@@ -113,7 +113,7 @@ export const documentsAPI = {
 export const activitiesAPI = {
   all: (params) => api.get('/activities', { params }),
   list: (dealId, params) => api.get(`/activities/${dealId}`, { params }),
-  create: (dealId, data) => api.post(`/activities/${dealId}`, data),
+  create: (dealId, data) => api.post('/activities', { ...data, dealId }),
   update: (activityId, data) => api.put(`/activities/entry/${activityId}`, data),
   updateStatus: (activityId, status) => api.patch(`/activities/entry/${activityId}/status`, { status }),
   delete: (activityId) => api.delete(`/activities/entry/${activityId}`),
@@ -133,6 +133,7 @@ export const intelligenceAPI = {
   saveMarketNotes:         (section, items) => api.put('/intelligence/market-notes', { section, items }),
   getMarketTransactions:   (params) => api.get('/intelligence/market-transactions', { params }),
   getMicroMarketBenchmarks:(params) => api.get('/intelligence/micro-market-benchmarks', { params }),
+  getDealAnalysis:         (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
 };
 
 // Exports

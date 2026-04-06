@@ -13,6 +13,8 @@ import {
   Archive,
   RotateCcw,
   CheckCircle2,
+  Brain,
+  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -24,6 +26,7 @@ import {
   useRestoreDeal,
 } from '../hooks/useDeals';
 import { useCreateActivity, useDeleteActivity, useUpdateActivityStatus } from '../hooks/useActivities';
+import { intelligenceAPI } from '../services/api';
 import useAuthStore from '../store/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Badge from '../components/common/Badge';
@@ -107,6 +110,9 @@ export default function DealDetailPage() {
   const [showActivityForm, setShowActivityForm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   const isAdmin = user?.role === 'admin';
   const canEdit = user?.role === 'admin' || user?.role === 'analyst';
@@ -143,6 +149,19 @@ export default function DealDetailPage() {
       await restoreDeal.mutateAsync(id);
     } catch {
       // handled by mutation hook
+    }
+  };
+
+  const handleAiAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await intelligenceAPI.getDealAnalysis(id);
+      setAiAnalysis(res.data.data);
+    } catch (err) {
+      setAiError(err.response?.data?.message || 'Analysis failed. Check that ANTHROPIC_API_KEY is configured.');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -268,6 +287,41 @@ export default function DealDetailPage() {
         {deal.is_archived && <Badge className="bg-slate-200 text-slate-800">Archived</Badge>}
         {deal.assigned_to_name && (
           <span className="text-sm text-gray-500">Assigned to {deal.assigned_to_name}</span>
+        )}
+      </div>
+
+      {/* Claude AI Analysis Panel */}
+      <div className="card mb-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Brain size={18} className="text-primary-600" />
+            AI Deal Analysis
+            <span className="text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Claude</span>
+          </h2>
+          <button
+            onClick={handleAiAnalysis}
+            disabled={aiLoading}
+            className="btn btn-primary flex items-center gap-1.5 text-sm"
+          >
+            {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
+            {aiLoading ? 'Analysing…' : aiAnalysis ? 'Refresh Analysis' : 'Generate Analysis'}
+          </button>
+        </div>
+        {aiError && (
+          <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{aiError}</p>
+        )}
+        {aiAnalysis?.analysis && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">{aiAnalysis.analysis}</p>
+            <p className="text-xs text-gray-400 mt-2">
+              Generated {aiAnalysis.generatedAt ? new Date(aiAnalysis.generatedAt).toLocaleString('en-IN') : ''} · Cross-referenced against internal pipeline, market benchmarks, and verified comps
+            </p>
+          </div>
+        )}
+        {!aiAnalysis && !aiLoading && !aiError && (
+          <p className="mt-2 text-sm text-gray-500">
+            Generate a Claude-powered IC memo cross-referencing this deal's financials against Bengaluru micro-market benchmarks and verified comps.
+          </p>
         )}
       </div>
 

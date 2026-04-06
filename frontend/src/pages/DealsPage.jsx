@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, X, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDeals, useCreateDeal } from '../hooks/useDeals';
@@ -35,13 +35,20 @@ const INITIAL_FORM = {
 
 export default function DealsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Filters
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [stageFilter, setStageFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [page, setPage] = useState(1);
+
+  // Sync search param from header navigation
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q) setSearch(q);
+  }, [searchParams]);
 
   // Modal
   const [showModal, setShowModal] = useState(false);

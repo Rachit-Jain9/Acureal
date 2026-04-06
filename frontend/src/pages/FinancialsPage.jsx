@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { useFinancials, useCalculateFinancials } from '../hooks/useFinancials';
 import { useDeal } from '../hooks/useDeals';
+import { toast } from '../components/common/Toast';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
@@ -337,6 +338,24 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
     const data = { assetClass };
     for (const [k, v] of Object.entries(inputs)) {
       data[k] = v === '' ? undefined : Number(v);
+    }
+    // Client-side required-field guard per asset class
+    const required = {
+      residential_apartments: ['plotAreaSqft', 'fsi', 'constructionCostPerSqft', 'sellingRatePerSqft'],
+      plotted_development:    ['totalLandSqft', 'sellingRatePerSqft'],
+      commercial_office:      ['leasableAreaSqft', 'constructionCostPerSqft', 'baseRentPerSqftMonth'],
+      retail:                 ['leasableAreaSqft', 'constructionCostPerSqft', 'baseRentPerSqftMonth'],
+      industrial:             ['leasableAreaSqft', 'constructionCostPerSqft', 'baseRentPerSqftMonth'],
+      hospitality:            ['keys', 'adr', 'stabilizedOccPct'],
+    };
+    const missing = (required[assetClass] || []).filter((f) => !(data[f] > 0));
+    if (missing.length) {
+      const labels = missing.map((f) => {
+        const def = (FIELD_DEFS[assetClass] || []).find((d) => d.name === f);
+        return def ? def.label : f;
+      });
+      toast.error(`Required: ${labels.join(', ')}`);
+      return;
     }
     onSubmit(data);
   };

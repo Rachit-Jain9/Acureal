@@ -97,6 +97,10 @@ router.post(
       const result = await financialService.calculateAndSave(req.params.dealId, req.body);
       res.status(201).json({ success: true, message: 'Financials calculated and saved.', data: result });
     } catch (error) {
+      // Engine validation errors should surface as 422 with the actual message
+      if (error.message && !error.code && !error.statusCode) {
+        return res.status(422).json({ success: false, message: error.message });
+      }
       next(error);
     }
   }

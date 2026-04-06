@@ -66,21 +66,32 @@ export const formatPct = (value, decimals = 1) => {
 };
 
 /**
- * Format area in sqft with commas
+ * Format area — respects pref_areaUnit (sqft | sqm | acres)
  */
 export const formatArea = (value) => {
   if (value === null || value === undefined) return '-';
   const num = Number(value);
   if (Number.isNaN(num)) return '-';
+  const unit = localStorage.getItem('pref_areaUnit') || 'sqft';
+  if (unit === 'sqm') {
+    const sqm = num * 0.092903;
+    return `${sqm.toLocaleString('en-IN', { maximumFractionDigits: 1 })} sqm`;
+  }
+  if (unit === 'acres') {
+    const acres = num / 43560;
+    return `${acres.toLocaleString('en-IN', { maximumFractionDigits: 3 })} acres`;
+  }
   return `${num.toLocaleString('en-IN')} sqft`;
 };
 
 /**
- * Format date
+ * Format date — respects pref_dateFormat locale
  */
 export const formatDate = (value) => {
   if (!value) return '-';
-  return new Date(value).toLocaleDateString('en-IN', {
+  const locale = localStorage.getItem('pref_dateFormat') || 'en-IN';
+  if (locale === 'iso') return new Date(value).toISOString().slice(0, 10);
+  return new Date(value).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

@@ -94,4 +94,14 @@ router.get('/micro-market-benchmarks', authenticate, async (req, res, next) => {
   }
 });
 
+// POST /intelligence/deal-analysis/:dealId — Claude-powered deal memo
+router.post('/deal-analysis/:dealId', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const result = await intelligenceService.getDealAnalysis(req.params.dealId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

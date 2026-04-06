@@ -19,7 +19,13 @@ export function useCalculateFinancials() {
       qc.invalidateQueries({ queryKey: ['deal', dealId] });
       toast.success('Financials calculated');
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Calculation failed'),
+    onError: (err) => {
+      const msg = err.response?.data?.message
+        || err.response?.data?.errors?.[0]?.message
+        || err.message
+        || 'Calculation failed';
+      toast.error(msg);
+    },
   });
 }
 

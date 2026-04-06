@@ -50,7 +50,7 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
         center={[property.lat, property.lng]}
         radius={getMarkerRadius(property.landAreaSqft) + (isSelected ? 4 : 0)}
         pathOptions={{
-          color: isSelected ? '#0f172a' : '#ffffff',
+          color: isSelected ? '#0f172a' : (property.geocode_status === 'approximate' ? '#f59e0b' : '#ffffff'),
           weight: isSelected ? 3 : 2,
           fillColor: zoningMeta.color,
           fillOpacity: isSelected ? 1 : 0.9,
@@ -61,6 +61,9 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
           <div className="space-y-0.5">
             <p className="text-sm font-semibold">{property.name}</p>
             <p className="text-xs text-gray-500">{property.city}, {property.state}</p>
+            {property.geocode_status === 'approximate' && (
+              <p className="text-xs text-amber-600">⚠ Approximate location</p>
+            )}
           </div>
         </Tooltip>
 
@@ -70,6 +73,12 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
               <p className="text-base font-semibold text-gray-900">{property.name}</p>
               <p className="text-sm text-gray-500">{property.address}</p>
             </div>
+            {property.geocode_status === 'approximate' && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                ⚠ Location is approximate — the pin may not reflect the exact site. Enter a precise address and re-geocode from the{' '}
+                <Link to={`/properties/${property.id}`} className="underline font-medium">property page</Link>.
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <Badge className={zoningMeta.badgeClass}>{zoningMeta.label}</Badge>

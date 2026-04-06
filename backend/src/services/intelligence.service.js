@@ -320,6 +320,129 @@ const buildBrief = async (briefDate) => {
   };
 };
 
+// ─── DEAL ANALYSIS ───────────────────────────────────────────────────────────
+
+const getDealAnalysis = async (dealId) => {
+  const client = getAnthropicClient();
+  if (!client) return { analysis: null, reason: 'ANTHROPIC_API_KEY not configured' };
+
+  const [dealResult, finResult, benchmarksResult, compsResult, txResult] = await Promise.all([
+    query(
+      `SELECT d.id, d.name, d.stage, d.priority, d.deal_type, d.notes,
+              d.land_ask_price_cr, d.negotiated_price_cr, d.land_pricing_basis,
+              d.land_price_rate_inr, d.land_extent_input_value, d.land_extent_input_unit,
+              p.city, p.address, p.property_type, p.land_area_sqft, p.land_area_acres,
+              p.zoning, p.circle_rate_per_sqft
+       FROM deals d
+       LEFT JOIN properties p ON d.property_id = p.id
+       WHERE d.id = $1`,
+      [dealId]
+    ),
+    query(
+      `SELECT asset_class, irr_pct, npv_cr, residual_land_value_cr, equity_multiple,
+              gross_margin_pct, total_cost_cr, total_revenue_cr, model_params
+       FROM financials WHERE deal_id = $1`,
+      [dealId]
+    ).catch(() => ({ rows: [] })),
+    query(
+      `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
+              yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub
+       FROM micro_market_benchmarks WHERE LOWER(city) = 'bengaluru'
+       ORDER BY avg_price_max_per_sqft DESC NULLS LAST LIMIT 6`
+    ).catch(() => ({ rows: [] })),
+    query(
+      `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units
+       FROM comps WHERE is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
+       ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 6`
+    ).catch(() => ({ rows: [] })),
+    query(
+      `SELECT fiscal_year, quarter, deal_type, buyer, quantum_inr_mn, locality, land_size_acres
+       FROM market_transactions WHERE LOWER(city) = 'bengaluru'
+       ORDER BY fiscal_year DESC, quarter DESC LIMIT 5`
+    ).catch(() => ({ rows: [] })),
+  ]);
+
+  const deal = dealResult.rows[0];
+  if (!deal) return { analysis: null, reason: 'Deal not found' };
+
+  const fin = finResult.rows[0] || null;
+  const kpis = fin?.model_params?.kpis || {};
+
+  const systemPrompt = `You are a senior real estate investment analyst at REDIP, a Bengaluru-focused platform. Your role is to generate a concise, IC-ready deal analysis.
+
+Rules:
+- 180–240 words, exactly 4 sections: Deal Overview, Market Positioning, Risk Flags, Recommendation
+- Use specific numbers from the data provided — no vague statements
+- Cross-reference deal pricing/IRR against market benchmarks and comps
+- Flag real risks: pricing vs RLV, stage vs activity gap, comp premium/discount
+- Tone: direct, institutional — like a senior analyst briefing the Investment Committee
+- No markdown. No bullets. Plain text paragraphs only.`;
+
+  const payload = {
+    deal: {
+      name: deal.name,
+      stage: deal.stage,
+      priority: deal.priority,
+      dealType: deal.deal_type,
+      city: deal.city,
+      address: deal.address,
+      propertyType: deal.property_type,
+      landAreaAcres: deal.land_area_acres,
+      zoning: deal.zoning,
+      circleRatePerSqft: deal.circle_rate_per_sqft,
+      landAskPriceCr: deal.land_ask_price_cr,
+      negotiatedPriceCr: deal.negotiated_price_cr,
+      notes: deal.notes,
+    },
+    financials: fin ? {
+      assetClass: fin.asset_class,
+      irrPct: fin.irr_pct ?? kpis.irr,
+      npvCr: fin.npv_cr ?? kpis.npv,
+      rlvCr: fin.residual_land_value_cr ?? kpis.rlv,
+      equityMultiple: fin.equity_multiple ?? kpis.equityMultiple,
+      grossMarginPct: fin.gross_margin_pct,
+      totalCostCr: fin.total_cost_cr,
+      totalRevenueCr: fin.total_revenue_cr,
+    } : null,
+    marketBenchmarks: benchmarksResult.rows.map((b) => ({
+      microMarket: b.micro_market,
+      priceRange: `₹${b.avg_price_min_per_sqft}–${b.avg_price_max_per_sqft}/sqft`,
+      yoyGrowth: `${b.yoy_growth_min_pct}–${b.yoy_growth_max_pct}%`,
+      anchorHub: b.anchor_hub,
+    })),
+    recentTransactions: txResult.rows.map((t) => ({
+      period: `${t.fiscal_year} ${t.quarter}`,
+      buyer: t.buyer,
+      quantumCr: t.quantum_inr_mn ? (t.quantum_inr_mn / 100).toFixed(0) + ' Cr' : null,
+      locality: t.locality,
+      landAcres: t.land_size_acres,
+    })),
+    comps: compsResult.rows.map((c) => ({
+      project: c.project_name,
+      locality: c.locality,
+      ratePerSqft: c.rate_per_sqft,
+      bhkConfig: c.bhk_config,
+    })),
+  };
+
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 600,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: JSON.stringify(payload, null, 2) }],
+    });
+    return {
+      analysis: message.content[0]?.text || null,
+      generatedAt: new Date().toISOString(),
+      dealName: deal.name,
+    };
+  } catch (err) {
+    console.error('[Intelligence] Deal analysis failed:', err.message);
+    return { analysis: null, reason: err.message };
+  }
+};
+
 // ─── PUBLIC API ───────────────────────────────────────────────────────────────
 
 const getDailyBrief = async (userId, date = new Date().toISOString().slice(0, 10)) => {
@@ -398,4 +521,5 @@ module.exports = {
   saveMarketNotes,
   getMarketTransactions,
   getMicroMarketBenchmarks,
+  getDealAnalysis,
 };
