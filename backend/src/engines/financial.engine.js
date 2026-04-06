@@ -530,7 +530,7 @@ function calculatePlottedDevelopment(input) {
     cashFlows: structureCashFlows(cashFlows),
     sensitivityMatrix: buildPlottedSensitivity({
       totalLandSqft, saleableLandPct, avgPlotSizeSqft,
-      sellingRatePerSqyd, landCostCr, devCostPerSqft, approvalCostCr,
+      sellingRatePerSqft, landCostCr, devCostPerSqft, approvalCostCr,
       marketingCostPct, financeCostPct, durationMonths, discountRatePct, contingencyPct,
     }),
     _legacy: {

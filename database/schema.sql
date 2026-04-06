@@ -158,6 +158,16 @@ CREATE TABLE financials (
     gross_profit_cr DECIMAL(15, 4),
     gross_margin_pct DECIMAL(7, 4),
     developer_profit_cr DECIMAL(15, 4),
+    -- Asset class and model params (multi-class support)
+    asset_class VARCHAR(50) NOT NULL DEFAULT 'residential_apartments',
+    model_params JSONB,
+    -- Income asset KPIs
+    noi_cr DECIMAL(15, 4),
+    yield_on_cost_pct DECIMAL(8, 4),
+    exit_value_cr DECIMAL(15, 4),
+    entry_value_cr DECIMAL(15, 4),
+    dscr DECIMAL(8, 4),
+    stabilized_noi_cr DECIMAL(15, 4),
     -- Investment metrics
     npv_cr DECIMAL(15, 4),
     irr_pct DECIMAL(8, 4),
@@ -171,6 +181,8 @@ CREATE TABLE financials (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_financials_asset_class ON financials(asset_class);
 
 CREATE INDEX idx_financials_deal_id ON financials(deal_id);
 
