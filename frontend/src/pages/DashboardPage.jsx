@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import {
   BarChart,
   Bar,
@@ -16,6 +17,10 @@ import {
   TrendingUp,
   IndianRupee,
   Activity,
+  ArrowRight,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
@@ -36,8 +41,29 @@ const PIE_COLORS = [
   '#06b6d4', '#3b82f6',
 ];
 
+// ── Tooltip overrides for dark mode ──────────────────────────────────────────
+const TOOLTIP_STYLE = {
+  borderRadius: '8px',
+  border: '1px solid rgb(55 65 81)',
+  backgroundColor: 'rgb(31 41 55)',
+  color: '#f9fafb',
+  fontSize: '13px',
+};
+
+function SectionCard({ title, children, action }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h3>
+        {action && action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
-  const { data, isLoading, isError, error } = useDashboard();
+  const { data, isLoading, isError, error, refetch } = useDashboard();
 
   if (isLoading) {
     return (
@@ -49,9 +75,15 @@ export default function DashboardPage() {
 
   if (isError) {
     return (
-      <div className="text-center py-20 text-red-600">
-        <p className="text-lg font-medium">Failed to load dashboard</p>
-        <p className="text-sm text-gray-500 mt-1">{error?.message}</p>
+      <div className="text-center py-20">
+        <AlertTriangle size={36} className="text-red-400 mx-auto mb-3" />
+        <p className="text-base font-semibold text-gray-800 dark:text-gray-200">
+          Failed to load dashboard
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{error?.message}</p>
+        <button onClick={() => refetch()} className="btn btn-secondary mt-4">
+          Retry
+        </button>
       </div>
     );
   }
@@ -64,95 +96,163 @@ export default function DashboardPage() {
     cities_distribution = [],
   } = data || {};
 
-  const totalDeals = stats.total_deals || 0;
-  const activeDeals = stats.active_deals_count || 0;
-  const pipelineValue = stats.total_pipeline_value_cr || 0;
-  const avgIrr = stats.avg_irr_pct || 0;
+  const totalDeals      = stats.total_deals         || 0;
+  const activeDeals     = stats.active_deals_count   || 0;
+  const pipelineValue   = stats.total_pipeline_value_cr || 0;
+  const avgIrr          = stats.avg_irr_pct          || 0;
+  const icReadyDeals    = stats.ic_ready_count        || 0;
+  const dealsWithRisk   = stats.deals_with_open_risks || 0;
+  const docsUploaded    = stats.total_documents       || 0;
+  const closedValue     = stats.closed_value_cr       || 0;
 
-  // Transform pipeline distribution for the bar chart
-  const pipelineChartData = stage_distribution.map((item) => ({
-    stage: STAGE_CONFIG[item.stage]?.label || item.stage,
-    count: item.count,
-  }));
+  // Pipeline bar chart data — filter out stages with 0 deals
+  const pipelineChartData = stage_distribution
+    .map((item) => ({
+      stage: STAGE_CONFIG[item.stage]?.label || item.stage,
+      count: item.count,
+      fill: '#6366f1',
+    }))
+    .filter((d) => d.count > 0);
 
-  // Transform city distribution for the pie chart
-  const cityChartData = cities_distribution.map((item) => ({
-    name: item.city || item.name || 'Unknown',
-    value: Number(item.deal_count ?? item.count ?? 0),
-  })).filter((item) => item.value > 0);
-
+  // City pie chart data
+  const cityChartData = cities_distribution
+    .map((item) => ({
+      name: item.city || item.name || 'Unknown',
+      value: Number(item.deal_count ?? item.count ?? 0),
+    }))
+    .filter((item) => item.value > 0);
   const totalCityDeals = cityChartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Dashboard"
-        description="Overview of your real estate deal pipeline"
+        description="Live overview of your real estate deal pipeline"
+        actions={
+          <Link to="/dashboard/deals" className="btn btn-secondary text-sm flex items-center gap-1.5">
+            All Deals <ArrowRight size={14} />
+          </Link>
+        }
       />
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* ── KPI row ────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard
           title="Total Deals"
           value={totalDeals}
           icon={Briefcase}
-          subtitle="All deals in pipeline"
+          subtitle="All in pipeline"
         />
         <StatCard
           title="Active Deals"
           value={activeDeals}
           icon={Activity}
-          subtitle="Currently in progress"
+          subtitle="In progress"
+          accent={activeDeals > 0 ? 'green' : undefined}
         />
         <StatCard
           title="Pipeline Value"
           value={formatCrores(pipelineValue)}
           icon={IndianRupee}
-          subtitle="Total deal value"
+          subtitle="Cumulative ask price"
         />
         <StatCard
           title="Avg IRR"
           value={formatPct(avgIrr)}
           icon={TrendingUp}
-          subtitle="Across active deals"
+          subtitle="Modelled deals"
+          accent={avgIrr >= 20 ? 'green' : avgIrr >= 12 ? 'amber' : undefined}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Pipeline Distribution Bar Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Pipeline Distribution</h3>
+      {/* ── Secondary KPI row ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+          <div className="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
+            <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">IC Ready</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">{icReadyDeals}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+          <div className="p-2 bg-red-50 dark:bg-red-900/30 rounded-lg">
+            <AlertTriangle size={18} className="text-red-500 dark:text-red-400" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Open Risks</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">{dealsWithRisk}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+          <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+            <Briefcase size={18} className="text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Documents</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">{docsUploaded}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+          <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
+            <IndianRupee size={18} className="text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Closed Value</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {closedValue > 0 ? formatCrores(closedValue) : '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Charts row ─────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pipeline Distribution */}
+        <SectionCard title="Pipeline Distribution">
           {pipelineChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={pipelineChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart
+                data={pipelineChartData}
+                margin={{ top: 4, right: 10, bottom: 4, left: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,114,128,0.15)" />
                 <XAxis
                   dataKey="stage"
-                  tick={{ fontSize: 12, fill: '#6b7280' }}
-                  axisLine={{ stroke: '#e5e7eb' }}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  axisLine={{ stroke: 'rgba(107,114,128,0.2)' }}
+                  tickLine={false}
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fontSize: 12, fill: '#6b7280' }}
-                  axisLine={{ stroke: '#e5e7eb' }}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
                 />
                 <Tooltip
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  contentStyle={TOOLTIP_STYLE}
+                  cursor={{ fill: 'rgba(99,102,241,0.08)' }}
                 />
                 <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} name="Deals" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-16">No pipeline data available</p>
+            <div className="py-16 text-center">
+              <Briefcase size={28} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-400 dark:text-gray-500">No pipeline data yet</p>
+              <Link to="/dashboard/deals" className="text-xs text-primary-600 hover:underline mt-1 inline-block">
+                Create your first deal
+              </Link>
+            </div>
           )}
-        </div>
+        </SectionCard>
 
-        {/* City Distribution Pie Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">City Distribution</h3>
+        {/* City Distribution */}
+        <SectionCard title="City Distribution">
           {cityChartData.length > 0 ? (
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px] gap-4 items-center">
-              <ResponsiveContainer width="100%" height={280}>
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-center">
+              <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
                   <Pie
                     data={cityChartData}
@@ -160,11 +260,10 @@ export default function DashboardPage() {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    outerRadius={96}
-                    innerRadius={60}
+                    outerRadius={95}
+                    innerRadius={58}
                     paddingAngle={3}
-                    stroke="#ffffff"
-                    strokeWidth={3}
+                    stroke="transparent"
                     isAnimationActive={false}
                   >
                     {cityChartData.map((item, idx) => (
@@ -172,17 +271,14 @@ export default function DashboardPage() {
                     ))}
                     <Label
                       content={({ viewBox }) => {
-                        if (!viewBox || typeof viewBox.cx !== 'number' || typeof viewBox.cy !== 'number') {
-                          return null;
-                        }
-
+                        if (!viewBox || typeof viewBox.cx !== 'number') return null;
                         return (
                           <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
-                            <tspan x={viewBox.cx} y={viewBox.cy - 4} fill="#111827" fontSize="24" fontWeight="700">
+                            <tspan x={viewBox.cx} y={viewBox.cy - 4} fill="#111827" fontSize="22" fontWeight="700">
                               {totalCityDeals}
                             </tspan>
-                            <tspan x={viewBox.cx} y={viewBox.cy + 18} fill="#6b7280" fontSize="12">
-                              mapped deals
+                            <tspan x={viewBox.cx} y={viewBox.cy + 16} fill="#6b7280" fontSize="11">
+                              deals
                             </tspan>
                           </text>
                         );
@@ -190,105 +286,165 @@ export default function DashboardPage() {
                     />
                   </Pie>
                   <Tooltip
-                    formatter={(value, _name, entry) => [`${value} deal${value === 1 ? '' : 's'}`, entry.payload.name]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                    formatter={(value, _n, entry) => [
+                      `${value} deal${value === 1 ? '' : 's'}`,
+                      entry.payload.name,
+                    ]}
+                    contentStyle={TOOLTIP_STYLE}
                   />
                 </PieChart>
               </ResponsiveContainer>
-
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {cityChartData.map((item, idx) => {
-                  const percentage = totalCityDeals > 0
+                  const pct = totalCityDeals > 0
                     ? Math.round((item.value / totalCityDeals) * 100)
                     : 0;
-
                   return (
                     <div
                       key={item.name}
-                      className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2"
+                      className="flex items-center justify-between rounded-lg bg-gray-50 dark:bg-gray-700/50 px-3 py-2"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className="h-3 w-3 rounded-full"
+                          className="h-2.5 w-2.5 rounded-full flex-shrink-0"
                           style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
                         />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                          <p className="text-xs text-gray-500">{percentage}% of live pipeline</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{pct}%</p>
                         </div>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900">{item.value}</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100 ml-2">
+                        {item.value}
+                      </span>
                     </div>
                   );
                 })}
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-16">No city data available</p>
+            <div className="py-16 text-center">
+              <p className="text-sm text-gray-400 dark:text-gray-500">
+                Cities will appear once deals have location data
+              </p>
+            </div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
+      {/* ── Lower row ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activities */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activities</h3>
+        <SectionCard
+          title="Recent Activities"
+          action={
+            <Link
+              to="/dashboard/deals"
+              className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+            >
+              View all <ArrowRight size={12} />
+            </Link>
+          }
+        >
           {recent_activities.length > 0 ? (
-            <ul className="space-y-3 max-h-80 overflow-y-auto">
+            <ul className="space-y-3 max-h-72 overflow-y-auto pr-1">
               {recent_activities.map((activity, idx) => (
                 <li
                   key={activity.id || idx}
-                  className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                  className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                 >
-                  <div className="w-2 h-2 mt-2 rounded-full bg-primary-500 shrink-0" />
+                  <div className="w-2 h-2 mt-1.5 rounded-full bg-primary-500 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-800 leading-snug">
+                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
                       {activity.description}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      <Clock size={10} className="inline mr-1" />
                       {formatRelativeTime(activity.activity_date || activity.created_at)}
-                      {activity.deal_name && <span className="ml-1">&middot; {activity.deal_name}</span>}
+                      {activity.deal_name && (
+                        <span className="ml-1 text-gray-500 dark:text-gray-400">
+                          &middot; {activity.deal_name}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-8">No recent activities</p>
+            <div className="py-10 text-center">
+              <p className="text-sm text-gray-400 dark:text-gray-500">No activities yet</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Activities logged on deals will appear here
+              </p>
+            </div>
           )}
-        </div>
+        </SectionCard>
 
         {/* Top Deals by IRR */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Deals by IRR</h3>
+        <SectionCard
+          title="Top Deals by IRR"
+          action={
+            <Link
+              to="/dashboard/deals"
+              className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+            >
+              All deals <ArrowRight size={12} />
+            </Link>
+          }
+        >
           {top_deals_by_irr.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-1">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 pr-4 font-medium text-gray-500">Deal</th>
-                    <th className="text-left py-2 pr-4 font-medium text-gray-500">Stage</th>
-                    <th className="text-right py-2 pr-4 font-medium text-gray-500">Value</th>
-                    <th className="text-right py-2 font-medium text-gray-500">IRR</th>
+                  <tr className="border-b border-gray-100 dark:border-gray-700">
+                    <th className="text-left py-2 pr-3 font-medium text-gray-500 dark:text-gray-400">
+                      Deal
+                    </th>
+                    <th className="text-left py-2 pr-3 font-medium text-gray-500 dark:text-gray-400">
+                      Stage
+                    </th>
+                    <th className="text-right py-2 pr-3 font-medium text-gray-500 dark:text-gray-400">
+                      Value
+                    </th>
+                    <th className="text-right py-2 font-medium text-gray-500 dark:text-gray-400">
+                      IRR
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {top_deals_by_irr.map((deal, idx) => {
                     const stageConf = STAGE_CONFIG[deal.stage] || {};
                     return (
-                      <tr key={deal.id || idx} className="border-b border-gray-50 last:border-0">
-                        <td className="py-2.5 pr-4 font-medium text-gray-900 truncate max-w-[160px]">
-                          {deal.name}
+                      <tr
+                        key={deal.id || idx}
+                        className="border-b border-gray-50 dark:border-gray-700/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
+                        <td className="py-2.5 pr-3">
+                          <Link
+                            to={`/dashboard/deals/${deal.id}`}
+                            className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 truncate max-w-[140px] block"
+                          >
+                            {deal.name}
+                          </Link>
                         </td>
-                        <td className="py-2.5 pr-4">
+                        <td className="py-2.5 pr-3">
                           <Badge className={stageConf.color}>
                             {stageConf.label || deal.stage}
                           </Badge>
                         </td>
-                        <td className="py-2.5 pr-4 text-right text-gray-600 whitespace-nowrap">
+                        <td className="py-2.5 pr-3 text-right text-gray-600 dark:text-gray-400 whitespace-nowrap">
                           {formatCrores(deal.total_revenue_cr)}
                         </td>
-                        <td className="py-2.5 text-right font-semibold text-primary-600 whitespace-nowrap">
+                        <td className={`py-2.5 text-right font-bold whitespace-nowrap ${
+                          Number(deal.irr_pct) >= 20
+                            ? 'text-green-600 dark:text-green-400'
+                            : Number(deal.irr_pct) >= 15
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-primary-600 dark:text-primary-400'
+                        }`}>
                           {formatPct(deal.irr_pct)}
                         </td>
                       </tr>
@@ -298,9 +454,14 @@ export default function DashboardPage() {
               </table>
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-8">No deals available</p>
+            <div className="py-10 text-center">
+              <TrendingUp size={28} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-400 dark:text-gray-500">
+                Run a financial model on a deal to see IRR rankings
+              </p>
+            </div>
           )}
-        </div>
+        </SectionCard>
       </div>
     </div>
   );

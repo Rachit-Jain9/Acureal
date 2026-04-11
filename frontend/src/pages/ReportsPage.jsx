@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Download, FileText, Loader2 } from 'lucide-react';
+import { Download, FileText, Loader2, AlertTriangle } from 'lucide-react';
+import { downloadAxiosResponse, downloadBlob } from '../utils/download';
 import { useDeals } from '../hooks/useDeals';
 import { useDailyBrief } from '../hooks/useIntelligence';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -93,17 +94,12 @@ export default function ReportsPage() {
     setExportingCSV(true);
     try {
       const response = await exportsAPI.deals();
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'deals_export.csv');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      downloadAxiosResponse(response, 'deals_export.csv');
       toast.success('Deals CSV downloaded');
-    } catch {
-      toast.error('Export failed');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Export failed';
+      toast.error(msg);
+      console.error('[ReportsPage] Export deals error:', err);
     } finally {
       setExportingCSV(false);
     }
@@ -113,17 +109,12 @@ export default function ReportsPage() {
     setExportingComps(true);
     try {
       const response = await exportsAPI.comps();
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'comps_export.csv');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      downloadAxiosResponse(response, 'comps_export.csv');
       toast.success('Comps CSV downloaded');
-    } catch {
-      toast.error('Export failed');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Comps export failed';
+      toast.error(msg);
+      console.error('[ReportsPage] Export comps error:', err);
     } finally {
       setExportingComps(false);
     }
@@ -134,20 +125,17 @@ export default function ReportsPage() {
     try {
       const response = await exportsAPI.icReport(dealId);
       const reportPayload = response.data?.data ?? response.data;
-      const blob = new Blob([JSON.stringify(reportPayload, null, 2)], {
-        type: 'application/json',
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `IC_Report_${dealName}.json`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('IC Report generated');
-    } catch {
-      toast.error('IC Report generation failed');
+      const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      downloadBlob(
+        JSON.stringify(reportPayload, null, 2),
+        `IC_Report_${safeName}.json`,
+        'application/json'
+      );
+      toast.success('IC Report downloaded');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'IC Report generation failed';
+      toast.error(msg);
+      console.error('[ReportsPage] IC report error:', err);
     } finally {
       setGeneratingIC(null);
     }
@@ -175,7 +163,7 @@ export default function ReportsPage() {
         <button
           onClick={handleExportDeals}
           disabled={exportingCSV}
-          className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          className="btn btn-secondary flex items-center gap-2 text-sm"
         >
           {exportingCSV ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           Export Deals CSV
@@ -183,23 +171,23 @@ export default function ReportsPage() {
         <button
           onClick={handleExportComps}
           disabled={exportingComps}
-          className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          className="btn btn-secondary flex items-center gap-2 text-sm"
         >
           {exportingComps ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           Export Comps CSV
         </button>
       </div>
 
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="flex gap-6 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`border-b-2 pb-3 text-sm font-medium transition ${
+              className={`border-b-2 pb-3 text-sm font-medium transition whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
               }`}
             >
               {tab.label}
@@ -209,7 +197,7 @@ export default function ReportsPage() {
       </div>
 
       {activeTab === 'pipeline' && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
           {deals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No deals yet. Add verified opportunities to generate pipeline reports." />
@@ -217,23 +205,23 @@ export default function ReportsPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">Stage</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500">Count</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500">Total Value</th>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Stage</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Count</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Total Value</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {pipelineData.map((row) => (
-                  <tr key={row.stage} className="hover:bg-gray-50">
+                  <tr key={row.stage} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-6 py-3">
                       <Badge className={row.color}>{row.label}</Badge>
                     </td>
-                    <td className="px-6 py-3 text-right font-medium text-gray-900">{row.count}</td>
+                    <td className="px-6 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{row.count}</td>
                     <td className="px-6 py-3 text-right text-gray-900">{formatCrores(row.totalValue)}</td>
                   </tr>
                 ))}
-                <tr className="bg-gray-50 font-semibold">
+                <tr className="bg-gray-50 dark:bg-gray-700/60 font-semibold">
                   <td className="px-6 py-3 text-gray-900">Total</td>
                   <td className="px-6 py-3 text-right text-gray-900">
                     {pipelineData.reduce((sum, row) => sum + row.count, 0)}
@@ -249,7 +237,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'financial' && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
           {deals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No underwriting data available yet. Create deals and financial models to populate this report." />
@@ -258,7 +246,7 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Deal</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">City</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">Revenue</th>
@@ -269,9 +257,9 @@ export default function ReportsPage() {
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">Eq. Multiple</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {deals.map((deal) => (
-                    <tr key={deal.id} className="hover:bg-gray-50">
+                    <tr key={deal.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                       <td className="px-4 py-3 font-medium text-gray-900">{deal.name}</td>
                       <td className="px-4 py-3 text-gray-600">{deal.city || '-'}</td>
                       <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'total_revenue_cr'))}</td>
@@ -294,7 +282,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'citywise' && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
           {cityData.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No city-level portfolio data yet. Add linked properties and deals to compare city exposure." />
@@ -302,16 +290,16 @@ export default function ReportsPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">City</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500">Deal Count</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500">Avg IRR</th>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">City</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Deal Count</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Avg IRR</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {cityData.map((row) => (
-                  <tr key={row.city} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 font-medium text-gray-900">{row.city}</td>
+                  <tr key={row.city} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                    <td className="px-6 py-3 font-medium text-gray-900 dark:text-gray-100">{row.city}</td>
                     <td className="px-6 py-3 text-right text-gray-900">{row.count}</td>
                     <td className="px-6 py-3 text-right text-gray-900">
                       {row.avgIRR !== null ? formatPct(row.avgIRR) : '-'}
@@ -325,7 +313,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'performance' && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
           {performanceData.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No performance ranking yet. As financial models are added, REDIP will rank live opportunities by return profile." />
@@ -334,7 +322,7 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">#</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Deal</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">City</th>
@@ -344,9 +332,9 @@ export default function ReportsPage() {
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">IC Report</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {performanceData.map((deal, idx) => (
-                    <tr key={deal.id} className="hover:bg-gray-50">
+                    <tr key={deal.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                       <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{deal.name}</td>
                       <td className="px-4 py-3 text-gray-600">{deal.city || '-'}</td>
@@ -382,7 +370,7 @@ export default function ReportsPage() {
 
       {activeTab === 'intelligence' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">
@@ -419,7 +407,7 @@ export default function ReportsPage() {
           )}
 
           {dailyBrief?.dealOfDay && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
               <h4 className="text-base font-semibold text-gray-900">1. Deal of the Day</h4>
               <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
                 <div>
@@ -441,7 +429,7 @@ export default function ReportsPage() {
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
               <h4 className="text-base font-semibold text-gray-900">2. Key Developments</h4>
               {(dailyBrief?.keyDevelopments || []).length > 0 ? (
                 <div className="mt-4 space-y-4">
@@ -462,7 +450,7 @@ export default function ReportsPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
               <h4 className="text-base font-semibold text-gray-900">3. Market Signals</h4>
               <div className="mt-4 grid gap-4">
                 <div className="rounded-xl bg-emerald-50 p-4">
@@ -485,7 +473,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
             <h4 className="text-base font-semibold text-gray-900">4. Bengaluru Demand Heatmap</h4>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
@@ -499,7 +487,7 @@ export default function ReportsPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Insight</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {(dailyBrief?.bengaluruDemandHeatmap || []).map((row) => (
                     <tr key={row.microMarket}>
                       <td className="px-4 py-3 font-medium text-gray-900">{row.microMarket}</td>
@@ -516,7 +504,7 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
               <h4 className="text-base font-semibold text-gray-900">5. Demand Slowdown Indicators</h4>
               <ul className="mt-4 space-y-3 text-sm text-gray-700">
                 {(dailyBrief?.demandSlowdownIndicators || []).map((item, index) => (
@@ -524,7 +512,7 @@ export default function ReportsPage() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
               <h4 className="text-base font-semibold text-gray-900">6. Strategic Takeaways</h4>
               <ul className="mt-4 space-y-3 text-sm text-gray-700">
                 {(dailyBrief?.strategicTakeaways || []).map((item, index) => (

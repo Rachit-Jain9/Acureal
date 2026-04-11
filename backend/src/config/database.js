@@ -1,20 +1,14 @@
 const { Pool } = require('pg');
 
-const DEV_DATABASE_URL = 'postgresql://postgres:password@localhost:5432/redevint';
+const connectionString = process.env.DATABASE_URL;
 
-const isPlaceholderValue = (value) => !value || /your[_-]/i.test(value);
-const usingFallbackDatabaseUrl =
-  process.env.NODE_ENV !== 'production' && isPlaceholderValue(process.env.DATABASE_URL);
-
-const connectionString =
-  process.env.NODE_ENV === 'production'
-    ? process.env.DATABASE_URL
-    : usingFallbackDatabaseUrl
-      ? DEV_DATABASE_URL
-      : process.env.DATABASE_URL;
-
-if (process.env.NODE_ENV !== 'test' && usingFallbackDatabaseUrl) {
-  console.warn('DATABASE_URL is not configured. Falling back to local development database.');
+if (!connectionString && process.env.NODE_ENV !== 'test') {
+  console.error(
+    '[REDIP] DATABASE_URL is not set. Add it to backend/.env (local) or Vercel environment variables (production).'
+  );
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 }
 
 const isServerless = !!process.env.VERCEL;

@@ -4,10 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 
-const DEV_DATABASE_URL = 'postgresql://postgres:password@localhost:5432/redevint';
-
-const isPlaceholderValue = (value) => !value || /your[_-]/i.test(value);
-
 const inputPath = process.argv[2];
 
 if (!inputPath) {
@@ -22,15 +18,10 @@ if (!fs.existsSync(filePath)) {
   process.exit(1);
 }
 
-const databaseUrl =
-  process.env.NODE_ENV === 'production'
-    ? process.env.DATABASE_URL
-    : isPlaceholderValue(process.env.DATABASE_URL)
-      ? DEV_DATABASE_URL
-      : process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  console.error('DATABASE_URL is not configured.');
+  console.error('[REDIP] DATABASE_URL is not set. Configure it in backend/.env before running migrations.');
   process.exit(1);
 }
 
