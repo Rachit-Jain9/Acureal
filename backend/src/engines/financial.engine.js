@@ -143,6 +143,7 @@ function structureCashFlows(cfs) {
 // ─── RESIDENTIAL APARTMENTS ──────────────────────────────────────────────────
 
 function calculateResidentialApartments(input) {
+  const skipSensitivity = input.skipSensitivity === true;
   const plotAreaSqft         = Number(input.plotAreaSqft);
   const fsi                  = Number(input.fsi);
   const loadingFactor        = Number(input.loadingFactor) || 0.65;
@@ -171,7 +172,19 @@ function calculateResidentialApartments(input) {
   const debtLTV     = Math.min(0.75, Math.max(0, Number(input.debtLTV) || 0));
   const debtRatePct = Number(input.debtRatePct) || 10.5;
 
-  if (plotAreaSqft <= 0 || fsi <= 0 || fsi > 20) throw new Error('Invalid plot area or FSI');
+  if (
+    !Number.isFinite(plotAreaSqft)
+    || !Number.isFinite(fsi)
+    || !Number.isFinite(constructionCostSqft)
+    || !Number.isFinite(sellingRateSqft)
+  ) {
+    throw new Error('Required field missing');
+  }
+  if (plotAreaSqft <= 0) throw new Error('Plot area must be greater than 0');
+  if (fsi <= 0 || fsi > 20) throw new Error('FSI must be between 0 and 20');
+  if (durationMonths < 6 || durationMonths > 120) {
+    throw new Error('Project duration must be between 6 and 120 months');
+  }
   if (loadingFactor <= 0 || loadingFactor > 1)   throw new Error('Loading factor must be 0–1');
   if (constructionCostSqft <= 0) throw new Error('Construction cost must be positive');
   if (sellingRateSqft <= 0)      throw new Error('Selling rate must be positive');
@@ -306,12 +319,14 @@ function calculateResidentialApartments(input) {
   try { irrPct = calculateIRR(cashFlows); } catch { /* skip */ }
   try { npvCr  = calculateNPV(cashFlows, discountRatePct / 100); } catch { /* skip */ }
 
-  const sensitivity = buildResidentialSensitivity({
-    plotAreaSqft, fsi, loadingFactor, constructionCostSqft, sellingRateSqft,
-    landCostCr, approvalCostCr, marketingCostPct, financeCostPct,
-    durationMonths, discountRatePct, developerMarginPct,
-    contingencyPct, architectFeePct, pmcFeePct,
-  });
+  const sensitivity = skipSensitivity
+    ? null
+    : buildResidentialSensitivity({
+        plotAreaSqft, fsi, loadingFactor, constructionCostSqft, sellingRateSqft,
+        landCostCr, approvalCostCr, marketingCostPct, financeCostPct,
+        durationMonths, discountRatePct, developerMarginPct,
+        contingencyPct, architectFeePct, pmcFeePct,
+      });
 
   return {
     assetClass: 'residential_apartments',
@@ -401,6 +416,7 @@ function calculateResidentialApartments(input) {
 // ─── PLOTTED DEVELOPMENT ─────────────────────────────────────────────────────
 
 function calculatePlottedDevelopment(input) {
+  const skipSensitivity = input.skipSensitivity === true;
   const totalLandSqft      = Number(input.totalLandSqft);
   const saleableLandPct    = Number(input.saleableLandPct) || 55;
   const avgPlotSizeSqft    = Number(input.avgPlotSizeSqft) || 1200;
@@ -528,11 +544,13 @@ function calculatePlottedDevelopment(input) {
     },
     capitalStack: null,
     cashFlows: structureCashFlows(cashFlows),
-    sensitivityMatrix: buildPlottedSensitivity({
-      totalLandSqft, saleableLandPct, avgPlotSizeSqft,
-      sellingRatePerSqft, landCostCr, devCostPerSqft, approvalCostCr,
-      marketingCostPct, financeCostPct, durationMonths, discountRatePct, contingencyPct,
-    }),
+    sensitivityMatrix: skipSensitivity
+      ? null
+      : buildPlottedSensitivity({
+          totalLandSqft, saleableLandPct, avgPlotSizeSqft,
+          sellingRatePerSqft, landCostCr, devCostPerSqft, approvalCostCr,
+          marketingCostPct, financeCostPct, durationMonths, discountRatePct, contingencyPct,
+        }),
     _legacy: {
       plot_area_sqft: totalLandSqft, fsi: 1, loading_factor: saleableLandPct / 100,
       land_cost_cr: landCostCr, approval_cost_cr: approvalCostCr,
@@ -737,7 +755,7 @@ function calculateIncomeAsset(input) {
 // ─── SENSITIVITY MATRICES ────────────────────────────────────────────────────
 
 function buildResidentialSensitivity(p) {
-  const vars = [-0.20, -0.10, 0, 0.10, 0.20];
+  const vars = [-0.20, -0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20];
   const sellingRates      = vars.map((v) => Math.round(p.sellingRateSqft * (1 + v)));
   const constructionCosts = vars.map((v) => Math.round(p.constructionCostSqft * (1 + v)));
   const irrGrid = constructionCosts.map((cc) =>
@@ -750,6 +768,7 @@ function buildResidentialSensitivity(p) {
           contingencyPct: p.contingencyPct,
           architectFeePct: p.architectFeePct,
           pmcFeePct: p.pmcFeePct,
+          skipSensitivity: true,
         });
         return r.kpis.irr;
       } catch { return null; }
@@ -763,13 +782,18 @@ function buildResidentialSensitivity(p) {
 }
 
 function buildPlottedSensitivity(p) {
-  const vars = [-0.20, -0.10, 0, 0.10, 0.20];
+  const vars = [-0.20, -0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20];
   const sellingRates = vars.map((v) => Math.round(p.sellingRatePerSqft * (1 + v)));
   const devCosts     = vars.map((v) => Math.round(p.devCostPerSqft * (1 + v)));
   const irrGrid = devCosts.map((dc) =>
     sellingRates.map((sr) => {
       try {
-        const r = calculatePlottedDevelopment({ ...p, sellingRatePerSqft: sr, devCostPerSqft: dc });
+        const r = calculatePlottedDevelopment({
+          ...p,
+          sellingRatePerSqft: sr,
+          devCostPerSqft: dc,
+          skipSensitivity: true,
+        });
         return r.kpis.irr;
       } catch { return null; }
     })
@@ -1135,15 +1159,17 @@ function calculateScenarios(baseInput) {
 
 function calculateFullFinancials(input) {
   const assetClass = input.assetClass || 'residential_apartments';
+  let result;
   switch (assetClass) {
-    case 'residential_apartments': return calculateResidentialApartments(input);
-    case 'plotted_development':    return calculatePlottedDevelopment(input);
+    case 'residential_apartments': result = calculateResidentialApartments(input); break;
+    case 'plotted_development':    result = calculatePlottedDevelopment(input); break;
     case 'commercial_office':
     case 'retail':
-    case 'industrial':             return calculateIncomeAsset({ ...input, assetClass });
-    case 'hospitality':            return calculateHospitality(input);
+    case 'industrial':             result = calculateIncomeAsset({ ...input, assetClass }); break;
+    case 'hospitality':            result = calculateHospitality(input); break;
     default: throw new Error(`Unknown asset class: ${assetClass}`);
   }
+  return withLegacyAliases(result);
 }
 
 // ─── LEGACY SENSITIVITY ALIAS ─────────────────────────────────────────────────
@@ -1168,6 +1194,65 @@ function buildSensitivityMatrix(baseParams) {
   });
 }
 
+function buildLegacyCashFlows(input = {}) {
+  const quarters = Math.max(1, Math.ceil((Number(input.projectDurationMonths) || 12) / 3));
+  const cfs = new Array(quarters + 1).fill(0);
+
+  const landCostCr = Number(input.landCostCr) || 0;
+  const stampDutyCr = Number(input.stampDutyCr) || 0;
+  const totalConstructionCostCr = Number(input.totalConstructionCostCr) || 0;
+  const gstCostCr = Number(input.gstCostCr) || 0;
+  const approvalCostCr = Number(input.approvalCostCr) || 0;
+  const marketingCostCr = Number(input.marketingCostCr) || 0;
+  const financeCostPct = Number(input.financeParams?.financeCostPct) || 0;
+  const totalRevenueCr = Number(input.totalRevenueCr) || 0;
+
+  cfs[0] = -(landCostCr + stampDutyCr + (approvalCostCr * 0.25));
+
+  const developmentCostCr =
+    totalConstructionCostCr
+    + gstCostCr
+    + (approvalCostCr * 0.75)
+    + marketingCostCr
+    + (totalConstructionCostCr * (financeCostPct / 100) * (quarters / 4));
+
+  const spendWeights = sCurveWeights(quarters);
+  for (let quarter = 1; quarter <= quarters; quarter += 1) {
+    cfs[quarter] -= developmentCostCr * spendWeights[quarter - 1];
+  }
+
+  const salesStartQuarter = Math.max(1, Math.ceil(quarters * 0.5));
+  const salesQuarters = quarters - salesStartQuarter + 1;
+  const salesWeights = Array.from({ length: salesQuarters }, (_, index) => index + 1);
+  const salesWeightTotal = salesWeights.reduce((sum, weight) => sum + weight, 0);
+
+  for (let quarter = salesStartQuarter; quarter <= quarters; quarter += 1) {
+    const weight = salesWeights[quarter - salesStartQuarter];
+    cfs[quarter] += totalRevenueCr * (weight / salesWeightTotal);
+  }
+
+  return safeCashFlows(cfs);
+}
+
+function withLegacyAliases(result) {
+  return {
+    ...result,
+    grossAreaSqft: result._legacy?.gross_area_sqft ?? result.areas?.grossBuiltUp ?? null,
+    saleableAreaSqft: result._legacy?.saleable_area_sqft ?? result.areas?.saleable ?? null,
+    totalConstructionCostCr: result._legacy?.total_construction_cost_cr ?? result.costs?.construction ?? null,
+    totalRevenueCr: result._legacy?.total_revenue_cr ?? result.revenue?.totalRevenueCr ?? null,
+    totalCostCr: result._legacy?.total_cost_cr ?? result.costs?.total ?? null,
+    grossProfitCr: result._legacy?.gross_profit_cr ?? result.revenue?.grossProfitCr ?? null,
+    grossMarginPct: result._legacy?.gross_margin_pct ?? result.kpis?.grossMarginPct ?? null,
+    irrPct: result._legacy?.irr_pct ?? result.kpis?.irr ?? null,
+    npvCr: result._legacy?.npv_cr ?? result.kpis?.npv ?? null,
+    residualLandValueCr: result._legacy?.residual_land_value_cr ?? result.kpis?.rlv ?? null,
+    equityMultiple: result._legacy?.equity_multiple ?? result.kpis?.equityMultiple ?? null,
+    gstCostCr: result._legacy?.gst_cost_cr ?? result.costs?.gst ?? null,
+    stampDutyCr: result._legacy?.stamp_duty_cr ?? result.costs?.stampDuty ?? null,
+  };
+}
+
 module.exports = {
   calculateIRR,
   calculateNPV,
@@ -1175,5 +1260,5 @@ module.exports = {
   calculateFullFinancials,
   calculateScenarios,
   buildSensitivityMatrix,
-  buildCashFlows: () => { throw new Error('Deprecated: use calculateFullFinancials'); },
+  buildCashFlows: buildLegacyCashFlows,
 };

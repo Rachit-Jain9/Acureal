@@ -7,6 +7,8 @@
 
 -- ── 1. MARKET TRANSACTIONS TABLE ─────────────────────────────
 
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE IF NOT EXISTS market_transactions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   fiscal_year     VARCHAR(10)  NOT NULL,          -- 'FY2025', 'FY2026', 'FY2027'

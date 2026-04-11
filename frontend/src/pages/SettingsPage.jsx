@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, User, Lock, Palette, Save, Loader2, DollarSign, Brain } from 'lucide-react';
+import { User, Lock, Palette, Save, Loader2, DollarSign, Brain } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
@@ -38,7 +38,7 @@ const DATE_FORMAT_OPTIONS = [
 ];
 
 export default function SettingsPage() {
-  const { user, updateProfile } = useAuthStore();
+  const { user, updateProfile, sessionPersistence } = useAuthStore();
 
   // Profile form
   const [profile, setProfile] = useState({
@@ -248,6 +248,14 @@ export default function SettingsPage() {
           <Lock size={18} />
           Security
         </h3>
+        <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+          <p className="text-sm font-medium text-gray-800">Current session behavior</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {sessionPersistence === 'persistent'
+              ? 'Remember me is enabled for this browser. REDIP will keep this session across browser restarts until you sign out.'
+              : 'This is a browser-session login. REDIP will sign you out when the browser closes unless you choose Remember me at sign-in.'}
+          </p>
+        </div>
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>

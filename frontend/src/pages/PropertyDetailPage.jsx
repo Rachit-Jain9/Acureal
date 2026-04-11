@@ -42,7 +42,7 @@ export default function PropertyDetailPage() {
           title="Property not found"
           description="The property details could not be loaded."
           action={
-            <button onClick={() => navigate('/properties')} className="btn btn-secondary">
+            <button onClick={() => navigate('/dashboard/deals')} className="btn btn-secondary">
               Back to Properties
             </button>
           }
@@ -54,7 +54,7 @@ export default function PropertyDetailPage() {
   return (
     <div className="space-y-6">
       <button
-        onClick={() => navigate('/properties')}
+        onClick={() => navigate('/dashboard/deals')}
         className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
       >
         <ArrowLeft size={16} /> Back to Properties
@@ -213,7 +213,7 @@ export default function PropertyDetailPage() {
               return (
                 <Link
                   key={deal.id}
-                  to={`/deals/${deal.id}`}
+                  to={`/dashboard/deals/${deal.id}`}
                   className="rounded-xl border border-gray-200 p-4 hover:shadow-sm transition"
                 >
                   <div className="flex items-start justify-between gap-3">

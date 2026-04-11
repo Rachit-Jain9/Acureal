@@ -25,31 +25,40 @@ ALTER TABLE deal_stage_history ENABLE ROW LEVEL SECURITY;
 -- RLS automatically. These policies are supplementary for additional roles.
 
 -- Properties: read-all, write by service role only (Express enforces auth)
-CREATE POLICY IF NOT EXISTS "properties_select_all"
+DROP POLICY IF EXISTS "properties_select_all" ON properties;
+CREATE POLICY "properties_select_all"
   ON properties FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "deals_select_all"
+DROP POLICY IF EXISTS "deals_select_all" ON deals;
+CREATE POLICY "deals_select_all"
   ON deals FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "financials_select_all"
+DROP POLICY IF EXISTS "financials_select_all" ON financials;
+CREATE POLICY "financials_select_all"
   ON financials FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "comps_select_all"
+DROP POLICY IF EXISTS "comps_select_all" ON comps;
+CREATE POLICY "comps_select_all"
   ON comps FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "documents_select_all"
+DROP POLICY IF EXISTS "documents_select_all" ON documents;
+CREATE POLICY "documents_select_all"
   ON documents FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "activities_select_all"
+DROP POLICY IF EXISTS "activities_select_all" ON activities;
+CREATE POLICY "activities_select_all"
   ON activities FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "intelligence_briefs_select_all"
+DROP POLICY IF EXISTS "intelligence_briefs_select_all" ON intelligence_briefs;
+CREATE POLICY "intelligence_briefs_select_all"
   ON intelligence_briefs FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "market_notes_select_all"
+DROP POLICY IF EXISTS "market_notes_select_all" ON market_notes;
+CREATE POLICY "market_notes_select_all"
   ON market_notes FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "deal_stage_history_select_all"
+DROP POLICY IF EXISTS "deal_stage_history_select_all" ON deal_stage_history;
+CREATE POLICY "deal_stage_history_select_all"
   ON deal_stage_history FOR SELECT USING (true);
 
 -- ─── Supabase Storage bucket: redip-documents ─────────────────────────────────

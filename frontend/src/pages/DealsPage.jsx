@@ -19,12 +19,38 @@ import {
 } from '../utils/format';
 import { buildLandPricingPreview } from '../utils/landPricing';
 
+const ASSET_CLASS_LABELS = {
+  residential_apartments: 'Residential Apts',
+  plotted_development: 'Plotted Dev',
+  villas: 'Villas',
+  commercial_office: 'Commercial Office',
+  retail: 'Retail',
+  industrial_warehousing: 'Industrial/WH',
+  hospitality: 'Hospitality',
+  mixed_use: 'Mixed Use',
+  raw_land: 'Raw Land',
+  redevelopment: 'Redevelopment',
+};
+
+const DEAL_STRUCTURE_LABELS = {
+  outright: 'Outright',
+  jv: 'JV',
+  jda: 'JDA',
+  revenue_share: 'Rev Share',
+  area_share: 'Area Share',
+  profit_share: 'Profit Share',
+  ground_lease: 'Ground Lease',
+  hybrid: 'Hybrid',
+};
+
 const INITIAL_FORM = {
   propertyId: '',
   name: '',
   dealType: 'acquisition',
   stage: 'screening',
   priority: 'medium',
+  assetClass: 'residential_apartments',
+  dealStructure: 'outright',
   landPricingBasis: 'total_cr',
   landPriceRateInr: '',
   landExtentInputValue: '',
@@ -107,11 +133,13 @@ export default function DealsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
-      propertyId: form.propertyId,
+      propertyId: form.propertyId || undefined,
       name: form.name,
       dealType: form.dealType,
       stage: form.stage,
       priority: form.priority,
+      assetClass: form.assetClass,
+      dealStructure: form.dealStructure,
       landPricingBasis: form.landPricingBasis,
       landPriceRateInr: form.landPriceRateInr ? parseFloat(form.landPriceRateInr) : undefined,
       landExtentInputValue: form.landExtentInputValue ? parseFloat(form.landExtentInputValue) : undefined,
@@ -228,7 +256,7 @@ export default function DealsPage() {
               return (
                 <Link
                   key={deal.id}
-                  to={`/deals/${deal.id}`}
+                  to={`/dashboard/deals/${deal.id}`}
                   className="card hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -239,15 +267,57 @@ export default function DealsPage() {
                   <p className="text-sm text-gray-600 mb-1">{deal.property_name || 'Unlinked property'}</p>
                   <p className="text-xs text-gray-400 mb-3">{deal.city}{deal.state ? `, ${deal.state}` : ''}</p>
 
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-400">Land Area</p>
+                      <p className="font-medium text-gray-800">
+                        {deal.land_area_acres
+                          ? `${Number(deal.land_area_acres).toFixed(2)} acres`
+                          : deal.land_area_sqft
+                            ? `${Number(deal.land_area_sqft).toLocaleString('en-IN')} sqft`
+                            : 'Pending'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Headline Economics</p>
+                      <p className="font-medium text-gray-800">
+                        {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center flex-wrap gap-2 mb-3">
                     <Badge className={priorityCfg.color}>{priorityCfg.label}</Badge>
                     <span className="text-xs text-gray-500">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
-                    {deal.property_type && (
+                    {deal.asset_class && (
                       <span className="text-xs text-gray-500">
-                        {PROPERTY_TYPE_LABELS[deal.property_type] || deal.property_type}
+                        {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}
+                      </span>
+                    )}
+                    {deal.deal_structure && (
+                      <span className="text-xs text-gray-500">
+                        {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}
                       </span>
                     )}
                   </div>
+
+                  {Array.isArray(deal.key_risks) && deal.key_risks.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      {deal.key_risks.slice(0, 2).map((risk) => (
+                        <span
+                          key={risk}
+                          className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
+                        >
+                          {risk}
+                        </span>
+                      ))}
+                      {deal.open_high_risk_count > 2 && (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                          +{deal.open_high_risk_count - 2} more
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between text-sm border-t pt-3">
                     <div>
@@ -260,9 +330,9 @@ export default function DealsPage() {
                     </div>
                   </div>
 
-                  {deal.last_activity_date && (
+                  {(deal.last_activity_date || deal.updated_at) && (
                     <p className="text-xs text-gray-400 mt-2">
-                      Last activity {formatRelativeTime(deal.last_activity_date)}
+                      Updated {formatRelativeTime(deal.last_activity_date || deal.updated_at)}
                     </p>
                   )}
                 </Link>
@@ -316,7 +386,7 @@ export default function DealsPage() {
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Linked Property</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Property</label>
                 <select
                   name="propertyId"
                   value={form.propertyId}
@@ -378,6 +448,34 @@ export default function DealsPage() {
                     {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => (
                       <option key={key} value={key}>{cfg.label}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Asset Class</label>
+                  <select name="assetClass" value={form.assetClass} onChange={handleFormChange} className="input w-full">
+                    <option value="residential_apartments">Residential Apartments</option>
+                    <option value="plotted_development">Plotted Development</option>
+                    <option value="villas">Villas</option>
+                    <option value="commercial_office">Commercial Office</option>
+                    <option value="retail">Retail</option>
+                    <option value="industrial_warehousing">Industrial / Warehousing</option>
+                    <option value="hospitality">Hospitality</option>
+                    <option value="mixed_use">Mixed Use</option>
+                    <option value="raw_land">Raw Land</option>
+                    <option value="redevelopment">Redevelopment</option>
+                  </select>
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Deal Structure</label>
+                  <select name="dealStructure" value={form.dealStructure} onChange={handleFormChange} className="input w-full">
+                    <option value="outright">Outright Purchase</option>
+                    <option value="jv">JV (Joint Venture)</option>
+                    <option value="jda">JDA (Development Agreement)</option>
+                    <option value="revenue_share">Revenue Share</option>
+                    <option value="area_share">Area Share</option>
+                    <option value="profit_share">Profit Share</option>
+                    <option value="ground_lease">Ground Lease</option>
+                    <option value="hybrid">Hybrid</option>
                   </select>
                 </div>
               </div>

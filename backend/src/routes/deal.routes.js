@@ -11,6 +11,8 @@ const {
   normalizePropertyType,
   normalizeAreaUnit,
   normalizeLandPricingBasis,
+  ASSET_CLASSES,
+  DEAL_STRUCTURES,
 } = require('../constants/domain');
 
 const router = express.Router();
@@ -108,6 +110,8 @@ router.post(
     body('negotiatedPriceCr').optional().isFloat({ min: 0 }),
     body('targetLaunchDate').optional().isISO8601(),
     body('expectedCloseDate').optional().isISO8601(),
+    body('assetClass').optional().isIn(ASSET_CLASSES),
+    body('dealStructure').optional().isIn(DEAL_STRUCTURES),
   ],
   handleValidation,
   async (req, res, next) => {
@@ -147,6 +151,8 @@ router.put(
     body('landExtentInputValue').optional().isFloat({ min: 0.01 }),
     body('landExtentInputUnit').optional().customSanitizer(normalizeAreaUnit).isIn(AREA_UNITS),
     body('negotiatedPriceCr').optional().isFloat({ min: 0 }),
+    body('assetClass').optional().isIn(ASSET_CLASSES),
+    body('dealStructure').optional().isIn(DEAL_STRUCTURES),
   ],
   handleValidation,
   async (req, res, next) => {
@@ -211,6 +217,22 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next)
   try {
     const result = await dealService.deleteDeal(req.params.id);
     res.json({ success: true, message: 'Deal deleted.', data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /deals/:id/readiness
+router.get('/:id/readiness', authenticate, async (req, res, next) => {
+  try {
+    const deal = await dealService.getDealById(req.params.id);
+    res.json({
+      success: true,
+      data: {
+        readiness_summary: deal.readiness_summary,
+        next_steps: deal.next_steps,
+      },
+    });
   } catch (error) {
     next(error);
   }

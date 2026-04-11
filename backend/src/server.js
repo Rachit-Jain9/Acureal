@@ -19,6 +19,10 @@ const dashboardRoutes = require('./routes/dashboard.routes');
 const exportRoutes = require('./routes/export.routes');
 const healthRoutes = require('./routes/health.routes');
 const intelligenceRoutes = require('./routes/intelligence.routes');
+const ddRoutes = require('./routes/dd.routes');
+const approvalsRoutes = require('./routes/approvals.routes');
+const riskRoutes = require('./routes/risk.routes');
+const extractionRoutes = require('./routes/extraction.routes');
 
 const app = express();
 
@@ -82,6 +86,10 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/exports', exportRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api', ddRoutes);
+app.use('/api', approvalsRoutes);
+app.use('/api', riskRoutes);
+app.use('/api', extractionRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

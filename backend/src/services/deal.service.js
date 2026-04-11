@@ -7,6 +7,7 @@ const {
   LIVE_DEAL_STAGES,
 } = require('../constants/domain');
 const { calculateLandPricing } = require('../utils/landPricing');
+const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 
 const buildStageOrderCase = (column = 'd.stage') => `
   CASE ${column}
@@ -44,6 +45,10 @@ const dealSelect = `
   p.land_area_sqft,
   p.land_area_acres,
   p.zoning,
+  p.pincode,
+  p.existing_fsi,
+  p.ownership_type,
+  p.encumbrance_status,
   p.address as property_address,
   p.geocode_status,
   u.name as assigned_to_name,
@@ -62,7 +67,72 @@ const dealSelect = `
     WHERE deal_id = d.id
     ORDER BY activity_date DESC
     LIMIT 1
-  ) as last_activity_date
+  ) as last_activity_date,
+  (
+    SELECT COUNT(*)
+    FROM documents doc
+    WHERE doc.deal_id = d.id
+  ) as document_count,
+  (
+    SELECT COUNT(*)
+    FROM dd_items ddi
+    WHERE ddi.deal_id = d.id
+      AND ddi.is_required = TRUE
+      AND ddi.status NOT IN ('completed', 'not_applicable')
+  ) as pending_required_dd_count,
+  (
+    SELECT COUNT(*)
+    FROM dd_items ddi
+    WHERE ddi.deal_id = d.id
+      AND ddi.is_required = TRUE
+      AND ddi.severity = 'deal_breaker'
+      AND ddi.status NOT IN ('completed', 'not_applicable')
+  ) as pending_deal_breakers,
+  (
+    SELECT COUNT(*)
+    FROM approval_items ai
+    WHERE ai.deal_id = d.id
+      AND ai.is_required = TRUE
+  ) as required_approval_count,
+  (
+    SELECT COUNT(*)
+    FROM approval_items ai
+    WHERE ai.deal_id = d.id
+      AND ai.is_required = TRUE
+      AND (
+        ai.is_validated = TRUE
+        OR ai.status IN ('validated', 'approved')
+      )
+  ) as validated_approval_count,
+  (
+    SELECT COUNT(*)
+    FROM risk_flags rf
+    WHERE rf.deal_id = d.id
+      AND rf.status IN ('open', 'flagged')
+      AND rf.severity IN ('critical', 'high')
+  ) as open_high_risk_count,
+  COALESCE(
+    (
+      SELECT json_agg(rf.title ORDER BY risk_order, created_at DESC)
+      FROM (
+        SELECT
+          title,
+          created_at,
+          CASE severity
+            WHEN 'critical' THEN 1
+            WHEN 'high' THEN 2
+            WHEN 'medium' THEN 3
+            ELSE 4
+          END AS risk_order
+        FROM risk_flags
+        WHERE deal_id = d.id
+          AND status IN ('open', 'flagged')
+        ORDER BY risk_order, created_at DESC
+        LIMIT 3
+      ) rf
+    ),
+    '[]'::json
+  ) as key_risks
 `;
 
 const getPropertyContext = async (client, propertyId) => {
@@ -103,13 +173,15 @@ const createDeal = async (data, userId) =>
         target_launch_date, expected_close_date, land_pricing_basis,
         land_price_rate_inr, land_extent_input_value, land_extent_input_unit,
         land_ask_price_cr, negotiated_price_cr, jv_split_developer_pct, jv_split_landowner_pct,
-        rera_number, rera_expiry_date, notes, priority, created_by
+        rera_number, rera_expiry_date, notes, priority, created_by,
+        asset_class, deal_structure
       ) VALUES (
         $1,$2,$3,$4,$5,
         $6,$7,$8,
         $9,$10,$11,
         $12,$13,$14,$15,
-        $16,$17,$18,$19,$20
+        $16,$17,$18,$19,$20,
+        $21,$22
       )
       RETURNING *`,
       [
@@ -133,6 +205,8 @@ const createDeal = async (data, userId) =>
         data.notes || null,
         data.priority || 'medium',
         userId,
+        data.assetClass || 'residential_apartments',
+        data.dealStructure || 'outright',
       ]
     );
 
@@ -235,8 +309,19 @@ const getDeals = async (filters = {}, pagination = {}) => {
     [...values, limit, offset]
   );
 
+  const normalizedRows = dataResult.rows.map((row) => ({
+    ...row,
+    document_count: parseInt(row.document_count, 10) || 0,
+    pending_required_dd_count: parseInt(row.pending_required_dd_count, 10) || 0,
+    pending_deal_breakers: parseInt(row.pending_deal_breakers, 10) || 0,
+    required_approval_count: parseInt(row.required_approval_count, 10) || 0,
+    validated_approval_count: parseInt(row.validated_approval_count, 10) || 0,
+    open_high_risk_count: parseInt(row.open_high_risk_count, 10) || 0,
+    key_risks: Array.isArray(row.key_risks) ? row.key_risks : [],
+  }));
+
   return {
-    data: dataResult.rows,
+    data: normalizedRows,
     pagination: {
       total: parseInt(countResult.rows[0].count, 10),
       page,
@@ -268,35 +353,83 @@ const getDealById = async (id) => {
     throw createError('Deal not found.', 404);
   }
 
-  const deal = result.rows[0];
+  const deal = {
+    ...result.rows[0],
+    document_count: parseInt(result.rows[0].document_count, 10) || 0,
+    pending_required_dd_count: parseInt(result.rows[0].pending_required_dd_count, 10) || 0,
+    pending_deal_breakers: parseInt(result.rows[0].pending_deal_breakers, 10) || 0,
+    required_approval_count: parseInt(result.rows[0].required_approval_count, 10) || 0,
+    validated_approval_count: parseInt(result.rows[0].validated_approval_count, 10) || 0,
+    open_high_risk_count: parseInt(result.rows[0].open_high_risk_count, 10) || 0,
+    key_risks: Array.isArray(result.rows[0].key_risks) ? result.rows[0].key_risks : [],
+  };
 
-  const financialsResult = await query('SELECT * FROM financials WHERE deal_id = $1', [id]);
+  const [
+    financialsResult,
+    activitiesResult,
+    historyResult,
+    ddItemsResult,
+    approvalsResult,
+    riskFlagsResult,
+    documentCategoriesResult,
+  ] = await Promise.all([
+    query('SELECT * FROM financials WHERE deal_id = $1', [id]),
+    query(
+      `SELECT a.*, u.name as performed_by_name, completer.name as completed_by_name
+       FROM activities a
+       LEFT JOIN users u ON a.performed_by = u.id
+       LEFT JOIN users completer ON a.completed_by = completer.id
+       WHERE a.deal_id = $1
+       ORDER BY a.activity_date DESC
+       LIMIT 10`,
+      [id]
+    ),
+    query(
+      `SELECT dsh.*, u.name as changed_by_name
+       FROM deal_stage_history dsh
+       LEFT JOIN users u ON dsh.changed_by = u.id
+       WHERE dsh.deal_id = $1
+       ORDER BY dsh.changed_at ASC`,
+      [id]
+    ),
+    query('SELECT * FROM dd_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
+    query('SELECT * FROM approval_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
+    query('SELECT * FROM risk_flags WHERE deal_id = $1 ORDER BY created_at DESC', [id]),
+    query(
+      `SELECT doc_category, COUNT(*) AS count
+       FROM documents
+       WHERE deal_id = $1
+       GROUP BY doc_category`,
+      [id]
+    ),
+  ]);
+
   deal.financials = financialsResult.rows[0] || null;
-
-  const activitiesResult = await query(
-    `SELECT a.*, u.name as performed_by_name, completer.name as completed_by_name
-     FROM activities a
-     LEFT JOIN users u ON a.performed_by = u.id
-     LEFT JOIN users completer ON a.completed_by = completer.id
-     WHERE a.deal_id = $1
-     ORDER BY a.activity_date DESC
-     LIMIT 10`,
-    [id]
-  );
   deal.recent_activities = activitiesResult.rows;
-
-  const historyResult = await query(
-    `SELECT dsh.*, u.name as changed_by_name
-     FROM deal_stage_history dsh
-     LEFT JOIN users u ON dsh.changed_by = u.id
-     WHERE dsh.deal_id = $1
-     ORDER BY dsh.changed_at ASC`,
-    [id]
-  );
   deal.stage_history = historyResult.rows;
-
-  const docCount = await query('SELECT COUNT(*) FROM documents WHERE deal_id = $1', [id]);
-  deal.document_count = parseInt(docCount.rows[0].count, 10);
+  deal.dd_items = ddItemsResult.rows;
+  deal.approval_items = approvalsResult.rows;
+  deal.risk_flags = riskFlagsResult.rows;
+  deal.document_category_counts = Object.fromEntries(
+    documentCategoriesResult.rows.map((row) => [row.doc_category, parseInt(row.count, 10) || 0]),
+  );
+  deal.readiness_summary = buildReadinessSummary({
+    ddItems: deal.dd_items,
+    approvals: deal.approval_items,
+    riskFlags: deal.risk_flags,
+    financials: deal.financials,
+    documentCount: deal.document_count,
+  });
+  deal.next_steps = deriveNextSteps({
+    deal,
+    ddItems: deal.dd_items,
+    approvals: deal.approval_items,
+    riskFlags: deal.risk_flags,
+    financials: deal.financials,
+    documentCount: deal.document_count,
+    documentCategoryCounts: deal.document_category_counts,
+    readinessSummary: deal.readiness_summary,
+  });
 
   return deal;
 };
@@ -348,8 +481,10 @@ const updateDeal = async (id, data) =>
         rera_expiry_date = $16,
         notes = $17,
         priority = $18,
+        asset_class = $19,
+        deal_structure = $20,
         updated_at = NOW()
-      WHERE id = $19
+      WHERE id = $21
       RETURNING *`,
       [
         propertyId,
@@ -370,6 +505,8 @@ const updateDeal = async (id, data) =>
         data.reraExpiryDate ?? existingDeal.rera_expiry_date,
         data.notes ?? existingDeal.notes,
         data.priority ?? existingDeal.priority,
+        data.assetClass ?? existingDeal.asset_class,
+        data.dealStructure ?? existingDeal.deal_structure,
         id,
       ]
     );

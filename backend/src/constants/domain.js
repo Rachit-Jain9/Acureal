@@ -109,6 +109,78 @@ const canTransitionStage = (fromStage, toStage) => {
   return allowedTransitions.includes(toStage);
 };
 
+const ASSET_CLASSES = [
+  'residential_apartments',
+  'plotted_development',
+  'villas',
+  'commercial_office',
+  'retail',
+  'industrial_warehousing',
+  'hospitality',
+  'mixed_use',
+  'raw_land',
+  'redevelopment',
+];
+
+const DEAL_STRUCTURES = [
+  'outright',
+  'jv',
+  'jda',
+  'revenue_share',
+  'area_share',
+  'profit_share',
+  'ground_lease',
+  'hybrid',
+];
+
+const DOC_TYPES = [
+  'title_deed',
+  'mother_deed',
+  'sale_deed',
+  'ec',
+  'rtc_pahani',
+  'mutation',
+  'conversion_certificate',
+  'khata',
+  'layout_approval',
+  'sanctioned_plan',
+  'jda_jv',
+  'broker_quote',
+  'other',
+];
+
+const DD_CATEGORIES = [
+  'title_ownership',
+  'land_classification',
+  'seller_validity',
+  'statutory',
+  'financial_commercial',
+  'project_specific',
+  'physical_technical',
+];
+
+const DD_SEVERITIES = ['deal_breaker', 'buildability_blocker', 'commercial_blocker', 'secondary'];
+const DD_STATUSES = ['pending', 'in_progress', 'completed', 'flagged', 'not_applicable'];
+
+const APPROVAL_TYPES = [
+  'planning',
+  'conversion',
+  'khata',
+  'building_plan',
+  'fire_noc',
+  'water_sewage',
+  'power',
+  'airport_height',
+  'environment',
+  'pollution',
+  'drainage_nala',
+  'rera',
+  'other',
+];
+
+const RISK_CATEGORIES = ['title', 'zoning', 'regulatory', 'financial', 'physical', 'market', 'legal'];
+const RISK_SEVERITIES = ['critical', 'high', 'medium', 'low'];
+
 module.exports = {
   PROPERTY_TYPES,
   ZONING_TYPES,
@@ -125,4 +197,13 @@ module.exports = {
   normalizeAreaUnit,
   normalizeLandPricingBasis,
   canTransitionStage,
+  ASSET_CLASSES,
+  DEAL_STRUCTURES,
+  DOC_TYPES,
+  DD_CATEGORIES,
+  DD_SEVERITIES,
+  DD_STATUSES,
+  APPROVAL_TYPES,
+  RISK_CATEGORIES,
+  RISK_SEVERITIES,
 };

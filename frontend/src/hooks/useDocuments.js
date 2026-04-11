@@ -12,7 +12,7 @@ export function useDocumentDealOptions() {
 export function useDocuments(dealId, category) {
   return useQuery({
     queryKey: ['documents', dealId, category],
-    queryFn: () => documentsAPI.list(dealId, category).then((r) => r.data),
+    queryFn: () => documentsAPI.list(dealId, category).then((r) => r.data.documents ?? r.data),
     enabled: !!dealId,
   });
 }
@@ -38,5 +38,12 @@ export function useDeleteDocument() {
       toast.success('Document deleted');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Delete failed'),
+  });
+}
+
+export function useDownloadDocument() {
+  return useMutation({
+    mutationFn: ({ dealId, docId }) => documentsAPI.download(dealId, docId).then((r) => r.data),
+    onError: (err) => toast.error(err.response?.data?.message || 'Download failed'),
   });
 }

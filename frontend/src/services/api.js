@@ -22,7 +22,7 @@ const api = axios.create({
 
 // Attach JWT token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -36,6 +36,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
@@ -128,12 +130,12 @@ export const dashboardAPI = {
 
 // Intelligence
 export const intelligenceAPI = {
-  getDailyBrief:           (date)   => api.get('/intelligence/daily-brief', { params: { date } }),
-  getMarketNotes:          ()       => api.get('/intelligence/market-notes'),
-  saveMarketNotes:         (section, items) => api.put('/intelligence/market-notes', { section, items }),
-  getMarketTransactions:   (params) => api.get('/intelligence/market-transactions', { params }),
-  getMicroMarketBenchmarks:(params) => api.get('/intelligence/micro-market-benchmarks', { params }),
-  getDealAnalysis:         (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
+  getDailyBrief:            (date)   => api.get('/intelligence/daily-brief', { params: { date } }),
+  getMarketNotes:           ()       => api.get('/intelligence/market-notes'),
+  saveMarketNotes:          (section, items) => api.put('/intelligence/market-notes', { section, items }),
+  getMarketTransactions:    (params) => api.get('/intelligence/market-transactions', { params }),
+  getMicroMarketBenchmarks: (params) => api.get('/intelligence/micro-market-benchmarks', { params }),
+  getDealAnalysis:          (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
 };
 
 // Exports
@@ -141,6 +143,42 @@ export const exportsAPI = {
   deals: (params) => api.get('/exports/deals', { params, responseType: 'blob' }),
   comps: () => api.get('/exports/comps', { responseType: 'blob' }),
   icReport: (dealId) => api.get(`/exports/ic-report/${dealId}`),
+};
+
+// DD Items
+export const ddAPI = {
+  list:         (dealId)           => api.get(`/deals/${dealId}/dd`),
+  create:       (dealId, data)     => api.post(`/deals/${dealId}/dd`, data),
+  update:       (dealId, id, data) => api.put(`/deals/${dealId}/dd/${id}`, data),
+  updateStatus: (dealId, id, status) => api.patch(`/deals/${dealId}/dd/${id}/status`, { status }),
+  delete:       (dealId, id)       => api.delete(`/deals/${dealId}/dd/${id}`),
+  seed:         (dealId)           => api.post(`/deals/${dealId}/dd/seed`),
+  score:        (dealId)           => api.get(`/deals/${dealId}/dd/score`),
+};
+
+// Approval Items
+export const approvalsAPI = {
+  list:   (dealId)           => api.get(`/deals/${dealId}/approvals`),
+  create: (dealId, data)     => api.post(`/deals/${dealId}/approvals`, data),
+  update: (dealId, id, data) => api.put(`/deals/${dealId}/approvals/${id}`, data),
+  delete: (dealId, id)       => api.delete(`/deals/${dealId}/approvals/${id}`),
+  seed:   (dealId)           => api.post(`/deals/${dealId}/approvals/seed`),
+};
+
+// Risk Flags
+export const riskAPI = {
+  list:   (dealId)           => api.get(`/deals/${dealId}/risk`),
+  create: (dealId, data)     => api.post(`/deals/${dealId}/risk`, data),
+  update: (dealId, id, data) => api.put(`/deals/${dealId}/risk/${id}`, data),
+  delete: (dealId, id)       => api.delete(`/deals/${dealId}/risk/${id}`),
+  score:  (dealId)           => api.get(`/deals/${dealId}/risk/score`),
+};
+
+// Document Extraction
+export const extractionAPI = {
+  extract:          (documentId, data)                            => api.post(`/documents/${documentId}/extract`, data),
+  getResult:        (documentId)                                  => api.get(`/documents/${documentId}/extraction`),
+  applyCorrections: (documentId, extractionId, corrections)       => api.put(`/documents/${documentId}/extraction/${extractionId}/corrections`, { corrections }),
 };
 
 export default api;

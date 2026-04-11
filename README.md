@@ -1,31 +1,33 @@
 # REDIP
 
-REDIP is a Real Estate Development Intelligence Platform for Indian development and capital-markets workflows. It combines pipeline management, property intelligence, underwriting context, spatial analysis, comparable tracking, and a Bengaluru-first intelligence brief scaffold.
+REDIP is an AI-powered deal intelligence, due diligence, underwriting, and investor reporting platform for India, with Bengaluru as the priority market.
+
+## What the app does
+
+- Keeps `deals` as the master workspace for parcel data, documents, activities, DD, approvals, risks, and underwriting.
+- Ingests real documents and supports Gemini-based extraction for uploaded evidence.
+- Synthesizes deterministic deal readiness and next steps from DD, approvals, risks, document coverage, and financial state.
+- Supports investor-grade underwriting, market intelligence, comps, and reporting workflows without fabricating external facts.
 
 ## Stack
 
 - Frontend: React 18, Vite, React Router, React Query, Zustand, Tailwind, Recharts, Leaflet
-- Backend: Node.js, Express, PostgreSQL, JWT auth
-- Deployment: Vercel serverless wrapper via [api/index.js](C:/Users/rachi/OneDrive%20-%20UW/Desktop/REDIP/api/index.js)
+- Backend: Express, PostgreSQL, JWT auth, multer uploads
+- Deployment: Vercel via `api/index.js`
 
-## Core product areas
+## Current architecture
 
-- Deal pipeline management with flexible stage transitions
-- Property management with optional early-stage data capture
-- Land pricing workflow with per-acre, per-sqft, and total-price entry
-- Activity tracking with completion, priority, filtering, and editing
-- Document uploads tied to live deals
-- Side-by-side opportunity comparison
-- Map intelligence with clustering, comps overlays, and stage heat layers
-- Dashboard metrics, city distribution, and recent activity
-- Verified-data daily real estate intelligence readiness for Bengaluru and India
+- Top-level navigation: Dashboard, Deals, Market Intelligence, Comps, Reports / Exports, Admin / Settings
+- Deal detail modules: Overview, Parcel / Site, Documents, Activity, Financial, DD / Approvals, Risk, Market / Comps
+- Legacy top-level routes for documents and activities redirect to deals
+- Properties list is no longer part of the primary workflow
 
 ## Local setup
 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL running locally or a hosted PostgreSQL connection string
+- PostgreSQL or Supabase Postgres
 
 ### Install
 
@@ -38,7 +40,7 @@ npm install
 
 ### Database
 
-For a fresh database:
+Fresh database:
 
 ```powershell
 cd backend
@@ -46,18 +48,20 @@ npm run migrate
 npm run seed
 ```
 
-For an existing database, apply incremental SQL from `database/migrations/` instead of rerunning the full schema.
+Incremental patching:
 
-### Start the app
+- use `database/migrations/` for existing databases
+- make sure `database/migrations/20260411_deal_centric_expansion.sql` has been applied
+- then apply `database/migrations/20260411_documents_and_security_alignment.sql`
 
-From the repo root:
+### Run locally
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\run-redip.ps1 check
 powershell -ExecutionPolicy Bypass -File .\run-redip.ps1 fullstack
 ```
 
-Or run them separately:
+Or separately:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\run-redip.ps1 backend
@@ -66,59 +70,57 @@ powershell -ExecutionPolicy Bypass -File .\run-redip.ps1 frontend
 
 ## Environment variables
 
-### Backend
-
 Copy `backend/.env.example` to `backend/.env`.
 
-Required:
+Core backend vars:
 
 - `DATABASE_URL`
 - `JWT_SECRET`
+- `CORS_ORIGINS`
 
-Optional:
+AI / document pipeline:
 
+- `GEMINI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- optional provider routing vars such as `AI_PROVIDER_DOCUMENT_EXTRACTION`, `AI_PROVIDER_REASONING`
+
+Storage / infra:
+
+- `BLOB_READ_WRITE_TOKEN` or Supabase storage credentials
 - `SUPABASE_URL`
 - `SUPABASE_KEY`
 - `SUPABASE_STORAGE_BUCKET`
-- `CORS_ORIGINS`
-- `MAX_FILE_SIZE_MB`
-- `ALLOWED_FILE_TYPES`
+- `GOOGLE_MAPS_API_KEY` for backend geocoding if used
 
-### Frontend
+Frontend:
 
-Copy `frontend/.env.example` to `frontend/.env`.
+- `VITE_API_URL=/api`
 
-- `VITE_API_URL=/api` for local Vite proxying
+## Validation
 
-## Testing and verification
-
-Backend:
+Backend tests:
 
 ```powershell
 cd backend
 npm test
 ```
 
-Frontend:
+Frontend build:
 
 ```powershell
 cd frontend
 npm run build
 ```
 
+## Important repo notes
+
+- Do not fabricate zoning, legal, market, or comp intelligence.
+- Do not use LLMs for financial math or deterministic scoring.
+- Keep provider calls behind backend adapters.
+- Check `TODO_MANUAL.md`, `TODO_DATA.md`, and `TODO_LEGAL.md` before presenting a feature as production-ready.
+
 ## Deployment
 
 - GitHub remote: `https://github.com/Rachit-Jain9/REDIP.git`
-- Vercel project linkage is stored in `.vercel/project.json`
-- Production app URL: `https://redip.vercel.app/`
-
-Production env vars to set in Vercel:
-
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `NODE_ENV=production`
-- `CORS_ORIGINS=https://redip.vercel.app`
-
-## Seed data note
-
-REDIP no longer ships with demo business data. `npm run seed` is a no-op confirmation step so local and production environments do not get polluted with mock deals, properties, comps, or activities. The recommended local path is to register a real user and add verified records through the app.
+- Vercel project metadata: `.vercel/project.json`
+- Production app: `https://redip.vercel.app/`

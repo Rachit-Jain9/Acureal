@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/database');
+const { getProviderAvailability, runClaudeReasoning } = require('./ai/providerRegistry');
 
 const HEATMAP_MARKETS = [
   'Whitefield',
@@ -85,25 +86,13 @@ const getNotesMap = async () => {
 
 // ─── CLAUDE API BRIEF GENERATION ─────────────────────────────────────────────
 
-const getAnthropicClient = () => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || /your[_-]/i.test(apiKey) || apiKey.startsWith('[')) return null;
-  try {
-    const { Anthropic } = require('@anthropic-ai/sdk');
-    return new Anthropic({ apiKey });
-  } catch {
-    return null;
-  }
-};
-
 /**
  * Generate a Claude-powered intelligence brief.
  * Cross-references internal pipeline against market benchmarks, verified transactions, and comps.
  * Sections: Deal of the Day, Market Signals, Risk Signals, Strategic Takeaways
  */
 const generateClaudeBrief = async (dealData, pipelineStats, notes, benchmarks, recentTx, topComps) => {
-  const client = getAnthropicClient();
-  if (!client) return null;
+  if (!getProviderAvailability().claude) return null;
 
   const hasNotes = notes.micro_market?.length || notes.slowdown?.length || notes.strategic?.length;
 
@@ -150,14 +139,11 @@ Rules:
   };
 
   try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 700,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: JSON.stringify(payload, null, 2) }],
+    return await runClaudeReasoning({
+      systemPrompt,
+      payload,
+      maxTokens: 700,
     });
-
-    return message.content[0]?.text || null;
   } catch (err) {
     console.error('[Intelligence] Claude brief generation failed:', err.message);
     return null;
@@ -323,8 +309,9 @@ const buildBrief = async (briefDate) => {
 // ─── DEAL ANALYSIS ───────────────────────────────────────────────────────────
 
 const getDealAnalysis = async (dealId) => {
-  const client = getAnthropicClient();
-  if (!client) return { analysis: null, reason: 'ANTHROPIC_API_KEY not configured' };
+  if (!getProviderAvailability().claude) {
+    return { analysis: null, reason: 'ANTHROPIC_API_KEY not configured' };
+  }
 
   const [dealResult, finResult, benchmarksResult, compsResult, txResult] = await Promise.all([
     query(
@@ -426,14 +413,12 @@ Rules:
   };
 
   try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: JSON.stringify(payload, null, 2) }],
-    });
     return {
-      analysis: message.content[0]?.text || null,
+      analysis: await runClaudeReasoning({
+        systemPrompt,
+        payload,
+        maxTokens: 600,
+      }),
       generatedAt: new Date().toISOString(),
       dealName: deal.name,
     };

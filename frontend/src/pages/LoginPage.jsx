@@ -9,6 +9,7 @@ export default function LoginPage() {
 
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -61,18 +62,21 @@ export default function LoginPage() {
 
     let success;
     if (isRegister) {
-      success = await register({
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        phone: form.phone || undefined,
-      });
+      success = await register(
+        {
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          phone: form.phone || undefined,
+        },
+        rememberMe,
+      );
     } else {
-      success = await login(form.email, form.password);
+      success = await login(form.email, form.password, rememberMe);
     }
 
     if (success) {
-      navigate('/');
+      navigate('/dashboard');
     }
   };
 
@@ -98,8 +102,8 @@ export default function LoginPage() {
           </h2>
           <p className="text-sm text-gray-500 mb-6">
             {isRegister
-              ? 'Sign up to start managing your deals'
-              : 'Sign in to your REDIP account'}
+              ? 'Create a deal workspace account for sourcing, diligence, and underwriting'
+              : 'Sign in to your REDIP deal intelligence workspace'}
           </p>
 
           {/* Server error */}
@@ -216,6 +220,25 @@ export default function LoginPage() {
                 )}
               </div>
             )}
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <input
+                  id="rememberMe"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                />
+                <label htmlFor="rememberMe" className="text-sm text-gray-600 cursor-pointer select-none">
+                  Remember me across browser restarts
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Default session behavior is privacy-first: if this stays unchecked, REDIP signs you
+                out when the browser closes.
+              </p>
+            </div>
 
             {/* Submit */}
             <button

@@ -95,7 +95,15 @@ const getDocuments = async (dealId, category = null) => {
   }
 
   const result = await query(
-    `SELECT d.*, u.name as uploaded_by_name
+    `SELECT
+       d.*,
+       d.name AS file_name,
+       d.name AS original_name,
+       d.file_type AS mime_type,
+       d.file_size_bytes AS file_size,
+       d.doc_category AS category,
+       d.created_at AS uploaded_at,
+       u.name as uploaded_by_name
      FROM documents d
      LEFT JOIN users u ON d.uploaded_by = u.id
      WHERE ${conditions.join(' AND ')}

@@ -78,3 +78,11 @@ export function useDeleteActivity() {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete activity'),
   });
 }
+
+export function useActivitiesByDeal(dealId) {
+  return useQuery({
+    queryKey: ['activities', dealId],
+    queryFn: () => activitiesAPI.list(dealId).then((r) => r.data.data || r.data),
+    enabled: !!dealId,
+  });
+}
