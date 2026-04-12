@@ -1,0 +1,9 @@
+{
+  "projectName": "REDIP",
+  "defaultTask": "deal-centric product and architecture work",
+  "notes": [
+    "Keep deals as the master entity.",
+    "Do not fabricate regulatory, legal, market, or financial facts.",
+    "LLMs may interpret and summarize; deterministic code must calculate."
+  ]
+}
