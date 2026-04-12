@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
+const { normalizeDatabaseUrl } = require('./databaseUrl');
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (!connectionString && process.env.NODE_ENV !== 'test') {
   console.error(

@@ -76,6 +76,15 @@ router.get('/:dealId/download/:documentId', authenticate, async (req, res, next)
   }
 });
 
+// GET /documents/:dealId/download/:documentId/file
+router.get('/:dealId/download/:documentId/file', authenticate, async (req, res, next) => {
+  try {
+    await documentService.streamDownload(req.params.documentId, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // DELETE /documents/:dealId/:documentId
 router.delete(
   '/:dealId/:documentId',

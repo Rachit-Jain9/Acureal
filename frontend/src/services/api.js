@@ -107,7 +107,10 @@ export const documentsAPI = {
   upload: (dealId, formData) => api.post(`/documents/${dealId}/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  download: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}`),
+  downloadMeta: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}`),
+  download: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}/file`, {
+    responseType: 'blob',
+  }),
   delete: (dealId, docId) => api.delete(`/documents/${dealId}/${docId}`),
 };
 

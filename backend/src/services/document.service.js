@@ -1,6 +1,6 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
-const { uploadFile, getDownloadUrl, deleteStorageFile } = require('../config/storage');
+const { uploadFile, getDownloadUrl, fetchStoredFile, deleteStorageFile } = require('../config/storage');
 const path = require('path');
 
 const getDocumentDealOptions = async () => {
@@ -169,10 +169,51 @@ const getSignedUrl = async (documentId) => {
   }
 };
 
+const streamDownload = async (documentId, res) => {
+  const result = await query('SELECT * FROM documents WHERE id = $1', [documentId]);
+
+  if (result.rows.length === 0) {
+    throw createError('Document not found.', 404);
+  }
+
+  const doc = result.rows[0];
+
+  try {
+    const file = await fetchStoredFile(doc.file_url, 3600);
+
+    res.setHeader('Content-Type', file.contentType || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', file.cacheControl || 'private, no-cache');
+
+    if (file.contentLength) {
+      res.setHeader('Content-Length', file.contentLength);
+    }
+
+    if (file.etag) {
+      res.setHeader('ETag', file.etag);
+    }
+
+    const fallbackName = doc.name || 'document';
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(fallbackName)}`
+    );
+
+    file.stream.on('error', (error) => {
+      res.destroy(error);
+    });
+
+    file.stream.pipe(res);
+  } catch (error) {
+    throw createError(`Could not download file: ${error.message}`, 500);
+  }
+};
+
 module.exports = {
   getDocumentDealOptions,
   uploadDocument,
   getDocuments,
   deleteDocument,
   getSignedUrl,
+  streamDownload,
 };

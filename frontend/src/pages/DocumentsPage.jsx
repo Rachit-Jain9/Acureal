@@ -17,6 +17,7 @@ import Badge from '../components/common/Badge';
 import { formatRelativeTime } from '../utils/format';
 import { documentsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
+import { downloadAxiosResponse } from '../utils/download';
 
 const CATEGORIES = [
   { value: 'om', label: 'Offering Memorandum' },
@@ -103,13 +104,7 @@ export default function DocumentsPage() {
   const handleDownload = async (doc) => {
     try {
       const response = await documentsAPI.download(selectedDealId, doc.id);
-      const signedUrl = response.data?.data?.url;
-
-      if (!signedUrl) {
-        throw new Error('Signed URL missing');
-      }
-
-      window.open(signedUrl, '_blank', 'noopener,noreferrer');
+      downloadAxiosResponse(response, doc.name || 'document');
     } catch {
       toast.error('Download failed');
     }

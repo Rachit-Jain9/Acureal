@@ -1,13 +1,18 @@
 const express = require('express');
 const { pool } = require('../config/database');
+const { getStorageStatus } = require('../config/storage');
 
 const router = express.Router();
 
 // GET /health
 router.get('/', async (req, res) => {
+  const storage = getStorageStatus();
+
   res.json({
     success: true,
     status: 'healthy',
+    storage: storage.status === 'healthy' ? 'ready' : storage.status,
+    storage_provider: storage.provider,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
@@ -19,6 +24,7 @@ router.get('/detailed', async (req, res) => {
   const checks = {
     server: { status: 'healthy' },
     database: { status: 'unknown' },
+    storage: getStorageStatus(),
     memory: {},
   };
 

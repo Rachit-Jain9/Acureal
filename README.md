@@ -70,7 +70,7 @@ powershell -ExecutionPolicy Bypass -File .\run-redip.ps1 frontend
 
 ## Environment variables
 
-Copy `backend/.env.example` to `backend/.env`.
+Copy `backend/.env.example` to `backend/.env.local` for local secrets. `backend/.env` still works, but `.env.local` is safer for machine-specific credentials.
 
 Core backend vars:
 
@@ -88,9 +88,18 @@ Storage / infra:
 
 - `BLOB_READ_WRITE_TOKEN` or Supabase storage credentials
 - `SUPABASE_URL`
-- `SUPABASE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_STORAGE_BUCKET`
 - `GOOGLE_MAPS_API_KEY` for backend geocoding if used
+
+Backend env loading order:
+
+- `.env`
+- `.env.[NODE_ENV]`
+- `.env.local`
+- `.env.[NODE_ENV].local`
+
+For document storage, REDIP prefers Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set and automatically falls back to Supabase Storage when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured.
 
 Frontend:
 

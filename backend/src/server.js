@@ -1,4 +1,4 @@
-require('dotenv').config({ override: process.env.NODE_ENV !== 'production' });
+require('./config/loadEnv');
 
 const express = require('express');
 const cors = require('cors');
@@ -14,6 +14,7 @@ const dealRoutes = require('./routes/deal.routes');
 const financialRoutes = require('./routes/financial.routes');
 const compsRoutes = require('./routes/comps.routes');
 const documentRoutes = require('./routes/document.routes');
+const uploadRoutes = require('./routes/upload.routes');
 const activityRoutes = require('./routes/activity.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const exportRoutes = require('./routes/export.routes');
@@ -81,6 +82,7 @@ app.use('/api/deals', dealRoutes);
 app.use('/api/financials', financialRoutes);
 app.use('/api/comps', compsRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/upload', uploadRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/intelligence', intelligenceRoutes);

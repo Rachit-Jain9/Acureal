@@ -1,8 +1,9 @@
-require('dotenv').config({ override: process.env.NODE_ENV !== 'production' });
+require('../src/config/loadEnv');
 
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
+const { normalizeDatabaseUrl } = require('../src/config/databaseUrl');
 
 const inputPath = process.argv[2];
 
@@ -18,7 +19,7 @@ if (!fs.existsSync(filePath)) {
   process.exit(1);
 }
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (!databaseUrl) {
   console.error('[REDIP] DATABASE_URL is not set. Configure it in backend/.env before running migrations.');

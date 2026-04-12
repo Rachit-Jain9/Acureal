@@ -14,6 +14,7 @@ import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { formatDate } from '../../utils/format';
+import { downloadAxiosResponse } from '../../utils/download';
 
 const CATEGORIES = [
   { value: 'om', label: 'OM / Offering Memo', color: 'bg-blue-100 text-blue-700' },
@@ -127,17 +128,7 @@ export default function DocumentsTab({ dealId }) {
     setDownloading(doc.id);
     try {
       const res = await documentsAPI.download(dealId, doc.id);
-      // Expect a signed URL or blob
-      const url = res.data?.url || res.data?.data?.url;
-      if (url) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = doc.original_name || doc.file_name || 'document';
-        a.target = '_blank';
-        a.click();
-      } else {
-        toast.error('Download link unavailable');
-      }
+      downloadAxiosResponse(res, doc.original_name || doc.file_name || 'document');
     } catch {
       toast.error('Download failed');
     } finally {
