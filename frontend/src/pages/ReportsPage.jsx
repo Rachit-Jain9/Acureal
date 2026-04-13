@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, FileText, Loader2, AlertTriangle } from 'lucide-react';
+import { Download, FileText, Loader2, AlertTriangle, Presentation } from 'lucide-react';
 import { downloadAxiosResponse, downloadBlob } from '../utils/download';
 import { useDeals } from '../hooks/useDeals';
 import { useDailyBrief } from '../hooks/useIntelligence';
@@ -29,6 +29,8 @@ export default function ReportsPage() {
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingComps, setExportingComps] = useState(false);
   const [generatingIC, setGeneratingIC] = useState(null);
+  const [exportingPptx, setExportingPptx] = useState(null);
+  const [exportingXlsx, setExportingXlsx] = useState(null);
 
   const { data: dealsData, isLoading } = useDeals({ limit: 500, includeArchived: true });
   const { data: dailyBrief } = useDailyBrief();
@@ -117,6 +119,34 @@ export default function ReportsPage() {
       console.error('[ReportsPage] Export comps error:', err);
     } finally {
       setExportingComps(false);
+    }
+  };
+
+  const handleExportPptx = async (dealId, dealName) => {
+    setExportingPptx(dealId);
+    try {
+      const response = await exportsAPI.dealPptx(dealId);
+      const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      downloadAxiosResponse(response, `redip-${safeName}.pptx`);
+      toast.success('PPTX deck downloaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'PPTX export failed');
+    } finally {
+      setExportingPptx(null);
+    }
+  };
+
+  const handleExportXlsx = async (dealId, dealName) => {
+    setExportingXlsx(dealId);
+    try {
+      const response = await exportsAPI.dealXlsx(dealId);
+      const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      downloadAxiosResponse(response, `redip-${safeName}.xlsx`);
+      toast.success('Excel workbook downloaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Excel export failed');
+    } finally {
+      setExportingXlsx(null);
     }
   };
 
@@ -329,7 +359,7 @@ export default function ReportsPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Stage</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">IRR</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">NPV</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">IC Report</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">Exports</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -345,19 +375,48 @@ export default function ReportsPage() {
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900">{formatPct(deal._irr)}</td>
                       <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'npv_cr'))}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleGenerateIC(deal.id, deal.name)}
-                          disabled={generatingIC === deal.id}
-                          className="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
-                        >
-                          {generatingIC === deal.id ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <FileText size={12} />
-                          )}
-                          Generate
-                        </button>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleExportPptx(deal.id, deal.name)}
+                            disabled={exportingPptx === deal.id}
+                            title="Download PPTX investor deck"
+                            className="inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
+                          >
+                            {exportingPptx === deal.id ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <Presentation size={11} />
+                            )}
+                            PPTX
+                          </button>
+                          <button
+                            onClick={() => handleExportXlsx(deal.id, deal.name)}
+                            disabled={exportingXlsx === deal.id}
+                            title="Download Excel workbook"
+                            className="inline-flex items-center gap-1 rounded-lg bg-green-50 px-2 py-1 text-xs font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+                          >
+                            {exportingXlsx === deal.id ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <Download size={11} />
+                            )}
+                            XLSX
+                          </button>
+                          <button
+                            onClick={() => handleGenerateIC(deal.id, deal.name)}
+                            disabled={generatingIC === deal.id}
+                            title="Generate IC report (JSON)"
+                            className="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
+                          >
+                            {generatingIC === deal.id ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <FileText size={11} />
+                            )}
+                            IC
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

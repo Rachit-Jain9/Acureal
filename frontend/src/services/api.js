@@ -146,6 +146,10 @@ export const exportsAPI = {
   deals: (params) => api.get('/exports/deals', { params, responseType: 'blob' }),
   comps: () => api.get('/exports/comps', { responseType: 'blob' }),
   icReport: (dealId) => api.get(`/exports/ic-report/${dealId}`),
+  dealXlsx: (dealId) => api.get(`/exports/deals/${dealId}/xlsx`, { responseType: 'blob' }),
+  dealPdf: (dealId) => api.get(`/exports/deals/${dealId}/pdf`, { responseType: 'blob' }),
+  dealPptx: (dealId) => api.get(`/exports/deals/${dealId}/pptx`, { responseType: 'blob' }),
+  dealsXlsx: (params) => api.get('/exports/deals/xlsx', { params, responseType: 'blob' }),
 };
 
 // DD Items

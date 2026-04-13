@@ -365,7 +365,7 @@ export default function DealDetailPage() {
       {/* Active tab content */}
       <div>
         {activeTab === 'overview' && <OverviewTab deal={deal} id={id} />}
-        {activeTab === 'parcel' && <ParcelTab deal={deal} />}
+        {activeTab === 'parcel' && <ParcelTab deal={deal} dealId={id} canEdit={canEdit} />}
         {activeTab === 'zoning' && <ZoningTab deal={deal} dealId={id} setTab={setTab} />}
         {activeTab === 'documents' && <DocumentsTab dealId={id} />}
         {activeTab === 'activity' && <ActivityTab dealId={id} />}
