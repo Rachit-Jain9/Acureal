@@ -18,8 +18,23 @@ const TABS = [
   { key: 'intelligence', label: 'Intelligence' },
 ];
 
+const FINANCIAL_REPORT_KEYS = [
+  'total_revenue_cr',
+  'total_cost_cr',
+  'gross_profit_cr',
+  'irr_pct',
+  'npv_cr',
+  'equity_multiple',
+];
+
+const hasFinancialModel = (deal) =>
+  FINANCIAL_REPORT_KEYS.some((key) => {
+    const value = deal?.[key];
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+  });
+
 const EmptyTableState = ({ message }) => (
-  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-600">
+  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-slate-900/70 dark:text-slate-300">
     {message}
   </div>
 );
@@ -35,6 +50,7 @@ export default function ReportsPage() {
   const { data: dealsData, isLoading } = useDeals({ limit: 500, includeArchived: true });
   const { data: dailyBrief } = useDailyBrief();
   const deals = dealsData?.data || [];
+  const underwrittenDeals = useMemo(() => deals.filter(hasFinancialModel), [deals]);
 
   const pipelineData = useMemo(() => {
     const stages = {};
@@ -83,13 +99,13 @@ export default function ReportsPage() {
 
   const performanceData = useMemo(
     () =>
-      [...deals]
+      [...underwrittenDeals]
         .map((deal) => ({
           ...deal,
           _irr: Number(deal.irr_pct) || 0,
         }))
         .sort((a, b) => b._irr - a._irr),
-    [deals]
+    [underwrittenDeals]
   );
 
   const handleExportDeals = async () => {
@@ -268,7 +284,7 @@ export default function ReportsPage() {
 
       {activeTab === 'financial' && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-          {deals.length === 0 ? (
+          {underwrittenDeals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No underwriting data available yet. Create deals and financial models to populate this report." />
             </div>
@@ -288,7 +304,7 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {deals.map((deal) => (
+                  {underwrittenDeals.map((deal) => (
                     <tr key={deal.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                       <td className="px-4 py-3 font-medium text-gray-900">{deal.name}</td>
                       <td className="px-4 py-3 text-gray-600">{deal.city || '-'}</td>

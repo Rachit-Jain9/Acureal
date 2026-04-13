@@ -44,7 +44,7 @@ router.get(
     qv('liveOnly').optional().isBoolean().toBoolean(),
     qv('search').optional().trim(),
     qv('page').optional().isInt({ min: 1 }),
-    qv('limit').optional().isInt({ min: 1, max: 200 }),
+    qv('limit').optional().isInt({ min: 1, max: 500 }),
   ],
   handleValidation,
   async (req, res, next) => {

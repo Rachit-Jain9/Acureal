@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import Layout from './components/layout/Layout';
 import ToastContainer from './components/common/Toast';
@@ -41,6 +41,11 @@ function withSuspense(element) {
       <Suspense fallback={<PageLoader />}>{element}</Suspense>
     </ErrorBoundary>
   );
+}
+
+function LegacyPropertyDetailRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/dashboard/properties/${id}`} replace />;
 }
 
 export default function App() {
@@ -87,6 +92,8 @@ export default function App() {
 
         {/* Legacy top-level redirects for old bookmark paths */}
         <Route path="/deals" element={<Navigate to="/dashboard/deals" replace />} />
+        <Route path="/properties" element={<Navigate to="/dashboard/deals" replace />} />
+        <Route path="/properties/:id" element={<LegacyPropertyDetailRedirect />} />
         <Route path="/documents" element={<Navigate to="/dashboard/deals" replace />} />
         <Route path="/activities" element={<Navigate to="/dashboard/deals" replace />} />
 

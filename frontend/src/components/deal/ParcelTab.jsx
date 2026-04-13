@@ -261,7 +261,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                 >
                   <option value="residential">Residential</option>
                   <option value="commercial">Commercial</option>
-                  <option value="mixed">Mixed Use</option>
+                  <option value="mixed_use">Mixed Use</option>
                   <option value="industrial">Industrial</option>
                   <option value="agricultural">Agricultural</option>
                 </select>
@@ -322,7 +322,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
               </button>
             )}
             <Link
-              to={`/properties/${deal.property_id}`}
+              to={`/dashboard/properties/${deal.property_id}`}
               className="text-sm text-primary-700 font-medium hover:text-primary-800 flex items-center gap-1"
             >
               View / Edit Property Record <ExternalLink size={13} />

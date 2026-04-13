@@ -3,16 +3,23 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100;
+    @apply min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
   }
 
-  /* Smooth dark-mode transitions */
   *, *::before, *::after {
     transition-property: background-color, border-color, color;
     transition-duration: 150ms;
@@ -21,81 +28,160 @@
 }
 
 @layer components {
-  /* ── Buttons ──────────────────────────────────────────────── */
   .btn,
   .btn-primary {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium
-           transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
+
   .btn-primary {
     @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-1;
   }
+
   .btn-secondary,
   .btn-danger {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium
-           transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  .btn-secondary {
-    @apply bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200
-           hover:bg-gray-200 dark:hover:bg-gray-600
-           border border-transparent dark:border-gray-600;
-  }
-  .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700
-           dark:bg-red-700 dark:hover:bg-red-600
-           focus:ring-2 focus:ring-red-500 focus:ring-offset-1;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
 
-  /* ── Inputs ───────────────────────────────────────────────── */
+  .btn-secondary {
+    @apply border border-transparent bg-gray-100 text-gray-700 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-1 dark:bg-red-700 dark:hover:bg-red-600;
+  }
+
   .input,
   .input-field {
-    @apply w-full px-3 py-2
-           border border-gray-300 dark:border-gray-600
-           bg-white dark:bg-gray-800
-           text-gray-900 dark:text-gray-100
-           placeholder-gray-400 dark:placeholder-gray-500
-           rounded-lg
-           focus:ring-2 focus:ring-primary-500 focus:border-primary-500
-           outline-none transition-colors;
+    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500;
   }
 
-  /* ── Cards ────────────────────────────────────────────────── */
   .card {
-    @apply bg-white dark:bg-gray-800
-           rounded-xl shadow-sm
-           border border-gray-200 dark:border-gray-700
-           p-6;
+    @apply rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800;
   }
 
-  /* ── Badges ───────────────────────────────────────────────── */
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
 
-  /* ── Table helpers ────────────────────────────────────────── */
   .table-auto thead th {
-    @apply text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider
-           bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700
-           px-4 py-2.5 text-left;
+    @apply bg-gray-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400;
+    border-bottom: 1px solid rgb(229 231 235 / 1);
   }
+
   .table-auto tbody td {
-    @apply text-sm text-gray-700 dark:text-gray-300 px-4 py-3
-           border-b border-gray-100 dark:border-gray-700/50;
+    @apply px-4 py-3 text-sm text-gray-700 dark:text-gray-300;
+    border-bottom: 1px solid rgb(243 244 246 / 1);
   }
+
   .table-auto tbody tr:last-child td {
     @apply border-0;
   }
+
   .table-auto tbody tr {
-    @apply hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors;
+    @apply transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/30;
   }
 
-  /* ── Dividers ────────────────────────────────────────────── */
   .divider {
     @apply border-t border-gray-200 dark:border-gray-700;
   }
 
-  /* ── Section headers ──────────────────────────────────────── */
   .section-label {
-    @apply text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider;
+    @apply text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500;
+  }
+}
+
+@layer utilities {
+  .dark .bg-white {
+    background-color: rgb(15 23 42 / 1);
+  }
+
+  .dark .bg-white\/95 {
+    background-color: rgb(15 23 42 / 0.95);
+  }
+
+  .dark .bg-white\/80 {
+    background-color: rgb(15 23 42 / 0.8);
+  }
+
+  .dark .bg-white\/70 {
+    background-color: rgb(15 23 42 / 0.72);
+  }
+
+  .dark .bg-gray-50,
+  .dark .bg-slate-50 {
+    background-color: rgb(15 23 42 / 0.88);
+  }
+
+  .dark .bg-gray-100 {
+    background-color: rgb(30 41 59 / 0.9);
+  }
+
+  .dark .bg-gray-200 {
+    background-color: rgb(51 65 85 / 0.92);
+  }
+
+  .dark .border-gray-100 {
+    border-color: rgb(51 65 85 / 0.35);
+  }
+
+  .dark .border-gray-200,
+  .dark .border-slate-200 {
+    border-color: rgb(51 65 85 / 0.9);
+  }
+
+  .dark .border-gray-300 {
+    border-color: rgb(71 85 105 / 0.95);
+  }
+
+  .dark .text-gray-900,
+  .dark .text-slate-900 {
+    color: rgb(248 250 252 / 1);
+  }
+
+  .dark .text-gray-800,
+  .dark .text-slate-800 {
+    color: rgb(226 232 240 / 1);
+  }
+
+  .dark .text-gray-700,
+  .dark .text-slate-700 {
+    color: rgb(203 213 225 / 1);
+  }
+
+  .dark .text-gray-600,
+  .dark .text-slate-600 {
+    color: rgb(186 197 214 / 1);
+  }
+
+  .dark .text-gray-500,
+  .dark .text-slate-500 {
+    color: rgb(148 163 184 / 1);
+  }
+
+  .dark .text-gray-400,
+  .dark .text-slate-400 {
+    color: rgb(148 163 184 / 0.82);
+  }
+
+  .dark .text-gray-300 {
+    color: rgb(203 213 225 / 0.6);
+  }
+
+  .dark .hover\:bg-gray-50:hover,
+  .dark .hover\:bg-slate-50:hover {
+    background-color: rgb(30 41 59 / 0.75);
+  }
+
+  .dark .hover\:bg-gray-100:hover {
+    background-color: rgb(51 65 85 / 0.8);
+  }
+
+  .dark .hover\:text-gray-700:hover,
+  .dark .hover\:text-slate-700:hover {
+    color: rgb(226 232 240 / 1);
+  }
+
+  .dark .hover\:text-gray-600:hover {
+    color: rgb(203 213 225 / 1);
   }
 }

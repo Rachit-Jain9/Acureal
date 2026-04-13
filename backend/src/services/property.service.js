@@ -220,7 +220,7 @@ const getProperties = async (filters = {}, pagination = {}) => {
   }
 
   const page = parseInt(pagination.page, 10) || 1;
-  const limit = Math.min(parseInt(pagination.limit, 10) || 20, 200);
+  const limit = Math.min(parseInt(pagination.limit, 10) || 20, 500);
   const offset = (page - 1) * limit;
 
   const whereClause = conditions.join(' AND ');

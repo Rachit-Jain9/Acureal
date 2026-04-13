@@ -244,7 +244,7 @@ export default function PropertiesPage() {
               >
                 <div className="mb-3 flex items-start justify-between">
                   <Link
-                    to={`/properties/${property.id}`}
+                    to={`/dashboard/properties/${property.id}`}
                     className="text-lg font-semibold text-gray-900 hover:text-primary-600"
                   >
                     {property.display_name || property.name || 'Untitled property'}

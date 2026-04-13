@@ -76,7 +76,7 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
             {property.geocode_status === 'approximate' && (
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
                 ⚠ Location is approximate — the pin may not reflect the exact site. Enter a precise address and re-geocode from the{' '}
-                <Link to={`/properties/${property.id}`} className="underline font-medium">property page</Link>.
+                <Link to={`/dashboard/properties/${property.id}`} className="underline font-medium">property page</Link>.
               </div>
             )}
 
@@ -107,7 +107,7 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
                 Focus property
               </button>
               <Link
-                to={`/properties/${property.id}`}
+                to={`/dashboard/properties/${property.id}`}
                 className="text-sm font-medium text-primary-600 hover:text-primary-700"
               >
                 Open detail
@@ -318,10 +318,10 @@ export default function MapCanvas({
   return (
     <div className="relative h-[calc(100vh-180px)] min-h-[720px]">
       {mapIsLoading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70">
+        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70 dark:bg-slate-950/80">
           <div className="flex flex-col items-center gap-3">
             <LoadingSpinner />
-            <span className="text-sm text-gray-500">Loading map intelligence...</span>
+            <span className="text-sm text-gray-500 dark:text-slate-300">Loading map intelligence...</span>
           </div>
         </div>
       )}
@@ -472,26 +472,26 @@ export default function MapCanvas({
         />
       </MapContainer>
 
-      <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5">
+      <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5 dark:bg-slate-900/95 dark:ring-white/10">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
             <Layers3 size={18} />
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Spatial Control Room</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Spatial Control Room</p>
             {selectedProperty ? (
               <>
-                <p className="mt-1 font-semibold text-gray-900">{selectedProperty.name}</p>
-                <p className="text-sm text-gray-500">{selectedProperty.city}, {selectedProperty.state}</p>
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-1 font-semibold text-gray-900 dark:text-slate-100">{selectedProperty.name}</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">{selectedProperty.city}, {selectedProperty.state}</p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
                   Property focus, nearby comps, and stage heat layers are now centered on the same land parcel.
                 </p>
               </>
             ) : (
               <>
-                <p className="mt-1 font-semibold text-gray-900">Use the map like an intelligence layer</p>
-                <p className="text-sm text-gray-600">
-                  Filter by city or zoning, zoom into clusters, then focus a property to unlock comparable and pipeline context around it.
+                <p className="mt-1 font-semibold text-gray-900 dark:text-slate-100">Use the map like an intelligence layer</p>
+                <p className="text-sm text-gray-600 dark:text-slate-300">
+                  Precision mode only plots verified or manual coordinates. Filter by city or zoning, then focus a property to unlock comparable and pipeline context around it.
                 </p>
               </>
             )}
@@ -506,7 +506,7 @@ export default function MapCanvas({
         </span>
         <span className="inline-flex items-center gap-2">
           <Briefcase size={15} />
-          {heatLayers.reduce((sum, layer) => sum + layer.count, 0)} mapped deals
+          {heatLayers.reduce((sum, layer) => sum + layer.count, 0)} precision-mapped deals
         </span>
         <span className="inline-flex items-center gap-2">
           <MapPin size={15} />
@@ -514,15 +514,15 @@ export default function MapCanvas({
         </span>
       </div>
 
-      <div className="absolute bottom-16 right-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Heat Layer Legend</p>
+      <div className="absolute bottom-16 right-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5 dark:bg-slate-900/95 dark:ring-white/10">
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Heat Layer Legend</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {Object.entries(STAGE_HEAT_META)
             .filter(([stage]) => visibleStages[stage])
             .map(([stage, meta]) => (
               <span
                 key={stage}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700"
+                className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-200"
               >
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
                 {meta.label}
@@ -532,16 +532,16 @@ export default function MapCanvas({
       </div>
 
       {selectedProperty && showNearbyComps && (
-        <div className="absolute right-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Nearby Comp Snapshot</p>
+        <div className="absolute right-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5 dark:bg-slate-900/95 dark:ring-white/10">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Nearby Comp Snapshot</p>
           {nearbyCompsLoading ? (
-            <p className="mt-2 text-sm text-gray-500">Loading nearby comps...</p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Loading nearby comps...</p>
           ) : nearbyComps.length > 0 ? (
             <div className="mt-2 space-y-2">
               {nearbyComps.slice(0, 3).map((comp) => (
-                <div key={comp.id} className="rounded-xl bg-gray-50 px-3 py-2">
-                  <p className="text-sm font-medium text-gray-900">{comp.project_name}</p>
-                  <p className="text-xs text-gray-500">
+                <div key={comp.id} className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-slate-800">
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{comp.project_name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
                     {comp.distanceKm ? `${comp.distanceKm.toFixed(2)} km` : comp.city}
                     {comp.ratePerSqft ? ` • ${formatINR(comp.ratePerSqft, 0)}/sqft` : ''}
                   </p>
@@ -549,7 +549,7 @@ export default function MapCanvas({
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-gray-500">No nearby comps available within {nearbyRadiusKm} km.</p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">No nearby comps available within {nearbyRadiusKm} km.</p>
           )}
         </div>
       )}

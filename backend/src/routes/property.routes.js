@@ -33,10 +33,12 @@ router.get(
     qv('state').optional().trim(),
     qv('zoning').optional().isIn(ZONING_TYPES),
     qv('propertyType').optional().customSanitizer(normalizePropertyType).isIn(PROPERTY_TYPES),
-    qv('geocodeStatus').optional().isIn(['pending', 'matched', 'approximate', 'failed', 'manual', 'insufficient_data']),
+    qv('geocodeStatus')
+      .optional()
+      .isIn(['pending', 'matched', 'verified', 'approximate', 'failed', 'manual', 'insufficient_data']),
     qv('search').optional().trim(),
     qv('page').optional().isInt({ min: 1 }),
-    qv('limit').optional().isInt({ min: 1, max: 200 }),
+    qv('limit').optional().isInt({ min: 1, max: 500 }),
   ],
   handleValidation,
   async (req, res, next) => {

@@ -1,6 +1,7 @@
 export const INDIA_CENTER = [20.5937, 78.9629];
 export const DEFAULT_ZOOM = 5;
 export const SEARCH_RADIUS_OPTIONS = [3, 5, 8, 12];
+export const PRECISE_GEOCODE_STATUSES = new Set(['verified', 'manual']);
 
 export const ZONING_META = {
   residential: {
@@ -68,24 +69,33 @@ export const DEFAULT_VISIBLE_STAGES = {
   dead: false,
 };
 
-// Deterministic offset so city-level geocoded properties don't stack at the same point.
-// Uses the property ID as a seed — same ID always produces the same tiny offset (~300 m max).
-const deterministicJitter = (seed, range = 0.003) => {
-  const str = String(seed);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 31 + str.charCodeAt(i)) | 0;
-  }
-  return ((hash % 1000) / 1000 - 0.5) * 2 * range;
+const toFiniteNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 };
 
 export const normalizeProperty = (property) => {
-  const isApprox = property.geocode_status === 'approximate';
+  const geocodeStatus = property.geocode_status || 'pending';
+  const lat = toFiniteNumber(property.lat);
+  const lng = toFiniteNumber(property.lng);
+  const hasCoordinates = lat !== null && lng !== null;
+  const isPreciseLocation = hasCoordinates && PRECISE_GEOCODE_STATUSES.has(geocodeStatus);
+
   return {
     ...property,
     id: property.id || property._id,
-    lat: Number(property.lat) + (isApprox ? deterministicJitter(String(property.id) + 'lat') : 0),
-    lng: Number(property.lng) + (isApprox ? deterministicJitter(String(property.id) + 'lng') : 0),
+    name:
+      property.display_name ||
+      property.name ||
+      property.address ||
+      [property.city, property.state].filter(Boolean).join(', ') ||
+      'Unnamed property',
+    geocodeStatus,
+    lat,
+    lng,
+    hasCoordinates,
+    isPreciseLocation,
+    isApproximateLocation: hasCoordinates && geocodeStatus === 'approximate',
     landAreaSqft: Number(property.land_area_sqft ?? property.landAreaSqft ?? 0),
     circleRatePerSqft: Number(property.circle_rate_per_sqft ?? property.circleRatePerSqft ?? 0),
     zoning: property.zoning || 'residential',
@@ -96,8 +106,8 @@ export const normalizeDeal = (deal) => ({
   ...deal,
   id: deal.id || deal._id,
   propertyId: deal.property_id || deal.propertyId,
-  lat: Number(deal.lat),
-  lng: Number(deal.lng),
+  lat: toFiniteNumber(deal.lat),
+  lng: toFiniteNumber(deal.lng),
   totalRevenueCr: Number(deal.total_revenue_cr ?? 0),
   irrPct: Number(deal.irr_pct ?? 0),
 });
@@ -105,8 +115,8 @@ export const normalizeDeal = (deal) => ({
 export const normalizeComp = (comp) => ({
   ...comp,
   id: comp.id || comp._id,
-  lat: Number(comp.lat),
-  lng: Number(comp.lng),
+  lat: toFiniteNumber(comp.lat),
+  lng: toFiniteNumber(comp.lng),
   ratePerSqft: Number(comp.rate_per_sqft ?? 0),
   distanceKm: Number(comp.distance_km ?? 0),
   projectType: comp.project_type || 'residential',

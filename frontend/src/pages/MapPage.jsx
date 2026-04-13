@@ -18,6 +18,7 @@ import PageHeader from '../components/common/PageHeader';
 import MapCanvas from '../components/map/MapCanvas';
 import {
   DEFAULT_VISIBLE_STAGES,
+  PRECISE_GEOCODE_STATUSES,
   SEARCH_RADIUS_OPTIONS,
   STAGE_HEAT_META,
   ZONING_META,
@@ -31,10 +32,10 @@ import { formatArea, formatCrores, formatINR } from '../utils/format';
 
 function ToggleRow({ checked, label, description, onChange }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3">
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 dark:border-gray-700 dark:bg-slate-900/80">
       <div>
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{label}</p>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{description}</p>
       </div>
       <input
         type="checkbox"
@@ -47,8 +48,8 @@ function ToggleRow({ checked, label, description, onChange }) {
 }
 
 export default function MapPage() {
-  const { data: propertiesData, isLoading: propertiesLoading } = useProperties({ limit: 200 });
-  const { data: dealsData, isLoading: dealsLoading } = useDeals({ limit: 200 });
+  const { data: propertiesData, isLoading: propertiesLoading } = useProperties({ limit: 500 });
+  const { data: dealsData, isLoading: dealsLoading } = useDeals({ limit: 500 });
   const { user } = useAuthStore();
   const bulkGeocode = useBulkGeocodeProperties();
   const canGeocode = user?.role === 'admin' || user?.role === 'analyst';
@@ -77,22 +78,25 @@ export default function MapPage() {
     [rawDeals]
   );
 
-  const mappableProperties = useMemo(
+  const preciseProperties = useMemo(
     () =>
-      normalizedProperties.filter(
-        (property) => Number.isFinite(property.lat) && Number.isFinite(property.lng)
-      ),
+      normalizedProperties.filter((property) => property.isPreciseLocation),
+    [normalizedProperties]
+  );
+
+  const reviewQueueProperties = useMemo(
+    () => normalizedProperties.filter((property) => !property.isPreciseLocation),
     [normalizedProperties]
   );
 
   const cityOptions = useMemo(
-    () => [...new Set(mappableProperties.map((property) => property.city).filter(Boolean))].sort(),
-    [mappableProperties]
+    () => [...new Set(preciseProperties.map((property) => property.city).filter(Boolean))].sort(),
+    [preciseProperties]
   );
 
   const filteredProperties = useMemo(
     () =>
-      mappableProperties.filter((property) => {
+      preciseProperties.filter((property) => {
         if (cityFilter !== 'all' && property.city !== cityFilter) {
           return false;
         }
@@ -103,7 +107,7 @@ export default function MapPage() {
 
         return matchesSearch(property, search);
       }),
-    [cityFilter, mappableProperties, search, zoningFilter]
+    [cityFilter, preciseProperties, search, zoningFilter]
   );
 
   const filteredPropertyIds = useMemo(
@@ -216,7 +220,9 @@ export default function MapPage() {
   }, {});
 
   const dominantCity = Object.entries(cityCounts).sort((a, b) => b[1] - a[1])[0] || null;
-  const unmappedCount = normalizedProperties.length - mappableProperties.length;
+  const approximateCount = reviewQueueProperties.filter((property) => property.isApproximateLocation).length;
+  const missingPinCount = reviewQueueProperties.filter((property) => !property.hasCoordinates).length;
+  const reviewQueuePreview = reviewQueueProperties.slice(0, 6);
 
   const circleRateValues = filteredProperties
     .map((property) => property.circleRatePerSqft)
@@ -264,23 +270,63 @@ export default function MapPage() {
       <div className="grid grid-cols-1 xl:grid-cols-[390px_minmax(0,1fr)] gap-6">
         <aside className="card flex h-[calc(100vh-180px)] min-h-[720px] flex-col overflow-hidden">
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-blue-50 px-3 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Visible Properties</p>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{filteredProperties.length}</p>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-4 dark:border-blue-900/60 dark:bg-blue-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">Visible Properties</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-blue-50">{filteredProperties.length}</p>
             </div>
-            <div className="rounded-xl bg-emerald-50 px-3 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">Visible Deals</p>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{visibleDeals.length}</p>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Visible Deals</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-emerald-50">{visibleDeals.length}</p>
             </div>
-            <div className="rounded-xl bg-purple-50 px-3 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-purple-600">Cities</p>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{Object.keys(cityCounts).length}</p>
+            <div className="rounded-xl border border-purple-100 bg-purple-50 px-3 py-4 dark:border-purple-900/60 dark:bg-purple-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-purple-700 dark:text-purple-300">Cities</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-purple-50">{Object.keys(cityCounts).length}</p>
             </div>
-            <div className="rounded-xl bg-amber-50 px-3 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-amber-600">Unmapped</p>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{unmappedCount}</p>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-4 dark:border-amber-900/60 dark:bg-amber-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">Pin Review</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-amber-50">{reviewQueueProperties.length}</p>
             </div>
           </div>
+
+          {reviewQueueProperties.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Precision Mode</p>
+                  <h2 className="mt-2 text-base font-semibold text-amber-950">Only precise property pins appear on this map</h2>
+                  <p className="mt-1 text-sm text-amber-900">
+                    REDIP now excludes low-confidence locations from nearby comps and deal heat layers.
+                    {approximateCount > 0 ? ` ${approximateCount} properties are approximate.` : ''}
+                    {missingPinCount > 0 ? ` ${missingPinCount} still need coordinates.` : ''}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-right text-xs text-amber-900">
+                  <p>Precise statuses</p>
+                  <p className="mt-1 font-semibold">{Array.from(PRECISE_GEOCODE_STATUSES).join(' + ')}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {reviewQueuePreview.map((property) => (
+                  <Link
+                    key={property.id}
+                    to={`/dashboard/properties/${property.id}`}
+                    className="flex items-center justify-between rounded-xl border border-amber-200 bg-white px-3 py-3 transition hover:border-amber-300 hover:bg-amber-100/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{property.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-600">
+                        {[property.city, property.state].filter(Boolean).join(', ') || 'Location incomplete'}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                      {property.geocodeStatus?.replace(/_/g, ' ') || 'review'}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <div className="relative">
@@ -484,7 +530,7 @@ export default function MapPage() {
                   </div>
 
                   <Link
-                    to={`/properties/${selectedProperty.id}`}
+                    to={`/dashboard/properties/${selectedProperty.id}`}
                     className="mt-3 inline-flex text-sm font-medium text-primary-600 hover:text-primary-700"
                   >
                     Open property detail
@@ -600,7 +646,7 @@ export default function MapPage() {
                           Focus on map
                         </button>
                         <Link
-                          to={`/properties/${property.id}`}
+                          to={`/dashboard/properties/${property.id}`}
                           className="font-medium text-primary-600 hover:text-primary-700"
                         >
                           Open detail

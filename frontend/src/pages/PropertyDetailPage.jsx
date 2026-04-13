@@ -1,35 +1,169 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, IndianRupee, MapPin, RefreshCw, Ruler } from 'lucide-react';
-import { useProperty, useGeocodeProperty } from '../hooks/useProperties';
+import {
+  ArrowLeft,
+  Building2,
+  Edit2,
+  ExternalLink,
+  IndianRupee,
+  MapPin,
+  RefreshCw,
+  Ruler,
+  X,
+} from 'lucide-react';
+import { useProperty, useGeocodeProperty, useUpdateProperty } from '../hooks/useProperties';
 import { useDeals } from '../hooks/useDeals';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
-import { formatArea, formatDate, formatINR, PROPERTY_TYPE_LABELS, STAGE_CONFIG } from '../utils/format';
+import { toast } from '../components/common/Toast';
+import {
+  formatArea,
+  formatDate,
+  formatINR,
+  PROPERTY_TYPE_LABELS,
+  STAGE_CONFIG,
+} from '../utils/format';
+import { normalizeAreaSqft } from '../utils/landPricing';
+
+const PROPERTY_TYPE_OPTIONS = [
+  { value: 'land', label: 'Land' },
+  { value: 'residential', label: 'Residential' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'mixed_use', label: 'Mixed Use' },
+  { value: 'industrial', label: 'Industrial' },
+  { value: 'office', label: 'Office' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'hospitality', label: 'Hospitality' },
+];
+
+const ZONING_OPTIONS = [
+  { value: 'residential', label: 'Residential' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'mixed_use', label: 'Mixed Use' },
+  { value: 'industrial', label: 'Industrial' },
+  { value: 'agricultural', label: 'Agricultural' },
+];
 
 const GEOCODE_STATUS_META = {
-  verified:          { label: 'Verified',          cls: 'bg-emerald-100 text-emerald-700' },
-  manual:            { label: 'Manual',             cls: 'bg-blue-100 text-blue-700' },
-  approximate:       { label: 'Approximate (city)', cls: 'bg-amber-100 text-amber-700' },
-  failed:            { label: 'Failed',             cls: 'bg-red-100 text-red-700' },
-  pending:           { label: 'Pending',            cls: 'bg-gray-100 text-gray-600' },
-  insufficient_data: { label: 'Insufficient data',  cls: 'bg-gray-100 text-gray-600' },
+  verified: { label: 'Verified', cls: 'bg-emerald-100 text-emerald-700' },
+  manual: { label: 'Manual', cls: 'bg-blue-100 text-blue-700' },
+  approximate: { label: 'Approximate (city)', cls: 'bg-amber-100 text-amber-700' },
+  failed: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
+  pending: { label: 'Pending', cls: 'bg-gray-100 text-gray-600' },
+  insufficient_data: { label: 'Insufficient data', cls: 'bg-gray-100 text-gray-600' },
 };
+
+const buildEditForm = (property) => ({
+  name: property.name || '',
+  address: property.address || '',
+  city: property.city || '',
+  state: property.state || '',
+  pincode: property.pincode || '',
+  propertyType: property.property_type || 'land',
+  zoning: property.zoning || 'residential',
+  landAreaValue: property.land_area_input_value ?? property.land_area_sqft ?? '',
+  landAreaUnit: property.land_area_input_unit || 'sqft',
+  circleRatePerSqft: property.circle_rate_per_sqft ?? '',
+  permissibleFsi: property.permissible_fsi ?? '',
+  surveyNumber: property.survey_number || '',
+  ownerName: property.owner_name || '',
+  roadWidthMtrs: property.road_width_mtrs ?? '',
+  ownershipType: property.ownership_type || '',
+  encumbranceStatus: property.encumbrance_status || '',
+  notes: property.notes || '',
+  lat: property.lat ?? '',
+  lng: property.lng ?? '',
+});
+
+const buildEditPayload = (form) => ({
+  name: form.name || undefined,
+  address: form.address || undefined,
+  city: form.city || undefined,
+  state: form.state || undefined,
+  pincode: form.pincode || undefined,
+  propertyType: form.propertyType,
+  zoning: form.zoning,
+  landAreaValue: form.landAreaValue === '' ? undefined : Number(form.landAreaValue),
+  landAreaUnit: form.landAreaUnit,
+  circleRatePerSqft: form.circleRatePerSqft === '' ? undefined : Number(form.circleRatePerSqft),
+  permissibleFsi: form.permissibleFsi === '' ? undefined : Number(form.permissibleFsi),
+  surveyNumber: form.surveyNumber || undefined,
+  ownerName: form.ownerName || undefined,
+  roadWidthMtrs: form.roadWidthMtrs === '' ? undefined : Number(form.roadWidthMtrs),
+  ownershipType: form.ownershipType || undefined,
+  encumbranceStatus: form.encumbranceStatus || undefined,
+  notes: form.notes || undefined,
+  lat: form.lat === '' ? undefined : Number(form.lat),
+  lng: form.lng === '' ? undefined : Number(form.lng),
+});
+
+const DetailField = ({ label, value }) => (
+  <div>
+    <span className="text-gray-400">{label}</span>
+    <p className="mt-1 font-medium text-gray-900">{value || '-'}</p>
+  </div>
+);
 
 export default function PropertyDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState(null);
 
   const { data: property, isLoading, isError } = useProperty(id);
-  const { data: dealsData } = useDeals({ limit: 200 });
+  const { data: dealsData } = useDeals({ limit: 500, includeArchived: true });
   const geocodeMutation = useGeocodeProperty();
+  const updateProperty = useUpdateProperty();
 
   const relatedDeals = useMemo(
     () => (dealsData?.data || []).filter((deal) => deal.property_id === id),
     [dealsData?.data, id]
   );
+
+  const hasCoordinates =
+    property?.lat !== null &&
+    property?.lat !== undefined &&
+    property?.lng !== null &&
+    property?.lng !== undefined;
+  const googleMapsUrl = hasCoordinates
+    ? `https://www.google.com/maps?q=${property.lat},${property.lng}`
+    : null;
+  const editAreaSqft = editForm
+    ? normalizeAreaSqft(editForm.landAreaValue, editForm.landAreaUnit)
+    : null;
+
+  const openEditModal = () => {
+    if (!property) {
+      return;
+    }
+
+    setEditForm(buildEditForm(property));
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+    if (!editForm) {
+      return;
+    }
+
+    const hasLat = editForm.lat !== '';
+    const hasLng = editForm.lng !== '';
+
+    if (hasLat !== hasLng) {
+      toast.error('Enter both latitude and longitude, or leave both blank.');
+      return;
+    }
+
+    try {
+      await updateProperty.mutateAsync({ id, data: buildEditPayload(editForm) });
+      setShowEditModal(false);
+    } catch {
+      // handled by mutation hook
+    }
+  };
 
   if (isLoading) {
     return <LoadingSpinner className="py-24" />;
@@ -51,11 +185,16 @@ export default function PropertyDetailPage() {
     );
   }
 
+  const geocodeMeta = GEOCODE_STATUS_META[property.geocode_status || 'pending'] || {
+    label: property.geocode_status || 'Pending',
+    cls: 'bg-gray-100 text-gray-600',
+  };
+
   return (
     <div className="space-y-6">
       <button
         onClick={() => navigate('/dashboard/deals')}
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
       >
         <ArrowLeft size={16} /> Back to Properties
       </button>
@@ -63,142 +202,194 @@ export default function PropertyDetailPage() {
       <PageHeader
         title={property.display_name || property.name || 'Untitled property'}
         description={[property.city, property.state].filter(Boolean).join(', ') || 'Location still being completed'}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {googleMapsUrl && (
+              <a
+                href={googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary inline-flex items-center gap-2 text-sm"
+              >
+                <ExternalLink size={14} />
+                Open in Google Maps
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={openEditModal}
+              className="btn btn-primary inline-flex items-center gap-2 text-sm"
+            >
+              <Edit2 size={14} />
+              Edit Property
+            </button>
+          </div>
+        }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="card lg:col-span-2">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Property Overview</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Property Type</span>
-              <p className="font-medium text-gray-900 mt-1">
-                {property.property_type ? (PROPERTY_TYPE_LABELS[property.property_type] || property.property_type) : '-'}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Address</span>
-              <p className="font-medium text-gray-900 mt-1">{property.address || 'Address not captured yet'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Zoning</span>
-              <p className="font-medium text-gray-900 mt-1 capitalize">
-                {property.zoning?.replace(/_/g, ' ') || '-'}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Land Area</span>
-              <p className="font-medium text-gray-900 mt-1">{formatArea(property.land_area_sqft)}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Circle Rate</span>
-              <p className="font-medium text-gray-900 mt-1">
-                {property.circle_rate_per_sqft ? formatINR(property.circle_rate_per_sqft) : '-'}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Permissible FSI</span>
-              <p className="font-medium text-gray-900 mt-1">
-                {property.permissible_fsi ?? property.existing_fsi ?? '-'}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Survey Number</span>
-              <p className="font-medium text-gray-900 mt-1">{property.survey_number || '-'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Owner</span>
-              <p className="font-medium text-gray-900 mt-1">{property.owner_name || '-'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Created</span>
-              <p className="font-medium text-gray-900 mt-1">{formatDate(property.created_at)}</p>
-            </div>
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Property Overview</h2>
+          <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+            <DetailField
+              label="Property Type"
+              value={property.property_type ? PROPERTY_TYPE_LABELS[property.property_type] || property.property_type : '-'}
+            />
+            <DetailField label="Address" value={property.address || 'Address not captured yet'} />
+            <DetailField label="Zoning" value={property.zoning?.replace(/_/g, ' ') || '-'} />
+            <DetailField label="Land Area" value={formatArea(property.land_area_sqft)} />
+            <DetailField
+              label="Circle Rate"
+              value={property.circle_rate_per_sqft ? `${formatINR(property.circle_rate_per_sqft)}/sqft` : '-'}
+            />
+            <DetailField label="Permissible FSI" value={property.permissible_fsi ?? property.existing_fsi ?? '-'} />
+            <DetailField label="Survey Number" value={property.survey_number || '-'} />
+            <DetailField label="Owner" value={property.owner_name || '-'} />
+            <DetailField label="Road Width" value={property.road_width_mtrs ? `${property.road_width_mtrs} m` : '-'} />
+            <DetailField label="Ownership Type" value={property.ownership_type || '-'} />
+            <DetailField label="Encumbrance Status" value={property.encumbrance_status || '-'} />
+            <DetailField label="Created" value={formatDate(property.created_at)} />
           </div>
 
           {property.notes && (
             <div className="mt-6 border-t pt-4">
-              <span className="text-gray-400 text-sm">Notes</span>
-              <p className="text-sm text-gray-700 mt-1 whitespace-pre-line">{property.notes}</p>
+              <span className="text-sm text-gray-400">Notes</span>
+              <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{property.notes}</p>
             </div>
           )}
         </section>
 
-        <section className="card">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">At a Glance</h2>
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-primary-50 text-primary-600 shrink-0">
-                <MapPin size={18} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-500">Geocode status</p>
-                {(() => {
-                  const status = property.geocode_status || 'pending';
-                  const meta = GEOCODE_STATUS_META[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
-                  return (
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>
-                        {meta.label}
+        <section className="card space-y-5">
+          <div>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">At a Glance</h2>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 rounded-lg bg-primary-50 p-2 text-primary-600">
+                  <MapPin size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-gray-500">Geocode status</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${geocodeMeta.cls}`}>
+                      {geocodeMeta.label}
+                    </span>
+                    {hasCoordinates && (
+                      <span className="truncate font-mono text-xs text-gray-400">
+                        {Number(property.lat).toFixed(5)}, {Number(property.lng).toFixed(5)}
                       </span>
-                      {property.lat && property.lng && (
-                        <span className="text-xs text-gray-400 font-mono truncate">
-                          {Number(property.lat).toFixed(5)}, {Number(property.lng).toFixed(5)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-                {property.geocode_message && (
-                  <p className="mt-1 text-xs text-gray-400 truncate" title={property.geocode_message}>
-                    {property.geocode_message}
+                    )}
+                  </div>
+                  {property.geocode_message && (
+                    <p className="mt-1 text-xs text-gray-400">{property.geocode_message}</p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={geocodeMutation.isPending}
+                    onClick={() => geocodeMutation.mutate(id)}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={geocodeMutation.isPending ? 'animate-spin' : ''} />
+                    {geocodeMutation.isPending ? 'Re-geocoding...' : 'Re-geocode from address'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+                  <Ruler size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Land Area</p>
+                  <p className="text-sm font-medium text-gray-900">{formatArea(property.land_area_sqft)}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+                  <IndianRupee size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Circle Rate</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {property.circle_rate_per_sqft ? `${formatINR(property.circle_rate_per_sqft)}/sqft` : '-'}
                   </p>
-                )}
-                <button
-                  type="button"
-                  disabled={geocodeMutation.isPending}
-                  onClick={() => geocodeMutation.mutate(id)}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
-                >
-                  <RefreshCw size={12} className={geocodeMutation.isPending ? 'animate-spin' : ''} />
-                  {geocodeMutation.isPending ? 'Re-geocoding…' : 'Re-geocode from address'}
-                </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+                  <Building2 size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Deals Linked</p>
+                  <p className="text-sm font-medium text-gray-900">{property.deal_count || 0}</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary-50 text-primary-600">
-                <Ruler size={18} />
-              </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-slate-900/80">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-gray-500">Land Area</p>
-                <p className="text-sm font-medium text-gray-900">{formatArea(property.land_area_sqft)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary-50 text-primary-600">
-                <IndianRupee size={18} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Circle Rate</p>
-                <p className="text-sm font-medium text-gray-900">
-                  {property.circle_rate_per_sqft ? formatINR(property.circle_rate_per_sqft) : '-'}
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Location Confidence</p>
+                <h3 className="mt-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+                  {property.geocode_status === 'manual'
+                    ? 'Manual coordinates override geocoding'
+                    : property.geocode_status === 'approximate'
+                      ? 'This pin is approximate'
+                      : 'Map-ready location'}
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+                  {property.geocode_status === 'approximate'
+                    ? 'This property is excluded from precision map overlays until you tighten the address or save exact coordinates.'
+                    : 'Verified and manual coordinates are trusted for nearby comps, land coverage, and deal heat layers.'}
                 </p>
               </div>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${geocodeMeta.cls}`}>
+                {geocodeMeta.label}
+              </span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary-50 text-primary-600">
-                <Building2 size={18} />
+
+            {hasCoordinates ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-slate-900">
+                  <div className="text-gray-600 dark:text-slate-300">
+                    Lat {Number(property.lat).toFixed(6)} | Lng {Number(property.lng).toFixed(6)}
+                  </div>
+                  {googleMapsUrl && (
+                    <a
+                      href={googleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-700"
+                    >
+                      Open map
+                      <ExternalLink size={13} />
+                    </a>
+                  )}
+                </div>
+                <div className="h-64 bg-gray-100 dark:bg-slate-950">
+                  <iframe
+                    title="property-location-preview"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    src={`https://maps.google.com/maps?q=${property.lat},${property.lng}&z=15&output=embed`}
+                  />
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Deals Linked</p>
-                <p className="text-sm font-medium text-gray-900">{property.deal_count || 0}</p>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-slate-400">
+                No coordinates yet. Save a more precise address or enter manual lat/lng below to make this property map-ready.
               </div>
-            </div>
+            )}
           </div>
         </section>
       </div>
 
       <section className="card">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Related Deals</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Related Deals</h2>
 
         {relatedDeals.length === 0 ? (
           <EmptyState
@@ -206,7 +397,7 @@ export default function PropertyDetailPage() {
             description="Create a deal for this property from the Deals page."
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {relatedDeals.map((deal) => {
               const stageConfig = STAGE_CONFIG[deal.stage] || STAGE_CONFIG.screening;
 
@@ -214,12 +405,12 @@ export default function PropertyDetailPage() {
                 <Link
                   key={deal.id}
                   to={`/dashboard/deals/${deal.id}`}
-                  className="rounded-xl border border-gray-200 p-4 hover:shadow-sm transition"
+                  className="rounded-xl border border-gray-200 p-4 transition hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-gray-900">{deal.name}</p>
-                      <p className="text-sm text-gray-500 mt-1">{deal.deal_type}</p>
+                      <p className="mt-1 text-sm text-gray-500">{deal.deal_type}</p>
                     </div>
                     <Badge className={stageConfig.color}>{stageConfig.label}</Badge>
                   </div>
@@ -229,6 +420,284 @@ export default function PropertyDetailPage() {
           </div>
         )}
       </section>
+
+      {showEditModal && editForm && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 py-8">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-950">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Edit Property</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                  Update address intelligence, commercial fields, and manual coordinates from one place.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Property Name</label>
+                    <input
+                      type="text"
+                      value={editForm.name}
+                      onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                      className="input"
+                      placeholder="Optional if the site is still unnamed"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Address</label>
+                    <input
+                      type="text"
+                      value={editForm.address}
+                      onChange={(event) => setEditForm((current) => ({ ...current, address: event.target.value }))}
+                      className="input"
+                      placeholder="Village, survey number, road, landmark..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">City</label>
+                    <input
+                      type="text"
+                      value={editForm.city}
+                      onChange={(event) => setEditForm((current) => ({ ...current, city: event.target.value }))}
+                      className="input"
+                      placeholder="Bengaluru"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">State</label>
+                    <input
+                      type="text"
+                      value={editForm.state}
+                      onChange={(event) => setEditForm((current) => ({ ...current, state: event.target.value }))}
+                      className="input"
+                      placeholder="Karnataka"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Pincode</label>
+                    <input
+                      type="text"
+                      value={editForm.pincode}
+                      onChange={(event) => setEditForm((current) => ({ ...current, pincode: event.target.value }))}
+                      className="input"
+                      placeholder="560001"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Property Type</label>
+                    <select
+                      value={editForm.propertyType}
+                      onChange={(event) => setEditForm((current) => ({ ...current, propertyType: event.target.value }))}
+                      className="input"
+                    >
+                      {PROPERTY_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Zoning</label>
+                    <select
+                      value={editForm.zoning}
+                      onChange={(event) => setEditForm((current) => ({ ...current, zoning: event.target.value }))}
+                      className="input"
+                    >
+                      {ZONING_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Land Extent</label>
+                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editForm.landAreaValue}
+                        onChange={(event) => setEditForm((current) => ({ ...current, landAreaValue: event.target.value }))}
+                        className="input"
+                        placeholder="Enter area"
+                      />
+                      <select
+                        value={editForm.landAreaUnit}
+                        onChange={(event) => setEditForm((current) => ({ ...current, landAreaUnit: event.target.value }))}
+                        className="input"
+                      >
+                        <option value="sqft">sq ft</option>
+                        <option value="acre">acre</option>
+                      </select>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                      {editAreaSqft
+                        ? `Normalized area: ${formatArea(editAreaSqft)}`
+                        : 'Enter whichever land unit you have. REDIP will normalize it for calculations and map coverage.'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Circle Rate (INR / sqft)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.circleRatePerSqft}
+                      onChange={(event) => setEditForm((current) => ({ ...current, circleRatePerSqft: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Permissible FSI</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.permissibleFsi}
+                      onChange={(event) => setEditForm((current) => ({ ...current, permissibleFsi: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Road Width (m)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.roadWidthMtrs}
+                      onChange={(event) => setEditForm((current) => ({ ...current, roadWidthMtrs: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Survey Number</label>
+                    <input
+                      type="text"
+                      value={editForm.surveyNumber}
+                      onChange={(event) => setEditForm((current) => ({ ...current, surveyNumber: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Owner Name</label>
+                    <input
+                      type="text"
+                      value={editForm.ownerName}
+                      onChange={(event) => setEditForm((current) => ({ ...current, ownerName: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Ownership Type</label>
+                    <input
+                      type="text"
+                      value={editForm.ownershipType}
+                      onChange={(event) => setEditForm((current) => ({ ...current, ownershipType: event.target.value }))}
+                      className="input"
+                      placeholder="Freehold, leasehold..."
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Encumbrance Status</label>
+                    <input
+                      type="text"
+                      value={editForm.encumbranceStatus}
+                      onChange={(event) => setEditForm((current) => ({ ...current, encumbranceStatus: event.target.value }))}
+                      className="input"
+                      placeholder="Clear, under review..."
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-slate-900/80">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Map Precision Controls</h4>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+                    Leave coordinates blank to geocode from the address. Enter both lat and lng only if you want to set an exact manual pin.
+                  </p>
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Latitude</label>
+                      <input
+                        type="number"
+                        min="-90"
+                        max="90"
+                        step="0.000001"
+                        value={editForm.lat}
+                        onChange={(event) => setEditForm((current) => ({ ...current, lat: event.target.value }))}
+                        className="input"
+                        placeholder="12.971599"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Longitude</label>
+                      <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="0.000001"
+                        value={editForm.lng}
+                        onChange={(event) => setEditForm((current) => ({ ...current, lng: event.target.value }))}
+                        className="input"
+                        placeholder="77.594566"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Notes</label>
+                  <textarea
+                    rows={4}
+                    value={editForm.notes}
+                    onChange={(event) => setEditForm((current) => ({ ...current, notes: event.target.value }))}
+                    className="input"
+                    placeholder="Capture site nuance, broker context, or diligence notes..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateProperty.isPending}
+                  className="btn btn-primary"
+                >
+                  {updateProperty.isPending ? 'Saving...' : 'Save Property'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
