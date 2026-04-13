@@ -2,17 +2,26 @@
 
 /**
  * Geocoding for Indian addresses.
- * Primary:  Google Maps Geocoding API (requires GOOGLE_MAPS_API_KEY)
+ * Primary:  Google Maps Geocoding API (requires GOOGLE_MAPS_API_KEY, server-side only)
  * Fallback: Nominatim / OpenStreetMap (free, rate-limited to ~1 req/sec)
+ *
+ * Cache: Results are persisted to geocode_cache table (30-day TTL) to avoid
+ *        redundant external API calls for the same address.
  *
  * Geocode status values stored on properties:
  *   verified    – high-confidence match (place_id or full address match)
  *   approximate – city-level match only (confidence < 0.6)
  *   failed      – no match found
  *   pending     – not yet geocoded
+ *   manual      – coordinates set manually by user (pin drag)
  */
 
 const axios = require('axios');
+let dbQuery = null;
+const getDb = () => {
+  if (!dbQuery) dbQuery = require('../config/database').query;
+  return dbQuery;
+};
 
 const GOOGLE_MAPS_KEY = () => process.env.GOOGLE_MAPS_API_KEY;
 
@@ -176,15 +185,106 @@ const geocodeWithNominatim = async (address, city, state, pincode) => {
   }
 };
 
+// ─── CACHE ────────────────────────────────────────────────────────────────────
+
+const normalizeCacheKey = (address, city, state, pincode) => {
+  const parts = [address, city, state, pincode, 'india'].filter(Boolean).map((p) => p.toLowerCase().trim());
+  return parts.join('|');
+};
+
+const readFromCache = async (cacheKey) => {
+  try {
+    const db = getDb();
+    const result = await db(
+      `SELECT * FROM geocode_cache
+       WHERE cache_key = $1 AND expires_at > NOW()
+       LIMIT 1`,
+      [cacheKey]
+    );
+    if (result.rows.length === 0) return null;
+
+    // Increment hit count
+    await db('UPDATE geocode_cache SET hit_count = hit_count + 1 WHERE cache_key = $1', [cacheKey]);
+
+    const row = result.rows[0];
+    return {
+      found: row.status !== 'failed',
+      lat: row.lat ? parseFloat(row.lat) : null,
+      lng: row.lng ? parseFloat(row.lng) : null,
+      displayName: row.formatted_address,
+      placeId: row.place_id,
+      status: row.status,
+      confidence: row.confidence ? parseFloat(row.confidence) : null,
+      message: `[cache hit] ${row.formatted_address || ''}`,
+      provider: row.provider,
+      fromCache: true,
+    };
+  } catch (err) {
+    // Cache is a best-effort optimization; never block geocoding on cache errors
+    console.warn('[Geocode] Cache read error (non-fatal):', err.message);
+    return null;
+  }
+};
+
+const writeToCache = async (cacheKey, result) => {
+  if (!result) return;
+  try {
+    const db = getDb();
+    await db(
+      `INSERT INTO geocode_cache
+         (cache_key, place_id, lat, lng, formatted_address, provider, confidence, status, fetched_at, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW() + INTERVAL '30 days')
+       ON CONFLICT (cache_key) DO UPDATE SET
+         place_id = EXCLUDED.place_id,
+         lat = EXCLUDED.lat,
+         lng = EXCLUDED.lng,
+         formatted_address = EXCLUDED.formatted_address,
+         provider = EXCLUDED.provider,
+         confidence = EXCLUDED.confidence,
+         status = EXCLUDED.status,
+         fetched_at = NOW(),
+         expires_at = NOW() + INTERVAL '30 days',
+         hit_count = geocode_cache.hit_count + 1`,
+      [
+        cacheKey,
+        result.placeId || null,
+        result.lat || null,
+        result.lng || null,
+        result.displayName || null,
+        result.provider || 'unknown',
+        result.confidence || null,
+        result.status || 'failed',
+      ]
+    );
+  } catch (err) {
+    console.warn('[Geocode] Cache write error (non-fatal):', err.message);
+  }
+};
+
 // ─── PUBLIC API ───────────────────────────────────────────────────────────────
 
 const geocodeAddress = async (address, city, state, pincode) => {
+  const cacheKey = normalizeCacheKey(address, city, state, pincode);
+
+  // Try cache first
+  const cached = await readFromCache(cacheKey);
+  if (cached) return cached;
+
+  // Live geocode
+  let result;
   if (isGoogleConfigured()) {
-    const googleResult = await geocodeWithGoogle(address, city, state, pincode);
-    if (googleResult !== null) return googleResult; // null = try fallback
+    result = await geocodeWithGoogle(address, city, state, pincode);
+    if (result === null) {
+      result = await geocodeWithNominatim(address, city, state, pincode);
+    }
+  } else {
+    result = await geocodeWithNominatim(address, city, state, pincode);
   }
 
-  return geocodeWithNominatim(address, city, state, pincode);
+  // Cache the result (even failures, to avoid hammering the API)
+  if (result) await writeToCache(cacheKey, result);
+
+  return result;
 };
 
 module.exports = { geocodeAddress };

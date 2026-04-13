@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { User, Lock, Palette, Save, Loader2, DollarSign, Brain } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
 import { authAPI } from '../services/api';
+import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
 
 const CURRENCY_OPTIONS = [
@@ -20,8 +21,6 @@ const CURRENCY_CODE_OPTIONS = [
   { value: 'GBP', label: 'GBP — British Pound (£)', symbol: '£' },
   { value: 'JPY', label: 'JPY — Japanese Yen (¥)', symbol: '¥' },
   { value: 'SGD', label: 'SGD — Singapore Dollar (S$)', symbol: 'S$' },
-  { value: 'LKR', label: 'LKR — Sri Lankan Rupee', symbol: 'Rs' },
-  { value: 'THB', label: 'THB — Thai Baht (฿)', symbol: '฿' },
 ];
 
 const AREA_UNIT_OPTIONS = [
@@ -63,10 +62,44 @@ export default function SettingsPage() {
     dateFormat: localStorage.getItem('pref_dateFormat') || 'en-IN',
   });
 
-  // Currency code + FX reference rate
+  // Currency code + live FX rates
   const [currencyCode, setCurrencyCode] = useState(localStorage.getItem('pref_currencyCode') || 'INR');
-  const [fxRate, setFxRate] = useState(localStorage.getItem('pref_fx_rate') || '');
+  const [liveRates, setLiveRates] = useState(null);
+  const [ratesLoading, setRatesLoading] = useState(false);
+  const [ratesRefreshing, setRatesRefreshing] = useState(false);
   const selectedCurrency = CURRENCY_CODE_OPTIONS.find((c) => c.value === currencyCode);
+
+  const fetchLiveRates = useCallback(async () => {
+    setRatesLoading(true);
+    try {
+      const resp = await api.get('/fx/rates');
+      setLiveRates(resp.data.rates || []);
+    } catch {
+      // Rates unavailable — graceful degradation
+    } finally {
+      setRatesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchLiveRates(); }, [fetchLiveRates]);
+
+  const handleRefreshRates = async () => {
+    setRatesRefreshing(true);
+    try {
+      await api.post('/fx/refresh');
+      await fetchLiveRates();
+      toast.success('Exchange rates refreshed');
+    } catch {
+      toast.error('Rate refresh failed — using most recent stored rates');
+    } finally {
+      setRatesRefreshing(false);
+    }
+  };
+
+  const getActiveRate = () => {
+    if (!liveRates || currencyCode === 'INR') return null;
+    return liveRates.find((r) => r.quote_currency === currencyCode) || null;
+  };
 
   // Market notes (admin only)
   const { data: marketNotes } = useMarketNotes();
@@ -172,21 +205,7 @@ export default function SettingsPage() {
   const handleCurrencyCodeChange = (code) => {
     setCurrencyCode(code);
     localStorage.setItem('pref_currencyCode', code);
-    if (code === 'INR') {
-      localStorage.removeItem('pref_fx_rate');
-      setFxRate('');
-    }
-    toast.success('Currency updated — reload any open page to see converted values');
-  };
-
-  const handleFxRateSave = () => {
-    const parsed = parseFloat(fxRate);
-    if (!parsed || parsed <= 0) {
-      toast.error('Enter a valid positive exchange rate');
-      return;
-    }
-    localStorage.setItem('pref_fx_rate', String(parsed));
-    toast.success(`Reference rate saved: 1 ${currencyCode} = ₹${parsed.toFixed(4)}`);
+    toast.success('Currency updated');
   };
 
   return (
@@ -387,16 +406,26 @@ export default function SettingsPage() {
 
       {/* Currency Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
-          <DollarSign size={18} />
-          Display Currency
-        </h3>
+        <div className="flex items-start justify-between mb-1">
+          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <DollarSign size={18} />
+            Display Currency
+          </h3>
+          <button
+            onClick={handleRefreshRates}
+            disabled={ratesRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 transition disabled:opacity-50"
+          >
+            {ratesRefreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+            Refresh Rates
+          </button>
+        </div>
         <p className="text-xs text-gray-500 mb-4">
-          All deal values are stored in INR Crores. Select a display currency and enter your reference exchange rate — REDIP does not fetch live FX rates.
+          All deal values are stored in INR Crores. Rates are auto-updated daily. Select a display currency and the app will use the latest available rate.
         </p>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Display Currency</label>
             <select
               value={currencyCode}
               onChange={(e) => handleCurrencyCodeChange(e.target.value)}
@@ -408,37 +437,81 @@ export default function SettingsPage() {
             </select>
           </div>
 
+          {/* Live rate display */}
           {currencyCode !== 'INR' && (
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+              {ratesLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 size={14} className="animate-spin" />
+                  Loading rates…
+                </div>
+              ) : (() => {
+                const activeRate = getActiveRate();
+                if (!activeRate) {
+                  return (
+                    <div className="flex items-start gap-2 text-sm text-amber-700">
+                      <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                      <div>
+                        No rate available for INR → {currencyCode}. Click <strong>Refresh Rates</strong> to fetch the latest rates.
+                      </div>
+                    </div>
+                  );
+                }
+                const isStale = activeRate.freshness_status !== 'fresh';
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      {isStale
+                        ? <AlertTriangle size={14} className="text-amber-500 flex-shrink-0" />
+                        : <CheckCircle size={14} className="text-emerald-500 flex-shrink-0" />
+                      }
+                      <span className="text-sm font-semibold text-gray-900">
+                        1 INR = {currencyCode} {Number(activeRate.rate).toFixed(6)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 space-y-0.5">
+                      <p>Effective date: {activeRate.effective_date}</p>
+                      <p>Source: {activeRate.source}</p>
+                      <p>Status: <span className={isStale ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'}>{activeRate.freshness_status}</span></p>
+                      {isStale && <p className="text-amber-600">Using most recent available rate — click Refresh Rates to update.</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* All rates table */}
+          {liveRates && liveRates.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reference rate: 1 {currencyCode} = how many INR?
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={fxRate}
-                  onChange={(e) => setFxRate(e.target.value)}
-                  placeholder={`e.g. ${currencyCode === 'USD' ? '84.20' : currencyCode === 'AED' ? '22.90' : currencyCode === 'EUR' ? '91.50' : currencyCode === 'GBP' ? '107.00' : currencyCode === 'JPY' ? '0.55' : currencyCode === 'SGD' ? '62.00' : currencyCode === 'LKR' ? '0.31' : '2.45'}`}
-                  step="0.0001"
-                  min="0"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-                <button
-                  onClick={handleFxRateSave}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition"
-                >
-                  <Save size={14} />
-                  Save Rate
-                </button>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">All Available Rates (1 INR =)</p>
+              <div className="rounded-lg border border-gray-100 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-500">Currency</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500">Rate</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500">Date</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {liveRates.map((r) => (
+                      <tr key={r.quote_currency} className={r.quote_currency === currencyCode ? 'bg-primary-50' : 'bg-white'}>
+                        <td className="px-3 py-2 font-medium text-gray-900">{r.quote_currency}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{Number(r.rate).toFixed(6)}</td>
+                        <td className="px-3 py-2 text-right text-gray-500">{r.effective_date}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${r.freshness_status === 'fresh' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {r.freshness_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <p className="mt-1 text-xs text-gray-400">
-                Enter the rate from a source you trust (e.g. RBI, your bank, Bloomberg). This is for display only and does not affect stored data.
-              </p>
-              {localStorage.getItem('pref_fx_rate') && (
-                <p className="mt-1 text-xs text-emerald-600 font-medium">
-                  Active rate: 1 {currencyCode} = ₹{parseFloat(localStorage.getItem('pref_fx_rate')).toFixed(4)}
-                </p>
-              )}
+              <p className="mt-1.5 text-xs text-gray-400">Rates are stored in INR base. Display only — stored deal values are never modified.</p>
             </div>
           )}
         </div>

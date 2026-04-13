@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
@@ -24,6 +25,7 @@ const ddRoutes = require('./routes/dd.routes');
 const approvalsRoutes = require('./routes/approvals.routes');
 const riskRoutes = require('./routes/risk.routes');
 const extractionRoutes = require('./routes/extraction.routes');
+const fxRoutes = require('./routes/fx.routes');
 
 const app = express();
 
@@ -66,6 +68,44 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+// Rate limiting
+// Auth endpoints: strict (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// AI generation and export endpoints: moderate (cost protection)
+const heavyLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Rate limit reached for this operation. Please wait before retrying.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// General API: relaxed global limit
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please slow down.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api/intelligence', heavyLimiter);
+app.use('/api/exports', heavyLimiter);
+app.use('/api/extraction', heavyLimiter);
+app.use('/api/fx/refresh', heavyLimiter);
+app.use('/api', generalLimiter);
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -92,6 +132,7 @@ app.use('/api', ddRoutes);
 app.use('/api', approvalsRoutes);
 app.use('/api', riskRoutes);
 app.use('/api', extractionRoutes);
+app.use('/api/fx', fxRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

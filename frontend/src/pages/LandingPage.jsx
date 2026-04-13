@@ -141,7 +141,7 @@ const problems = [
   },
   {
     problem: 'Slow due diligence',
-    solution: 'Gemini-powered extraction from title deeds, EC, RTC, and JDA documents',
+    solution: 'AI-powered extraction from title deeds, EC, RTC, and JDA documents — including Kannada-language records',
     icon: Zap,
   },
   {
@@ -201,7 +201,7 @@ const workflowPhases = [
     number: '02',
     title: 'Extract & Evaluate',
     description:
-      'Gemini AI classifies, extracts, and structures evidence from Indian land documents including Kannada-language records, EC transactions, and RTC fields.',
+      'AI classifies, extracts, and structures evidence from Indian land documents including Kannada-language records, EC transactions, and RTC fields.',
   },
   {
     number: '03',
@@ -255,16 +255,16 @@ function ProductWorkflow() {
 
 // ─── AI Capabilities ──────────────────────────────────────────────────────────
 
-const geminiItems = [
-  'Document classification',
-  'PDF and image extraction',
+const documentIntelligenceItems = [
+  'Document classification and categorisation',
+  'PDF and image content extraction',
   'Kannada to English translation',
   'EC transaction parsing',
   'RTC/Pahani field extraction',
   'JDA/JV clause extraction',
 ];
 
-const claudeItems = [
+const dealReasoningItems = [
   'DD synthesis and missing-item detection',
   'Risk narrative generation',
   'Next-step recommendations',
@@ -279,15 +279,15 @@ function AICapabilities() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            Two AI Models, Routed by Task
+            AI Routed by Task, Not by Guesswork
           </h2>
           <p className="text-gray-500 text-lg">
-            Each model is used only where it outperforms the alternative. No LLM is used for
-            deterministic math or rule-engine decisions.
+            Each AI capability is applied only where it materially improves accuracy. No AI is used
+            for deterministic math, rule-engine decisions, or financial calculations.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Gemini */}
+          {/* Document Intelligence */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
@@ -295,13 +295,13 @@ function AICapabilities() {
               </div>
               <div>
                 <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
-                  Gemini
+                  Document AI
                 </div>
                 <div className="text-base font-bold text-gray-900">Document Intelligence</div>
               </div>
             </div>
             <ul className="space-y-2.5">
-              {geminiItems.map((item) => (
+              {documentIntelligenceItems.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700">
                   <span className="mt-1 w-4 h-4 rounded-full bg-emerald-100 flex-shrink-0 flex items-center justify-center">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -312,7 +312,7 @@ function AICapabilities() {
             </ul>
           </div>
 
-          {/* Claude */}
+          {/* Deal Reasoning */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
@@ -320,13 +320,13 @@ function AICapabilities() {
               </div>
               <div>
                 <div className="text-xs font-semibold text-primary-600 uppercase tracking-wider">
-                  Claude
+                  Reasoning AI
                 </div>
                 <div className="text-base font-bold text-gray-900">Deal Reasoning</div>
               </div>
             </div>
             <ul className="space-y-2.5">
-              {claudeItems.map((item) => (
+              {dealReasoningItems.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700">
                   <span className="mt-1 w-4 h-4 rounded-full bg-primary-100 flex-shrink-0 flex items-center justify-center">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
