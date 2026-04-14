@@ -207,7 +207,7 @@ describe('Financial Engine', () => {
     });
 
     test('should throw for invalid project duration', () => {
-      expect(() => calculateFullFinancials({ ...baseInput, projectDurationMonths: 11 })).toThrow('Project duration must be between 12 and 180 months');
+      expect(() => calculateFullFinancials({ ...baseInput, projectDurationYears: 0.5 })).toThrow('Project duration must be between 1 and 15 years');
     });
 
     test('should include GST at 18% of construction cost', () => {

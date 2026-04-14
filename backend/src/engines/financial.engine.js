@@ -14,6 +14,8 @@ const GST_INFRA_RATE  = 0.12;  // GST on civil/infra (plotted dev)
 const STAMP_DUTY_RATE = 0.05;  // Stamp duty on land (avg India, varies 3-8%)
 const CARPET_RATIO    = 0.70;  // Carpet / Saleable area
 const SBU_RATIO       = 1.25;  // Super Built-Up / Saleable area
+const MIN_PROJECT_DURATION_YEARS = 1;
+const MAX_PROJECT_DURATION_YEARS = 15;
 
 // Scenario presets: adjustments applied to base inputs
 const SCENARIO_PRESETS = {
@@ -115,21 +117,178 @@ function sCurveWeights(n) {
 
 const round4 = (n) => (n != null && !isNaN(n) ? Math.round(n * 10000) / 10000 : null);
 const round2 = (n) => (n != null && !isNaN(n) ? Math.round(n * 100) / 100 : null);
+const roundQuarterYear = (n) => (n != null && !isNaN(n) ? Math.round(n * 4) / 4 : null);
 
 function safeCashFlows(cfs) {
   return cfs.map((v) => Math.round((isFinite(v) ? v : 0) * 100) / 100);
 }
 
-function structureCashFlows(cfs) {
-  const quarterly = cfs.map((net, quarter) => ({ quarter, net }));
+function normalizeEffectiveDate(value) {
+  if (!value) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const candidate = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(candidate.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  return candidate.toISOString().slice(0, 10);
+}
+
+function addUtcDays(dateStr, days) {
+  const date = new Date(`${dateStr}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function addUtcMonths(dateStr, months) {
+  const date = new Date(`${dateStr}T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+function toValidYearInput(value, fallbackYears) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallbackYears;
+  }
+
+  return numeric;
+}
+
+function resolveTimelineInput(input, {
+  defaultDurationYears,
+  defaultConstructionStartYears = 0,
+  defaultConstructionEndRatio = 0.85,
+}) {
+  const durationYearsRaw = input.projectDurationYears != null
+    ? Number(input.projectDurationYears)
+    : (Number(input.projectDurationMonths) || defaultDurationYears * 12) / 12;
+
+  const durationYears = roundQuarterYear(toValidYearInput(durationYearsRaw, defaultDurationYears));
+  const durationMonths = Math.round(durationYears * 12);
+
+  const constructionStartYearsRaw = input.constructionStartYears != null
+    ? Number(input.constructionStartYears)
+    : (Number(input.constructionStartMonths) || defaultConstructionStartYears * 12) / 12;
+  const constructionStartYears = Math.max(0, roundQuarterYear(
+    Number.isFinite(constructionStartYearsRaw) ? constructionStartYearsRaw : defaultConstructionStartYears
+  ));
+  const constructionStartMonths = Math.round(constructionStartYears * 12);
+
+  const constructionEndYearsRaw = input.constructionEndYears != null
+    ? Number(input.constructionEndYears)
+    : (Number(input.constructionEndMonths) > 0
+      ? Number(input.constructionEndMonths) / 12
+      : durationYears * defaultConstructionEndRatio);
+  const defaultConstructionEndYears = durationYears * defaultConstructionEndRatio;
+  const constructionEndYears = Math.max(
+    constructionStartYears,
+    Math.min(
+      durationYears,
+      roundQuarterYear(
+        Number.isFinite(constructionEndYearsRaw) && constructionEndYearsRaw > 0
+          ? constructionEndYearsRaw
+          : defaultConstructionEndYears
+      )
+    )
+  );
+  const constructionEndMonths = Math.round(constructionEndYears * 12);
+
+  return {
+    effectiveDate: normalizeEffectiveDate(input.effectiveDate),
+    projectDurationYears: durationYears,
+    projectDurationMonths: durationMonths,
+    constructionStartYears,
+    constructionStartMonths,
+    constructionEndYears,
+    constructionEndMonths,
+  };
+}
+
+function buildTimeline({
+  effectiveDate,
+  projectDurationYears,
+  projectDurationMonths,
+  constructionStartYears = 0,
+  constructionStartMonths = 0,
+  constructionEndYears = projectDurationYears,
+  constructionEndMonths = projectDurationMonths,
+  holdPeriodYears = 0,
+}) {
+  const totalModelMonths = projectDurationMonths + Math.max(0, Math.round((Number(holdPeriodYears) || 0) * 12));
+
+  return {
+    effectiveDate,
+    projectDurationYears: roundQuarterYear(projectDurationYears),
+    projectDurationMonths,
+    constructionStartYears: roundQuarterYear(constructionStartYears),
+    constructionStartMonths,
+    constructionEndYears: roundQuarterYear(constructionEndYears),
+    constructionEndMonths,
+    holdPeriodYears: roundQuarterYear(Number(holdPeriodYears) || 0),
+    constructionStartDate: addUtcMonths(effectiveDate, constructionStartMonths),
+    constructionEndDate: addUtcDays(addUtcMonths(effectiveDate, constructionEndMonths), -1),
+    modelEndDate: addUtcDays(addUtcMonths(effectiveDate, totalModelMonths), -1),
+  };
+}
+
+function structureCashFlows(cfs, timeline = {}) {
+  const effectiveDate = normalizeEffectiveDate(timeline.effectiveDate);
+  const quarterly = cfs.map((net, quarter) => {
+    if (quarter === 0) {
+      return {
+        quarter,
+        label: 'Effective Date',
+        startDate: effectiveDate,
+        endDate: effectiveDate,
+        period: effectiveDate,
+        net,
+      };
+    }
+
+    const startDate = addUtcMonths(effectiveDate, (quarter - 1) * 3);
+    const endDate = addUtcDays(addUtcMonths(effectiveDate, quarter * 3), -1);
+
+    return {
+      quarter,
+      label: `Q${quarter}`,
+      startDate,
+      endDate,
+      period: `${startDate} to ${endDate}`,
+      net,
+    };
+  });
+
   const yearly = [];
-  if (cfs[0] !== 0) yearly.push({ year: 0, label: 'Pre-Project', net: round2(cfs[0]) });
+  if (cfs[0] !== 0) {
+    yearly.push({
+      year: 0,
+      label: 'Effective Date',
+      startDate: effectiveDate,
+      endDate: effectiveDate,
+      period: effectiveDate,
+      net: round2(cfs[0]),
+    });
+  }
+
   for (let y = 0; y < Math.ceil((cfs.length - 1) / 4); y++) {
     const s = y * 4 + 1;
     const e = Math.min(s + 3, cfs.length - 1);
     const net = round2(cfs.slice(s, e + 1).reduce((a, b) => a + b, 0));
-    yearly.push({ year: y + 1, label: `Year ${y + 1}`, net });
+    yearly.push({
+      year: y + 1,
+      label: `Year ${y + 1}`,
+      startDate: quarterly[s]?.startDate || effectiveDate,
+      endDate: quarterly[e]?.endDate || effectiveDate,
+      period: quarterly[s]?.startDate && quarterly[e]?.endDate
+        ? `${quarterly[s].startDate} to ${quarterly[e].endDate}`
+        : effectiveDate,
+      net,
+    });
   }
+
   return {
     quarterly,
     yearly,
@@ -155,9 +314,14 @@ function calculateResidentialApartments(input) {
   const marketingCostPct     = Number(input.marketingCostPct) || 5;
   const financeCostPct       = Number(input.financeCostPct) || 12;
   const developerMarginPct   = Number(input.developerMarginPct) || 20;
-  const durationMonths       = Number(input.projectDurationMonths) || 36;
   const discountRatePct      = Number(input.discountRatePct) || 14;
   const pricingEscalationPct = Number(input.pricingEscalationPct) || 0;
+  const timeline = resolveTimelineInput(input, {
+    defaultDurationYears: 3,
+    defaultConstructionStartYears: 0.25,
+    defaultConstructionEndRatio: 0.85,
+  });
+  const durationMonths = timeline.projectDurationMonths;
 
   // Soft costs (% of construction cost)
   const contingencyPct  = Number(input.contingencyPct)  || 5;   // 5% default contingency
@@ -165,10 +329,8 @@ function calculateResidentialApartments(input) {
   const pmcFeePct       = Number(input.pmcFeePct)       || 1.5; // project management
 
   // Construction phasing
-  const constructionStartMonths = Number(input.constructionStartMonths) || 0;
-  const constructionEndMonths   = Number(input.constructionEndMonths) > 0
-    ? Math.min(Number(input.constructionEndMonths), durationMonths)
-    : durationMonths * 0.85;
+  const constructionStartMonths = timeline.constructionStartMonths;
+  const constructionEndMonths = timeline.constructionEndMonths;
 
   // Capital stack
   const debtLTV     = Math.min(0.75, Math.max(0, Number(input.debtLTV) || 0));
@@ -184,8 +346,8 @@ function calculateResidentialApartments(input) {
   }
   if (plotAreaSqft <= 0) throw new Error('Plot area must be greater than 0');
   if (fsi <= 0 || fsi > 20) throw new Error('FSI must be between 0 and 20');
-  if (durationMonths < 12 || durationMonths > 180) {
-    throw new Error('Project duration must be between 12 and 180 months');
+  if (timeline.projectDurationYears < MIN_PROJECT_DURATION_YEARS || timeline.projectDurationYears > MAX_PROJECT_DURATION_YEARS) {
+    throw new Error(`Project duration must be between ${MIN_PROJECT_DURATION_YEARS} and ${MAX_PROJECT_DURATION_YEARS} years`);
   }
   if (loadingFactor < 0 || loadingFactor > 1)   throw new Error('Loading factor must be between 0 and 1 (e.g. 0.15 = 15% loading)');
   if (constructionCostSqft <= 0) throw new Error('Construction cost must be positive');
@@ -332,14 +494,23 @@ function calculateResidentialApartments(input) {
         contingencyPct, architectFeePct, pmcFeePct,
       });
 
+  const outputTimeline = buildTimeline(timeline);
+
   return {
     assetClass: 'residential_apartments',
     inputs: {
       plotAreaSqft, fsi, loadingFactor, constructionCostPerSqft: constructionCostSqft,
       sellingRatePerSqft: sellingRateSqft, landCostCr, approvalCostCr,
       approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
-      marketingCostPct, financeCostPct, developerMarginPct, projectDurationMonths: durationMonths,
-      discountRatePct, pricingEscalationPct, constructionStartMonths, constructionEndMonths,
+      marketingCostPct, financeCostPct, developerMarginPct,
+      effectiveDate: outputTimeline.effectiveDate,
+      projectDurationYears: outputTimeline.projectDurationYears,
+      projectDurationMonths: durationMonths,
+      discountRatePct, pricingEscalationPct,
+      constructionStartYears: outputTimeline.constructionStartYears,
+      constructionStartMonths,
+      constructionEndYears: outputTimeline.constructionEndYears,
+      constructionEndMonths,
       contingencyPct, architectFeePct, pmcFeePct, debtLTV, debtRatePct,
     },
     kpis: {
@@ -394,7 +565,8 @@ function calculateResidentialApartments(input) {
       debtLTV,
       debtRatePct,
     } : null,
-    cashFlows: structureCashFlows(cashFlows),
+    timeline: outputTimeline,
+    cashFlows: structureCashFlows(cashFlows, outputTimeline),
     sensitivityMatrix: sensitivity,
     _legacy: {
       plot_area_sqft: plotAreaSqft, fsi, loading_factor: loadingFactor,
@@ -435,13 +607,21 @@ function calculatePlottedDevelopment(input) {
   const devCostPerSqft     = Number(input.devCostPerSqft) || 250;
   const marketingCostPct   = Number(input.marketingCostPct) || 4;
   const financeCostPct     = Number(input.financeCostPct) || 12;
-  const durationMonths     = Number(input.projectDurationMonths) || 24;
   const discountRatePct    = Number(input.discountRatePct) || 14;
   const contingencyPct     = Number(input.contingencyPct) || 3;
+  const timeline = resolveTimelineInput(input, {
+    defaultDurationYears: 2,
+    defaultConstructionStartYears: 0,
+    defaultConstructionEndRatio: 0.70,
+  });
+  const durationMonths = timeline.projectDurationMonths;
 
   if (totalLandSqft <= 0)      throw new Error('Total land area must be positive');
   if (sellingRatePerSqft <= 0) throw new Error('Selling rate must be positive');
   if (avgPlotSizeSqft <= 0)    throw new Error('Average plot size must be positive');
+  if (timeline.projectDurationYears < MIN_PROJECT_DURATION_YEARS || timeline.projectDurationYears > MAX_PROJECT_DURATION_YEARS) {
+    throw new Error(`Project duration must be between ${MIN_PROJECT_DURATION_YEARS} and ${MAX_PROJECT_DURATION_YEARS} years`);
+  }
 
   // Approval cost: ₹/sqft of total land OR legacy Cr
   const approvalCostCr = Number(input.approvalCostPerSqft) > 0
@@ -501,13 +681,19 @@ function calculatePlottedDevelopment(input) {
   try { irrPct = calculateIRR(cashFlows); } catch { /* skip */ }
   try { npvCr  = calculateNPV(cashFlows, discountRatePct / 100); } catch { /* skip */ }
 
+  const outputTimeline = buildTimeline(timeline);
+
   return {
     assetClass: 'plotted_development',
     inputs: {
       totalLandSqft, saleableLandPct, avgPlotSizeSqft, sellingRatePerSqft,
       landCostCr, devCostPerSqft, approvalCostCr,
       approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
-      marketingCostPct, financeCostPct, projectDurationMonths: durationMonths, discountRatePct,
+      marketingCostPct, financeCostPct,
+      effectiveDate: outputTimeline.effectiveDate,
+      projectDurationYears: outputTimeline.projectDurationYears,
+      projectDurationMonths: durationMonths,
+      discountRatePct,
       contingencyPct,
     },
     kpis: {
@@ -547,7 +733,8 @@ function calculatePlottedDevelopment(input) {
       annualNOI: null, stabilizedNOI: null, exitValue: null,
     },
     capitalStack: null,
-    cashFlows: structureCashFlows(cashFlows),
+    timeline: outputTimeline,
+    cashFlows: structureCashFlows(cashFlows, outputTimeline),
     sensitivityMatrix: skipSensitivity
       ? null
       : buildPlottedSensitivity({
@@ -585,11 +772,16 @@ function calculateIncomeAsset(input) {
   const exitCapRate          = Number(input.exitCapRate) || 7;
   const entryCapRate         = Number(input.entryCapRate) || exitCapRate;
   const holdPeriodYears      = Number(input.holdPeriodYears) || 5;
-  const constructionMonths   = Number(input.projectDurationMonths) || 36;
   const discountRatePct      = Number(input.discountRatePct) || 14;
   const debtCoverage         = Number(input.debtCoverage) || 0;
   const interestRatePct      = Number(input.interestRatePct) || 10;
   const contingencyPct       = Number(input.contingencyPct) || 4;
+  const timeline = resolveTimelineInput(input, {
+    defaultDurationYears: 3,
+    defaultConstructionStartYears: 0,
+    defaultConstructionEndRatio: 1,
+  });
+  const constructionMonths = timeline.projectDurationMonths;
 
   // Retail-specific anchor blended rent
   const anchorPct          = assetClass === 'retail' ? (Number(input.anchorPct) || 40) : 0;
@@ -603,6 +795,9 @@ function calculateIncomeAsset(input) {
   if (constructionCostSqft <= 0)         throw new Error('Construction cost must be positive');
   if (baseRentMonth <= 0)                throw new Error('Base rent must be positive');
   if (exitCapRate <= 0 || exitCapRate > 30) throw new Error('Exit cap rate must be 0–30%');
+  if (timeline.projectDurationYears < MIN_PROJECT_DURATION_YEARS || timeline.projectDurationYears > MAX_PROJECT_DURATION_YEARS) {
+    throw new Error(`Project duration must be between ${MIN_PROJECT_DURATION_YEARS} and ${MAX_PROJECT_DURATION_YEARS} years`);
+  }
 
   const constructionCostCr = (leasableAreaSqft * constructionCostSqft) / 1e7;
   const gstCostCr          = constructionCostCr * GST_RATE;
@@ -675,13 +870,21 @@ function calculateIncomeAsset(input) {
     baseRentMonth: effectiveBaseRent, baseExitCapRate: exitCapRate,
   });
 
+  const outputTimeline = buildTimeline({
+    ...timeline,
+    holdPeriodYears,
+  });
+
   return {
     assetClass,
     inputs: {
       leasableAreaSqft, constructionCostPerSqft: constructionCostSqft, landCostCr, approvalCostCr,
       baseRentPerSqftMonth: baseRentMonth, rentEscalationPct, vacancyPct, opexPct,
       tiPerSqft, lcMonths, entryCapRate, exitCapRate, holdPeriodYears,
-      projectDurationMonths: constructionMonths, discountRatePct, debtCoverage, interestRatePct,
+      effectiveDate: outputTimeline.effectiveDate,
+      projectDurationYears: outputTimeline.projectDurationYears,
+      projectDurationMonths: constructionMonths,
+      discountRatePct, debtCoverage, interestRatePct,
       contingencyPct,
       ...(assetClass === 'retail' ? { anchorPct, anchorRentDiscount } : {}),
     },
@@ -740,7 +943,8 @@ function calculateIncomeAsset(input) {
       equityPct:   round2((1 - debtCoverage) * 100),
       dscr,
     } : null,
-    cashFlows: structureCashFlows(cashFlows),
+    timeline: outputTimeline,
+    cashFlows: structureCashFlows(cashFlows, outputTimeline),
     sensitivityMatrix: sensitivity,
     _legacy: {
       land_cost_cr: landCostCr,
@@ -866,7 +1070,6 @@ function calculateHospitality(input) {
   const adr                  = Number(input.adr) || 6000;                      // Average Daily Rate ₹
   const adrGrowthPct         = Number(input.adrGrowthPct) || 5;
   const stabilizedOccPct     = Number(input.stabilizedOccPct) || 65;
-  const constructionMonths   = Number(input.projectDurationMonths) || 30;
   const holdPeriodYears      = Number(input.holdPeriodYears) || 8;
   const fbRevPct             = Number(input.fbRevPct) || 25;                   // F&B as % of rooms rev
   const otherRevPct          = Number(input.otherRevPct) || 10;                // Other revenue as %
@@ -877,12 +1080,21 @@ function calculateHospitality(input) {
   const debtCoverage         = Number(input.debtCoverage) || 0;
   const interestRatePct      = Number(input.interestRatePct) || 10.5;
   const contingencyPct       = Number(input.contingencyPct) || 5;
+  const timeline = resolveTimelineInput(input, {
+    defaultDurationYears: 2.5,
+    defaultConstructionStartYears: 0,
+    defaultConstructionEndRatio: 1,
+  });
+  const constructionMonths = timeline.projectDurationMonths;
 
   if (keys <= 0)                   throw new Error('Number of keys must be positive');
   if (constructionCostKey <= 0)    throw new Error('Construction cost per key must be positive');
   if (adr <= 0)                    throw new Error('ADR must be positive');
   if (stabilizedOccPct <= 0 || stabilizedOccPct > 100) throw new Error('Occupancy must be 0–100%');
   if (exitCapRate <= 0 || exitCapRate > 30) throw new Error('Exit cap rate must be 0–30%');
+  if (timeline.projectDurationYears < MIN_PROJECT_DURATION_YEARS || timeline.projectDurationYears > MAX_PROJECT_DURATION_YEARS) {
+    throw new Error(`Project duration must be between ${MIN_PROJECT_DURATION_YEARS} and ${MAX_PROJECT_DURATION_YEARS} years`);
+  }
 
   // Development costs
   const constructionCostCr = (keys * constructionCostKey) / 1e7;
@@ -978,12 +1190,20 @@ function calculateHospitality(input) {
     })
   );
 
+  const outputTimeline = buildTimeline({
+    ...timeline,
+    holdPeriodYears,
+  });
+
   return {
     assetClass: 'hospitality',
     inputs: {
       keys, constructionCostPerKey: constructionCostKey, landCostCr, approvalCostCr,
       preOpeningCostPerKey: preOpeningCostKey, adr, adrGrowthPct, stabilizedOccPct,
-      projectDurationMonths: constructionMonths, holdPeriodYears, fbRevPct, otherRevPct,
+      effectiveDate: outputTimeline.effectiveDate,
+      projectDurationYears: outputTimeline.projectDurationYears,
+      projectDurationMonths: constructionMonths,
+      holdPeriodYears, fbRevPct, otherRevPct,
       gopMarginPct, ebitdaMarginPct, exitCapRate, discountRatePct, debtCoverage,
       interestRatePct, contingencyPct,
     },
@@ -1044,7 +1264,8 @@ function calculateHospitality(input) {
       equityPct:   round2((1 - debtCoverage) * 100),
       dscr,
     } : null,
-    cashFlows: structureCashFlows(cashFlows),
+    timeline: outputTimeline,
+    cashFlows: structureCashFlows(cashFlows, outputTimeline),
     sensitivityMatrix: { sellingRates: adrVars, constructionCosts: occVars, irrGrid, axis: ['Occupancy (%)', 'ADR (₹)'], variations: occVars.map((o) => `${o}%`) },
     _legacy: {
       land_cost_cr:          landCostCr,
