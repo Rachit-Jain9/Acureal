@@ -368,14 +368,15 @@ export default function PropertyDetailPage() {
                     </a>
                   )}
                 </div>
-                <div className="h-64 bg-gray-100 dark:bg-slate-950">
+                <div className="h-72 bg-gray-100 dark:bg-slate-950">
                   <iframe
                     title="property-location-preview"
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}
                     loading="lazy"
-                    src={`https://maps.google.com/maps?q=${property.lat},${property.lng}&z=15&output=embed`}
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://maps.google.com/maps?q=${property.lat},${property.lng}&z=17&t=k&output=embed&iwloc=near`}
                   />
                 </div>
               </div>

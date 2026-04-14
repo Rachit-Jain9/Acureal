@@ -396,32 +396,44 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
         </h3>
         {hasLatLng ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
               <span>
-                Lat: <strong>{Number(deal.lat).toFixed(6)}</strong>
+                Lat: <strong className="font-mono">{Number(deal.lat).toFixed(6)}</strong>
               </span>
               <span>
-                Lng: <strong>{Number(deal.lng).toFixed(6)}</strong>
+                Lng: <strong className="font-mono">{Number(deal.lng).toFixed(6)}</strong>
               </span>
               <a
-                href={`https://www.google.com/maps?q=${deal.lat},${deal.lng}`}
+                href={`https://www.google.com/maps/search/?api=1&query=${deal.lat},${deal.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1"
               >
                 Open in Google Maps <ExternalLink size={12} />
               </a>
+              <a
+                href={`https://www.google.com/maps/@${deal.lat},${deal.lng},17z/data=!3m1!1e3`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1"
+              >
+                Satellite view <ExternalLink size={12} />
+              </a>
             </div>
-            <div className="h-56 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center">
+            <div className="h-72 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
               <iframe
                 title="property-map"
                 width="100%"
                 height="100%"
                 style={{ border: 0 }}
                 loading="lazy"
-                src={`https://maps.google.com/maps?q=${deal.lat},${deal.lng}&z=15&output=embed`}
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://maps.google.com/maps?q=${deal.lat},${deal.lng}&z=17&t=k&output=embed&iwloc=near`}
               />
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Pin at exact lat/lng. If the location looks off, re-geocode the property or enter manual coordinates on the Property Record.
+            </p>
           </div>
         ) : (
           <div className="h-40 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 text-gray-400">
