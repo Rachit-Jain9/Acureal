@@ -10,6 +10,12 @@
       "includeFiles": "backend/**"
     }
   },
+  "crons": [
+    {
+      "path": "/api/fx/refresh/daily",
+      "schedule": "5 3 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }

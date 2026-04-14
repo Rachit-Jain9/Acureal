@@ -77,6 +77,7 @@ Core backend vars:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `CORS_ORIGINS`
+- `CRON_SECRET` for the daily Vercel FX refresh job
 
 AI / document pipeline:
 
@@ -133,3 +134,4 @@ npm run build
 - GitHub remote: `https://github.com/Rachit-Jain9/REDIP.git`
 - Vercel project metadata: `.vercel/project.json`
 - Production app: `https://redip.vercel.app/`
+- Daily FX refresh is scheduled in `vercel.json` at `03:05 UTC` via `/api/fx/refresh/daily`

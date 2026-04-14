@@ -3,7 +3,8 @@
 /**
  * Exchange rate service.
  *
- * Provider: exchangerate.host (free, no API key required for basic usage)
+ * Provider: @fawazahmed0/currency-api via jsDelivr CDN
+ * Feed used: https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json
  * Base currency: INR (canonical platform currency)
  *
  * Behavior:
@@ -17,33 +18,47 @@ const { query } = require('../config/database');
 
 const BASE_CURRENCY = 'INR';
 const SUPPORTED_QUOTES = ['USD', 'EUR', 'GBP', 'AED', 'SGD', 'JPY', 'AUD', 'CAD'];
-const PROVIDER_URL = 'https://api.exchangerate.host/latest';
-const PROVIDER_NAME = 'exchangerate_host';
+const PROVIDER_URL = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json';
+const PROVIDER_NAME = 'fawazahmed_currency_api';
 const FETCH_TIMEOUT_MS = 10000;
 
 /**
- * Fetch latest rates from exchangerate.host.
+ * Fetch latest rates from the USD feed and cross-convert to 1 INR = X quote.
  * Returns { rates: { USD: x, EUR: y, ... }, date: 'YYYY-MM-DD' } or null on failure.
  */
 const fetchFromProvider = async () => {
   try {
     const response = await axios.get(PROVIDER_URL, {
-      params: {
-        base: BASE_CURRENCY,
-        symbols: SUPPORTED_QUOTES.join(','),
-      },
       timeout: FETCH_TIMEOUT_MS,
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
     });
 
     const data = response.data;
-    if (!data?.success || !data?.rates) {
-      console.warn('[FX] Provider returned non-success response:', data?.error);
+    const usdRates = data?.usd;
+    const usdToInr = Number(usdRates?.inr);
+
+    if (!usdRates || !Number.isFinite(usdToInr) || usdToInr <= 0) {
+      console.warn('[FX] Provider returned invalid USD payload.');
       return null;
     }
 
+    const rates = Object.fromEntries(
+      SUPPORTED_QUOTES.map((quote) => {
+        if (quote === 'USD') {
+          return [quote, 1 / usdToInr];
+        }
+
+        const usdToQuote = Number(usdRates[quote.toLowerCase()]);
+        if (!Number.isFinite(usdToQuote) || usdToQuote <= 0) {
+          return [quote, null];
+        }
+
+        return [quote, usdToQuote / usdToInr];
+      }).filter(([, rate]) => Number.isFinite(rate) && rate > 0)
+    );
+
     return {
-      rates: data.rates,
+      rates,
       date: data.date || new Date().toISOString().slice(0, 10),
     };
   } catch (err) {
@@ -105,16 +120,19 @@ const refreshRates = async () => {
   const startTime = Date.now();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Check if already fetched fresh today
+  // Check if this provider was already fetched successfully today.
   const existing = await query(
-    `SELECT id FROM exchange_rates
-     WHERE base_currency = $1 AND effective_date = $2 AND freshness_status = 'fresh'
+    `SELECT id
+     FROM exchange_rate_fetch_log
+     WHERE fetch_date = $1
+       AND source = $2
+       AND success = TRUE
      LIMIT 1`,
-    [BASE_CURRENCY, today]
+    [today, PROVIDER_NAME]
   );
 
   if (existing.rows.length > 0) {
-    return { refreshed: false, reason: 'already_fresh_today', date: today };
+    return { refreshed: false, reason: 'already_refreshed_today', fetchDate: today };
   }
 
   // Attempt live fetch
@@ -122,9 +140,17 @@ const refreshRates = async () => {
   const durationMs = Date.now() - startTime;
 
   if (providerData) {
-    const updated = await persistRates(providerData.rates, providerData.date, PROVIDER_NAME, 'fresh');
+    const freshnessStatus = providerData.date === today ? 'fresh' : 'stale';
+    const updated = await persistRates(providerData.rates, providerData.date, PROVIDER_NAME, freshnessStatus);
     await logFetch({ fetchDate: today, source: PROVIDER_NAME, success: true, currenciesUpdated: updated, durationMs });
-    return { refreshed: true, date: providerData.date, currenciesUpdated: updated, source: PROVIDER_NAME };
+    return {
+      refreshed: true,
+      date: providerData.date,
+      fetchDate: today,
+      currenciesUpdated: updated,
+      source: PROVIDER_NAME,
+      freshnessStatus,
+    };
   }
 
   // Provider failed — mark most recent stored rates as fallback for today

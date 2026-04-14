@@ -5,6 +5,14 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { refreshRates, getAllRates, getRate, convertFromINR, SUPPORTED_QUOTES } = require('../services/fx.service');
 
 const router = express.Router();
+const getCronToken = () => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return null;
+  }
+
+  return `Bearer ${cronSecret}`;
+};
 
 // GET /api/fx/rates — latest stored rates for all supported currencies
 router.get('/rates', authenticate, async (req, res, next) => {
@@ -85,6 +93,30 @@ router.post('/refresh', authenticate, requireRole('admin', 'analyst'), async (re
   try {
     const result = await refreshRates();
     res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/refresh/daily', async (req, res, next) => {
+  try {
+    const expectedToken = getCronToken();
+    if (!expectedToken) {
+      return res.status(503).json({
+        success: false,
+        message: 'CRON_SECRET is not configured.',
+      });
+    }
+
+    if (req.get('authorization') !== expectedToken) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized cron request.',
+      });
+    }
+
+    const result = await refreshRates();
+    res.json({ success: true, scheduled: true, ...result });
   } catch (err) {
     next(err);
   }
