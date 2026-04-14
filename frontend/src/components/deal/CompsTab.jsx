@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
-import { clsx } from 'clsx';
 import { compsAPI } from '../../services/api';
 import LoadingSpinner from '../common/LoadingSpinner';
-import Badge from '../common/Badge';
 
 function formatRate(value) {
   if (value == null) return '-';
@@ -73,36 +71,49 @@ function NearbyCompsTable({ comps }) {
   );
 }
 
-function BenchmarkCard({ benchmark }) {
+function BenchmarkCard({ benchmark, city }) {
   if (!benchmark) return null;
 
+  if (benchmark.found === false) {
+    return (
+      <div className="card">
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp size={16} className="text-gray-400" />
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Market Benchmark — {city || 'Location'}</h3>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {benchmark.message || 'No verified comparable transactions found in this radius. Add project comps to populate pricing benchmarks.'}
+        </p>
+      </div>
+    );
+  }
+
+  const b = benchmark.benchmarks || {};
   const metrics = [
-    { label: 'Avg Launch Rate', value: formatRate(benchmark.avg_launch_rate_sqft) },
-    { label: 'Avg Resale Rate', value: formatRate(benchmark.avg_resale_rate_sqft) },
-    { label: 'Avg Appreciation (%)', value: benchmark.avg_appreciation_pct != null ? `${Number(benchmark.avg_appreciation_pct).toFixed(1)}%` : '-' },
-    { label: 'Inventory (units)', value: benchmark.inventory_units?.toLocaleString('en-IN') ?? '-' },
-    { label: 'Absorption Rate', value: benchmark.absorption_rate != null ? `${Number(benchmark.absorption_rate).toFixed(1)}%` : '-' },
-    { label: 'Period', value: benchmark.period || '-' },
+    { label: 'Average Rate', value: formatRate(b.avg_rate_per_sqft) },
+    { label: 'Median Rate',  value: formatRate(b.median_rate_per_sqft) },
+    { label: 'Min',          value: formatRate(b.min_rate_per_sqft) },
+    { label: 'Max',          value: formatRate(b.max_rate_per_sqft) },
+    { label: '25th Pctile',  value: formatRate(b.p25_rate_per_sqft) },
+    { label: '75th Pctile',  value: formatRate(b.p75_rate_per_sqft) },
   ];
 
   return (
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp size={16} className="text-primary-600" />
-        <h3 className="text-base font-semibold text-gray-900">
-          Market Benchmark — {benchmark.city || benchmark.micro_market || 'City'}
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Market Benchmark — {city || 'Location'}
         </h3>
-        {benchmark.source && (
-          <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded ml-auto">
-            {benchmark.source}
-          </span>
-        )}
+        <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded ml-auto">
+          {benchmark.count} comps · {benchmark.radius_km} km
+        </span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {metrics.map(({ label, value }) => (
-          <div key={label} className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-400 mb-1">{label}</p>
-            <p className="text-sm font-bold text-gray-900">{value}</p>
+          <div key={label} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{label}</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{value}</p>
           </div>
         ))}
       </div>
@@ -123,7 +134,7 @@ export default function CompsTab({ deal }) {
     queryKey: ['comps-nearby', deal?.lat, deal?.lng],
     queryFn: () =>
       compsAPI
-        .nearby({ lat: deal.lat, lng: deal.lng, radius: 5000 })
+        .nearby({ lat: deal.lat, lng: deal.lng, radius: 5 })
         .then((r) => r.data?.data ?? r.data),
     enabled: hasLatLng,
   });
@@ -134,16 +145,16 @@ export default function CompsTab({ deal }) {
     isError: benchmarkError,
     refetch: refetchBenchmark,
   } = useQuery({
-    queryKey: ['comps-benchmark', city],
+    queryKey: ['comps-benchmark', deal?.lat, deal?.lng],
     queryFn: () =>
       compsAPI
-        .benchmarks({ city })
+        .benchmarks({ lat: deal.lat, lng: deal.lng, radius: 5 })
         .then((r) => r.data?.data ?? r.data),
-    enabled: !!city,
+    enabled: hasLatLng,
   });
 
   const nearbyComps = Array.isArray(nearbyData) ? nearbyData : [];
-  const benchmark = Array.isArray(benchmarkData) ? benchmarkData[0] : benchmarkData;
+  const benchmark = benchmarkData;
 
   return (
     <div className="space-y-6">
@@ -159,7 +170,7 @@ export default function CompsTab({ deal }) {
       )}
 
       {/* Market Benchmark */}
-      {city && (
+      {hasLatLng && (
         benchmarkLoading ? (
           <LoadingSpinner className="py-8" />
         ) : benchmarkError ? (
@@ -168,19 +179,8 @@ export default function CompsTab({ deal }) {
             <p className="text-sm text-red-600 mb-2">Failed to load benchmark data.</p>
             <button onClick={refetchBenchmark} className="btn btn-secondary text-sm">Retry</button>
           </div>
-        ) : benchmark ? (
-          <BenchmarkCard benchmark={benchmark} />
         ) : (
-          <div className="card">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={16} className="text-gray-400" />
-              <h3 className="text-base font-semibold text-gray-900">Market Benchmark</h3>
-            </div>
-            <p className="text-sm text-gray-400">
-              No benchmark data available for {city}. Verified market data must be sourced and
-              entered before benchmarks can be displayed.
-            </p>
-          </div>
+          <BenchmarkCard benchmark={benchmark} city={city} />
         )
       )}
 

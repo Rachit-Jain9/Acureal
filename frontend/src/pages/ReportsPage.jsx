@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Download, FileText, Loader2, AlertTriangle, Presentation } from 'lucide-react';
-import { downloadAxiosResponse, downloadBlob } from '../utils/download';
+import { Download, FileText, Loader2, Presentation } from 'lucide-react';
+import { downloadAxiosResponse } from '../utils/download';
 import { useDeals } from '../hooks/useDeals';
 import { useDailyBrief } from '../hooks/useIntelligence';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -27,10 +27,11 @@ const EmptyTableState = ({ message }) => (
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState('pipeline');
   const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingDealsXlsx, setExportingDealsXlsx] = useState(false);
   const [exportingComps, setExportingComps] = useState(false);
-  const [generatingIC, setGeneratingIC] = useState(null);
   const [exportingPptx, setExportingPptx] = useState(null);
   const [exportingXlsx, setExportingXlsx] = useState(null);
+  const [exportingPdf, setExportingPdf] = useState(null);
 
   const { data: dealsData, isLoading } = useDeals({ limit: 500, includeArchived: true });
   const { data: dailyBrief } = useDailyBrief();
@@ -122,6 +123,21 @@ export default function ReportsPage() {
     }
   };
 
+  const handleExportDealsXlsx = async () => {
+    setExportingDealsXlsx(true);
+    try {
+      const response = await exportsAPI.dealsXlsx();
+      downloadAxiosResponse(response, 'redip-deals.xlsx');
+      toast.success('Deals workbook downloaded');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Deals workbook export failed';
+      toast.error(msg);
+      console.error('[ReportsPage] Export deals workbook error:', err);
+    } finally {
+      setExportingDealsXlsx(false);
+    }
+  };
+
   const handleExportPptx = async (dealId, dealName) => {
     setExportingPptx(dealId);
     try {
@@ -150,24 +166,19 @@ export default function ReportsPage() {
     }
   };
 
-  const handleGenerateIC = async (dealId, dealName) => {
-    setGeneratingIC(dealId);
+  const handleExportPdf = async (dealId, dealName) => {
+    setExportingPdf(dealId);
     try {
-      const response = await exportsAPI.icReport(dealId);
-      const reportPayload = response.data?.data ?? response.data;
+      const response = await exportsAPI.dealPdf(dealId);
       const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadBlob(
-        JSON.stringify(reportPayload, null, 2),
-        `IC_Report_${safeName}.json`,
-        'application/json'
-      );
-      toast.success('IC Report downloaded');
+      downloadAxiosResponse(response, `redip-${safeName}.pdf`);
+      toast.success('PDF report downloaded');
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'IC Report generation failed';
+      const msg = err.response?.data?.message || err.message || 'PDF export failed';
       toast.error(msg);
-      console.error('[ReportsPage] IC report error:', err);
+      console.error('[ReportsPage] PDF export error:', err);
     } finally {
-      setGeneratingIC(null);
+      setExportingPdf(null);
     }
   };
 
@@ -205,6 +216,14 @@ export default function ReportsPage() {
         >
           {exportingComps ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           Export Comps CSV
+        </button>
+        <button
+          onClick={handleExportDealsXlsx}
+          disabled={exportingDealsXlsx}
+          className="btn btn-secondary flex items-center gap-2 text-sm"
+        >
+          {exportingDealsXlsx ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          Export Deals XLSX
         </button>
       </div>
 
@@ -404,17 +423,17 @@ export default function ReportsPage() {
                             XLSX
                           </button>
                           <button
-                            onClick={() => handleGenerateIC(deal.id, deal.name)}
-                            disabled={generatingIC === deal.id}
-                            title="Generate IC report (JSON)"
+                            onClick={() => handleExportPdf(deal.id, deal.name)}
+                            disabled={exportingPdf === deal.id}
+                            title="Download PDF report"
                             className="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
                           >
-                            {generatingIC === deal.id ? (
+                            {exportingPdf === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
                             ) : (
                               <FileText size={11} />
                             )}
-                            IC
+                            PDF
                           </button>
                         </div>
                       </td>

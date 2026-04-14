@@ -146,7 +146,9 @@ function calculateResidentialApartments(input) {
   const skipSensitivity = input.skipSensitivity === true;
   const plotAreaSqft         = Number(input.plotAreaSqft);
   const fsi                  = Number(input.fsi);
-  const loadingFactor        = Number(input.loadingFactor) || 0.65;
+  const loadingFactor        = input.loadingFactor != null && !isNaN(Number(input.loadingFactor))
+    ? Number(input.loadingFactor)
+    : 0.15;
   const constructionCostSqft = Number(input.constructionCostPerSqft);
   const sellingRateSqft      = Number(input.sellingRatePerSqft);
   const landCostCr           = Number(input.landCostCr) || 0;
@@ -182,18 +184,20 @@ function calculateResidentialApartments(input) {
   }
   if (plotAreaSqft <= 0) throw new Error('Plot area must be greater than 0');
   if (fsi <= 0 || fsi > 20) throw new Error('FSI must be between 0 and 20');
-  if (durationMonths < 6 || durationMonths > 120) {
-    throw new Error('Project duration must be between 6 and 120 months');
+  if (durationMonths < 12 || durationMonths > 180) {
+    throw new Error('Project duration must be between 12 and 180 months');
   }
-  if (loadingFactor <= 0 || loadingFactor > 1)   throw new Error('Loading factor must be 0–1');
+  if (loadingFactor < 0 || loadingFactor > 1)   throw new Error('Loading factor must be between 0 and 1 (e.g. 0.15 = 15% loading)');
   if (constructionCostSqft <= 0) throw new Error('Construction cost must be positive');
   if (sellingRateSqft <= 0)      throw new Error('Selling rate must be positive');
 
-  // Areas
+  // Areas — Indian convention: FSI defines buildable/FAR area (gross),
+  // loading adds balconies, common areas, terraces etc. on top to get saleable
+  // e.g. plot 100sf × FSI 2.5 × (1 + 0.15 loading) = 287.5 sf saleable
   const grossAreaSqft    = plotAreaSqft * fsi;
-  const saleableAreaSqft = grossAreaSqft * loadingFactor;
-  const carpetAreaSqft   = saleableAreaSqft * CARPET_RATIO;
-  const superBuiltupSqft = saleableAreaSqft * SBU_RATIO;
+  const saleableAreaSqft = grossAreaSqft * (1 + loadingFactor);
+  const carpetAreaSqft   = grossAreaSqft * CARPET_RATIO;
+  const superBuiltupSqft = saleableAreaSqft;
 
   // Approval cost: ₹/sqft of GFA or legacy Cr
   const approvalCostCr = Number(input.approvalCostPerSqft) > 0
@@ -1100,7 +1104,7 @@ function applyScenarioPreset(input, scenarioKey) {
   // Duration adjustments
   if (out.projectDurationMonths) {
     out.projectDurationMonths = Math.round(out.projectDurationMonths * preset.durationMultiplier);
-    out.projectDurationMonths = Math.min(120, Math.max(6, out.projectDurationMonths));
+    out.projectDurationMonths = Math.min(180, Math.max(12, out.projectDurationMonths));
     if (out.constructionEndMonths) {
       out.constructionEndMonths = Math.round(out.constructionEndMonths * preset.durationMultiplier);
       out.constructionEndMonths = Math.min(out.projectDurationMonths, out.constructionEndMonths);

@@ -39,6 +39,11 @@ router.get(
   [qv('stage').optional(), qv('city').optional()],
   handleValidation,
   async (req, res, next) => {
+    return res.status(410).json({
+      success: false,
+      message: 'JSON IC report exports have been retired. Use PDF, PPTX, XLSX, or CSV exports instead.',
+    });
+
     try {
       const conditions = ['1=1'];
       const values = [];
@@ -446,16 +451,25 @@ router.get(
       const margin = 50;
       let y = height - margin;
 
+      const toPdfSafeText = (value) =>
+        String(value ?? 'N/A')
+          .replace(/₹|â‚¹/g, 'INR ')
+          .replace(/Â·|·/g, ' | ')
+          .replace(/â€”|—/g, '-')
+          .replace(/–/g, '-')
+          .replace(/×/g, 'x')
+          .replace(/[^\x20-\x7E\n]/g, '');
+
       const drawText = (text, x, yPos, opts = {}) => {
         const { size = 10, isBold = false, color = rgb(0.1, 0.1, 0.1) } = opts;
-        page.drawText(String(text ?? '—'), { x, y: yPos, size, font: isBold ? boldFont : font, color });
+        page.drawText(toPdfSafeText(text), { x, y: yPos, size, font: isBold ? boldFont : font, color });
       };
 
       const drawLine = (yPos) => {
         page.drawLine({ start: { x: margin, y: yPos }, end: { x: width - margin, y: yPos }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
       };
 
-      const fmt = (v, suffix = '') => (v != null && v !== '' ? `${Number(v).toFixed(2)}${suffix}` : '—');
+      const fmt = (v, suffix = '') => (v != null && v !== '' ? `${Number(v).toFixed(2)}${suffix}` : 'N/A');
 
       // Header bar
       page.drawRectangle({ x: 0, y: height - 60, width, height: 60, color: rgb(0.05, 0.15, 0.35) });
@@ -571,10 +585,19 @@ router.get(
           p.address as property_address, p.city, p.state, p.land_area_sqft, p.zoning,
           p.survey_number, p.owner_name, p.circle_rate_per_sqft, p.permissible_fsi,
           u.name as assigned_to_name,
-          f.land_cost_cr, f.construction_cost_cr, f.other_costs_cr, f.total_cost_cr,
+          f.land_cost_cr,
+          f.total_construction_cost_cr AS construction_cost_cr,
+          f.approval_cost_cr, f.marketing_cost_cr, f.finance_cost_cr,
+          f.gst_cost_cr, f.stamp_duty_cr,
+          f.total_cost_cr,
           f.total_revenue_cr, f.gross_profit_cr, f.gross_margin_pct,
           f.irr_pct, f.npv_cr, f.equity_multiple, f.residual_land_value_cr,
-          f.saleable_area_sqft, f.avg_sale_rate_per_sqft
+          f.saleable_area_sqft, f.gross_area_sqft, f.carpet_area_sqft,
+          f.selling_rate_per_sqft, f.construction_cost_per_sqft,
+          f.fsi, f.loading_factor, f.plot_area_sqft,
+          f.discount_rate_pct, f.project_duration_months,
+          f.developer_margin_pct, f.asset_class as financial_asset_class,
+          f.model_params, f.cash_flows
          FROM deals d
          LEFT JOIN properties p ON d.property_id = p.id
          LEFT JOIN users u ON d.assigned_to = u.id
@@ -832,10 +855,17 @@ router.get(
       // Cost waterfall bar chart
       const hasFinancials = d.total_cost_cr != null && d.total_revenue_cr != null;
       if (hasFinancials) {
-        const landCost  = parseFloat(d.land_cost_cr) || 0;
+        const landCost   = parseFloat(d.land_cost_cr) || 0;
         const constrCost = parseFloat(d.construction_cost_cr) || 0;
-        const otherCost  = parseFloat(d.other_costs_cr) || 0;
+        const otherCost  = [
+          d.approval_cost_cr,
+          d.marketing_cost_cr,
+          d.finance_cost_cr,
+          d.gst_cost_cr,
+          d.stamp_duty_cr,
+        ].reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
         const revenue    = parseFloat(d.total_revenue_cr) || 0;
+        const maxChartValue = Math.max(revenue, landCost + constrCost + otherCost);
 
         slide3.addChart(prs.ChartType.bar, [
           {
@@ -849,7 +879,7 @@ router.get(
           chartColors: ['2563EB', '3B82F6', '93C5FD', '16A34A'],
           showValue: true,
           dataLabelFontSize: 9,
-          valAxisMaxVal: Math.ceil(Math.max(revenue, landCost + constrCost + otherCost) * 1.1),
+          valAxisMaxVal: Math.ceil(maxChartValue * 1.1),
           catAxisLabelFontSize: 9,
           valAxisLabelFontSize: 9,
           legendPos: 'b',

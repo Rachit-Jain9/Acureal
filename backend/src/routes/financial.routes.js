@@ -27,11 +27,11 @@ const modelValidation = [
   // Land & site
   body('plotAreaSqft').optional().isFloat({ min: 1 }),
   body('fsi').optional().isFloat({ min: 0.1, max: 20 }),
-  body('loadingFactor').optional().isFloat({ min: 0.05, max: 1 }),
+  body('loadingFactor').optional().isFloat({ min: 0, max: 1 }),
   // Construction
   body('constructionCostPerSqft').optional().isFloat({ min: 1 }),
-  body('constructionStartMonths').optional().isInt({ min: 0, max: 60 }),
-  body('constructionEndMonths').optional().isInt({ min: 1, max: 120 }),
+  body('constructionStartMonths').optional().isInt({ min: 0, max: 180 }),
+  body('constructionEndMonths').optional().isInt({ min: 1, max: 180 }),
   body('contingencyPct').optional().isFloat({ min: 0, max: 25 }),
   // Soft costs
   body('approvalCostCr').optional().isFloat({ min: 0 }),
@@ -49,7 +49,7 @@ const modelValidation = [
   body('debtLTV').optional().isFloat({ min: 0, max: 0.80 }),
   body('debtRatePct').optional().isFloat({ min: 0, max: 30 }),
   // Project timeline
-  body('projectDurationMonths').optional().isInt({ min: 6, max: 120 }),
+  body('projectDurationMonths').optional().isInt({ min: 12, max: 180 }),
   body('discountRatePct').optional().isFloat({ min: 0, max: 100 }),
   // Plotted-specific
   body('totalLandSqft').optional().isFloat({ min: 1 }),

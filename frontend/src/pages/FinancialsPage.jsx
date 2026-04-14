@@ -38,7 +38,7 @@ const FIELD_DEFS = {
   residential_apartments: [
     { name: 'plotAreaSqft',           label: 'Plot Area (sqft)',               type: 'number', placeholder: '50000' },
     { name: 'fsi',                    label: 'FSI / FAR',                      type: 'number', step: '0.1',  placeholder: '2.5' },
-    { name: 'loadingFactor',          label: 'Loading Factor (saleable %)',     type: 'number', step: '0.01', placeholder: '0.65', hint: 'Saleable / Gross Built-Up (typically 0.60–0.72)' },
+    { name: 'loadingFactor',          label: 'Loading Factor (add-on to gross)', type: 'number', step: '0.01', min: '0', max: '1', placeholder: '0.15', hint: 'Enter 0.15 for 15% loading. Saleable area = Gross built-up area × (1 + loading factor).' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '4500' },
     { name: 'sellingRatePerSqft',     label: 'Selling Rate (₹/sqft)',           type: 'number', placeholder: '8000' },
     { name: 'landCostCr',               label: 'Land Cost (₹ Cr)',                  type: 'number', step: '0.01', placeholder: '25' },
@@ -52,9 +52,9 @@ const FIELD_DEFS = {
     { name: 'debtLTV',                   label: 'Debt LTV (0–0.80)',                 type: 'number', step: '0.05', placeholder: '0',  hint: '0 = all equity. 0.65 = 65% construction finance' },
     { name: 'debtRatePct',               label: 'Debt Rate (% pa)',                  type: 'number', step: '0.25', placeholder: '14', hint: 'Construction finance rate. Typically 12–16% pa' },
     { name: 'pricingEscalationPct',      label: 'Pricing Escalation (% pa)',         type: 'number', step: '0.1',  placeholder: '0', hint: 'Expected annual price appreciation during project' },
-    { name: 'projectDurationMonths',     label: 'Project Duration (months)',         type: 'number', placeholder: '36' },
-    { name: 'constructionStartMonths',   label: 'Construction Start (month)',        type: 'number', placeholder: '3',  hint: 'Month from project start when construction begins (after approvals). E.g. 3 = Q1 end.' },
-    { name: 'constructionEndMonths',     label: 'Construction End (month)',          type: 'number', placeholder: '30', hint: 'Month from project start when structure is complete. Revenue peaks here.' },
+    { name: 'projectDurationMonths',     label: 'Project Duration (months)',         type: 'number', min: '12', max: '180', placeholder: '36' },
+    { name: 'constructionStartMonths',   label: 'Construction Start (month)',        type: 'number', min: '0', max: '180', placeholder: '3',  hint: 'Month from project start when construction begins (after approvals). E.g. 3 = Q1 end.' },
+    { name: 'constructionEndMonths',     label: 'Construction End (month)',          type: 'number', min: '1', max: '180', placeholder: '30', hint: 'Month from project start when structure is complete. Revenue peaks here.' },
     { name: 'discountRatePct',           label: 'Discount Rate (%)',                 type: 'number', step: '0.1',  placeholder: '14' },
   ],
   plotted_development: [
@@ -67,7 +67,7 @@ const FIELD_DEFS = {
     { name: 'approvalCostPerSqft',    label: 'Approval Cost (₹/sqft land)',     type: 'number', step: '5',    placeholder: '80', hint: 'BMRDA layout approval, DTCP sanction — typically ₹50–200/sqft of total land' },
     { name: 'marketingCostPct',       label: 'Marketing Cost (% of revenue)',   type: 'number', step: '0.1',  placeholder: '4' },
     { name: 'financeCostPct',         label: 'Finance Cost (% pa)',             type: 'number', step: '0.1',  placeholder: '12' },
-    { name: 'projectDurationMonths',  label: 'Project Duration (months)',       type: 'number', placeholder: '24' },
+    { name: 'projectDurationMonths',  label: 'Project Duration (months)',       type: 'number', min: '12', max: '180', placeholder: '24' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '14' },
   ],
   commercial_office: [
@@ -84,7 +84,7 @@ const FIELD_DEFS = {
     { name: 'entryCapRate',           label: 'Entry Cap Rate (%)',              type: 'number', step: '0.25', placeholder: '7', hint: 'Prime Bengaluru office: 6.5–8%' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '7.5', hint: 'Typically 25–50 bps wider than entry' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '5' },
-    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', placeholder: '36' },
+    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', min: '12', max: '180', placeholder: '36' },
     { name: 'debtCoverage',           label: 'Debt Coverage (LTV, 0–1)',        type: 'number', step: '0.05', placeholder: '0.65' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '14' },
@@ -104,7 +104,7 @@ const FIELD_DEFS = {
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8', hint: 'Retail: 7.5–9%' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
-    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', placeholder: '36' },
+    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', min: '12', max: '180', placeholder: '36' },
     { name: 'debtCoverage',           label: 'Debt Coverage (LTV)',             type: 'number', step: '0.05', placeholder: '0.60' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '15' },
@@ -120,7 +120,7 @@ const FIELD_DEFS = {
     { name: 'opexPct',                label: 'Operating Expenses (% of EGR)',   type: 'number', step: '1',    placeholder: '15', hint: 'Industrial is lower opex than office' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8.5', hint: 'Warehousing/logistics: 7.5–9.5%' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
-    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', placeholder: '18' },
+    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', min: '12', max: '180', placeholder: '18' },
     { name: 'debtCoverage',           label: 'Debt Coverage (LTV)',             type: 'number', step: '0.05', placeholder: '0.65' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '13' },
@@ -140,7 +140,7 @@ const FIELD_DEFS = {
     { name: 'ebitdaMarginPct',         label: 'EBITDA Margin (% of total revenue)',   type: 'number', step: '1',    placeholder: '28', hint: 'After management fee & reserve. India hotels: 22–32%' },
     { name: 'exitCapRate',             label: 'Exit Cap Rate (%)',                    type: 'number', step: '0.25', placeholder: '9',  hint: 'Hotel exit caps India: 8–11%' },
     { name: 'holdPeriodYears',         label: 'Hold Period (years)',                  type: 'number', step: '1',    placeholder: '8' },
-    { name: 'projectDurationMonths',   label: 'Construction Duration (months)',       type: 'number', placeholder: '30', hint: 'Typical hotel construction: 24–36 months' },
+    { name: 'projectDurationMonths',   label: 'Construction Duration (months)',       type: 'number', min: '12', max: '180', placeholder: '30', hint: 'Typical hotel construction: 24–36 months' },
     { name: 'debtCoverage',            label: 'Debt LTV (0–1)',                       type: 'number', step: '0.05', placeholder: '0.55' },
     { name: 'interestRatePct',         label: 'Interest Rate (% pa)',                 type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'contingencyPct',          label: 'Contingency (% of construction)',      type: 'number', step: '1',    placeholder: '5' },
@@ -150,7 +150,7 @@ const FIELD_DEFS = {
 
 const DEFAULT_VALUES = {
   residential_apartments: {
-    loadingFactor: '0.65', marketingCostPct: '5', financeCostPct: '12',
+    loadingFactor: '0.15', marketingCostPct: '5', financeCostPct: '12',
     developerMarginPct: '20', pricingEscalationPct: '0',
     contingencyPct: '5', architectFeePct: '2', pmcFeePct: '1.5',
     debtLTV: '0', debtRatePct: '14',
@@ -196,6 +196,29 @@ const toNumber = (v) => {
   return isNaN(n) ? null : n;
 };
 
+const normalizeResidentialLoadingFactor = (value, fallback = '0.15') => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+
+  // Legacy residential models stored loading as saleable/gross (~0.60-0.70).
+  // Reset those obvious legacy ratios to the new additive input default so
+  // reopening an older model does not inflate saleable area on recalculation.
+  if (numeric > 0.45) return fallback;
+
+  return String(numeric);
+};
+
+const hasLegacyResidentialLoadingFactor = (financials) => {
+  if (!financials) return false;
+  const assetClass = financials.asset_class || financials.model_params?.assetClass;
+  if (assetClass !== 'residential_apartments') return false;
+
+  const stored = financials.model_params?.inputs?.loadingFactor;
+  const raw = stored ?? financials.loading_factor;
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) && numeric > 0.45;
+};
+
 function buildInitialInputs(financials, targetClass, deal) {
   const assetClass = targetClass || financials?.asset_class || 'residential_apartments';
   const defaults = DEFAULT_VALUES[assetClass] || {};
@@ -204,7 +227,7 @@ function buildInitialInputs(financials, targetClass, deal) {
   // Deal provides plot area / land area for pre-population when no financials yet
   const dealLandSqft = deal?.land_area_sqft ?? null;
 
-  if (assetClass === 'residential_apartments' && !targetClass && financials) {
+  if (assetClass === 'residential_apartments' && financials) {
     // Resolve approval cost: prefer stored per-sqft, fall back to legacy Cr field
     const approvalPerSqft = stored.approvalCostPerSqft
       || (financials.approval_cost_cr && financials.gross_area_sqft
@@ -213,7 +236,10 @@ function buildInitialInputs(financials, targetClass, deal) {
     return {
       plotAreaSqft:            financials.plot_area_sqft ?? dealLandSqft ?? '',
       fsi:                     financials.fsi ?? '',
-      loadingFactor:           financials.loading_factor ?? defaults.loadingFactor,
+      loadingFactor:           normalizeResidentialLoadingFactor(
+        stored.loadingFactor ?? financials.loading_factor,
+        defaults.loadingFactor
+      ),
       constructionCostPerSqft: financials.construction_cost_per_sqft ?? '',
       sellingRatePerSqft:      financials.selling_rate_per_sqft ?? '',
       landCostCr:              financials.land_cost_cr ?? '',
@@ -397,6 +423,8 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
               name={field.name}
               type={field.type}
               step={field.step}
+              min={field.min}
+              max={field.max}
               placeholder={field.placeholder}
               value={inputs[field.name] ?? ''}
               onChange={handleChange}
@@ -1354,6 +1382,10 @@ export default function FinancialsPage() {
 
   const normalizedFinancials = useMemo(() => normalizeFinancials(financials), [financials]);
   const hasResults = !!normalizedFinancials;
+  const showLegacyResidentialNotice = useMemo(
+    () => hasLegacyResidentialLoadingFactor(financials),
+    [financials]
+  );
 
   const handleCalculate = (data) => {
     calculateMutation.mutate({ dealId, data });
@@ -1405,6 +1437,12 @@ export default function FinancialsPage() {
           )}
         </div>
       </div>
+
+      {showLegacyResidentialNotice && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          This residential model was saved under the legacy loading-factor logic. The recalculate form below now normalizes the loading factor to the corrected additive format, but the KPI cards above remain the previously saved output until you click `Calculate`.
+        </div>
+      )}
 
       {/* Results for existing financials */}
       {hasResults && (

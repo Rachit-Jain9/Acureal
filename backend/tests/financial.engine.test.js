@@ -185,7 +185,12 @@ describe('Financial Engine', () => {
 
     test('should compute correct saleable area with default loading', () => {
       const result = calculateFullFinancials(baseInput);
-      expect(result.saleableAreaSqft).toBe(48750); // 75000 * 0.65
+      expect(result.saleableAreaSqft).toBe(86250); // 75000 * (1 + 0.15)
+    });
+
+    test('should treat loading factor as an additive uplift on gross area', () => {
+      const result = calculateFullFinancials({ ...baseInput, loadingFactor: 0.15 });
+      expect(result.saleableAreaSqft).toBe(86250); // 75000 * (1 + 0.15)
     });
 
     test('should throw for missing required fields', () => {
@@ -202,7 +207,7 @@ describe('Financial Engine', () => {
     });
 
     test('should throw for invalid project duration', () => {
-      expect(() => calculateFullFinancials({ ...baseInput, projectDurationMonths: 3 })).toThrow('Project duration must be between 6 and 120 months');
+      expect(() => calculateFullFinancials({ ...baseInput, projectDurationMonths: 11 })).toThrow('Project duration must be between 12 and 180 months');
     });
 
     test('should include GST at 18% of construction cost', () => {
@@ -233,7 +238,7 @@ describe('Financial Engine', () => {
       const matrix = buildSensitivityMatrix({
         plotAreaSqft: 25000,
         fsi: 3.0,
-        loadingFactor: 0.65,
+        loadingFactor: 0.15,
         constructionCostPerSqft: 4500,
         sellingRatePerSqft: 42000,
         landCostCr: 155,
@@ -255,7 +260,7 @@ describe('Financial Engine', () => {
       const matrix = buildSensitivityMatrix({
         plotAreaSqft: 25000,
         fsi: 3.0,
-        loadingFactor: 0.65,
+        loadingFactor: 0.15,
         constructionCostPerSqft: 4500,
         sellingRatePerSqft: 42000,
         landCostCr: 155,
