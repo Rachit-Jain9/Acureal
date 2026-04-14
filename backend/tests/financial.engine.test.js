@@ -210,6 +210,14 @@ describe('Financial Engine', () => {
       expect(() => calculateFullFinancials({ ...baseInput, projectDurationYears: 0.5 })).toThrow('Project duration must be between 1 and 15 years');
     });
 
+    test('saleable area should be gross FAR area * (1 + loading factor)', () => {
+      const result = calculateFullFinancials({
+        ...baseInput, plotAreaSqft: 100, fsi: 2.5, loadingFactor: 0.15,
+      });
+      const saleable = result.saleableAreaSqft ?? result._legacy?.saleable_area_sqft ?? result.areas?.saleable;
+      expect(saleable).toBeCloseTo(100 * 2.5 * 1.15, 2);
+    });
+
     test('should include GST at 18% of construction cost', () => {
       const result = calculateFullFinancials(baseInput);
       expect(result.gstCostCr).toBeCloseTo(result.totalConstructionCostCr * 0.18, 2);

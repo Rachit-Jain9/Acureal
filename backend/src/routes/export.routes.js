@@ -916,6 +916,148 @@ router.get(
       }
 
       // ─────────────────────────────────────────────────────
+      // SLIDE 3b — Areas & Assumptions (only if financial model exists)
+      // ─────────────────────────────────────────────────────
+      if (hasFinancials) {
+        const slideA = prs.addSlide();
+        slideA.addShape(prs.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.85, fill: { color: DARK_BLUE } });
+        slideA.addText('Areas & Underwriting Assumptions', {
+          x: 0.4, y: 0.1, w: 12, h: 0.6,
+          fontSize: 20, bold: true, color: WHITE, fontFace: 'Helvetica',
+        });
+
+        // Areas bar chart
+        const plotSqft     = parseFloat(d.plot_area_sqft || d.land_area_sqft) || 0;
+        const grossSqft    = parseFloat(d.gross_area_sqft) || (plotSqft * (parseFloat(d.fsi) || 0));
+        const saleableSqft = parseFloat(d.saleable_area_sqft) || 0;
+        const carpetSqft   = parseFloat(d.carpet_area_sqft) || 0;
+
+        if (plotSqft || grossSqft || saleableSqft) {
+          slideA.addChart(prs.ChartType.bar, [{
+            name: 'Area (sqft)',
+            labels: ['Plot (Land)', 'Gross FAR', 'Saleable (Super)', 'Carpet'],
+            values: [plotSqft, grossSqft, saleableSqft, carpetSqft],
+          }], {
+            x: 0.3, y: 1.05, w: 7.5, h: 3.0,
+            barDir: 'bar',
+            chartColors: ['0F766E', '0284C7', '2563EB', '7C3AED'],
+            showValue: true,
+            dataLabelFontSize: 9,
+            catAxisLabelFontSize: 9,
+            valAxisLabelFontSize: 9,
+            legendPos: 'none',
+            title: 'Area Breakdown (sqft)',
+            titleFontSize: 10,
+          });
+        }
+
+        // Input assumptions table
+        const inputRows = [
+          [{ text: 'Parameter', options: { bold: true, color: WHITE, fill: { color: DARK_BLUE } } },
+           { text: 'Value',     options: { bold: true, color: WHITE, fill: { color: DARK_BLUE }, align: 'right' } }],
+          ['Plot Area',              plotSqft ? `${plotSqft.toLocaleString('en-IN')} sqft` : 'N/A'],
+          ['FSI',                    d.fsi != null ? fmt(d.fsi) : 'N/A'],
+          ['Loading Factor',         d.loading_factor != null ? `${(parseFloat(d.loading_factor) * 100).toFixed(1)}%` : 'N/A'],
+          ['Construction Cost',      d.construction_cost_per_sqft ? `₹${fmt(d.construction_cost_per_sqft)}/sqft` : 'N/A'],
+          ['Selling Rate',           d.selling_rate_per_sqft ? `₹${fmt(d.selling_rate_per_sqft)}/sqft` : 'N/A'],
+          ['Project Duration',       d.project_duration_months ? `${(d.project_duration_months / 12).toFixed(1)} years` : 'N/A'],
+          ['Discount Rate',          d.discount_rate_pct != null ? `${fmt(d.discount_rate_pct)}%` : 'N/A'],
+          ['Developer Margin',       d.developer_margin_pct != null ? `${fmt(d.developer_margin_pct)}%` : 'N/A'],
+        ].map((row, i) => i === 0 ? row : [
+          { text: row[0], options: { fontSize: 10, fill: { color: i % 2 === 0 ? 'F8FAFC' : WHITE } } },
+          { text: row[1], options: { fontSize: 10, bold: true, align: 'right', fill: { color: i % 2 === 0 ? 'F8FAFC' : WHITE } } },
+        ]);
+        slideA.addTable(inputRows, {
+          x: 8.0, y: 1.05, w: 5.1,
+          fontFace: 'Helvetica',
+          colW: [3.0, 2.1],
+          border: { type: 'solid', color: 'E2E8F0', pt: 0.5 },
+          rowH: 0.38,
+        });
+
+        // Area insight callout
+        const loadingPct = d.loading_factor != null ? (parseFloat(d.loading_factor) * 100).toFixed(1) : null;
+        const efficiencyPct = grossSqft > 0 && carpetSqft > 0 ? ((carpetSqft / saleableSqft) * 100).toFixed(1) : null;
+        slideA.addShape(prs.ShapeType.rect, {
+          x: 0.3, y: 4.3, w: 12.7, h: 2.6, fill: { color: 'F1F5F9' }, radius: 6,
+        });
+        slideA.addText('Area Efficiency Insight', {
+          x: 0.5, y: 4.4, w: 12, h: 0.35,
+          fontSize: 11, bold: true, color: DARK_BLUE, fontFace: 'Helvetica',
+        });
+        const insight = [
+          plotSqft ? `Plot area: ${plotSqft.toLocaleString('en-IN')} sqft × FSI ${fmt(d.fsi)} = ${Math.round(grossSqft).toLocaleString('en-IN')} sqft of FAR area.` : null,
+          loadingPct ? `With ${loadingPct}% loading for balconies and common areas, saleable super built-up = ${Math.round(saleableSqft).toLocaleString('en-IN')} sqft.` : null,
+          efficiencyPct ? `Carpet efficiency ratio is ${efficiencyPct}% (carpet / saleable), industry benchmark 65–75%.` : null,
+          d.selling_rate_per_sqft && saleableSqft ? `At ₹${Number(d.selling_rate_per_sqft).toLocaleString('en-IN')}/sqft, gross sales potential = ₹${(saleableSqft * parseFloat(d.selling_rate_per_sqft) / 1e7).toFixed(2)} Cr.` : null,
+        ].filter(Boolean).join('\n\n');
+        slideA.addText(insight || 'Insufficient data for insight generation.', {
+          x: 0.5, y: 4.8, w: 12.3, h: 2.0,
+          fontSize: 10, color: TEXT_DARK, fontFace: 'Helvetica', valign: 'top', wrap: true,
+        });
+      }
+
+      // ─────────────────────────────────────────────────────
+      // SLIDE 3c — Cash Flows (if model exists)
+      // ─────────────────────────────────────────────────────
+      let cashFlowSeries = null;
+      try {
+        const raw = d.cash_flows;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (parsed?.yearly?.length) cashFlowSeries = parsed.yearly;
+        else if (Array.isArray(parsed?.quarterly) && parsed.quarterly.length) cashFlowSeries = parsed.quarterly;
+        else if (Array.isArray(parsed)) cashFlowSeries = parsed;
+      } catch { /* ignore */ }
+
+      if (cashFlowSeries && cashFlowSeries.length >= 2) {
+        const slideCF = prs.addSlide();
+        slideCF.addShape(prs.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.85, fill: { color: DARK_BLUE } });
+        slideCF.addText('Projected Cash Flows', {
+          x: 0.4, y: 0.1, w: 12, h: 0.6,
+          fontSize: 20, bold: true, color: WHITE, fontFace: 'Helvetica',
+        });
+
+        const labels = cashFlowSeries.map((cf, i) => cf.label || (cf.year != null ? `Y${cf.year}` : `Q${cf.quarter ?? i}`));
+        const values = cashFlowSeries.map((cf) => Number(cf.net ?? cf) || 0);
+
+        slideCF.addChart(prs.ChartType.bar, [{
+          name: 'Net Cash Flow (₹ Cr)',
+          labels,
+          values,
+        }], {
+          x: 0.3, y: 1.05, w: 12.8, h: 4.2,
+          barDir: 'col',
+          chartColors: ['2563EB'],
+          showValue: true,
+          dataLabelFontSize: 8,
+          catAxisLabelFontSize: 9,
+          valAxisLabelFontSize: 9,
+          legendPos: 'none',
+          title: 'Unlevered Cash Flow Profile (₹ Cr)',
+          titleFontSize: 11,
+        });
+
+        // Cumulative line below
+        const cumulative = values.reduce((acc, v, i) => {
+          acc.push((acc[i - 1] || 0) + v);
+          return acc;
+        }, []);
+        const totalIn  = values.filter((v) => v > 0).reduce((a, b) => a + b, 0);
+        const totalOut = Math.abs(values.filter((v) => v < 0).reduce((a, b) => a + b, 0));
+        const netTotal = totalIn - totalOut;
+
+        slideCF.addText(
+          `Total inflow: ₹${fmt(totalIn)} Cr  ·  Total outflow: ₹${fmt(totalOut)} Cr  ·  Net: ₹${fmt(netTotal)} Cr  ·  Peak deployment: ₹${fmt(Math.min(...cumulative))} Cr`,
+          { x: 0.3, y: 5.4, w: 12.8, h: 0.4, fontSize: 10, color: TEXT_DARK, fontFace: 'Helvetica', align: 'center', bold: true }
+        );
+
+        slideCF.addText(
+          'Cash flow phasing reflects land + approvals upfront, construction (S-curve), sales collection tied to construction milestones, and final handover. Quarterly granularity used in underwriting; yearly view shown here for readability.',
+          { x: 0.6, y: 5.9, w: 12.2, h: 1.3, fontSize: 10, color: TEXT_MID, fontFace: 'Helvetica', italic: true, wrap: true, valign: 'top' }
+        );
+      }
+
+      // ─────────────────────────────────────────────────────
       // SLIDE 4 — Market Comps (if available)
       // ─────────────────────────────────────────────────────
       if (compsResult.rows.length > 0) {
