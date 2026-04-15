@@ -52,7 +52,7 @@ const workflowSteps = [
   { icon: Cpu, label: 'Extract & Classify' },
   { icon: MapPin, label: 'Evaluate Parcel' },
   { icon: LineChart, label: 'Underwrite' },
-  { icon: Download, label: 'IC-Ready Outputs' },
+  { icon: Download, label: 'Investor-Grade Outputs' },
 ];
 
 function Hero() {
@@ -145,8 +145,8 @@ const problems = [
     icon: Zap,
   },
   {
-    problem: 'IC prep delays',
-    solution: 'One-click IC-ready reports, PDFs, and Excel models',
+    problem: 'Investment Committee prep delays',
+    solution: 'One-click investor-grade reports, PDFs, and Excel models',
     icon: Download,
   },
 ];
@@ -213,7 +213,7 @@ const workflowPhases = [
     number: '04',
     title: 'Generate Outputs',
     description:
-      'IC memos, financial models, DD summaries, risk reports, and export packages — ready for committee without manual reformatting.',
+      'Investor-grade memos, financial models, DD summaries, risk reports, and export packages — ready for committee without manual reformatting.',
   },
 ];
 
@@ -223,7 +223,7 @@ function ProductWorkflow() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            From Source to IC in One Platform
+            From Source to Investment Committee in One Platform
           </h2>
           <p className="text-gray-500 text-lg">
             A single deal workspace replaces fragmented spreadsheets, shared drives, and email
@@ -268,7 +268,7 @@ const dealReasoningItems = [
   'DD synthesis and missing-item detection',
   'Risk narrative generation',
   'Next-step recommendations',
-  'IC memo drafting',
+  'Investor-grade memo drafting',
   'Market and comps synthesis',
   'Financing structure guidance',
 ];

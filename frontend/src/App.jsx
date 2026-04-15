@@ -1,10 +1,31 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import Layout from './components/layout/Layout';
 import ToastContainer from './components/common/Toast';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ErrorBoundary from './components/common/ErrorBoundary';
+
+// Neutralize scroll-wheel on focused number inputs. Browsers increment/decrement
+// <input type="number"> values on wheel when focused, which is a common footgun
+// on long underwriting forms — a stray scroll can silently change an assumption.
+// Blurring on wheel preserves native scroll behavior while keeping values stable.
+function useDisableNumberInputScroll() {
+  useEffect(() => {
+    const handler = (e) => {
+      const el = e.target;
+      if (
+        el instanceof HTMLInputElement
+        && el.type === 'number'
+        && document.activeElement === el
+      ) {
+        el.blur();
+      }
+    };
+    document.addEventListener('wheel', handler, { passive: true });
+    return () => document.removeEventListener('wheel', handler);
+  }, []);
+}
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -49,6 +70,7 @@ function LegacyPropertyDetailRedirect() {
 }
 
 export default function App() {
+  useDisableNumberInputScroll();
   return (
     <BrowserRouter>
       <ToastContainer />

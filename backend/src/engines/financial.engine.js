@@ -169,32 +169,35 @@ function resolveTimelineInput(input, {
   const durationYears = roundQuarterYear(toValidYearInput(durationYearsRaw, defaultDurationYears));
   const durationMonths = Math.round(durationYears * 12);
 
-  const constructionStartYearsRaw = input.constructionStartYears != null
-    ? Number(input.constructionStartYears)
-    : (Number(input.constructionStartMonths) || defaultConstructionStartYears * 12) / 12;
-  const constructionStartYears = Math.max(0, roundQuarterYear(
-    Number.isFinite(constructionStartYearsRaw) ? constructionStartYearsRaw : defaultConstructionStartYears
+  // Construction timing is naturally month-level. Prefer direct month input so
+  // users get exact 14/18/22-month schedules instead of silent quarter-year drift.
+  const constructionStartMonthsRaw = input.constructionStartMonths != null
+    ? Number(input.constructionStartMonths)
+    : (input.constructionStartYears != null
+      ? Number(input.constructionStartYears) * 12
+      : defaultConstructionStartYears * 12);
+  const constructionStartMonths = Math.max(0, Math.min(
+    durationMonths,
+    Math.round(Number.isFinite(constructionStartMonthsRaw) ? constructionStartMonthsRaw : 0)
   ));
-  const constructionStartMonths = Math.round(constructionStartYears * 12);
+  const constructionStartYears = constructionStartMonths / 12;
 
-  const constructionEndYearsRaw = input.constructionEndYears != null
-    ? Number(input.constructionEndYears)
-    : (Number(input.constructionEndMonths) > 0
-      ? Number(input.constructionEndMonths) / 12
-      : durationYears * defaultConstructionEndRatio);
-  const defaultConstructionEndYears = durationYears * defaultConstructionEndRatio;
-  const constructionEndYears = Math.max(
-    constructionStartYears,
+  const defaultConstructionEndMonths = Math.round(durationMonths * defaultConstructionEndRatio);
+  const constructionEndMonthsRaw = input.constructionEndMonths != null
+    ? Number(input.constructionEndMonths)
+    : (input.constructionEndYears != null
+      ? Number(input.constructionEndYears) * 12
+      : defaultConstructionEndMonths);
+  const constructionEndMonths = Math.max(
+    constructionStartMonths + 1,
     Math.min(
-      durationYears,
-      roundQuarterYear(
-        Number.isFinite(constructionEndYearsRaw) && constructionEndYearsRaw > 0
-          ? constructionEndYearsRaw
-          : defaultConstructionEndYears
-      )
+      durationMonths,
+      Math.round(Number.isFinite(constructionEndMonthsRaw) && constructionEndMonthsRaw > 0
+        ? constructionEndMonthsRaw
+        : defaultConstructionEndMonths)
     )
   );
-  const constructionEndMonths = Math.round(constructionEndYears * 12);
+  const constructionEndYears = constructionEndMonths / 12;
 
   return {
     effectiveDate: normalizeEffectiveDate(input.effectiveDate),
@@ -316,6 +319,10 @@ function calculateResidentialApartments(input) {
   const developerMarginPct   = Number(input.developerMarginPct) || 20;
   const discountRatePct      = Number(input.discountRatePct) || 14;
   const pricingEscalationPct = Number(input.pricingEscalationPct) || 0;
+  const avgUnitSizeSqftRaw   = Number(input.avgUnitSizeSqft);
+  const avgUnitSizeSqft      = Number.isFinite(avgUnitSizeSqftRaw) && avgUnitSizeSqftRaw > 0
+    ? avgUnitSizeSqftRaw
+    : null;
   const timeline = resolveTimelineInput(input, {
     defaultDurationYears: 3,
     defaultConstructionStartYears: 0.25,
@@ -333,7 +340,7 @@ function calculateResidentialApartments(input) {
   const constructionEndMonths = timeline.constructionEndMonths;
 
   // Capital stack
-  const debtLTV     = Math.min(0.75, Math.max(0, Number(input.debtLTV) || 0));
+  const debtLTV     = Math.min(1, Math.max(0, Number(input.debtLTV) || 0));
   const debtRatePct = Number(input.debtRatePct) || 10.5;
 
   if (
@@ -360,6 +367,7 @@ function calculateResidentialApartments(input) {
   const saleableAreaSqft = grossAreaSqft * (1 + loadingFactor);
   const carpetAreaSqft   = grossAreaSqft * CARPET_RATIO;
   const superBuiltupSqft = saleableAreaSqft;
+  const numberOfUnits    = avgUnitSizeSqft ? Math.max(1, Math.round(saleableAreaSqft / avgUnitSizeSqft)) : null;
 
   // Approval cost: ₹/sqft of GFA or legacy Cr
   const approvalCostCr = Number(input.approvalCostPerSqft) > 0
@@ -512,6 +520,7 @@ function calculateResidentialApartments(input) {
       constructionEndYears: outputTimeline.constructionEndYears,
       constructionEndMonths,
       contingencyPct, architectFeePct, pmcFeePct, debtLTV, debtRatePct,
+      avgUnitSizeSqft,
     },
     kpis: {
       irr:           round4(irrPct),
@@ -529,6 +538,8 @@ function calculateResidentialApartments(input) {
       carpet:       round2(carpetAreaSqft),
       superBuiltUp: round2(superBuiltupSqft),
       leasable:     null,
+      numberOfUnits,
+      avgUnitSizeSqft,
     },
     costs: {
       land:               round4(landCostCr),
@@ -585,6 +596,8 @@ function calculateResidentialApartments(input) {
       npv_cr: round4(npvCr), irr_pct: round4(irrPct),
       residual_land_value_cr: round4(rlvCr), equity_multiple: round4(equityMultiple),
       discount_rate_pct: discountRatePct,
+      avg_unit_size_sqft: avgUnitSizeSqft,
+      number_of_units: numberOfUnits,
     },
   };
 }

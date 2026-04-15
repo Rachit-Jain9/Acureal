@@ -210,7 +210,7 @@ export default function OverviewTab({ deal, id }) {
               )}
             >
               {readiness.status === 'ic_ready'
-                ? 'IC Ready'
+                ? 'Investor-Grade'
                 : readiness.status === 'work_in_progress'
                   ? 'In Progress'
                   : 'Not Ready'}

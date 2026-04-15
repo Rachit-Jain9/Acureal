@@ -19,7 +19,8 @@ const ALLOWED_MIME_TYPES = [
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.zip', '.csv'];
 
-const MAX_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 10) * 1024 * 1024;
+const MAX_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 const storage = multer.memoryStorage();
 
@@ -56,7 +57,7 @@ const uploadSingle = (fieldName = 'file') => (req, res, next) => {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({
           success: false,
-          message: `File too large. Maximum allowed size is ${process.env.MAX_FILE_SIZE_MB || 10}MB.`,
+          message: `File too large. Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`,
         });
       }
       return res.status(400).json({
@@ -80,7 +81,7 @@ const uploadMultiple = (fieldName = 'files', maxCount = 5) => (req, res, next) =
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({
           success: false,
-          message: `File too large. Maximum allowed size is ${process.env.MAX_FILE_SIZE_MB || 10}MB.`,
+          message: `File too large. Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`,
         });
       }
       return res.status(400).json({

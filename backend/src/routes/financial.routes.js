@@ -46,7 +46,8 @@ const modelValidation = [
   body('developerMarginPct').optional().isFloat({ min: 0, max: 100 }),
   // Financing & capital stack
   body('financeCostPct').optional().isFloat({ min: 0, max: 100 }),
-  body('debtLTV').optional().isFloat({ min: 0, max: 0.80 }),
+  body('debtLTV').optional().isFloat({ min: 0, max: 1 }),
+  body('avgUnitSizeSqft').optional().isFloat({ min: 100, max: 20000 }),
   body('debtRatePct').optional().isFloat({ min: 0, max: 30 }),
   // Project timeline
   body('projectDurationMonths').optional().isInt({ min: 12, max: 180 }),

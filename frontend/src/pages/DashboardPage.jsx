@@ -172,7 +172,7 @@ export default function DashboardPage() {
             <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">IC Ready</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Investor-Grade</p>
             <p className="text-lg font-bold text-gray-900 dark:text-white">{icReadyDeals}</p>
           </div>
         </div>

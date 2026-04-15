@@ -39,6 +39,7 @@ const FIELD_DEFS = {
     { name: 'plotAreaSqft',           label: 'Plot Area (sqft)',               type: 'number', placeholder: '50000' },
     { name: 'fsi',                    label: 'FSI / FAR',                      type: 'number', step: '0.1',  placeholder: '2.5' },
     { name: 'loadingFactor',          label: 'Loading Factor (add-on to gross)', type: 'number', step: '0.01', min: '0', max: '1', placeholder: '0.15', hint: 'Enter 0.15 for 15% loading. Saleable area = Gross built-up area × (1 + loading factor).' },
+    { name: 'avgUnitSizeSqft',        label: 'Avg Unit Size (saleable sqft)',  type: 'number', step: '10',   min: '100', placeholder: '1200', hint: 'Optional. Number of units = Saleable area ÷ Avg unit size. Bengaluru 2BHK: 1,000–1,400 sqft; 3BHK: 1,500–2,200 sqft.' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '4500' },
     { name: 'sellingRatePerSqft',     label: 'Selling Rate (₹/sqft)',           type: 'number', placeholder: '8000' },
     { name: 'landCostCr',               label: 'Land Cost (₹ Cr)',                  type: 'number', step: '0.01', placeholder: '25' },
@@ -49,12 +50,12 @@ const FIELD_DEFS = {
     { name: 'contingencyPct',            label: 'Contingency (% of construction)',   type: 'number', step: '0.5',  placeholder: '5',  hint: 'Cost overrun buffer. Institutional: 5–8%' },
     { name: 'architectFeePct',           label: 'Architect Fee (% of construction)', type: 'number', step: '0.25', placeholder: '2',  hint: 'Architecture and design fees. Typically 1.5–3%' },
     { name: 'pmcFeePct',                 label: 'PMC Fee (% of construction)',       type: 'number', step: '0.25', placeholder: '1.5', hint: 'Project Management Consultant fee. Typically 1–2%' },
-    { name: 'debtLTV',                   label: 'Debt LTV (0–0.80)',                 type: 'number', step: '0.05', placeholder: '0',  hint: '0 = all equity. 0.65 = 65% construction finance' },
+    { name: 'debtLTV',                   label: 'Debt LTV (0–1)',                    type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0',  hint: '0 = all equity, 1 = fully debt-funded. 0.65 = 65% construction finance. Land cost and approvals are typically equity-funded.' },
     { name: 'debtRatePct',               label: 'Debt Rate (% pa)',                  type: 'number', step: '0.25', placeholder: '14', hint: 'Construction finance rate. Typically 12–16% pa' },
     { name: 'pricingEscalationPct',      label: 'Pricing Escalation (% pa)',         type: 'number', step: '0.1',  placeholder: '0', hint: 'Expected annual price appreciation during project' },
     { name: 'projectDurationYears',      label: 'Project Duration (years)',          type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3', hint: 'Total project length from effective date to final collection. Cash flows anchor on the effective date above.' },
-    { name: 'constructionStartYears',    label: 'Construction Start (years)',        type: 'number', step: '0.25', min: '0', max: '15', placeholder: '0.25', hint: 'Years from effective date when construction begins (after approvals).' },
-    { name: 'constructionEndYears',      label: 'Construction End (years)',          type: 'number', step: '0.25', min: '0.25', max: '15', placeholder: '2.5', hint: 'Years from effective date when structure is complete. Revenue peaks here.' },
+    { name: 'constructionStartMonths',   label: 'Construction Start (months)',       type: 'number', step: '1', min: '0', max: '180', placeholder: '3', hint: 'Months from effective date when construction begins (after approvals). Typical: 3–6 months.' },
+    { name: 'constructionEndMonths',     label: 'Construction End (months)',         type: 'number', step: '1', min: '1', max: '180', placeholder: '30', hint: 'Months from effective date when structure is complete. Typical Bengaluru apartment: 24–36 months.' },
     { name: 'discountRatePct',           label: 'Discount Rate (%)',                 type: 'number', step: '0.1',  placeholder: '14' },
   ],
   plotted_development: [
@@ -155,7 +156,7 @@ const DEFAULT_VALUES = {
     contingencyPct: '5', architectFeePct: '2', pmcFeePct: '1.5',
     debtLTV: '0', debtRatePct: '14',
     projectDurationYears: '3', discountRatePct: '14',
-    constructionStartYears: '0.25', constructionEndYears: '2.5',
+    constructionStartMonths: '3', constructionEndMonths: '30',
   },
   plotted_development: {
     saleableLandPct: '55', avgPlotSizeSqft: '1200', devCostPerSqft: '250',
@@ -265,6 +266,7 @@ function buildInitialInputs(financials, targetClass, deal) {
         stored.loadingFactor ?? financials.loading_factor,
         defaults.loadingFactor
       ),
+      avgUnitSizeSqft:         stored.avgUnitSizeSqft ?? financials.avg_unit_size_sqft ?? '',
       constructionCostPerSqft: financials.construction_cost_per_sqft ?? '',
       sellingRatePerSqft:      financials.selling_rate_per_sqft ?? '',
       landCostCr:              financials.land_cost_cr ?? '',
@@ -274,12 +276,12 @@ function buildInitialInputs(financials, targetClass, deal) {
       developerMarginPct:      financials.developer_margin_pct ?? defaults.developerMarginPct,
       pricingEscalationPct:    stored.pricingEscalationPct ?? defaults.pricingEscalationPct,
       projectDurationYears:    storedDurationYears ?? defaults.projectDurationYears,
-      constructionStartYears:  stored.constructionStartYears
-        ?? monthsToYears(stored.constructionStartMonths)
-        ?? defaults.constructionStartYears,
-      constructionEndYears:    stored.constructionEndYears
-        ?? monthsToYears(stored.constructionEndMonths)
-        ?? defaults.constructionEndYears,
+      constructionStartMonths: stored.constructionStartMonths
+        ?? (stored.constructionStartYears != null ? Math.round(Number(stored.constructionStartYears) * 12) : null)
+        ?? defaults.constructionStartMonths,
+      constructionEndMonths:   stored.constructionEndMonths
+        ?? (stored.constructionEndYears != null ? Math.round(Number(stored.constructionEndYears) * 12) : null)
+        ?? defaults.constructionEndMonths,
       discountRatePct:         financials.discount_rate_pct ?? defaults.discountRatePct,
     };
   }
@@ -338,6 +340,8 @@ function normalizeFinancials(financials) {
       keys: areas.keys,
       totalPlots: areas.totalPlots,
       avgPlotSizeSqft: toNumber(areas.avgPlotSizeSqft),
+      numberOfUnits: toNumber(areas.numberOfUnits),
+      residentialAvgUnitSize: toNumber(areas.avgUnitSizeSqft),
     },
     costs: {
       land: toNumber(costs.land ?? financials.land_cost_cr),
@@ -558,6 +562,12 @@ function AreaBreakdown({ areas, assetClass }) {
     rows.push({ label: 'Saleable Area', value: formatArea(areas.saleable) });
     rows.push({ label: 'Carpet Area', value: formatArea(areas.carpet) });
     rows.push({ label: 'Super Built-Up Area', value: formatArea(areas.superBuiltUp) });
+    if (areas.numberOfUnits) {
+      rows.push({
+        label: 'Number of Units',
+        value: `${areas.numberOfUnits.toLocaleString('en-IN')}${areas.residentialAvgUnitSize ? ` @ ${formatArea(areas.residentialAvgUnitSize)}` : ''}`,
+      });
+    }
   }
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -1305,12 +1315,12 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
     ?? rawFinancials?.project_duration_months
     ?? 36;
   const constructionStartMonths =
-    (inputs.constructionStartYears != null ? Number(inputs.constructionStartYears) * 12 : null)
-    ?? inputs.constructionStartMonths
+    (inputs.constructionStartMonths != null && inputs.constructionStartMonths !== '' ? Number(inputs.constructionStartMonths) : null)
+    ?? (inputs.constructionStartYears != null ? Number(inputs.constructionStartYears) * 12 : null)
     ?? 0;
   const constructionEndMonths =
-    (inputs.constructionEndYears != null ? Number(inputs.constructionEndYears) * 12 : null)
-    ?? inputs.constructionEndMonths
+    (inputs.constructionEndMonths != null && inputs.constructionEndMonths !== '' ? Number(inputs.constructionEndMonths) : null)
+    ?? (inputs.constructionEndYears != null ? Number(inputs.constructionEndYears) * 12 : null)
     ?? projectDurationMonths * 0.85;
 
   const schedule = useMemo(() => {
