@@ -4,6 +4,7 @@ import { ExternalLink, MapPin, AlertCircle, Search, X, Plus, Link2, CheckCircle2
 import { formatArea, formatDate } from '../../utils/format';
 import { useProperties, useCreateProperty } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
+import SiteWeatherCard from './SiteWeatherCard';
 
 function FieldRow({ label, value, span = false }) {
   if (!value && value !== 0) return null;
@@ -455,6 +456,11 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
           </div>
         )}
       </div>
+
+      {/* Site weather (Open-Meteo) — only if geocoded */}
+      {hasLatLng && (
+        <SiteWeatherCard lat={deal.lat} lng={deal.lng} city={deal.city} />
+      )}
 
       {/* Additional Technical Details */}
       {(deal.rera_number || deal.target_launch_date || deal.expected_close_date) && (

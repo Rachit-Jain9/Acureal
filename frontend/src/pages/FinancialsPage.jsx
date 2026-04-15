@@ -52,9 +52,9 @@ const FIELD_DEFS = {
     { name: 'debtLTV',                   label: 'Debt LTV (0–0.80)',                 type: 'number', step: '0.05', placeholder: '0',  hint: '0 = all equity. 0.65 = 65% construction finance' },
     { name: 'debtRatePct',               label: 'Debt Rate (% pa)',                  type: 'number', step: '0.25', placeholder: '14', hint: 'Construction finance rate. Typically 12–16% pa' },
     { name: 'pricingEscalationPct',      label: 'Pricing Escalation (% pa)',         type: 'number', step: '0.1',  placeholder: '0', hint: 'Expected annual price appreciation during project' },
-    { name: 'projectDurationMonths',     label: 'Project Duration (months)',         type: 'number', min: '12', max: '180', placeholder: '36' },
-    { name: 'constructionStartMonths',   label: 'Construction Start (month)',        type: 'number', min: '0', max: '180', placeholder: '3',  hint: 'Month from project start when construction begins (after approvals). E.g. 3 = Q1 end.' },
-    { name: 'constructionEndMonths',     label: 'Construction End (month)',          type: 'number', min: '1', max: '180', placeholder: '30', hint: 'Month from project start when structure is complete. Revenue peaks here.' },
+    { name: 'projectDurationYears',      label: 'Project Duration (years)',          type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3', hint: 'Total project length from effective date to final collection. Cash flows anchor on the effective date above.' },
+    { name: 'constructionStartYears',    label: 'Construction Start (years)',        type: 'number', step: '0.25', min: '0', max: '15', placeholder: '0.25', hint: 'Years from effective date when construction begins (after approvals).' },
+    { name: 'constructionEndYears',      label: 'Construction End (years)',          type: 'number', step: '0.25', min: '0.25', max: '15', placeholder: '2.5', hint: 'Years from effective date when structure is complete. Revenue peaks here.' },
     { name: 'discountRatePct',           label: 'Discount Rate (%)',                 type: 'number', step: '0.1',  placeholder: '14' },
   ],
   plotted_development: [
@@ -67,7 +67,7 @@ const FIELD_DEFS = {
     { name: 'approvalCostPerSqft',    label: 'Approval Cost (₹/sqft land)',     type: 'number', step: '5',    placeholder: '80', hint: 'BMRDA layout approval, DTCP sanction — typically ₹50–200/sqft of total land' },
     { name: 'marketingCostPct',       label: 'Marketing Cost (% of revenue)',   type: 'number', step: '0.1',  placeholder: '4' },
     { name: 'financeCostPct',         label: 'Finance Cost (% pa)',             type: 'number', step: '0.1',  placeholder: '12' },
-    { name: 'projectDurationMonths',  label: 'Project Duration (months)',       type: 'number', min: '12', max: '180', placeholder: '24' },
+    { name: 'projectDurationYears',   label: 'Project Duration (years)',        type: 'number', step: '0.25', min: '1', max: '15', placeholder: '2' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '14' },
   ],
   commercial_office: [
@@ -84,7 +84,7 @@ const FIELD_DEFS = {
     { name: 'entryCapRate',           label: 'Entry Cap Rate (%)',              type: 'number', step: '0.25', placeholder: '7', hint: 'Prime Bengaluru office: 6.5–8%' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '7.5', hint: 'Typically 25–50 bps wider than entry' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '5' },
-    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', min: '12', max: '180', placeholder: '36' },
+    { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3' },
     { name: 'debtCoverage',           label: 'Debt Coverage (LTV, 0–1)',        type: 'number', step: '0.05', placeholder: '0.65' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '14' },
@@ -104,7 +104,7 @@ const FIELD_DEFS = {
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8', hint: 'Retail: 7.5–9%' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
-    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', min: '12', max: '180', placeholder: '36' },
+    { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3' },
     { name: 'debtCoverage',           label: 'Debt Coverage (LTV)',             type: 'number', step: '0.05', placeholder: '0.60' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '15' },
@@ -120,7 +120,7 @@ const FIELD_DEFS = {
     { name: 'opexPct',                label: 'Operating Expenses (% of EGR)',   type: 'number', step: '1',    placeholder: '15', hint: 'Industrial is lower opex than office' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8.5', hint: 'Warehousing/logistics: 7.5–9.5%' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
-    { name: 'projectDurationMonths',  label: 'Construction Duration (months)',  type: 'number', min: '12', max: '180', placeholder: '18' },
+    { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '1.5' },
     { name: 'debtCoverage',           label: 'Debt Coverage (LTV)',             type: 'number', step: '0.05', placeholder: '0.65' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '13' },
@@ -140,7 +140,7 @@ const FIELD_DEFS = {
     { name: 'ebitdaMarginPct',         label: 'EBITDA Margin (% of total revenue)',   type: 'number', step: '1',    placeholder: '28', hint: 'After management fee & reserve. India hotels: 22–32%' },
     { name: 'exitCapRate',             label: 'Exit Cap Rate (%)',                    type: 'number', step: '0.25', placeholder: '9',  hint: 'Hotel exit caps India: 8–11%' },
     { name: 'holdPeriodYears',         label: 'Hold Period (years)',                  type: 'number', step: '1',    placeholder: '8' },
-    { name: 'projectDurationMonths',   label: 'Construction Duration (months)',       type: 'number', min: '12', max: '180', placeholder: '30', hint: 'Typical hotel construction: 24–36 months' },
+    { name: 'projectDurationYears',    label: 'Construction Duration (years)',        type: 'number', step: '0.25', min: '1', max: '15', placeholder: '2.5', hint: 'Typical hotel construction: 2–3 years' },
     { name: 'debtCoverage',            label: 'Debt LTV (0–1)',                       type: 'number', step: '0.05', placeholder: '0.55' },
     { name: 'interestRatePct',         label: 'Interest Rate (% pa)',                 type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'contingencyPct',          label: 'Contingency (% of construction)',      type: 'number', step: '1',    placeholder: '5' },
@@ -154,36 +154,36 @@ const DEFAULT_VALUES = {
     developerMarginPct: '20', pricingEscalationPct: '0',
     contingencyPct: '5', architectFeePct: '2', pmcFeePct: '1.5',
     debtLTV: '0', debtRatePct: '14',
-    projectDurationMonths: '36', discountRatePct: '14',
-    constructionStartMonths: '3', constructionEndMonths: '30',
+    projectDurationYears: '3', discountRatePct: '14',
+    constructionStartYears: '0.25', constructionEndYears: '2.5',
   },
   plotted_development: {
     saleableLandPct: '55', avgPlotSizeSqft: '1200', devCostPerSqft: '250',
     marketingCostPct: '4', financeCostPct: '12',
-    projectDurationMonths: '24', discountRatePct: '14',
+    projectDurationYears: '2', discountRatePct: '14',
   },
   commercial_office: {
     rentEscalationPct: '5', vacancyPct: '10', opexPct: '20',
     tiPerSqft: '500', lcMonths: '2',
     entryCapRate: '7', exitCapRate: '7.5', holdPeriodYears: '5',
-    projectDurationMonths: '36', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
+    projectDurationYears: '3', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
   },
   retail: {
     anchorPct: '40', anchorRentDiscount: '20',
     rentEscalationPct: '5', vacancyPct: '12', opexPct: '22',
     tiPerSqft: '800', lcMonths: '2',
     exitCapRate: '8', holdPeriodYears: '7',
-    projectDurationMonths: '36', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '15',
+    projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '15',
   },
   industrial: {
     rentEscalationPct: '4', vacancyPct: '7', opexPct: '15',
     exitCapRate: '8.5', holdPeriodYears: '7',
-    projectDurationMonths: '18', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '13',
+    projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '13',
   },
   hospitality: {
     stabilizedOccPct: '65', adrGrowthPct: '5', fbRevPct: '25', otherRevPct: '10',
     gopMarginPct: '35', ebitdaMarginPct: '28', exitCapRate: '9',
-    holdPeriodYears: '8', projectDurationMonths: '30',
+    holdPeriodYears: '8', projectDurationYears: '2.5',
     debtCoverage: '0.55', interestRatePct: '10.5', contingencyPct: '5', discountRatePct: '15',
   },
 };
@@ -219,6 +219,17 @@ const hasLegacyResidentialLoadingFactor = (financials) => {
   return Number.isFinite(numeric) && numeric > 0.45;
 };
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function monthsToYears(months) {
+  if (months == null) return null;
+  const n = Number(months);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round((n / 12) * 100) / 100;
+}
+
 function buildInitialInputs(financials, targetClass, deal) {
   const assetClass = targetClass || financials?.asset_class || 'residential_apartments';
   const defaults = DEFAULT_VALUES[assetClass] || {};
@@ -227,6 +238,19 @@ function buildInitialInputs(financials, targetClass, deal) {
   // Deal provides plot area / land area for pre-population when no financials yet
   const dealLandSqft = deal?.land_area_sqft ?? null;
 
+  // Effective date defaults to stored → deal effective → today
+  const effectiveDate =
+    stored.effectiveDate
+    ?? financials?.effective_date
+    ?? deal?.effective_date
+    ?? todayIso();
+
+  // Duration: prefer years (new), fall back to converting legacy months
+  const storedDurationYears =
+    stored.projectDurationYears
+    ?? monthsToYears(stored.projectDurationMonths)
+    ?? monthsToYears(financials?.project_duration_months);
+
   if (assetClass === 'residential_apartments' && financials) {
     // Resolve approval cost: prefer stored per-sqft, fall back to legacy Cr field
     const approvalPerSqft = stored.approvalCostPerSqft
@@ -234,6 +258,7 @@ function buildInitialInputs(financials, targetClass, deal) {
           ? Math.round((financials.approval_cost_cr * 1e7) / financials.gross_area_sqft)
           : '') || '';
     return {
+      effectiveDate,
       plotAreaSqft:            financials.plot_area_sqft ?? dealLandSqft ?? '',
       fsi:                     financials.fsi ?? '',
       loadingFactor:           normalizeResidentialLoadingFactor(
@@ -248,18 +273,26 @@ function buildInitialInputs(financials, targetClass, deal) {
       financeCostPct:          financials.finance_cost_pct ?? defaults.financeCostPct,
       developerMarginPct:      financials.developer_margin_pct ?? defaults.developerMarginPct,
       pricingEscalationPct:    stored.pricingEscalationPct ?? defaults.pricingEscalationPct,
-      projectDurationMonths:   financials.project_duration_months ?? defaults.projectDurationMonths,
-      constructionStartMonths: stored.constructionStartMonths ?? defaults.constructionStartMonths,
-      constructionEndMonths:   stored.constructionEndMonths ?? defaults.constructionEndMonths,
+      projectDurationYears:    storedDurationYears ?? defaults.projectDurationYears,
+      constructionStartYears:  stored.constructionStartYears
+        ?? monthsToYears(stored.constructionStartMonths)
+        ?? defaults.constructionStartYears,
+      constructionEndYears:    stored.constructionEndYears
+        ?? monthsToYears(stored.constructionEndMonths)
+        ?? defaults.constructionEndYears,
       discountRatePct:         financials.discount_rate_pct ?? defaults.discountRatePct,
     };
   }
 
   // For any class: merge stored inputs with defaults, blank out anything not set
   const fields = FIELD_DEFS[assetClass] || [];
-  const out = {};
+  const out = { effectiveDate };
   for (const f of fields) {
     let val = stored[f.name] ?? defaults[f.name] ?? '';
+    // Legacy migration: projectDurationYears may only exist as legacy months in stored
+    if (!val && f.name === 'projectDurationYears' && storedDurationYears != null) {
+      val = storedDurationYears;
+    }
     // Pre-populate land area from deal for plot-type fields
     if (!val && f.name === 'plotAreaSqft' && dealLandSqft) val = dealLandSqft;
     if (!val && f.name === 'totalLandSqft' && dealLandSqft) val = dealLandSqft;
@@ -365,7 +398,10 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
     e.preventDefault();
     const data = { assetClass };
     for (const [k, v] of Object.entries(inputs)) {
-      data[k] = v === '' ? undefined : Number(v);
+      if (v === '' || v == null) { data[k] = undefined; continue; }
+      // effectiveDate is a date string, not a number
+      if (k === 'effectiveDate') { data[k] = String(v); continue; }
+      data[k] = Number(v);
     }
     // Client-side required-field guard per asset class
     const required = {
@@ -396,6 +432,22 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
         <Calculator size={18} className="text-primary-600" />
         Model Inputs
       </h2>
+      <div className="mb-4 bg-primary-50 border border-primary-100 rounded-lg p-3">
+        <label htmlFor="effectiveDate" className="text-sm font-medium text-primary-900 block mb-1">
+          Effective Date
+        </label>
+        <input
+          id="effectiveDate"
+          name="effectiveDate"
+          type="date"
+          value={inputs.effectiveDate ?? ''}
+          onChange={handleChange}
+          className="input w-full sm:w-auto"
+        />
+        <p className="text-xs text-primary-700 mt-1">
+          Cash flows, construction milestones, and hold period all anchor on this date.
+        </p>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {fields.map((field) => (
           <div key={field.name}>
@@ -1247,9 +1299,19 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
   const debtLTV = capitalStack?.debtLTV ?? inputs.debtLTV ?? 0;
   const debtRatePct = capitalStack?.debtRatePct ?? inputs.debtRatePct ?? 0;
   const debtDrawnCr = capitalStack?.debtCr ?? 0;
-  const projectDurationMonths = inputs.projectDurationMonths ?? 36;
-  const constructionStartMonths = inputs.constructionStartMonths ?? 0;
-  const constructionEndMonths = inputs.constructionEndMonths ?? projectDurationMonths * 0.85;
+  const projectDurationMonths =
+    (inputs.projectDurationYears != null ? Number(inputs.projectDurationYears) * 12 : null)
+    ?? inputs.projectDurationMonths
+    ?? rawFinancials?.project_duration_months
+    ?? 36;
+  const constructionStartMonths =
+    (inputs.constructionStartYears != null ? Number(inputs.constructionStartYears) * 12 : null)
+    ?? inputs.constructionStartMonths
+    ?? 0;
+  const constructionEndMonths =
+    (inputs.constructionEndYears != null ? Number(inputs.constructionEndYears) * 12 : null)
+    ?? inputs.constructionEndMonths
+    ?? projectDurationMonths * 0.85;
 
   const schedule = useMemo(() => {
     if (!(debtDrawnCr > 0) || !(debtRatePct > 0)) return null;

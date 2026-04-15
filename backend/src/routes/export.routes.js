@@ -385,7 +385,7 @@ router.get(
         { Category: 'RETURNS', Item: 'Equity Multiple', Value_Cr: d.equity_multiple },
         { Category: 'RETURNS', Item: 'Residual Land Value (₹ Cr)', Value_Cr: d.residual_land_value_cr },
         { Category: 'ASSUMPTIONS', Item: 'Discount Rate %', Value_Cr: d.discount_rate_pct },
-        { Category: 'ASSUMPTIONS', Item: 'Project Duration (months)', Value_Cr: d.project_duration_months },
+        { Category: 'ASSUMPTIONS', Item: 'Project Duration (years)', Value_Cr: d.project_duration_months ? Number((d.project_duration_months / 12).toFixed(2)) : null },
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(financialData), 'Financial Model');
 
@@ -960,6 +960,7 @@ router.get(
           ['Loading Factor',         d.loading_factor != null ? `${(parseFloat(d.loading_factor) * 100).toFixed(1)}%` : 'N/A'],
           ['Construction Cost',      d.construction_cost_per_sqft ? `₹${fmt(d.construction_cost_per_sqft)}/sqft` : 'N/A'],
           ['Selling Rate',           d.selling_rate_per_sqft ? `₹${fmt(d.selling_rate_per_sqft)}/sqft` : 'N/A'],
+          ['Effective Date',         d.model_params?.inputs?.effectiveDate || 'Today'],
           ['Project Duration',       d.project_duration_months ? `${(d.project_duration_months / 12).toFixed(1)} years` : 'N/A'],
           ['Discount Rate',          d.discount_rate_pct != null ? `${fmt(d.discount_rate_pct)}%` : 'N/A'],
           ['Developer Margin',       d.developer_margin_pct != null ? `${fmt(d.developer_margin_pct)}%` : 'N/A'],
