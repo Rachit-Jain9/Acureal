@@ -139,6 +139,9 @@ export default function DealDetailPage() {
       await transitionStage.mutateAsync({ id, stage: newStage, notes: stageNotes });
       setStageNotes('');
       setStageExpanded(false);
+      if (newStage === 'dead') {
+        navigate('/dashboard/deals');
+      }
     } catch {
       // Mutation hook handles toast
     }
@@ -157,6 +160,7 @@ export default function DealDetailPage() {
     try {
       await archiveDeal.mutateAsync({ id, reason: 'Archived from deal detail page' });
       setShowArchiveConfirm(false);
+      navigate('/dashboard/deals');
     } catch {
       // handled by mutation hook
     }
@@ -619,8 +623,8 @@ export default function DealDetailPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Archive Deal</h3>
             <p className="text-sm text-gray-600 mb-5">
-              Archive <strong>{deal.name}</strong> to remove it from live pipeline views without
-              losing its history, activities, or documents. The deal can be restored later.
+              Archive <strong>{deal.name}</strong> to remove it from active views. If no other live
+              deal depends on the linked property, its address record will be cleared too.
             </p>
             <div className="flex justify-end gap-3">
               <button

@@ -5,9 +5,16 @@ const {
   ACTIVITY_STATUSES,
   ACTIVITY_PRIORITIES,
 } = require('../constants/domain');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
 const ensureDealExists = async (dealId) => {
-  const dealResult = await query('SELECT id FROM deals WHERE id = $1', [dealId]);
+  const dealResult = await query(
+    `SELECT id
+     FROM deals
+     WHERE id = $1
+       AND ${buildVisibleDealCondition('deals')}`,
+    [dealId]
+  );
   if (dealResult.rows.length === 0) {
     throw createError('Deal not found.', 404);
   }
@@ -96,7 +103,7 @@ const logActivity = async (
 };
 
 const buildActivityQuery = (filters = {}, pagination = {}) => {
-  const conditions = ['d.is_archived = FALSE'];
+  const conditions = [buildVisibleDealCondition('d')];
   const values = [];
   let paramCount = 1;
 

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
-import { authAPI, adminAPI } from '../services/api';
+import { authAPI } from '../services/api';
 import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
 
@@ -39,31 +38,6 @@ const DATE_FORMAT_OPTIONS = [
 
 export default function SettingsPage() {
   const { user, updateProfile, sessionPersistence } = useAuthStore();
-  const queryClient = useQueryClient();
-  const [resetConfirmText, setResetConfirmText] = useState('');
-  const [resetting, setResetting] = useState(false);
-
-  const handleResetDemoData = async () => {
-    if (resetConfirmText !== 'DELETE ALL') {
-      toast.error('Type "DELETE ALL" exactly to confirm.');
-      return;
-    }
-    setResetting(true);
-    try {
-      const resp = await adminAPI.resetDemoData();
-      const counts = resp.data?.deleted || {};
-      const total = Object.values(counts).reduce(
-        (sum, v) => sum + (typeof v === 'number' ? v : 0), 0
-      );
-      queryClient.clear();
-      toast.success(`Reset complete — ${total} rows erased across ${Object.keys(counts).length} tables.`);
-      setResetConfirmText('');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Reset failed — check server logs.');
-    } finally {
-      setResetting(false);
-    }
-  };
 
   // Profile form
   const [profile, setProfile] = useState({
@@ -542,40 +516,6 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
-
-      {/* Danger Zone — admin only */}
-      {user?.role === 'admin' && (
-        <div className="bg-white rounded-xl shadow-sm border-2 border-red-200 p-6">
-          <h3 className="text-base font-semibold text-red-700 mb-1 flex items-center gap-2">
-            <Trash2 size={18} />
-            Danger Zone — Reset Demo Data
-          </h3>
-          <p className="text-xs text-gray-600 mb-4">
-            Permanently erase every deal, property, document, financial model, DD item, approval, risk flag, activity, and comp record from the database. Users, preferences, and system settings are preserved. Use this to clear test / demo content before loading real deals.
-          </p>
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
-            <p className="text-sm font-medium text-red-800">
-              This action is irreversible. Type <code className="bg-white px-1.5 py-0.5 rounded border border-red-300 font-mono text-xs">DELETE ALL</code> below to enable the button.
-            </p>
-            <input
-              type="text"
-              value={resetConfirmText}
-              onChange={(e) => setResetConfirmText(e.target.value)}
-              placeholder="Type DELETE ALL"
-              className="w-full px-3 py-2 border border-red-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-            <button
-              type="button"
-              onClick={handleResetDemoData}
-              disabled={resetting || resetConfirmText !== 'DELETE ALL'}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {resetting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {resetting ? 'Erasing…' : 'Erase All Deal Data'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

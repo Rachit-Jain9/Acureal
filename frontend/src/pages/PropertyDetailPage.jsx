@@ -113,7 +113,7 @@ export default function PropertyDetailPage() {
   const [editForm, setEditForm] = useState(null);
 
   const { data: property, isLoading, isError } = useProperty(id);
-  const { data: dealsData } = useDeals({ limit: 500, includeArchived: true });
+  const { data: dealsData } = useDeals({ limit: 500 });
   const geocodeMutation = useGeocodeProperty();
   const updateProperty = useUpdateProperty();
 

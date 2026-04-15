@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { normalizePropertyType } = require('../constants/domain');
+const { buildVisiblePropertyCondition } = require('../utils/dealVisibility');
 const { geocodeAddress } = require('../utils/geocode');
 const { normalizeAreaSqft, normalizeAreaUnit, round } = require('../utils/landPricing');
 
@@ -160,7 +161,7 @@ const createProperty = async (data, userId) => {
 };
 
 const getProperties = async (filters = {}, pagination = {}) => {
-  const conditions = ['1=1'];
+  const conditions = [buildVisiblePropertyCondition('p', 'linked_deal')];
   const values = [];
   let paramCount = 1;
 
@@ -254,11 +255,14 @@ const getPropertyById = async (id) => {
       (
         SELECT COUNT(*)
         FROM deals d
-        WHERE d.property_id = p.id AND d.is_archived = FALSE
+        WHERE d.property_id = p.id
+          AND d.is_archived = FALSE
+          AND d.stage <> 'dead'
       ) as deal_count
      FROM properties p
      LEFT JOIN users u ON p.created_by = u.id
-     WHERE p.id = $1`,
+     WHERE p.id = $1
+       AND ${buildVisiblePropertyCondition('p', 'linked_deal')}`,
     [id]
   );
 

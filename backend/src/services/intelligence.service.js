@@ -2,6 +2,7 @@
 
 const { query } = require('../config/database');
 const { getProviderAvailability, runClaudeReasoning } = require('./ai/providerRegistry');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
 const HEATMAP_MARKETS = [
   'Whitefield',
@@ -160,7 +161,7 @@ const buildBrief = async (briefDate) => {
        FROM deals d
        LEFT JOIN properties p ON d.property_id = p.id
        LEFT JOIN financials f ON d.id = f.deal_id
-       WHERE d.is_archived = FALSE
+       WHERE ${buildVisibleDealCondition('d')}
        ORDER BY
          CASE WHEN LOWER(COALESCE(p.city, '')) IN ('bangalore', 'bengaluru') THEN 0 ELSE 1 END,
          COALESCE(f.irr_pct, 0) DESC,
@@ -172,16 +173,16 @@ const buildBrief = async (briefDate) => {
        FROM activities a
        LEFT JOIN deals d ON a.deal_id = d.id
        LEFT JOIN properties p ON d.property_id = p.id
-       WHERE COALESCE(d.is_archived, FALSE) = FALSE
+       WHERE ${buildVisibleDealCondition('d')}
        ORDER BY a.activity_date DESC
        LIMIT 7`
     ),
     query(
       `SELECT
         COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage NOT IN ('closed', 'dead')) as live_deals,
-        COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'dead') as dead_deals,
+        COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'dead') as hidden_dead_deals,
         AVG(f.irr_pct) FILTER (WHERE d.is_archived = FALSE AND f.irr_pct IS NOT NULL) as avg_irr,
-        SUM(f.total_revenue_cr) FILTER (WHERE d.is_archived = FALSE) as total_pipeline_cr
+        SUM(f.total_revenue_cr) FILTER (WHERE ${buildVisibleDealCondition('d')}) as total_pipeline_cr
        FROM deals d
        LEFT JOIN financials f ON d.id = f.deal_id`
     ),
@@ -208,7 +209,7 @@ const buildBrief = async (briefDate) => {
   const allTopDeals = topDealResult.rows;
   const signalRow = marketSignalResult.rows[0] || {};
   const liveDeals = parseInt(signalRow.live_deals, 10) || 0;
-  const deadDeals = parseInt(signalRow.dead_deals, 10) || 0;
+  const deadDeals = parseInt(signalRow.hidden_dead_deals, 10) || 0;
   const avgIrr = signalRow.avg_irr ? Number(signalRow.avg_irr) : null;
   const totalPipelineCr = signalRow.total_pipeline_cr ? Number(signalRow.total_pipeline_cr) : null;
 
@@ -278,8 +279,8 @@ const buildBrief = async (briefDate) => {
         : ['No live opportunities currently tracked in REDIP.'],
       risk: [
         deadDeals > 0
-          ? `${deadDeals} deal${deadDeals !== 1 ? 's' : ''} marked dead — review for recurring sourcing or diligence failures.`
-          : 'No dead deals currently tracked.',
+          ? `${deadDeals} inactive deal${deadDeals !== 1 ? 's remain' : ' remains'} hidden from pipeline views — review sourcing quality and archive hygiene separately.`
+          : 'No inactive dead deals are currently hidden from the pipeline.',
         'Verified external Bengaluru market feeds not configured — REDIP is intentionally withholding market-level pricing and demand claims.',
       ],
       sourceType: 'internal_pipeline_only',
@@ -291,8 +292,8 @@ const buildBrief = async (briefDate) => {
       : [
           'Awaiting verified external transaction, inventory, and absorption sources before REDIP will publish slowdown signals.',
           deadDeals > 0
-            ? 'Internal dead-deal count is non-zero — review failed opportunities for recurring pricing, title, or diligence issues.'
-            : 'No internal dead-deal trend currently available.',
+            ? 'Inactive hidden deals exist in the database — review recurring pricing, title, or diligence failures outside the live pipeline.'
+            : 'No inactive dead-deal trend currently available.',
         ],
     strategicTakeaways: strategicNotes.length > 0
       ? strategicNotes
@@ -322,7 +323,8 @@ const getDealAnalysis = async (dealId) => {
               p.zoning, p.circle_rate_per_sqft
        FROM deals d
        LEFT JOIN properties p ON d.property_id = p.id
-       WHERE d.id = $1`,
+       WHERE d.id = $1
+         AND ${buildVisibleDealCondition('d')}`,
       [dealId]
     ),
     query(

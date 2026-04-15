@@ -69,7 +69,7 @@ export default function ActivitiesPage() {
   }), [filters]);
 
   const { data, isLoading, isError } = useActivityFeed(queryParams);
-  const { data: dealsData } = useDeals({ limit: 200, includeArchived: true });
+  const { data: dealsData } = useDeals({ limit: 200 });
   const createActivity = useCreateActivity();
   const updateActivity = useUpdateActivity();
   const updateActivityStatus = useUpdateActivityStatus();

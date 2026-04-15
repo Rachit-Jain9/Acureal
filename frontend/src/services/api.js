@@ -187,8 +187,4 @@ export const extractionAPI = {
   applyCorrections: (documentId, extractionId, corrections)       => api.put(`/documents/${documentId}/extraction/${extractionId}/corrections`, { corrections }),
 };
 
-export const adminAPI = {
-  resetDemoData: () => api.post('/admin/reset-demo-data', { confirm: 'RESET-REDIP-DEMO-DATA' }),
-};
-
 export default api;

@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
 const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
 const pptxgen = require('pptxgenjs');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getDealExportContext } = require('../services/dealExport.service');
 
 const router = express.Router();
@@ -968,7 +969,7 @@ router.get(
          LEFT JOIN properties p ON d.property_id = p.id
          LEFT JOIN financials f ON d.id = f.deal_id
          LEFT JOIN users u ON d.assigned_to = u.id
-         WHERE d.is_archived = FALSE
+         WHERE ${buildVisibleDealCondition('d')}
          ORDER BY d.updated_at DESC`
       );
 
@@ -995,7 +996,7 @@ router.get(
 
       // Summary sheet
       const summaryData = [
-        { Metric: 'Total Active Deals', Value: dealsResult.rows.length },
+        { Metric: 'Total Visible Deals', Value: dealsResult.rows.length },
         { Metric: 'Export Date', Value: new Date().toISOString().slice(0, 10) },
         { Metric: 'Exported By', Value: req.user.name },
         { Metric: 'Platform', Value: 'REDIP — Real Estate Development Intelligence' },

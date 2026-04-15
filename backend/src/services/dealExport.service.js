@@ -1,4 +1,5 @@
 const { query } = require('../config/database');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getCompsNearLocation } = require('./comps.service');
 const { generateDealInsights } = require('./export.insights.service');
 
@@ -62,6 +63,7 @@ const DEAL_EXPORT_SQL = `
   LEFT JOIN users u ON d.assigned_to = u.id
   LEFT JOIN financials f ON d.id = f.deal_id
   WHERE d.id = $1
+    AND ${buildVisibleDealCondition('d')}
 `;
 
 const num = (value) => {

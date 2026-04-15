@@ -1,4 +1,5 @@
 const { query } = require('../config/database');
+const { buildVisibleDealCondition, buildVisiblePropertyCondition } = require('../utils/dealVisibility');
 
 const getDashboardStats = async (userId) => {
   const liveStageArray = [
@@ -16,7 +17,7 @@ const getDashboardStats = async (userId) => {
   // Total deals stats
   const dealsStatsResult = await query(
     `SELECT
-      COUNT(*) FILTER (WHERE d.is_archived = FALSE) as total_deals,
+      COUNT(*) FILTER (WHERE ${buildVisibleDealCondition('d')}) as total_deals,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])) as active_deals_count,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'closed' AND d.updated_at >= DATE_TRUNC('month', NOW())) as deals_closed_this_month,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'dead') as dead_deals,
@@ -36,7 +37,7 @@ const getDashboardStats = async (userId) => {
       COALESCE(SUM(f.total_revenue_cr), 0) as value_cr
      FROM deals d
      LEFT JOIN financials f ON d.id = f.deal_id
-     WHERE d.is_archived = FALSE
+     WHERE ${buildVisibleDealCondition('d')}
      GROUP BY d.stage
      ORDER BY CASE d.stage
        WHEN 'sourced' THEN 1
@@ -68,7 +69,11 @@ const getDashboardStats = async (userId) => {
   }
 
   // Total properties
-  const propertiesResult = await query('SELECT COUNT(*) as total FROM properties');
+  const propertiesResult = await query(
+    `SELECT COUNT(*) as total
+     FROM properties p
+     WHERE ${buildVisiblePropertyCondition('p', 'linked_deal')}`
+  );
   const totalProperties = parseInt(propertiesResult.rows[0].total, 10);
 
   // Recent activities (global, last 10)
@@ -81,7 +86,7 @@ const getDashboardStats = async (userId) => {
      LEFT JOIN users u ON a.performed_by = u.id
      LEFT JOIN deals d ON a.deal_id = d.id
      LEFT JOIN properties p ON d.property_id = p.id
-     WHERE COALESCE(d.is_archived, FALSE) = FALSE
+     WHERE ${buildVisibleDealCondition('d')}
      ORDER BY a.activity_date DESC
      LIMIT 10`
   );
@@ -106,6 +111,7 @@ const getDashboardStats = async (userId) => {
       COUNT(*) FILTER (WHERE d.stage = 'closed') as closed_deals
      FROM deals d
      WHERE d.created_at >= NOW() - INTERVAL '6 months' AND d.is_archived = FALSE
+       AND d.stage <> 'dead'
      GROUP BY DATE_TRUNC('month', d.created_at), TO_CHAR(d.created_at, 'Mon YYYY')
      ORDER BY month_date ASC`
   );
@@ -115,7 +121,7 @@ const getDashboardStats = async (userId) => {
     `SELECT p.city, COUNT(d.id) as deal_count
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id
-     WHERE d.stage NOT IN ('dead') AND d.is_archived = FALSE
+     WHERE ${buildVisibleDealCondition('d')}
      GROUP BY p.city
      ORDER BY deal_count DESC
      LIMIT 8`

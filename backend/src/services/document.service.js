@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { uploadFile, getDownloadUrl, fetchStoredFile, deleteStorageFile } = require('../config/storage');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const path = require('path');
 
 const getDocumentDealOptions = async () => {
@@ -14,7 +15,7 @@ const getDocumentDealOptions = async () => {
       COALESCE(NULLIF(p.name, ''), NULLIF(p.address, ''), CONCAT(COALESCE(p.city, 'Unknown city'), ' property')) as property_name
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id
-     WHERE d.is_archived = FALSE
+     WHERE ${buildVisibleDealCondition('d')}
      ORDER BY
        CASE
          WHEN d.stage IN ('sourced', 'screening', 'site_visit', 'loi', 'due_diligence', 'underwriting', 'ic_review', 'negotiation', 'active') THEN 1
@@ -28,13 +29,17 @@ const getDocumentDealOptions = async () => {
 
 const uploadDocument = async (dealId, file, category, userId, description = '') => {
   // Verify deal exists
-  const dealResult = await query('SELECT id, is_archived FROM deals WHERE id = $1', [dealId]);
+  const dealResult = await query('SELECT id, is_archived, stage FROM deals WHERE id = $1', [dealId]);
   if (dealResult.rows.length === 0) {
     throw createError('Deal not found.', 404);
   }
 
   if (dealResult.rows[0].is_archived) {
     throw createError('Restore the archived deal before uploading documents to it.', 409);
+  }
+
+  if (dealResult.rows[0].stage === 'dead') {
+    throw createError('Dead deals are hidden from document workflows.', 409);
   }
 
   if (!file || !file.buffer) {
@@ -80,8 +85,12 @@ const uploadDocument = async (dealId, file, category, userId, description = '') 
 };
 
 const getDocuments = async (dealId, category = null) => {
-  const dealResult = await query('SELECT id, is_archived FROM deals WHERE id = $1', [dealId]);
+  const dealResult = await query('SELECT id, is_archived, stage FROM deals WHERE id = $1', [dealId]);
   if (dealResult.rows.length === 0) {
+    throw createError('Deal not found.', 404);
+  }
+
+  if (dealResult.rows[0].is_archived || dealResult.rows[0].stage === 'dead') {
     throw createError('Deal not found.', 404);
   }
 

@@ -33,7 +33,7 @@ export default function ReportsPage() {
   const [exportingXlsx, setExportingXlsx] = useState(null);
   const [exportingPdf, setExportingPdf] = useState(null);
 
-  const { data: dealsData, isLoading } = useDeals({ limit: 500, includeArchived: true });
+  const { data: dealsData, isLoading } = useDeals({ limit: 500 });
   const { data: dailyBrief } = useDailyBrief();
   const deals = dealsData?.data || [];
 
@@ -48,13 +48,15 @@ export default function ReportsPage() {
       stages[stage].totalValue += Number(deal.total_revenue_cr || 0);
     });
 
-    return Object.entries(STAGE_CONFIG).map(([key, config]) => ({
-      stage: key,
-      label: config.label,
-      color: config.color,
-      count: stages[key]?.count || 0,
-      totalValue: stages[key]?.totalValue || 0,
-    }));
+    return Object.entries(STAGE_CONFIG)
+      .filter(([key]) => key !== 'dead')
+      .map(([key, config]) => ({
+        stage: key,
+        label: config.label,
+        color: config.color,
+        count: stages[key]?.count || 0,
+        totalValue: stages[key]?.totalValue || 0,
+      }));
   }, [deals]);
 
   const cityData = useMemo(() => {

@@ -7,6 +7,7 @@ const {
   LIVE_DEAL_STAGES,
 } = require('../constants/domain');
 const { calculateLandPricing } = require('../utils/landPricing');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 
 const buildStageOrderCase = (column = 'd.stage') => `
@@ -135,6 +136,41 @@ const dealSelect = `
   ) as key_risks
 `;
 
+const purgePropertyIfInactiveOnly = async (client, propertyId, excludingDealId = null) => {
+  if (!propertyId) {
+    return null;
+  }
+
+  const values = [propertyId];
+  let excludingClause = '';
+  if (excludingDealId) {
+    values.push(excludingDealId);
+    excludingClause = `AND d.id <> $2`;
+  }
+
+  const visibleDealsResult = await client.query(
+    `SELECT EXISTS(
+      SELECT 1
+      FROM deals d
+      WHERE d.property_id = $1
+        ${excludingClause}
+        AND ${buildVisibleDealCondition('d')}
+    ) AS has_visible_deals`,
+    values
+  );
+
+  if (visibleDealsResult.rows[0]?.has_visible_deals) {
+    return null;
+  }
+
+  const deleteResult = await client.query(
+    'DELETE FROM properties WHERE id = $1 RETURNING id, address, city',
+    [propertyId]
+  );
+
+  return deleteResult.rows[0] || null;
+};
+
 const getPropertyContext = async (client, propertyId) => {
   if (!propertyId) {
     return null;
@@ -230,6 +266,10 @@ const getDeals = async (filters = {}, pagination = {}) => {
     conditions.push('d.is_archived = TRUE');
   } else if (!filters.includeArchived) {
     conditions.push('d.is_archived = FALSE');
+  }
+
+  if (!filters.includeDead) {
+    conditions.push(`d.stage <> 'dead'`);
   }
 
   if (filters.stage) {
@@ -350,6 +390,10 @@ const getDealById = async (id) => {
   );
 
   if (result.rows.length === 0) {
+    throw createError('Deal not found.', 404);
+  }
+
+  if (result.rows[0].is_archived || result.rows[0].stage === 'dead') {
     throw createError('Deal not found.', 404);
   }
 
@@ -549,7 +593,20 @@ const transitionStage = async (dealId, newStage, userId, notes = '') => {
       [dealId, currentDeal.stage, newStage, userId, notes || null]
     );
 
-    return dealUpdateResult.rows[0];
+    let propertyDeleted = null;
+    if (newStage === 'dead') {
+      const archivedDeal = dealUpdateResult.rows[0];
+      propertyDeleted = await purgePropertyIfInactiveOnly(
+        client,
+        archivedDeal.property_id,
+        dealId
+      );
+    }
+
+    return {
+      ...dealUpdateResult.rows[0],
+      property_deleted: propertyDeleted,
+    };
   });
 };
 
@@ -579,7 +636,7 @@ const getDealsByStage = async () => {
      LEFT JOIN properties p ON d.property_id = p.id
      LEFT JOIN users u ON d.assigned_to = u.id
      LEFT JOIN financials f ON d.id = f.deal_id
-     WHERE d.is_archived = FALSE
+     WHERE ${buildVisibleDealCondition('d')}
      GROUP BY d.stage
      ORDER BY ${buildStageOrderCase('d.stage')}`,
     []
@@ -611,7 +668,7 @@ const getDealsByStage = async () => {
 const getPipelineSummary = async () => {
   const summaryResult = await query(
     `SELECT
-      COUNT(*) FILTER (WHERE d.is_archived = FALSE) as total_deals,
+      COUNT(*) FILTER (WHERE ${buildVisibleDealCondition('d')}) as total_deals,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])) as active_deals,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'closed') as closed_deals,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'dead') as dead_deals,
@@ -626,7 +683,7 @@ const getPipelineSummary = async () => {
   const stageResult = await query(
     `SELECT stage, COUNT(*) as count
      FROM deals
-     WHERE is_archived = FALSE
+     WHERE ${buildVisibleDealCondition('deals')}
      GROUP BY stage
      ORDER BY ${buildStageOrderCase('stage')}`
   );
@@ -649,25 +706,40 @@ const getPipelineSummary = async () => {
   };
 };
 
-const archiveDeal = async (id, userId, reason = null) => {
-  const result = await query(
-    `UPDATE deals
-     SET is_archived = TRUE,
-         archived_at = NOW(),
-         archived_by = $2,
-         archived_reason = $3,
-         updated_at = NOW()
-     WHERE id = $1 AND is_archived = FALSE
-     RETURNING *`,
-    [id, userId, reason || null]
-  );
+const archiveDeal = async (id, userId, reason = null) =>
+  transaction(async (client) => {
+    const currentDealResult = await client.query(
+      'SELECT id, property_id, is_archived FROM deals WHERE id = $1',
+      [id]
+    );
 
-  if (result.rows.length === 0) {
-    throw createError('Deal not found or already archived.', 404);
-  }
+    if (currentDealResult.rows.length === 0 || currentDealResult.rows[0].is_archived) {
+      throw createError('Deal not found or already archived.', 404);
+    }
 
-  return result.rows[0];
-};
+    const result = await client.query(
+      `UPDATE deals
+       SET is_archived = TRUE,
+           archived_at = NOW(),
+           archived_by = $2,
+           archived_reason = $3,
+           updated_at = NOW()
+       WHERE id = $1 AND is_archived = FALSE
+       RETURNING *`,
+      [id, userId, reason || null]
+    );
+
+    const propertyDeleted = await purgePropertyIfInactiveOnly(
+      client,
+      result.rows[0].property_id,
+      id
+    );
+
+    return {
+      ...result.rows[0],
+      property_deleted: propertyDeleted,
+    };
+  });
 
 const restoreDeal = async (id) => {
   const result = await query(
@@ -689,24 +761,34 @@ const restoreDeal = async (id) => {
   return result.rows[0];
 };
 
-const deleteDeal = async (id) => {
-  const dealResult = await query('SELECT id, stage, is_archived FROM deals WHERE id = $1', [id]);
-
-  if (dealResult.rows.length === 0) {
-    throw createError('Deal not found.', 404);
-  }
-
-  const deal = dealResult.rows[0];
-  if (!deal.is_archived && !['dead', 'closed'].includes(deal.stage)) {
-    throw createError(
-      'Archive the deal first, or mark it dead/closed before permanently deleting it.',
-      409
+const deleteDeal = async (id) =>
+  transaction(async (client) => {
+    const dealResult = await client.query(
+      'SELECT id, stage, is_archived, property_id FROM deals WHERE id = $1',
+      [id]
     );
-  }
 
-  const result = await query('DELETE FROM deals WHERE id = $1 RETURNING id', [id]);
-  return { deleted: true, id: result.rows[0].id };
-};
+    if (dealResult.rows.length === 0) {
+      throw createError('Deal not found.', 404);
+    }
+
+    const deal = dealResult.rows[0];
+    if (!deal.is_archived && !['dead', 'closed'].includes(deal.stage)) {
+      throw createError(
+        'Archive the deal first, or mark it dead/closed before permanently deleting it.',
+        409
+      );
+    }
+
+    const result = await client.query('DELETE FROM deals WHERE id = $1 RETURNING id', [id]);
+    const propertyDeleted = await purgePropertyIfInactiveOnly(client, deal.property_id, id);
+
+    return {
+      deleted: true,
+      id: result.rows[0].id,
+      property_deleted: propertyDeleted,
+    };
+  });
 
 module.exports = {
   createDeal,

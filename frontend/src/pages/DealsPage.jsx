@@ -199,7 +199,7 @@ export default function DealsPage() {
           className="input w-auto"
         >
           <option value="">All Stages</option>
-          {Object.entries(STAGE_CONFIG).map(([key, cfg]) => (
+          {Object.entries(STAGE_CONFIG).filter(([key]) => key !== 'dead').map(([key, cfg]) => (
             <option key={key} value={key}>{cfg.label}</option>
           ))}
         </select>
