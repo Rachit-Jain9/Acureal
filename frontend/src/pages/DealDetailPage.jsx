@@ -10,6 +10,8 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Loader2,
+  Presentation,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -23,6 +25,9 @@ import {
 import useAuthStore from '../store/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Badge from '../components/common/Badge';
+import { toast } from '../components/common/Toast';
+import { exportsAPI } from '../services/api';
+import { downloadAxiosResponse } from '../utils/download';
 import {
   STAGE_CONFIG,
   STAGE_TRANSITIONS,
@@ -126,6 +131,7 @@ export default function DealDetailPage() {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
+  const [exportingPptx, setExportingPptx] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const canEdit = user?.role === 'admin' || user?.role === 'analyst';
@@ -191,6 +197,20 @@ export default function DealDetailPage() {
     }
   };
 
+  const handleExportPptx = async () => {
+    setExportingPptx(true);
+    try {
+      const response = await exportsAPI.dealPptx(id);
+      const safeName = (deal?.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      downloadAxiosResponse(response, `redip-${safeName}.pptx`);
+      toast.success('PPTX deck downloaded');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'PPTX export failed');
+    } finally {
+      setExportingPptx(false);
+    }
+  };
+
   // ── Loading / error states ────────────────────────────────────────────────
   if (isLoading) {
     return <LoadingSpinner className="py-24" />;
@@ -242,6 +262,16 @@ export default function DealDetailPage() {
 
         {/* Header action buttons */}
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          {canEdit && (
+            <button
+              onClick={handleExportPptx}
+              disabled={exportingPptx}
+              className="btn btn-secondary flex items-center gap-1 text-sm"
+            >
+              {exportingPptx ? <Loader2 size={13} className="animate-spin" /> : <Presentation size={13} />}
+              Export Deck
+            </button>
+          )}
           {canEdit && (
             <button
               onClick={handleEditOpen}

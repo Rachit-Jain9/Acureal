@@ -12,6 +12,12 @@ const APPROVAL_READY_STATUSES = new Set(['validated', 'approved']);
 const OPEN_RISK_STATUSES = new Set(['open', 'flagged']);
 const STRUCTURED_DEAL_TYPES = new Set(['jv', 'jda', 'revenue_share', 'area_share', 'profit_share', 'hybrid']);
 
+const num = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const uniquePush = (list, value) => {
   if (value && !list.includes(value)) {
     list.push(value);
@@ -233,8 +239,33 @@ const deriveNextSteps = ({
   } else if (financials.irr_pct == null || financials.total_revenue_cr == null || financials.total_cost_cr == null) {
     uniquePush(
       groups['Financing / Investor Actions'],
-      'Refresh the financial model inputs so IRR, total cost, and total revenue are fully populated before IC circulation.',
+      'Refresh the financial model inputs so IRR, total cost, and total revenue are fully populated before Investor-Grade circulation.',
     );
+  }
+
+  if (financials) {
+    const irrPct = num(financials.irr_pct);
+    const grossMarginPct = num(financials.gross_margin_pct);
+    const totalRevenueCr = num(financials.total_revenue_cr);
+    const totalCostCr = num(financials.total_cost_cr);
+    const askPriceCr = num(financials.land_ask_price_cr);
+    const residualLandValueCr = num(financials.residual_land_value_cr);
+
+    if (
+      (irrPct !== null && irrPct < 0)
+      || (grossMarginPct !== null && grossMarginPct < 0)
+      || (totalRevenueCr !== null && totalCostCr !== null && totalRevenueCr < totalCostCr)
+    ) {
+      uniquePush(
+        groups['Commercial / Negotiation Actions'],
+        'Reset pricing, cost, or product assumptions before re-circulating the opportunity because the current underwriting is value-destructive.',
+      );
+    } else if (askPriceCr !== null && residualLandValueCr !== null && askPriceCr > residualLandValueCr) {
+      uniquePush(
+        groups['Commercial / Negotiation Actions'],
+        'Re-open commercial negotiations because the stored ask remains above the current residual land value indication.',
+      );
+    }
   }
 
   if (summary.critical_or_high_risk_count > 0) {
@@ -247,14 +278,14 @@ const deriveNextSteps = ({
   if (deal?.stage === 'ic_review' || deal?.stage === 'negotiation' || summary.readiness_pct >= 60) {
     uniquePush(
       groups['Reporting / Export Actions'],
-      'Generate an updated IC-ready summary with risks, approvals, and current headline economics before the next decision meeting.',
+      'Generate an updated Investor-Grade summary with risks, approvals, and current headline economics before the next decision meeting.',
     );
   }
 
   if (summary.readiness_pct < 45) {
     uniquePush(
       groups['Immediate DD Actions'],
-      'Bring the deal to minimum diligence readiness before pushing it deeper into negotiation or committee workflow.',
+      'Bring the deal to minimum diligence readiness before pushing it deeper into negotiation or investor-review workflow.',
     );
   }
 

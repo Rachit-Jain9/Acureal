@@ -32,6 +32,11 @@ const ASSET_CLASSES = [
 
 const INCOME_CLASSES     = new Set(['commercial_office', 'retail', 'industrial']);
 const HOSPITALITY_CLASSES = new Set(['hospitality']);
+const EXIT_STRATEGY_OPTIONS = [
+  { value: 'cap_rate_sale', label: 'Cap Rate Sale' },
+  { value: 'lrd', label: 'LRD' },
+  { value: 'forward_purchase', label: 'Forward Purchase' },
+];
 
 // Per-class input field definitions
 const FIELD_DEFS = {
@@ -41,6 +46,7 @@ const FIELD_DEFS = {
     { name: 'loadingFactor',          label: 'Loading Factor (add-on to gross)', type: 'number', step: '0.01', min: '0', max: '1', placeholder: '0.15', hint: 'Enter 0.15 for 15% loading. Saleable area = Gross built-up area × (1 + loading factor).' },
     { name: 'avgUnitSizeSqft',        label: 'Avg Unit Size (saleable sqft)',  type: 'number', step: '10',   min: '100', placeholder: '1200', hint: 'Optional. Number of units = Saleable area ÷ Avg unit size. Bengaluru 2BHK: 1,000–1,400 sqft; 3BHK: 1,500–2,200 sqft.' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '4500' },
+    { name: 'gstPct',                 label: 'GST on Construction (%)',          type: 'number', step: '0.5',  placeholder: '18', hint: 'GST on construction. Under-construction residential: 1–5% (affordable) or 18% (commercial). Enter as a percentage (e.g. 18 for 18%).' },
     { name: 'sellingRatePerSqft',     label: 'Selling Rate (₹/sqft)',           type: 'number', placeholder: '8000' },
     { name: 'landCostCr',               label: 'Land Cost (₹ Cr)',                  type: 'number', step: '0.01', placeholder: '25' },
     { name: 'approvalCostPerSqft',      label: 'Approval Cost (₹/sqft GFA)',        type: 'number', step: '10',   placeholder: '200', hint: 'BMRDA/BBMP plan sanction, OC, utilities — typically ₹100–500/sqft of gross built-up area' },
@@ -65,6 +71,7 @@ const FIELD_DEFS = {
     { name: 'sellingRatePerSqft',      label: 'Selling Rate (₹/sqft)',           type: 'number', placeholder: '1350', hint: '₹1,350/sqft ≈ ₹12,150/sqyd. Convert: ÷ 9 to get sqft rate' },
     { name: 'landCostCr',             label: 'Land Cost (₹ Cr)',                type: 'number', step: '0.01', placeholder: '20' },
     { name: 'devCostPerSqft',         label: 'Development Cost (₹/sqft land)', type: 'number', placeholder: '250', hint: 'Roads, utilities, landscaping on total land area' },
+    { name: 'gstPct',                 label: 'GST on Dev. Works (%)',           type: 'number', step: '0.5',  placeholder: '12', hint: 'GST on civil/infrastructure development works. Typically 12% for plotted layouts. Enter as a percentage (e.g. 12 for 12%).' },
     { name: 'approvalCostPerSqft',    label: 'Approval Cost (₹/sqft land)',     type: 'number', step: '5',    placeholder: '80', hint: 'BMRDA layout approval, DTCP sanction — typically ₹50–200/sqft of total land' },
     { name: 'marketingCostPct',       label: 'Marketing Cost (% of revenue)',   type: 'number', step: '0.1',  placeholder: '4' },
     { name: 'financeCostPct',         label: 'Finance Cost (% pa)',             type: 'number', step: '0.1',  placeholder: '12' },
@@ -74,8 +81,9 @@ const FIELD_DEFS = {
   commercial_office: [
     { name: 'leasableAreaSqft',       label: 'Leasable Area (sqft)',            type: 'number', placeholder: '100000' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '6000', hint: 'Grade A office: ₹5,000–8,000/sqft' },
+    { name: 'gstPct',                 label: 'GST on Construction (%)',          type: 'number', step: '0.5',  placeholder: '18', hint: 'GST on construction. Commercial: typically 18%. Enter as a percentage (e.g. 18 for 18%).' },
     { name: 'landCostCr',             label: 'Land Cost (₹ Cr)',                type: 'number', step: '0.01', placeholder: '40' },
-    { name: 'approvalCostCr',         label: 'Approval Cost (₹ Cr)',            type: 'number', step: '0.01', placeholder: '3' },
+    { name: 'approvalCostPerSqft',    label: 'Approval Cost (₹/sqft leasable)', type: 'number', step: '10',   placeholder: '150', hint: 'Plan sanction, OC, fire NOC, utilities — typically ₹100–500/sqft of leasable area' },
     { name: 'baseRentPerSqftMonth',   label: 'Base Rent (₹/sqft/month)',        type: 'number', placeholder: '85', hint: 'Bengaluru Grade A: ₹70–120/sqft/month' },
     { name: 'rentEscalationPct',      label: 'Rent Escalation (% pa)',          type: 'number', step: '0.5',  placeholder: '5' },
     { name: 'vacancyPct',             label: 'Vacancy (%)',                     type: 'number', step: '1',    placeholder: '10' },
@@ -84,17 +92,23 @@ const FIELD_DEFS = {
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2', hint: 'Months of base rent paid to broker' },
     { name: 'entryCapRate',           label: 'Entry Cap Rate (%)',              type: 'number', step: '0.25', placeholder: '7', hint: 'Prime Bengaluru office: 6.5–8%' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '7.5', hint: 'Typically 25–50 bps wider than entry' },
+    { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
+    { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdRefinanceYear',       label: 'LRD Refinance Year',              type: 'number', step: '1', min: '1', max: '20', placeholder: '2', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'forwardPurchasePriceCr', label: 'Forward Purchase Price (₹ Cr)',   type: 'number', step: '0.01', min: '0', placeholder: '180', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '5' },
     { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3' },
-    { name: 'debtCoverage',           label: 'Debt Coverage (LTV, 0–1)',        type: 'number', step: '0.05', placeholder: '0.65' },
+    { name: 'debtCoverage',           label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '14' },
   ],
   retail: [
     { name: 'leasableAreaSqft',       label: 'Leasable Area (sqft)',            type: 'number', placeholder: '80000' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '5500', hint: 'Retail mall: ₹4,500–7,000/sqft' },
+    { name: 'gstPct',                 label: 'GST on Construction (%)',          type: 'number', step: '0.5',  placeholder: '18', hint: 'GST on construction. Commercial: typically 18%. Enter as a percentage (e.g. 18 for 18%).' },
     { name: 'landCostCr',             label: 'Land Cost (₹ Cr)',                type: 'number', step: '0.01', placeholder: '30' },
-    { name: 'approvalCostCr',         label: 'Approval Cost (₹ Cr)',            type: 'number', step: '0.01', placeholder: '2.5' },
+    { name: 'approvalCostPerSqft',    label: 'Approval Cost (₹/sqft leasable)', type: 'number', step: '10',   placeholder: '150', hint: 'Plan sanction, fire NOC, OC, utilities — typically ₹100–500/sqft of leasable area' },
     { name: 'baseRentPerSqftMonth',   label: 'Inline Tenant Rent (₹/sqft/mo)', type: 'number', placeholder: '120', hint: 'Non-anchor inline stores' },
     { name: 'anchorPct',              label: 'Anchor Tenant Area (%)',          type: 'number', step: '5',    placeholder: '40', hint: 'Anchor tenants get lower rent (typically 30–50% of area)' },
     { name: 'anchorRentDiscount',     label: 'Anchor Rent Discount (%)',        type: 'number', step: '5',    placeholder: '20', hint: 'Discount applied to anchor tenant rent vs inline rate' },
@@ -104,25 +118,36 @@ const FIELD_DEFS = {
     { name: 'tiPerSqft',              label: 'Tenant Improvements (₹/sqft)',    type: 'number', placeholder: '800' },
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8', hint: 'Retail: 7.5–9%' },
+    { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
+    { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.60', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdRefinanceYear',       label: 'LRD Refinance Year',              type: 'number', step: '1', min: '1', max: '20', placeholder: '3', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'forwardPurchasePriceCr', label: 'Forward Purchase Price (₹ Cr)',   type: 'number', step: '0.01', min: '0', placeholder: '160', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
     { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3' },
-    { name: 'debtCoverage',           label: 'Debt Coverage (LTV)',             type: 'number', step: '0.05', placeholder: '0.60' },
+    { name: 'debtCoverage',           label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.60' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '15' },
   ],
   industrial: [
     { name: 'leasableAreaSqft',       label: 'Industrial Floor Area (sqft)',    type: 'number', placeholder: '200000' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '1800', hint: 'Industrial shed/warehouse: ₹1,200–2,500/sqft' },
+    { name: 'gstPct',                 label: 'GST on Construction (%)',          type: 'number', step: '0.5',  placeholder: '18', hint: 'GST on construction. Industrial: typically 18%. Enter as a percentage (e.g. 18 for 18%).' },
     { name: 'landCostCr',             label: 'Land Cost (₹ Cr)',                type: 'number', step: '0.01', placeholder: '25' },
-    { name: 'approvalCostCr',         label: 'Approval Cost (₹ Cr)',            type: 'number', step: '0.01', placeholder: '2' },
+    { name: 'approvalCostPerSqft',    label: 'Approval Cost (₹/sqft GFA)',      type: 'number', step: '5',    placeholder: '75', hint: 'Layout approval, utilities, fire NOC — typically ₹30–150/sqft of industrial floor area' },
     { name: 'baseRentPerSqftMonth',   label: 'Base Rent (₹/sqft/month)',        type: 'number', placeholder: '28', hint: 'Bengaluru industrial: ₹18–40/sqft/month' },
     { name: 'rentEscalationPct',      label: 'Rent Escalation (% pa)',          type: 'number', step: '0.5',  placeholder: '4', hint: 'Industrial leases: typically 3-5% pa or 15% every 3 years' },
     { name: 'vacancyPct',             label: 'Vacancy (%)',                     type: 'number', step: '1',    placeholder: '7', hint: 'Industrial: typically 5–10% in strong markets' },
     { name: 'opexPct',                label: 'Operating Expenses (% of EGR)',   type: 'number', step: '1',    placeholder: '15', hint: 'Industrial is lower opex than office' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8.5', hint: 'Warehousing/logistics: 7.5–9.5%' },
+    { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
+    { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdRefinanceYear',       label: 'LRD Refinance Year',              type: 'number', step: '1', min: '1', max: '20', placeholder: '3', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'forwardPurchasePriceCr', label: 'Forward Purchase Price (₹ Cr)',   type: 'number', step: '0.01', min: '0', placeholder: '140', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
     { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '1.5' },
-    { name: 'debtCoverage',           label: 'Debt Coverage (LTV)',             type: 'number', step: '0.05', placeholder: '0.65' },
+    { name: 'debtCoverage',           label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65' },
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '13' },
   ],
@@ -131,7 +156,8 @@ const FIELD_DEFS = {
     { name: 'constructionCostPerKey',  label: 'Construction Cost (₹/key)',            type: 'number', placeholder: '8000000', hint: 'All-in cost per key incl. FF&E. Budget: ₹50L–1.5Cr/key' },
     { name: 'preOpeningCostPerKey',    label: 'Pre-Opening Cost (₹/key)',             type: 'number', placeholder: '300000',  hint: 'Staff training, launch marketing, consumables. Typically ₹2–5L/key' },
     { name: 'landCostCr',              label: 'Land Cost (₹ Cr)',                     type: 'number', step: '0.01', placeholder: '20' },
-    { name: 'approvalCostCr',          label: 'Approval Cost (₹ Cr)',                 type: 'number', step: '0.01', placeholder: '2' },
+    { name: 'approvalCostPerSqft',     label: 'Approval Cost (₹/sqft GFA)',           type: 'number', step: '10',   placeholder: '150', hint: 'Plan sanctions, fire NOC, FSSAI, utilities — applied to est. GFA (keys × ~600 sqft). Typically ₹100–400/sqft.' },
+    { name: 'gstPct',                  label: 'GST on Construction (%)',              type: 'number', step: '0.5',  placeholder: '18', hint: 'GST on construction cost. Typically 18%. Enter as a percentage (e.g. 18 for 18%).' },
     { name: 'adr',                     label: 'Average Daily Rate (₹/night)',         type: 'number', placeholder: '6000', hint: 'Stabilized ADR. Bengaluru mid-scale: ₹4k–8k; luxury: ₹10k–25k' },
     { name: 'stabilizedOccPct',        label: 'Stabilized Occupancy (%)',             type: 'number', step: '1',    placeholder: '65', hint: 'Y3+ occupancy. Bengaluru hotels: 60–75% stabilized' },
     { name: 'adrGrowthPct',            label: 'ADR Growth (% pa)',                    type: 'number', step: '0.5',  placeholder: '5' },
@@ -140,9 +166,14 @@ const FIELD_DEFS = {
     { name: 'gopMarginPct',            label: 'GOP Margin (% of total revenue)',      type: 'number', step: '1',    placeholder: '35', hint: 'Gross Operating Profit. India branded hotels: 30–45%' },
     { name: 'ebitdaMarginPct',         label: 'EBITDA Margin (% of total revenue)',   type: 'number', step: '1',    placeholder: '28', hint: 'After management fee & reserve. India hotels: 22–32%' },
     { name: 'exitCapRate',             label: 'Exit Cap Rate (%)',                    type: 'number', step: '0.25', placeholder: '9',  hint: 'Hotel exit caps India: 8–11%' },
+    { name: 'exitStrategy',            label: 'Exit Strategy',                         type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized operating asset.' },
+    { name: 'lrdLTV',                  label: 'Operating Refi LTV (0–1)',              type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.55', hint: 'Refinance sizing against stabilized entry value during hold.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdInterestRatePct',      label: 'Operating Refi Rate (% pa)',            type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9.5', hint: 'Coupon / all-in cost on the operating refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'lrdRefinanceYear',        label: 'Operating Refi Year',                   type: 'number', step: '1', min: '1', max: '20', placeholder: '3', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
+    { name: 'forwardPurchasePriceCr',  label: 'Forward Purchase Price (₹ Cr)',         type: 'number', step: '0.01', min: '0', placeholder: '220', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',         label: 'Hold Period (years)',                  type: 'number', step: '1',    placeholder: '8' },
     { name: 'projectDurationYears',    label: 'Construction Duration (years)',        type: 'number', step: '0.25', min: '1', max: '15', placeholder: '2.5', hint: 'Typical hotel construction: 2–3 years' },
-    { name: 'debtCoverage',            label: 'Debt LTV (0–1)',                       type: 'number', step: '0.05', placeholder: '0.55' },
+    { name: 'debtCoverage',            label: 'Debt LTV / LTC (0–1)',                 type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.55' },
     { name: 'interestRatePct',         label: 'Interest Rate (% pa)',                 type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'contingencyPct',          label: 'Contingency (% of construction)',      type: 'number', step: '1',    placeholder: '5' },
     { name: 'discountRatePct',         label: 'Discount Rate (%)',                    type: 'number', step: '0.1',  placeholder: '15' },
@@ -157,35 +188,41 @@ const DEFAULT_VALUES = {
     debtLTV: '0', debtRatePct: '14',
     projectDurationYears: '3', discountRatePct: '14',
     constructionStartMonths: '3', constructionEndMonths: '30',
+    gstPct: '18',
   },
   plotted_development: {
     saleableLandPct: '55', avgPlotSizeSqft: '1200', devCostPerSqft: '250',
     marketingCostPct: '4', financeCostPct: '12',
     projectDurationYears: '2', discountRatePct: '14',
+    gstPct: '12',
   },
   commercial_office: {
     rentEscalationPct: '5', vacancyPct: '10', opexPct: '20',
     tiPerSqft: '500', lcMonths: '2',
-    entryCapRate: '7', exitCapRate: '7.5', holdPeriodYears: '5',
+    entryCapRate: '7', exitCapRate: '7.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '2', holdPeriodYears: '5',
     projectDurationYears: '3', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
+    gstPct: '18',
   },
   retail: {
     anchorPct: '40', anchorRentDiscount: '20',
     rentEscalationPct: '5', vacancyPct: '12', opexPct: '22',
     tiPerSqft: '800', lcMonths: '2',
-    exitCapRate: '8', holdPeriodYears: '7',
+    exitCapRate: '8', exitStrategy: 'cap_rate_sale', lrdLTV: '0.60', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
     projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '15',
+    gstPct: '18',
   },
   industrial: {
     rentEscalationPct: '4', vacancyPct: '7', opexPct: '15',
-    exitCapRate: '8.5', holdPeriodYears: '7',
+    exitCapRate: '8.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
     projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '13',
+    gstPct: '18',
   },
   hospitality: {
     stabilizedOccPct: '65', adrGrowthPct: '5', fbRevPct: '25', otherRevPct: '10',
-    gopMarginPct: '35', ebitdaMarginPct: '28', exitCapRate: '9',
+    gopMarginPct: '35', ebitdaMarginPct: '28', exitCapRate: '9', exitStrategy: 'cap_rate_sale', lrdLTV: '0.55', lrdInterestRatePct: '9.5', lrdRefinanceYear: '3',
     holdPeriodYears: '8', projectDurationYears: '2.5',
     debtCoverage: '0.55', interestRatePct: '10.5', contingencyPct: '5', discountRatePct: '15',
+    gstPct: '18',
   },
 };
 
@@ -271,6 +308,7 @@ function buildInitialInputs(financials, targetClass, deal) {
       sellingRatePerSqft:      financials.selling_rate_per_sqft ?? '',
       landCostCr:              financials.land_cost_cr ?? '',
       approvalCostPerSqft:     approvalPerSqft,
+      gstPct:                  stored.gstPct ?? defaults.gstPct,
       marketingCostPct:        financials.marketing_cost_pct ?? defaults.marketingCostPct,
       financeCostPct:          financials.finance_cost_pct ?? defaults.financeCostPct,
       developerMarginPct:      financials.developer_margin_pct ?? defaults.developerMarginPct,
@@ -401,10 +439,12 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const data = { assetClass };
+    const fieldLookup = new Map((FIELD_DEFS[assetClass] || []).map((field) => [field.name, field]));
     for (const [k, v] of Object.entries(inputs)) {
       if (v === '' || v == null) { data[k] = undefined; continue; }
       // effectiveDate is a date string, not a number
       if (k === 'effectiveDate') { data[k] = String(v); continue; }
+      if (fieldLookup.get(k)?.type === 'select') { data[k] = String(v); continue; }
       data[k] = Number(v);
     }
     // Client-side required-field guard per asset class
@@ -428,7 +468,9 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
     onSubmit(data);
   };
 
-  const fields = FIELD_DEFS[assetClass] || [];
+  const fields = (FIELD_DEFS[assetClass] || []).filter(
+    (field) => !field.visibleWhen || field.visibleWhen(inputs, assetClass)
+  );
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -474,18 +516,35 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
                 {field.hint}
               </p>
             )}
-            <input
-              id={field.name}
-              name={field.name}
-              type={field.type}
-              step={field.step}
-              min={field.min}
-              max={field.max}
-              placeholder={field.placeholder}
-              value={inputs[field.name] ?? ''}
-              onChange={handleChange}
-              className="input w-full"
-            />
+            {field.type === 'select' ? (
+              <select
+                id={field.name}
+                name={field.name}
+                value={inputs[field.name] ?? ''}
+                onChange={handleChange}
+                className="input w-full"
+              >
+                {(field.options || []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id={field.name}
+                name={field.name}
+                type={field.type}
+                step={field.step}
+                min={field.min}
+                max={field.max}
+                placeholder={field.placeholder}
+                value={inputs[field.name] ?? ''}
+                onChange={handleChange}
+                onWheel={(e) => e.target.blur()}
+                className="input w-full"
+              />
+            )}
           </div>
         ))}
       </div>

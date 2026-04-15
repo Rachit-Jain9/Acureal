@@ -70,4 +70,21 @@ describe('dealExport.service helpers', () => {
 
     expect(recommendation.label).toBe('Incomplete Underwriting');
   });
+
+  test('flags reprice or rework when the stored underwriting is value-destructive', () => {
+    const recommendation = computeRecommendation({
+      ddSummary: { open_deal_breakers: 0, completion_pct: 80 },
+      riskSummary: { critical: 0, high: 0, medium: 0, low: 0 },
+      hasFinancialModel: true,
+      irrPct: -18.6,
+      grossMarginPct: -50.8,
+      totalRevenueCr: 76.9,
+      totalCostCr: 115.99,
+      askPriceCr: 160,
+      residualLandValueCr: 110,
+    });
+
+    expect(recommendation.label).toBe('Reprice / Rework');
+    expect(recommendation.tone).toBe('negative');
+  });
 });

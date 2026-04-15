@@ -3,13 +3,26 @@
 const axios = require('axios');
 const { query } = require('../config/database');
 const { getDownloadUrl } = require('../config/storage');
-const { runGeminiInline } = require('./ai/providerRegistry');
+const {
+  getProviderAvailability,
+  runGeminiInline,
+  runClaudeReasoning,
+} = require('./ai/providerRegistry');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Gemini client (lazy init so tests don't crash without API key)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_UPLOAD_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50;
+const MAX_EXTRACTION_FILE_SIZE_MB = Math.max(
+  1,
+  Math.min(
+    parseInt(process.env.DOCUMENT_EXTRACTION_MAX_FILE_SIZE_MB, 10) || MAX_UPLOAD_FILE_SIZE_MB,
+    MAX_UPLOAD_FILE_SIZE_MB,
+  ),
+);
+const MAX_FILE_BYTES = MAX_EXTRACTION_FILE_SIZE_MB * 1024 * 1024;
+const CLAUDE_NORMALIZATION_TIMEOUT_MS = 12000;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Extraction prompts keyed by doc_type
@@ -333,7 +346,9 @@ async function fetchFileAsBase64(fileUrl) {
   const buffer = Buffer.from(response.data);
 
   if (buffer.length > MAX_FILE_BYTES) {
-    throw new Error(`File size ${buffer.length} bytes exceeds 10 MB limit`);
+    throw new Error(
+      `File size ${buffer.length} bytes exceeds the AI extraction limit of ${MAX_EXTRACTION_FILE_SIZE_MB} MB`
+    );
   }
 
   return {
@@ -367,6 +382,14 @@ async function callGemini(prompt, base64Data, mimeType) {
     mimeType,
   });
 }
+
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
 
 function parseJsonResponse(text) {
   // Strip markdown code fences if present
@@ -402,39 +425,84 @@ function computeConfidenceScores(structuredFields) {
   return scores;
 }
 
+function pickBestStructuredFields(primaryFields, secondaryFields) {
+  if (!secondaryFields) return primaryFields;
+  if (!primaryFields) return secondaryFields;
+
+  const primaryScore = computeConfidenceScores(primaryFields)._overall || 0;
+  const secondaryScore = computeConfidenceScores(secondaryFields)._overall || 0;
+  return secondaryScore > primaryScore ? secondaryFields : primaryFields;
+}
+
+async function normalizeStructuredFieldsWithClaude({ docType, rawText, structuredFields }) {
+  if (!structuredFields || !getProviderAvailability().claude) {
+    return null;
+  }
+
+  const systemPrompt = `You validate structured extraction output for Indian real-estate documents.
+
+STRICT RULES:
+- Return ONLY valid JSON.
+- Preserve the exact shape of the provided extracted_json object.
+- Do not invent facts, numbers, dates, parties, or clauses.
+- If a field is not explicitly supported by the source extraction, keep the current value or set it to null / empty.
+- Normalize obvious formatting only: dates, number strings, whitespace, duplicated array values.
+- Be conservative. Prefer missing over guessed.`;
+
+  const normalized = await withTimeout(
+    runClaudeReasoning({
+      systemPrompt,
+      payload: {
+        doc_type: docType,
+        extracted_json: structuredFields,
+        raw_extraction_text: rawText,
+      },
+      maxTokens: 1600,
+    }),
+    CLAUDE_NORMALIZATION_TIMEOUT_MS,
+    'Claude extraction normalization'
+  );
+
+  return parseJsonResponse(normalized);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Core functions
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function classifyDocument(fileUrl, fileName, mimeType) {
-  const effectiveMime = inferMimeType(fileName, mimeType);
-  const { base64 } = await fetchFileAsBase64(fileUrl);
-  const responseText = await callGemini(CLASSIFY_PROMPT, base64, effectiveMime);
-
+async function classifyDocumentContent(base64Data, mimeType) {
+  const responseText = await callGemini(CLASSIFY_PROMPT, base64Data, mimeType);
   const parsed = parseJsonResponse(responseText);
   return parsed.doc_type || 'other';
 }
 
+async function classifyDocument(fileUrl, fileName, mimeType) {
+  const effectiveMime = inferMimeType(fileName, mimeType);
+  const { base64 } = await fetchFileAsBase64(fileUrl);
+  return classifyDocumentContent(base64, effectiveMime);
+}
+
 async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId = null) {
+  const providerLabel = getProviderAvailability().claude ? 'gemini_claude' : 'gemini';
   // Create extraction record in 'processing' state
   const insertResult = await query(
     `INSERT INTO document_extractions
        (document_id, deal_id, extraction_status, provider)
-     VALUES ($1, $2, 'processing', 'gemini')
+     VALUES ($1, $2, 'processing', $3)
      RETURNING *`,
-    [documentId, dealId || null],
+    [documentId, dealId || null, providerLabel],
   );
   const extraction = insertResult.rows[0];
   const extractionId = extraction.id;
 
   try {
     const effectiveMime = inferMimeType(fileName, mimeType);
-    const { base64, sizeBytes } = await fetchFileAsBase64(fileUrl);
+    const { base64 } = await fetchFileAsBase64(fileUrl);
 
     // Step 1: classify
     let docType;
     try {
-      docType = await classifyDocument(fileUrl, fileName, effectiveMime);
+      docType = await classifyDocumentContent(base64, effectiveMime);
     } catch {
       docType = 'other';
     }
@@ -450,6 +518,23 @@ async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId =
       structuredFields = parseJsonResponse(rawText);
     } catch (e) {
       parseError = `JSON parse failed: ${e.message}`;
+    }
+
+    if (structuredFields) {
+      try {
+        structuredFields = pickBestStructuredFields(
+          structuredFields,
+          await normalizeStructuredFieldsWithClaude({
+            docType,
+            rawText,
+            structuredFields,
+          })
+        );
+      } catch (normalizationError) {
+        parseError = parseError
+          ? `${parseError}; Claude normalization skipped: ${normalizationError.message}`
+          : `Claude normalization skipped: ${normalizationError.message}`;
+      }
     }
 
     const confidenceScores = structuredFields ? computeConfidenceScores(structuredFields) : {};
@@ -479,8 +564,6 @@ async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId =
         extractionId,
       ],
     );
-
-    return updateResult.rows[0];
 
     // Also update document table with doc_type if column exists
     try {

@@ -29,6 +29,10 @@ const fxRoutes = require('./routes/fx.routes');
 
 const app = express();
 
+// Vercel and other reverse proxies forward client IPs via X-Forwarded-* headers.
+// Trust the first proxy hop so express-rate-limit and auth middleware read them correctly.
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 

@@ -36,6 +36,7 @@ const modelValidation = [
   // Soft costs
   body('approvalCostCr').optional().isFloat({ min: 0 }),
   body('approvalCostPerSqft').optional().isFloat({ min: 0 }),
+  body('gstPct').optional().isFloat({ min: 0, max: 100 }),
   body('architectFeePct').optional().isFloat({ min: 0, max: 10 }),
   body('pmcFeePct').optional().isFloat({ min: 0, max: 10 }),
   // Revenue & pricing
@@ -68,8 +69,13 @@ const modelValidation = [
   body('lcMonths').optional().isFloat({ min: 0, max: 24 }),
   body('entryCapRate').optional().isFloat({ min: 1, max: 30 }),
   body('exitCapRate').optional().isFloat({ min: 1, max: 30 }),
+  body('exitStrategy').optional().isIn(['cap_rate_sale', 'lrd', 'forward_purchase']),
   body('holdPeriodYears').optional().isInt({ min: 1, max: 20 }),
   body('debtCoverage').optional().isFloat({ min: 0, max: 1 }),
+  body('lrdLTV').optional().isFloat({ min: 0, max: 1 }),
+  body('lrdInterestRatePct').optional().isFloat({ min: 0, max: 50 }),
+  body('lrdRefinanceYear').optional().isFloat({ min: 1, max: 20 }),
+  body('forwardPurchasePriceCr').optional().isFloat({ min: 0 }),
   body('interestRatePct').optional().isFloat({ min: 0, max: 50 }),
   body('anchorPct').optional().isFloat({ min: 0, max: 100 }),
   body('anchorRentDiscount').optional().isFloat({ min: 0, max: 80 }),

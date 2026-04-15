@@ -97,7 +97,7 @@ const generateClaudeBrief = async (dealData, pipelineStats, notes, benchmarks, r
 
   const hasNotes = notes.micro_market?.length || notes.slowdown?.length || notes.strategic?.length;
 
-  const systemPrompt = `You are a senior buy-side real estate investment analyst at REDIP, a Bengaluru-focused real estate development intelligence platform. You report directly to the Investment Committee.
+  const systemPrompt = `You are a senior buy-side real estate investment analyst at REDIP, a Bengaluru-focused real estate development intelligence platform. You report directly to the investment review team.
 
 Your job is to generate a precise, data-driven ANALYSIS — not a summary. Cross-reference everything provided.
 
@@ -109,7 +109,7 @@ Rules:
 - Identify which micro-markets have the strongest momentum (high YoY growth) vs. which appear soft
 - Flag real risks: stale deals, IRR outliers vs. market comps, micro-markets with no internal pipeline coverage, concentration risk
 - Reference actual company names, micro-markets, and specific ₹ figures — never use placeholders
-- Tone: direct, institutional, IC-ready — like a GP briefing a Limited Partner
+- Tone: direct, institutional, investor-grade — like a GP briefing a Limited Partner
 - No fluff. No markdown. Plain text paragraphs only. No bullet points.`;
 
   const payload = {
@@ -357,14 +357,14 @@ const getDealAnalysis = async (dealId) => {
   const fin = finResult.rows[0] || null;
   const kpis = fin?.model_params?.kpis || {};
 
-  const systemPrompt = `You are a senior real estate investment analyst at REDIP, a Bengaluru-focused platform. Your role is to generate a concise, IC-ready deal analysis.
+  const systemPrompt = `You are a senior real estate investment analyst at REDIP, a Bengaluru-focused platform. Your role is to generate a concise, investor-grade deal analysis.
 
 Rules:
 - 180–240 words, exactly 4 sections: Deal Overview, Market Positioning, Risk Flags, Recommendation
 - Use specific numbers from the data provided — no vague statements
 - Cross-reference deal pricing/IRR against market benchmarks and comps
 - Flag real risks: pricing vs RLV, stage vs activity gap, comp premium/discount
-- Tone: direct, institutional — like a senior analyst briefing the Investment Committee
+- Tone: direct, institutional — like a senior analyst briefing the investment review team
 - No markdown. No bullets. Plain text paragraphs only.`;
 
   const payload = {

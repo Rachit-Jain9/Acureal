@@ -36,7 +36,7 @@ const ALLOWED_TYPES = [
   'image/png',
   'image/jpeg',
 ];
-const MAX_SIZE_MB = 10;
+const MAX_SIZE_MB = 50;
 
 function formatBytes(bytes) {
   if (!bytes) return '-';
@@ -204,7 +204,7 @@ export default function DocumentsTab({ dealId }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                File <span className="text-gray-400">(PDF, DOC, DOCX, XLS, XLSX, PNG, JPG · max 10 MB)</span>
+                File <span className="text-gray-400">(PDF, DOC, DOCX, XLS, XLSX, PNG, JPG · max 50 MB)</span>
               </label>
               <input
                 ref={fileRef}

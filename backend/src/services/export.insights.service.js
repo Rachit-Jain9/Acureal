@@ -132,18 +132,18 @@ const buildPayload = ({
     : [],
 });
 
-const SYSTEM_PROMPT = `You are an investment committee analyst at an India-focused real estate private equity firm. You produce disciplined, grounded, quantitative IC notes.
+const SYSTEM_PROMPT = `You are an investment-review analyst at an India-focused real estate private equity firm. You produce disciplined, grounded, quantitative investor-grade notes.
 
 STRICT RULES:
 - Respond ONLY with valid JSON matching the schema below. No markdown fences, no prose before/after.
 - Reference only the numbers and flags provided. Never invent market rates, comps, zoning facts, legal status, or approvals.
 - If a KPI is missing, say so explicitly rather than guessing.
-- Be blunt about weaknesses. IC notes that only praise are useless.
+- Be blunt about weaknesses. Investor-grade notes that only praise are useless.
 - India market conventions: values in INR Crore, IRR in percent, areas in sqft.
 
 SCHEMA:
 {
-  "ic_opinion": "3-5 sentence IC opinion. Lead with a clear stance (proceed / proceed with conditions / pass). Cite 2-3 specific KPIs from the payload. Name one material weakness.",
+  "ic_opinion": "3-5 sentence investor-grade opinion. Lead with a clear stance (proceed / proceed with conditions / pass). Cite 2-3 specific KPIs from the payload. Name one material weakness.",
   "top_risks": [
     { "title": "Short risk title (max 8 words)", "detail": "1-2 sentence explanation anchored in the data" }
   ],
@@ -173,7 +173,7 @@ const generateDealInsights = async ({
     next_steps: [],
     confidence: null,
     disclaimer:
-      'AI-generated IC opinion is informational only. Verify all facts and risks before any investment decision.',
+      'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
   });
 
   if (!getProviderAvailability().claude) {
@@ -233,7 +233,7 @@ const generateDealInsights = async ({
       ? parsed.confidence
       : 'medium',
     disclaimer:
-      'AI-generated IC opinion based on stored deal data. Verify all facts and risks before any investment decision.',
+      'AI-generated Investor-Grade opinion based on stored deal data. Verify all facts and risks before any investment decision.',
   };
 };
 

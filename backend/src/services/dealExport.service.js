@@ -1,7 +1,9 @@
 const { query } = require('../config/database');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
 const { generateDealInsights } = require('./export.insights.service');
+const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 
 const OPEN_RISK_STATUSES = new Set(['open', 'flagged']);
 const CLOSED_DD_STATUSES = new Set(['completed', 'not_applicable']);
@@ -16,12 +18,21 @@ const DEAL_EXPORT_SQL = `
     p.address AS property_address,
     p.city,
     p.state,
+    NULL::text AS micro_market,
+    p.pincode,
     p.land_area_sqft,
+    p.land_area_acres,
     p.zoning,
     p.survey_number,
     p.owner_name,
     p.circle_rate_per_sqft,
+    p.existing_fsi,
     p.permissible_fsi,
+    p.road_width_mtrs,
+    p.setback_details,
+    p.ownership_type,
+    p.encumbrance_status,
+    p.notes AS property_notes,
     p.lat AS property_lat,
     p.lng AS property_lng,
     p.geocode_status,
@@ -46,6 +57,7 @@ const DEAL_EXPORT_SQL = `
     f.saleable_area_sqft,
     f.gross_area_sqft,
     f.carpet_area_sqft,
+    f.super_builtup_area_sqft,
     f.selling_rate_per_sqft,
     f.construction_cost_per_sqft,
     f.fsi,
@@ -54,6 +66,13 @@ const DEAL_EXPORT_SQL = `
     f.discount_rate_pct,
     f.project_duration_months,
     f.developer_margin_pct,
+    f.developer_profit_cr,
+    f.noi_cr,
+    f.yield_on_cost_pct,
+    f.exit_value_cr,
+    f.entry_value_cr,
+    f.dscr,
+    f.stabilized_noi_cr,
     f.asset_class AS financial_asset_class,
     f.model_params,
     f.cash_flows,
@@ -99,6 +118,15 @@ const humanizeKey = (value) =>
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (match) => match.toUpperCase());
+
+const normalizeCityVariants = (city) => {
+  const normalized = String(city || '').trim().toLowerCase();
+  if (!normalized) return [];
+  if (normalized === 'bengaluru' || normalized === 'bangalore') {
+    return ['bengaluru', 'bangalore'];
+  }
+  return [normalized];
+};
 
 const mapAssetClassToCompType = (assetClass, propertyType) => {
   const normalizedAssetClass = String(assetClass || '').trim().toLowerCase();
@@ -242,11 +270,91 @@ const buildDynamicAssumptions = (inputs) =>
       value,
     }));
 
-const computeRecommendation = ({ ddSummary, riskSummary, hasFinancialModel, irrPct, grossMarginPct }) => {
+const summarizeApprovals = (rows = []) => {
+  const required = rows.filter((item) => item.is_required);
+  const validated = required.filter(
+    (item) => item.is_validated || ['validated', 'approved'].includes(item.status),
+  );
+  const pendingRequired = required.filter(
+    (item) => !(item.is_validated || ['validated', 'approved'].includes(item.status)),
+  );
+
+  return {
+    total: rows.length,
+    required: required.length,
+    validated: validated.length,
+    pendingRequired: pendingRequired.length,
+    available: rows.filter((item) => item.is_available).length,
+    uploaded: rows.filter((item) => item.is_uploaded || item.document_id).length,
+    inProgress: rows.filter((item) => item.status === 'in_progress').length,
+    items: rows,
+  };
+};
+
+const summarizeDocuments = (rows = []) => {
+  const byCategory = rows.reduce((acc, row) => {
+    const key = row.doc_category || 'other';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const imageLike = rows.filter((row) => {
+    const fileType = String(row.file_type || '').toLowerCase();
+    return fileType.startsWith('image/');
+  });
+
+  const planLike = rows.filter((row) =>
+    /(plan|layout|site|drawing|elevation|parcel|survey)/i.test(
+      `${row.name || ''} ${row.description || ''}`,
+    ),
+  );
+
+  const mapLike = rows.filter((row) =>
+    /(map|location|satellite|google|survey|parcel)/i.test(
+      `${row.name || ''} ${row.description || ''}`,
+    ),
+  );
+
+  return {
+    total: rows.length,
+    byCategory,
+    imageCount: imageLike.length,
+    planCount: planLike.length,
+    mapCount: mapLike.length,
+    visuals: {
+      hasImages: imageLike.length > 0,
+      hasPlans: planLike.length > 0,
+      hasMaps: mapLike.length > 0,
+    },
+    featured: rows.slice(0, 8),
+  };
+};
+
+const computeRecommendation = ({
+  ddSummary,
+  riskSummary,
+  hasFinancialModel,
+  irrPct,
+  grossMarginPct,
+  totalRevenueCr,
+  totalCostCr,
+  askPriceCr,
+  residualLandValueCr,
+}) => {
   const critical = Number(riskSummary.critical || 0);
   const high = Number(riskSummary.high || 0);
   const openDealBreakers = Number(ddSummary.open_deal_breakers || 0);
   const ddCompletionPct = Number(ddSummary.completion_pct || 0);
+  const irr = num(irrPct);
+  const grossMargin = num(grossMarginPct);
+  const totalRevenue = num(totalRevenueCr);
+  const totalCost = num(totalCostCr);
+  const askPrice = num(askPriceCr);
+  const residualLandValue = num(residualLandValueCr);
+  const isValueDestructive =
+    (irr !== null && irr < 0)
+    || (grossMargin !== null && grossMargin < 0)
+    || (totalRevenue !== null && totalCost !== null && totalRevenue < totalCost);
 
   if (critical > 0 || openDealBreakers > 0) {
     return {
@@ -260,19 +368,31 @@ const computeRecommendation = ({ ddSummary, riskSummary, hasFinancialModel, irrP
     return {
       label: 'Incomplete Underwriting',
       tone: 'caution',
-      reason: 'Financial model outputs are missing, so the IC view is not yet decision-ready.',
+      reason: 'Financial model outputs are missing, so the Investor-Grade view is not yet decision-ready.',
     };
   }
 
-  if (high >= 2 || ddCompletionPct < 50) {
+  if (isValueDestructive) {
+    return {
+      label: 'Reprice / Rework',
+      tone: 'negative',
+      reason: 'Current underwriting is value-destructive at the stored price and program assumptions, so pricing, cost, or product mix must be reset before the deal is advanced.',
+    };
+  }
+
+  if (
+    high >= 2
+    || ddCompletionPct < 50
+    || (askPrice !== null && residualLandValue !== null && askPrice > residualLandValue)
+  ) {
     return {
       label: 'Proceed With Conditions',
       tone: 'caution',
-      reason: 'The opportunity has potential, but diligence completion or high-severity risk load needs tightening.',
+      reason: 'The opportunity may be actionable, but diligence closure, pricing alignment, or risk load still needs tightening.',
     };
   }
 
-  if ((num(irrPct) || 0) >= 18 && (num(grossMarginPct) || 0) >= 18) {
+  if ((irr || 0) >= 18 && (grossMargin || 0) >= 18) {
     return {
       label: 'Proceed',
       tone: 'positive',
@@ -310,6 +430,23 @@ const fetchCityComps = async ({ city, compType }) => {
   return result.rows;
 };
 
+const fetchCityBenchmarks = async ({ city }) => {
+  const cityVariants = normalizeCityVariants(city);
+  if (!cityVariants.length) return [];
+
+  const result = await query(
+    `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
+            yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub, data_period, is_verified
+     FROM micro_market_benchmarks
+     WHERE LOWER(city) = ANY($1::text[])
+     ORDER BY avg_price_max_per_sqft DESC NULLS LAST, micro_market ASC
+     LIMIT 8`,
+    [cityVariants],
+  );
+
+  return result.rows;
+};
+
 const getDealExportContext = async (dealId) => {
   const dealResult = await query(DEAL_EXPORT_SQL, [dealId]);
   if (!dealResult.rows.length) {
@@ -328,7 +465,7 @@ const getDealExportContext = async (dealId) => {
     sensitivity_matrix: sensitivity,
   };
 
-  const [ddSummaryResult, ddItemsResult, riskSummaryResult, riskItemsResult] = await Promise.all([
+  const [ddSummaryResult, ddItemsResult, riskSummaryResult, riskItemsResult, approvalsResult, documentsResult, cityBenchmarks] = await Promise.all([
     query(
       `SELECT
         COUNT(*) FILTER (WHERE is_required) AS total_required,
@@ -365,15 +502,31 @@ const getDealExportContext = async (dealId) => {
       `SELECT title, severity, category, status, description, mitigation
        FROM risk_flags
        WHERE deal_id = $1 AND status IN ('open', 'flagged')
-       ORDER BY CASE severity
-         WHEN 'critical' THEN 1
-         WHEN 'high' THEN 2
-         WHEN 'medium' THEN 3
-         WHEN 'low' THEN 4
-         ELSE 5
+        ORDER BY CASE severity
+          WHEN 'critical' THEN 1
+          WHEN 'high' THEN 2
+          WHEN 'medium' THEN 3
+          WHEN 'low' THEN 4
+          ELSE 5
        END, created_at DESC`,
       [dealId]
     ),
+    query(
+      `SELECT a.*, d.name AS document_name
+       FROM approval_items a
+       LEFT JOIN documents d ON d.id = a.document_id
+       WHERE a.deal_id = $1
+       ORDER BY a.approval_type, a.created_at`,
+      [dealId]
+    ),
+    query(
+      `SELECT id, name, file_type, doc_category, description, created_at
+       FROM documents
+       WHERE deal_id = $1
+       ORDER BY created_at DESC`,
+      [dealId]
+    ),
+    fetchCityBenchmarks({ city: deal.city }).catch(() => []),
   ]);
 
   const ddSummary = {
@@ -394,7 +547,13 @@ const getDealExportContext = async (dealId) => {
   riskSummary.total =
     riskSummary.critical + riskSummary.high + riskSummary.medium + riskSummary.low;
 
-  const compType = mapAssetClassToCompType(deal.asset_class || deal.financial_asset_class, deal.property_type);
+  const approvals = approvalsResult.rows;
+  const documents = documentsResult.rows;
+  const approvalSummary = summarizeApprovals(approvals);
+  const documentSummary = summarizeDocuments(documents);
+
+  const inferredAssetClass = inferAssetClass({ deal, inputs: modelParams?.inputs || {} });
+  const compType = mapAssetClassToCompType(inferredAssetClass, deal.property_type);
   const propertyLat = num(deal.property_lat);
   const propertyLng = num(deal.property_lng);
 
@@ -412,12 +571,35 @@ const getDealExportContext = async (dealId) => {
   const effectiveDate = modelParams?.inputs?.effectiveDate || null;
   const hasFinancialModel = deal.total_cost_cr !== null && deal.total_revenue_cr !== null;
 
+  const readiness = buildReadinessSummary({
+    ddItems: ddItemsResult.rows,
+    approvals,
+    riskFlags: riskItemsResult.rows,
+    financials: hasFinancialModel ? deal : null,
+    documentCount: documents.length,
+  });
+
+  const nextSteps = deriveNextSteps({
+    deal,
+    ddItems: ddItemsResult.rows,
+    approvals,
+    riskFlags: riskItemsResult.rows,
+    financials: hasFinancialModel ? deal : null,
+    documentCount: documents.length,
+    documentCategoryCounts: documentSummary.byCategory,
+    readinessSummary: readiness,
+  });
+
   const recommendation = computeRecommendation({
     ddSummary,
     riskSummary,
     hasFinancialModel,
     irrPct: deal.irr_pct,
     grossMarginPct: deal.gross_margin_pct,
+    totalRevenueCr: deal.total_revenue_cr,
+    totalCostCr: deal.total_cost_cr,
+    askPriceCr: deal.land_ask_price_cr,
+    residualLandValueCr: deal.residual_land_value_cr,
   });
 
   const ai = await generateDealInsights({
@@ -439,7 +621,7 @@ const getDealExportContext = async (dealId) => {
     next_steps: [],
     confidence: null,
     disclaimer:
-      'AI-generated IC opinion is informational only. Verify all facts and risks before any investment decision.',
+      'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
   }));
 
   return {
@@ -466,6 +648,7 @@ const getDealExportContext = async (dealId) => {
       cityComps,
       exportComps,
       benchmarks,
+      cityBenchmarks,
       pricingGapPct:
         num(deal.selling_rate_per_sqft) && num(benchmarks.median_rate_per_sqft)
           ? round(
@@ -476,6 +659,16 @@ const getDealExportContext = async (dealId) => {
             )
           : null,
     },
+    approvals: {
+      summary: approvalSummary,
+      items: approvals,
+    },
+    documents: {
+      summary: documentSummary,
+      items: documents,
+    },
+    readiness,
+    nextSteps,
     ai,
   };
 };

@@ -62,12 +62,12 @@ const STAGE_NEXT_STEPS = {
     'Build or update financial model with revised assumptions',
     'Run IRR and NPV sensitivity analyses',
     'Obtain construction cost estimate from quantity surveyor',
-    'Prepare IC deck first draft',
+    'Prepare Investor-Grade deck first draft',
   ],
   ic_review: [
-    'Circulate IC memo to Investment Committee',
-    'Address committee queries and revise projections',
-    'Obtain IC approval or conditional approval',
+    'Circulate the Investor-Grade memo for internal review',
+    'Address review queries and revise projections',
+    'Obtain investor approval or conditional approval',
     'Define final negotiation mandate and walk-away terms',
   ],
   negotiation: [
@@ -353,7 +353,7 @@ export default function OverviewTab({ deal, id }) {
         ) : (
           !aiLoading && !aiError && (
             <p className="mt-2 text-sm text-gray-500">
-              Generate a Claude-powered IC memo cross-referencing this deal's financials against
+              Generate a Claude-powered Investor-Grade memo cross-referencing this deal's financials against
               Bengaluru micro-market benchmarks and verified comps.
             </p>
           )

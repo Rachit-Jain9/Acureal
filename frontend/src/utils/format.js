@@ -123,7 +123,7 @@ export const STAGE_CONFIG = {
   loi: { label: 'LOI', color: 'bg-yellow-100 text-yellow-800' },
   due_diligence: { label: 'Due Diligence', color: 'bg-orange-100 text-orange-800' },
   underwriting: { label: 'Underwriting', color: 'bg-purple-100 text-purple-800' },
-  ic_review: { label: 'IC Review', color: 'bg-indigo-100 text-indigo-800' },
+  ic_review: { label: 'Investor-Grade Review', color: 'bg-indigo-100 text-indigo-800' },
   negotiation: { label: 'Negotiation', color: 'bg-cyan-100 text-cyan-800' },
   active: { label: 'Active', color: 'bg-green-100 text-green-800' },
   closed: { label: 'Closed', color: 'bg-emerald-100 text-emerald-800' },

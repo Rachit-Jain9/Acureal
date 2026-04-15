@@ -285,4 +285,97 @@ describe('Financial Engine', () => {
       expect(typeof centerIRR).toBe('number');
     });
   });
+
+  describe('income and hospitality exit strategies', () => {
+    const officeInput = {
+      assetClass: 'commercial_office',
+      leasableAreaSqft: 100000,
+      constructionCostPerSqft: 6000,
+      landCostCr: 40,
+      approvalCostPerSqft: 150,
+      gstPct: 18,
+      baseRentPerSqftMonth: 85,
+      rentEscalationPct: 5,
+      vacancyPct: 10,
+      opexPct: 20,
+      tiPerSqft: 500,
+      lcMonths: 2,
+      entryCapRate: 7,
+      exitCapRate: 7.5,
+      holdPeriodYears: 5,
+      projectDurationYears: 3,
+      debtCoverage: 0.65,
+      interestRatePct: 10,
+      discountRatePct: 14,
+    };
+
+    const hospitalityInput = {
+      assetClass: 'hospitality',
+      keys: 120,
+      constructionCostPerKey: 8500000,
+      preOpeningCostPerKey: 300000,
+      landCostCr: 35,
+      approvalCostPerSqft: 150,
+      gstPct: 18,
+      adr: 7000,
+      stabilizedOccPct: 68,
+      adrGrowthPct: 5,
+      fbRevPct: 25,
+      otherRevPct: 10,
+      gopMarginPct: 35,
+      ebitdaMarginPct: 28,
+      exitCapRate: 9,
+      holdPeriodYears: 8,
+      projectDurationYears: 2.5,
+      debtCoverage: 0.55,
+      interestRatePct: 10.5,
+      contingencyPct: 5,
+      discountRatePct: 15,
+    };
+
+    test('should honor user-configured GST for income assets', () => {
+      const result = calculateFullFinancials({ ...officeInput, gstPct: 5 });
+      expect(result.gstCostCr).toBeCloseTo(result.totalConstructionCostCr * 0.05, 2);
+      expect(result.inputs.gstPct).toBe(5);
+    });
+
+    test('should use forward purchase pricing for income-asset exit value', () => {
+      const result = calculateFullFinancials({
+        ...officeInput,
+        exitStrategy: 'forward_purchase',
+        forwardPurchasePriceCr: 220,
+      });
+
+      expect(result.inputs.exitStrategy).toBe('forward_purchase');
+      expect(result.kpis.exitValue).toBeCloseTo(220, 2);
+      expect(result.revenue.exitValue).toBeCloseTo(220, 2);
+    });
+
+    test('should retain LRD settings for income assets within the supported 0 to 1 range', () => {
+      const result = calculateFullFinancials({
+        ...officeInput,
+        exitStrategy: 'lrd',
+        lrdLTV: 0.6,
+        lrdInterestRatePct: 9.25,
+        lrdRefinanceYear: 2,
+      });
+
+      expect(result.inputs.exitStrategy).toBe('lrd');
+      expect(result.inputs.lrdLTV).toBeCloseTo(0.6, 2);
+      expect(result.inputs.lrdInterestRatePct).toBeCloseTo(9.25, 2);
+      expect(result.inputs.lrdRefinanceYear).toBe(2);
+    });
+
+    test('should use forward purchase pricing for hospitality exit value', () => {
+      const result = calculateFullFinancials({
+        ...hospitalityInput,
+        exitStrategy: 'forward_purchase',
+        forwardPurchasePriceCr: 260,
+      });
+
+      expect(result.inputs.exitStrategy).toBe('forward_purchase');
+      expect(result.kpis.exitValue).toBeCloseTo(260, 2);
+      expect(result.revenue.exitValue).toBeCloseTo(260, 2);
+    });
+  });
 });

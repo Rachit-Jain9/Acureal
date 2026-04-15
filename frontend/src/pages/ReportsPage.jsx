@@ -24,6 +24,28 @@ const EmptyTableState = ({ message }) => (
   </div>
 );
 
+const getExportErrorMessage = async (err, fallbackMessage) => {
+  const responseData = err?.response?.data;
+
+  if (responseData instanceof Blob) {
+    try {
+      const text = await responseData.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.message) return parsed.message;
+        } catch {
+          return text;
+        }
+      }
+    } catch {
+      // fall through to the regular message chain
+    }
+  }
+
+  return err?.response?.data?.message || err?.message || fallbackMessage;
+};
+
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState('pipeline');
   const [exportingCSV, setExportingCSV] = useState(false);
@@ -132,7 +154,7 @@ export default function ReportsPage() {
       downloadAxiosResponse(response, 'redip-deals.xlsx');
       toast.success('Deals workbook downloaded');
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Deals workbook export failed';
+      const msg = await getExportErrorMessage(err, 'Deals workbook export failed');
       toast.error(msg);
       console.error('[ReportsPage] Export deals workbook error:', err);
     } finally {
@@ -148,7 +170,7 @@ export default function ReportsPage() {
       downloadAxiosResponse(response, `redip-${safeName}.pptx`);
       toast.success('PPTX deck downloaded');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'PPTX export failed');
+      toast.error(await getExportErrorMessage(err, 'PPTX export failed'));
     } finally {
       setExportingPptx(null);
     }
@@ -162,7 +184,7 @@ export default function ReportsPage() {
       downloadAxiosResponse(response, `redip-${safeName}.xlsx`);
       toast.success('Excel workbook downloaded');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Excel export failed');
+      toast.error(await getExportErrorMessage(err, 'Excel export failed'));
     } finally {
       setExportingXlsx(null);
     }
@@ -176,7 +198,7 @@ export default function ReportsPage() {
       downloadAxiosResponse(response, `redip-${safeName}.pdf`);
       toast.success('PDF report downloaded');
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'PDF export failed';
+      const msg = await getExportErrorMessage(err, 'PDF export failed');
       toast.error(msg);
       console.error('[ReportsPage] PDF export error:', err);
     } finally {

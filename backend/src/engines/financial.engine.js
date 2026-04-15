@@ -9,13 +9,20 @@
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const GST_RATE        = 0.18;  // GST on construction (residential slabs)
-const GST_INFRA_RATE  = 0.12;  // GST on civil/infra (plotted dev)
 const STAMP_DUTY_RATE = 0.05;  // Stamp duty on land (avg India, varies 3-8%)
 const CARPET_RATIO    = 0.70;  // Carpet / Saleable area
 const SBU_RATIO       = 1.25;  // Super Built-Up / Saleable area
 const MIN_PROJECT_DURATION_YEARS = 1;
 const MAX_PROJECT_DURATION_YEARS = 15;
+const DEFAULT_GST_PCT_BY_ASSET_CLASS = Object.freeze({
+  residential_apartments: 18,
+  plotted_development: 12,
+  commercial_office: 18,
+  retail: 18,
+  industrial: 18,
+  hospitality: 18,
+});
+const SUPPORTED_EXIT_STRATEGIES = new Set(['cap_rate_sale', 'lrd', 'forward_purchase']);
 
 // Scenario presets: adjustments applied to base inputs
 const SCENARIO_PRESETS = {
@@ -118,6 +125,26 @@ function sCurveWeights(n) {
 const round4 = (n) => (n != null && !isNaN(n) ? Math.round(n * 10000) / 10000 : null);
 const round2 = (n) => (n != null && !isNaN(n) ? Math.round(n * 100) / 100 : null);
 const roundQuarterYear = (n) => (n != null && !isNaN(n) ? Math.round(n * 4) / 4 : null);
+
+function resolveGstRate(input, assetClass) {
+  const gstPct = Number(input.gstPct);
+  if (Number.isFinite(gstPct) && gstPct >= 0) {
+    return gstPct / 100;
+  }
+
+  return (DEFAULT_GST_PCT_BY_ASSET_CLASS[assetClass] || 0) / 100;
+}
+
+function resolveDebtRatio(value, fallback = 0) {
+  const ratio = Number(value);
+  const safeRatio = Number.isFinite(ratio) ? ratio : fallback;
+  return Math.min(1, Math.max(0, safeRatio));
+}
+
+function resolveExitStrategy(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SUPPORTED_EXIT_STRATEGIES.has(normalized) ? normalized : 'cap_rate_sale';
+}
 
 function safeCashFlows(cfs) {
   return cfs.map((v) => Math.round((isFinite(v) ? v : 0) * 100) / 100);
@@ -340,7 +367,7 @@ function calculateResidentialApartments(input) {
   const constructionEndMonths = timeline.constructionEndMonths;
 
   // Capital stack
-  const debtLTV     = Math.min(1, Math.max(0, Number(input.debtLTV) || 0));
+  const debtLTV     = resolveDebtRatio(input.debtLTV, 0);
   const debtRatePct = Number(input.debtRatePct) || 10.5;
 
   if (
@@ -381,7 +408,8 @@ function calculateResidentialApartments(input) {
 
   // HARD COSTS
   const constructionCostCr = (saleableAreaSqft * constructionCostSqft) / 1e7;
-  const gstCostCr          = constructionCostCr * GST_RATE;
+  const gstRateInput       = resolveGstRate(input, 'residential_apartments');
+  const gstCostCr          = constructionCostCr * gstRateInput;
   const contingencyCr      = constructionCostCr * (contingencyPct / 100);
   const stampDutyCr        = landCostCr * STAMP_DUTY_RATE;
   const hardCostCr         = constructionCostCr + gstCostCr + contingencyCr;
@@ -510,6 +538,7 @@ function calculateResidentialApartments(input) {
       plotAreaSqft, fsi, loadingFactor, constructionCostPerSqft: constructionCostSqft,
       sellingRatePerSqft: sellingRateSqft, landCostCr, approvalCostCr,
       approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
+      gstPct: round2(gstRateInput * 100),
       marketingCostPct, financeCostPct, developerMarginPct,
       effectiveDate: outputTimeline.effectiveDate,
       projectDurationYears: outputTimeline.projectDurationYears,
@@ -648,7 +677,8 @@ function calculatePlottedDevelopment(input) {
   const totalRevenueCr   = (totalPlots * avgPlotSizeSqft * sellingRatePerSqft) / 1e7;
   const stampDutyCr      = landCostCr * STAMP_DUTY_RATE;
   const devCostCr        = (totalLandSqft * devCostPerSqft) / 1e7;
-  const gstCostCr        = devCostCr * GST_INFRA_RATE;
+  const gstRateInput     = resolveGstRate(input, 'plotted_development');
+  const gstCostCr        = devCostCr * gstRateInput;
   const contingencyCr    = devCostCr * (contingencyPct / 100);
   const marketingCostCr  = totalRevenueCr * (marketingCostPct / 100);
   const financeCostCr    = (landCostCr + devCostCr) * (financeCostPct / 100);
@@ -702,6 +732,7 @@ function calculatePlottedDevelopment(input) {
       totalLandSqft, saleableLandPct, avgPlotSizeSqft, sellingRatePerSqft,
       landCostCr, devCostPerSqft, approvalCostCr,
       approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
+      gstPct: round2(gstRateInput * 100),
       marketingCostPct, financeCostPct,
       effectiveDate: outputTimeline.effectiveDate,
       projectDurationYears: outputTimeline.projectDurationYears,
@@ -775,7 +806,9 @@ function calculateIncomeAsset(input) {
   const leasableAreaSqft     = Number(input.leasableAreaSqft);
   const constructionCostSqft = Number(input.constructionCostPerSqft);
   const landCostCr           = Number(input.landCostCr) || 0;
-  const approvalCostCr       = Number(input.approvalCostCr) || 0;
+  const approvalCostCr       = Number(input.approvalCostPerSqft) > 0
+    ? (leasableAreaSqft * Number(input.approvalCostPerSqft)) / 1e7
+    : Number(input.approvalCostCr) || 0;
   const baseRentMonth        = Number(input.baseRentPerSqftMonth);
   const rentEscalationPct    = Number(input.rentEscalationPct) || 5;
   const vacancyPct           = Number(input.vacancyPct) || 10;
@@ -786,9 +819,17 @@ function calculateIncomeAsset(input) {
   const entryCapRate         = Number(input.entryCapRate) || exitCapRate;
   const holdPeriodYears      = Number(input.holdPeriodYears) || 5;
   const discountRatePct      = Number(input.discountRatePct) || 14;
-  const debtCoverage         = Number(input.debtCoverage) || 0;
+  const debtCoverage         = resolveDebtRatio(input.debtCoverage, 0);
   const interestRatePct      = Number(input.interestRatePct) || 10;
-  const contingencyPct       = Number(input.contingencyPct) || 4;
+  const contingencyPct         = Number(input.contingencyPct) || 4;
+  const exitStrategy           = resolveExitStrategy(input.exitStrategy);
+  const lrdLTV                 = resolveDebtRatio(input.lrdLTV, 0.65);
+  const lrdInterestRatePct     = Number(input.lrdInterestRatePct) || 9;
+  const maxRefinanceYear       = Math.max(1, holdPeriodYears - 1);
+  const lrdRefinanceYear       = Number(input.lrdRefinanceYear) > 0
+    ? Math.min(Number(input.lrdRefinanceYear), maxRefinanceYear)
+    : Math.max(1, Math.floor(holdPeriodYears / 2));
+  const forwardPurchasePriceCr = Number(input.forwardPurchasePriceCr) || 0;
   const timeline = resolveTimelineInput(input, {
     defaultDurationYears: 3,
     defaultConstructionStartYears: 0,
@@ -813,7 +854,8 @@ function calculateIncomeAsset(input) {
   }
 
   const constructionCostCr = (leasableAreaSqft * constructionCostSqft) / 1e7;
-  const gstCostCr          = constructionCostCr * GST_RATE;
+  const gstRateInput       = resolveGstRate(input, assetClass);
+  const gstCostCr          = constructionCostCr * gstRateInput;
   const contingencyCr      = constructionCostCr * (contingencyPct / 100);
   const stampDutyCr        = landCostCr * STAMP_DUTY_RATE;
   const tiCostCr           = (leasableAreaSqft * tiPerSqft) / 1e7;
@@ -829,13 +871,18 @@ function calculateIncomeAsset(input) {
 
   const yieldOnCost  = totalDevCostCr > 0 ? (stabilizedNOICr / totalDevCostCr) * 100 : 0;
   const entryValueCr = stabilizedNOICr / (entryCapRate / 100);
-  const noiAtExit    = stabilizedNOICr * Math.pow(1 + rentEscalationPct / 100, holdPeriodYears);
-  const exitValueCr  = noiAtExit / (exitCapRate / 100);
+  const noiAtExit              = stabilizedNOICr * Math.pow(1 + rentEscalationPct / 100, holdPeriodYears);
+  const exitValueCr            = noiAtExit / (exitCapRate / 100);
+  const effectiveExitValueCr   = exitStrategy === 'forward_purchase' && forwardPurchasePriceCr > 0
+    ? forwardPurchasePriceCr : exitValueCr;
 
   const constQ = Math.ceil(constructionMonths / 3);
   const opQ    = holdPeriodYears * 4;
   const totalQ = constQ + opQ;
   const cfs    = new Array(totalQ + 1).fill(0);
+  const lrdRefinanceQ  = exitStrategy === 'lrd' ? Math.min(constQ + lrdRefinanceYear * 4, totalQ) : 0;
+  const lrdProceeds    = exitStrategy === 'lrd' ? lrdLTV * entryValueCr : 0;
+  const lrdQInterest   = exitStrategy === 'lrd' ? (lrdProceeds * (lrdInterestRatePct / 100)) / 4 : 0;
 
   cfs[0] -= landCostCr + stampDutyCr + approvalCostCr * 0.25;
   if (constQ >= 2) { cfs[1] -= approvalCostCr * 0.375; cfs[2] -= approvalCostCr * 0.375; }
@@ -845,18 +892,27 @@ function calculateIncomeAsset(input) {
     cfs[q + 1] -= (constructionCostCr + gstCostCr + contingencyCr) * cweights[q];
   }
   if (constQ >= 1) cfs[constQ] -= tiCostCr + lcCostCr;
+  if (!input._phase1Mode && exitStrategy === 'lrd' && lrdRefinanceQ > 0) cfs[lrdRefinanceQ] += lrdProceeds;
 
   // Operating phase with lease-up ramp
   for (let q = 1; q <= opQ; q++) {
-    const yearIdx       = Math.ceil(q / 4);
+    const yearIdx         = Math.ceil(q / 4);
     const occupancyFactor = q <= 2 ? 0.60 : q === 3 ? 0.80 : (1 - vacancyPct / 100);
-    const rentEsc       = Math.pow(1 + rentEscalationPct / 100, yearIdx - 1);
-    const qRent         = (leasableAreaSqft * effectiveBaseRent * 3 * rentEsc * occupancyFactor) / 1e7;
-    const qNOI          = qRent * (1 - opexPct / 100);
-    const cfIdx         = constQ + q;
-    if (cfIdx <= totalQ) cfs[cfIdx] += qNOI;
+    const rentEsc         = Math.pow(1 + rentEscalationPct / 100, yearIdx - 1);
+    const qRent           = (leasableAreaSqft * effectiveBaseRent * 3 * rentEsc * occupancyFactor) / 1e7;
+    const qNOI            = qRent * (1 - opexPct / 100);
+    const cfIdx           = constQ + q;
+    if (cfIdx <= totalQ) {
+      cfs[cfIdx] += qNOI;
+      if (!input._phase1Mode && exitStrategy === 'lrd' && lrdQInterest > 0 && cfIdx >= lrdRefinanceQ) {
+        cfs[cfIdx] -= lrdQInterest;
+      }
+    }
   }
-  cfs[totalQ] += exitValueCr;
+  if (!input._phase1Mode) {
+    cfs[totalQ] += exitStrategy === 'lrd' ? effectiveExitValueCr - lrdProceeds : effectiveExitValueCr;
+  }
+  const rawCFs = [...cfs];
 
   const cashFlows  = safeCashFlows(cfs);
   let irrPct = null, npvCr = null;
@@ -892,12 +948,19 @@ function calculateIncomeAsset(input) {
     assetClass,
     inputs: {
       leasableAreaSqft, constructionCostPerSqft: constructionCostSqft, landCostCr, approvalCostCr,
+      approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
+      gstPct: round2(gstRateInput * 100),
       baseRentPerSqftMonth: baseRentMonth, rentEscalationPct, vacancyPct, opexPct,
       tiPerSqft, lcMonths, entryCapRate, exitCapRate, holdPeriodYears,
       effectiveDate: outputTimeline.effectiveDate,
       projectDurationYears: outputTimeline.projectDurationYears,
       projectDurationMonths: constructionMonths,
       discountRatePct, debtCoverage, interestRatePct,
+      exitStrategy,
+      lrdLTV: exitStrategy === 'lrd' ? lrdLTV : null,
+      lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
+      lrdRefinanceYear: exitStrategy === 'lrd' ? lrdRefinanceYear : null,
+      forwardPurchasePriceCr: exitStrategy === 'forward_purchase' ? forwardPurchasePriceCr : null,
       contingencyPct,
       ...(assetClass === 'retail' ? { anchorPct, anchorRentDiscount } : {}),
     },
@@ -912,7 +975,7 @@ function calculateIncomeAsset(input) {
       noi:           round4(stabilizedNOICr),
       yieldOnCost:   round4(yieldOnCost),
       dscr,
-      exitValue:     round4(exitValueCr),
+      exitValue:     round4(effectiveExitValueCr),
       entryValue:    round4(entryValueCr),
     },
     areas: {
@@ -943,7 +1006,7 @@ function calculateIncomeAsset(input) {
       grossMarginPct:   null,
       annualNOI:        round4(stabilizedNOICr),
       stabilizedNOI:    round4(stabilizedNOICr),
-      exitValue:        round4(exitValueCr),
+      exitValue:        round4(effectiveExitValueCr),
       grossFirstYearRent: round4(grossRevY1Cr),
       effectiveGrossRev: round4(effectiveGrossRevCr),
       opex:             round4(opexCr),
@@ -1090,9 +1153,17 @@ function calculateHospitality(input) {
   const ebitdaMarginPct      = Number(input.ebitdaMarginPct) || 28;            // EBITDA after mgmt fee
   const exitCapRate          = Number(input.exitCapRate) || 9;
   const discountRatePct      = Number(input.discountRatePct) || 15;
-  const debtCoverage         = Number(input.debtCoverage) || 0;
+  const debtCoverage         = resolveDebtRatio(input.debtCoverage, 0);
   const interestRatePct      = Number(input.interestRatePct) || 10.5;
   const contingencyPct       = Number(input.contingencyPct) || 5;
+  const exitStrategy         = resolveExitStrategy(input.exitStrategy);
+  const lrdLTV               = resolveDebtRatio(input.lrdLTV, 0.55);
+  const lrdInterestRatePct   = Number(input.lrdInterestRatePct) || 9.5;
+  const maxRefinanceYear     = Math.max(1, holdPeriodYears - 1);
+  const lrdRefinanceYear     = Number(input.lrdRefinanceYear) > 0
+    ? Math.min(Number(input.lrdRefinanceYear), maxRefinanceYear)
+    : Math.max(1, Math.floor(holdPeriodYears / 2));
+  const forwardPurchasePriceCr = Number(input.forwardPurchasePriceCr) || 0;
   const timeline = resolveTimelineInput(input, {
     defaultDurationYears: 2.5,
     defaultConstructionStartYears: 0,
@@ -1111,11 +1182,14 @@ function calculateHospitality(input) {
 
   // Development costs
   const constructionCostCr = (keys * constructionCostKey) / 1e7;
-  const gstCostCr          = constructionCostCr * GST_RATE;
+  const gstRateInput       = resolveGstRate(input, 'hospitality');
+  const gstCostCr          = constructionCostCr * gstRateInput;
   const contingencyCr      = constructionCostCr * (contingencyPct / 100);
   const preOpeningCostCr   = (keys * preOpeningCostKey) / 1e7;
   const stampDutyCr        = landCostCr * STAMP_DUTY_RATE;
-  const approvalCostCr     = Number(input.approvalCostCr) || 0;
+  const approvalCostCr     = Number(input.approvalCostPerSqft) > 0
+    ? (keys * 600 * Number(input.approvalCostPerSqft)) / 1e7
+    : Number(input.approvalCostCr) || 0;
   const hardCostCr         = constructionCostCr + gstCostCr + contingencyCr;
   const totalDevCostCr     = landCostCr + stampDutyCr + hardCostCr + preOpeningCostCr + approvalCostCr;
 
@@ -1135,12 +1209,18 @@ function calculateHospitality(input) {
   const exitEBITDA    = ebitdaCrY1Stab * Math.pow(1 + adrGrowthPct / 100, holdPeriodYears);
   const exitValueCr   = exitEBITDA / (exitCapRate / 100);
   const entryValueCr  = ebitdaCrY1Stab / (exitCapRate / 100);
+  const effectiveExitValueCr = exitStrategy === 'forward_purchase' && forwardPurchasePriceCr > 0
+    ? forwardPurchasePriceCr
+    : exitValueCr;
 
   // Cash flows
   const constQ   = Math.ceil(constructionMonths / 3);
   const opQ      = holdPeriodYears * 4;
   const totalQ   = constQ + opQ;
   const cfs      = new Array(totalQ + 1).fill(0);
+  const lrdRefinanceQ = exitStrategy === 'lrd' ? Math.min(constQ + lrdRefinanceYear * 4, totalQ) : 0;
+  const lrdProceeds = exitStrategy === 'lrd' ? lrdLTV * entryValueCr : 0;
+  const lrdQInterest = exitStrategy === 'lrd' ? (lrdProceeds * (lrdInterestRatePct / 100)) / 4 : 0;
 
   // Development phase
   cfs[0] -= landCostCr + stampDutyCr + approvalCostCr * 0.25;
@@ -1156,6 +1236,9 @@ function calculateHospitality(input) {
   for (let q = 0; q < constQ && q + 1 <= totalQ; q++) {
     cfs[q + 1] -= hardCostCr * cweights[q];
   }
+  if (exitStrategy === 'lrd' && lrdRefinanceQ > 0) {
+    cfs[lrdRefinanceQ] += lrdProceeds;
+  }
 
   // Operating phase with ramp-up and annual ADR growth
   for (let q = 1; q <= opQ; q++) {
@@ -1167,9 +1250,14 @@ function calculateHospitality(input) {
     const qTotalRev = qRoomsRev * (1 + fbRevPct / 100 + otherRevPct / 100);
     const qEBITDA   = qTotalRev * (ebitdaMarginPct / 100);
     const cfIdx     = constQ + q;
-    if (cfIdx <= totalQ) cfs[cfIdx] += qEBITDA;
+    if (cfIdx <= totalQ) {
+      cfs[cfIdx] += qEBITDA;
+      if (exitStrategy === 'lrd' && lrdQInterest > 0 && cfIdx >= lrdRefinanceQ) {
+        cfs[cfIdx] -= lrdQInterest;
+      }
+    }
   }
-  cfs[totalQ] += exitValueCr;
+  cfs[totalQ] += exitStrategy === 'lrd' ? effectiveExitValueCr - lrdProceeds : effectiveExitValueCr;
 
   const cashFlows = safeCashFlows(cfs);
   let irrPct = null, npvCr = null;
@@ -1212,6 +1300,8 @@ function calculateHospitality(input) {
     assetClass: 'hospitality',
     inputs: {
       keys, constructionCostPerKey: constructionCostKey, landCostCr, approvalCostCr,
+      approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
+      gstPct: round2(gstRateInput * 100),
       preOpeningCostPerKey: preOpeningCostKey, adr, adrGrowthPct, stabilizedOccPct,
       effectiveDate: outputTimeline.effectiveDate,
       projectDurationYears: outputTimeline.projectDurationYears,
@@ -1219,6 +1309,11 @@ function calculateHospitality(input) {
       holdPeriodYears, fbRevPct, otherRevPct,
       gopMarginPct, ebitdaMarginPct, exitCapRate, discountRatePct, debtCoverage,
       interestRatePct, contingencyPct,
+      exitStrategy,
+      lrdLTV: exitStrategy === 'lrd' ? lrdLTV : null,
+      lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
+      lrdRefinanceYear: exitStrategy === 'lrd' ? lrdRefinanceYear : null,
+      forwardPurchasePriceCr: exitStrategy === 'forward_purchase' ? forwardPurchasePriceCr : null,
     },
     kpis: {
       irr:           round4(irrPct),
@@ -1231,7 +1326,7 @@ function calculateHospitality(input) {
       noi:           round4(ebitdaCrY1Stab),
       yieldOnCost:   round4(yieldOnCost),
       dscr,
-      exitValue:     round4(exitValueCr),
+      exitValue:     round4(effectiveExitValueCr),
       entryValue:    round4(entryValueCr),
       revPAR:        round2(revPARStabilized),
       gopMargin:     round2(gopMarginPct),
@@ -1262,7 +1357,7 @@ function calculateHospitality(input) {
       grossMarginPct:     null,
       annualNOI:          round4(ebitdaCrY1Stab),
       stabilizedNOI:      round4(ebitdaCrY1Stab),
-      exitValue:          round4(exitValueCr),
+      exitValue:          round4(effectiveExitValueCr),
       revPAR:             round2(revPARStabilized),
       roomsRevenue:       round4(roomsRevCrY1Stab),
       fbRevenue:          round4(fbRevCrY1Stab),

@@ -7,6 +7,8 @@ const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
 const pptxgen = require('pptxgenjs');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getDealExportContext } = require('../services/dealExport.service');
+const { buildDealDeckPptx } = require('../services/dealPptx.service');
+const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
 
 const router = express.Router();
 
@@ -43,7 +45,7 @@ router.get(
   async (req, res, next) => {
     return res.status(410).json({
       success: false,
-      message: 'JSON IC report exports have been retired. Use PDF, PPTX, XLSX, or CSV exports instead.',
+      message: 'JSON Investor-Grade report exports have been retired. Use PDF, PPTX, XLSX, or CSV exports instead.',
     });
 
     try {
@@ -185,7 +187,7 @@ router.get(
         exportContext.ai.available && exportContext.ai.next_steps.length
           ? exportContext.ai.next_steps.slice(0, 3)
           : [
-              'Close open deal-breaker diligence items before IC.',
+              'Close open deal-breaker diligence items before Investor-Grade review.',
               'Refresh verified comps and validate pricing assumptions.',
               'Re-run downside sensitivity before any investment call.',
             ];
@@ -633,7 +635,7 @@ router.get(
         }
       );
 
-      drawPanel(page1, { x: 34, y: 72, w: 488, h: 248, title: 'AI IC View', fill: COLORS.white });
+      drawPanel(page1, { x: 34, y: 72, w: 488, h: 248, title: 'AI Investor-Grade View', fill: COLORS.white });
       drawWrappedText(page1, aiOpinion, {
         x: 48,
         y: 286,
@@ -842,7 +844,7 @@ router.get(
       });
       drawFooter(
         page3,
-        'For internal IC use only. All values reflect stored deal data and should be independently verified before any commitment.'
+        'For internal investor-review use only. All values reflect stored deal data and should be independently verified before any commitment.'
       );
 
       const pdfBytes = await pdfDoc.save();
@@ -905,7 +907,7 @@ router.get(
       else if (risks.filter((r) => r.level === 'high').length >= 1) recommendation = 'PROCEED WITH CAUTION';
 
       const report = {
-        report_type: 'IC Report',
+        report_type: 'Investor-Grade Report',
         generated_at: new Date().toISOString(),
         generated_by: req.user.name,
         deal: {
@@ -1032,6 +1034,19 @@ router.get(
       if (!exportContext) {
         return res.status(404).json({ success: false, message: 'Deal not found.' });
       }
+
+      const xlsxBuffer = await buildDealWorkbookXlsx(exportContext, {
+        brandName: 'REDIP',
+        userName: req.user?.name || 'REDIP',
+        generatedAt: new Date().toISOString(),
+      });
+      const xlsxSafeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
+        .replace(/[^a-z0-9]/gi, '-')
+        .toLowerCase();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      return res.send(xlsxBuffer);
+
       const d = exportContext.deal;
 
       const ddCounts = exportContext.dd.summary;
@@ -1162,7 +1177,7 @@ router.get(
 
       // AI IC opinion block
       if (insights.available && insights.ic_opinion) {
-        execRows.push(['AI IC Opinion']);
+        execRows.push(['AI Investor-Grade Opinion']);
         execRows.push([`Confidence: ${insights.confidence || 'medium'}`]);
         execRows.push([insights.ic_opinion]);
         execRows.push(['']);
@@ -1182,7 +1197,7 @@ router.get(
         }
         execRows.push([insights.disclaimer]);
       } else {
-        execRows.push(['AI IC Opinion']);
+        execRows.push(['AI Investor-Grade Opinion']);
         execRows.push(['Not available — configure ANTHROPIC_API_KEY or retry later.']);
       }
 
@@ -1680,6 +1695,26 @@ router.get(
         return res.status(404).json({ success: false, message: 'Deal not found.' });
       }
 
+      {
+        const pptxBuffer = await buildDealDeckPptx(exportContext, {
+          brandName: 'REDIP',
+          userName: req.user?.name || 'REDIP user',
+          generatedAt: new Date().toISOString(),
+        });
+
+        const safeName = (exportContext.deal?.name || 'deal')
+          .replace(/[^a-z0-9]/gi, '-')
+          .toLowerCase();
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="redip-${safeName}-${new Date().toISOString().slice(0, 10)}.pptx"`,
+        );
+        res.send(pptxBuffer);
+        return;
+      }
+
       const deal = exportContext.deal;
       const ddSummary = exportContext.dd.summary;
       const riskSummary = exportContext.risks.summary;
@@ -1700,7 +1735,7 @@ router.get(
         exportContext.ai.available && exportContext.ai.next_steps.length
           ? exportContext.ai.next_steps.slice(0, 3)
           : [
-              'Close open deal-breaker diligence items before IC.',
+              'Close open deal-breaker diligence items before Investor-Grade review.',
               'Refresh verified comps and validate pricing assumptions.',
               'Re-run downside sensitivity before any investment call.',
             ];
@@ -1830,7 +1865,7 @@ router.get(
         fill: { color: WHITE },
         line: { color: CARD, width: 1 },
       });
-      icSlide.addText('AI IC Opinion', {
+      icSlide.addText('AI Investor-Grade Opinion', {
         x: 4.85, y: 1.18, w: 2.2, h: 0.2,
         fontSize: 11, bold: true, color: NAVY, fontFace: 'Helvetica',
       });
@@ -2150,7 +2185,7 @@ router.get(
         fontSize: 22, bold: true, color: NAVY, fontFace: 'Helvetica',
       });
       disclaimer.addText(
-        'This presentation is generated from stored REDIP deal data for internal investment-review use only. Financial outputs and AI-generated commentary are informational and must be independently verified before any investment decision, IC note, or circulation outside the deal team.',
+        'This presentation is generated from stored REDIP deal data for internal investment-review use only. Financial outputs and AI-generated commentary are informational and must be independently verified before any investment decision, investor note, or circulation outside the deal team.',
         {
           x: 1.0, y: 2.05, w: 11.2, h: 1.45,
           fontSize: 11, color: SLATE, fontFace: 'Helvetica', wrap: true,
@@ -2787,7 +2822,7 @@ router.get(
         x: 6.2, y: 2.6, w: 6.9, h: 2.5,
         fill: { color: recBg }, line: { color: recColor, width: 2 }, radius: 8,
       });
-      slide5.addText('IC Recommendation', {
+      slide5.addText('Investor-Grade Recommendation', {
         x: 6.2, y: 2.8, w: 6.9, h: 0.4,
         fontSize: 10, color: TEXT_MID, fontFace: 'Helvetica', align: 'center',
       });
@@ -2810,7 +2845,7 @@ router.get(
         fontSize: 18, bold: true, color: DARK_BLUE, fontFace: 'Helvetica',
       });
       slide6.addText(
-        'This presentation has been prepared by REDIP for internal investment committee review only. All financial projections are based on current deal assumptions and have not been independently verified. Values are in Indian Rupees (Crore) unless otherwise stated. Past performance is not indicative of future results. This document does not constitute investment advice. All recipients are bound by applicable confidentiality obligations. Do not distribute without prior written consent.',
+        'This presentation has been prepared by REDIP for internal investor review only. All financial projections are based on current deal assumptions and have not been independently verified. Values are in Indian Rupees (Crore) unless otherwise stated. Past performance is not indicative of future results. This document does not constitute investment advice. All recipients are bound by applicable confidentiality obligations. Do not distribute without prior written consent.',
         {
           x: 1, y: 2.2, w: 11, h: 3,
           fontSize: 11, color: TEXT_MID, fontFace: 'Helvetica', valign: 'top', wrap: true,

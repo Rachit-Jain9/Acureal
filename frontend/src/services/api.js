@@ -106,6 +106,7 @@ export const documentsAPI = {
   list: (dealId, category) => api.get(`/documents/${dealId}`, { params: { category } }),
   upload: (dealId, formData) => api.post(`/documents/${dealId}/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 2 * 60 * 1000,
   }),
   downloadMeta: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}`),
   download: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}/file`, {
