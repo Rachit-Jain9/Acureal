@@ -4,6 +4,11 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE OR REPLACE FUNCTION current_organization_id()
+RETURNS UUID AS $$
+  SELECT NULLIF(current_setting('app.current_organization_id', true), '')::uuid
+$$ LANGUAGE sql STABLE;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'organization_role') THEN
@@ -183,9 +188,11 @@ BEGIN
       AND d.id = dsh.deal_id;
 
     UPDATE document_extractions de
-    SET organization_id = COALESCE(d.organization_id, doc.organization_id)
+    SET organization_id = COALESCE(
+      (SELECT d.organization_id FROM deals d WHERE d.id = de.deal_id),
+      doc.organization_id
+    )
     FROM documents doc
-    LEFT JOIN deals d ON d.id = de.deal_id
     WHERE de.organization_id IS NULL
       AND doc.id = de.document_id;
 
