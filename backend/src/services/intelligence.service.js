@@ -165,7 +165,7 @@ const buildBrief = async (briefDate) => {
        LEFT JOIN financials f ON d.id = f.deal_id
        WHERE ${buildVisibleDealCondition('d')}
        ORDER BY
-         CASE WHEN LOWER(COALESCE(p.city, '')) IN ('bangalore', 'bengaluru') THEN 0 ELSE 1 END,
+         CASE WHEN LOWER(COALESCE(p.city, '')) = 'bengaluru' THEN 0 ELSE 1 END,
          COALESCE(f.irr_pct, 0) DESC,
          d.updated_at DESC
        LIMIT 5`

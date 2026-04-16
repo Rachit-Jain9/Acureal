@@ -48,7 +48,6 @@ const getExportErrorMessage = async (err, fallbackMessage) => {
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState('pipeline');
-  const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingDealsXlsx, setExportingDealsXlsx] = useState(false);
   const [exportingComps, setExportingComps] = useState(false);
   const [exportingPptx, setExportingPptx] = useState(null);
@@ -117,20 +116,6 @@ export default function ReportsPage() {
     [deals]
   );
 
-  const handleExportDeals = async () => {
-    setExportingCSV(true);
-    try {
-      const response = await exportsAPI.deals();
-      downloadAxiosResponse(response, 'deals_export.csv');
-      toast.success('Deals CSV downloaded');
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Export failed';
-      toast.error(msg);
-      console.error('[ReportsPage] Export deals error:', err);
-    } finally {
-      setExportingCSV(false);
-    }
-  };
 
   const handleExportComps = async () => {
     setExportingComps(true);
@@ -225,14 +210,6 @@ export default function ReportsPage() {
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={handleExportDeals}
-          disabled={exportingCSV}
-          className="btn btn-secondary flex items-center gap-2 text-sm"
-        >
-          {exportingCSV ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          Export Deals CSV
-        </button>
         <button
           onClick={handleExportComps}
           disabled={exportingComps}

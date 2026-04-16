@@ -6,9 +6,6 @@ const {
   consumeInvitation,
   createWorkspaceForUser,
   hydrateUserAuthContext,
-  listOrganizationMembers,
-  inviteOrganizationMember,
-  setOrganizationMemberStatus,
 } = require('./organization.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
 
@@ -185,31 +182,10 @@ const updateUser = async (id, data, requestedOrganizationId = null) => {
   return getUserById(id, requestedOrganizationId);
 };
 
-const listUsers = async (organizationId) => listOrganizationMembers(organizationId);
-
-const toggleUserStatus = async (id, isActive, requestingUserId, organizationId) =>
-  setOrganizationMemberStatus({
-    organizationId,
-    userId: id,
-    isActive,
-    requestingUserId,
-  });
-
-const createInvitation = async (organizationId, email, role, invitedBy) =>
-  inviteOrganizationMember({
-    organizationId,
-    email,
-    role,
-    invitedBy,
-  });
-
 module.exports = {
   register,
   login,
   getUserById,
   updateUser,
-  listUsers,
-  toggleUserStatus,
-  createInvitation,
   getJwtSecret,
 };

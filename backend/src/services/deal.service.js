@@ -259,7 +259,7 @@ const createDeal = async (data, userId) =>
   });
 
 const getDeals = async (filters = {}, pagination = {}) => {
-  const conditions = ['d.organization_id = current_organization_id()'];
+  const conditions = ['(d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))'];
   const values = [];
   let paramCount = 1;
 
@@ -387,7 +387,7 @@ const getDealById = async (id) => {
      LEFT JOIN users creator ON d.created_by = creator.id
      LEFT JOIN financials f ON d.id = f.deal_id
      WHERE d.id = $1
-       AND d.organization_id = current_organization_id()`,
+       AND (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))`,
     [id]
   );
 
@@ -682,7 +682,7 @@ const getPipelineSummary = async () => {
       AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage <> 'dead') as avg_irr_pct
      FROM deals d
      LEFT JOIN financials f ON d.id = f.deal_id
-     WHERE d.organization_id = current_organization_id()`,
+     WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))`,
     [LIVE_DEAL_STAGES]
   );
 

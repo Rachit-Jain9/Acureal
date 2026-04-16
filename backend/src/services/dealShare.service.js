@@ -1,0 +1,129 @@
+'use strict';
+
+const { query, transaction } = require('../config/database');
+const { createError } = require('../middleware/errorHandler');
+
+const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = 'viewer') => {
+  if (!['viewer', 'editor'].includes(permission)) {
+    throw createError('Permission must be viewer or editor.', 400);
+  }
+
+  return transaction(async (client) => {
+    // Verify the deal exists and belongs to the requesting user
+    const dealResult = await client.query(
+      'SELECT id, created_by, name FROM deals WHERE id = $1 AND created_by = $2',
+      [dealId, sharedByUserId]
+    );
+
+    if (dealResult.rows.length === 0) {
+      throw createError('Deal not found or you are not the owner.', 404);
+    }
+
+    // Find the target user by email
+    const userResult = await client.query(
+      'SELECT id, email, name FROM users WHERE LOWER(email) = LOWER($1) AND is_active = TRUE',
+      [sharedWithEmail]
+    );
+
+    if (userResult.rows.length === 0) {
+      throw createError('No active user found with that email.', 404);
+    }
+
+    const targetUser = userResult.rows[0];
+
+    if (targetUser.id === sharedByUserId) {
+      throw createError('You cannot share a deal with yourself.', 400);
+    }
+
+    // Upsert the share
+    const shareResult = await client.query(
+      `INSERT INTO deal_shares (deal_id, shared_by, shared_with, permission)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (deal_id, shared_with)
+       DO UPDATE SET permission = EXCLUDED.permission, updated_at = NOW()
+       RETURNING id, deal_id, shared_by, shared_with, permission, created_at`,
+      [dealId, sharedByUserId, targetUser.id, permission]
+    );
+
+    return {
+      ...shareResult.rows[0],
+      shared_with_email: targetUser.email,
+      shared_with_name: targetUser.name,
+    };
+  });
+};
+
+const revokeDealShare = async (dealId, sharedByUserId, sharedWithUserId) =>
+  transaction(async (client) => {
+    // Verify the deal belongs to the requesting user
+    const dealResult = await client.query(
+      'SELECT id FROM deals WHERE id = $1 AND created_by = $2',
+      [dealId, sharedByUserId]
+    );
+
+    if (dealResult.rows.length === 0) {
+      throw createError('Deal not found or you are not the owner.', 404);
+    }
+
+    const deleteResult = await client.query(
+      'DELETE FROM deal_shares WHERE deal_id = $1 AND shared_with = $2 RETURNING id',
+      [dealId, sharedWithUserId]
+    );
+
+    if (deleteResult.rows.length === 0) {
+      throw createError('Share not found.', 404);
+    }
+
+    return { revoked: true };
+  });
+
+const listDealShares = async (dealId, userId) => {
+  // User must be the deal owner to see shares
+  const result = await query(
+    `SELECT
+       ds.id,
+       ds.deal_id,
+       ds.shared_with,
+       ds.permission,
+       ds.created_at,
+       u.email AS shared_with_email,
+       u.name AS shared_with_name
+     FROM deal_shares ds
+     INNER JOIN users u ON u.id = ds.shared_with
+     WHERE ds.deal_id = $1 AND ds.shared_by = $2
+     ORDER BY ds.created_at ASC`,
+    [dealId, userId]
+  );
+
+  return result.rows;
+};
+
+const listDealsSharedWithMe = async (userId) => {
+  const result = await query(
+    `SELECT
+       ds.id AS share_id,
+       ds.deal_id,
+       ds.permission,
+       ds.created_at AS shared_at,
+       d.name AS deal_name,
+       d.stage,
+       d.deal_type,
+       sharer.name AS shared_by_name,
+       sharer.email AS shared_by_email
+     FROM deal_shares ds
+     INNER JOIN deals d ON d.id = ds.deal_id
+     INNER JOIN users sharer ON sharer.id = ds.shared_by
+     WHERE ds.shared_with = $1
+     ORDER BY ds.created_at DESC`,
+    [userId]
+  );
+
+  return result.rows;
+};
+
+module.exports = {
+  shareDeal,
+  revokeDealShare,
+  listDealShares,
+  listDealsSharedWithMe,
+};

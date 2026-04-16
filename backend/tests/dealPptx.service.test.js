@@ -163,7 +163,7 @@ const createNegativeExportContext = () => ({
     ...createExportContext().deal,
     name: 'Gattahalli',
     property_name: 'Gattahalli',
-    city: 'Bangalore',
+    city: 'Bengaluru',
     state: 'Karnataka',
     deal_type: 'jv',
     deal_structure: 'outright',

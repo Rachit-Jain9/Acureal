@@ -11,7 +11,6 @@
 
 const STAMP_DUTY_RATE = 0.05;  // Stamp duty on land (avg India, varies 3-8%)
 const CARPET_RATIO    = 0.70;  // Carpet / Saleable area
-const SBU_RATIO       = 1.25;  // Super Built-Up / Saleable area
 const MIN_PROJECT_DURATION_YEARS = 1;
 const MAX_PROJECT_DURATION_YEARS = 15;
 const DEFAULT_GST_PCT_BY_ASSET_CLASS = Object.freeze({
@@ -401,8 +400,12 @@ function calculateResidentialApartments(input) {
     ? (grossAreaSqft * Number(input.approvalCostPerSqft)) / 1e7
     : Number(input.approvalCostCr) || 0;
 
-  // Revenue with pricing escalation
-  const avgPriceEsc       = 1 + (pricingEscalationPct / 100) * (durationMonths / 24);
+  // Revenue with compound pricing escalation
+  // Average effective rate over the selling period using compound growth
+  const durationYears     = durationMonths / 12;
+  const avgPriceEsc       = pricingEscalationPct > 0
+    ? ((Math.pow(1 + pricingEscalationPct / 100, durationYears) - 1) / (pricingEscalationPct / 100 * durationYears))
+    : 1;
   const effectiveRate     = sellingRateSqft * avgPriceEsc;
   const totalRevenueCr    = (saleableAreaSqft * effectiveRate) / 1e7;
 
@@ -418,7 +421,11 @@ function calculateResidentialApartments(input) {
   const architectCr      = constructionCostCr * (architectFeePct / 100);
   const pmcCr            = constructionCostCr * (pmcFeePct / 100);
   const marketingCostCr  = totalRevenueCr * (marketingCostPct / 100);
-  const financeCostCr    = (landCostCr + hardCostCr) * (financeCostPct / 100);
+  // Finance cost: weighted by average outstanding balance over construction period
+  // Land is outstanding from day 0; construction draws down over time (avg ~50% outstanding)
+  const landFinanceCr    = landCostCr * (financeCostPct / 100) * (durationMonths / 12);
+  const constFinanceCr   = hardCostCr * (financeCostPct / 100) * ((constructionEndMonths - constructionStartMonths) / 12) * 0.5;
+  const financeCostCr    = landFinanceCr + constFinanceCr;
   const softCostCr       = architectCr + pmcCr + approvalCostCr + marketingCostCr + financeCostCr;
 
   const totalCostCr   = landCostCr + stampDutyCr + hardCostCr + softCostCr;
@@ -559,6 +566,12 @@ function calculateResidentialApartments(input) {
       grossMarginPct: round4(grossMarginPct),
       leveredIrr:    round4(leveredIrrPct),
       leveredNpv:    round4(leveredNpvCr),
+      // Per-unit metrics
+      costPerSqft:     saleableAreaSqft > 0 ? round2((totalCostCr * 1e7) / saleableAreaSqft) : null,
+      revenuePerSqft:  saleableAreaSqft > 0 ? round2((totalRevenueCr * 1e7) / saleableAreaSqft) : null,
+      profitPerSqft:   saleableAreaSqft > 0 ? round2((grossProfitCr * 1e7) / saleableAreaSqft) : null,
+      landCostPerSqft: plotAreaSqft > 0 ? round2((landCostCr * 1e7) / plotAreaSqft) : null,
+      moic:            equityInvestedCr > 0 ? round4((equityInvestedCr + grossProfitCr) / equityInvestedCr) : null,
       noi: null, yieldOnCost: null, dscr: null, exitValue: null, entryValue: null,
     },
     areas: {
@@ -681,14 +694,16 @@ function calculatePlottedDevelopment(input) {
   const gstCostCr        = devCostCr * gstRateInput;
   const contingencyCr    = devCostCr * (contingencyPct / 100);
   const marketingCostCr  = totalRevenueCr * (marketingCostPct / 100);
-  const financeCostCr    = (landCostCr + devCostCr) * (financeCostPct / 100);
-  const totalCostCr      = landCostCr + devCostCr + gstCostCr + stampDutyCr +
-                           contingencyCr + approvalCostCr + marketingCostCr + financeCostCr;
+  // Finance cost: duration-weighted — land from day 0, dev costs drawn over time
+  const landFinPlotCr   = landCostCr * (financeCostPct / 100) * (durationMonths / 12);
+  const devFinPlotCr    = devCostCr * (financeCostPct / 100) * (durationMonths / 12) * 0.5;
+  const financeCostCr   = landFinPlotCr + devFinPlotCr;
+  const totalCostCr     = landCostCr + devCostCr + gstCostCr + stampDutyCr +
+                          contingencyCr + approvalCostCr + marketingCostCr + financeCostCr;
 
   const grossProfitCr  = totalRevenueCr - totalCostCr;
   const grossMarginPct = totalRevenueCr > 0 ? (grossProfitCr / totalRevenueCr) * 100 : 0;
-  const equityInvested = landCostCr + stampDutyCr + approvalCostCr;
-  const equityMultiple = equityInvested > 0 ? (equityInvested + grossProfitCr) / equityInvested : null;
+  const equityMultiple = totalCostCr > 0 ? (totalCostCr + grossProfitCr) / totalCostCr : null;
   const rlvCr          = (totalRevenueCr - devCostCr - gstCostCr - contingencyCr - approvalCostCr - marketingCostCr - financeCostCr) / 1.20;
 
   const totalQ  = Math.ceil(durationMonths / 3);
@@ -745,6 +760,12 @@ function calculatePlottedDevelopment(input) {
       equityMultiple: round4(equityMultiple), rlv: round4(rlvCr),
       grossMarginPct: round4(grossMarginPct),
       leveredIrr: null, leveredNpv: null,
+      // Per-plot / per-sqft metrics
+      revenuePerPlot: totalPlots > 0 ? round2((totalRevenueCr * 1e7) / totalPlots) : null,
+      costPerPlot:    totalPlots > 0 ? round2((totalCostCr * 1e7) / totalPlots) : null,
+      profitPerPlot:  totalPlots > 0 ? round2((grossProfitCr * 1e7) / totalPlots) : null,
+      landCostPerSqft: totalLandSqft > 0 ? round2((landCostCr * 1e7) / totalLandSqft) : null,
+      revenuePerSqft:  saleableLandSqft > 0 ? round2((totalRevenueCr * 1e7) / saleableLandSqft) : null,
       noi: null, yieldOnCost: null, dscr: null, exitValue: null, entryValue: null,
     },
     areas: {
@@ -977,6 +998,19 @@ function calculateIncomeAsset(input) {
       dscr,
       exitValue:     round4(effectiveExitValueCr),
       entryValue:    round4(entryValueCr),
+      // Per-sqft and per-unit metrics
+      devCostPerSqft: leasableAreaSqft > 0 ? round2((totalDevCostCr * 1e7) / leasableAreaSqft) : null,
+      rentPerSqftAnnual: round2(effectiveBaseRent * 12),
+      noiPerSqft:    leasableAreaSqft > 0 ? round2((stabilizedNOICr * 1e7) / leasableAreaSqft) : null,
+      spreadOverCost: round4(yieldOnCost - (exitCapRate || 0)), // positive = value creation
+      // Asset-class-specific KPIs
+      ...(assetClass === 'industrial_warehousing' ? {
+        warehouseEfficiency: round2(leasableAreaSqft / (leasableAreaSqft / 0.85) * 100),
+      } : {}),
+      ...(assetClass === 'retail' ? {
+        blendedRentFactor: round4(blendedRentFactor),
+        anchorRentDiscount: round2(anchorRentDiscount),
+      } : {}),
     },
     areas: {
       leasable:    round2(leasableAreaSqft),
@@ -1330,10 +1364,16 @@ function calculateHospitality(input) {
       entryValue:    round4(entryValueCr),
       revPAR:        round2(revPARStabilized),
       gopMargin:     round2(gopMarginPct),
+      // Per-key metrics
+      devCostPerKey:   keys > 0 ? round2((totalDevCostCr * 1e7) / keys) : null,
+      revenuePerKey:   keys > 0 ? round2((totalRevCrY1Stab * 1e7) / keys) : null,
+      ebitdaPerKey:    keys > 0 ? round2((ebitdaCrY1Stab * 1e7) / keys) : null,
+      gopPAR:          keys > 0 ? round2((gopCrY1Stab * 1e7) / (keys * 365)) : null,
+      tRevPAR:         keys > 0 ? round2((totalRevCrY1Stab * 1e7) / (keys * 365)) : null,
     },
     areas: {
       leasable:    null,
-      grossBuiltUp: round2(keys * 600),  // rough estimate ~600 sqft/key incl. common areas
+      grossBuiltUp: round2(keys * 600),
       saleable:    null, carpet: null, superBuiltUp: null,
       keys,
     },

@@ -123,7 +123,7 @@ const normalizeCityVariants = (city) => {
   const normalized = String(city || '').trim().toLowerCase();
   if (!normalized) return [];
   if (normalized === 'bengaluru' || normalized === 'bangalore') {
-    return ['bengaluru', 'bangalore'];
+    return ['bengaluru'];
   }
   return [normalized];
 };

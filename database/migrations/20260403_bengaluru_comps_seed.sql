@@ -20,7 +20,7 @@ INSERT INTO comps (
   is_verified, source, created_at, updated_at
 ) VALUES
 
--- ─── East Bangalore: Whitefield / Brookefield / KR Puram ───────────────────
+-- ─── East Bengaluru: Whitefield / Brookefield / KR Puram ───────────────────
 ('Mahindra Blossom', 'Mahindra Lifespace Developers Limited',
   'Bengaluru', 'Whitefield', 12.9698, 77.7499,
   'residential', '3/3.5/4 BHK', 15500, 733, TRUE,
@@ -46,7 +46,7 @@ INSERT INTO comps (
   'residential', '2/3/4 BHK', 15000, 150, TRUE,
   'Internal benchmark table – April 2026', NOW(), NOW()),
 
--- ─── North Bangalore: Yelahanka / Hebbal-Yelahanka belt ────────────────────
+-- ─── North Bengaluru: Yelahanka / Hebbal-Yelahanka belt ────────────────────
 ('Casagrand Estancia', 'Casagrand',
   'Bengaluru', 'Yelahanka', 13.1007, 77.5963,
   'residential', '3/4 BHK', 8220, 429, TRUE,
@@ -77,7 +77,7 @@ INSERT INTO comps (
   'residential', '2/2.5/3 BHK', 8160, 2522, TRUE,
   'Internal benchmark table – April 2026', NOW(), NOW()),
 
--- ─── South Bangalore: Jayanagar / JP Nagar / Bannerghatta belt ─────────────
+-- ─── South Bengaluru: Jayanagar / JP Nagar / Bannerghatta belt ─────────────
 ('Vaishnavi at One Krishna Brindavan', 'Vaishnavi Group',
   'Bengaluru', 'JP Nagar', 12.9073, 77.5801,
   'residential', '3/4 BHK', 16660, 359, TRUE,

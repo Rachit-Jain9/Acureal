@@ -12,6 +12,7 @@ import {
   X,
   Loader2,
   Presentation,
+  Share2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -45,6 +46,7 @@ import DDTab from '../components/deal/DDTab';
 import RiskTab from '../components/deal/RiskTab';
 import CompsTab from '../components/deal/CompsTab';
 import ZoningTab from '../components/deal/ZoningTab';
+import ShareDealPanel from '../components/deal/ShareDealPanel';
 
 const TABS = [
   { id: 'overview',   label: 'Overview' },
@@ -132,6 +134,7 @@ export default function DealDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [exportingPptx, setExportingPptx] = useState(false);
+  const [showSharePanel, setShowSharePanel] = useState(false);
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const canEdit = ['owner', 'admin', 'editor'].includes(user?.role);
@@ -272,6 +275,12 @@ export default function DealDetailPage() {
               Export Deck
             </button>
           )}
+          <button
+            onClick={() => setShowSharePanel(true)}
+            className="btn btn-secondary flex items-center gap-1 text-sm"
+          >
+            <Share2 size={13} /> Share
+          </button>
           {canEdit && (
             <button
               onClick={handleEditOpen}
@@ -644,6 +653,16 @@ export default function DealDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Share Panel ───────────────────────────────────────────────── */}
+      {showSharePanel && (
+        <ShareDealPanel
+          dealId={id}
+          dealName={deal.name}
+          isOwner={deal.created_by === user?.id}
+          onClose={() => setShowSharePanel(false)}
+        />
       )}
 
       {/* ── Archive Confirm Modal ────────────────────────────────────────── */}

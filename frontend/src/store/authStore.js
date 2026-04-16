@@ -119,20 +119,6 @@ const useAuthStore = create((set) => ({
     }
   },
 
-  switchOrganization: async (organizationId) => {
-    try {
-      const { data: res } = await authAPI.getMeForOrganization(organizationId);
-      const updatedUser = res.data;
-      persistUser(updatedUser);
-      set({ user: updatedUser });
-      return { success: true, user: updatedUser };
-    } catch (err) {
-      const message = getRequestErrorMessage(err, 'Could not switch workspace');
-      set({ error: message });
-      return { success: false, message };
-    }
-  },
-
   clearError: () => set({ error: null }),
   sessionPersistence: getSessionPersistence(),
 }));

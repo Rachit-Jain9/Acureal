@@ -7,12 +7,20 @@ const getDocumentErrorMessage = (err, fallback) => {
     return 'Upload timed out. Please retry with a smaller file or a more stable connection.';
   }
 
+  if (err.response?.status === 413) {
+    return 'File is too large for the server. Try a file under 4.5 MB or contact support.';
+  }
+
+  if (err.response?.status === 403) {
+    return err.response.data?.message || 'You do not have permission to perform this action.';
+  }
+
   if (err.response?.data?.message) {
     return err.response.data.message;
   }
 
   if (err.request) {
-    return 'Could not reach the document service. Please retry.';
+    return 'No response from the server. Check your connection and file size, then retry.';
   }
 
   return fallback;

@@ -253,7 +253,7 @@ VALUES
  'Tata Realty and Infrastructure Ltd',
  'Gulf Oil Corp + Hinduja Realty Ventures',
  NULL,23000,38,NULL,
- 'North Bangalore',
+ 'North Bengaluru',
  'Premium Commercial Office | 38+ acres',
  'Source pending','Bengaluru')
 
@@ -267,7 +267,7 @@ INSERT INTO micro_market_benchmarks
 VALUES
   ('Bengaluru','Whitefield',                13900,17000,  5, 9, 'ITPL, RMZ Ecoworld',                '2025-2026'),
   ('Bengaluru','Sarjapur Road',              6500,12000,  7, 9, 'Wipro SEZ, Embassy TechVillage',     '2025-2026'),
-  ('Bengaluru','Hebbal / North Bangalore',   8500,12000,  6, 8, 'Manyata Tech Park, Airport',         '2025-2026'),
+  ('Bengaluru','Hebbal / North Bengaluru',   8500,12000,  6, 8, 'Manyata Tech Park, Airport',         '2025-2026'),
   ('Bengaluru','Devanahalli / Bagalur',      8000,11500,  8,12, 'Aerospace Park, KIA',                '2025-2026'),
   ('Bengaluru','Thanisandra / Hennur',      10000,17000,  7,10, 'Manyata Tech Park',                  '2025-2026'),
   ('Bengaluru','Bannerghatta Road',          8000,12640,  6, 8, 'NICE Road, E-City access',            '2025-2026'),
@@ -284,14 +284,14 @@ ON CONFLICT (city, micro_market) DO UPDATE SET
 
 -- ── 6. UPDATE COMPS WITH UNIT COUNTS, SIZE RANGES, RATE RANGES ──
 
--- East Bangalore
+-- East Bengaluru
 UPDATE comps SET total_units=733,  bhk_config='3/3.5/4 BHK',            carpet_area_sqft=1136, super_builtup_area_sqft=1515, rate_per_sqft=15500, rate_per_sqft_min=15500, rate_per_sqft_max=15500 WHERE project_name='Mahindra Blossom'            AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=2000, bhk_config='1/2/3/4 BHK',            carpet_area_sqft=659,  super_builtup_area_sqft=2513, rate_per_sqft=15400, rate_per_sqft_min=13900, rate_per_sqft_max=16900 WHERE project_name='Prestige Evergreen'           AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=329,  bhk_config='3/4 BHK',                 carpet_area_sqft=1060, super_builtup_area_sqft=2810, rate_per_sqft=14600, rate_per_sqft_min=14600, rate_per_sqft_max=14600 WHERE project_name='Sumadhura Solace Phase II'    AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=1875, bhk_config='1/3/3.5/4 BHK',          carpet_area_sqft=660,  super_builtup_area_sqft=2481, rate_per_sqft=14850, rate_per_sqft_min=14100, rate_per_sqft_max=15600 WHERE project_name='Sobha Neopolis Phase 4'       AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=150,  bhk_config='2/3/4 BHK',               carpet_area_sqft=826,  super_builtup_area_sqft=1464, rate_per_sqft=15000, rate_per_sqft_min=15000, rate_per_sqft_max=15000 WHERE project_name='Sumadhura Edition Phase II'   AND city ILIKE '%bengaluru%';
 
--- North Bangalore
+-- North Bengaluru
 UPDATE comps SET total_units=429,  bhk_config='3/4 BHK',                 carpet_area_sqft=1770, super_builtup_area_sqft=2773, rate_per_sqft=8220,  rate_per_sqft_min=8220,  rate_per_sqft_max=8220  WHERE project_name='Casagrand Estancia'         AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=940,  bhk_config='3BHK/4BHK/Townhouse/Row House', carpet_area_sqft=1650, super_builtup_area_sqft=3553, rate_per_sqft=11900, rate_per_sqft_min=10000, rate_per_sqft_max=13800 WHERE project_name='TATA Varnam'           AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=1904, bhk_config='Studio/1/2/2.5/3/3.5/4 BHK + Row Houses', carpet_area_sqft=650, super_builtup_area_sqft=2600, rate_per_sqft=11670, rate_per_sqft_min=11670, rate_per_sqft_max=11670 WHERE project_name='Bhartiya Nikoo Garden Estate' AND city ILIKE '%bengaluru%';
@@ -299,7 +299,7 @@ UPDATE comps SET total_units=1077, bhk_config='Studio/1/2/3/4 BHK',      carpet_
 UPDATE comps SET total_units=600,  bhk_config='3/4 BHK Villas & Apartments', carpet_area_sqft=2400, super_builtup_area_sqft=3200, rate_per_sqft=9500, rate_per_sqft_min=9500, rate_per_sqft_max=9500 WHERE project_name='Prestige Autumn Leaves'  AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=2522, bhk_config='2/2.5/3 BHK',             carpet_area_sqft=1041, super_builtup_area_sqft=1927, rate_per_sqft=8160,  rate_per_sqft_min=8160,  rate_per_sqft_max=8160  WHERE project_name='Kalyani Living Tree'        AND city ILIKE '%bengaluru%';
 
--- South Bangalore
+-- South Bengaluru
 UPDATE comps SET total_units=359,  bhk_config='3/4 BHK',                 carpet_area_sqft=2050, super_builtup_area_sqft=2566, rate_per_sqft=16660, rate_per_sqft_min=16660, rate_per_sqft_max=16660 WHERE project_name ILIKE '%Vaishnavi%Krishna%'   AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=2130, bhk_config='1/2/3/3.5/4 BHK',         carpet_area_sqft=695,  super_builtup_area_sqft=2774, rate_per_sqft=12150, rate_per_sqft_min=11500, rate_per_sqft_max=12800 WHERE project_name='Prestige Southern Star'      AND city ILIKE '%bengaluru%';
 UPDATE comps SET total_units=2000, bhk_config='2/3/4 BHK',               carpet_area_sqft=1100, super_builtup_area_sqft=2500, rate_per_sqft=12000, rate_per_sqft_min=10000, rate_per_sqft_max=13000 WHERE project_name ILIKE '%Godrej%Bannerghatta%' AND city ILIKE '%bengaluru%';

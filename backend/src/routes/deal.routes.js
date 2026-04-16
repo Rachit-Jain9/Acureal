@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query: qv, param } = require('express-validator');
 const dealService = require('../services/deal.service');
+const dealShareService = require('../services/dealShare.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -58,6 +59,16 @@ router.get(
     }
   }
 );
+
+// GET /deals/shared-with-me (must be before /:id)
+router.get('/shared-with-me', authenticate, async (req, res, next) => {
+  try {
+    const shares = await dealShareService.listDealsSharedWithMe(req.user.id);
+    res.json({ success: true, data: shares });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // GET /deals/pipeline
 router.get('/pipeline', authenticate, async (req, res, next) => {
@@ -222,6 +233,56 @@ router.get('/:id/readiness', authenticate, async (req, res, next) => {
         next_steps: deal.next_steps,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Deal Sharing ─────────────────────────────────────────────────────────
+
+// GET /deals/:id/shares
+router.get('/:id/shares', authenticate, async (req, res, next) => {
+  try {
+    const shares = await dealShareService.listDealShares(req.params.id, req.user.id);
+    res.json({ success: true, data: shares });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /deals/:id/shares
+router.post(
+  '/:id/shares',
+  authenticate,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('permission').optional().isIn(['viewer', 'editor']).withMessage('Permission must be viewer or editor'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const share = await dealShareService.shareDeal(
+        req.params.id,
+        req.user.id,
+        req.body.email,
+        req.body.permission || 'viewer'
+      );
+      res.status(201).json({ success: true, message: 'Deal shared.', data: share });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// DELETE /deals/:id/shares/:userId
+router.delete('/:id/shares/:userId', authenticate, async (req, res, next) => {
+  try {
+    const result = await dealShareService.revokeDealShare(
+      req.params.id,
+      req.user.id,
+      req.params.userId
+    );
+    res.json({ success: true, message: 'Share revoked.', data: result });
   } catch (error) {
     next(error);
   }

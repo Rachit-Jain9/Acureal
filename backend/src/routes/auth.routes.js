@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const authService = require('../services/auth.service');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 
 const router = express.Router();
@@ -104,69 +104,6 @@ router.put(
       };
       const updated = await authService.updateUser(req.user.id, payload, req.user.organization_id);
       res.json({ success: true, message: 'Profile updated.', data: updated });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// GET /auth/users (admin only)
-router.get('/users', authenticate, requireAdmin, async (req, res, next) => {
-  try {
-    const users = await authService.listUsers(req.user.organization_id);
-    res.json({ success: true, data: users });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// PATCH /auth/users/:id/status (admin only)
-router.patch('/users/:id/status', authenticate, requireAdmin, async (req, res, next) => {
-  try {
-    const { isActive } = req.body;
-    if (typeof isActive !== 'boolean') {
-      return res.status(400).json({ success: false, message: 'isActive must be a boolean.' });
-    }
-    const user = await authService.toggleUserStatus(
-      req.params.id,
-      isActive,
-      req.user.id,
-      req.user.organization_id
-    );
-    res.json({ success: true, data: user });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/organizations', authenticate, async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      activeOrganizationId: req.user.organization_id,
-      organizations: req.user.organizations || [],
-    },
-  });
-});
-
-router.post(
-  '/invitations',
-  authenticate,
-  requireAdmin,
-  [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-    body('role').isIn(['admin', 'editor', 'viewer']).withMessage('Invalid invitation role'),
-  ],
-  handleValidation,
-  async (req, res, next) => {
-    try {
-      const invitation = await authService.createInvitation(
-        req.user.organization_id,
-        req.body.email,
-        req.body.role,
-        req.user.id
-      );
-      res.status(201).json({ success: true, data: invitation });
     } catch (error) {
       next(error);
     }

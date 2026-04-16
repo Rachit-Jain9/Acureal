@@ -64,15 +64,7 @@ export const authAPI = {
   login: (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
   getMe: () => api.get('/auth/me'),
-  getMeForOrganization: (organizationId) =>
-    api.get('/auth/me', {
-      headers: { 'X-Organization-Id': organizationId },
-    }),
   updateMe: (data) => api.put('/auth/me', data),
-  getOrganizations: () => api.get('/auth/organizations'),
-  listUsers: () => api.get('/auth/users'),
-  toggleUserStatus: (id, isActive) => api.patch(`/auth/users/${id}/status`, { isActive }),
-  inviteUser: (data) => api.post('/auth/invitations', data),
 };
 
 // Deals
@@ -87,6 +79,11 @@ export const dealsAPI = {
   transitionStage: (id, stage, notes) => api.patch(`/deals/${id}/stage`, { stage, notes }),
   getPipeline: () => api.get('/deals/pipeline'),
   getSummary: () => api.get('/deals/summary'),
+  // Sharing
+  listShares: (id) => api.get(`/deals/${id}/shares`),
+  shareDeal: (id, email, permission) => api.post(`/deals/${id}/shares`, { email, permission }),
+  revokeShare: (id, userId) => api.delete(`/deals/${id}/shares/${userId}`),
+  getSharedWithMe: () => api.get('/deals/shared-with-me'),
 };
 
 // Properties
@@ -124,8 +121,11 @@ export const documentsAPI = {
   dealOptions: () => api.get('/documents/deals/options'),
   list: (dealId, category) => api.get(`/documents/${dealId}`, { params: { category } }),
   upload: (dealId, formData) => api.post(`/documents/${dealId}/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 2 * 60 * 1000,
+    // Let the browser set Content-Type with the correct multipart boundary
+    headers: { 'Content-Type': undefined },
+    timeout: 3 * 60 * 1000,
+    maxContentLength: 55 * 1024 * 1024,
+    maxBodyLength: 55 * 1024 * 1024,
   }),
   downloadMeta: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}`),
   download: (dealId, docId) => api.get(`/documents/${dealId}/download/${docId}/file`, {
@@ -163,7 +163,6 @@ export const intelligenceAPI = {
 
 // Exports
 export const exportsAPI = {
-  deals: (params) => api.get('/exports/deals', { params, responseType: 'blob' }),
   comps: () => api.get('/exports/comps', { responseType: 'blob' }),
   dealXlsx: (dealId) => api.get(`/exports/deals/${dealId}/xlsx`, { responseType: 'blob' }),
   dealPdf: (dealId) => api.get(`/exports/deals/${dealId}/pdf`, { responseType: 'blob' }),

@@ -11,6 +11,11 @@ RETURNS UUID AS $$
   SELECT NULLIF(current_setting('app.current_organization_id', true), '')::uuid
 $$ LANGUAGE sql STABLE;
 
+CREATE OR REPLACE FUNCTION current_user_id()
+RETURNS UUID LANGUAGE sql STABLE AS $$
+  SELECT NULLIF(current_setting('app.current_user_id', true), '')::uuid
+$$;
+
 -- Enums
 CREATE TYPE user_role AS ENUM ('admin', 'analyst', 'viewer');
 CREATE TYPE organization_role AS ENUM ('owner', 'admin', 'editor', 'viewer');
@@ -170,6 +175,23 @@ CREATE INDEX idx_deals_assigned_to ON deals(assigned_to);
 CREATE INDEX idx_deals_created_by ON deals(created_by);
 CREATE INDEX idx_deals_deal_type ON deals(deal_type);
 CREATE INDEX idx_deals_archived ON deals(is_archived);
+
+-- Deal shares table (per-user deal sharing across isolated workspaces)
+CREATE TABLE deal_shares (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    shared_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    shared_with UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    permission VARCHAR(20) NOT NULL DEFAULT 'viewer'
+        CHECK (permission IN ('viewer', 'editor')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (deal_id, shared_with)
+);
+
+CREATE INDEX idx_deal_shares_deal ON deal_shares(deal_id);
+CREATE INDEX idx_deal_shares_shared_with ON deal_shares(shared_with);
+CREATE INDEX idx_deal_shares_shared_by ON deal_shares(shared_by);
 
 -- Deal stage history table
 CREATE TABLE deal_stage_history (
@@ -713,6 +735,65 @@ CREATE POLICY approval_items_org_scope ON approval_items
 CREATE POLICY risk_flags_org_scope ON risk_flags
   FOR ALL USING (organization_id = current_organization_id())
   WITH CHECK (organization_id = current_organization_id());
+
+-- Deal shares RLS
+ALTER TABLE deal_shares ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY deal_shares_access ON deal_shares
+  FOR ALL USING (
+    shared_by = current_user_id()
+    OR shared_with = current_user_id()
+  );
+
+-- Shared deal read policies (complement org-scoped policies for cross-user access)
+CREATE POLICY deals_shared_read ON deals
+  FOR SELECT USING (
+    id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY properties_shared_read ON properties
+  FOR SELECT USING (
+    id IN (
+      SELECT d.property_id FROM deals d
+      INNER JOIN deal_shares ds ON ds.deal_id = d.id
+      WHERE ds.shared_with = current_user_id() AND d.property_id IS NOT NULL
+    )
+  );
+
+CREATE POLICY documents_shared_read ON documents
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY dd_items_shared_read ON dd_items
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY approval_items_shared_read ON approval_items
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY risk_flags_shared_read ON risk_flags
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY activities_shared_read ON activities
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY financials_shared_read ON financials
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
+
+CREATE POLICY deal_stage_history_shared_read ON deal_stage_history
+  FOR SELECT USING (
+    deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
+  );
 
 -- View: deal_summary
 CREATE VIEW deal_summary AS

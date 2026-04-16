@@ -26,7 +26,7 @@ const getDashboardStats = async (userId) => {
       AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage <> 'dead') as avg_irr_pct
      FROM deals d
      LEFT JOIN financials f ON d.id = f.deal_id
-     WHERE d.organization_id = current_organization_id()`,
+     WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))`,
     [liveStageArray]
   );
 
@@ -98,7 +98,7 @@ const getDashboardStats = async (userId) => {
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id
      LEFT JOIN financials f ON d.id = f.deal_id
-     WHERE d.organization_id = current_organization_id()
+     WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))
        AND f.irr_pct IS NOT NULL AND d.stage NOT IN ('dead', 'closed') AND d.is_archived = FALSE
      ORDER BY f.irr_pct DESC
      LIMIT 5`
@@ -112,7 +112,7 @@ const getDashboardStats = async (userId) => {
       COUNT(*) as new_deals,
       COUNT(*) FILTER (WHERE d.stage = 'closed') as closed_deals
      FROM deals d
-     WHERE d.organization_id = current_organization_id()
+     WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))
        AND d.created_at >= NOW() - INTERVAL '6 months' AND d.is_archived = FALSE
        AND d.stage <> 'dead'
      GROUP BY DATE_TRUNC('month', d.created_at), TO_CHAR(d.created_at, 'Mon YYYY')

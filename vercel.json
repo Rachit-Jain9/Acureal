@@ -6,7 +6,8 @@
   "installCommand": "npm install --prefix backend && npm install --include=dev --prefix frontend",
   "functions": {
     "api/index.js": {
-      "maxDuration": 30,
+      "maxDuration": 60,
+      "memory": 1024,
       "includeFiles": "backend/**"
     }
   },
