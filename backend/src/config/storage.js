@@ -18,6 +18,7 @@ const { Readable } = require('stream');
 const {
   uploadFile: supabaseUpload,
   getSignedUrl: supabaseSignedUrl,
+  createSignedUploadUrl: supabaseCreateSignedUploadUrl,
   deleteFile: supabaseDelete,
   getSupabaseConfig,
   isSupabaseConfigured,
@@ -202,6 +203,28 @@ const fetchStoredFile = async (fileUrl, expiresInSeconds = 3600) => {
 };
 
 /**
+ * Create a presigned upload URL so the frontend can upload directly to storage,
+ * bypassing Vercel's 4.5 MB serverless request body limit.
+ * Only supported for Supabase storage.
+ */
+const createUploadUrl = async (fileName, dealId, organizationId) => {
+  const preferredProvider = getPreferredStorageProvider();
+
+  if (preferredProvider !== 'supabase') {
+    throw new Error('Direct uploads are only supported with Supabase storage.');
+  }
+
+  if (!organizationId) {
+    throw new Error('Active organization context is required for document uploads.');
+  }
+
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `organizations/${organizationId}/deals/${dealId}/${Date.now()}-${safeName}`;
+
+  return supabaseCreateSignedUploadUrl(filePath);
+};
+
+/**
  * Delete a stored file.
  */
 const deleteStorageFile = async (fileUrl) => {
@@ -219,6 +242,7 @@ const deleteStorageFile = async (fileUrl) => {
 
 module.exports = {
   uploadFile,
+  createUploadUrl,
   getDownloadUrl,
   fetchStoredFile,
   deleteStorageFile,

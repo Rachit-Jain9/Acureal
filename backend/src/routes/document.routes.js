@@ -33,7 +33,7 @@ router.get(
   }
 );
 
-// POST /documents/:dealId/upload
+// POST /documents/:dealId/upload  (legacy: through-server, subject to Vercel 4.5 MB limit)
 router.post(
   '/:dealId/upload',
   authenticate,
@@ -47,6 +47,57 @@ router.post(
         req.body.category || 'other',
         req.user.id,
         req.body.description,
+        req.user.organization_id
+      );
+      res.status(201).json({ success: true, message: 'Document uploaded.', data: doc });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /documents/:dealId/upload-url  (step 1: get presigned URL for direct-to-Supabase upload)
+router.post(
+  '/:dealId/upload-url',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const { fileName, fileSize } = req.body;
+      if (!fileName) {
+        return res.status(400).json({ success: false, message: 'fileName is required.' });
+      }
+      const result = await documentService.getPresignedUploadUrl(
+        req.params.dealId,
+        fileName,
+        fileSize || 0,
+        req.user.id,
+        req.user.organization_id
+      );
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /documents/:dealId/confirm-upload  (step 2: save metadata after direct upload)
+router.post(
+  '/:dealId/confirm-upload',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const { storagePath, originalName, fileType, fileSize, category, description } = req.body;
+      const doc = await documentService.confirmDirectUpload(
+        req.params.dealId,
+        storagePath,
+        originalName,
+        fileType,
+        fileSize,
+        category || 'other',
+        description,
+        req.user.id,
         req.user.organization_id
       );
       res.status(201).json({ success: true, message: 'Document uploaded.', data: doc });

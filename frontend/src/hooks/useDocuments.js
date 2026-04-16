@@ -8,7 +8,7 @@ const getDocumentErrorMessage = (err, fallback) => {
   }
 
   if (err.response?.status === 413) {
-    return 'File is too large for the server. Try a file under 4.5 MB or contact support.';
+    return 'File exceeds the maximum allowed size (50 MB).';
   }
 
   if (err.response?.status === 403) {
@@ -19,8 +19,12 @@ const getDocumentErrorMessage = (err, fallback) => {
     return err.response.data.message;
   }
 
+  if (err.message) {
+    return err.message;
+  }
+
   if (err.request) {
-    return 'No response from the server. Check your connection and file size, then retry.';
+    return 'No response from the server. Check your connection and retry.';
   }
 
   return fallback;
@@ -41,10 +45,44 @@ export function useDocuments(dealId, category) {
   });
 }
 
+/**
+ * Two-step direct-to-Supabase upload:
+ *   1. Get a presigned URL from the backend
+ *   2. PUT the file directly to Supabase (bypasses Vercel 4.5 MB limit)
+ *   3. Confirm the upload with the backend to save metadata
+ */
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ dealId, formData }) => documentsAPI.upload(dealId, formData).then((r) => r.data),
+    mutationFn: async ({ dealId, file, category, description }) => {
+      // Step 1: get presigned upload URL
+      const urlRes = await documentsAPI.getUploadUrl(dealId, file.name, file.size);
+      const { signedUrl, storagePath } = urlRes.data.data;
+
+      // Step 2: upload directly to Supabase
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text().catch(() => '');
+        throw new Error(`Direct upload failed (${uploadRes.status}): ${errText || uploadRes.statusText}`);
+      }
+
+      // Step 3: confirm upload with backend
+      const confirmRes = await documentsAPI.confirmUpload(dealId, {
+        storagePath,
+        originalName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        category,
+        description,
+      });
+
+      return confirmRes.data;
+    },
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['documents', dealId] });
       toast.success('Document uploaded');

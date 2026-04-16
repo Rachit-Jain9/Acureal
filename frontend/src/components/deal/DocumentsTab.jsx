@@ -102,13 +102,14 @@ export default function DocumentsTab({ dealId }) {
       setFileError('Please select a file.');
       return;
     }
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('category', category);
-    if (description.trim()) formData.append('description', description.trim());
 
     try {
-      await uploadDoc.mutateAsync({ dealId, formData });
+      await uploadDoc.mutateAsync({
+        dealId,
+        file,
+        category,
+        description: description.trim() || undefined,
+      });
       setShowUploadForm(false);
       setFile(null);
       setDescription('');

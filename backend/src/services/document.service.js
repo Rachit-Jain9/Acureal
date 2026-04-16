@@ -1,6 +1,6 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
-const { uploadFile, getDownloadUrl, fetchStoredFile, deleteStorageFile } = require('../config/storage');
+const { uploadFile, createUploadUrl, getDownloadUrl, fetchStoredFile, deleteStorageFile } = require('../config/storage');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const path = require('path');
 
@@ -85,6 +85,101 @@ const uploadDocument = async (dealId, file, category, userId, description = '', 
   const doc = result.rows[0];
 
   // Get uploader name
+  const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
+  doc.uploaded_by_name = userResult.rows[0]?.name || 'Unknown';
+
+  return doc;
+};
+
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.zip', '.csv']);
+const MAX_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
+
+/**
+ * Step 1 of direct upload: generate a presigned URL so the frontend can PUT
+ * the file directly to Supabase Storage (bypasses Vercel 4.5 MB body limit).
+ */
+const getPresignedUploadUrl = async (dealId, fileName, fileSize, userId, organizationId) => {
+  if (!organizationId) {
+    throw createError('Active organization is required for document uploads.', 400);
+  }
+
+  const dealResult = await query(
+    'SELECT id, is_archived, stage FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    [dealId]
+  );
+  if (dealResult.rows.length === 0) {
+    throw createError('Deal not found.', 404);
+  }
+  if (dealResult.rows[0].is_archived) {
+    throw createError('Restore the archived deal before uploading documents to it.', 409);
+  }
+  if (dealResult.rows[0].stage === 'dead') {
+    throw createError('Dead deals are hidden from document workflows.', 409);
+  }
+
+  // Validate extension
+  const ext = path.extname(fileName).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    throw createError(`File type ${ext} is not allowed.`, 400);
+  }
+
+  // Validate size
+  if (fileSize > MAX_FILE_SIZE) {
+    throw createError(`File too large. Maximum allowed size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`, 413);
+  }
+
+  try {
+    const result = await createUploadUrl(fileName, dealId, organizationId);
+    return {
+      signedUrl: result.signedUrl,
+      storagePath: result.path,
+      token: result.token,
+    };
+  } catch (error) {
+    throw createError(`Could not create upload URL: ${error.message}`, 500);
+  }
+};
+
+/**
+ * Step 2 of direct upload: after the frontend has PUT the file to Supabase,
+ * save the document metadata row in the database.
+ */
+const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, fileSize, category, description, userId, organizationId) => {
+  if (!organizationId) {
+    throw createError('Active organization is required for document uploads.', 400);
+  }
+
+  const dealResult = await query(
+    'SELECT id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    [dealId]
+  );
+  if (dealResult.rows.length === 0) {
+    throw createError('Deal not found.', 404);
+  }
+
+  if (!storagePath) {
+    throw createError('Storage path is required.', 400);
+  }
+
+  const fileExt = path.extname(originalName || '').toLowerCase();
+
+  const result = await query(
+    `INSERT INTO documents (deal_id, name, file_url, file_type, file_size_bytes, doc_category, description, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
+    [
+      dealId,
+      originalName || 'Untitled',
+      storagePath,
+      fileType || fileExt.substring(1),
+      fileSize || 0,
+      category || 'other',
+      description || null,
+      userId,
+    ]
+  );
+
+  const doc = result.rows[0];
   const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
   doc.uploaded_by_name = userResult.rows[0]?.name || 'Unknown';
 
@@ -276,6 +371,8 @@ const streamDownload = async (documentId, res, dealId = null) => {
 module.exports = {
   getDocumentDealOptions,
   uploadDocument,
+  getPresignedUploadUrl,
+  confirmDirectUpload,
   getDocuments,
   deleteDocument,
   getSignedUrl,

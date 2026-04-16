@@ -120,8 +120,14 @@ export const compsAPI = {
 export const documentsAPI = {
   dealOptions: () => api.get('/documents/deals/options'),
   list: (dealId, category) => api.get(`/documents/${dealId}`, { params: { category } }),
+  // Step 1: get presigned URL for direct-to-Supabase upload
+  getUploadUrl: (dealId, fileName, fileSize) =>
+    api.post(`/documents/${dealId}/upload-url`, { fileName, fileSize }),
+  // Step 2: confirm upload after file is in Supabase
+  confirmUpload: (dealId, data) =>
+    api.post(`/documents/${dealId}/confirm-upload`, data),
+  // Legacy: through-server upload (kept for fallback / small files)
   upload: (dealId, formData) => api.post(`/documents/${dealId}/upload`, formData, {
-    // Let the browser set Content-Type with the correct multipart boundary
     headers: { 'Content-Type': undefined },
     timeout: 3 * 60 * 1000,
     maxContentLength: 55 * 1024 * 1024,

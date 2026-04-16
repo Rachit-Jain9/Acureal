@@ -71,6 +71,32 @@ const getSignedUrl = async (filePath, expiresInSeconds = 3600) => {
 };
 
 /**
+ * Create a signed upload URL so the client can PUT a file directly to Supabase,
+ * bypassing Vercel's 4.5 MB serverless body limit.
+ */
+const createSignedUploadUrl = async (filePath) => {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    throw new Error('Supabase storage is not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).');
+  }
+
+  const { data, error } = await client.storage
+    .from(getStorageBucket())
+    .createSignedUploadUrl(filePath);
+
+  if (error) {
+    throw new Error(`Signed upload URL creation failed: ${error.message}`);
+  }
+
+  return {
+    signedUrl: data.signedUrl,
+    path: data.path,
+    token: data.token,
+  };
+};
+
+/**
  * Delete a file from Supabase Storage.
  */
 const deleteFile = async (filePath) => {
@@ -96,5 +122,6 @@ module.exports = {
   isSupabaseConfigured,
   uploadFile,
   getSignedUrl,
+  createSignedUploadUrl,
   deleteFile,
 };
