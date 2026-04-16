@@ -5,8 +5,14 @@ const { calculateFullFinancials, calculateScenarios } = require('../engines/fina
 // ─── CALCULATE AND SAVE ───────────────────────────────────────────────────────
 
 const calculateAndSave = async (dealId, inputData) => {
-  const dealResult = await query('SELECT id FROM deals WHERE id = $1', [dealId]);
+  const dealResult = await query(
+    'SELECT id, is_archived, stage FROM deals WHERE id = $1',
+    [dealId]
+  );
   if (dealResult.rows.length === 0) throw createError('Deal not found.', 404);
+  const dealRow = dealResult.rows[0];
+  if (dealRow.is_archived) throw createError('Restore this deal before recalculating financials.', 409);
+  if (dealRow.stage === 'dead') throw createError('Financial models cannot be saved to a dead deal.', 409);
 
   const computed   = calculateFullFinancials(inputData);
   const scenarios  = calculateScenarios(inputData);

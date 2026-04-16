@@ -137,13 +137,27 @@ const getDocuments = async (dealId, category = null) => {
 };
 
 const deleteDocument = async (documentId, userId) => {
-  const result = await query('SELECT * FROM documents WHERE id = $1', [documentId]);
+  const result = await query(
+    `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
+     FROM documents doc
+     LEFT JOIN deals ON deals.id = doc.deal_id
+     WHERE doc.id = $1`,
+    [documentId]
+  );
 
   if (result.rows.length === 0) {
     throw createError('Document not found.', 404);
   }
 
   const doc = result.rows[0];
+
+  if (doc.deal_archived) {
+    throw createError('Cannot delete documents from an archived deal. Restore the deal first.', 409);
+  }
+
+  if (doc.deal_stage === 'dead') {
+    throw createError('Cannot delete documents from a dead deal.', 409);
+  }
 
   try {
     await deleteStorageFile(doc.file_url);
@@ -157,14 +171,28 @@ const deleteDocument = async (documentId, userId) => {
   return { deleted: true, id: documentId };
 };
 
-const getSignedUrl = async (documentId) => {
-  const result = await query('SELECT * FROM documents WHERE id = $1', [documentId]);
+const getSignedUrl = async (documentId, dealId = null) => {
+  const result = await query(
+    `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
+     FROM documents doc
+     LEFT JOIN deals ON deals.id = doc.deal_id
+     WHERE doc.id = $1`,
+    [documentId]
+  );
 
   if (result.rows.length === 0) {
     throw createError('Document not found.', 404);
   }
 
   const doc = result.rows[0];
+
+  if (dealId && doc.deal_id && doc.deal_id !== dealId) {
+    throw createError('Document not found.', 404);
+  }
+
+  if (doc.deal_archived || doc.deal_stage === 'dead') {
+    throw createError('Document not found.', 404);
+  }
 
   try {
     const downloadUrl = await getDownloadUrl(doc.file_url, 3600);
@@ -178,14 +206,28 @@ const getSignedUrl = async (documentId) => {
   }
 };
 
-const streamDownload = async (documentId, res) => {
-  const result = await query('SELECT * FROM documents WHERE id = $1', [documentId]);
+const streamDownload = async (documentId, res, dealId = null) => {
+  const result = await query(
+    `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
+     FROM documents doc
+     LEFT JOIN deals ON deals.id = doc.deal_id
+     WHERE doc.id = $1`,
+    [documentId]
+  );
 
   if (result.rows.length === 0) {
     throw createError('Document not found.', 404);
   }
 
   const doc = result.rows[0];
+
+  if (dealId && doc.deal_id && doc.deal_id !== dealId) {
+    throw createError('Document not found.', 404);
+  }
+
+  if (doc.deal_archived || doc.deal_stage === 'dead') {
+    throw createError('Document not found.', 404);
+  }
 
   try {
     const file = await fetchStoredFile(doc.file_url, 3600);

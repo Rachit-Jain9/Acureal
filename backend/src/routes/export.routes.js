@@ -35,80 +35,16 @@ const escapeCsvField = (value) => {
 
 const toCsvRow = (fields) => fields.map(escapeCsvField).join(',');
 
-// GET /exports/deals
+// GET /exports/deals — retired; use per-deal CSV/XLSX/PPTX/PDF exports
 router.get(
   '/deals',
   authenticate,
   requireRole('admin', 'analyst'),
-  [qv('stage').optional(), qv('city').optional()],
-  handleValidation,
-  async (req, res, next) => {
-    return res.status(410).json({
+  async (req, res) => {
+    res.status(410).json({
       success: false,
-      message: 'JSON Investor-Grade report exports have been retired. Use PDF, PPTX, XLSX, or CSV exports instead.',
+      message: 'JSON pipeline exports have been retired. Use per-deal PDF, PPTX, XLSX, or CSV exports instead.',
     });
-
-    try {
-      const conditions = ['1=1'];
-      const values = [];
-      let paramCount = 1;
-
-      if (req.query.stage) {
-        conditions.push(`d.stage = $${paramCount}`);
-        values.push(req.query.stage);
-        paramCount++;
-      }
-      if (req.query.city) {
-        conditions.push(`LOWER(p.city) = LOWER($${paramCount})`);
-        values.push(req.query.city);
-        paramCount++;
-      }
-
-      const result = await query(
-        `SELECT d.name as deal_name, d.deal_type, d.stage, d.priority,
-          p.name as property_name, p.city, p.state, p.land_area_sqft,
-          d.land_ask_price_cr, d.negotiated_price_cr,
-          f.total_revenue_cr, f.total_cost_cr, f.gross_profit_cr,
-          f.irr_pct, f.npv_cr, f.gross_margin_pct,
-          u.name as assigned_to_name,
-          d.created_at, d.updated_at
-         FROM deals d
-         LEFT JOIN properties p ON d.property_id = p.id
-         LEFT JOIN financials f ON d.id = f.deal_id
-         LEFT JOIN users u ON d.assigned_to = u.id
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY d.updated_at DESC`,
-        values
-      );
-
-      const headers = [
-        'Deal Name', 'Deal Type', 'Stage', 'Priority',
-        'Property', 'City', 'State', 'Land Area (sqft)',
-        'Ask Price (Cr)', 'Negotiated Price (Cr)',
-        'Revenue (Cr)', 'Cost (Cr)', 'Profit (Cr)',
-        'IRR %', 'NPV (Cr)', 'Margin %',
-        'Assigned To', 'Created', 'Updated',
-      ];
-
-      const rows = result.rows.map((r) =>
-        toCsvRow([
-          r.deal_name, r.deal_type, r.stage, r.priority,
-          r.property_name, r.city, r.state, r.land_area_sqft,
-          r.land_ask_price_cr, r.negotiated_price_cr,
-          r.total_revenue_cr, r.total_cost_cr, r.gross_profit_cr,
-          r.irr_pct, r.npv_cr, r.gross_margin_pct,
-          r.assigned_to_name, r.created_at, r.updated_at,
-        ])
-      );
-
-      const csv = [toCsvRow(headers), ...rows].join('\n');
-
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="deals-export-${Date.now()}.csv"`);
-      res.send(csv);
-    } catch (error) {
-      next(error);
-    }
   }
 );
 

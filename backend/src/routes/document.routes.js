@@ -69,7 +69,7 @@ router.post(
 // GET /documents/:dealId/download/:documentId
 router.get('/:dealId/download/:documentId', authenticate, async (req, res, next) => {
   try {
-    const result = await documentService.getSignedUrl(req.params.documentId);
+    const result = await documentService.getSignedUrl(req.params.documentId, req.params.dealId);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -79,7 +79,7 @@ router.get('/:dealId/download/:documentId', authenticate, async (req, res, next)
 // GET /documents/:dealId/download/:documentId/file
 router.get('/:dealId/download/:documentId/file', authenticate, async (req, res, next) => {
   try {
-    await documentService.streamDownload(req.params.documentId, res);
+    await documentService.streamDownload(req.params.documentId, res, req.params.dealId);
   } catch (error) {
     next(error);
   }
