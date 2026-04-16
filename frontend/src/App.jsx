@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import useAuthStore from './store/authStore';
 import Layout from './components/layout/Layout';
 import ToastContainer from './components/common/Toast';
@@ -73,6 +74,7 @@ export default function App() {
   useDisableNumberInputScroll();
   return (
     <BrowserRouter>
+      <Analytics />
       <ToastContainer />
       <Routes>
         {/* Public landing page — no auth required */}
