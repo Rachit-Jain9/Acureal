@@ -364,7 +364,7 @@ export default function IntelligencePage() {
   const { data: transactions, isLoading: txLoading } = useMarketTransactions({ city: 'Bengaluru' });
   const { data: benchmarks, isLoading: bmLoading } = useMicroMarketBenchmarks({ city: 'Bengaluru' });
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
 
   if (isLoading) {
     return (

@@ -52,7 +52,7 @@ export default function MapPage() {
   const { data: dealsData, isLoading: dealsLoading } = useDeals({ limit: 500 });
   const { user } = useAuthStore();
   const bulkGeocode = useBulkGeocodeProperties();
-  const canGeocode = user?.role === 'admin' || user?.role === 'analyst';
+  const canGeocode = ['owner', 'admin', 'editor'].includes(user?.role);
 
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('all');

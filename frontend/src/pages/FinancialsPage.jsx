@@ -18,17 +18,13 @@ import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
 import StatCard from '../components/common/StatCard';
 import { formatCrores, formatPct, formatINR, formatArea } from '../utils/format';
+import {
+  ASSET_CLASS_CONFIG,
+  FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS,
+  resolveFinancialModelClass,
+} from '../utils/assetClasses';
 
 // ─── ASSET CLASS CONFIG ────────────────────────────────────────────────────
-
-const ASSET_CLASSES = [
-  { value: 'residential_apartments', label: 'Residential Apartments' },
-  { value: 'plotted_development',    label: 'Plotted Development' },
-  { value: 'commercial_office',      label: 'Commercial Office' },
-  { value: 'retail',                 label: 'Retail' },
-  { value: 'industrial_warehousing', label: 'Industrial / Warehousing' },
-  { value: 'hospitality',            label: 'Hospitality' },
-];
 
 const INCOME_CLASSES     = new Set(['commercial_office', 'retail', 'industrial_warehousing']);
 const HOSPITALITY_CLASSES = new Set(['hospitality']);
@@ -37,6 +33,7 @@ const EXIT_STRATEGY_OPTIONS = [
   { value: 'lrd', label: 'LRD' },
   { value: 'forward_purchase', label: 'Forward Purchase' },
 ];
+const ASSET_CLASSES = ASSET_CLASS_CONFIG;
 
 // Per-class input field definitions
 const FIELD_DEFS = {
@@ -226,6 +223,12 @@ const DEFAULT_VALUES = {
   },
 };
 
+const getModelAssetClass = (assetClass) => resolveFinancialModelClass(assetClass);
+const getFieldDefs = (assetClass) => FIELD_DEFS[getModelAssetClass(assetClass)] || [];
+const getDefaultValues = (assetClass) => DEFAULT_VALUES[getModelAssetClass(assetClass)] || {};
+const getFinancialModelLabel = (assetClass) =>
+  FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS[assetClass] || 'Residential Apartments';
+
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 
 const toNumber = (v) => {
@@ -270,7 +273,7 @@ function monthsToYears(months) {
 
 function buildInitialInputs(financials, targetClass, deal) {
   const assetClass = targetClass || financials?.asset_class || 'residential_apartments';
-  const defaults = DEFAULT_VALUES[assetClass] || {};
+  const defaults = getDefaultValues(assetClass);
   const stored = financials?.model_params?.inputs || {};
 
   // Deal provides plot area / land area for pre-population when no financials yet
@@ -325,7 +328,7 @@ function buildInitialInputs(financials, targetClass, deal) {
   }
 
   // For any class: merge stored inputs with defaults, blank out anything not set
-  const fields = FIELD_DEFS[assetClass] || [];
+  const fields = getFieldDefs(assetClass);
   const out = { effectiveDate };
   for (const f of fields) {
     let val = stored[f.name] ?? defaults[f.name] ?? '';
@@ -425,6 +428,7 @@ function normalizeFinancials(financials) {
 function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
   const [inputs, setInputs] = useState(() => buildInitialInputs(null, assetClass, deal));
   const [hintOpen, setHintOpen] = useState(null);
+  const modelAssetClass = getModelAssetClass(assetClass);
 
   useEffect(() => {
     if (initialValues) setInputs(buildInitialInputs(initialValues, assetClass, deal));
@@ -439,7 +443,7 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const data = { assetClass };
-    const fieldLookup = new Map((FIELD_DEFS[assetClass] || []).map((field) => [field.name, field]));
+    const fieldLookup = new Map(getFieldDefs(assetClass).map((field) => [field.name, field]));
     for (const [k, v] of Object.entries(inputs)) {
       if (v === '' || v == null) { data[k] = undefined; continue; }
       // effectiveDate is a date string, not a number
@@ -456,10 +460,10 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
       industrial:             ['leasableAreaSqft', 'constructionCostPerSqft', 'baseRentPerSqftMonth'],
       hospitality:            ['keys', 'adr', 'stabilizedOccPct'],
     };
-    const missing = (required[assetClass] || []).filter((f) => !(data[f] > 0));
+    const missing = (required[getModelAssetClass(assetClass)] || []).filter((f) => !(data[f] > 0));
     if (missing.length) {
       const labels = missing.map((f) => {
-        const def = (FIELD_DEFS[assetClass] || []).find((d) => d.name === f);
+        const def = getFieldDefs(assetClass).find((d) => d.name === f);
         return def ? def.label : f;
       });
       toast.error(`Required: ${labels.join(', ')}`);
@@ -468,7 +472,7 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
     onSubmit(data);
   };
 
-  const fields = (FIELD_DEFS[assetClass] || []).filter(
+  const fields = getFieldDefs(assetClass).filter(
     (field) => !field.visibleWhen || field.visibleWhen(inputs, assetClass)
   );
 
@@ -478,6 +482,11 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
         <Calculator size={18} className="text-primary-600" />
         Model Inputs
       </h2>
+      {modelAssetClass !== assetClass && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          This asset class currently underwrites on the {getFinancialModelLabel(assetClass)} model family.
+        </div>
+      )}
       <div className="mb-4 bg-primary-50 border border-primary-100 rounded-lg p-3">
         <label htmlFor="effectiveDate" className="text-sm font-medium text-primary-900 block mb-1">
           Effective Date
@@ -558,8 +567,9 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
 }
 
 function KPICards({ kpis, assetClass }) {
-  const isIncome = INCOME_CLASSES.has(assetClass);
-  const isHospitality = HOSPITALITY_CLASSES.has(assetClass);
+  const modelAssetClass = getModelAssetClass(assetClass);
+  const isIncome = INCOME_CLASSES.has(modelAssetClass);
+  const isHospitality = HOSPITALITY_CLASSES.has(modelAssetClass);
 
   if (isHospitality) {
     return (
@@ -604,16 +614,17 @@ function KPICards({ kpis, assetClass }) {
 }
 
 function AreaBreakdown({ areas, assetClass }) {
+  const modelAssetClass = getModelAssetClass(assetClass);
   const rows = [];
-  if (assetClass === 'plotted_development') {
+  if (modelAssetClass === 'plotted_development') {
     rows.push({ label: 'Total Land Area', value: formatArea(areas.grossBuiltUp) });
     rows.push({ label: 'Saleable Land', value: formatArea(areas.saleable) });
     if (areas.totalPlots) rows.push({ label: 'Total Plots', value: areas.totalPlots.toLocaleString('en-IN') });
     if (areas.avgPlotSizeSqft) rows.push({ label: 'Avg Plot Size', value: formatArea(areas.avgPlotSizeSqft) });
-  } else if (HOSPITALITY_CLASSES.has(assetClass)) {
+  } else if (HOSPITALITY_CLASSES.has(modelAssetClass)) {
     if (areas.keys) rows.push({ label: 'Keys (rooms)', value: areas.keys.toLocaleString('en-IN') });
     if (areas.grossBuiltUp) rows.push({ label: 'Est. GFA (incl. common areas)', value: formatArea(areas.grossBuiltUp) });
-  } else if (INCOME_CLASSES.has(assetClass)) {
+  } else if (INCOME_CLASSES.has(modelAssetClass)) {
     rows.push({ label: 'Leasable Area', value: formatArea(areas.leasable) });
     rows.push({ label: 'Gross Built-Up (est.)', value: formatArea(areas.grossBuiltUp) });
   } else {
@@ -644,9 +655,10 @@ function AreaBreakdown({ areas, assetClass }) {
 }
 
 function CostBreakdown({ costs, assetClass }) {
+  const modelAssetClass = getModelAssetClass(assetClass);
   const rows = [
     { label: 'Land Cost',              value: costs.land },
-    { label: assetClass === 'plotted_development' ? 'Development Cost' : 'Construction Cost', value: costs.construction },
+    { label: modelAssetClass === 'plotted_development' ? 'Development Cost' : 'Construction Cost', value: costs.construction },
     { label: 'GST',                    value: costs.gst },
     { label: 'Contingency',            value: costs.contingency },
     { label: 'Stamp Duty',             value: costs.stampDuty },
@@ -680,8 +692,9 @@ function CostBreakdown({ costs, assetClass }) {
 }
 
 function RevenuePanel({ revenue, kpis, assetClass }) {
-  const isIncome = INCOME_CLASSES.has(assetClass);
-  const isHospitality = HOSPITALITY_CLASSES.has(assetClass);
+  const modelAssetClass = getModelAssetClass(assetClass);
+  const isIncome = INCOME_CLASSES.has(modelAssetClass);
+  const isHospitality = HOSPITALITY_CLASSES.has(modelAssetClass);
 
   let rows, panelTitle;
   if (isHospitality) {
@@ -731,7 +744,7 @@ function RevenuePanel({ revenue, kpis, assetClass }) {
 function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }) {
   const [view, setView] = useState('quarterly');
   if (!cashFlows || cashFlows.length === 0) return null;
-  const isIncome = INCOME_CLASSES.has(assetClass);
+  const isIncome = INCOME_CLASSES.has(getModelAssetClass(assetClass));
 
   const quarterlyData = cashFlows.map((cf) => ({ name: `Q${cf.quarter}`, value: cf.value }));
   const yearlyData    = (yearlyCashFlows || []).map((cf) => ({ name: cf.label, value: cf.value }));
@@ -800,8 +813,9 @@ function getIRRColor(irr) {
 function SensitivityTable({ sensitivity, assetClass }) {
   if (!sensitivity?.grid?.length) return null;
   const { sellingRates, constructionCosts, grid, axis } = sensitivity;
-  const isIncome      = INCOME_CLASSES.has(assetClass);
-  const isHospitality = HOSPITALITY_CLASSES.has(assetClass);
+  const modelAssetClass = getModelAssetClass(assetClass);
+  const isIncome      = INCOME_CLASSES.has(modelAssetClass);
+  const isHospitality = HOSPITALITY_CLASSES.has(modelAssetClass);
   const rowLabel  = axis?.[0] || (isIncome ? 'Exit Cap Rate (%)' : 'Constr. Cost/sqft');
   const colHeader = axis?.[1] || (isIncome ? 'Base Rent/sqft/mo' : 'Selling Rate/sqft');
 
@@ -1513,6 +1527,7 @@ export default function FinancialsPage() {
 
   const normalizedFinancials = useMemo(() => normalizeFinancials(financials), [financials]);
   const hasResults = !!normalizedFinancials;
+  const activeFinancialModelLabel = getFinancialModelLabel(activeClass);
   const showLegacyResidentialNotice = useMemo(
     () => hasLegacyResidentialLoadingFactor(financials),
     [financials]
@@ -1555,12 +1570,15 @@ export default function FinancialsPage() {
               onChange={(e) => handleClassChange(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
             >
-              {ASSET_CLASSES.map((ac) => (
+              {ASSET_CLASS_CONFIG.map((ac) => (
                 <option key={ac.value} value={ac.value}>{ac.label}</option>
               ))}
             </select>
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
+          <span className="text-xs text-gray-500">
+            Underwriting model: {activeFinancialModelLabel}
+          </span>
           {hasResults && normalizedFinancials.assetClass !== activeClass && (
             <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
               Switching class — current results shown above are for {ASSET_CLASSES.find((a) => a.value === normalizedFinancials.assetClass)?.label}

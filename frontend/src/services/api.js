@@ -23,8 +23,21 @@ const api = axios.create({
 // Attach JWT token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const rawUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+  let activeOrganizationId = null;
+
+  try {
+    const parsedUser = rawUser ? JSON.parse(rawUser) : null;
+    activeOrganizationId = parsedUser?.organization_id || parsedUser?.default_organization_id || null;
+  } catch {
+    activeOrganizationId = null;
+  }
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (activeOrganizationId && !config.headers['X-Organization-Id']) {
+    config.headers['X-Organization-Id'] = activeOrganizationId;
   }
   return config;
 });
@@ -51,9 +64,15 @@ export const authAPI = {
   login: (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
   getMe: () => api.get('/auth/me'),
+  getMeForOrganization: (organizationId) =>
+    api.get('/auth/me', {
+      headers: { 'X-Organization-Id': organizationId },
+    }),
   updateMe: (data) => api.put('/auth/me', data),
+  getOrganizations: () => api.get('/auth/organizations'),
   listUsers: () => api.get('/auth/users'),
   toggleUserStatus: (id, isActive) => api.patch(`/auth/users/${id}/status`, { isActive }),
+  inviteUser: (data) => api.post('/auth/invitations', data),
 };
 
 // Deals

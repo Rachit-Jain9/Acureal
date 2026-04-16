@@ -33,6 +33,17 @@ const saveSession = (token, user, rememberMe) => {
   storage.setItem('user', JSON.stringify(user));
 };
 
+const persistUser = (user) => {
+  if (localStorage.getItem('token')) {
+    localStorage.setItem('user', JSON.stringify(user));
+    return;
+  }
+
+  if (sessionStorage.getItem('token')) {
+    sessionStorage.setItem('user', JSON.stringify(user));
+  }
+};
+
 const getSessionPersistence = () => (localStorage.getItem('token') ? 'persistent' : 'session');
 
 const clearSession = () => {
@@ -100,16 +111,25 @@ const useAuthStore = create((set) => ({
     try {
       const { data: res } = await authAPI.updateMe(data);
       const updatedUser = res.data;
-      // Persist to whichever storage currently holds the user
-      if (localStorage.getItem('token')) {
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      } else {
-        sessionStorage.setItem('user', JSON.stringify(updatedUser));
-      }
+      persistUser(updatedUser);
       set({ user: updatedUser });
       return true;
     } catch {
       return false;
+    }
+  },
+
+  switchOrganization: async (organizationId) => {
+    try {
+      const { data: res } = await authAPI.getMeForOrganization(organizationId);
+      const updatedUser = res.data;
+      persistUser(updatedUser);
+      set({ user: updatedUser });
+      return { success: true, user: updatedUser };
+    } catch (err) {
+      const message = getRequestErrorMessage(err, 'Could not switch workspace');
+      set({ error: message });
+      return { success: false, message };
     }
   },
 

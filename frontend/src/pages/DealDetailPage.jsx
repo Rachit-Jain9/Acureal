@@ -133,8 +133,8 @@ export default function DealDetailPage() {
   const [editForm, setEditForm] = useState(null);
   const [exportingPptx, setExportingPptx] = useState(false);
 
-  const isAdmin = user?.role === 'admin';
-  const canEdit = user?.role === 'admin' || user?.role === 'analyst';
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const canEdit = ['owner', 'admin', 'editor'].includes(user?.role);
 
   const setTab = (tabId) => {
     setSearchParams({ tab: tabId });
@@ -625,8 +625,7 @@ export default function DealDetailPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Deal</h3>
             <p className="text-sm text-gray-600 mb-5">
-              Permanently delete <strong>{deal.name}</strong>? This is irreversible and should
-              only be done after archiving or marking the deal as dead/closed.
+              This action will permanently delete this deal and its associated data. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -640,7 +639,7 @@ export default function DealDetailPage() {
                 disabled={deleteDeal.isPending}
                 className="btn btn-danger"
               >
-                {deleteDeal.isPending ? 'Deleting...' : 'Delete'}
+                {deleteDeal.isPending ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>

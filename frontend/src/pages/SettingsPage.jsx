@@ -37,7 +37,7 @@ const DATE_FORMAT_OPTIONS = [
 ];
 
 export default function SettingsPage() {
-  const { user, updateProfile, sessionPersistence } = useAuthStore();
+  const { user, updateProfile, sessionPersistence, switchOrganization } = useAuthStore();
 
   // Profile form
   const [profile, setProfile] = useState({
@@ -46,6 +46,7 @@ export default function SettingsPage() {
     phone: user?.phone || '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
 
   // Security form
   const [security, setSecurity] = useState({
@@ -54,6 +55,10 @@ export default function SettingsPage() {
     confirmPassword: '',
   });
   const [changingPassword, setChangingPassword] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'viewer' });
+  const [invitingMember, setInvitingMember] = useState(false);
 
   // Preferences (localStorage only)
   const [preferences, setPreferences] = useState({
@@ -143,6 +148,27 @@ export default function SettingsPage() {
     }
   }, [user]);
 
+  const loadTeamMembers = useCallback(async () => {
+    if (!(user?.role === 'owner' || user?.role === 'admin')) {
+      setTeamMembers([]);
+      return;
+    }
+
+    setTeamLoading(true);
+    try {
+      const response = await authAPI.listUsers();
+      setTeamMembers(response.data?.data || []);
+    } catch {
+      toast.error('Could not load workspace members');
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    loadTeamMembers();
+  }, [loadTeamMembers]);
+
   const handleProfileSave = async (e) => {
     e.preventDefault();
     if (!profile.name.trim()) {
@@ -208,12 +234,96 @@ export default function SettingsPage() {
     toast.success('Currency updated');
   };
 
+  const handleWorkspaceSwitch = async (organizationId) => {
+    if (!organizationId || organizationId === user?.organization_id) {
+      return;
+    }
+
+    setSwitchingWorkspace(true);
+    const result = await switchOrganization(organizationId);
+    setSwitchingWorkspace(false);
+
+    if (result.success) {
+      toast.success('Workspace switched');
+    } else {
+      toast.error(result.message || 'Could not switch workspace');
+    }
+  };
+
+  const handleInviteSubmit = async (event) => {
+    event.preventDefault();
+    if (!inviteForm.email.trim()) {
+      toast.error('Invite email is required');
+      return;
+    }
+
+    setInvitingMember(true);
+    try {
+      const response = await authAPI.inviteUser({
+        email: inviteForm.email.trim(),
+        role: inviteForm.role,
+      });
+      const invitation = response.data?.data;
+      toast.success(
+        invitation?.token
+          ? `Invitation created. Token: ${invitation.token}`
+          : 'Invitation created'
+      );
+      setInviteForm({ email: '', role: 'viewer' });
+      await loadTeamMembers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not create invitation');
+    } finally {
+      setInvitingMember(false);
+    }
+  };
+
+  const handleMemberStatusToggle = async (member) => {
+    try {
+      await authAPI.toggleUserStatus(member.id, !member.is_active);
+      toast.success(member.is_active ? 'Workspace access revoked' : 'Workspace access restored');
+      await loadTeamMembers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not update workspace access');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Settings"
         description="Manage your profile, security, and preferences"
       />
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <User size={18} />
+          Workspace
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Active Workspace</label>
+            <select
+              value={user?.organization_id || ''}
+              onChange={(e) => handleWorkspaceSwitch(e.target.value)}
+              disabled={switchingWorkspace || !user?.organizations?.length}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
+            >
+              {(user?.organizations || []).map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name} ({organization.role})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            <p className="font-medium text-gray-800">{user?.organization?.name || 'No active workspace'}</p>
+            <p className="mt-1">
+              Role: <span className="capitalize">{user?.role || 'viewer'}</span>
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Profile Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -362,7 +472,82 @@ export default function SettingsPage() {
       </div>
 
       {/* Market Intelligence Notes — admin only */}
-      {user?.role === 'admin' && (
+      {(user?.role === 'owner' || user?.role === 'admin') && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <User size={18} />
+            Workspace Team
+          </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            Invite members into the active workspace and control their access level.
+          </p>
+
+          <form onSubmit={handleInviteSubmit} className="grid gap-3 md:grid-cols-[1.5fr_0.8fr_auto] mb-5">
+            <input
+              type="email"
+              value={inviteForm.email}
+              onChange={(e) => setInviteForm((current) => ({ ...current, email: e.target.value }))}
+              placeholder="teammate@company.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <select
+              value={inviteForm.role}
+              onChange={(e) => setInviteForm((current) => ({ ...current, role: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="admin">Admin</option>
+              <option value="editor">Editor</option>
+              <option value="viewer">Viewer</option>
+            </select>
+            <button
+              type="submit"
+              disabled={invitingMember}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+            >
+              {invitingMember ? 'Inviting...' : 'Invite Member'}
+            </button>
+          </form>
+
+          <div className="space-y-3">
+            {teamLoading ? (
+              <div className="text-sm text-gray-500">Loading team…</div>
+            ) : teamMembers.length === 0 ? (
+              <div className="text-sm text-gray-500">No workspace members found.</div>
+            ) : (
+              teamMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex flex-col gap-3 rounded-lg border border-gray-200 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{member.name || member.email}</p>
+                    <p className="text-xs text-gray-500">{member.email}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Role: <span className="capitalize">{member.role}</span>
+                      {' · '}
+                      Status: {member.is_active ? 'Active' : 'Inactive'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={member.id === user?.id}
+                    onClick={() => handleMemberStatusToggle(member)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
+                      member.is_active
+                        ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    } disabled:opacity-50`}
+                  >
+                    {member.is_active ? 'Deactivate Access' : 'Restore Access'}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {(user?.role === 'owner' || user?.role === 'admin') && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <Brain size={18} />
