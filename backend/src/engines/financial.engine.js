@@ -19,7 +19,7 @@ const DEFAULT_GST_PCT_BY_ASSET_CLASS = Object.freeze({
   plotted_development: 12,
   commercial_office: 18,
   retail: 18,
-  industrial: 18,
+  industrial_warehousing: 18,
   hospitality: 18,
 });
 const SUPPORTED_EXIT_STRATEGIES = new Set(['cap_rate_sale', 'lrd', 'forward_purchase']);
@@ -1498,7 +1498,7 @@ function calculateFullFinancials(input) {
     case 'plotted_development':    result = calculatePlottedDevelopment(input); break;
     case 'commercial_office':
     case 'retail':
-    case 'industrial':             result = calculateIncomeAsset({ ...input, assetClass }); break;
+    case 'industrial_warehousing': result = calculateIncomeAsset({ ...input, assetClass }); break;
     case 'hospitality':            result = calculateHospitality(input); break;
     default: throw new Error(`Unknown asset class: ${assetClass}`);
   }

@@ -26,11 +26,11 @@ const ASSET_CLASSES = [
   { value: 'plotted_development',    label: 'Plotted Development' },
   { value: 'commercial_office',      label: 'Commercial Office' },
   { value: 'retail',                 label: 'Retail' },
-  { value: 'industrial',             label: 'Industrial' },
+  { value: 'industrial_warehousing', label: 'Industrial / Warehousing' },
   { value: 'hospitality',            label: 'Hospitality' },
 ];
 
-const INCOME_CLASSES     = new Set(['commercial_office', 'retail', 'industrial']);
+const INCOME_CLASSES     = new Set(['commercial_office', 'retail', 'industrial_warehousing']);
 const HOSPITALITY_CLASSES = new Set(['hospitality']);
 const EXIT_STRATEGY_OPTIONS = [
   { value: 'cap_rate_sale', label: 'Cap Rate Sale' },
@@ -129,7 +129,7 @@ const FIELD_DEFS = {
     { name: 'interestRatePct',        label: 'Interest Rate (% pa)',            type: 'number', step: '0.25', placeholder: '10.5' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '15' },
   ],
-  industrial: [
+  industrial_warehousing: [
     { name: 'leasableAreaSqft',       label: 'Industrial Floor Area (sqft)',    type: 'number', placeholder: '200000' },
     { name: 'constructionCostPerSqft',label: 'Construction Cost (₹/sqft)',      type: 'number', placeholder: '1800', hint: 'Industrial shed/warehouse: ₹1,200–2,500/sqft' },
     { name: 'gstPct',                 label: 'GST on Construction (%)',          type: 'number', step: '0.5',  placeholder: '18', hint: 'GST on construction. Industrial: typically 18%. Enter as a percentage (e.g. 18 for 18%).' },
@@ -211,7 +211,7 @@ const DEFAULT_VALUES = {
     projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '15',
     gstPct: '18',
   },
-  industrial: {
+  industrial_warehousing: {
     rentEscalationPct: '4', vacancyPct: '7', opexPct: '15',
     exitCapRate: '8.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
     projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '13',
