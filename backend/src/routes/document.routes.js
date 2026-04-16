@@ -1,22 +1,11 @@
 const express = require('express');
-const { body, query: qv, validationResult } = require('express-validator');
+const { query: qv } = require('express-validator');
 const documentService = require('../services/document.service');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { handleValidation } = require('../middleware/validate');
 const { uploadSingle } = require('../middleware/upload');
 
 const router = express.Router();
-
-const handleValidation = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed',
-      errors: errors.array().map((e) => ({ field: e.path, message: e.msg })),
-    });
-  }
-  next();
-};
 
 // GET /documents/deals/options
 router.get('/deals/options', authenticate, async (req, res, next) => {

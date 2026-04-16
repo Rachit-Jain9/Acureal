@@ -1,5 +1,4 @@
 const express = require('express');
-const { query: qv, validationResult } = require('express-validator');
 const { query } = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
@@ -11,18 +10,6 @@ const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
 
 const router = express.Router();
-
-const handleValidation = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed',
-      errors: errors.array().map((e) => ({ field: e.path, message: e.msg })),
-    });
-  }
-  next();
-};
 
 const escapeCsvField = (value) => {
   if (value === null || value === undefined) return '';

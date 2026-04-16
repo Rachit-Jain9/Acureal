@@ -1,7 +1,8 @@
 const express = require('express');
-const { body, query: qv, param, validationResult } = require('express-validator');
+const { body, query: qv, param } = require('express-validator');
 const dealService = require('../services/deal.service');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { handleValidation } = require('../middleware/validate');
 const {
   DEAL_STAGES,
   DEAL_TYPES,
@@ -16,18 +17,6 @@ const {
 } = require('../constants/domain');
 
 const router = express.Router();
-
-const handleValidation = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed',
-      errors: errors.array().map((e) => ({ field: e.path, message: e.msg })),
-    });
-  }
-  next();
-};
 
 // GET /deals
 router.get(

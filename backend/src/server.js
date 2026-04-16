@@ -45,6 +45,7 @@ const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://l
 const allowedOrigins = new Set(corsOrigins);
 const isLoopbackOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 const isVercelOrigin = (origin) => /\.vercel\.app$/i.test(origin);
+const isLocalRuntime = !process.env.VERCEL;
 
 app.use(cors({
   origin(origin, callback) {
@@ -56,7 +57,7 @@ app.use(cors({
       return callback(null, true);
     }
 
-    if (process.env.NODE_ENV !== 'production' && isLoopbackOrigin(origin)) {
+    if (isLocalRuntime && isLoopbackOrigin(origin)) {
       return callback(null, true);
     }
 

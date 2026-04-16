@@ -6,37 +6,28 @@ const riskService = require('../services/risk.service');
 
 const router = express.Router();
 
-// ──────────────────────────────────────────────────────────────────────────────
 // GET /deals/:dealId/risk
-// ──────────────────────────────────────────────────────────────────────────────
-router.get('/deals/:dealId/risk', authenticate, async (req, res) => {
+router.get('/deals/:dealId/risk', authenticate, async (req, res, next) => {
   try {
     const flags = await riskService.listByDeal(req.params.dealId);
     return res.json({ success: true, data: flags });
   } catch (err) {
-    console.error('risk.routes listByDeal error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // GET /deals/:dealId/risk/score
-// Must be registered BEFORE /:id routes
-// ──────────────────────────────────────────────────────────────────────────────
-router.get('/deals/:dealId/risk/score', authenticate, async (req, res) => {
+router.get('/deals/:dealId/risk/score', authenticate, async (req, res, next) => {
   try {
     const score = await riskService.getRiskScore(req.params.dealId);
     return res.json({ success: true, data: score });
   } catch (err) {
-    console.error('risk.routes getRiskScore error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // POST /deals/:dealId/risk
-// ──────────────────────────────────────────────────────────────────────────────
-router.post('/deals/:dealId/risk', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.post('/deals/:dealId/risk', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const { category, title } = req.body;
     if (!category || !title) {
@@ -46,15 +37,12 @@ router.post('/deals/:dealId/risk', authenticate, requireAdminOrAnalyst, async (r
     const flag = await riskService.create(req.params.dealId, req.body, req.user.id);
     return res.status(201).json({ success: true, data: flag });
   } catch (err) {
-    console.error('risk.routes create error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // PUT /deals/:dealId/risk/:id
-// ──────────────────────────────────────────────────────────────────────────────
-router.put('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.put('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const flag = await riskService.update(req.params.id, req.body);
     if (!flag) {
@@ -62,15 +50,12 @@ router.put('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async
     }
     return res.json({ success: true, data: flag });
   } catch (err) {
-    console.error('risk.routes update error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // DELETE /deals/:dealId/risk/:id
-// ──────────────────────────────────────────────────────────────────────────────
-router.delete('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.delete('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const deleted = await riskService.delete(req.params.id);
     if (!deleted) {
@@ -78,8 +63,7 @@ router.delete('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, as
     }
     return res.json({ success: true, data: { id: deleted.id } });
   } catch (err) {
-    console.error('risk.routes delete error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 

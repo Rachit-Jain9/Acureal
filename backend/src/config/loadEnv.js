@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 
 const backendRoot = path.resolve(__dirname, '..', '..');
 const protectedKeys = new Set(Object.keys(process.env));
+const lockedFileKeys = new Set(['NODE_ENV']);
 
 const getEnvFiles = (nodeEnv = process.env.NODE_ENV || 'development') => {
   const files = ['.env'];
@@ -26,9 +27,11 @@ const getEnvFiles = (nodeEnv = process.env.NODE_ENV || 'development') => {
 };
 
 const loadEnv = (baseDir = backendRoot) => {
+  const runtimeNodeEnv = process.env.NODE_ENV || 'development';
+  process.env.NODE_ENV = runtimeNodeEnv;
   const loadedFiles = [];
 
-  for (const relativeFile of getEnvFiles()) {
+  for (const relativeFile of getEnvFiles(runtimeNodeEnv)) {
     const fullPath = path.join(baseDir, relativeFile);
 
     if (!fs.existsSync(fullPath)) {
@@ -38,6 +41,10 @@ const loadEnv = (baseDir = backendRoot) => {
     const parsed = dotenv.parse(fs.readFileSync(fullPath));
 
     for (const [key, value] of Object.entries(parsed)) {
+      if (lockedFileKeys.has(key)) {
+        continue;
+      }
+
       if (!protectedKeys.has(key)) {
         process.env[key] = value;
       }

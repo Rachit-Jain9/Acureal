@@ -8,15 +8,11 @@ const { getProviderAvailability } = require('../services/ai/providerRegistry');
 
 const router = express.Router();
 
-// ──────────────────────────────────────────────────────────────────────────────
 // POST /documents/:documentId/extract
-// Trigger AI extraction for a document
-// ──────────────────────────────────────────────────────────────────────────────
-router.post('/documents/:documentId/extract', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.post('/documents/:documentId/extract', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const { documentId } = req.params;
 
-    // Fetch document metadata to get file URL
     const docResult = await query(
       `SELECT id, deal_id, file_url, name AS file_name, file_type AS mime_type
        FROM documents
@@ -41,7 +37,6 @@ router.post('/documents/:documentId/extract', authenticate, requireAdminOrAnalys
       });
     }
 
-    // Start extraction (may take several seconds)
     const extraction = await extractionService.extractDocument(
       doc.id,
       doc.file_url,
@@ -52,16 +47,12 @@ router.post('/documents/:documentId/extract', authenticate, requireAdminOrAnalys
 
     return res.status(201).json({ success: true, data: extraction });
   } catch (err) {
-    console.error('extraction.routes extract error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // GET /documents/:documentId/extraction
-// Get the latest extraction result for a document
-// ──────────────────────────────────────────────────────────────────────────────
-router.get('/documents/:documentId/extraction', authenticate, async (req, res) => {
+router.get('/documents/:documentId/extraction', authenticate, async (req, res, next) => {
   try {
     const extraction = await extractionService.getExtractionByDocument(req.params.documentId);
     if (!extraction) {
@@ -69,16 +60,12 @@ router.get('/documents/:documentId/extraction', authenticate, async (req, res) =
     }
     return res.json({ success: true, data: extraction });
   } catch (err) {
-    console.error('extraction.routes getExtractionByDocument error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // PUT /documents/:documentId/extraction/:extractionId/corrections
-// Apply human corrections to an extraction
-// ──────────────────────────────────────────────────────────────────────────────
-router.put('/documents/:documentId/extraction/:extractionId/corrections', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.put('/documents/:documentId/extraction/:extractionId/corrections', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const { corrections } = req.body;
     if (!corrections || typeof corrections !== 'object') {
@@ -97,8 +84,7 @@ router.put('/documents/:documentId/extraction/:extractionId/corrections', authen
 
     return res.json({ success: true, data: updated });
   } catch (err) {
-    console.error('extraction.routes applyCorrections error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 

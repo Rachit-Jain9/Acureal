@@ -1,19 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
-
-const getJwtSecret = () => {
-  const configuredSecret = process.env.JWT_SECRET;
-
-  if (configuredSecret && !/your[_-]/i.test(configuredSecret)) {
-    return configuredSecret;
-  }
-
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET is not configured.');
-  }
-
-  return 'redip-dev-jwt-secret-change-me-please';
-};
+const { getJwtSecret } = require('../services/auth.service');
 
 const authenticate = async (req, res, next) => {
   try {

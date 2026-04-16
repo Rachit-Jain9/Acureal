@@ -6,24 +6,18 @@ const approvalsService = require('../services/approvals.service');
 
 const router = express.Router();
 
-// ──────────────────────────────────────────────────────────────────────────────
 // GET /deals/:dealId/approvals
-// ──────────────────────────────────────────────────────────────────────────────
-router.get('/deals/:dealId/approvals', authenticate, async (req, res) => {
+router.get('/deals/:dealId/approvals', authenticate, async (req, res, next) => {
   try {
     const items = await approvalsService.listByDeal(req.params.dealId);
     return res.json({ success: true, data: items });
   } catch (err) {
-    console.error('approvals.routes listByDeal error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // POST /deals/:dealId/approvals/seed
-// Must be registered BEFORE /:id routes
-// ──────────────────────────────────────────────────────────────────────────────
-router.post('/deals/:dealId/approvals/seed', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.post('/deals/:dealId/approvals/seed', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const { assetClass } = req.body;
     const items = await approvalsService.seedForDeal(req.params.dealId, assetClass);
@@ -33,15 +27,12 @@ router.post('/deals/:dealId/approvals/seed', authenticate, requireAdminOrAnalyst
       message: `Seeded ${items.length} approval items`,
     });
   } catch (err) {
-    console.error('approvals.routes seedForDeal error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // POST /deals/:dealId/approvals
-// ──────────────────────────────────────────────────────────────────────────────
-router.post('/deals/:dealId/approvals', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.post('/deals/:dealId/approvals', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const approvalType = req.body.approval_type || req.body.approvalType;
     const { name } = req.body;
@@ -55,15 +46,12 @@ router.post('/deals/:dealId/approvals', authenticate, requireAdminOrAnalyst, asy
     });
     return res.status(201).json({ success: true, data: item });
   } catch (err) {
-    console.error('approvals.routes create error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // PUT /deals/:dealId/approvals/:id
-// ──────────────────────────────────────────────────────────────────────────────
-router.put('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.put('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const item = await approvalsService.update(req.params.id, req.body);
     if (!item) {
@@ -71,15 +59,12 @@ router.put('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, 
     }
     return res.json({ success: true, data: item });
   } catch (err) {
-    console.error('approvals.routes update error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
 // DELETE /deals/:dealId/approvals/:id
-// ──────────────────────────────────────────────────────────────────────────────
-router.delete('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, async (req, res) => {
+router.delete('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
     const deleted = await approvalsService.delete(req.params.id);
     if (!deleted) {
@@ -87,8 +72,7 @@ router.delete('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalys
     }
     return res.json({ success: true, data: { id: deleted.id } });
   } catch (err) {
-    console.error('approvals.routes delete error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 });
 

@@ -176,4 +176,4 @@ const toggleUserStatus = async (id, isActive, requestingUserId) => {
   return result.rows[0];
 };
 
-module.exports = { register, login, getUserById, updateUser, listUsers, toggleUserStatus };
+module.exports = { register, login, getUserById, updateUser, listUsers, toggleUserStatus, getJwtSecret };

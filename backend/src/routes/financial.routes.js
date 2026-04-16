@@ -1,23 +1,11 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body } = require('express-validator');
 const financialService = require('../services/financial.service');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { handleValidation } = require('../middleware/validate');
+const { ASSET_CLASSES } = require('../constants/domain');
 
 const router = express.Router();
-
-const ASSET_CLASSES = ['residential_apartments', 'plotted_development', 'commercial_office', 'retail', 'industrial', 'hospitality'];
-
-const handleValidation = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed',
-      errors: errors.array().map((e) => ({ field: e.path, message: e.msg })),
-    });
-  }
-  next();
-};
 
 const baseValidation = [
   body('assetClass').optional().isIn(ASSET_CLASSES).withMessage('Invalid asset class'),
