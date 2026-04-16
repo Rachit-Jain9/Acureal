@@ -256,6 +256,7 @@ const getPropertyById = async (id) => {
         SELECT COUNT(*)
         FROM deals d
         WHERE d.property_id = p.id
+          AND d.organization_id = current_organization_id()
           AND d.is_archived = FALSE
           AND d.stage <> 'dead'
       ) as deal_count
@@ -369,6 +370,7 @@ const deleteProperty = async (id) => {
     `SELECT COUNT(*)
      FROM deals
      WHERE property_id = $1
+       AND organization_id = current_organization_id()
        AND is_archived = FALSE
        AND stage NOT IN ('closed', 'dead')`,
     [id]
@@ -381,7 +383,10 @@ const deleteProperty = async (id) => {
     );
   }
 
-  const result = await query('DELETE FROM properties WHERE id = $1 RETURNING id', [id]);
+  const result = await query(
+    'DELETE FROM properties WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
+    [id]
+  );
 
   if (result.rows.length === 0) {
     throw createError('Property not found.', 404);

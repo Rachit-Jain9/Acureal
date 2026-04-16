@@ -77,7 +77,9 @@ const buildHeatmapFromBenchmarks = (benchmarks) => {
 };
 
 const getNotesMap = async () => {
-  const result = await query('SELECT section, items FROM market_notes');
+  const result = await query(
+    'SELECT section, items FROM market_notes WHERE organization_id = current_organization_id()'
+  );
   const map = {};
   for (const row of result.rows) {
     map[row.section] = row.items;
@@ -184,22 +186,26 @@ const buildBrief = async (briefDate) => {
         AVG(f.irr_pct) FILTER (WHERE d.is_archived = FALSE AND f.irr_pct IS NOT NULL) as avg_irr,
         SUM(f.total_revenue_cr) FILTER (WHERE ${buildVisibleDealCondition('d')}) as total_pipeline_cr
        FROM deals d
-       LEFT JOIN financials f ON d.id = f.deal_id`
+       LEFT JOIN financials f ON d.id = f.deal_id
+       WHERE d.organization_id = current_organization_id()`
     ),
     query(
       `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
               yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub, data_period
-       FROM micro_market_benchmarks WHERE LOWER(city) = 'bengaluru'
+       FROM micro_market_benchmarks
+       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
        ORDER BY avg_price_max_per_sqft DESC NULLS LAST`
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT fiscal_year, quarter, deal_type, buyer, quantum_inr_mn, locality, land_size_acres
-       FROM market_transactions WHERE LOWER(city) = 'bengaluru'
+       FROM market_transactions
+       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
        ORDER BY fiscal_year DESC, quarter DESC LIMIT 10`
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units
-       FROM comps WHERE is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
+       FROM comps
+       WHERE organization_id = current_organization_id() AND is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
        ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 8`
     ).catch(() => ({ rows: [] })),
     getNotesMap(),
@@ -336,17 +342,20 @@ const getDealAnalysis = async (dealId) => {
     query(
       `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
               yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub
-       FROM micro_market_benchmarks WHERE LOWER(city) = 'bengaluru'
+       FROM micro_market_benchmarks
+       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
        ORDER BY avg_price_max_per_sqft DESC NULLS LAST LIMIT 6`
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units
-       FROM comps WHERE is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
+       FROM comps
+       WHERE organization_id = current_organization_id() AND is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
        ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 6`
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT fiscal_year, quarter, deal_type, buyer, quantum_inr_mn, locality, land_size_acres
-       FROM market_transactions WHERE LOWER(city) = 'bengaluru'
+       FROM market_transactions
+       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
        ORDER BY fiscal_year DESC, quarter DESC LIMIT 5`
     ).catch(() => ({ rows: [] })),
   ]);
@@ -435,19 +444,27 @@ Rules:
 const getDailyBrief = async (userId, date = new Date().toISOString().slice(0, 10)) => {
   const brief = await buildBrief(date);
 
-  await query(
-    `INSERT INTO intelligence_briefs (organization_id, brief_date, market_scope, content, created_by)
-     VALUES (current_organization_id(), $1, $2, $3, $4)
-     ON CONFLICT (organization_id, brief_date, market_scope)
-     DO UPDATE SET content = EXCLUDED.content, created_by = EXCLUDED.created_by`,
-    [date, 'bengaluru_india', brief, userId || null]
-  );
+  try {
+    await query(
+      `INSERT INTO intelligence_briefs (organization_id, brief_date, market_scope, content, created_by)
+       VALUES (current_organization_id(), $1, $2, $3, $4)
+       ON CONFLICT (organization_id, brief_date, market_scope)
+       DO UPDATE SET content = EXCLUDED.content, created_by = EXCLUDED.created_by`,
+      [date, 'bengaluru_india', brief, userId || null]
+    );
+  } catch (err) {
+    // If the unique constraint is missing the ON CONFLICT will fail — log and continue,
+    // the brief is still generated and returned from buildBrief().
+    console.warn('[Intelligence] Brief cache write failed (safe to ignore):', err.message);
+  }
 
   return brief;
 };
 
 const getMarketNotes = async () => {
-  const result = await query('SELECT section, items, updated_at FROM market_notes');
+  const result = await query(
+    'SELECT section, items, updated_at FROM market_notes WHERE organization_id = current_organization_id()'
+  );
   const notes = { micro_market: [], slowdown: [], strategic: [] };
   for (const row of result.rows) {
     if (notes[row.section] !== undefined) {
@@ -475,7 +492,7 @@ const saveMarketNotes = async (section, items, userId) => {
 };
 
 const getMarketTransactions = async ({ city = 'Bengaluru', fy, quarter, dealType } = {}) => {
-  const conditions = [`LOWER(city) = LOWER($1)`];
+  const conditions = [`organization_id = current_organization_id()`, `LOWER(city) = LOWER($1)`];
   const values = [city];
   let p = 2;
 
@@ -495,7 +512,7 @@ const getMarketTransactions = async ({ city = 'Bengaluru', fy, quarter, dealType
 const getMicroMarketBenchmarks = async ({ city = 'Bengaluru' } = {}) => {
   const result = await query(
     `SELECT * FROM micro_market_benchmarks
-     WHERE LOWER(city) = LOWER($1)
+     WHERE organization_id = current_organization_id() AND LOWER(city) = LOWER($1)
      ORDER BY avg_price_max_per_sqft DESC NULLS LAST`,
     [city]
   );

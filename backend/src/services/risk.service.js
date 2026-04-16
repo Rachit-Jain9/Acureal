@@ -38,6 +38,7 @@ async function listByDeal(dealId) {
      FROM risk_flags r
      LEFT JOIN users u ON u.id = r.created_by
      WHERE r.deal_id = $1
+       AND r.organization_id = current_organization_id()
      ORDER BY
        CASE r.severity
          WHEN 'critical' THEN 1
@@ -99,6 +100,7 @@ async function update(id, data) {
   const result = await query(
     `UPDATE risk_flags SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex}
+       AND organization_id = current_organization_id()
      RETURNING *`,
     values,
   );
@@ -106,7 +108,10 @@ async function update(id, data) {
 }
 
 async function deleteRiskFlag(id) {
-  const result = await query('DELETE FROM risk_flags WHERE id = $1 RETURNING id', [id]);
+  const result = await query(
+    'DELETE FROM risk_flags WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
+    [id]
+  );
   return result.rows[0] || null;
 }
 
@@ -121,6 +126,7 @@ async function getRiskScore(dealId) {
     `SELECT severity, COUNT(*) AS cnt
      FROM risk_flags
      WHERE deal_id = $1
+       AND organization_id = current_organization_id()
        AND status IN ('open', 'flagged')
      GROUP BY severity`,
     [dealId],
@@ -148,7 +154,8 @@ async function getRiskScore(dealId) {
        COUNT(*) FILTER (WHERE severity = 'critical')     AS critical_total,
        COUNT(*) FILTER (WHERE severity = 'high')         AS high_total
      FROM risk_flags
-     WHERE deal_id = $1`,
+     WHERE deal_id = $1
+       AND organization_id = current_organization_id()`,
     [dealId],
   );
 

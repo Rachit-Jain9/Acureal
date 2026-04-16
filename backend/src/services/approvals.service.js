@@ -222,6 +222,7 @@ async function listByDeal(dealId) {
      FROM approval_items a
      LEFT JOIN documents d ON d.id = a.document_id
      WHERE a.deal_id = $1
+       AND a.organization_id = current_organization_id()
      ORDER BY a.approval_type, a.created_at`,
     [dealId],
   );
@@ -292,6 +293,7 @@ async function update(id, data) {
   const result = await query(
     `UPDATE approval_items SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex}
+       AND organization_id = current_organization_id()
      RETURNING *`,
     values,
   );
@@ -299,7 +301,10 @@ async function update(id, data) {
 }
 
 async function deleteApprovalItem(id) {
-  const result = await query('DELETE FROM approval_items WHERE id = $1 RETURNING id', [id]);
+  const result = await query(
+    'DELETE FROM approval_items WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
+    [id]
+  );
   return result.rows[0] || null;
 }
 
@@ -318,7 +323,10 @@ async function seedForDeal(dealId, assetClass = 'residential_apartments') {
   const template = ASSET_CLASS_APPROVALS[effectiveAssetClass] || RESIDENTIAL_APPROVALS;
 
   // Avoid duplicate seeding
-  const existing = await query('SELECT name FROM approval_items WHERE deal_id = $1', [dealId]);
+  const existing = await query(
+    'SELECT name FROM approval_items WHERE deal_id = $1 AND organization_id = current_organization_id()',
+    [dealId]
+  );
   const existingNames = new Set(existing.rows.map((r) => r.name));
 
   const toInsert = template.filter((item) => !existingNames.has(item.name));

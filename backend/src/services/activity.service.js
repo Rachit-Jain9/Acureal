@@ -22,7 +22,10 @@ const ensureDealExists = async (dealId) => {
 };
 
 const ensureActivityEditable = async (activityId, userId, userRole) => {
-  const result = await query('SELECT * FROM activities WHERE id = $1', [activityId]);
+  const result = await query(
+    'SELECT * FROM activities WHERE id = $1 AND organization_id = current_organization_id()',
+    [activityId]
+  );
 
   if (result.rows.length === 0) {
     throw createError('Activity not found.', 404);

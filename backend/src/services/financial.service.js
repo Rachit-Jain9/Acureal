@@ -11,7 +11,7 @@ const {
 
 const calculateAndSave = async (dealId, inputData) => {
   const dealResult = await query(
-    'SELECT id, is_archived, stage FROM deals WHERE id = $1',
+    'SELECT id, is_archived, stage FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
     [dealId]
   );
   if (dealResult.rows.length === 0) throw createError('Deal not found.', 404);

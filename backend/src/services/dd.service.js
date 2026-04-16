@@ -256,6 +256,7 @@ async function listByDeal(dealId) {
      LEFT JOIN users u_assigned  ON u_assigned.id  = d.assigned_to
      LEFT JOIN users u_completed ON u_completed.id = d.completed_by
      WHERE d.deal_id = $1
+       AND d.organization_id = current_organization_id()
      ORDER BY
        CASE d.severity
          WHEN 'deal_breaker'         THEN 1
@@ -278,7 +279,8 @@ async function getById(id) {
      FROM dd_items d
      LEFT JOIN users u_assigned  ON u_assigned.id  = d.assigned_to
      LEFT JOIN users u_completed ON u_completed.id = d.completed_by
-     WHERE d.id = $1`,
+     WHERE d.id = $1
+       AND d.organization_id = current_organization_id()`,
     [id],
   );
   return result.rows[0] || null;
@@ -338,6 +340,7 @@ async function update(id, data) {
   const result = await query(
     `UPDATE dd_items SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex}
+       AND organization_id = current_organization_id()
      RETURNING *`,
     values,
   );
@@ -357,6 +360,7 @@ async function updateStatus(id, status, userId) {
          completed_by = $3,
          updated_at   = NOW()
      WHERE id = $4
+       AND organization_id = current_organization_id()
      RETURNING *`,
     [
       status,
@@ -369,7 +373,10 @@ async function updateStatus(id, status, userId) {
 }
 
 async function deleteDDItem(id) {
-  const result = await query('DELETE FROM dd_items WHERE id = $1 RETURNING id', [id]);
+  const result = await query(
+    'DELETE FROM dd_items WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
+    [id]
+  );
   return result.rows[0] || null;
 }
 
@@ -417,7 +424,10 @@ async function seedForDeal(dealId, assetClass = 'residential_apartments', dealSt
   const allItems = [...checklist, ...structureItems];
 
   // Deduplicate by item_name to be safe on re-seed
-  const existing = await query('SELECT item_name FROM dd_items WHERE deal_id = $1', [dealId]);
+  const existing = await query(
+    'SELECT item_name FROM dd_items WHERE deal_id = $1 AND organization_id = current_organization_id()',
+    [dealId]
+  );
   const existingNames = new Set(existing.rows.map((r) => r.item_name));
 
   const toInsert = allItems.filter((item) => !existingNames.has(item.item_name));
@@ -460,6 +470,7 @@ async function getDDScore(dealId) {
                           AND status IN ('completed', 'not_applicable'))    AS deal_breakers_done
      FROM dd_items
      WHERE deal_id = $1
+       AND organization_id = current_organization_id()
        AND is_required = TRUE`,
     [dealId],
   );

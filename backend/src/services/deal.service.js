@@ -259,7 +259,7 @@ const createDeal = async (data, userId) =>
   });
 
 const getDeals = async (filters = {}, pagination = {}) => {
-  const conditions = ['1=1'];
+  const conditions = ['d.organization_id = current_organization_id()'];
   const values = [];
   let paramCount = 1;
 
@@ -386,7 +386,8 @@ const getDealById = async (id) => {
      LEFT JOIN users u ON d.assigned_to = u.id
      LEFT JOIN users creator ON d.created_by = creator.id
      LEFT JOIN financials f ON d.id = f.deal_id
-     WHERE d.id = $1`,
+     WHERE d.id = $1
+       AND d.organization_id = current_organization_id()`,
     [id]
   );
 
@@ -481,7 +482,10 @@ const getDealById = async (id) => {
 
 const updateDeal = async (id, data) =>
   transaction(async (client) => {
-    const existingResult = await client.query('SELECT * FROM deals WHERE id = $1', [id]);
+    const existingResult = await client.query(
+      'SELECT * FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+      [id]
+    );
     if (existingResult.rows.length === 0) {
       throw createError('Deal not found.', 404);
     }
@@ -561,7 +565,7 @@ const updateDeal = async (id, data) =>
 
 const transitionStage = async (dealId, newStage, userId, notes = '') => {
   const dealResult = await query(
-    'SELECT id, stage, is_archived FROM deals WHERE id = $1',
+    'SELECT id, stage, is_archived FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
     [dealId]
   );
 
@@ -677,7 +681,8 @@ const getPipelineSummary = async () => {
       COALESCE(SUM(f.total_revenue_cr) FILTER (WHERE d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])), 0) as pipeline_value_cr,
       AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage <> 'dead') as avg_irr_pct
      FROM deals d
-     LEFT JOIN financials f ON d.id = f.deal_id`,
+     LEFT JOIN financials f ON d.id = f.deal_id
+     WHERE d.organization_id = current_organization_id()`,
     [LIVE_DEAL_STAGES]
   );
 
@@ -710,7 +715,7 @@ const getPipelineSummary = async () => {
 const archiveDeal = async (id, userId, reason = null) =>
   transaction(async (client) => {
     const currentDealResult = await client.query(
-      'SELECT id, property_id, is_archived FROM deals WHERE id = $1',
+      'SELECT id, property_id, is_archived FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
       [id]
     );
 
@@ -750,7 +755,7 @@ const restoreDeal = async (id) => {
          archived_by = NULL,
          archived_reason = NULL,
          updated_at = NOW()
-     WHERE id = $1 AND is_archived = TRUE
+     WHERE id = $1 AND is_archived = TRUE AND organization_id = current_organization_id()
      RETURNING *`,
     [id]
   );
@@ -765,7 +770,7 @@ const restoreDeal = async (id) => {
 const deleteDeal = async (id) =>
   transaction(async (client) => {
     const dealResult = await client.query(
-      'SELECT id, stage, is_archived, property_id FROM deals WHERE id = $1',
+      'SELECT id, stage, is_archived, property_id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
       [id]
     );
 

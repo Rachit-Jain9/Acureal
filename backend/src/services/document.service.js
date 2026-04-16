@@ -32,8 +32,11 @@ const uploadDocument = async (dealId, file, category, userId, description = '', 
     throw createError('Active organization is required for document uploads.', 400);
   }
 
-  // Verify deal exists
-  const dealResult = await query('SELECT id, is_archived, stage FROM deals WHERE id = $1', [dealId]);
+  // Verify deal exists and belongs to current org
+  const dealResult = await query(
+    'SELECT id, is_archived, stage FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    [dealId]
+  );
   if (dealResult.rows.length === 0) {
     throw createError('Deal not found.', 404);
   }
@@ -89,7 +92,10 @@ const uploadDocument = async (dealId, file, category, userId, description = '', 
 };
 
 const getDocuments = async (dealId, category = null) => {
-  const dealResult = await query('SELECT id, is_archived, stage FROM deals WHERE id = $1', [dealId]);
+  const dealResult = await query(
+    'SELECT id, is_archived, stage FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    [dealId]
+  );
   if (dealResult.rows.length === 0) {
     throw createError('Deal not found.', 404);
   }
@@ -145,7 +151,8 @@ const deleteDocument = async (documentId, userId) => {
     `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
      FROM documents doc
      LEFT JOIN deals ON deals.id = doc.deal_id
-     WHERE doc.id = $1`,
+     WHERE doc.id = $1
+       AND doc.organization_id = current_organization_id()`,
     [documentId]
   );
 
@@ -180,7 +187,8 @@ const getSignedUrl = async (documentId, dealId = null) => {
     `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
      FROM documents doc
      LEFT JOIN deals ON deals.id = doc.deal_id
-     WHERE doc.id = $1`,
+     WHERE doc.id = $1
+       AND doc.organization_id = current_organization_id()`,
     [documentId]
   );
 
@@ -215,7 +223,8 @@ const streamDownload = async (documentId, res, dealId = null) => {
     `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
      FROM documents doc
      LEFT JOIN deals ON deals.id = doc.deal_id
-     WHERE doc.id = $1`,
+     WHERE doc.id = $1
+       AND doc.organization_id = current_organization_id()`,
     [documentId]
   );
 

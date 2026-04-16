@@ -47,7 +47,7 @@ const addComp = async (data, userId = null) => {
 };
 
 const getComps = async (filters = {}, pagination = {}) => {
-  const conditions = ['1=1'];
+  const conditions = ['organization_id = current_organization_id()'];
   const values = [];
   let paramCount = 1;
 
@@ -132,6 +132,7 @@ const getCompsNearLocation = async (lat, lng, radiusKm = 5, projectType = null) 
   const lngDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
 
   const conditions = [
+    'organization_id = current_organization_id()',
     'lat IS NOT NULL',
     'lng IS NOT NULL',
     `lat BETWEEN $1 AND $2`,
@@ -220,7 +221,10 @@ const computeBenchmarks = (comps, radiusKm) => {
 };
 
 const deleteComp = async (id) => {
-  const result = await query('DELETE FROM comps WHERE id = $1 RETURNING id', [id]);
+  const result = await query(
+    'DELETE FROM comps WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
+    [id]
+  );
   if (result.rows.length === 0) {
     throw createError('Comparable not found.', 404);
   }
