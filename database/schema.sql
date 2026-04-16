@@ -6,8 +6,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE OR REPLACE FUNCTION current_organization_id()
+RETURNS UUID AS $$
+  SELECT NULLIF(current_setting('app.current_organization_id', true), '')::uuid
+$$ LANGUAGE sql STABLE;
+
 -- Enums
 CREATE TYPE user_role AS ENUM ('admin', 'analyst', 'viewer');
+CREATE TYPE organization_role AS ENUM ('owner', 'admin', 'editor', 'viewer');
 CREATE TYPE zoning_type AS ENUM ('residential', 'commercial', 'mixed_use', 'industrial', 'agricultural');
 CREATE TYPE deal_type AS ENUM ('acquisition', 'jv', 'da', 'outright');
 CREATE TYPE deal_stage AS ENUM ('sourced', 'screening', 'site_visit', 'loi', 'due_diligence', 'underwriting', 'ic_review', 'negotiation', 'active', 'closed', 'dead');
@@ -32,9 +38,57 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
 
+-- Organizations / workspaces
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(120) UNIQUE NOT NULL,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE organization_members (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role organization_role NOT NULL DEFAULT 'viewer',
+    invited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (organization_id, user_id)
+);
+
+CREATE TABLE organization_invitations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    role organization_role NOT NULL DEFAULT 'viewer',
+    token VARCHAR(255) UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(24), 'hex'),
+    invited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    accepted_at TIMESTAMP WITH TIME ZONE,
+    accepted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (organization_id, email)
+);
+
+ALTER TABLE users
+    ADD COLUMN default_organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
+
+CREATE INDEX idx_organizations_slug ON organizations(slug);
+CREATE INDEX idx_organization_members_org_user ON organization_members(organization_id, user_id);
+CREATE INDEX idx_organization_members_user ON organization_members(user_id);
+CREATE INDEX idx_organization_invitations_org_email ON organization_invitations(organization_id, email);
+CREATE INDEX idx_organization_invitations_token ON organization_invitations(token);
+
 -- Properties table
 CREATE TABLE properties (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name VARCHAR(500),
     address TEXT,
     city VARCHAR(100),
@@ -68,6 +122,7 @@ CREATE TABLE properties (
 );
 
 CREATE INDEX idx_properties_city ON properties(city);
+CREATE INDEX idx_properties_organization_id ON properties(organization_id);
 CREATE INDEX idx_properties_zoning ON properties(zoning);
 CREATE INDEX idx_properties_property_type ON properties(property_type);
 CREATE INDEX idx_properties_created_by ON properties(created_by);
@@ -77,6 +132,7 @@ CREATE INDEX idx_properties_name_trgm ON properties USING gin(name gin_trgm_ops)
 -- Deals table
 CREATE TABLE deals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     property_id UUID REFERENCES properties(id) ON DELETE SET NULL,
     name VARCHAR(500) NOT NULL,
     deal_type deal_type NOT NULL,
@@ -108,6 +164,7 @@ CREATE TABLE deals (
 );
 
 CREATE INDEX idx_deals_property_id ON deals(property_id);
+CREATE INDEX idx_deals_organization_id ON deals(organization_id);
 CREATE INDEX idx_deals_stage ON deals(stage);
 CREATE INDEX idx_deals_assigned_to ON deals(assigned_to);
 CREATE INDEX idx_deals_created_by ON deals(created_by);
@@ -117,6 +174,7 @@ CREATE INDEX idx_deals_archived ON deals(is_archived);
 -- Deal stage history table
 CREATE TABLE deal_stage_history (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
     from_stage deal_stage,
     to_stage deal_stage NOT NULL,
@@ -126,11 +184,13 @@ CREATE TABLE deal_stage_history (
 );
 
 CREATE INDEX idx_deal_stage_history_deal_id ON deal_stage_history(deal_id);
+CREATE INDEX idx_deal_stage_history_organization_id ON deal_stage_history(organization_id);
 CREATE INDEX idx_deal_stage_history_changed_at ON deal_stage_history(changed_at);
 
 -- Financials table
 CREATE TABLE financials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL UNIQUE REFERENCES deals(id) ON DELETE CASCADE,
     -- Inputs
     land_cost_cr DECIMAL(15, 4),
@@ -187,11 +247,13 @@ CREATE TABLE financials (
 
 CREATE INDEX IF NOT EXISTS idx_financials_asset_class ON financials(asset_class);
 
+CREATE INDEX idx_financials_organization_id ON financials(organization_id);
 CREATE INDEX idx_financials_deal_id ON financials(deal_id);
 
 -- Comps table
 CREATE TABLE comps (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     project_name VARCHAR(500) NOT NULL,
     developer VARCHAR(255),
     city VARCHAR(100) NOT NULL,
@@ -218,6 +280,7 @@ CREATE TABLE comps (
 );
 
 CREATE INDEX idx_comps_city ON comps(city);
+CREATE INDEX idx_comps_organization_id ON comps(organization_id);
 CREATE INDEX idx_comps_locality ON comps(locality);
 CREATE INDEX idx_comps_project_type ON comps(project_type);
 CREATE INDEX idx_comps_location ON comps(lat, lng);
@@ -228,6 +291,7 @@ CREATE INDEX idx_comps_is_verified ON comps(is_verified);
 -- Documents table
 CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
     name VARCHAR(500) NOT NULL,
     file_url TEXT NOT NULL,
@@ -242,12 +306,14 @@ CREATE TABLE documents (
 );
 
 CREATE INDEX idx_documents_deal_id ON documents(deal_id);
+CREATE INDEX idx_documents_organization_id ON documents(organization_id);
 CREATE INDEX idx_documents_doc_category ON documents(doc_category);
 CREATE INDEX idx_documents_uploaded_by ON documents(uploaded_by);
 
 -- Activities table
 CREATE TABLE activities (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
     activity_type activity_type NOT NULL,
     description TEXT NOT NULL,
@@ -264,6 +330,7 @@ CREATE TABLE activities (
 );
 
 CREATE INDEX idx_activities_deal_id ON activities(deal_id);
+CREATE INDEX idx_activities_organization_id ON activities(organization_id);
 CREATE INDEX idx_activities_performed_by ON activities(performed_by);
 CREATE INDEX idx_activities_activity_date ON activities(activity_date DESC);
 CREATE INDEX idx_activities_type ON activities(activity_type);
@@ -273,22 +340,25 @@ CREATE INDEX idx_activities_priority ON activities(priority);
 -- Intelligence briefs
 CREATE TABLE intelligence_briefs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     brief_date DATE NOT NULL,
     market_scope VARCHAR(100) NOT NULL DEFAULT 'bengaluru_india',
     content JSONB NOT NULL,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE (brief_date, market_scope)
+    UNIQUE (organization_id, brief_date, market_scope)
 );
 
-CREATE INDEX idx_intelligence_briefs_date_scope ON intelligence_briefs(brief_date, market_scope);
+CREATE INDEX idx_intelligence_briefs_org_date_scope ON intelligence_briefs(organization_id, brief_date, market_scope);
 
 -- Market notes
 CREATE TABLE market_notes (
-    section VARCHAR(50) PRIMARY KEY,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    section VARCHAR(50) NOT NULL,
     items JSONB NOT NULL DEFAULT '[]'::jsonb,
     updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (organization_id, section)
 );
 
 CREATE INDEX idx_market_notes_section ON market_notes(section);
@@ -296,6 +366,7 @@ CREATE INDEX idx_market_notes_section ON market_notes(section);
 -- Verified market transactions
 CREATE TABLE market_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     fiscal_year VARCHAR(10) NOT NULL,
     quarter VARCHAR(5) NOT NULL,
     deal_type VARCHAR(50) NOT NULL,
@@ -314,7 +385,8 @@ CREATE TABLE market_transactions (
 );
 
 CREATE UNIQUE INDEX market_transactions_dedup
-    ON market_transactions (fiscal_year, quarter, quantum_inr_mn, LOWER(COALESCE(buyer, '')));
+    ON market_transactions (organization_id, fiscal_year, quarter, quantum_inr_mn, LOWER(COALESCE(buyer, '')));
+CREATE INDEX idx_mktxn_org ON market_transactions(organization_id);
 CREATE INDEX idx_mktxn_fy ON market_transactions(fiscal_year);
 CREATE INDEX idx_mktxn_type ON market_transactions(deal_type);
 CREATE INDEX idx_mktxn_city ON market_transactions(city);
@@ -322,6 +394,7 @@ CREATE INDEX idx_mktxn_city ON market_transactions(city);
 -- Micro-market benchmarks
 CREATE TABLE micro_market_benchmarks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     city VARCHAR(100) DEFAULT 'Bengaluru',
     micro_market VARCHAR(200) NOT NULL,
     avg_price_min_per_sqft DECIMAL(12, 2),
@@ -332,14 +405,16 @@ CREATE TABLE micro_market_benchmarks (
     data_period VARCHAR(50) DEFAULT '2025-2026',
     is_verified BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE (city, micro_market)
+    UNIQUE (organization_id, city, micro_market)
 );
 
+CREATE INDEX idx_mmb_org ON micro_market_benchmarks(organization_id);
 CREATE INDEX idx_mmb_city ON micro_market_benchmarks(city);
 
 -- Document extraction history
 CREATE TABLE document_extractions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     deal_id UUID REFERENCES deals(id) ON DELETE CASCADE,
     doc_type VARCHAR(100),
@@ -362,6 +437,7 @@ CREATE TABLE document_extractions (
 );
 
 CREATE INDEX idx_document_extractions_document_id ON document_extractions(document_id);
+CREATE INDEX idx_document_extractions_organization_id ON document_extractions(organization_id);
 CREATE INDEX idx_document_extractions_deal_id ON document_extractions(deal_id);
 CREATE INDEX idx_document_extractions_status ON document_extractions(extraction_status);
 CREATE INDEX idx_document_extractions_doc_type ON document_extractions(doc_type);
@@ -369,6 +445,7 @@ CREATE INDEX idx_document_extractions_doc_type ON document_extractions(doc_type)
 -- Due diligence checklist items
 CREATE TABLE dd_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
     category VARCHAR(100) NOT NULL,
     item_name VARCHAR(500) NOT NULL,
@@ -387,6 +464,7 @@ CREATE TABLE dd_items (
 );
 
 CREATE INDEX idx_dd_items_deal_id ON dd_items(deal_id);
+CREATE INDEX idx_dd_items_organization_id ON dd_items(organization_id);
 CREATE INDEX idx_dd_items_status ON dd_items(status);
 CREATE INDEX idx_dd_items_severity ON dd_items(severity);
 CREATE INDEX idx_dd_items_category ON dd_items(category);
@@ -394,6 +472,7 @@ CREATE INDEX idx_dd_items_category ON dd_items(category);
 -- Approval tracker items
 CREATE TABLE approval_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
     approval_type VARCHAR(100) NOT NULL,
     name VARCHAR(500) NOT NULL,
@@ -414,12 +493,14 @@ CREATE TABLE approval_items (
 );
 
 CREATE INDEX idx_approval_items_deal_id ON approval_items(deal_id);
+CREATE INDEX idx_approval_items_organization_id ON approval_items(organization_id);
 CREATE INDEX idx_approval_items_status ON approval_items(status);
 CREATE INDEX idx_approval_items_approval_type ON approval_items(approval_type);
 
 -- Deal-level risk flags
 CREATE TABLE risk_flags (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
     category VARCHAR(100) NOT NULL,
     severity VARCHAR(50) NOT NULL DEFAULT 'medium',
@@ -434,9 +515,27 @@ CREATE TABLE risk_flags (
 );
 
 CREATE INDEX idx_risk_flags_deal_id ON risk_flags(deal_id);
+CREATE INDEX idx_risk_flags_organization_id ON risk_flags(organization_id);
 CREATE INDEX idx_risk_flags_status ON risk_flags(status);
 CREATE INDEX idx_risk_flags_severity ON risk_flags(severity);
 CREATE INDEX idx_risk_flags_category ON risk_flags(category);
+
+-- Tenant defaults for application-managed tables.
+ALTER TABLE properties ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE deals ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE deal_stage_history ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE financials ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE comps ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE documents ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE activities ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE intelligence_briefs ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE market_notes ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE market_transactions ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE micro_market_benchmarks ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE document_extractions ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE dd_items ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE approval_items ALTER COLUMN organization_id SET DEFAULT current_organization_id();
+ALTER TABLE risk_flags ALTER COLUMN organization_id SET DEFAULT current_organization_id();
 
 -- Trigger to update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -448,6 +547,15 @@ END;
 $$ language 'plpgsql';
 
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+CREATE TRIGGER update_organization_members_updated_at BEFORE UPDATE ON organization_members
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+CREATE TRIGGER update_organization_invitations_updated_at BEFORE UPDATE ON organization_invitations
     FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 CREATE TRIGGER update_properties_updated_at BEFORE UPDATE ON properties
@@ -487,6 +595,14 @@ CREATE TRIGGER update_risk_flags_updated_at BEFORE UPDATE ON risk_flags
     FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- Row level security
+CREATE OR REPLACE FUNCTION current_organization_id()
+RETURNS UUID AS $$
+  SELECT NULLIF(current_setting('app.current_organization_id', true), '')::uuid
+$$ LANGUAGE sql STABLE;
+
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE financials ENABLE ROW LEVEL SECURITY;
@@ -503,21 +619,100 @@ ALTER TABLE dd_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE approval_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE risk_flags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY properties_select_all ON properties FOR SELECT USING (true);
-CREATE POLICY deals_select_all ON deals FOR SELECT USING (true);
-CREATE POLICY financials_select_all ON financials FOR SELECT USING (true);
-CREATE POLICY comps_select_all ON comps FOR SELECT USING (true);
-CREATE POLICY documents_select_all ON documents FOR SELECT USING (true);
-CREATE POLICY activities_select_all ON activities FOR SELECT USING (true);
-CREATE POLICY intelligence_briefs_select_all ON intelligence_briefs FOR SELECT USING (true);
-CREATE POLICY market_notes_select_all ON market_notes FOR SELECT USING (true);
-CREATE POLICY market_transactions_select_all ON market_transactions FOR SELECT USING (true);
-CREATE POLICY micro_market_benchmarks_select_all ON micro_market_benchmarks FOR SELECT USING (true);
-CREATE POLICY deal_stage_history_select_all ON deal_stage_history FOR SELECT USING (true);
-CREATE POLICY document_extractions_select_all ON document_extractions FOR SELECT USING (true);
-CREATE POLICY dd_items_select_all ON dd_items FOR SELECT USING (true);
-CREATE POLICY approval_items_select_all ON approval_items FOR SELECT USING (true);
-CREATE POLICY risk_flags_select_all ON risk_flags FOR SELECT USING (true);
+ALTER TABLE properties FORCE ROW LEVEL SECURITY;
+ALTER TABLE deals FORCE ROW LEVEL SECURITY;
+ALTER TABLE financials FORCE ROW LEVEL SECURITY;
+ALTER TABLE comps FORCE ROW LEVEL SECURITY;
+ALTER TABLE documents FORCE ROW LEVEL SECURITY;
+ALTER TABLE activities FORCE ROW LEVEL SECURITY;
+ALTER TABLE intelligence_briefs FORCE ROW LEVEL SECURITY;
+ALTER TABLE market_notes FORCE ROW LEVEL SECURITY;
+ALTER TABLE market_transactions FORCE ROW LEVEL SECURITY;
+ALTER TABLE micro_market_benchmarks FORCE ROW LEVEL SECURITY;
+ALTER TABLE deal_stage_history FORCE ROW LEVEL SECURITY;
+ALTER TABLE document_extractions FORCE ROW LEVEL SECURITY;
+ALTER TABLE dd_items FORCE ROW LEVEL SECURITY;
+ALTER TABLE approval_items FORCE ROW LEVEL SECURITY;
+ALTER TABLE risk_flags FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY organizations_member_access ON organizations
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM organization_members om
+      WHERE om.organization_id = organizations.id
+        AND om.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+        AND om.is_active = TRUE
+    )
+  );
+
+CREATE POLICY organization_members_member_access ON organization_members
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY organization_invitations_member_access ON organization_invitations
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY properties_org_scope ON properties
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY deals_org_scope ON deals
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY financials_org_scope ON financials
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY comps_org_scope ON comps
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY documents_org_scope ON documents
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY activities_org_scope ON activities
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY intelligence_briefs_org_scope ON intelligence_briefs
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY market_notes_org_scope ON market_notes
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY market_transactions_org_scope ON market_transactions
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY micro_market_benchmarks_org_scope ON micro_market_benchmarks
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY deal_stage_history_org_scope ON deal_stage_history
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY document_extractions_org_scope ON document_extractions
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY dd_items_org_scope ON dd_items
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY approval_items_org_scope ON approval_items
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY risk_flags_org_scope ON risk_flags
+  FOR ALL USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
 
 -- View: deal_summary
 CREATE VIEW deal_summary AS

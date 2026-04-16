@@ -3,7 +3,12 @@ jest.mock('../src/config/database', () => ({
   transaction: jest.fn(),
 }));
 
+jest.mock('../src/config/storage', () => ({
+  deleteStorageFile: jest.fn(),
+}));
+
 const { query, transaction } = require('../src/config/database');
+const { deleteStorageFile } = require('../src/config/storage');
 const dealService = require('../src/services/deal.service');
 
 describe('deal.service inactive deal handling', () => {
@@ -61,5 +66,19 @@ describe('deal.service inactive deal handling', () => {
 
     expect(txQuery.mock.calls[3][0]).toContain('DELETE FROM properties');
     expect(result.property_deleted).toEqual({ id: 'prop-1' });
+  });
+
+  test('deleteDeal removes associated storage files before deleting the deal', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'deal-1', stage: 'closed', is_archived: false, property_id: 'prop-1' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'doc-1', file_url: 'organizations/org-1/deals/deal-1/file.pdf' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'deal-1' }] })
+      .mockResolvedValueOnce({ rows: [{ has_visible_deals: true }] });
+
+    const result = await dealService.deleteDeal('deal-1');
+
+    expect(deleteStorageFile).toHaveBeenCalledWith('organizations/org-1/deals/deal-1/file.pdf');
+    expect(query.mock.calls[2][0]).toContain('DELETE FROM deals');
+    expect(result.deleted).toBe(true);
   });
 });

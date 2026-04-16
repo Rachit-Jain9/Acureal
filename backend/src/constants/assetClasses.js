@@ -1,0 +1,89 @@
+'use strict';
+
+const ASSET_CLASS_CONFIG = [
+  {
+    value: 'residential_apartments',
+    label: 'Residential Apartments',
+    financialModelClass: 'residential_apartments',
+    financialModelLabel: 'Residential Apartments',
+  },
+  {
+    value: 'plotted_development',
+    label: 'Plotted Development',
+    financialModelClass: 'plotted_development',
+    financialModelLabel: 'Plotted Development',
+  },
+  {
+    value: 'villas',
+    label: 'Villas',
+    financialModelClass: 'residential_apartments',
+    financialModelLabel: 'Residential Apartments',
+  },
+  {
+    value: 'commercial_office',
+    label: 'Commercial Office',
+    financialModelClass: 'commercial_office',
+    financialModelLabel: 'Commercial Office',
+  },
+  {
+    value: 'retail',
+    label: 'Retail',
+    financialModelClass: 'retail',
+    financialModelLabel: 'Retail',
+  },
+  {
+    value: 'industrial_warehousing',
+    label: 'Industrial / Warehousing',
+    financialModelClass: 'industrial_warehousing',
+    financialModelLabel: 'Industrial / Warehousing',
+  },
+  {
+    value: 'hospitality',
+    label: 'Hospitality',
+    financialModelClass: 'hospitality',
+    financialModelLabel: 'Hospitality',
+  },
+  {
+    value: 'mixed_use',
+    label: 'Mixed Use',
+    financialModelClass: 'residential_apartments',
+    financialModelLabel: 'Residential Apartments',
+  },
+  {
+    value: 'raw_land',
+    label: 'Raw Land',
+    financialModelClass: 'plotted_development',
+    financialModelLabel: 'Plotted Development',
+  },
+  {
+    value: 'redevelopment',
+    label: 'Redevelopment',
+    financialModelClass: 'residential_apartments',
+    financialModelLabel: 'Residential Apartments',
+  },
+];
+
+const ASSET_CLASSES = ASSET_CLASS_CONFIG.map((entry) => entry.value);
+const ASSET_CLASS_LABELS = Object.fromEntries(
+  ASSET_CLASS_CONFIG.map((entry) => [entry.value, entry.label])
+);
+const FINANCIAL_ASSET_CLASSES = ASSET_CLASS_CONFIG.map((entry) => entry.value);
+const FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS = Object.fromEntries(
+  ASSET_CLASS_CONFIG.map((entry) => [entry.value, entry.financialModelClass])
+);
+const FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS = Object.fromEntries(
+  ASSET_CLASS_CONFIG.map((entry) => [entry.value, entry.financialModelLabel])
+);
+
+const resolveFinancialModelClass = (assetClass) =>
+  FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS[assetClass] || 'residential_apartments';
+
+module.exports = {
+  ASSET_CLASS_CONFIG,
+  ASSET_CLASSES,
+  ASSET_CLASS_LABELS,
+  FINANCIAL_ASSET_CLASSES,
+  FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS,
+  FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS,
+  resolveFinancialModelClass,
+};

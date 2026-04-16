@@ -117,7 +117,7 @@ const getBlob = () => {
  *   url     = storage identifier stored in documents.file_url
  *   isBlob  = true if stored in Vercel Blob (url is a full https URL)
  */
-const uploadFile = async (fileBuffer, fileName, mimeType, dealId) => {
+const uploadFile = async (fileBuffer, fileName, mimeType, dealId, organizationId = null) => {
   const preferredProvider = getPreferredStorageProvider();
 
   if (preferredProvider === 'vercel_blob') {
@@ -149,11 +149,11 @@ const uploadFile = async (fileBuffer, fileName, mimeType, dealId) => {
   }
 
   if (preferredProvider === 'supabase') {
-    const result = await supabaseUpload(fileBuffer, fileName, mimeType, dealId);
+    const result = await supabaseUpload(fileBuffer, fileName, mimeType, dealId, organizationId);
     return { url: result.path, isBlob: false, access: 'private' };
   }
 
-  const result = await supabaseUpload(fileBuffer, fileName, mimeType, dealId);
+  const result = await supabaseUpload(fileBuffer, fileName, mimeType, dealId, organizationId);
 
   return { url: result.path, isBlob: false };
 };

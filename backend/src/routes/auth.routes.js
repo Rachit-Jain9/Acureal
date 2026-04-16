@@ -24,15 +24,19 @@ router.post(
       .withMessage('Password must be at least 8 characters')
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
       .withMessage('Password must contain uppercase, lowercase and a number'),
-    body('role').optional().isIn(['admin', 'analyst', 'viewer']).withMessage('Invalid role'),
     body('phone').optional().trim(),
+    body('organizationName').optional().trim().isLength({ min: 2, max: 255 }),
+    body('invitationToken').optional().trim().isLength({ min: 16, max: 255 }),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const { email, password, role, phone } = req.body;
+      const { email, password, phone, organizationName, invitationToken } = req.body;
       const name = req.body.name || req.body.fullName;
-      const result = await authService.register(name, email, password, role, phone);
+      const result = await authService.register(name, email, password, phone, {
+        organizationName,
+        invitationToken,
+      });
       res.status(201).json({
         success: true,
         message: 'Account created successfully.',
@@ -55,7 +59,7 @@ router.post(
   async (req, res, next) => {
     try {
       const { email, password } = req.body;
-      const result = await authService.login(email, password);
+      const result = await authService.login(email, password, req.header('x-organization-id'));
       res.json({
         success: true,
         message: 'Login successful.',
@@ -70,7 +74,7 @@ router.post(
 // GET /auth/me
 router.get('/me', authenticate, async (req, res, next) => {
   try {
-    const user = await authService.getUserById(req.user.id);
+    const user = await authService.getUserById(req.user.id, req.user.organization_id);
     res.json({ success: true, data: user });
   } catch (error) {
     next(error);
@@ -98,7 +102,7 @@ router.put(
         ...req.body,
         name: req.body.name || req.body.fullName,
       };
-      const updated = await authService.updateUser(req.user.id, payload);
+      const updated = await authService.updateUser(req.user.id, payload, req.user.organization_id);
       res.json({ success: true, message: 'Profile updated.', data: updated });
     } catch (error) {
       next(error);
@@ -109,7 +113,7 @@ router.put(
 // GET /auth/users (admin only)
 router.get('/users', authenticate, requireAdmin, async (req, res, next) => {
   try {
-    const users = await authService.listUsers();
+    const users = await authService.listUsers(req.user.organization_id);
     res.json({ success: true, data: users });
   } catch (error) {
     next(error);
@@ -123,11 +127,50 @@ router.patch('/users/:id/status', authenticate, requireAdmin, async (req, res, n
     if (typeof isActive !== 'boolean') {
       return res.status(400).json({ success: false, message: 'isActive must be a boolean.' });
     }
-    const user = await authService.toggleUserStatus(req.params.id, isActive, req.user.id);
+    const user = await authService.toggleUserStatus(
+      req.params.id,
+      isActive,
+      req.user.id,
+      req.user.organization_id
+    );
     res.json({ success: true, data: user });
   } catch (error) {
     next(error);
   }
 });
+
+router.get('/organizations', authenticate, async (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      activeOrganizationId: req.user.organization_id,
+      organizations: req.user.organizations || [],
+    },
+  });
+});
+
+router.post(
+  '/invitations',
+  authenticate,
+  requireAdmin,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('role').isIn(['admin', 'editor', 'viewer']).withMessage('Invalid invitation role'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const invitation = await authService.createInvitation(
+        req.user.organization_id,
+        req.body.email,
+        req.body.role,
+        req.user.id
+      );
+      res.status(201).json({ success: true, data: invitation });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 module.exports = router;

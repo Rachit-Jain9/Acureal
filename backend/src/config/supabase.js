@@ -16,15 +16,19 @@ const {
  * Returns the storage path - not a public URL.
  * Call getSignedUrl() to generate a time-limited access URL.
  */
-const uploadFile = async (fileBuffer, fileName, mimeType, dealId) => {
+const uploadFile = async (fileBuffer, fileName, mimeType, dealId, organizationId = null) => {
   const client = getSupabaseClient();
 
   if (!client) {
     throw new Error('Supabase storage is not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).');
   }
 
+  if (!organizationId) {
+    throw new Error('Active organization context is required for document uploads.');
+  }
+
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const filePath = `deals/${dealId}/${Date.now()}-${safeName}`;
+  const filePath = `organizations/${organizationId}/deals/${dealId}/${Date.now()}-${safeName}`;
 
   const { data, error } = await client.storage
     .from(getStorageBucket())

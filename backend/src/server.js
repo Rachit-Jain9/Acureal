@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { runWithRequestContext } = require('./lib/requestContext');
 
 // Route imports
 const authRoutes = require('./routes/auth.routes');
@@ -28,6 +29,10 @@ const extractionRoutes = require('./routes/extraction.routes');
 const fxRoutes = require('./routes/fx.routes');
 
 const app = express();
+
+app.use((req, res, next) => {
+  runWithRequestContext({}, next);
+});
 
 // Vercel and other reverse proxies forward client IPs via X-Forwarded-* headers.
 // Trust the first proxy hop so express-rate-limit and auth middleware read them correctly.

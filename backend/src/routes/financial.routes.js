@@ -3,18 +3,9 @@ const { body } = require('express-validator');
 const financialService = require('../services/financial.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
+const { FINANCIAL_ASSET_CLASSES } = require('../constants/assetClasses');
 
 const router = express.Router();
-
-// Only the asset classes the financial engine can actually calculate
-const FINANCIAL_ASSET_CLASSES = [
-  'residential_apartments',
-  'plotted_development',
-  'commercial_office',
-  'retail',
-  'industrial_warehousing',
-  'hospitality',
-];
 
 const baseValidation = [
   body('assetClass').optional().isIn(FINANCIAL_ASSET_CLASSES).withMessage('Invalid asset class'),

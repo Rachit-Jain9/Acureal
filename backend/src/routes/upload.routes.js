@@ -19,7 +19,8 @@ router.post(
         req.file,
         req.body.category || 'other',
         req.user.id,
-        req.body.description
+        req.body.description,
+        req.user.organization_id
       );
 
       res.status(201).json({ success: true, message: 'Document uploaded.', data: doc });

@@ -1,3 +1,5 @@
+const { ASSET_CLASSES } = require('./assetClasses');
+
 const PROPERTY_TYPES = [
   'land',
   'residential',
@@ -108,19 +110,6 @@ const canTransitionStage = (fromStage, toStage) => {
   const allowedTransitions = STAGE_TRANSITIONS[fromStage] || [];
   return allowedTransitions.includes(toStage);
 };
-
-const ASSET_CLASSES = [
-  'residential_apartments',
-  'plotted_development',
-  'villas',
-  'commercial_office',
-  'retail',
-  'industrial_warehousing',
-  'hospitality',
-  'mixed_use',
-  'raw_land',
-  'redevelopment',
-];
 
 const DEAL_STRUCTURES = [
   'outright',

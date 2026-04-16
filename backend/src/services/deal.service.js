@@ -9,6 +9,7 @@ const {
 const { calculateLandPricing } = require('../utils/landPricing');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
+const { deleteStorageFile } = require('../config/storage');
 
 const buildStageOrderCase = (column = 'd.stage') => `
   CASE ${column}
@@ -778,6 +779,22 @@ const deleteDeal = async (id) =>
         'Archive the deal first, or mark it dead/closed before permanently deleting it.',
         409
       );
+    }
+
+    const documentsResult = await client.query(
+      'SELECT id, file_url FROM documents WHERE deal_id = $1',
+      [id]
+    );
+
+    for (const document of documentsResult.rows) {
+      if (!document.file_url) {
+        continue;
+      }
+      try {
+        await deleteStorageFile(document.file_url);
+      } catch (error) {
+        throw createError(`Could not permanently delete an associated document: ${error.message}`, 500);
+      }
     }
 
     const result = await client.query('DELETE FROM deals WHERE id = $1 RETURNING id', [id]);

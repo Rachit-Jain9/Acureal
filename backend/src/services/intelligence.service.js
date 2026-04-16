@@ -436,9 +436,9 @@ const getDailyBrief = async (userId, date = new Date().toISOString().slice(0, 10
   const brief = await buildBrief(date);
 
   await query(
-    `INSERT INTO intelligence_briefs (brief_date, market_scope, content, created_by)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (brief_date, market_scope)
+    `INSERT INTO intelligence_briefs (organization_id, brief_date, market_scope, content, created_by)
+     VALUES (current_organization_id(), $1, $2, $3, $4)
+     ON CONFLICT (organization_id, brief_date, market_scope)
      DO UPDATE SET content = EXCLUDED.content, created_by = EXCLUDED.created_by`,
     [date, 'bengaluru_india', brief, userId || null]
   );
@@ -464,9 +464,9 @@ const saveMarketNotes = async (section, items, userId) => {
   const cleaned = items.map((s) => String(s).trim()).filter(Boolean);
 
   await query(
-    `INSERT INTO market_notes (section, items, updated_by, updated_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (section)
+    `INSERT INTO market_notes (organization_id, section, items, updated_by, updated_at)
+     VALUES (current_organization_id(), $1, $2, $3, NOW())
+     ON CONFLICT (organization_id, section)
      DO UPDATE SET items = EXCLUDED.items, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
     [section, JSON.stringify(cleaned), userId || null]
   );

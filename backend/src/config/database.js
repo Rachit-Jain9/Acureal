@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { normalizeDatabaseUrl } = require('./databaseUrl');
+const { getRequestContext } = require('../lib/requestContext');
 
 const connectionString = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
@@ -61,10 +62,22 @@ const describeDatabaseError = (error) => {
   return 'Database operation failed.';
 };
 
+const applyRequestContext = async (client) => {
+  const context = getRequestContext();
+  await client.query(
+    `SELECT
+       set_config('app.current_user_id', $1, false),
+       set_config('app.current_organization_id', $2, false)`,
+    [context.userId || '', context.organizationId || '']
+  );
+};
+
 const query = async (text, params) => {
   const start = Date.now();
+  const client = await pool.connect();
   try {
-    const res = await pool.query(text, params);
+    await applyRequestContext(client);
+    const res = await client.query(text, params);
     const duration = Date.now() - start;
     if (process.env.NODE_ENV === 'development') {
       console.log('Query executed:', { text: text.substring(0, 100), duration, rows: res.rowCount });
@@ -77,6 +90,8 @@ const query = async (text, params) => {
       error.message = message;
     }
     throw error;
+  } finally {
+    client.release();
   }
 };
 
@@ -86,6 +101,7 @@ const transaction = async (callback) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await applyRequestContext(client);
     const result = await callback(client);
     await client.query('COMMIT');
     return result;

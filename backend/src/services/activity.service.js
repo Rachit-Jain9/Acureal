@@ -5,6 +5,7 @@ const {
   ACTIVITY_STATUSES,
   ACTIVITY_PRIORITIES,
 } = require('../constants/domain');
+const { roleSatisfies } = require('../constants/roles');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
 const ensureDealExists = async (dealId) => {
@@ -28,7 +29,7 @@ const ensureActivityEditable = async (activityId, userId, userRole) => {
   }
 
   const activity = result.rows[0];
-  if (!['admin', 'analyst'].includes(userRole) && activity.performed_by !== userId) {
+  if (!roleSatisfies(userRole, ['admin', 'editor']) && activity.performed_by !== userId) {
     throw createError('You do not have permission to modify this activity.', 403);
   }
 

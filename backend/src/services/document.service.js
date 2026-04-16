@@ -27,7 +27,11 @@ const getDocumentDealOptions = async () => {
   return result.rows;
 };
 
-const uploadDocument = async (dealId, file, category, userId, description = '') => {
+const uploadDocument = async (dealId, file, category, userId, description = '', organizationId = null) => {
+  if (!organizationId) {
+    throw createError('Active organization is required for document uploads.', 400);
+  }
+
   // Verify deal exists
   const dealResult = await query('SELECT id, is_archived, stage FROM deals WHERE id = $1', [dealId]);
   if (dealResult.rows.length === 0) {
@@ -53,7 +57,7 @@ const uploadDocument = async (dealId, file, category, userId, description = '') 
 
   let fileUrl;
   try {
-    const uploadResult = await uploadFile(file.buffer, fileName, file.mimetype, dealId);
+    const uploadResult = await uploadFile(file.buffer, fileName, file.mimetype, dealId, organizationId);
     fileUrl = uploadResult.url;
   } catch (error) {
     throw createError(`File upload failed: ${error.message}`, 500);

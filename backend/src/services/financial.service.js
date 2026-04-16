@@ -1,6 +1,11 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { calculateFullFinancials, calculateScenarios } = require('../engines/financial.engine');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+const {
+  resolveFinancialModelClass,
+  FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS,
+} = require('../constants/assetClasses');
 
 // ─── CALCULATE AND SAVE ───────────────────────────────────────────────────────
 
@@ -14,9 +19,16 @@ const calculateAndSave = async (dealId, inputData) => {
   if (dealRow.is_archived) throw createError('Restore this deal before recalculating financials.', 409);
   if (dealRow.stage === 'dead') throw createError('Financial models cannot be saved to a dead deal.', 409);
 
-  const computed   = calculateFullFinancials(inputData);
-  const scenarios  = calculateScenarios(inputData);
-  const assetClass = computed.assetClass;
+  const selectedAssetClass = inputData.assetClass || 'residential_apartments';
+  const modelAssetClass = resolveFinancialModelClass(selectedAssetClass);
+  const normalizedInput = {
+    ...inputData,
+    assetClass: modelAssetClass,
+  };
+
+  const computed   = calculateFullFinancials(normalizedInput);
+  const scenarios  = calculateScenarios(normalizedInput);
+  const assetClass = selectedAssetClass;
   const leg        = computed._legacy || {};
   const kpis       = computed.kpis   || {};
   const costs      = computed.costs  || {};
@@ -25,6 +37,9 @@ const calculateAndSave = async (dealId, inputData) => {
   // Store everything including scenarios in model_params (no separate column needed)
   const modelParams = JSON.stringify({
     inputs:       computed.inputs,
+    selectedAssetClass,
+    financialModelClass: modelAssetClass,
+    financialModelLabel: FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS[selectedAssetClass] || 'Residential Apartments',
     kpis,
     areas,
     costs,
@@ -134,7 +149,14 @@ const calculateAndSave = async (dealId, inputData) => {
 // ─── GET FINANCIALS ───────────────────────────────────────────────────────────
 
 const getFinancials = async (dealId) => {
-  const result = await query('SELECT * FROM financials WHERE deal_id = $1', [dealId]);
+  const result = await query(
+    `SELECT f.*
+     FROM financials f
+     INNER JOIN deals d ON d.id = f.deal_id
+     WHERE f.deal_id = $1
+       AND ${buildVisibleDealCondition('d')}`,
+    [dealId]
+  );
   if (result.rows.length === 0) throw createError('Financials not found for this deal.', 404);
   return result.rows[0];
 };
@@ -148,7 +170,7 @@ const runSensitivity = async (dealId, params) => {
   const assetClass = fin.asset_class || 'residential_apartments';
   const stored     = fin.model_params?.inputs || {};
   const baseParams = {
-    assetClass,
+    assetClass: resolveFinancialModelClass(assetClass),
     plotAreaSqft:            params.plotAreaSqft            || stored.plotAreaSqft            || fin.plot_area_sqft,
     fsi:                     params.fsi                     || stored.fsi                     || fin.fsi,
     loadingFactor:           params.loadingFactor           || stored.loadingFactor           || fin.loading_factor,
@@ -185,7 +207,7 @@ const getScenarios = async (dealId) => {
   const assetClass = fin.asset_class || 'residential_apartments';
   const stored     = fin.model_params?.inputs || {};
   const baseParams = {
-    assetClass,
+    assetClass: resolveFinancialModelClass(assetClass),
     ...stored,
     plotAreaSqft:            stored.plotAreaSqft            ?? fin.plot_area_sqft,
     fsi:                     stored.fsi                     ?? fin.fsi,
