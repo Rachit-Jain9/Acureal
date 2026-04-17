@@ -20,10 +20,19 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+const isSessionBootstrapRequest = (config) => {
+  const url = String(config?.url || '').toLowerCase();
+  return url === '/auth/login'
+    || url === '/auth/register'
+    || url.endsWith('/auth/login')
+    || url.endsWith('/auth/register');
+};
+
 // Attach JWT token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const rawUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+  const skipSessionHeaders = isSessionBootstrapRequest(config);
   let activeOrganizationId = null;
 
   try {
@@ -33,10 +42,10 @@ api.interceptors.request.use((config) => {
     activeOrganizationId = null;
   }
 
-  if (token) {
+  if (token && !skipSessionHeaders) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  if (activeOrganizationId && !config.headers['X-Organization-Id']) {
+  if (activeOrganizationId && !skipSessionHeaders && !config.headers['X-Organization-Id']) {
     config.headers['X-Organization-Id'] = activeOrganizationId;
   }
   return config;

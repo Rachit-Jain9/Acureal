@@ -32,6 +32,38 @@ const generateToken = (userId, role) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
+const isOrganizationAccessDenied = (error) =>
+  error?.statusCode === 403 && error?.message === 'Organization access denied.';
+
+const resolveLoginAuthContext = async (userId, requestedOrganizationId, defaultOrganizationId) => {
+  try {
+    return await hydrateUserAuthContext(userId, requestedOrganizationId);
+  } catch (error) {
+    if (!isOrganizationAccessDenied(error)) {
+      throw error;
+    }
+
+    if (requestedOrganizationId) {
+      try {
+        return await hydrateUserAuthContext(userId, null);
+      } catch (retryError) {
+        if (!isOrganizationAccessDenied(retryError) || !defaultOrganizationId) {
+          throw retryError;
+        }
+      }
+    } else if (!defaultOrganizationId) {
+      throw error;
+    }
+
+    await query(
+      'UPDATE users SET default_organization_id = NULL, updated_at = NOW() WHERE id = $1',
+      [userId]
+    );
+
+    return hydrateUserAuthContext(userId, null);
+  }
+};
+
 const register = async (name, email, password, phone = null, options = {}) => {
   const normalizedEmail = email.toLowerCase();
   const existingUser = await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
@@ -103,7 +135,11 @@ const login = async (email, password, requestedOrganizationId = null) => {
 
   await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
-  const authContext = await hydrateUserAuthContext(user.id, requestedOrganizationId);
+  const authContext = await resolveLoginAuthContext(
+    user.id,
+    requestedOrganizationId,
+    user.default_organization_id
+  );
   const token = generateToken(authContext.user.id, authContext.user.role);
 
   return { user: authContext.user, token };
