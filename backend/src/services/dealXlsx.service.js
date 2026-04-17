@@ -197,11 +197,9 @@ const makeWeightVector = (periods, key) => {
   return values.map((value) => round((value || 0) / total, 6));
 };
 
-const classifyDealFamily = (assetClass, dealType) => {
-  const normalizedDealType = str(dealType).toLowerCase();
+const classifyDealFamily = (assetClass) => {
   if (assetClass === 'hospitality') return 'hospitality';
   if (['commercial_office', 'retail', 'industrial_warehousing'].includes(assetClass)) return 'income';
-  if (['debt', 'loan'].includes(normalizedDealType)) return 'debt';
   return 'development';
 };
 
@@ -219,7 +217,7 @@ const buildWorkbookContext = (exportContext, options = {}) => {
     },
     inputs,
   });
-  const dealFamily = classifyDealFamily(assetClass, deal.deal_type);
+  const dealFamily = classifyDealFamily(assetClass);
   const phasingSheetName = dealFamily === 'development' ? SHEETS.phasingDevelopment : SHEETS.phasingLease;
   const periods = makePeriods(exportContext || {}, inputs);
   const revenueWeights = makeWeightVector(periods, 'positiveWeight');
@@ -1298,72 +1296,110 @@ const buildExecutiveSummarySheet = (workbook, context) => {
 
 const buildSensitivitySheet = (workbook, context) => {
   const sheet = makeSheet(workbook, SHEETS.sensitivity);
-  sheet.columns = [{ width: 18 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 22 }];
-  makeSectionHeader(sheet, 1, 'Sensitivity', 7);
+  const matrix = context.exportContext?.sensitivity || {};
+  const rowAxis = Array.isArray(matrix.constructionCosts) ? matrix.constructionCosts.map(num).filter((value) => value !== null) : [];
+  const colAxis = Array.isArray(matrix.sellingRates) ? matrix.sellingRates.map(num).filter((value) => value !== null) : [];
+  const irrGrid = Array.isArray(matrix.irrGrid) ? matrix.irrGrid : [];
+  const axisLabels = Array.isArray(matrix.axis) && matrix.axis.length === 2 ? matrix.axis : null;
 
-  const title = context.dealFamily === 'development'
-    ? 'Price vs Cost Margin Sensitivity'
-    : context.dealFamily === 'hospitality'
-      ? 'ADR vs Occupancy Revenue Sensitivity'
-      : 'Rent vs Occupancy NOI Sensitivity';
-  setLabelCell(sheet.getCell('A3'), title, true);
+  const axisWidth = Math.max(colAxis.length + 2, 7);
+  const columnWidths = [{ width: 24 }];
+  for (let idx = 0; idx < axisWidth - 1; idx += 1) columnWidths.push({ width: 14 });
+  sheet.columns = columnWidths;
+  makeSectionHeader(sheet, 1, 'Sensitivity (Absolute Ranges from Deal Model Params)', axisWidth);
 
-  const shocks = [-0.1, -0.05, 0, 0.05, 0.1];
-  shocks.forEach((shock, index) => {
-    setInputCell(sheet.getCell(4, index + 2), shock, PCT_FMT);
-    setInputCell(sheet.getCell(index + 5, 1), shock, PCT_FMT);
-  });
+  let familyTitle;
+  if (context.dealFamily === 'hospitality') familyTitle = 'ADR vs Occupancy — IRR Sensitivity';
+  else if (context.dealFamily === 'income') familyTitle = 'Base Rent vs Exit Cap — IRR Sensitivity';
+  else familyTitle = 'Selling Rate vs Construction Cost — IRR Sensitivity';
+  setLabelCell(sheet.getCell('A3'), familyTitle, true);
 
-  if (context.dealFamily === 'development') {
-    shocks.forEach((costShock, rIndex) => {
-      shocks.forEach((priceShock, cIndex) => {
-        const cell = sheet.getCell(5 + rIndex, 2 + cIndex);
-        const rowShock = sheet.getCell(5 + rIndex, 1).address;
-        const colShock = sheet.getCell(4, 2 + cIndex).address;
-        setFormulaCell(
-          cell,
-          `IFERROR(((${context.sheetRefs.revenue.totalRevenueCell}*(1+${colShock}))-(${context.sheetRefs.costs.totalCostCell}*(1+${rowShock})))/(${context.sheetRefs.revenue.totalRevenueCell}*(1+${colShock})),"")`,
-          PCT_FMT,
-        );
+  const hasAbsoluteMatrix = rowAxis.length && colAxis.length && irrGrid.length === rowAxis.length;
+
+  if (hasAbsoluteMatrix) {
+    const rowAxisLabel = axisLabels ? axisLabels[0] : 'Row Driver';
+    const colAxisLabel = axisLabels ? axisLabels[1] : 'Column Driver';
+    setLabelCell(sheet.getCell(4, 1), `${rowAxisLabel} ↓ / ${colAxisLabel} →`, true);
+    colAxis.forEach((value, cIdx) => {
+      setInputCell(sheet.getCell(4, 2 + cIdx), value, SUMMARY_NUM_FMT);
+    });
+    applyRowFill(sheet.getRow(4), COLORS.lightBlue);
+
+    rowAxis.forEach((rowValue, rIdx) => {
+      const rowNumber = 5 + rIdx;
+      setInputCell(sheet.getCell(rowNumber, 1), rowValue, SUMMARY_NUM_FMT);
+      const gridRow = Array.isArray(irrGrid[rIdx]) ? irrGrid[rIdx] : [];
+      colAxis.forEach((_colValue, cIdx) => {
+        const raw = num(gridRow[cIdx]);
+        const cell = sheet.getCell(rowNumber, 2 + cIdx);
+        if (raw === null) {
+          setLabelCell(cell, '');
+        } else {
+          setInputCell(cell, raw / 100, PCT_FMT);
+          styleCell(cell, {
+            font: { size: 9, color: { argb: COLORS.text }, bold: rIdx === Math.floor(rowAxis.length / 2) && cIdx === Math.floor(colAxis.length / 2) },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.paper } },
+            alignment: { horizontal: 'right', vertical: 'middle' },
+            numFmt: PCT_FMT,
+          });
+        }
       });
     });
-  } else if (context.dealFamily === 'income') {
-    shocks.forEach((occShock, rIndex) => {
-      shocks.forEach((rentShock, cIndex) => {
-        const cell = sheet.getCell(5 + rIndex, 2 + cIndex);
-        const rowShock = sheet.getCell(5 + rIndex, 1).address;
-        const colShock = sheet.getCell(4, 2 + cIndex).address;
-        setFormulaCell(
-          cell,
-          `IFERROR(${context.sheetRefs.revenue.stabilizedIncomeCell}*(1+${colShock})*(1+${rowShock}),"")`,
-          SUMMARY_NUM_FMT,
-        );
-      });
+
+    const noteRow = 5 + rowAxis.length + 1;
+    setLabelCell(
+      sheet.getCell(noteRow, 1),
+      'Absolute ranges and IRR values are computed server-side from the deal\'s financial model (model_params) and refreshed on every sensitivity recompute. Cells are static — edit the underlying assumptions to re-trigger the engine.',
+      true,
+    );
+    sheet.mergeCells(noteRow, 1, noteRow, axisWidth);
+    styleCell(sheet.getCell(noteRow, 1), {
+      font: { size: 9, color: { argb: COLORS.muted }, italic: true },
+      alignment: { wrapText: true, vertical: 'top' },
     });
+    sheet.getRow(noteRow).height = 30;
   } else {
-    shocks.forEach((occShock, rIndex) => {
-      shocks.forEach((adrShock, cIndex) => {
-        const cell = sheet.getCell(5 + rIndex, 2 + cIndex);
-        const rowShock = sheet.getCell(5 + rIndex, 1).address;
-        const colShock = sheet.getCell(4, 2 + cIndex).address;
-        setFormulaCell(
-          cell,
-          `IFERROR(${context.sheetRefs.revenue.totalRevenueCell}*(1+${colShock})*(1+${rowShock}),"")`,
-          SUMMARY_NUM_FMT,
-        );
+    const shocks = [-0.1, -0.05, 0, 0.05, 0.1];
+    setLabelCell(sheet.getCell(4, 1), 'Fallback shock grid (model has not produced an absolute sensitivity matrix yet).', true);
+    sheet.mergeCells(4, 1, 4, axisWidth);
+    shocks.forEach((shock, index) => {
+      setInputCell(sheet.getCell(5, index + 2), shock, PCT_FMT);
+      setInputCell(sheet.getCell(index + 6, 1), shock, PCT_FMT);
+    });
+
+    const revenueCell = context.sheetRefs.revenue.totalRevenueCell;
+    const costCell = context.sheetRefs.costs.totalCostCell;
+    shocks.forEach((_r, rIndex) => {
+      shocks.forEach((_c, cIndex) => {
+        const rowShock = sheet.getCell(6 + rIndex, 1).address;
+        const colShock = sheet.getCell(5, 2 + cIndex).address;
+        const cell = sheet.getCell(6 + rIndex, 2 + cIndex);
+        if (context.dealFamily === 'development') {
+          setFormulaCell(
+            cell,
+            `IFERROR(((${revenueCell}*(1+${colShock}))-(${costCell}*(1+${rowShock})))/(${revenueCell}*(1+${colShock})),"")`,
+            PCT_FMT,
+          );
+        } else if (context.dealFamily === 'income') {
+          const stabilized = context.sheetRefs.revenue.stabilizedIncomeCell || revenueCell;
+          setFormulaCell(cell, `IFERROR(${stabilized}*(1+${colShock})*(1+${rowShock}),"")`, SUMMARY_NUM_FMT);
+        } else {
+          setFormulaCell(cell, `IFERROR(${revenueCell}*(1+${colShock})*(1+${rowShock}),"")`, SUMMARY_NUM_FMT);
+        }
       });
     });
   }
 
-  makeSectionHeader(sheet, 12, 'Scenario Read-through', 7);
-  setLabelCell(sheet.getCell('A13'), 'Scenario', true);
-  setLabelCell(sheet.getCell('B13'), 'Revenue', true);
-  setLabelCell(sheet.getCell('C13'), 'Cost', true);
-  setLabelCell(sheet.getCell('D13'), 'Margin / NOI', true);
-  applyRowFill(sheet.getRow(13), COLORS.lightBlue);
+  const readthroughStart = (hasAbsoluteMatrix ? 5 + rowAxis.length + 3 : 13);
+  makeSectionHeader(sheet, readthroughStart, 'Scenario Read-through', axisWidth);
+  const headerRow = readthroughStart + 1;
+  ['Scenario', 'Revenue', 'Cost', 'Margin / NOI'].forEach((heading, index) => {
+    setLabelCell(sheet.getCell(headerRow, index + 1), heading, true);
+  });
+  applyRowFill(sheet.getRow(headerRow), COLORS.lightBlue);
 
   ['Base', 'Upside', 'Downside'].forEach((scenario, index) => {
-    const row = 14 + index;
+    const row = headerRow + 1 + index;
     setLabelCell(sheet.getCell(row, 1), scenario);
     setFormulaCell(sheet.getCell(row, 2), `INDEX(${SHEETS.scenarios}!$B$4:$B$6,MATCH(A${row},${SHEETS.scenarios}!$A$4:$A$6,0))*${context.sheetRefs.revenue.totalRevenueCell}`);
     setFormulaCell(sheet.getCell(row, 3), `INDEX(${SHEETS.scenarios}!$C$4:$C$6,MATCH(A${row},${SHEETS.scenarios}!$A$4:$A$6,0))*${context.sheetRefs.costs.totalCostCell}`);
