@@ -24,6 +24,9 @@ import type {
   KernelResult,
   ProvenanceEntry,
 } from '../types';
+import type { IntelligenceReport } from '../intelligence/types';
+
+export type CohortTier = 'control' | 'early' | 'ramp' | 'rollout' | 'full';
 
 export interface CovenantSummary {
   readonly monthly: readonly CovenantResult[];
@@ -41,6 +44,34 @@ export type EngineVersion = 'v1-legacy' | 'v2-ts' | 'v2-python';
  * separate from the raw deal inputs so we can evolve the orchestration
  * layer without touching the base kernel API.
  */
+export interface IntelligenceOptions {
+  /** Include IntelligenceReport in output. Default: false. */
+  readonly enabled: boolean;
+  /** Equity contribution timing (negative = outflow from investor). */
+  readonly equityCashFlows?: readonly Decimal[];
+  /** Project (unlevered) cash flows, month-indexed, aligned to totalMonths. */
+  readonly projectCashFlows?: readonly Decimal[];
+  /** Discount rate for LLCR/PLCR (annual, as fraction e.g. 0.09 = 9%). */
+  readonly annualDiscountRate?: Decimal;
+  /** Equity inflows (for MOIC numerator). */
+  readonly equityInflows?: readonly Decimal[];
+  /** Equity outflows (for MOIC denominator). */
+  readonly equityOutflows?: readonly Decimal[];
+  /** Target DSCR used to compute debt capacity. Default 1.25. */
+  readonly targetDSCR?: Decimal;
+  /** Annual facility rate used for debt capacity (if not supplied, uses first facility rate). */
+  readonly annualRate?: Decimal;
+  /** Include dynamic tornado sensitivity. */
+  readonly sensitivity?: boolean;
+  /** Variables to sweep for tornado. Default: empty (skip). */
+  readonly sensitivityVariables?: readonly {
+    name: string;
+    base: Decimal;
+    lowPct?: number;
+    highPct?: number;
+  }[];
+}
+
 export interface OrchestrationInput {
   readonly dealId: string;
   readonly dealInputs: DealInputs;
@@ -60,6 +91,8 @@ export interface OrchestrationInput {
   readonly sculptTarget?: Decimal;
   /** Allow callers to force a specific engine (tests). Prod should leave undefined. */
   readonly forceEngine?: EngineVersion;
+  /** Intelligence output options. Opt-in — legacy callers see no change. */
+  readonly intelligence?: IntelligenceOptions;
 }
 
 /** Rolled-up headline metrics across the pipeline. */
@@ -83,6 +116,7 @@ export interface OrchestrationOutput {
   readonly kpis: OrchestratedKPIs;
   readonly provenance: readonly ProvenanceEntry[];
   readonly rolloutDecision: RolloutDecision;
+  readonly intelligence?: IntelligenceReport;
 }
 
 export interface RolloutDecision {
@@ -95,6 +129,10 @@ export interface RolloutDecision {
   /** Threshold percent at decision time. */
   readonly thresholdPct: number;
   readonly reason: string;
+  /** True when the instant kill switch was engaged. */
+  readonly killed?: boolean;
+  /** Cohort tier for telemetry. */
+  readonly cohort?: CohortTier;
 }
 
 /** Minimal JSON-safe facility row used on the Python wire format. */

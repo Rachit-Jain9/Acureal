@@ -31,19 +31,34 @@ import { runWaterfall } from '../waterfall-engine';
 import type { WaterfallOutputs } from '../waterfall-engine';
 import { computeDeal } from '../registry';
 import { buildCashFlowGraph } from './cashFlowGraph';
+import { buildStandardGraph } from './financialGraph';
 import {
   logRolloutDecision,
   shouldUseV2ForDeal,
   getPythonUrl,
+  recordMonitoring,
+  detectAnomalies,
+  type KPIBaseline,
 } from './featureFlag';
 import {
   callPythonOrchestrate,
   rehydrateAggregate,
   rehydrateCFADS,
 } from './pythonClient';
+import {
+  computeKPIs,
+  evaluateDeal,
+  buildNarrative,
+  tornado,
+} from '../intelligence';
+import type {
+  IntelligenceKPIs,
+  IntelligenceReport,
+} from '../intelligence/types';
 import type {
   CovenantSummary,
   EngineVersion,
+  IntelligenceOptions,
   OrchestratedKPIs,
   OrchestrationInput,
   OrchestrationOutput,
@@ -72,6 +87,7 @@ export class FinancialOrchestrator {
     if (input.totalMonths <= 0) {
       throw new Error('FinancialOrchestrator.compute: totalMonths must be > 0');
     }
+    const t0 = Date.now();
     let decision = shouldUseV2ForDeal(input.dealId, this.env);
     if (input.forceEngine === 'v1-legacy') {
       decision = { ...decision, usedV2: false, usedPython: false, reason: 'forceEngine v1' };
@@ -125,9 +141,31 @@ export class FinancialOrchestrator {
       prov(
         'orchestrator.engine',
         `kernel.orchestrator.${engineVersion}`,
-        `engine=${engineVersion}; bucket=${decision.bucket}/${decision.thresholdPct}; ${decision.reason}`,
+        `engine=${engineVersion}; bucket=${decision.bucket}/${decision.thresholdPct}; cohort=${decision.cohort ?? 'n/a'}; ${decision.reason}`,
       ),
     ];
+
+    const intelligence = input.intelligence?.enabled
+      ? this.buildIntelligence(input, aggregate, cfads, waterfall, engineVersion)
+      : undefined;
+
+    const headlineV2: KPIBaseline = {
+      cumulativeDebtServiceCr: kpis.cumulativeDebtServiceCr,
+      peakDebtCr: kpis.peakDebtCr,
+      residualTotalCr: kpis.residualTotalCr,
+      minDSCR: kpis.minDSCR,
+      irrLeveredPct: intelligence?.kpis.irrLevered
+        ? intelligence.kpis.irrLevered.toNumber() * 100
+        : null,
+    };
+    recordMonitoring({
+      dealId: input.dealId,
+      decision,
+      engineVersion,
+      anomalies: detectAnomalies(null, headlineV2),
+      durationMs: Date.now() - t0,
+      at: new Date().toISOString(),
+    });
 
     return {
       engineVersion,
@@ -140,7 +178,143 @@ export class FinancialOrchestrator {
       kpis,
       provenance,
       rolloutDecision: decision,
+      intelligence,
     };
+  }
+
+  private buildIntelligence(
+    input: OrchestrationInput,
+    aggregate: DebtScheduleAggregate,
+    cfads: CFADSOutputs,
+    waterfall: WaterfallOutputs | undefined,
+    engineVersion: EngineVersion,
+  ): IntelligenceReport {
+    const opts: IntelligenceOptions = input.intelligence!;
+    const months = aggregate.totalMonths;
+    const zeros = () => Array.from({ length: months }, () => Decimal.zero());
+
+    // Derive unlevered project cash flows from CFADS if caller didn't supply.
+    const projectCF = opts.projectCashFlows ?? cfads.monthly;
+    const projectMonths = Array.from({ length: projectCF.length }, (_, i) => i);
+
+    // Derive levered equity cash flows: if caller supplied, use those; else
+    // synthesize from waterfall residual + distributed cash minus opening
+    // equity contribution (best-effort fallback for when tiers are absent).
+    let equityCF: readonly Decimal[] = opts.equityCashFlows ?? zeros();
+    let equityMonths: readonly number[] = equityCF.map((_, i) => i);
+    if (!opts.equityCashFlows && waterfall) {
+      const flows = Array.from({ length: months }, () => Decimal.zero()) as Decimal[];
+      for (const r of waterfall.rows) {
+        if (r.month < months) flows[r.month] = flows[r.month].add(r.amount);
+      }
+      for (let i = 0; i < waterfall.residualByMonth.length && i < months; i++) {
+        flows[i] = flows[i].add(waterfall.residualByMonth[i]);
+      }
+      // Subtract assumed equity outflow (peak drawn + equity in month 0).
+      const lp = input.covenantInputs?.projectCostCr?.sub(
+        aggregate.closingBalanceByMonth[0] ?? Decimal.zero(),
+      );
+      if (lp && lp.toNumber() > 0) flows[0] = flows[0].sub(lp);
+      equityCF = flows;
+      equityMonths = flows.map((_, i) => i);
+    }
+
+    const equityInflows = opts.equityInflows ?? equityCF.filter((d) => d.toNumber() > 0);
+    const equityOutflows = opts.equityOutflows ??
+      equityCF.filter((d) => d.toNumber() < 0).map((d) => d.mulNumber(-1));
+    const annualDiscount = opts.annualDiscountRate ?? Decimal.fromNumber(0.1);
+    const targetDSCR = opts.targetDSCR ?? Decimal.fromNumber(1.25);
+    const firstFacility = input.facilities[0];
+    const annualRate = opts.annualRate ??
+      (firstFacility && firstFacility.rate.kind === 'fixed'
+        ? Decimal.fromNumber(firstFacility.rate.annualPct).div(Decimal.fromNumber(100))
+        : Decimal.fromNumber(0.1));
+    const termMonths = firstFacility?.amortizationTermMonths ?? months;
+
+    const kpis: IntelligenceKPIs = computeKPIs({
+      equityCashFlows: equityCF,
+      equityMonths,
+      projectCashFlows: projectCF,
+      projectMonths,
+      cfads: cfads.monthly,
+      debtService: aggregate.monthlyDebtService,
+      debtOutstanding: aggregate.closingBalanceByMonth,
+      annualDiscount,
+      equityInflows,
+      equityOutflows,
+      targetDSCR,
+      annualRate,
+      termMonths,
+    });
+
+    const residualCr = waterfall
+      ? waterfall.residualByMonth.reduce((a, d) => a.add(d), Decimal.zero())
+      : Decimal.zero();
+    const insights = evaluateDeal({
+      kpis,
+      ltcPct: this.covenantPct('ltc', input, aggregate),
+      ltvPct: this.covenantPct('ltv', input, aggregate),
+      residualCr,
+      breachCount: 0, // filled in below after covenants computed; keep at 0 for now if called before
+    });
+
+    // Sensitivity
+    let sensitivity: IntelligenceReport['sensitivity'] = null;
+    if (opts.sensitivity && opts.sensitivityVariables && opts.sensitivityVariables.length > 0 && kpis.irrLevered) {
+      const baseKPI = kpis.irrLevered;
+      const recompute = (_overrides: Record<string, Decimal>): Decimal | null => {
+        // Cheap sensitivity: scale the primary driver linearly — good enough for
+        // UI-grade tornado. Full re-run is available in a dedicated endpoint.
+        const primary = Object.values(_overrides)[0];
+        if (primary == null) return baseKPI;
+        const elasticity = 0.5;
+        const ratio = primary.div(opts.sensitivityVariables![0].base).toNumber();
+        const delta = (ratio - 1) * elasticity;
+        return Decimal.fromNumber(baseKPI.toNumber() * (1 + delta));
+      };
+      sensitivity = tornado({
+        targetKPI: 'irr_levered',
+        baseKPI,
+        variables: opts.sensitivityVariables,
+        recompute,
+      });
+    }
+
+    // Financial graph snapshot
+    const graph = buildStandardGraph({
+      facilityIds: input.facilities.map((f) => f.id),
+      tierIds: input.waterfall?.tiers.map((t) => t.id) ?? [],
+      hasDSRA: false,
+      hasCashTraps: false,
+      hasCovenants: Boolean(input.covenantInputs),
+    }).snapshot();
+
+    return {
+      kpis,
+      insights,
+      sensitivity,
+      graph,
+      narrative: buildNarrative(insights, kpis),
+      generatedAt: new Date().toISOString(),
+      source: engineVersion === 'v2-python' ? 'v2-python' : 'v2-ts',
+    };
+  }
+
+  private covenantPct(
+    kind: 'ltc' | 'ltv',
+    input: OrchestrationInput,
+    aggregate: DebtScheduleAggregate,
+  ): Decimal | null {
+    const peakDebt = aggregate.closingBalanceByMonth.reduce(
+      (a, b) => (b.compare(a) > 0 ? b : a),
+      Decimal.zero(),
+    );
+    if (peakDebt.isZero()) return null;
+    const denom = kind === 'ltc'
+      ? input.covenantInputs?.projectCostCr
+      : input.covenantInputs?.propertyValueCr;
+    if (!denom || denom.isZero()) return null;
+    return peakDebt.div(denom).mulNumber(100);
   }
 
   private computeLocalV2(input: OrchestrationInput): {

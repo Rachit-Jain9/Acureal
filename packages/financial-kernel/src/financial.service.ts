@@ -24,12 +24,17 @@ import type {
 } from './orchestration/types';
 import {
   isDebtV2Enabled,
+  isKillSwitchOn,
   getRolloutPct,
   getPythonUrl,
   shouldUseV2ForDeal,
 } from './orchestration/featureFlag';
+import { buildInvestorPackage } from './exports/intelligentReport';
+import type { InvestorPackage } from './exports/types';
 
 export type { OrchestrationInput, OrchestrationOutput } from './orchestration/types';
+export type { InvestorPackage } from './exports/types';
+export type { IntelligenceReport, Insight, IntelligenceKPIs } from './intelligence/types';
 
 /**
  * Main service call. The orchestrator already handles gating, so this
@@ -52,6 +57,7 @@ export interface FinancialServiceStatus {
   readonly v2Enabled: boolean;
   readonly rolloutPct: number;
   readonly pythonUrl: string | null;
+  readonly killSwitch: boolean;
 }
 
 export function getServiceStatus(
@@ -61,11 +67,42 @@ export function getServiceStatus(
     v2Enabled: isDebtV2Enabled(env),
     rolloutPct: getRolloutPct(env),
     pythonUrl: getPythonUrl(env),
+    killSwitch: isKillSwitchOn(env),
   };
+}
+
+/**
+ * Investor-grade entry point. Runs the full pipeline with intelligence
+ * enabled and returns a flat, serialization-ready package suitable for
+ * the UI, PDF, and XLSX renderers. Gated by DEBT_ENGINE_V2 — when the
+ * flag is off, returns null and the caller should render legacy output.
+ */
+export async function computeInvestorPackage(
+  input: OrchestrationInput,
+): Promise<InvestorPackage | null> {
+  const out = await computeFinancials({
+    ...input,
+    intelligence: {
+      ...(input.intelligence ?? {}),
+      enabled: true,
+    },
+  });
+  // Gate: intelligence package is a v2-only deliverable. When the
+  // orchestrator's rollout decision selects v1-legacy (flag off, cohort
+  // not in rollout, or kill switch on), we return null so callers fall
+  // back to the legacy summary path.
+  if (out.engineVersion === 'v1-legacy' || !out.intelligence) return null;
+  return buildInvestorPackage(out, out.intelligence, input.dealId);
 }
 
 /**
  * Re-export flag helpers so the service file is a complete surface for
  * deployment scripts and the backend adapter.
  */
-export { shouldUseV2ForDeal, isDebtV2Enabled, getRolloutPct, getPythonUrl };
+export {
+  shouldUseV2ForDeal,
+  isDebtV2Enabled,
+  isKillSwitchOn,
+  getRolloutPct,
+  getPythonUrl,
+};

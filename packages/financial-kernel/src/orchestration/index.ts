@@ -10,21 +10,31 @@
 export { FinancialOrchestrator, orchestrate } from './orchestrator';
 export {
   isDebtV2Enabled,
+  isKillSwitchOn,
   getRolloutPct,
   getPythonUrl,
+  getAnomalyThresholdPct,
   hash32,
   dealBucket,
+  cohortTier,
   shouldUseV2ForDeal,
   logRolloutDecision,
+  detectAnomalies,
+  recordMonitoring,
 } from './featureFlag';
+export type { Anomaly, KPIBaseline, MonitoringRecord } from './featureFlag';
 export { buildCashFlowGraph, totalDistributable } from './cashFlowGraph';
 export type {
   CashFlowGraphInputs,
   CashFlowGraphOutput,
 } from './cashFlowGraph';
+export { FinancialGraph, buildStandardGraph } from './financialGraph';
+export type { StandardGraphInputs } from './financialGraph';
 export type {
+  CohortTier,
   CovenantSummary,
   EngineVersion,
+  IntelligenceOptions,
   OrchestratedKPIs,
   OrchestrationInput,
   OrchestrationOutput,
