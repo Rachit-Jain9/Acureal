@@ -82,9 +82,16 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: JSON_HEADERS });
   if (req.method !== 'POST')    return json(405, { error: 'method_not_allowed' });
 
-  const FASTAPI_URL = Deno.env.get('FASTAPI_URL') || '';
+  // Default to the Vercel production alias so the edge function is
+  // immediately usable without setting `supabase secrets set FASTAPI_URL=...`.
+  // Override by setting FASTAPI_URL in Supabase Edge Function secrets.
+  const FASTAPI_URL =
+    Deno.env.get('FASTAPI_URL') ||
+    'https://redip.vercel.app/api/investor-package';
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  const SUPABASE_SERVICE_ROLE_KEY =
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ||
+    Deno.env.get('SUPABASE_KEY') || '';
   if (!FASTAPI_URL) return json(500, { error: 'fastapi_url_not_configured' });
 
   let body: any;
@@ -181,6 +188,34 @@ Deno.serve(async (req) => {
 
   if (sb) {
     const hash = await sha256Hex(JSON.stringify(body));
+    const summary = pkg?.summary ?? {};
+    const kpi = summary.kpi ?? {};
+    const num = (v: any): number | null => {
+      if (v === null || v === undefined) return null;
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    // Upsert latest-per-deal projection.
+    await sb.from('investor_packages').upsert({
+      deal_id: dealId,
+      organization_id: organizationId,
+      engine_version: 'v2-python',
+      source: 'supabase-edge',
+      headline: summary.headline ?? null,
+      narrative: summary.narrative ?? null,
+      irr_levered_pct: num(kpi.irrLeveredPct),
+      min_dscr: num(kpi.minDSCR),
+      moic: num(kpi.moic),
+      llcr: num(kpi.llcr),
+      peak_equity_cr: num(kpi.peakEquityCr),
+      peak_debt_cr: num(kpi.peakDebtCr),
+      residual_total_cr: num(kpi.residualTotalCr),
+      breach_count: Number(kpi.breachCount ?? 0),
+      insights_count: Array.isArray(summary.insights) ? summary.insights.length : 0,
+      body: pkg,
+      input_hash: hash,
+    }, { onConflict: 'deal_id' });
+    // Append snapshot.
     await sb.from('investor_package_snapshots').insert({
       organization_id: organizationId,
       deal_id: dealId,
@@ -196,7 +231,7 @@ Deno.serve(async (req) => {
       event: 'investor_package_ok',
       severity: 'info',
       engine_version: 'v2-python',
-      payload: { elapsedMs, hasInsights: Array.isArray(pkg?.insights) && pkg.insights.length > 0 },
+      payload: { elapsedMs, hasInsights: Array.isArray(summary.insights) && summary.insights.length > 0, hash },
     });
   }
 

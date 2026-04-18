@@ -76,6 +76,14 @@ export function getServiceStatus(
  * enabled and returns a flat, serialization-ready package suitable for
  * the UI, PDF, and XLSX renderers. Gated by DEBT_ENGINE_V2 — when the
  * flag is off, returns null and the caller should render legacy output.
+ *
+ * Phase 5 routing:
+ *   - v1-legacy          → returns null (caller renders legacy)
+ *   - v2-ts              → builds the package locally from orchestrator output
+ *   - v2-python + URL    → POSTs to `${DEBT_ENGINE_PY_URL}/investor-package`
+ *                          (canonical Python source-of-truth; persists to
+ *                          Supabase server-side) and returns the parsed body
+ *   - v2-python, no URL  → silently falls back to v2-ts local build
  */
 export async function computeInvestorPackage(
   input: OrchestrationInput,
@@ -87,12 +95,89 @@ export async function computeInvestorPackage(
       enabled: true,
     },
   });
-  // Gate: intelligence package is a v2-only deliverable. When the
-  // orchestrator's rollout decision selects v1-legacy (flag off, cohort
-  // not in rollout, or kill switch on), we return null so callers fall
-  // back to the legacy summary path.
   if (out.engineVersion === 'v1-legacy' || !out.intelligence) return null;
+
+  const pyUrl = getPythonUrl(process.env);
+  if (out.engineVersion === 'v2-python' && pyUrl) {
+    try {
+      const remote = await callPythonInvestorPackage(pyUrl, input, out);
+      if (remote) return remote;
+    } catch (err) {
+      // Silent degrade — Python fallback matches orchestrator's behavior.
+      if (process.env.DEBT_ENGINE_V2_SILENT !== '1') {
+        console.warn(
+          `[financial.service] python investor-package fallback: ${(err as Error).message}`,
+        );
+      }
+    }
+  }
   return buildInvestorPackage(out, out.intelligence, input.dealId);
+}
+
+/**
+ * Serialize orchestrator output + intelligence inputs into the FastAPI
+ * wire format and POST to `/investor-package`. Returns the parsed
+ * payload cast to `InvestorPackage`; Python's response already matches
+ * the TS shape (both engines share `build_investor_package` contract).
+ *
+ * All decimals cross the wire as strings — never floats.
+ */
+async function callPythonInvestorPackage(
+  url: string,
+  input: OrchestrationInput,
+  out: OrchestrationOutput,
+): Promise<InvestorPackage | null> {
+  if (!out.intelligence) return null;
+  const intel: NonNullable<OrchestrationInput['intelligence']> = input.intelligence ?? {
+    enabled: true,
+  };
+  const months = out.aggregate.totalMonths;
+  const dec = (xs: readonly { toString(): string }[]) => xs.map((x) => x.toString());
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+  const equityCF = intel.equityCashFlows ?? [];
+  const projectCF = intel.projectCashFlows ?? out.cfads.monthly;
+
+  const body: Record<string, unknown> = {
+    deal_id: input.dealId,
+    engine_version: 'v2-python',
+    generated_at: new Date().toISOString(),
+    organization_id: (input as { organizationId?: string | null }).organizationId ?? null,
+    persist: true,
+
+    equity_cash_flows: dec(equityCF),
+    equity_months: range(equityCF.length),
+    project_cash_flows: dec(projectCF),
+    project_months: range(projectCF.length),
+    cfads: dec(out.cfads.monthly),
+    debt_service: dec(out.aggregate.monthlyDebtService),
+    debt_outstanding: dec(out.aggregate.closingBalanceByMonth),
+
+    annual_discount: (intel.annualDiscountRate ?? { toString: () => '0.10' }).toString(),
+    equity_inflows: dec(intel.equityInflows ?? []),
+    equity_outflows: dec(intel.equityOutflows ?? []),
+    target_dscr: (intel.targetDSCR ?? { toString: () => '1.25' }).toString(),
+    annual_rate: (intel.annualRate ?? { toString: () => '0.08' }).toString(),
+    term_months: months,
+
+    residual_total_cr: out.kpis.residualTotalCr?.toString() ?? '0',
+    peak_debt_cr: out.kpis.peakDebtCr?.toString() ?? '0',
+    cumulative_debt_service_cr: out.kpis.cumulativeDebtServiceCr?.toString() ?? '0',
+    breach_count: out.covenants?.breaches?.length ?? 0,
+  };
+
+  const endpoint = `${url.replace(/\/$/, '')}/investor-package`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`python /investor-package HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as InvestorPackage;
+  return json;
 }
 
 /**

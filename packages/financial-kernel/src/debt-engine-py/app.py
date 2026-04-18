@@ -28,8 +28,13 @@ from intelligence import (
     tornado as sens_tornado,
     build_investor_package,
 )
+from intelligence.supabase_sink import (
+    persist_investor_package,
+    upsert_cohort,
+    sha256_hex,
+)
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 app = FastAPI(
     title="REDIP Investor Intelligence",
@@ -74,6 +79,8 @@ class InvestorPackageRequest(BaseModel):
     deal_id: str
     engine_version: str = "v2-python"
     generated_at: str
+    organization_id: Optional[str] = None
+    persist: bool = True  # best-effort Supabase write; set False for local dev
 
     # KPI inputs (all arrays are decimal-strings)
     equity_cash_flows: List[str]
@@ -258,7 +265,56 @@ def investor_package_endpoint(req: InvestorPackageRequest) -> Dict[str, Any]:
         monthly=req.monthly,
         waterfall_rows=req.waterfall_rows,
     )
+
+    # Best-effort Supabase persistence. Returns a status block we attach
+    # to the response so callers can see what landed — never raises.
+    persistence: Dict[str, Any] = {"projected": False, "snapshotted": False, "logged": False}
+    if req.persist:
+        input_hash = sha256_hex(req.model_dump(mode="json"))
+        persistence = persist_investor_package(
+            deal_id=req.deal_id,
+            engine_version=req.engine_version,
+            body=pkg,
+            organization_id=req.organization_id,
+            input_hash=input_hash,
+            source="python-fastapi",
+        )
+        upsert_cohort(
+            subject_id=req.deal_id,
+            cohort=req.engine_version,
+            reason="python_service_call",
+        )
+
+    # Attach persistence metadata + engine/version so clients can render
+    # an honest "stored at" footer without another round-trip.
+    pkg["meta"] = {
+        "engineVersion": req.engine_version,
+        "serviceVersion": VERSION,
+        "persistence": persistence,
+    }
     return pkg
+
+
+@app.get("/investor-package/{deal_id}")
+def read_investor_package(deal_id: str) -> Dict[str, Any]:
+    """
+    Read-through for frontends. Returns the latest-per-deal projection
+    from the `investor_packages` table so the Reports / IC views can
+    render without re-computing. Falls back to 404 when there is no
+    stored package yet (legacy deal or v1-cohort).
+    """
+    from intelligence.supabase_sink import _client  # local import to defer lib load
+    client = _client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="supabase_not_configured")
+    try:
+        resp = client.table("investor_packages").select("*").eq("deal_id", deal_id).limit(1).execute()
+        rows = resp.data or []
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"supabase_read_failed: {exc}")
+    if not rows:
+        raise HTTPException(status_code=404, detail="no_stored_package")
+    return rows[0]
 
 
 @app.middleware("http")
