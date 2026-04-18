@@ -38,7 +38,13 @@ export function runWaterfall(inputs: WaterfallInputs): WaterfallOutputs {
     const priorityGroups = groupByPriority(tiers);
     for (const group of priorityGroups) {
       if (available.isZero()) break;
-      const demands = group.map((t) => demandAtMonth(t, m, cumulativeByTier.get(t.id)!));
+      const demands = group.map((t) => {
+        if (t.demandFn) {
+          const raw = t.demandFn({ month: m, tier: t, cumulativeByTier, context: inputs.context });
+          return clampDemand(t, raw, cumulativeByTier.get(t.id)!);
+        }
+        return demandAtMonth(t, m, cumulativeByTier.get(t.id)!);
+      });
       const totalDemand = demands.reduce<Decimal>((a, d) => a.add(d), Decimal.zero());
       if (totalDemand.isZero()) continue;
 
@@ -101,13 +107,17 @@ function groupByPriority(tiers: readonly WaterfallTier[]): WaterfallTier[][] {
 function demandAtMonth(tier: WaterfallTier, m: number, cumulative: Decimal): Decimal {
   const series = tier.demandPerMonth ?? [];
   const d = m < series.length ? series[m] : Decimal.zero();
-  if (d.isZero() || d.isNegative()) return Decimal.zero();
+  return clampDemand(tier, d, cumulative);
+}
+
+function clampDemand(tier: WaterfallTier, raw: Decimal, cumulative: Decimal): Decimal {
+  if (raw.isZero() || raw.isNegative()) return Decimal.zero();
   if (tier.cumulativeCap) {
     const headroom = tier.cumulativeCap.sub(cumulative);
     if (headroom.isNegative() || headroom.isZero()) return Decimal.zero();
-    return d.compare(headroom) > 0 ? headroom : d;
+    return raw.compare(headroom) > 0 ? headroom : raw;
   }
-  return d;
+  return raw;
 }
 
 function defaultAllocation({

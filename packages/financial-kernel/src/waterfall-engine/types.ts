@@ -25,6 +25,10 @@ export type TierKind =
   | 'common_equity'
   | 'sponsor_promote'
   | 'landowner_share'
+  | 'return_of_capital'
+  | 'preferred_return'
+  | 'catch_up'
+  | 'promote'
   | 'custom';
 
 /** A stakeholder receiving allocations from a tier. */
@@ -64,6 +68,20 @@ export interface AllocationHookOutput {
   readonly notes?: readonly string[];
 }
 
+/**
+ * State-aware demand function. Lets pref/catch-up/promote tiers look at
+ * cumulative prior distributions and produce a period-correct demand
+ * without the caller needing to precompute a static array.
+ */
+export type DemandFn = (ctx: TierDemandContext) => Decimal;
+
+export interface TierDemandContext {
+  readonly month: number;
+  readonly tier: WaterfallTier;
+  readonly cumulativeByTier: ReadonlyMap<string, Decimal>;
+  readonly context: WaterfallContext;
+}
+
 export interface WaterfallTier {
   readonly id: string;
   readonly kind: TierKind;
@@ -79,6 +97,11 @@ export interface WaterfallTier {
    * Can be zero if the tier is residual-only.
    */
   readonly demandPerMonth?: readonly Decimal[];
+  /**
+   * State-aware demand. Takes precedence over `demandPerMonth` when set —
+   * used by pref/catch-up/promote tiers that depend on cumulative history.
+   */
+  readonly demandFn?: DemandFn;
   /** Cap on total cumulative allocation to this tier (₹ Cr). */
   readonly cumulativeCap?: Decimal;
 }
