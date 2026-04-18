@@ -68,10 +68,11 @@ describe('buildInvestorPackage — enhanced surface', () => {
   beforeEach(() => {
     process.env = {
       ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_V2_SILENT: '1',
+      DEBT_ENGINE_SILENT: '1',
     };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
   });
   afterEach(() => { process.env = { ...prior }; });
 

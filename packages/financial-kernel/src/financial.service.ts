@@ -1,20 +1,17 @@
 /**
- * `financial.service.ts` — the single Phase 3 entry point for callers
- * that want a unified financial picture for a deal.
+ * `financial.service.ts` — single entry point for callers that want a
+ * unified financial picture for a deal.
  *
  * Contract:
- *   - Always returns the base kernel result (legacy-equivalent) in `baseResult`.
- *   - When `DEBT_ENGINE_V2` is off, the debt/waterfall overlays are empty
- *     zero-series and `engineVersion === 'v1-legacy'`. Callers can ignore
- *     the overlays and the shape matches legacy consumers byte-for-byte
- *     aside from the extra fields.
- *   - When `DEBT_ENGINE_V2` is on and the deal's hash bucket is under
- *     `DEBT_ENGINE_V2_ROLLOUT_PCT`, the full pipeline runs and
- *     `engineVersion` becomes `v2-ts` (or `v2-python` if the service URL
- *     is configured and responsive).
+ *   - Always returns a full result. `baseResult` is the legacy-equivalent
+ *     asset-adapter output every caller has depended on since Phase 1.
+ *   - The debt/CFADS/waterfall overlays always run. `engineVersion`
+ *     records the runtime (`inline` | `python` | `safe-mode`).
+ *   - Under the kill-switch (`DEBT_ENGINE_KILL=1`), overlays collapse to
+ *     zero-series so deal pages survive an incident without crashing.
  *
- * Every invocation emits a structured log line capturing the rollout
- * decision, so ops can audit which engine produced which number.
+ * Every invocation emits a structured decision log so ops can audit
+ * which runtime produced which number.
  */
 
 import { FinancialOrchestrator } from './orchestration/orchestrator';
@@ -23,11 +20,8 @@ import type {
   OrchestrationOutput,
 } from './orchestration/types';
 import {
-  isDebtV2Enabled,
   isKillSwitchOn,
-  getRolloutPct,
   getPythonUrl,
-  shouldUseV2ForDeal,
 } from './orchestration/featureFlag';
 import { buildInvestorPackage } from './exports/intelligentReport';
 import type { InvestorPackage } from './exports/types';
@@ -37,10 +31,10 @@ export type { InvestorPackage } from './exports/types';
 export type { IntelligenceReport, Insight, IntelligenceKPIs } from './intelligence/types';
 
 /**
- * Main service call. The orchestrator already handles gating, so this
- * layer is thin — it exists so callers can import from a stable path
- * (`@redip/financial-kernel/dist/financial.service`) without reaching
- * into the orchestration submodule.
+ * Main service call. The orchestrator runs the full pipeline
+ * unconditionally; this thin layer exists so callers can import from a
+ * stable path (`@redip/financial-kernel/dist/financial.service`) without
+ * reaching into the orchestration submodule.
  */
 export async function computeFinancials(
   input: OrchestrationInput,
@@ -49,13 +43,8 @@ export async function computeFinancials(
   return orch.compute(input);
 }
 
-/**
- * Synchronous snapshot of the flag state. Exposed so the backend
- * adapter can log/report without awaiting an orchestration call.
- */
+/** Synchronous snapshot of the ops state. Cheap — no orchestration. */
 export interface FinancialServiceStatus {
-  readonly v2Enabled: boolean;
-  readonly rolloutPct: number;
   readonly pythonUrl: string | null;
   readonly killSwitch: boolean;
 }
@@ -64,8 +53,6 @@ export function getServiceStatus(
   env: NodeJS.ProcessEnv = process.env,
 ): FinancialServiceStatus {
   return {
-    v2Enabled: isDebtV2Enabled(env),
-    rolloutPct: getRolloutPct(env),
     pythonUrl: getPythonUrl(env),
     killSwitch: isKillSwitchOn(env),
   };
@@ -74,20 +61,23 @@ export function getServiceStatus(
 /**
  * Investor-grade entry point. Runs the full pipeline with intelligence
  * enabled and returns a flat, serialization-ready package suitable for
- * the UI, PDF, and XLSX renderers. Gated by DEBT_ENGINE_V2 — when the
- * flag is off, returns null and the caller should render legacy output.
+ * the UI, PDF, and XLSX renderers.
  *
- * Phase 5 routing:
- *   - v1-legacy          → returns null (caller renders legacy)
- *   - v2-ts              → builds the package locally from orchestrator output
- *   - v2-python + URL    → POSTs to `${DEBT_ENGINE_PY_URL}/investor-package`
- *                          (canonical Python source-of-truth; persists to
- *                          Supabase server-side) and returns the parsed body
- *   - v2-python, no URL  → silently falls back to v2-ts local build
+ * Routing:
+ *   - `inline`    → builds the package locally from orchestrator output
+ *   - `python`    → POSTs to `${DEBT_ENGINE_PY_URL}/investor-package`
+ *                   (canonical source-of-truth; persists to Supabase
+ *                   server-side) and returns the parsed body. If the
+ *                   endpoint is unreachable, silently falls back to the
+ *                   local build so the deal page always renders.
+ *   - `safe-mode` → builds locally from the zero-overlay result. The
+ *                   KPI block reports zeros honestly; callers should
+ *                   check `engineVersion === 'safe-mode'` if they want
+ *                   to surface an ops banner.
  */
 export async function computeInvestorPackage(
   input: OrchestrationInput,
-): Promise<InvestorPackage | null> {
+): Promise<InvestorPackage> {
   const out = await computeFinancials({
     ...input,
     intelligence: {
@@ -95,29 +85,30 @@ export async function computeInvestorPackage(
       enabled: true,
     },
   });
-  if (out.engineVersion === 'v1-legacy' || !out.intelligence) return null;
+  // `out.intelligence` is guaranteed here because we forced enabled=true.
+  const intel = out.intelligence!;
 
   const pyUrl = getPythonUrl(process.env);
-  if (out.engineVersion === 'v2-python' && pyUrl) {
+  if (out.engineVersion === 'python' && pyUrl) {
     try {
       const remote = await callPythonInvestorPackage(pyUrl, input, out);
       if (remote) return remote;
     } catch (err) {
-      // Silent degrade — Python fallback matches orchestrator's behavior.
-      if (process.env.DEBT_ENGINE_V2_SILENT !== '1') {
+      // Silent degrade — match orchestrator's fallback behavior.
+      if (process.env.DEBT_ENGINE_SILENT !== '1' && process.env.DEBT_ENGINE_V2_SILENT !== '1') {
         console.warn(
           `[financial.service] python investor-package fallback: ${(err as Error).message}`,
         );
       }
     }
   }
-  return buildInvestorPackage(out, out.intelligence, input.dealId);
+  return buildInvestorPackage(out, intel, input.dealId);
 }
 
 /**
  * Serialize orchestrator output + intelligence inputs into the FastAPI
  * wire format and POST to `/investor-package`. Returns the parsed
- * payload cast to `InvestorPackage`; Python's response already matches
+ * payload cast to `InvestorPackage`; Python's response shape matches
  * the TS shape (both engines share `build_investor_package` contract).
  *
  * All decimals cross the wire as strings — never floats.
@@ -140,7 +131,7 @@ async function callPythonInvestorPackage(
 
   const body: Record<string, unknown> = {
     deal_id: input.dealId,
-    engine_version: 'v2-python',
+    engine_version: 'python',
     generated_at: new Date().toISOString(),
     organization_id: (input as { organizationId?: string | null }).organizationId ?? null,
     persist: true,
@@ -185,9 +176,6 @@ async function callPythonInvestorPackage(
  * deployment scripts and the backend adapter.
  */
 export {
-  shouldUseV2ForDeal,
-  isDebtV2Enabled,
   isKillSwitchOn,
-  getRolloutPct,
   getPythonUrl,
 };

@@ -29,10 +29,11 @@ describe('pipeline — end-to-end orchestration', () => {
   beforeEach(() => {
     process.env = {
       ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_V2_SILENT: '1',
+      DEBT_ENGINE_SILENT: '1',
     };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
   });
   afterEach(() => {
     process.env = { ...prior };
@@ -88,7 +89,7 @@ describe('pipeline — end-to-end orchestration', () => {
   test('produces finite KPIs across full horizon', async () => {
     const orch = new FinancialOrchestrator();
     const out = await orch.compute(makeCommercialInput());
-    expect(out.engineVersion).toBe('v2-ts');
+    expect(out.engineVersion).toBe('inline');
     expect(out.aggregate.totalMonths).toBe(60);
     expect(Number.isFinite(out.kpis.cumulativeDebtServiceCr)).toBe(true);
     expect(Number.isFinite(out.kpis.peakDebtCr)).toBe(true);
@@ -146,6 +147,6 @@ describe('pipeline — end-to-end orchestration', () => {
     const out = await orch.compute(makeCommercialInput());
     const engineProv = out.provenance.find((p) => p.key === 'orchestrator.engine');
     expect(engineProv).toBeDefined();
-    expect(engineProv!.source).toContain('v2-ts');
+    expect(engineProv!.source).toContain('inline');
   });
 });

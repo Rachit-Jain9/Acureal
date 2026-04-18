@@ -44,58 +44,71 @@ describe('FinancialOrchestrator — engine selection', () => {
     process.env = { ...prior };
   });
 
-  test('returns v1-legacy shape when DEBT_ENGINE_V2 off', async () => {
-    process.env = { ...prior, DEBT_ENGINE_V2: '0', DEBT_ENGINE_V2_SILENT: '1' };
+  test('runs inline pipeline by default (no env configured)', async () => {
+    process.env = { ...prior, DEBT_ENGINE_SILENT: '1' };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
     const out = await orch.compute(makeInput());
-    expect(out.engineVersion).toBe('v1-legacy');
-    expect(out.rolloutDecision.usedV2).toBe(false);
-    // Debt overlays are zero-series.
+    expect(out.engineVersion).toBe('inline');
+    expect(out.engineDecision.killed).toBe(false);
+    expect(out.engineDecision.reason).toBe('inline_default');
+    expect(out.kpis.cumulativeDebtServiceCr).toBeGreaterThan(0);
+    // 60 Cr 10% 36-month EMI → total debt service ~ 69.7 Cr.
+    expect(out.kpis.cumulativeDebtServiceCr).toBeCloseTo(69.7, 0);
+  });
+
+  test('kill-switch returns safe-mode shape with zero overlays', async () => {
+    process.env = { ...prior, DEBT_ENGINE_KILL: '1', DEBT_ENGINE_SILENT: '1' };
+    delete process.env.DEBT_ENGINE_PY_URL;
+    const orch = new FinancialOrchestrator();
+    const out = await orch.compute(makeInput());
+    expect(out.engineVersion).toBe('safe-mode');
+    expect(out.engineDecision.killed).toBe(true);
+    expect(out.engineDecision.reason).toBe('kill_switch_on');
     expect(out.kpis.cumulativeDebtServiceCr).toBe(0);
     expect(out.kpis.peakDebtCr).toBe(0);
   });
 
-  test('runs v2-ts pipeline at 100% rollout', async () => {
-    process.env = {
-      ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_V2_SILENT: '1',
-    };
+  test('legacy DEBT_ENGINE_V2_KILL still engages safe-mode', async () => {
+    process.env = { ...prior, DEBT_ENGINE_V2_KILL: '1', DEBT_ENGINE_SILENT: '1' };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
     const out = await orch.compute(makeInput());
-    expect(out.engineVersion).toBe('v2-ts');
-    expect(out.rolloutDecision.usedV2).toBe(true);
-    expect(out.kpis.cumulativeDebtServiceCr).toBeGreaterThan(0);
-    // With a 60 Cr 10% 36-month amort, total debt service ~ 69.7 Cr.
-    expect(out.kpis.cumulativeDebtServiceCr).toBeCloseTo(69.7, 0);
+    expect(out.engineVersion).toBe('safe-mode');
+    expect(out.engineDecision.killed).toBe(true);
   });
 
-  test('respects forceEngine=v2-ts even with flag off', async () => {
-    process.env = { ...prior, DEBT_ENGINE_V2: '0', DEBT_ENGINE_V2_SILENT: '1' };
+  test('forceEngine=safe-mode overrides default inline', async () => {
+    process.env = { ...prior, DEBT_ENGINE_SILENT: '1' };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
-    const out = await orch.compute({ ...makeInput(), forceEngine: 'v2-ts' });
-    expect(out.engineVersion).toBe('v2-ts');
+    const out = await orch.compute({ ...makeInput(), forceEngine: 'safe-mode' });
+    expect(out.engineVersion).toBe('safe-mode');
   });
 
-  test('forceEngine=v1-legacy overrides enabled flag', async () => {
+  test('forceEngine=inline overrides a python-URL env', async () => {
     process.env = {
       ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_V2_SILENT: '1',
+      DEBT_ENGINE_PY_URL: 'http://unreachable.invalid:9/',
+      DEBT_ENGINE_SILENT: '1',
     };
     const orch = new FinancialOrchestrator();
-    const out = await orch.compute({ ...makeInput(), forceEngine: 'v1-legacy' });
-    expect(out.engineVersion).toBe('v1-legacy');
+    const out = await orch.compute({ ...makeInput(), forceEngine: 'inline' });
+    expect(out.engineVersion).toBe('inline');
   });
 });
 
 describe('FinancialOrchestrator — covenants and KPIs', () => {
   beforeEach(() => {
-    process.env.DEBT_ENGINE_V2 = 'true';
-    process.env.DEBT_ENGINE_V2_ROLLOUT_PCT = '100';
-    process.env.DEBT_ENGINE_V2_SILENT = '1';
+    process.env.DEBT_ENGINE_SILENT = '1';
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
   });
 
   test('computes monthly DSCR and mins', async () => {
@@ -114,12 +127,13 @@ describe('FinancialOrchestrator — covenants and KPIs', () => {
     ).rejects.toThrow(/totalMonths/);
   });
 
-  test('empty facilities produces zero debt service', async () => {
+  test('empty facilities produces zero debt service without crashing', async () => {
     const orch = new FinancialOrchestrator();
     const out = await orch.compute({
       ...makeInput(),
       facilities: [],
     });
+    expect(out.engineVersion).toBe('inline');
     expect(out.kpis.cumulativeDebtServiceCr).toBe(0);
     expect(out.kpis.peakDebtCr).toBe(0);
     expect(out.aggregate.totalMonths).toBe(36);

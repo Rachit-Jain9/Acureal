@@ -91,5 +91,6 @@ export interface IntelligenceReport {
   readonly graph: FinancialGraphSnapshot | null;
   readonly narrative: string;
   readonly generatedAt: string;
-  readonly source: 'v2-ts' | 'v2-python';
+  /** Which runtime produced this report — matches EngineVersion. */
+  readonly source: 'inline' | 'python';
 }

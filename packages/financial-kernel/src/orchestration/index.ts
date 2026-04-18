@@ -1,28 +1,25 @@
 /**
  * @redip/financial-kernel/orchestration
  *
- * Phase 3 orchestration layer: unifies base kernel, debt roll-forward,
- * CFADS, covenants, waterfall, and KPIs behind a single call. All math
- * is deterministic Decimal; rollout is gated by DEBT_ENGINE_V2 and
- * a percentage-based hash bucket on the deal id.
+ * End-to-end financial pipeline: base kernel, debt roll-forward, CFADS,
+ * covenants, waterfall, and KPIs behind a single call. The engine is
+ * unconditional — the only operational knob is a kill-switch
+ * (`DEBT_ENGINE_KILL=1`) that degrades to a safe zero-overlay so deal
+ * pages survive an incident without crashing.
  */
 
 export { FinancialOrchestrator, orchestrate } from './orchestrator';
 export {
-  isDebtV2Enabled,
   isKillSwitchOn,
-  getRolloutPct,
   getPythonUrl,
-  getAnomalyThresholdPct,
+  isSilent,
   hash32,
   dealBucket,
-  cohortTier,
-  shouldUseV2ForDeal,
-  logRolloutDecision,
-  detectAnomalies,
+  selectEngine,
+  logEngineDecision,
   recordMonitoring,
 } from './featureFlag';
-export type { Anomaly, KPIBaseline, MonitoringRecord } from './featureFlag';
+export type { MonitoringRecord } from './featureFlag';
 export { buildCashFlowGraph, totalDistributable } from './cashFlowGraph';
 export type {
   CashFlowGraphInputs,
@@ -31,14 +28,13 @@ export type {
 export { FinancialGraph, buildStandardGraph } from './financialGraph';
 export type { StandardGraphInputs } from './financialGraph';
 export type {
-  CohortTier,
   CovenantSummary,
+  EngineDecision,
   EngineVersion,
   IntelligenceOptions,
   OrchestratedKPIs,
   OrchestrationInput,
   OrchestrationOutput,
-  RolloutDecision,
   WireFacilityRow,
   FacilityRow,
 } from './types';

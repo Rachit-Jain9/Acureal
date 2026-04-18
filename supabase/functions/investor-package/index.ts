@@ -1,13 +1,14 @@
 // supabase/functions/investor-package/index.ts
 // Deno edge function that proxies to the canonical Python investor
-// intelligence service, persists a snapshot + cohort decision, and
-// returns the final payload unchanged.
+// intelligence service. The debt engine is always on; the only
+// operational knob is a kill-switch that short-circuits to a safe-mode
+// response so deal pages survive an incident without crashing.
 //
 // Why an edge function at all:
 //   — centralizes auth (Supabase verifies the caller JWT automatically)
 //   — writes monitoring_logs + investor_package_snapshots from trusted
 //     server-side with service-role credentials, so the browser can't
-//     forge cohort assignments
+//     forge engine-version claims
 //   — keeps the Python compute hot on Vercel while the edge function
 //     gives us a single-origin surface at
 //     `<project>.supabase.co/functions/v1/investor-package`
@@ -16,14 +17,12 @@
 //   supabase functions deploy investor-package --project-ref $PROJECT_REF
 //
 // Required env (set via `supabase secrets set`):
-//   FASTAPI_URL              — full URL to /api/investor-package (Vercel)
-//   SUPABASE_URL             — auto-injected
-//   SUPABASE_SERVICE_ROLE_KEY — auto-injected
-//   DEBT_ENGINE_V2           — 'true' | 'false' (default 'false')
-//   DEBT_ENGINE_V2_KILL      — '1' flips every call to v1-legacy
-//   DEBT_ENGINE_V2_ROLLOUT_PCT — 0..100, rollout cohort size
+//   FASTAPI_URL                 — full URL to /investor-package (Vercel)
+//   SUPABASE_URL                — auto-injected
+//   SUPABASE_SERVICE_ROLE_KEY   — auto-injected
+//   DEBT_ENGINE_KILL            — '1' to flip every call to safe-mode
+//                                 (legacy `DEBT_ENGINE_V2_KILL` still works)
 
-// deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const JSON_HEADERS: Record<string, string> = {
@@ -38,9 +37,8 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-// FNV-1a 32-bit, stable hash for cohort bucketing. Matches the TS
-// orchestrator's bucket() so this edge function's cohort decision is
-// identical to what the kernel would pick on the backend.
+// FNV-1a 32-bit, stable hash. Matches `hash32` in the TS kernel so
+// telemetry drift detection produces the same bucket on both sides.
 function fnv1a(input: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
@@ -50,27 +48,25 @@ function fnv1a(input: string): number {
   return h;
 }
 
-function bucket(subjectId: string, flagKey: string): number {
-  return fnv1a(`${flagKey}:${subjectId}`) % 100;
+function dealBucket(dealId: string): number {
+  return fnv1a(dealId) % 100;
 }
 
-type CohortDecision = {
-  cohort: 'v1-legacy' | 'v2-ts' | 'v2-python';
-  rolloutPct: number;
+type EngineDecision = {
+  engineVersion: 'python' | 'safe-mode';
+  killed: boolean;
   bucket: number;
-  killSwitch: boolean;
   reason: string;
 };
 
-function decideCohort(dealId: string): CohortDecision {
-  const kill = Deno.env.get('DEBT_ENGINE_V2_KILL') === '1';
-  const flagOn = (Deno.env.get('DEBT_ENGINE_V2') || 'false').toLowerCase() === 'true';
-  const pct = Math.max(0, Math.min(100, Number(Deno.env.get('DEBT_ENGINE_V2_ROLLOUT_PCT') || '0')));
-  const b = bucket(dealId, 'DEBT_ENGINE_V2');
-  if (kill)  return { cohort: 'v1-legacy', rolloutPct: pct, bucket: b, killSwitch: true,  reason: 'kill_switch_on' };
-  if (!flagOn) return { cohort: 'v1-legacy', rolloutPct: pct, bucket: b, killSwitch: false, reason: 'flag_off' };
-  if (b < pct) return { cohort: 'v2-python', rolloutPct: pct, bucket: b, killSwitch: false, reason: 'cohort_in_rollout' };
-  return { cohort: 'v1-legacy', rolloutPct: pct, bucket: b, killSwitch: false, reason: 'cohort_outside_rollout' };
+function selectEngine(dealId: string): EngineDecision {
+  const killRaw = (Deno.env.get('DEBT_ENGINE_KILL') ?? Deno.env.get('DEBT_ENGINE_V2_KILL') ?? '')
+    .trim()
+    .toLowerCase();
+  const killed = killRaw === '1' || killRaw === 'true' || killRaw === 'on' || killRaw === 'yes';
+  const bucket = dealBucket(dealId);
+  if (killed) return { engineVersion: 'safe-mode', killed: true, bucket, reason: 'kill_switch_on' };
+  return { engineVersion: 'python', killed: false, bucket, reason: 'python_default' };
 }
 
 async function sha256Hex(s: string): Promise<string> {
@@ -78,23 +74,55 @@ async function sha256Hex(s: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Build a safe-mode response body: zero KPIs + an info banner insight.
+ * Shape matches InvestorPackage so the UI can render without branching.
+ */
+function safeModePackage(dealId: string): Record<string, unknown> {
+  const obs = {
+    kind: 'observation',
+    severity: 'high',
+    title: 'Debt engine disabled',
+    explanation: 'The operations kill-switch is currently engaged; all debt figures are zeroed. Operating metrics and asset facts remain accurate. Contact ops to re-enable.',
+  };
+  return {
+    summary: {
+      dealId,
+      engineVersion: 'safe-mode',
+      generatedAt: new Date().toISOString(),
+      headline: 'Debt engine temporarily disabled (kill-switch engaged)',
+      kpi: {
+        irrLeveredPct: null, irrUnleveredPct: null, moic: null,
+        minDSCR: null, maxDSCR: null, avgDSCR: null,
+        p5DSCR: null, p25DSCR: null, p50DSCR: null, p75DSCR: null,
+        llcr: null, plcr: null, peakEquityCr: 0, paybackMonth: null,
+        debtCapacityCr: 0, cumulativeDebtServiceCr: 0, peakDebtCr: 0,
+        residualTotalCr: 0, breachCount: 0,
+      },
+      insights: [obs],
+      insightsByKind: { risk: [], opportunity: [], observation: [obs] },
+      recommendations: [],
+      sensitivity: null,
+      graph: null,
+      narrative: 'Debt engine temporarily disabled. Numbers below reflect operations only.',
+    },
+    monthly: [],
+    waterfallRows: [],
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: JSON_HEADERS });
-  if (req.method !== 'POST')    return json(405, { error: 'method_not_allowed' });
+  if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
 
   // Default to the Vercel production alias so the edge function is
-  // immediately usable without setting `supabase secrets set FASTAPI_URL=...`.
-  // Override by setting FASTAPI_URL in Supabase Edge Function secrets.
-  const FASTAPI_URL =
-    Deno.env.get('FASTAPI_URL') ||
-    'https://redip.vercel.app/api/investor-package';
+  // immediately usable without `supabase secrets set FASTAPI_URL=...`.
+  const FASTAPI_URL = Deno.env.get('FASTAPI_URL') || 'https://redip.vercel.app/api/investor-package';
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-  const SUPABASE_SERVICE_ROLE_KEY =
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ||
-    Deno.env.get('SUPABASE_KEY') || '';
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_KEY') || '';
   if (!FASTAPI_URL) return json(500, { error: 'fastapi_url_not_configured' });
 
-  let body: any;
+  let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: 'invalid_json' }); }
   const dealId = typeof body?.deal_id === 'string' ? body.deal_id : typeof body?.dealId === 'string' ? body.dealId : null;
   if (!dealId) return json(400, { error: 'deal_id_required' });
@@ -103,47 +131,24 @@ Deno.serve(async (req) => {
     ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
     : null;
 
-  const decision = decideCohort(dealId);
+  const decision = selectEngine(dealId);
   const organizationId = typeof body?.organization_id === 'string' ? body.organization_id : null;
 
-  // Persist cohort decision (upsert by (flag_key, subject_kind, subject_id)).
-  if (sb) {
-    await sb.from('feature_flag_cohorts').upsert({
-      flag_key: 'DEBT_ENGINE_V2',
-      subject_kind: 'deal',
-      subject_id: dealId,
-      cohort: decision.cohort,
-      rollout_pct: decision.rolloutPct,
-      bucket: decision.bucket,
-      kill_switch: decision.killSwitch,
-      engine_version: decision.cohort,
-      reason: decision.reason,
-      payload: { source: 'supabase-edge' },
-    }, { onConflict: 'flag_key,subject_kind,subject_id' });
-  }
-
-  // v1 cohort: short-circuit. Caller falls back to legacy UI.
-  if (decision.cohort === 'v1-legacy') {
+  // Kill-switch: short-circuit to safe-mode without touching FastAPI.
+  if (decision.engineVersion === 'safe-mode') {
+    const pkg = safeModePackage(dealId);
     if (sb) {
       await sb.from('monitoring_logs').insert({
-        organization_id: organizationId,
-        deal_id: dealId,
-        source: 'supabase-edge',
-        event: 'investor_package_v1_cohort',
-        severity: 'info',
-        engine_version: 'v1-legacy',
+        organization_id: organizationId, deal_id: dealId,
+        source: 'supabase-edge', event: 'investor_package_safe_mode',
+        severity: 'medium', engine_version: 'safe-mode',
         payload: { decision },
       });
     }
-    return json(200, {
-      package: null,
-      engineVersion: 'v1-legacy',
-      flagState: decision,
-      reason: decision.killSwitch ? 'kill_switch_on' : 'intelligence_disabled_or_v1_cohort',
-    });
+    return json(200, { package: pkg, engineVersion: 'safe-mode', flagState: decision, reason: 'kill_switch_on' });
   }
 
-  // v2 cohort: proxy to Vercel FastAPI and capture its full payload.
+  // Default path: proxy to Vercel FastAPI and capture its full payload.
   const t0 = performance.now();
   let resp: Response;
   try {
@@ -155,12 +160,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     if (sb) {
       await sb.from('monitoring_logs').insert({
-        organization_id: organizationId,
-        deal_id: dealId,
-        source: 'supabase-edge',
-        event: 'fastapi_fetch_failed',
-        severity: 'high',
-        engine_version: 'v2-python',
+        organization_id: organizationId, deal_id: dealId,
+        source: 'supabase-edge', event: 'fastapi_fetch_failed',
+        severity: 'high', engine_version: 'python',
         payload: { error: String(err) },
       });
     }
@@ -168,18 +170,15 @@ Deno.serve(async (req) => {
   }
   const elapsedMs = performance.now() - t0;
 
-  let pkg: any = null;
+  let pkg: Record<string, unknown> | null = null;
   try { pkg = await resp.json(); } catch { /* leave pkg null */ }
 
   if (!resp.ok) {
     if (sb) {
       await sb.from('monitoring_logs').insert({
-        organization_id: organizationId,
-        deal_id: dealId,
-        source: 'supabase-edge',
-        event: 'fastapi_error',
-        severity: 'high',
-        engine_version: 'v2-python',
+        organization_id: organizationId, deal_id: dealId,
+        source: 'supabase-edge', event: 'fastapi_error',
+        severity: 'high', engine_version: 'python',
         payload: { status: resp.status, body: pkg, elapsedMs },
       });
     }
@@ -188,56 +187,37 @@ Deno.serve(async (req) => {
 
   if (sb) {
     const hash = await sha256Hex(JSON.stringify(body));
-    const summary = pkg?.summary ?? {};
-    const kpi = summary.kpi ?? {};
-    const num = (v: any): number | null => {
+    const summary = (pkg?.summary as Record<string, unknown>) ?? {};
+    const kpi = (summary.kpi as Record<string, unknown>) ?? {};
+    const num = (v: unknown): number | null => {
       if (v === null || v === undefined) return null;
       const n = typeof v === 'number' ? v : Number(v);
       return Number.isFinite(n) ? n : null;
     };
-    // Upsert latest-per-deal projection.
     await sb.from('investor_packages').upsert({
-      deal_id: dealId,
-      organization_id: organizationId,
-      engine_version: 'v2-python',
-      source: 'supabase-edge',
-      headline: summary.headline ?? null,
-      narrative: summary.narrative ?? null,
-      irr_levered_pct: num(kpi.irrLeveredPct),
-      min_dscr: num(kpi.minDSCR),
-      moic: num(kpi.moic),
-      llcr: num(kpi.llcr),
-      peak_equity_cr: num(kpi.peakEquityCr),
-      peak_debt_cr: num(kpi.peakDebtCr),
+      deal_id: dealId, organization_id: organizationId,
+      engine_version: 'python', source: 'supabase-edge',
+      headline: summary.headline ?? null, narrative: summary.narrative ?? null,
+      irr_levered_pct: num(kpi.irrLeveredPct), min_dscr: num(kpi.minDSCR),
+      moic: num(kpi.moic), llcr: num(kpi.llcr),
+      peak_equity_cr: num(kpi.peakEquityCr), peak_debt_cr: num(kpi.peakDebtCr),
       residual_total_cr: num(kpi.residualTotalCr),
       breach_count: Number(kpi.breachCount ?? 0),
-      insights_count: Array.isArray(summary.insights) ? summary.insights.length : 0,
-      body: pkg,
-      input_hash: hash,
+      insights_count: Array.isArray(summary.insights) ? (summary.insights as unknown[]).length : 0,
+      body: pkg, input_hash: hash,
     }, { onConflict: 'deal_id' });
-    // Append snapshot.
     await sb.from('investor_package_snapshots').insert({
-      organization_id: organizationId,
-      deal_id: dealId,
-      engine_version: 'v2-python',
-      source: 'supabase-edge',
-      input_hash: hash,
-      body: pkg,
+      organization_id: organizationId, deal_id: dealId,
+      engine_version: 'python', source: 'supabase-edge',
+      input_hash: hash, body: pkg,
     });
     await sb.from('monitoring_logs').insert({
-      organization_id: organizationId,
-      deal_id: dealId,
-      source: 'supabase-edge',
-      event: 'investor_package_ok',
-      severity: 'info',
-      engine_version: 'v2-python',
-      payload: { elapsedMs, hasInsights: Array.isArray(summary.insights) && summary.insights.length > 0, hash },
+      organization_id: organizationId, deal_id: dealId,
+      source: 'supabase-edge', event: 'investor_package_ok',
+      severity: 'info', engine_version: 'python',
+      payload: { elapsedMs, hasInsights: Array.isArray(summary.insights) && (summary.insights as unknown[]).length > 0, hash, bucket: decision.bucket },
     });
   }
 
-  return json(200, {
-    package: pkg,
-    engineVersion: 'v2-python',
-    flagState: decision,
-  });
+  return json(200, { package: pkg, engineVersion: 'python', flagState: decision });
 });

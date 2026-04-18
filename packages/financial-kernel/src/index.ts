@@ -89,7 +89,9 @@ export type {
   RevenueBreakdown,
 } from './types';
 
-// Debt engine (Phase 2 — gated behind DEBT_ENGINE_V2 at the integration seam).
+// Debt engine — unconditional. Operator emergency escape hatch is
+// DEBT_ENGINE_KILL (legacy alias: DEBT_ENGINE_V2_KILL), which collapses
+// the orchestrator to a zero-overlay safe-mode without disabling exports.
 export * as DebtEngine from './debt-engine';
 export * as WaterfallEngine from './waterfall-engine';
 

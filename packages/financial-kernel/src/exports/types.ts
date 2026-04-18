@@ -42,7 +42,8 @@ export interface InsightsByKind {
 
 export interface InvestorSummary {
   readonly dealId: string;
-  readonly engineVersion: 'v1-legacy' | 'v2-ts' | 'v2-python';
+  /** Which runtime produced the numbers. Matches orchestration EngineVersion. */
+  readonly engineVersion: 'inline' | 'python' | 'safe-mode';
   readonly generatedAt: string;
   readonly headline: string;
   readonly kpi: InvestorKPI;

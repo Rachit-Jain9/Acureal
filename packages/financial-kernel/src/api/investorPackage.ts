@@ -7,9 +7,10 @@
  * route handler, Supabase edge function, backend Express route) can
  * adapt it with a two-line shim.
  *
- * On gating: if `DEBT_ENGINE_V2` is off or the deal's cohort doesn't
- * opt in, the handler returns 200 with `{ package: null, reason }` —
- * callers should fall back to the legacy summary UI rather than error.
+ * The engine is always on. The handler always returns a package; when
+ * the kill-switch is engaged, `engineVersion === 'safe-mode'` and the
+ * KPI block reports zeros honestly so the UI can surface an ops banner
+ * without crashing.
  */
 import {
   computeInvestorPackage,
@@ -19,10 +20,9 @@ import type { OrchestrationInput } from '../orchestration/types';
 import type { InvestorPackage } from '../exports/types';
 
 export interface InvestorPackageResponseBody {
-  readonly package: InvestorPackage | null;
-  readonly engineVersion: 'v1-legacy' | 'v2-ts' | 'v2-python' | null;
+  readonly package: InvestorPackage;
+  readonly engineVersion: 'inline' | 'python' | 'safe-mode';
   readonly flagState: ReturnType<typeof getServiceStatus>;
-  readonly reason?: string;
 }
 
 export interface HandlerResult {
@@ -67,9 +67,8 @@ export async function handleInvestorPackage(
       status: 200,
       body: {
         package: pkg,
-        engineVersion: pkg?.summary.engineVersion ?? null,
+        engineVersion: pkg.summary.engineVersion,
         flagState: flag,
-        reason: pkg ? undefined : 'intelligence_disabled_or_v1_cohort',
       },
       headers: JSON_HEADERS,
     };

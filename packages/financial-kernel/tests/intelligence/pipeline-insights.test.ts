@@ -6,7 +6,6 @@ import { Decimal } from '../../src/decimal';
 import { FinancialOrchestrator } from '../../src/orchestration/orchestrator';
 import { buildPrefCatchPromoteTiers } from '../../src/waterfall-engine';
 import { buildInvestorPackage } from '../../src/exports/intelligentReport';
-import { detectAnomalies } from '../../src/orchestration/featureFlag';
 import type { OrchestrationInput } from '../../src/orchestration/types';
 import type { FacilitySpec } from '../../src/debt-engine';
 import { commercialSample } from '../fixtures';
@@ -18,10 +17,11 @@ describe('pipeline — intelligence output', () => {
   beforeEach(() => {
     process.env = {
       ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_V2_SILENT: '1',
+      DEBT_ENGINE_SILENT: '1',
     };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
   });
   afterEach(() => {
     process.env = { ...prior };
@@ -102,7 +102,7 @@ describe('pipeline — intelligence output', () => {
     expect(i.narrative.length).toBeGreaterThan(10);
     expect(i.graph).not.toBeNull();
     expect(i.graph!.nodes.length).toBeGreaterThan(0);
-    expect(i.source).toBe('v2-ts');
+    expect(i.source).toBe('inline');
   });
 
   test('sensitivity tornado produces sorted rows when enabled', async () => {
@@ -146,31 +146,20 @@ describe('pipeline — intelligence output', () => {
     expect(out.intelligence).toBeUndefined();
   });
 
-  test('detectAnomalies flags KPI drift above threshold', () => {
-    const v1 = {
-      cumulativeDebtServiceCr: 100,
-      peakDebtCr: 80,
-      residualTotalCr: 50,
-      minDSCR: 1.3,
-      irrLeveredPct: 15,
-    };
-    const v2 = {
-      cumulativeDebtServiceCr: 101,
-      peakDebtCr: 80,
-      residualTotalCr: 70,  // +40% drift — should flag
-      minDSCR: 1.3,
-      irrLeveredPct: 15.2,
-    };
-    const anomalies = detectAnomalies(v1, v2, 5);
-    expect(anomalies.find((a) => a.metric === 'residualTotalCr')).toBeDefined();
-    expect(anomalies.find((a) => a.metric === 'cumulativeDebtServiceCr')).toBeUndefined();
+  test('kill-switch collapses to safe-mode overlay', async () => {
+    process.env.DEBT_ENGINE_KILL = '1';
+    const out = await new FinancialOrchestrator().compute(makeInput());
+    expect(out.engineVersion).toBe('safe-mode');
+    expect(out.engineDecision.killed).toBe(true);
+    expect(out.kpis.cumulativeDebtServiceCr).toBe(0);
+    delete process.env.DEBT_ENGINE_KILL;
   });
 
-  test('kill switch forces v1 even when flag on', async () => {
+  test('legacy DEBT_ENGINE_V2_KILL still engages safe-mode', async () => {
     process.env.DEBT_ENGINE_V2_KILL = '1';
     const out = await new FinancialOrchestrator().compute(makeInput());
-    expect(out.engineVersion).toBe('v1-legacy');
-    expect(out.rolloutDecision.killed).toBe(true);
+    expect(out.engineVersion).toBe('safe-mode');
+    expect(out.engineDecision.killed).toBe(true);
     delete process.env.DEBT_ENGINE_V2_KILL;
   });
 });

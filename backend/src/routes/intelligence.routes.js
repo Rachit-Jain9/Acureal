@@ -105,11 +105,12 @@ router.post('/deal-analysis/:dealId', authenticate, requireRole('admin', 'analys
  * Thin adapter over the kernel's pure HTTP handler. Body is a full
  * `OrchestrationInput` (dealId, totalMonths, facilities, cfadsInputs,
  * waterfall, intelligence). Response mirrors the handler envelope:
- *   { package, engineVersion, flagState, reason? }
+ *   { package, engineVersion, flagState }
  *
- * Every call persists its cohort decision, monitoring event, and
- * (for v2 cohorts) a package snapshot — fire-and-forget so a Supabase
- * outage does not break the compute path.
+ * Every call persists a package snapshot and a monitoring event
+ * fire-and-forget so a Supabase outage does not break the compute path.
+ * `engineVersion` ∈ {inline, python, safe-mode}; `safe-mode` means the
+ * operator kill-switch (`DEBT_ENGINE_KILL=1`) is engaged.
  */
 router.post(
   '/investor-package',
@@ -122,24 +123,13 @@ router.post(
     try {
       const result = await invokeKernelHandler(input, process.env);
       const { status, body } = result;
-
-      if (dealId && body && typeof body === 'object' && 'flagState' in body) {
-        monitoring.upsertCohortDecision({
-          subjectId: dealId,
-          cohort: body.engineVersion || 'v1-legacy',
-          rolloutPct: body.flagState?.rolloutPct ?? 0,
-          killSwitch: Boolean(body.flagState?.killSwitch),
-          engineVersion: body.engineVersion || null,
-          reason: body.reason || 'kernel_decision',
-          payload: { source: 'backend-route' },
-        }).catch(() => {});
-      }
+      const engineVersion = body?.engineVersion || 'inline';
 
       if (status >= 200 && status < 300 && body?.package && dealId) {
         monitoring.persistInvestorPackageSnapshot({
           organizationId,
           dealId,
-          engineVersion: body.engineVersion || 'v2-ts',
+          engineVersion,
           source: 'backend',
           inputHash: sha256(input),
           body: body.package,
@@ -151,12 +141,15 @@ router.post(
         dealId,
         source: 'backend',
         event: status < 300 ? 'investor_package_ok' : 'investor_package_error',
-        severity: status < 300 ? 'info' : status >= 500 ? 'high' : 'medium',
-        engineVersion: body?.engineVersion || null,
+        severity:
+          status < 300
+            ? engineVersion === 'safe-mode' ? 'medium' : 'info'
+            : status >= 500 ? 'high' : 'medium',
+        engineVersion,
         payload: {
           status,
           hasPackage: Boolean(body?.package),
-          reason: body?.reason,
+          killSwitch: Boolean(body?.flagState?.killSwitch),
         },
       }).catch(() => {});
 

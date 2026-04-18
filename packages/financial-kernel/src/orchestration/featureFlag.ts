@@ -1,69 +1,68 @@
 /**
- * Feature-flag wiring for the Phase 3 orchestration layer with built-in
- * monitoring: cohort tracking (bucket tiers), anomaly detection
- * (v1-vs-v2 KPI drift), and an instant kill switch.
+ * Engine routing + ops escape hatches.
  *
- * Env knobs:
- *   - `DEBT_ENGINE_V2` (truthy/falsy): master switch.
- *   - `DEBT_ENGINE_V2_ROLLOUT_PCT` (0-100, default 0): gradual rollout.
- *   - `DEBT_ENGINE_V2_KILL` (truthy): kill switch — forces v1 regardless of
- *     every other setting. Lets ops disable V2 without a code deploy.
- *   - `DEBT_ENGINE_V2_ANOMALY_PCT` (0-100, default 5): abs-pct threshold above
- *     which a v2 KPI vs v1 baseline counts as an anomaly.
- *   - `DEBT_ENGINE_V2_SILENT` ('1'): suppress decision log lines in tests.
+ * The debt engine is always on — no rollout, no cohort bucketing, no
+ * version toggling. What remains here are three operational knobs:
  *
- * Determinism: the same deal always gets the same engine unless an operator
- * changes the threshold or flips the kill switch. We hash the deal id with
- * a 32-bit FNV-1a — fast, dependency-free, and stable across runs.
+ *   - `DEBT_ENGINE_PY_URL`    — if set, calls route to the Python
+ *                               FastAPI canonical service; otherwise
+ *                               the in-process TS runtime handles it.
+ *   - `DEBT_ENGINE_KILL`      — emergency kill-switch. When truthy,
+ *                               every call returns the `safe-mode`
+ *                               zero-overlay so an incident in the
+ *                               engine never breaks deal pages. Legacy
+ *                               name `DEBT_ENGINE_V2_KILL` still works.
+ *   - `DEBT_ENGINE_SILENT`    — suppress decision log lines in tests.
+ *                               Legacy name `DEBT_ENGINE_V2_SILENT`
+ *                               also accepted.
+ *
+ * Determinism: `dealBucket(dealId)` gives a stable 0-99 value per deal.
+ * Callers don't gate on it anymore but monitoring uses it to detect
+ * drift (same bucket → same numbers across time).
  */
 
-import type { CohortTier, RolloutDecision } from './types';
+import type { EngineDecision, EngineVersion } from './types';
 
 const TRUTHY = new Set(['true', '1', 'on', 'yes', 'enabled']);
 
-export function isDebtV2Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const v = String(env.DEBT_ENGINE_V2 ?? '').toLowerCase();
-  return TRUTHY.has(v);
+function envFirst(
+  env: NodeJS.ProcessEnv,
+  keys: readonly string[],
+): string | undefined {
+  for (const k of keys) {
+    const v = env[k];
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
+  return undefined;
 }
 
-export function getRolloutPct(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.DEBT_ENGINE_V2_ROLLOUT_PCT;
-  if (raw == null || raw === '') return isDebtV2Enabled(env) ? 100 : 0;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return 0;
-  if (n < 0) return 0;
-  if (n > 100) return 100;
-  return n;
-}
-
-export function getPythonUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  const url = env.DEBT_ENGINE_PY_URL;
-  if (!url || typeof url !== 'string' || url.trim() === '') return null;
-  return url.trim();
-}
-
-/** Kill switch — forces v1 regardless of every other knob. */
+/**
+ * True only when an operator has explicitly engaged the kill-switch.
+ * Accepts both the current name and the legacy `_V2_` name so operators
+ * with stale env vars don't lose their escape hatch on upgrade.
+ */
 export function isKillSwitchOn(env: NodeJS.ProcessEnv = process.env): boolean {
-  const v = String(env.DEBT_ENGINE_V2_KILL ?? '').toLowerCase();
-  return TRUTHY.has(v);
+  const raw = envFirst(env, ['DEBT_ENGINE_KILL', 'DEBT_ENGINE_V2_KILL']);
+  if (raw == null) return false;
+  return TRUTHY.has(raw.toLowerCase());
 }
 
-/** Anomaly threshold in percent (default 5%). */
-export function getAnomalyThresholdPct(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.DEBT_ENGINE_V2_ANOMALY_PCT;
-  if (raw == null || raw === '') return 5;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return 5;
-  return n;
+/**
+ * Return the Python service base URL, or null if calls should run
+ * in-process. Empty strings count as null so accidental empty env
+ * values don't route traffic into the void.
+ */
+export function getPythonUrl(env: NodeJS.ProcessEnv = process.env): string | null {
+  const raw = env.DEBT_ENGINE_PY_URL;
+  if (!raw || typeof raw !== 'string' || raw.trim() === '') return null;
+  return raw.trim();
 }
 
-/** Coarse-grained bucket tier for cohort observability. */
-export function cohortTier(bucket: number): CohortTier {
-  if (bucket < 1) return 'control';
-  if (bucket < 10) return 'early';
-  if (bucket < 25) return 'ramp';
-  if (bucket < 75) return 'rollout';
-  return 'full';
+/** Suppress decision/monitoring log lines (used by the test suite). */
+export function isSilent(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = envFirst(env, ['DEBT_ENGINE_SILENT', 'DEBT_ENGINE_V2_SILENT']);
+  if (raw == null) return false;
+  return raw === '1' || TRUTHY.has(raw.toLowerCase());
 }
 
 /** 32-bit FNV-1a hash of a string, returned as an unsigned integer. */
@@ -76,118 +75,82 @@ export function hash32(s: string): number {
   return h >>> 0;
 }
 
+/** Deterministic 0-99 bucket for a deal id. Used by telemetry for drift. */
 export function dealBucket(dealId: string): number {
   return hash32(dealId) % 100;
 }
 
-export function shouldUseV2ForDeal(
+/**
+ * Pick the runtime for a given deal. Pure function; no I/O.
+ *
+ * Decision order:
+ *   1. Kill-switch on → `safe-mode` (empty overlays; compute path short-circuits).
+ *   2. `DEBT_ENGINE_PY_URL` set → `python`.
+ *   3. Otherwise → `inline`.
+ */
+export function selectEngine(
   dealId: string,
   env: NodeJS.ProcessEnv = process.env,
-): RolloutDecision {
-  const enabled = isDebtV2Enabled(env);
+): EngineDecision {
   const killed = isKillSwitchOn(env);
-  const threshold = getRolloutPct(env);
+  const pyUrl = getPythonUrl(env);
   const bucket = dealBucket(dealId);
-  let usedV2 = false;
-  let reason = '';
+  let engineVersion: EngineVersion;
+  let reason: string;
   if (killed) {
-    reason = 'kill switch on';
-  } else if (!enabled) {
-    reason = 'DEBT_ENGINE_V2 off';
-  } else if (threshold <= 0) {
-    reason = 'rollout 0%';
-  } else if (threshold >= 100) {
-    usedV2 = true;
-    reason = 'rollout 100%';
-  } else if (bucket < threshold) {
-    usedV2 = true;
-    reason = `bucket ${bucket} < ${threshold}`;
+    engineVersion = 'safe-mode';
+    reason = 'kill_switch_on';
+  } else if (pyUrl) {
+    engineVersion = 'python';
+    reason = 'python_url_configured';
   } else {
-    reason = `bucket ${bucket} >= ${threshold}`;
+    engineVersion = 'inline';
+    reason = 'inline_default';
   }
-  const pythonUrl = usedV2 ? getPythonUrl(env) : null;
   return {
-    usedV2,
-    usedPython: Boolean(pythonUrl),
-    bucket,
-    thresholdPct: threshold,
-    reason,
+    engineVersion,
     killed,
-    cohort: cohortTier(bucket),
+    pythonAvailable: !killed && pyUrl != null,
+    bucket,
+    reason,
   };
 }
 
-export function logRolloutDecision(
+/** Structured decision log. Silent in tests via `DEBT_ENGINE_SILENT=1`. */
+export function logEngineDecision(
   dealId: string,
-  decision: RolloutDecision,
+  decision: EngineDecision,
   logger: Pick<Console, 'info'> = console,
+  env: NodeJS.ProcessEnv = process.env,
 ): void {
-  if (process.env.DEBT_ENGINE_V2_SILENT === '1') return;
+  if (isSilent(env)) return;
   logger.info(
-    `[financial.orchestrator] deal=${dealId} v2=${decision.usedV2} python=${decision.usedPython} bucket=${decision.bucket}/${decision.thresholdPct} cohort=${decision.cohort ?? 'n/a'} reason="${decision.reason}"`,
+    `[financial.orchestrator] deal=${dealId} engine=${decision.engineVersion} bucket=${decision.bucket} reason=${decision.reason}`,
   );
 }
 
-export interface KPIBaseline {
-  readonly cumulativeDebtServiceCr?: number | null;
-  readonly peakDebtCr?: number | null;
-  readonly residualTotalCr?: number | null;
-  readonly minDSCR?: number | null;
-  readonly irrLeveredPct?: number | null;
-}
-
-export interface Anomaly {
-  readonly metric: string;
-  readonly v1: number | null;
-  readonly v2: number | null;
-  readonly absDeltaPct: number;
-}
-
-/** Compare v1 vs v2 headline KPIs; flag metrics whose abs-pct delta exceeds
- *  the configured threshold. Returns empty array if v1 baseline is missing. */
-export function detectAnomalies(
-  v1: KPIBaseline | null,
-  v2: KPIBaseline,
-  thresholdPct: number = getAnomalyThresholdPct(),
-): Anomaly[] {
-  if (v1 == null) return [];
-  const metrics: (keyof KPIBaseline)[] = [
-    'cumulativeDebtServiceCr',
-    'peakDebtCr',
-    'residualTotalCr',
-    'minDSCR',
-    'irrLeveredPct',
-  ];
-  const out: Anomaly[] = [];
-  for (const m of metrics) {
-    const a = v1[m] ?? null;
-    const b = v2[m] ?? null;
-    if (a == null || b == null) continue;
-    const denom = Math.max(Math.abs(a), 1e-9);
-    const deltaPct = Math.abs((b - a) / denom) * 100;
-    if (deltaPct > thresholdPct) {
-      out.push({ metric: m, v1: a, v2: b, absDeltaPct: deltaPct });
-    }
-  }
-  return out;
-}
-
+/**
+ * Telemetry record emitted once per orchestration run. Callers that
+ * persist to `monitoring_logs` should flatten this into the payload.
+ */
 export interface MonitoringRecord {
   readonly dealId: string;
-  readonly decision: RolloutDecision;
-  readonly engineVersion: string;
-  readonly anomalies: readonly Anomaly[];
+  readonly decision: EngineDecision;
+  readonly engineVersion: EngineVersion;
   readonly durationMs: number;
   readonly at: string;
 }
 
-/** Emit a structured decision record for telemetry pipelines. Silent in tests. */
 export function recordMonitoring(
   rec: MonitoringRecord,
   logger: Pick<Console, 'info' | 'warn'> = console,
+  env: NodeJS.ProcessEnv = process.env,
 ): void {
-  if (process.env.DEBT_ENGINE_V2_SILENT === '1') return;
-  const line = JSON.stringify({ kind: 'financial.orchestrator.monitoring', ...rec });
-  if (rec.anomalies.length > 0) logger.warn(line);
+  if (isSilent(env)) return;
+  const line = JSON.stringify({
+    kind: 'financial.orchestrator.monitoring',
+    ...rec,
+  });
+  if (rec.engineVersion === 'safe-mode') logger.warn(line);
   else logger.info(line);
 }

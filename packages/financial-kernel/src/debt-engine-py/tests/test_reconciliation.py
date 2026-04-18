@@ -88,7 +88,7 @@ def _expected_kpi_keys():
 def test_envelope_has_summary_monthly_waterfall():
     pkg = build_investor_package(
         deal_id="deal-1",
-        engine_version="v2-python",
+        engine_version="python",
         generated_at="2026-04-18T00:00:00Z",
         kpis=_sample_kpis(),
         insights=[],
@@ -102,7 +102,7 @@ def test_envelope_has_summary_monthly_waterfall():
 def test_summary_has_complete_key_set():
     pkg = build_investor_package(
         deal_id="deal-1",
-        engine_version="v2-python",
+        engine_version="python",
         generated_at="2026-04-18T00:00:00Z",
         kpis=_sample_kpis(),
         insights=[],
@@ -115,7 +115,7 @@ def test_summary_has_complete_key_set():
 def test_kpi_block_has_complete_key_set():
     pkg = build_investor_package(
         deal_id="deal-1",
-        engine_version="v2-python",
+        engine_version="python",
         generated_at="2026-04-18T00:00:00Z",
         kpis=_sample_kpis(),
         insights=[],
@@ -127,7 +127,7 @@ def test_kpi_block_has_complete_key_set():
 
 def test_headline_format():
     pkg = build_investor_package(
-        deal_id="d", engine_version="v2-python", generated_at="t",
+        deal_id="d", engine_version="python", generated_at="t",
         kpis=_sample_kpis(), insights=[], narrative="",
     )
     headline = pkg["summary"]["headline"]
@@ -177,7 +177,7 @@ def test_insights_by_kind_partitions_exhaustively():
 
 def test_kpi_values_round_trip_as_strings_not_floats():
     pkg = build_investor_package(
-        deal_id="d", engine_version="v2-python", generated_at="t",
+        deal_id="d", engine_version="python", generated_at="t",
         kpis=_sample_kpis(), insights=[], narrative="",
     )
     k = pkg["summary"]["kpi"]

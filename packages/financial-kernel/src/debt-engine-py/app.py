@@ -30,19 +30,19 @@ from intelligence import (
 )
 from intelligence.supabase_sink import (
     persist_investor_package,
-    upsert_cohort,
     sha256_hex,
 )
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 app = FastAPI(
     title="REDIP Investor Intelligence",
     version=VERSION,
     description=(
         "Python canonical source of truth for KPI, decision, sensitivity, "
-        "and investor-package assembly. Behind DEBT_ENGINE_V2 on the TS "
-        "side; safe to call independently."
+        "and investor-package assembly. The debt engine is unconditional; "
+        "operators have a kill-switch (DEBT_ENGINE_KILL=1) on the TS side "
+        "as an emergency escape hatch. Safe to call independently."
     ),
 )
 
@@ -77,7 +77,9 @@ class SensitivityVariable(BaseModel):
 
 class InvestorPackageRequest(BaseModel):
     deal_id: str
-    engine_version: str = "v2-python"
+    # Engine runtime label. Defaults to "python" — this service IS the
+    # canonical Python engine. Callers may override for drill/test.
+    engine_version: str = "python"
     generated_at: str
     organization_id: Optional[str] = None
     persist: bool = True  # best-effort Supabase write; set False for local dev
@@ -174,7 +176,7 @@ def kpis_endpoint(req: KPIRequest) -> Dict[str, Any]:
         annual_rate=_D(req.annual_rate),
         term_months=req.term_months,
     )
-    return {"engine": "v2-python", "version": VERSION, "kpis": k}
+    return {"engine": "python", "version": VERSION, "kpis": k}
 
 
 @app.post("/investor-package")
@@ -279,11 +281,9 @@ def investor_package_endpoint(req: InvestorPackageRequest) -> Dict[str, Any]:
             input_hash=input_hash,
             source="python-fastapi",
         )
-        upsert_cohort(
-            subject_id=req.deal_id,
-            cohort=req.engine_version,
-            reason="python_service_call",
-        )
+        # No cohort upsert: the engine is unconditional, there is no
+        # rollout/cohort assignment to persist anymore. The snapshot row
+        # itself carries the engine_version for auditability.
 
     # Attach persistence metadata + engine/version so clients can render
     # an honest "stored at" footer without another round-trip.

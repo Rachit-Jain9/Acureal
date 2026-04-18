@@ -1,18 +1,22 @@
 'use strict';
 
 /**
- * Supabase-backed monitoring + rollout persistence for the financial
- * kernel's Phase-4 investor-intelligence pipeline.
+ * Supabase-backed monitoring + provenance for the financial kernel.
  *
- * Three concerns, one module:
- *   recordMonitoringEvent(event)          — append-only anomaly / variance /
- *                                            reconciliation log rows.
- *   upsertCohortDecision(decision)        — durable record of what cohort
- *                                            a deal landed in for
- *                                            DEBT_ENGINE_V2, so rollout
- *                                            is replayable from history.
- *   persistInvestorPackageSnapshot(snap)  — full package JSON + input hash
- *                                            for golden-file reconciliation.
+ * Two concerns, one module:
+ *   recordMonitoringEvent(event)          — append-only event log for
+ *                                            anomalies, variance alerts,
+ *                                            reconciliation runs, and
+ *                                            engine-decision traces.
+ *   persistInvestorPackageSnapshot(snap)  — full package JSON + input
+ *                                            hash for golden-file
+ *                                            reconciliation.
+ *
+ * Cohort tracking was removed when the debt engine became unconditional;
+ * the `investor_package_snapshots` rows already carry `engine_version`
+ * for auditability, and there is no rollout/cohort assignment to persist
+ * anymore. A legacy-compat `upsertCohortDecision` is retained below
+ * (no-op alias) so pre-existing callers don't blow up mid-deploy.
  *
  * When Supabase is not configured (local dev without env), every function
  * is a no-op that returns `{ persisted: false, reason }`. Callers should
@@ -67,45 +71,11 @@ const recordMonitoringEvent = async ({
 };
 
 /**
- * Upsert a feature-flag cohort row. `subjectId` is usually the deal
- * UUID. `cohort` ∈ {v1-legacy, v2-ts, v2-python}.
- */
-const upsertCohortDecision = async ({
-  flagKey = 'DEBT_ENGINE_V2',
-  subjectKind = 'deal',
-  subjectId,
-  cohort,
-  rolloutPct = 0,
-  bucket = null,
-  killSwitch = false,
-  engineVersion = null,
-  reason = null,
-  payload = {},
-} = {}) => {
-  if (!subjectId || !cohort) return { persisted: false, reason: 'subject_id_and_cohort_required' };
-  return _safe(async () => {
-    const sb = getSupabaseClient();
-    const { error } = await sb.from('feature_flag_cohorts').upsert({
-      flag_key: flagKey,
-      subject_kind: subjectKind,
-      subject_id: subjectId,
-      cohort,
-      rollout_pct: rolloutPct,
-      bucket,
-      kill_switch: killSwitch,
-      engine_version: engineVersion,
-      reason,
-      payload,
-    }, { onConflict: 'flag_key,subject_kind,subject_id' });
-    if (error) throw error;
-    return { persisted: true };
-  }, `upsertCohortDecision(${subjectId})`);
-};
-
-/**
  * Persist a full investor-package snapshot for golden-file reconciliation.
  * `inputHash` is a caller-computed SHA-256 of the request body — lets us
- * detect drift between identical inputs across engine versions.
+ * detect drift between identical inputs across engine runtimes.
+ *
+ * `engineVersion` ∈ {inline, python, safe-mode}.
  */
 const persistInvestorPackageSnapshot = async ({
   organizationId = null,
@@ -131,8 +101,18 @@ const persistInvestorPackageSnapshot = async ({
   }, `persistInvestorPackageSnapshot(${dealId})`);
 };
 
+/**
+ * Deprecated no-op. Cohorts were removed with the rollout. Retained so
+ * any pre-existing caller does not throw mid-deploy; returns a clear
+ * sentinel so the operator can see it fired during a rolling rollout.
+ */
+const upsertCohortDecision = async () => ({
+  persisted: false,
+  reason: 'cohort_persistence_removed',
+});
+
 module.exports = {
   recordMonitoringEvent,
-  upsertCohortDecision,
   persistInvestorPackageSnapshot,
+  upsertCohortDecision,
 };

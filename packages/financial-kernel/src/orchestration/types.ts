@@ -1,11 +1,15 @@
 /**
- * Phase 3 orchestration types.
+ * Orchestration types.
  *
  * An orchestration pass takes a deal (inputs + facility specs + waterfall
  * tiers) and returns the unified financial picture: base kernel result,
  * debt schedule, CFADS, covenants, waterfall, and KPIs — together with
- * rollout provenance so we can reason about which engine produced which
+ * engine provenance so we can reason about which runtime produced which
  * number.
+ *
+ * The debt engine is always on. An operator kill-switch
+ * (`DEBT_ENGINE_KILL=1`) exists as an emergency escape hatch that
+ * reduces the pipeline to a safe no-op overlay; see featureFlag.ts.
  */
 
 import type { Decimal } from '../decimal';
@@ -26,8 +30,6 @@ import type {
 } from '../types';
 import type { IntelligenceReport } from '../intelligence/types';
 
-export type CohortTier = 'control' | 'early' | 'ramp' | 'rollout' | 'full';
-
 export interface CovenantSummary {
   readonly monthly: readonly CovenantResult[];
   readonly minDSCR: number | null;
@@ -37,7 +39,14 @@ export interface CovenantSummary {
   readonly breaches: readonly string[];
 }
 
-export type EngineVersion = 'v1-legacy' | 'v2-ts' | 'v2-python';
+/**
+ * Where the pipeline ran:
+ *   - `inline`   — in-process TypeScript kernel
+ *   - `python`   — remote Python FastAPI (DEBT_ENGINE_PY_URL set)
+ *   - `safe-mode` — kill-switch on; pipeline produced zero-overlay so
+ *                   callers degrade gracefully without crashing
+ */
+export type EngineVersion = 'inline' | 'python' | 'safe-mode';
 
 /**
  * Input shape expected by `FinancialOrchestrator.compute`. Deliberately
@@ -89,9 +98,9 @@ export interface OrchestrationInput {
     readonly testMonths?: readonly number[];
   };
   readonly sculptTarget?: Decimal;
-  /** Allow callers to force a specific engine (tests). Prod should leave undefined. */
+  /** Allow callers to force a specific engine (tests + failover drills). */
   readonly forceEngine?: EngineVersion;
-  /** Intelligence output options. Opt-in — legacy callers see no change. */
+  /** Intelligence output options. Opt-in — defaults to KPIs-only. */
   readonly intelligence?: IntelligenceOptions;
 }
 
@@ -115,24 +124,26 @@ export interface OrchestrationOutput {
   readonly waterfall?: WaterfallOutputs;
   readonly kpis: OrchestratedKPIs;
   readonly provenance: readonly ProvenanceEntry[];
-  readonly rolloutDecision: RolloutDecision;
+  readonly engineDecision: EngineDecision;
   readonly intelligence?: IntelligenceReport;
 }
 
-export interface RolloutDecision {
-  /** Whether the orchestration path ran at all. */
-  readonly usedV2: boolean;
-  /** Whether the Python engine was used (implies usedV2). */
-  readonly usedPython: boolean;
-  /** Deterministic hash bucket for this deal (0-99). */
+/**
+ * Engine-routing verdict for a single compute call. Always deterministic
+ * for a given (deal id, env). Purely informational — the orchestrator
+ * always produces a full result; this just labels where the math ran.
+ */
+export interface EngineDecision {
+  /** Which runtime produced the numbers. */
+  readonly engineVersion: EngineVersion;
+  /** True when the operator kill-switch forced safe-mode. */
+  readonly killed: boolean;
+  /** True when a Python endpoint was configured and reachable. */
+  readonly pythonAvailable: boolean;
+  /** Deterministic 0-99 hash bucket — used by telemetry to spot drift. */
   readonly bucket: number;
-  /** Threshold percent at decision time. */
-  readonly thresholdPct: number;
+  /** Human-readable label: `python`, `inline`, `kill_switch_on`, `forceEngine=...`. */
   readonly reason: string;
-  /** True when the instant kill switch was engaged. */
-  readonly killed?: boolean;
-  /** Cohort tier for telemetry. */
-  readonly cohort?: CohortTier;
 }
 
 /** Minimal JSON-safe facility row used on the Python wire format. */

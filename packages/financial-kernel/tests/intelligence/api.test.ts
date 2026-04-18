@@ -1,11 +1,16 @@
 /**
  * Tests the pure HTTP handler that wraps computeInvestorPackage.
- * The handler must not throw on bad input, must return a JSON envelope,
- * and must honor the DEBT_ENGINE_V2 flag + kill switch.
  *
- * Flag manipulation goes through process.env because the orchestrator
- * reads it at runtime; the handler's env param only affects the
- * flagState field echoed to the caller.
+ * The debt engine is always on. The handler must:
+ *   - return 400 on invalid input
+ *   - return 200 with a real package on the default (inline) path
+ *   - return 200 with a safe-mode package + killSwitch flagState when
+ *     DEBT_ENGINE_KILL is engaged
+ *   - honor the legacy DEBT_ENGINE_V2_KILL alias
+ *
+ * The handler's `env` param only affects the echoed `flagState`. The
+ * orchestrator itself reads `process.env` at runtime, so the tests set
+ * both to keep behaviour consistent.
  */
 import { Decimal } from '../../src/decimal';
 import { handleInvestorPackage } from '../../src/api/investorPackage';
@@ -63,6 +68,15 @@ function validInput(): OrchestrationInput {
 
 describe('handleInvestorPackage — pure HTTP handler', () => {
   const prior = { ...process.env };
+  beforeEach(() => {
+    process.env = {
+      ...prior,
+      DEBT_ENGINE_SILENT: '1',
+    };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
+  });
   afterEach(() => { process.env = { ...prior }; });
 
   test('returns 400 on invalid input (no dealId)', async () => {
@@ -77,48 +91,75 @@ describe('handleInvestorPackage — pure HTTP handler', () => {
     expect(res.status).toBe(400);
   });
 
-  test('returns 200 with package when v2 enabled at 100%', async () => {
-    process.env = {
-      ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_V2_SILENT: '1',
-    };
+  test('returns 200 with inline package by default (no env configured)', async () => {
     const res = await handleInvestorPackage(validInput());
     expect(res.status).toBe(200);
-    const body = res.body as { package: unknown; engineVersion: string; flagState: { v2Enabled: boolean } };
-    expect(body.package).not.toBeNull();
-    expect(body.engineVersion).toBe('v2-ts');
-    expect(body.flagState.v2Enabled).toBe(true);
+    const body = res.body as {
+      package: { summary: { engineVersion: string; kpi: { cumulativeDebtServiceCr: number } } };
+      engineVersion: string;
+      flagState: { pythonUrl: string | null; killSwitch: boolean };
+    };
+    expect(body.package).toBeDefined();
+    expect(body.engineVersion).toBe('inline');
+    expect(body.package.summary.engineVersion).toBe('inline');
+    expect(body.flagState.killSwitch).toBe(false);
+    expect(body.flagState.pythonUrl).toBeNull();
+    // Real compute ran: cumulative debt service is positive for a 50Cr 9% 24-month facility.
+    expect(body.package.summary.kpi.cumulativeDebtServiceCr).toBeGreaterThan(0);
   });
 
-  test('returns 200 with null package + reason when v2 disabled', async () => {
+  test('kill-switch returns safe-mode package with zero debt overlays', async () => {
     process.env = {
       ...prior,
-      DEBT_ENGINE_V2: 'false',
-      DEBT_ENGINE_V2_SILENT: '1',
+      DEBT_ENGINE_KILL: '1',
+      DEBT_ENGINE_SILENT: '1',
     };
     delete process.env.DEBT_ENGINE_V2_KILL;
-    const res = await handleInvestorPackage(validInput());
+    delete process.env.DEBT_ENGINE_PY_URL;
+    const res = await handleInvestorPackage(validInput(), process.env);
     expect(res.status).toBe(200);
-    const body = res.body as { package: unknown; reason: string; flagState: { v2Enabled: boolean } };
-    expect(body.package).toBeNull();
-    expect(body.reason).toBe('intelligence_disabled_or_v1_cohort');
-    expect(body.flagState.v2Enabled).toBe(false);
+    const body = res.body as {
+      package: { summary: { engineVersion: string; kpi: { cumulativeDebtServiceCr: number; peakDebtCr: number } } };
+      engineVersion: string;
+      flagState: { killSwitch: boolean };
+    };
+    expect(body.package).toBeDefined();
+    expect(body.engineVersion).toBe('safe-mode');
+    expect(body.package.summary.engineVersion).toBe('safe-mode');
+    expect(body.flagState.killSwitch).toBe(true);
+    expect(body.package.summary.kpi.cumulativeDebtServiceCr).toBe(0);
+    expect(body.package.summary.kpi.peakDebtCr).toBe(0);
   });
 
-  test('kill switch forces v1 and nulls the package', async () => {
+  test('legacy DEBT_ENGINE_V2_KILL alias still engages safe-mode', async () => {
     process.env = {
       ...prior,
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
       DEBT_ENGINE_V2_KILL: '1',
-      DEBT_ENGINE_V2_SILENT: '1',
+      DEBT_ENGINE_SILENT: '1',
     };
-    const res = await handleInvestorPackage(validInput());
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_PY_URL;
+    const res = await handleInvestorPackage(validInput(), process.env);
     expect(res.status).toBe(200);
-    const body = res.body as { package: unknown; flagState: { killSwitch: boolean } };
-    expect(body.package).toBeNull();
+    const body = res.body as {
+      engineVersion: string;
+      flagState: { killSwitch: boolean };
+    };
+    expect(body.engineVersion).toBe('safe-mode');
     expect(body.flagState.killSwitch).toBe(true);
+  });
+
+  test('flagState echoes pythonUrl when configured', async () => {
+    process.env = {
+      ...prior,
+      DEBT_ENGINE_PY_URL: 'http://kernel.local',
+      DEBT_ENGINE_SILENT: '1',
+    };
+    delete process.env.DEBT_ENGINE_KILL;
+    delete process.env.DEBT_ENGINE_V2_KILL;
+    const res = await handleInvestorPackage(validInput(), process.env);
+    expect(res.status).toBe(200);
+    const body = res.body as { flagState: { pythonUrl: string | null } };
+    expect(body.flagState.pythonUrl).toBe('http://kernel.local');
   });
 });

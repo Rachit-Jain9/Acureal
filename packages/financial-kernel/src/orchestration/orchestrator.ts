@@ -1,17 +1,25 @@
 /**
- * FinancialOrchestrator — end-to-end Phase 3 pipeline.
+ * FinancialOrchestrator — end-to-end financial pipeline.
  *
- * Stage 1: base kernel (`computeDeal`) produces asset-adapter output.
- * Stage 2: facility roll-forward (`rollForwardFacilities`) produces debt schedule.
- * Stage 3: CFADS (`computeCFADS`) from operating projections.
- * Stage 4: cash-flow graph reduces CFADS − DS ± DSRA ± traps → `availableByMonth`.
- * Stage 5: waterfall (`runWaterfall`) distributes available cash.
- * Stage 6: covenants (`computeCovenants`) & KPIs rolled up.
+ * One pass, six deterministic stages:
+ *   1. base kernel (`computeDeal`) → asset-adapter output
+ *   2. facility roll-forward (`rollForwardFacilities`) → debt schedule
+ *   3. CFADS (`computeCFADS`) from operating projections
+ *   4. cash-flow graph: CFADS − DS ± DSRA ± traps → `availableByMonth`
+ *   5. waterfall (`runWaterfall`) distributes available cash
+ *   6. covenants + KPIs rolled up
  *
- * Engines, in order of preference:
- *   1) Python service (when `DEBT_ENGINE_PY_URL` is set and gate passes)
- *   2) TypeScript kernel (pure, always available — default V2 engine)
- *   3) Legacy (not invoked here — caller falls through on `usedV2=false`)
+ * Runtime selection (see `selectEngine` in featureFlag.ts):
+ *   - `inline`    — in-process TypeScript kernel (default)
+ *   - `python`    — remote Python FastAPI (when `DEBT_ENGINE_PY_URL` set,
+ *                   falls back to inline on error)
+ *   - `safe-mode` — kill-switch engaged; returns a zero-overlay so a deal
+ *                   page never crashes on engine failure
+ *
+ * No rollout, no cohort, no A/B. The engine is always on; operators have
+ * a single emergency kill-switch (`DEBT_ENGINE_KILL=1`) as an escape hatch.
+ * `forceEngine` on the input is still honored — useful for tests and
+ * failover drills.
  */
 
 import { Decimal, sum as decSum } from '../decimal';
@@ -33,12 +41,10 @@ import { computeDeal } from '../registry';
 import { buildCashFlowGraph } from './cashFlowGraph';
 import { buildStandardGraph } from './financialGraph';
 import {
-  logRolloutDecision,
-  shouldUseV2ForDeal,
+  logEngineDecision,
+  selectEngine,
   getPythonUrl,
   recordMonitoring,
-  detectAnomalies,
-  type KPIBaseline,
 } from './featureFlag';
 import {
   callPythonOrchestrate,
@@ -57,80 +63,98 @@ import type {
 } from '../intelligence/types';
 import type {
   CovenantSummary,
+  EngineDecision,
   EngineVersion,
   IntelligenceOptions,
   OrchestratedKPIs,
   OrchestrationInput,
   OrchestrationOutput,
-  RolloutDecision,
 } from './types';
 
 export class FinancialOrchestrator {
   private readonly env: NodeJS.ProcessEnv;
-  private readonly pythonEnabled: boolean;
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
     this.env = env;
-    this.pythonEnabled = getPythonUrl(env) != null;
   }
 
   /**
-   * Top-level entry. Always returns a result; the `engineVersion` and
-   * `rolloutDecision` fields describe which path ran.
+   * Top-level entry. Always returns a full result. `engineVersion` and
+   * `engineDecision` describe which runtime produced the numbers.
    *
    * Invariants:
-   *   - Throws only on invalid inputs (malformed spec, negative totalMonths).
-   *   - Python failures degrade to TS silently; the decision records the fall-back.
-   *   - `forceEngine` overrides rollout; useful for parity tests.
+   *   - Throws only on malformed inputs (negative/zero `totalMonths`).
+   *   - Python failures degrade to inline silently; `engineDecision.reason`
+   *     records the fall-back so ops can see it in monitoring_logs.
+   *   - Kill-switch always wins — safe-mode returns zero overlays so the
+   *     deal page stays renderable during an incident.
+   *   - `forceEngine` is respected for tests + drills.
    */
   async compute(input: OrchestrationInput): Promise<OrchestrationOutput> {
     if (input.totalMonths <= 0) {
       throw new Error('FinancialOrchestrator.compute: totalMonths must be > 0');
     }
     const t0 = Date.now();
-    let decision = shouldUseV2ForDeal(input.dealId, this.env);
-    if (input.forceEngine === 'v1-legacy') {
-      decision = { ...decision, usedV2: false, usedPython: false, reason: 'forceEngine v1' };
-    } else if (input.forceEngine === 'v2-ts') {
-      decision = { ...decision, usedV2: true, usedPython: false, reason: 'forceEngine v2-ts' };
-    } else if (input.forceEngine === 'v2-python') {
+
+    // Engine selection is pure: (dealId, env) → EngineDecision.
+    let decision = selectEngine(input.dealId, this.env);
+    if (input.forceEngine && input.forceEngine !== decision.engineVersion) {
+      const pyUrl = getPythonUrl(this.env);
       decision = {
         ...decision,
-        usedV2: true,
-        usedPython: this.pythonEnabled,
-        reason: this.pythonEnabled ? 'forceEngine v2-python' : 'forceEngine v2-python (no URL, fallback)',
+        engineVersion: input.forceEngine,
+        pythonAvailable:
+          input.forceEngine === 'python' ? pyUrl != null : decision.pythonAvailable,
+        reason: `forceEngine=${input.forceEngine}`,
       };
     }
-    logRolloutDecision(input.dealId, decision);
+    logEngineDecision(input.dealId, decision);
 
+    // Base kernel always runs — asset-adapter output is the legacy-equivalent
+    // shape every caller has depended on since Phase 1.
     const baseResult = computeDeal(input.dealInputs);
 
-    let engineVersion: EngineVersion = 'v1-legacy';
+    let engineVersion: EngineVersion;
     let aggregate: DebtScheduleAggregate;
     let scheduleByFacility: readonly FacilitySchedule[] = [];
     let cfads: CFADSOutputs;
 
-    if (decision.usedV2 && decision.usedPython) {
+    if (decision.engineVersion === 'safe-mode') {
+      // Kill-switch: produce a valid result with zero debt overlays so the
+      // deal page renders and CFADS still reflects operations. No throws.
+      ({ aggregate, scheduleByFacility, cfads } = this.emptyOverlay(input));
+      engineVersion = 'safe-mode';
+    } else if (decision.engineVersion === 'python' && decision.pythonAvailable) {
       try {
         const pyResp = await this.runPython(input);
         aggregate = rehydrateAggregate(pyResp, input.totalMonths);
         cfads = rehydrateCFADS(pyResp);
-        engineVersion = 'v2-python';
+        engineVersion = 'python';
       } catch (err) {
-        // Degrade to TS fallback silently; log for ops.
-        if (process.env.DEBT_ENGINE_V2_SILENT !== '1') {
-          console.warn(`[financial.orchestrator] python fallback: ${(err as Error).message}`);
+        // Python unreachable → inline fallback. Never fail a deal page
+        // because a remote service is down.
+        if (this.env.DEBT_ENGINE_SILENT !== '1' && this.env.DEBT_ENGINE_V2_SILENT !== '1') {
+          console.warn(
+            `[financial.orchestrator] python fallback → inline: ${(err as Error).message}`,
+          );
         }
-        ({ aggregate, scheduleByFacility, cfads } = this.computeLocalV2(input));
-        engineVersion = 'v2-ts';
+        ({ aggregate, scheduleByFacility, cfads } = this.computeInline(input));
+        engineVersion = 'inline';
+        decision = {
+          ...decision,
+          engineVersion: 'inline',
+          pythonAvailable: false,
+          reason: `python_error_fallback`,
+        };
       }
-    } else if (decision.usedV2) {
-      ({ aggregate, scheduleByFacility, cfads } = this.computeLocalV2(input));
-      engineVersion = 'v2-ts';
     } else {
-      // V2 disabled: return a legacy-shape result with empty debt overlays.
-      ({ aggregate, scheduleByFacility, cfads } = this.emptyLocal(input));
-      engineVersion = 'v1-legacy';
+      // Default path: in-process TypeScript kernel.
+      ({ aggregate, scheduleByFacility, cfads } = this.computeInline(input));
+      engineVersion = 'inline';
+      if (decision.engineVersion !== 'inline') {
+        // Forced python but no URL / unavailable → reflect actual runtime.
+        decision = { ...decision, engineVersion: 'inline', reason: 'python_unavailable_fallback' };
+      }
     }
 
     const covenants = this.computeCovenantSummary(input, aggregate, cfads);
@@ -141,7 +165,7 @@ export class FinancialOrchestrator {
       prov(
         'orchestrator.engine',
         `kernel.orchestrator.${engineVersion}`,
-        `engine=${engineVersion}; bucket=${decision.bucket}/${decision.thresholdPct}; cohort=${decision.cohort ?? 'n/a'}; ${decision.reason}`,
+        `engine=${engineVersion}; bucket=${decision.bucket}; reason=${decision.reason}`,
       ),
     ];
 
@@ -149,23 +173,17 @@ export class FinancialOrchestrator {
       ? this.buildIntelligence(input, aggregate, cfads, waterfall, engineVersion)
       : undefined;
 
-    const headlineV2: KPIBaseline = {
-      cumulativeDebtServiceCr: kpis.cumulativeDebtServiceCr,
-      peakDebtCr: kpis.peakDebtCr,
-      residualTotalCr: kpis.residualTotalCr,
-      minDSCR: kpis.minDSCR,
-      irrLeveredPct: intelligence?.kpis.irrLevered
-        ? intelligence.kpis.irrLevered.toNumber() * 100
-        : null,
-    };
-    recordMonitoring({
-      dealId: input.dealId,
-      decision,
-      engineVersion,
-      anomalies: detectAnomalies(null, headlineV2),
-      durationMs: Date.now() - t0,
-      at: new Date().toISOString(),
-    });
+    recordMonitoring(
+      {
+        dealId: input.dealId,
+        decision,
+        engineVersion,
+        durationMs: Date.now() - t0,
+        at: new Date().toISOString(),
+      },
+      console,
+      this.env,
+    );
 
     return {
       engineVersion,
@@ -177,7 +195,7 @@ export class FinancialOrchestrator {
       waterfall,
       kpis,
       provenance,
-      rolloutDecision: decision,
+      engineDecision: decision,
       intelligence,
     };
   }
@@ -296,7 +314,7 @@ export class FinancialOrchestrator {
       graph,
       narrative: buildNarrative(insights, kpis),
       generatedAt: new Date().toISOString(),
-      source: engineVersion === 'v2-python' ? 'v2-python' : 'v2-ts',
+      source: engineVersion === 'python' ? 'python' : 'inline',
     };
   }
 
@@ -317,7 +335,8 @@ export class FinancialOrchestrator {
     return peakDebt.div(denom).mulNumber(100);
   }
 
-  private computeLocalV2(input: OrchestrationInput): {
+  /** In-process TypeScript debt + CFADS runtime. Handles empty facilities. */
+  private computeInline(input: OrchestrationInput): {
     aggregate: DebtScheduleAggregate;
     scheduleByFacility: readonly FacilitySchedule[];
     cfads: CFADSOutputs;
@@ -334,7 +353,11 @@ export class FinancialOrchestrator {
     };
   }
 
-  private emptyLocal(input: OrchestrationInput) {
+  /**
+   * Zero-overlay result used under the kill-switch. CFADS still runs
+   * because it's just operating math — the overlay only zeros out debt.
+   */
+  private emptyOverlay(input: OrchestrationInput) {
     const cfads = computeCFADS(input.cfadsInputs);
     return {
       aggregate: this.emptyAggregate(input.totalMonths),

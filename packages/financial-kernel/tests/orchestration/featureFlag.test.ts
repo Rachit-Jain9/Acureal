@@ -1,51 +1,63 @@
 import {
-  isDebtV2Enabled,
-  getRolloutPct,
+  isKillSwitchOn,
   getPythonUrl,
+  isSilent,
   hash32,
   dealBucket,
-  shouldUseV2ForDeal,
+  selectEngine,
 } from '../../src/orchestration/featureFlag';
 
-describe('featureFlag — truthy parsing', () => {
+describe('featureFlag — kill-switch', () => {
   test.each(['true', '1', 'on', 'yes', 'enabled', 'True', 'ON'])(
-    'treats %p as enabled',
+    'treats %p as engaged under DEBT_ENGINE_KILL',
     (v) => {
-      expect(isDebtV2Enabled({ DEBT_ENGINE_V2: v } as NodeJS.ProcessEnv)).toBe(true);
+      expect(isKillSwitchOn({ DEBT_ENGINE_KILL: v } as NodeJS.ProcessEnv)).toBe(true);
     },
   );
 
   test.each(['0', 'false', 'off', 'no', '', undefined])(
-    'treats %p as disabled',
+    'treats %p as disengaged',
     (v) => {
-      const env = (v === undefined ? {} : { DEBT_ENGINE_V2: v }) as NodeJS.ProcessEnv;
-      expect(isDebtV2Enabled(env)).toBe(false);
+      const env = (v === undefined ? {} : { DEBT_ENGINE_KILL: v }) as NodeJS.ProcessEnv;
+      expect(isKillSwitchOn(env)).toBe(false);
     },
   );
+
+  test('honors legacy DEBT_ENGINE_V2_KILL as alias', () => {
+    expect(isKillSwitchOn({ DEBT_ENGINE_V2_KILL: '1' } as NodeJS.ProcessEnv)).toBe(true);
+  });
+
+  test('current name wins over legacy alias', () => {
+    expect(
+      isKillSwitchOn({
+        DEBT_ENGINE_KILL: '1',
+        DEBT_ENGINE_V2_KILL: '0',
+      } as NodeJS.ProcessEnv),
+    ).toBe(true);
+  });
 });
 
-describe('featureFlag — rollout percentage', () => {
-  test('default is 0 when V2 disabled and no explicit pct', () => {
-    expect(getRolloutPct({} as NodeJS.ProcessEnv)).toBe(0);
+describe('featureFlag — getPythonUrl', () => {
+  test('returns null when unset or empty', () => {
+    expect(getPythonUrl({} as NodeJS.ProcessEnv)).toBeNull();
+    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: '' } as NodeJS.ProcessEnv)).toBeNull();
+    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: '   ' } as NodeJS.ProcessEnv)).toBeNull();
   });
 
-  test('default is 100 when V2 enabled and no explicit pct', () => {
-    expect(getRolloutPct({ DEBT_ENGINE_V2: 'true' } as NodeJS.ProcessEnv)).toBe(100);
+  test('trims whitespace', () => {
+    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: ' http://x  ' } as NodeJS.ProcessEnv)).toBe('http://x');
   });
+});
 
-  test('explicit pct overrides default', () => {
-    expect(
-      getRolloutPct({ DEBT_ENGINE_V2: 'true', DEBT_ENGINE_V2_ROLLOUT_PCT: '25' } as NodeJS.ProcessEnv),
-    ).toBe(25);
+describe('featureFlag — isSilent', () => {
+  test('accepts DEBT_ENGINE_SILENT=1', () => {
+    expect(isSilent({ DEBT_ENGINE_SILENT: '1' } as NodeJS.ProcessEnv)).toBe(true);
   });
-
-  test('clamps to [0, 100]', () => {
-    expect(getRolloutPct({ DEBT_ENGINE_V2_ROLLOUT_PCT: '-5' } as NodeJS.ProcessEnv)).toBe(0);
-    expect(getRolloutPct({ DEBT_ENGINE_V2_ROLLOUT_PCT: '150' } as NodeJS.ProcessEnv)).toBe(100);
+  test('accepts legacy DEBT_ENGINE_V2_SILENT=1', () => {
+    expect(isSilent({ DEBT_ENGINE_V2_SILENT: '1' } as NodeJS.ProcessEnv)).toBe(true);
   });
-
-  test('non-finite pct treated as 0', () => {
-    expect(getRolloutPct({ DEBT_ENGINE_V2_ROLLOUT_PCT: 'abc' } as NodeJS.ProcessEnv)).toBe(0);
+  test('false when unset', () => {
+    expect(isSilent({} as NodeJS.ProcessEnv)).toBe(false);
   });
 });
 
@@ -68,67 +80,55 @@ describe('featureFlag — hash determinism', () => {
   });
 });
 
-describe('featureFlag — shouldUseV2ForDeal', () => {
-  test('returns false when V2 disabled', () => {
-    const d = shouldUseV2ForDeal('any', {} as NodeJS.ProcessEnv);
-    expect(d.usedV2).toBe(false);
-    expect(d.reason).toMatch(/off/);
+describe('featureFlag — selectEngine', () => {
+  test('defaults to inline when no env configured', () => {
+    const d = selectEngine('deal-1', {} as NodeJS.ProcessEnv);
+    expect(d.engineVersion).toBe('inline');
+    expect(d.killed).toBe(false);
+    expect(d.pythonAvailable).toBe(false);
+    expect(d.reason).toBe('inline_default');
   });
 
-  test('returns true when rollout = 100%', () => {
-    const d = shouldUseV2ForDeal('any', {
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
+  test('returns python when DEBT_ENGINE_PY_URL is set', () => {
+    const d = selectEngine('deal-1', {
+      DEBT_ENGINE_PY_URL: 'http://kernel.local',
     } as NodeJS.ProcessEnv);
-    expect(d.usedV2).toBe(true);
+    expect(d.engineVersion).toBe('python');
+    expect(d.pythonAvailable).toBe(true);
+    expect(d.reason).toBe('python_url_configured');
   });
 
-  test('returns false when rollout = 0%', () => {
-    const d = shouldUseV2ForDeal('any', {
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '0',
+  test('kill-switch always wins', () => {
+    const d = selectEngine('deal-1', {
+      DEBT_ENGINE_KILL: '1',
+      DEBT_ENGINE_PY_URL: 'http://kernel.local',
     } as NodeJS.ProcessEnv);
-    expect(d.usedV2).toBe(false);
+    expect(d.engineVersion).toBe('safe-mode');
+    expect(d.killed).toBe(true);
+    expect(d.pythonAvailable).toBe(false);
+    expect(d.reason).toBe('kill_switch_on');
   });
 
-  test('is deterministic per deal id', () => {
-    const env = {
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '50',
-    } as NodeJS.ProcessEnv;
-    const d1 = shouldUseV2ForDeal('deal-42', env);
-    const d2 = shouldUseV2ForDeal('deal-42', env);
-    expect(d1.usedV2).toBe(d2.usedV2);
+  test('legacy DEBT_ENGINE_V2_KILL still engages safe-mode', () => {
+    const d = selectEngine('deal-1', {
+      DEBT_ENGINE_V2_KILL: '1',
+    } as NodeJS.ProcessEnv);
+    expect(d.engineVersion).toBe('safe-mode');
+    expect(d.killed).toBe(true);
+  });
+
+  test('decision is deterministic for a given (deal, env)', () => {
+    const env = { DEBT_ENGINE_PY_URL: 'http://x' } as NodeJS.ProcessEnv;
+    const d1 = selectEngine('deal-42', env);
+    const d2 = selectEngine('deal-42', env);
+    expect(d1.engineVersion).toBe(d2.engineVersion);
     expect(d1.bucket).toBe(d2.bucket);
+    expect(d1.reason).toBe(d2.reason);
   });
 
-  test('python url activates usedPython flag at rollout', () => {
-    const d = shouldUseV2ForDeal('any', {
-      DEBT_ENGINE_V2: 'true',
-      DEBT_ENGINE_V2_ROLLOUT_PCT: '100',
-      DEBT_ENGINE_PY_URL: 'http://localhost:8080',
-    } as NodeJS.ProcessEnv);
-    expect(d.usedV2).toBe(true);
-    expect(d.usedPython).toBe(true);
-  });
-
-  test('python url does not activate when v2 off', () => {
-    const d = shouldUseV2ForDeal('any', {
-      DEBT_ENGINE_PY_URL: 'http://localhost:8080',
-    } as NodeJS.ProcessEnv);
-    expect(d.usedV2).toBe(false);
-    expect(d.usedPython).toBe(false);
-  });
-});
-
-describe('featureFlag — getPythonUrl', () => {
-  test('returns null when unset or empty', () => {
-    expect(getPythonUrl({} as NodeJS.ProcessEnv)).toBeNull();
-    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: '' } as NodeJS.ProcessEnv)).toBeNull();
-    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: '   ' } as NodeJS.ProcessEnv)).toBeNull();
-  });
-
-  test('trims whitespace', () => {
-    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: ' http://x  ' } as NodeJS.ProcessEnv)).toBe('http://x');
+  test('bucket is always populated', () => {
+    const d = selectEngine('any-deal', {} as NodeJS.ProcessEnv);
+    expect(d.bucket).toBeGreaterThanOrEqual(0);
+    expect(d.bucket).toBeLessThan(100);
   });
 });

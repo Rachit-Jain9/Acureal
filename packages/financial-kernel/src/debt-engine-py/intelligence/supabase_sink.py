@@ -9,7 +9,11 @@ Tables touched:
   investor_packages          — latest projection per deal (upsert by deal_id)
   investor_package_snapshots — append-only history
   monitoring_logs            — append-only event log
-  feature_flag_cohorts       — upsert rollout decision
+
+`feature_flag_cohorts` is retained in schema for legacy dashboards but is
+no longer written from the Python path — the debt engine is unconditional
+so there is no rollout cohort to persist. The legacy `upsert_cohort`
+helper is kept as a no-op shim for deploy-time backward compatibility.
 """
 from __future__ import annotations
 
@@ -172,36 +176,22 @@ def upsert_cohort(
     *,
     subject_id: str,
     cohort: str,
-    flag_key: str = "DEBT_ENGINE_V2",
+    flag_key: str = "DEBT_ENGINE",
     subject_kind: str = "deal",
     rollout_pct: int = 0,
     bucket: Optional[int] = None,
     kill_switch: bool = False,
-    reason: str = "python_decision",
+    reason: str = "cohort_persistence_removed",
 ) -> Dict[str, Any]:
-    client = _client()
-    if client is None:
-        return {"persisted": False, "reason": "supabase_not_configured"}
-    try:
-        client.table("feature_flag_cohorts").upsert(
-            {
-                "flag_key": flag_key,
-                "subject_kind": subject_kind,
-                "subject_id": subject_id,
-                "cohort": cohort,
-                "rollout_pct": rollout_pct,
-                "bucket": bucket,
-                "kill_switch": kill_switch,
-                "engine_version": cohort,
-                "reason": reason,
-                "payload": {"source": "python-fastapi"},
-            },
-            on_conflict="flag_key,subject_kind,subject_id",
-        ).execute()
-        return {"persisted": True}
-    except Exception as exc:
-        _logger.warning("feature_flag_cohorts upsert failed: %s", exc)
-        return {"persisted": False, "reason": str(exc)}
+    """Deprecated no-op. Cohort persistence was removed when the debt
+    engine became unconditional — there is no rollout to record. Kept as
+    a stable import target so existing callers don't break during rollout.
+    Silently returns a persisted=False status; callers should not depend
+    on side effects.
+    """
+    # Reference inputs to keep lint quiet without persisting.
+    _ = (subject_id, cohort, flag_key, subject_kind, rollout_pct, bucket, kill_switch)
+    return {"persisted": False, "reason": reason}
 
 
 def read_latest_snapshot(deal_id: str) -> Optional[Dict[str, Any]]:
