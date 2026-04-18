@@ -44,6 +44,33 @@ export {
 export { buildFinancing } from './financing';
 
 export { computeDeal, isSupportedAssetClass, SUPPORTED_ASSET_CLASSES } from './registry';
+export type { ComputeDealOptions } from './registry';
+
+export {
+  toSqft,
+  fromSqft,
+  toCrore,
+  crToDecimal,
+  toMonths,
+  toPercent,
+  toFraction,
+  DEFAULT_USD_INR,
+} from './units';
+export type { AreaUnit, MoneyUnit, MoneyAmount, TimeUnit } from './units';
+
+export {
+  GLOBAL_DEFAULTS,
+  ASSET_DEFAULTS,
+  mergeAssumptions,
+  resolveAssumptions,
+} from './assumptions';
+
+export {
+  DealInputError,
+  normalizeDealInput,
+  normalizedDealInputs,
+} from './inputSchema';
+export type { NormalizedRaw, NormalizedDeal, NormalizeArgs } from './inputSchema';
 
 export type {
   AssetClass,

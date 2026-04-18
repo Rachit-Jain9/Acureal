@@ -32,8 +32,16 @@ const loadKernel = () => {
   return _kernel;
 };
 
-const isV2Enabled = () =>
-  String(process.env.FIN_KERNEL_V2 || '').toLowerCase() === 'true';
+/**
+ * The kernel is authoritative as of Phase 1 completion. Set
+ * `FIN_KERNEL_V2=false` to fall back to the legacy engine (operator
+ * escape hatch, not intended for steady-state use). Unset or any other
+ * value means V2 is on.
+ */
+const isV2Enabled = () => {
+  const v = String(process.env.FIN_KERNEL_V2 || '').toLowerCase();
+  return v !== 'false' && v !== '0' && v !== 'off';
+};
 
 /**
  * Map the asset class name used by the service layer to the one
@@ -90,9 +98,15 @@ const computeKernelOverlay = (inputs, assetClass) => {
       engineVersion: 'v2',
     };
   } catch (err) {
-    // Hard fail in V2 mode: if FIN_KERNEL_V2 is on and the kernel throws
-    // on supported inputs, the operator needs to see it rather than
-    // silently fall back and mask a regression.
+    // Missing / invalid deal inputs should not break the save path —
+    // fall back to legacy output with a console warning so operators
+    // still get a record, but the gap is visible in logs. Any other
+    // kernel error is a real bug and bubbles up.
+    if (err && err.name === 'DealInputError') {
+      // eslint-disable-next-line no-console
+      console.warn(`[kernel.adapter] DealInputError for ${mapped}; falling back to legacy: ${err.message}`);
+      return null;
+    }
     throw new Error(`kernel.adapter: computeDeal failed for ${mapped}: ${err.message}`);
   }
 };
