@@ -88,3 +88,7 @@ export type {
   ProvenanceEntry,
   RevenueBreakdown,
 } from './types';
+
+// Debt engine (Phase 2 — gated behind DEBT_ENGINE_V2 at the integration seam).
+export * as DebtEngine from './debt-engine';
+export * as WaterfallEngine from './waterfall-engine';
