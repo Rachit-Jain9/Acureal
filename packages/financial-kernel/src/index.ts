@@ -92,3 +92,7 @@ export type {
 // Debt engine (Phase 2 — gated behind DEBT_ENGINE_V2 at the integration seam).
 export * as DebtEngine from './debt-engine';
 export * as WaterfallEngine from './waterfall-engine';
+
+// Phase 4 — pure HTTP handler for the investor-package endpoint.
+export { handleInvestorPackage } from './api';
+export type { InvestorPackageResponseBody, HandlerResult } from './api';

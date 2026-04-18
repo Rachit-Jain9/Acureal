@@ -9,6 +9,11 @@
       "maxDuration": 60,
       "memory": 1024,
       "includeFiles": "{backend,packages/financial-kernel/dist}/**"
+    },
+    "api/investor-package.py": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "packages/financial-kernel/src/debt-engine-py/**"
     }
   },
   "crons": [
@@ -18,6 +23,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/investor-package(/.*)?", "destination": "/api/investor-package" },
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
