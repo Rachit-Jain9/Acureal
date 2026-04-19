@@ -63,6 +63,7 @@ const modelValidation = [
   body('lrdLTV').optional().isFloat({ min: 0, max: 1 }),
   body('lrdInterestRatePct').optional().isFloat({ min: 0, max: 50 }),
   body('lrdRefinanceYear').optional().isFloat({ min: 1, max: 20 }),
+  body('amortizationYears').optional().isFloat({ min: 5, max: 30 }),
   body('forwardPurchasePriceCr').optional().isFloat({ min: 0 }),
   body('interestRatePct').optional().isFloat({ min: 0, max: 50 }),
   body('anchorPct').optional().isFloat({ min: 0, max: 100 }),

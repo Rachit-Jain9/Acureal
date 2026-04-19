@@ -7,6 +7,64 @@ const {
   FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS,
 } = require('../constants/assetClasses');
 
+// ─── SCENARIO PERSISTENCE ────────────────────────────────────────────────────
+
+const SCENARIO_MULTIPLIERS = {
+  base: { revenue: 1.00, cost: 1.00, duration: 1.00 },
+  bull: { revenue: 1.10, cost: 0.95, duration: 0.90 },
+  bear: { revenue: 0.88, cost: 1.10, duration: 1.20 },
+};
+
+const persistScenarios = async (dealId, scenarios) => {
+  if (!scenarios || typeof scenarios !== 'object') return;
+  for (const key of Object.keys(SCENARIO_MULTIPLIERS)) {
+    const s = scenarios[key];
+    if (!s) continue;
+    const kpis = s.kpis || {};
+    const rev  = s.revenue || {};
+    const m    = SCENARIO_MULTIPLIERS[key];
+    await query(
+      `INSERT INTO financial_scenarios (
+         deal_id, organization_id, scenario, label,
+         revenue_multiplier, cost_multiplier, duration_multiplier,
+         irr_pct, npv_cr, equity_multiple, gross_margin_pct,
+         total_revenue_cr, total_cost_cr,
+         kpis, inputs
+       ) VALUES ($1, (SELECT organization_id FROM deals WHERE id = $1), $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       ON CONFLICT (deal_id, scenario) DO UPDATE SET
+         label = EXCLUDED.label,
+         revenue_multiplier = EXCLUDED.revenue_multiplier,
+         cost_multiplier = EXCLUDED.cost_multiplier,
+         duration_multiplier = EXCLUDED.duration_multiplier,
+         irr_pct = EXCLUDED.irr_pct,
+         npv_cr = EXCLUDED.npv_cr,
+         equity_multiple = EXCLUDED.equity_multiple,
+         gross_margin_pct = EXCLUDED.gross_margin_pct,
+         total_revenue_cr = EXCLUDED.total_revenue_cr,
+         total_cost_cr = EXCLUDED.total_cost_cr,
+         kpis = EXCLUDED.kpis,
+         inputs = EXCLUDED.inputs,
+         updated_at = NOW()`,
+      [
+        dealId,
+        key,
+        s.label || null,
+        m.revenue,
+        m.cost,
+        m.duration,
+        kpis.irr ?? null,
+        kpis.npv ?? null,
+        kpis.equityMultiple ?? null,
+        kpis.grossMarginPct ?? rev.grossMarginPct ?? null,
+        rev.totalRevenueCr ?? null,
+        rev.totalCostCr ?? null,
+        JSON.stringify(kpis),
+        JSON.stringify(s.adjustments || {}),
+      ]
+    );
+  }
+};
+
 // ─── CALCULATE AND SAVE ───────────────────────────────────────────────────────
 
 const calculateAndSave = async (dealId, inputData) => {
@@ -90,6 +148,15 @@ const calculateAndSave = async (dealId, inputData) => {
     JSON.stringify(computed.sensitivityMatrix),
     leg.discount_rate_pct              ?? null,
   ];
+
+  // Persist scenarios to first-class table so they are queryable without
+  // deserializing model_params. Non-fatal — model_params still holds the
+  // authoritative snapshot in case the table write is rolled back / skipped.
+  try {
+    await persistScenarios(dealId, scenarios);
+  } catch (err) {
+    console.warn('[financial.service] persistScenarios failed:', err.message);
+  }
 
   const existing = await query('SELECT id FROM financials WHERE deal_id = $1', [dealId]);
 
