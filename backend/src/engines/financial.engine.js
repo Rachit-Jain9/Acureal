@@ -498,7 +498,9 @@ function calculateResidentialApartments(input) {
   const sellingRateSqft      = Number(input.sellingRatePerSqft);
   const landCostCr           = Number(input.landCostCr) || 0;
   const marketingCostPct     = Number(input.marketingCostPct) || 5;
-  const financeCostPct       = Number(input.financeCostPct) || 12;
+  const financeCostPct       = Number(input.financeCostPct) > 0
+    ? Number(input.financeCostPct)
+    : (Number(input.debtRatePct) > 0 ? Number(input.debtRatePct) : 12);
   const developerMarginPct   = Number(input.developerMarginPct) || 20;
   const discountRatePct      = Number(input.discountRatePct) || 14;
   const pricingEscalationPct = Number(input.pricingEscalationPct) || 0;
@@ -737,6 +739,7 @@ function calculateResidentialApartments(input) {
       constructionEndYears: outputTimeline.constructionEndYears,
       constructionEndMonths,
       contingencyPct, architectFeePct, pmcFeePct, debtLTV, debtRatePct,
+      debtTenorYears: Number(input.debtTenorYears) > 0 ? Number(input.debtTenorYears) : null,
       avgUnitSizeSqft,
     },
     kpis: {
@@ -843,7 +846,9 @@ function calculatePlottedDevelopment(input) {
   const landCostCr         = Number(input.landCostCr) || 0;
   const devCostPerSqft     = Number(input.devCostPerSqft) || 250;
   const marketingCostPct   = Number(input.marketingCostPct) || 4;
-  const financeCostPct     = Number(input.financeCostPct) || 12;
+  const financeCostPct     = Number(input.financeCostPct) > 0
+    ? Number(input.financeCostPct)
+    : (Number(input.debtRatePct) > 0 ? Number(input.debtRatePct) : 12);
   const discountRatePct    = Number(input.discountRatePct) || 14;
   const contingencyPct     = Number(input.contingencyPct) || 3;
   const debtLTV            = resolveDebtRatio(input.debtLTV, 0);
@@ -980,6 +985,7 @@ function calculatePlottedDevelopment(input) {
       discountRatePct,
       contingencyPct,
       debtLTV, debtRatePct,
+      debtTenorYears: Number(input.debtTenorYears) > 0 ? Number(input.debtTenorYears) : null,
     },
     kpis: {
       irr: round4(irrPct), npv: round4(npvCr),
