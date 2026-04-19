@@ -313,10 +313,12 @@ export function buildDebtSchedule({
   projectDurationMonths,
   constructionStartMonths = 0,
   constructionEndMonths,
+  debtTenorMonths,
 }) {
   if (!(debtDrawnCr > 0) || !(debtRatePct > 0) || !(projectDurationMonths > 0)) return null;
 
-  const totalQ = Math.ceil(projectDurationMonths / 3);
+  const repayMonths = debtTenorMonths > 0 ? Math.min(debtTenorMonths, projectDurationMonths) : projectDurationMonths;
+  const totalQ = Math.ceil(repayMonths / 3);
   const constStartQ = Math.max(0, Math.floor(constructionStartMonths / 3));
   const constEndQ = Math.min(totalQ, Math.ceil((constructionEndMonths || projectDurationMonths * 0.85) / 3));
   const constDurQ = Math.max(2, constEndQ - constStartQ);
