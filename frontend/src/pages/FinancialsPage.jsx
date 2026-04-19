@@ -597,8 +597,9 @@ function KPICards({ kpis, assetClass }) {
     );
   }
 
+  const hasDscr = kpis.dscr != null;
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className={`grid grid-cols-2 ${hasDscr ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
       <StatCard title="IRR" value={formatPct(kpis.irr)} subtitle="Internal Rate of Return" icon={TrendingUp} />
       <StatCard title="NPV" value={formatCrores(kpis.npv)} subtitle="Net Present Value" icon={IndianRupee} />
       <StatCard
@@ -613,6 +614,14 @@ function KPICards({ kpis, assetClass }) {
         subtitle="Residual Land Value"
         icon={Percent}
       />
+      {hasDscr && (
+        <StatCard
+          title="DSCR"
+          value={`${kpis.dscr.toFixed(2)}x`}
+          subtitle="Revenue / total debt service"
+          icon={Percent}
+        />
+      )}
     </div>
   );
 }
@@ -725,6 +734,7 @@ function RevenuePanel({ revenue, kpis, assetClass }) {
       { label: 'Revenue',  value: formatCrores(revenue.totalRevenue) },
       { label: 'Profit',   value: formatCrores(revenue.profit) },
       { label: 'Margin',   value: formatPct(revenue.margin) },
+      ...(kpis.dscr != null ? [{ label: 'DSCR', value: `${kpis.dscr.toFixed(2)}x` }] : []),
     ];
   }
 
