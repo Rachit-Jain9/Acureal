@@ -6,6 +6,8 @@ import {
   GitFork, Users, Layers, ChevronRight,
 } from 'lucide-react';
 import { calculateJDAWaterfall, calculateJVWaterfall, buildDebtSchedule } from '../utils/waterfall';
+import MethodologyExplorer from '../components/financials/MethodologyExplorer';
+import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -1668,11 +1670,16 @@ export default function FinancialsPage() {
         title="DCF Underwriting"
         description="Multi-asset-class financial modeling"
         actions={
-          <Link to={`/dashboard/deals/${dealId}`} className="btn btn-secondary flex items-center gap-1.5">
-            <ArrowLeft size={16} /> Back to Deal
-          </Link>
+          <div className="flex items-center gap-2">
+            <MethodologyExplorer assetClass={activeClass} />
+            <Link to={`/dashboard/deals/${dealId}`} className="btn btn-secondary flex items-center gap-1.5">
+              <ArrowLeft size={16} /> Back to Deal
+            </Link>
+          </div>
         }
       />
+
+      <AssetClassInsightBanner assetClass={activeClass} />
 
       {/* Asset Class Selector */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
