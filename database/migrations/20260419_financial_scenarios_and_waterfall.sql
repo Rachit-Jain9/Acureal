@@ -44,7 +44,7 @@ FROM deals d
 WHERE fs.deal_id = d.id
   AND fs.organization_id IS NULL;
 
-DO $$
+DO $do_fs$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
@@ -56,7 +56,7 @@ BEGIN
       FOR ALL USING (organization_id = current_organization_id())
       WITH CHECK (organization_id = current_organization_id());
   END IF;
-END $$;
+END $do_fs$;
 
 -- ── waterfall_distributions ──────────────────────────────────────────────────
 
@@ -82,7 +82,7 @@ FROM deals d
 WHERE wd.deal_id = d.id
   AND wd.organization_id IS NULL;
 
-DO $$
+DO $do_wd$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
@@ -94,13 +94,13 @@ BEGIN
       FOR ALL USING (organization_id = current_organization_id())
       WITH CHECK (organization_id = current_organization_id());
   END IF;
-END $$;
+END $do_wd$;
 
 -- ── Auto-populate organization_id triggers ───────────────────────────────────
 -- Mirrors the pattern used on `financials` so inserts don't need to pass org_id.
 
 CREATE OR REPLACE FUNCTION set_organization_id_from_deal()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 BEGIN
   IF NEW.organization_id IS NULL THEN
     SELECT organization_id INTO NEW.organization_id
@@ -108,7 +108,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_financial_scenarios_set_org ON financial_scenarios;
 CREATE TRIGGER trg_financial_scenarios_set_org
