@@ -587,17 +587,23 @@ function calculateResidentialApartments(input) {
   const totalQResidential = Math.ceil(durationMonths / 3);
   const constStartQRes    = Math.max(1, Math.floor(constructionStartMonths / 3) + 1);
   const constEndQRes      = Math.min(totalQResidential, Math.ceil(constructionEndMonths / 3));
+  // Finance carry caps at loan term if set, else at construction end + 1 qtr
+  // (typical: construction loan repaid from sales proceeds shortly after handover).
+  const debtTenorMonthsIn = Number(input.debtTenorYears) > 0
+    ? Number(input.debtTenorYears) * 12
+    : Math.min(durationMonths, constructionEndMonths + 3);
+  const carryQRes = Math.min(totalQResidential, Math.ceil(debtTenorMonthsIn / 3));
   const qFinRate          = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
-  // Land financing: interest accrues quarterly on the fixed land balance
-  const landFinanceCr     = landCostCr > 0 && totalQResidential > 0
-    ? landCostCr * (Math.pow(1 + qFinRate, totalQResidential) - 1)
+  // Land financing: interest accrues quarterly on the fixed land balance, capped at loan term
+  const landFinanceCr     = landCostCr > 0 && carryQRes > 0
+    ? landCostCr * (Math.pow(1 + qFinRate, carryQRes) - 1)
     : 0;
   const constSchedule = buildDrawSchedule({
     principalCr: hardCostCr,
     annualRatePct: financeCostPct,
-    totalQuarters: totalQResidential,
+    totalQuarters: carryQRes,
     drawStartQ: constStartQRes,
-    drawEndQ: constEndQRes,
+    drawEndQ: Math.min(constEndQRes, carryQRes),
     capitalizeInterest: true,
   });
   const constFinanceCr   = constSchedule.totalInterestCr;
@@ -756,7 +762,12 @@ function calculateResidentialApartments(input) {
       profitPerSqft:   saleableAreaSqft > 0 ? round2((grossProfitCr * 1e7) / saleableAreaSqft) : null,
       landCostPerSqft: plotAreaSqft > 0 ? round2((landCostCr * 1e7) / plotAreaSqft) : null,
       moic:            equityInvestedCr > 0 ? round4((equityInvestedCr + grossProfitCr) / equityInvestedCr) : null,
-      noi: null, yieldOnCost: null, dscr: null, exitValue: null, entryValue: null,
+      // Project DSCR = sellout proceeds ÷ total debt service (principal + interest).
+      // >1.0x means sales cover the debt with margin; <1.0x means shortfall at maturity.
+      dscr: debtLTV > 0 && (debtDrawnCr + debtInterestCr) > 0
+              ? round4(totalRevenueCr / (debtDrawnCr + debtInterestCr))
+              : null,
+      noi: null, yieldOnCost: null, exitValue: null, entryValue: null,
     },
     areas: {
       grossBuiltUp: round2(grossAreaSqft),
@@ -887,16 +898,20 @@ function calculatePlottedDevelopment(input) {
   //   Land is funded at Q0 and carried until exit; dev costs draw via S-curve over ~70% of duration.
   const totalQPlotted     = Math.ceil(durationMonths / 3);
   const plottedDevEndQ    = Math.max(2, Math.ceil((durationMonths * 0.70) / 3));
+  const debtTenorMonthsPlot = Number(input.debtTenorYears) > 0
+    ? Number(input.debtTenorYears) * 12
+    : Math.min(durationMonths, durationMonths * 0.70 + 3);
+  const carryQPlot        = Math.min(totalQPlotted, Math.ceil(debtTenorMonthsPlot / 3));
   const qFinRatePlot      = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
-  const landFinPlotCr     = landCostCr > 0 && totalQPlotted > 0
-    ? landCostCr * (Math.pow(1 + qFinRatePlot, totalQPlotted) - 1)
+  const landFinPlotCr     = landCostCr > 0 && carryQPlot > 0
+    ? landCostCr * (Math.pow(1 + qFinRatePlot, carryQPlot) - 1)
     : 0;
   const plottedSchedule = buildDrawSchedule({
     principalCr: devCostCr,
     annualRatePct: financeCostPct,
-    totalQuarters: totalQPlotted,
+    totalQuarters: carryQPlot,
     drawStartQ: 1,
-    drawEndQ: plottedDevEndQ,
+    drawEndQ: Math.min(plottedDevEndQ, carryQPlot),
     capitalizeInterest: true,
   });
   const devFinPlotCr    = plottedSchedule.totalInterestCr;
@@ -998,7 +1013,10 @@ function calculatePlottedDevelopment(input) {
       profitPerPlot:  totalPlots > 0 ? round2((grossProfitCr * 1e7) / totalPlots) : null,
       landCostPerSqft: totalLandSqft > 0 ? round2((landCostCr * 1e7) / totalLandSqft) : null,
       revenuePerSqft:  saleableLandSqft > 0 ? round2((totalRevenueCr * 1e7) / saleableLandSqft) : null,
-      noi: null, yieldOnCost: null, dscr: null, exitValue: null, entryValue: null,
+      dscr: debtLTV > 0 && (debtDrawnCrPlot + debtInterestCrPlot) > 0
+              ? round4(totalRevenueCr / (debtDrawnCrPlot + debtInterestCrPlot))
+              : null,
+      noi: null, yieldOnCost: null, exitValue: null, entryValue: null,
     },
     areas: {
       grossBuiltUp: round2(totalLandSqft),
@@ -1308,6 +1326,8 @@ function calculateIncomeAsset(input) {
       yieldOnCost:   round4(yieldOnCost),
       dscr,
       exitValue:     round4(effectiveExitValueCr),
+      terminalValue: round4(effectiveExitValueCr),
+      exitCapRate:   round4(exitCapRate),
       entryValue:    round4(entryValueCr),
       // Per-sqft and per-unit metrics
       devCostPerSqft: leasableAreaSqft > 0 ? round2((totalDevCostCr * 1e7) / leasableAreaSqft) : null,
@@ -1731,6 +1751,8 @@ function calculateHospitality(input) {
       yieldOnCost:   round4(yieldOnCost),
       dscr,
       exitValue:     round4(effectiveExitValueCr),
+      terminalValue: round4(effectiveExitValueCr),
+      exitCapRate:   round4(exitCapRate),
       entryValue:    round4(entryValueCr),
       revPAR:        round2(revPARStabilized),
       gopMargin:     round2(gopMarginPct),
