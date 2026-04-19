@@ -57,6 +57,7 @@ const FIELD_DEFS = {
     { name: 'pmcFeePct',                 label: 'PMC Fee (% of construction)',       type: 'number', step: '0.25', placeholder: '1.5', hint: 'Project Management Consultant fee. Typically 1–2%' },
     { name: 'debtLTV',                   label: 'Debt LTV (0–1)',                    type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0',  hint: '0 = all equity, 1 = fully debt-funded. 0.65 = 65% construction finance. Land cost and approvals are typically equity-funded.' },
     { name: 'debtRatePct',               label: 'Debt Rate (% pa)',                  type: 'number', step: '0.25', placeholder: '14', hint: 'Construction finance rate. Typically 12–16% pa' },
+    { name: 'debtTenorYears',            label: 'Loan Term (years)',                 type: 'number', step: '0.25', min: '0.25', max: '15', placeholder: '3', hint: 'Balloon repayment at this point. Typical construction finance: 2–4 years. Leave blank to repay at project end.' },
     { name: 'pricingEscalationPct',      label: 'Pricing Escalation (% pa)',         type: 'number', step: '0.1',  placeholder: '0', hint: 'Expected annual price appreciation during project' },
     { name: 'projectDurationYears',      label: 'Project Duration (years)',          type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3', hint: 'Total project length from effective date to final collection. Cash flows anchor on the effective date above.' },
     { name: 'constructionStartMonths',   label: 'Construction Start (months)',       type: 'number', step: '1', min: '0', max: '180', placeholder: '3', hint: 'Months from effective date when construction begins (after approvals). Typical: 3–6 months.' },
@@ -76,6 +77,7 @@ const FIELD_DEFS = {
     { name: 'financeCostPct',         label: 'Finance Cost (% pa)',             type: 'number', step: '0.1',  placeholder: '12', hint: 'Blended carry rate used when debt LTV is 0 (all-equity case).' },
     { name: 'debtLTV',                label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0', hint: '0 = all equity, 1 = fully debt-funded. Plotted layouts typically 0.40–0.55 (lower than apartments because upfront land dominates).' },
     { name: 'debtRatePct',            label: 'Debt Rate (% pa)',                type: 'number', step: '0.25', placeholder: '13', hint: 'Layout development finance / NBFC rate. Typically 12–15% pa.' },
+    { name: 'debtTenorYears',         label: 'Loan Term (years)',               type: 'number', step: '0.25', min: '0.25', max: '10', placeholder: '2', hint: 'Balloon repayment at this point. Plotted layouts: typically 1.5–3 years. Leave blank to repay at project end.' },
     { name: 'projectDurationYears',   label: 'Project Duration (years)',        type: 'number', step: '0.25', min: '1', max: '15', placeholder: '2' },
     { name: 'discountRatePct',        label: 'Discount Rate (%)',               type: 'number', step: '0.1',  placeholder: '14' },
   ],
@@ -1437,6 +1439,11 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
     ?? (inputs.constructionEndYears != null ? Number(inputs.constructionEndYears) * 12 : null)
     ?? projectDurationMonths * 0.85;
 
+  const debtTenorYearsRaw = capitalStack?.debtTenorYears ?? inputs.debtTenorYears;
+  const debtTenorMonths = debtTenorYearsRaw != null && debtTenorYearsRaw !== ''
+    ? Number(debtTenorYearsRaw) * 12
+    : null;
+
   const schedule = useMemo(() => {
     if (!(debtDrawnCr > 0) || !(debtRatePct > 0)) return null;
     return buildDebtSchedule({
@@ -1445,8 +1452,9 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
       projectDurationMonths,
       constructionStartMonths,
       constructionEndMonths,
+      debtTenorMonths,
     });
-  }, [debtDrawnCr, debtRatePct, projectDurationMonths, constructionStartMonths, constructionEndMonths]);
+  }, [debtDrawnCr, debtRatePct, projectDurationMonths, constructionStartMonths, constructionEndMonths, debtTenorMonths]);
 
   // Backend-computed amortizing schedule for income assets + hospitality.
   // Present when debtCoverage > 0 on an income-asset model.
