@@ -116,6 +116,14 @@ export const financialsAPI = {
   exportCSV: (dealId) => api.get(`/financials/${dealId}/export/csv`, { responseType: 'blob' }),
 };
 
+// Waterfall (JDA / JV / debt schedule)
+export const waterfallAPI = {
+  saveJDA: (dealId, data) => api.post(`/waterfall/${dealId}/jda`, data),
+  saveJV: (dealId, data) => api.post(`/waterfall/${dealId}/jv`, data),
+  debtSchedule: (data) => api.post('/waterfall/debt-schedule', data),
+  get: (dealId, kind) => api.get(`/waterfall/${dealId}`, { params: kind ? { kind } : {} }),
+};
+
 // Comps
 export const compsAPI = {
   list: (params) => api.get('/comps', { params }),

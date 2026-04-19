@@ -121,6 +121,163 @@ function sCurveWeights(n) {
   return weights.map((w) => w / total);
 }
 
+/**
+ * Build a quarterly debt draw + interest accrual schedule.
+ * Draws follow an S-curve across the construction window; interest accrues on
+ * the actual outstanding balance each quarter (opening balance + draw that quarter).
+ * Balloon repayment at the end of the horizon.
+ *
+ * @param {object} params
+ * @param {number} params.principalCr        Total principal drawn across construction (₹ Cr)
+ * @param {number} params.annualRatePct      Interest rate %/yr
+ * @param {number} params.totalQuarters      Total quarters in the cash-flow horizon
+ * @param {number} params.drawStartQ         First quarter index where draws can occur (1-based into CFs)
+ * @param {number} params.drawEndQ           Last quarter where draws may occur
+ * @param {number} [params.repaymentQ]       Quarter for balloon repayment (default = totalQuarters)
+ * @param {boolean} [params.capitalizeInterest=true]  Roll interest into balance (vs. cash pay)
+ * @returns {{draws:number[], balances:number[], interest:number[], totalInterestCr:number, totalPrincipalCr:number, repaymentQ:number}}
+ */
+function buildDrawSchedule({
+  principalCr,
+  annualRatePct,
+  totalQuarters,
+  drawStartQ,
+  drawEndQ,
+  repaymentQ,
+  capitalizeInterest = true,
+}) {
+  const draws = new Array(totalQuarters + 1).fill(0);
+  const balances = new Array(totalQuarters + 1).fill(0);
+  const interest = new Array(totalQuarters + 1).fill(0);
+
+  if (!(principalCr > 0) || !(annualRatePct >= 0) || !(totalQuarters >= 1)) {
+    return { draws, balances, interest, totalInterestCr: 0, totalPrincipalCr: 0, repaymentQ: repaymentQ ?? totalQuarters };
+  }
+
+  const qRate = Math.pow(1 + annualRatePct / 100, 0.25) - 1; // effective quarterly rate
+  const startQ = Math.max(1, Math.floor(drawStartQ));
+  const endQ = Math.max(startQ, Math.min(totalQuarters, Math.ceil(drawEndQ)));
+  const durationQ = Math.max(1, endQ - startQ + 1);
+  const weights = sCurveWeights(durationQ);
+  for (let i = 0; i < durationQ; i++) {
+    const q = startQ + i;
+    if (q <= totalQuarters) draws[q] = principalCr * weights[i];
+  }
+
+  let balance = 0;
+  let totalInterest = 0;
+  for (let q = 0; q <= totalQuarters; q++) {
+    const opening = balance;
+    balance += draws[q];
+    const accr = balance * qRate;
+    interest[q] = accr;
+    totalInterest += accr;
+    balance += capitalizeInterest ? accr : 0;
+    balances[q] = balance;
+    // record opening not strictly needed here; balances[] stores closing
+    void opening;
+  }
+
+  return {
+    draws,
+    balances,
+    interest,
+    totalInterestCr: totalInterest,
+    totalPrincipalCr: principalCr,
+    repaymentQ: repaymentQ ?? totalQuarters,
+  };
+}
+
+/**
+ * Build an amortizing (annuity) debt schedule for income-producing hold phases.
+ * Emits quarterly level debt service during operation; remaining principal balloons at exit.
+ *
+ * @param {object} params
+ * @param {number} params.principalCr              Initial funded principal (₹ Cr)
+ * @param {number} params.annualRatePct            Interest rate %/yr
+ * @param {number} params.amortizationYears        Amortization period (years) — typical 15–20 for CRE term loans
+ * @param {number} params.drawQ                    Quarter when loan funds (1-based)
+ * @param {number} params.operatingStartQ          First quarter amortizing P&I payments begin
+ * @param {number} params.exitQ                    Quarter the loan is fully repaid (balloon of remaining balance)
+ * @param {number} params.totalQuarters            Horizon length
+ * @returns {{draws:number[], interestPayments:number[], principalPayments:number[],
+ *            debtService:number[], balances:number[], balloonRepaymentCr:number,
+ *            totalInterestCr:number, quarterlyPayment:number}}
+ */
+function buildAmortizingSchedule({
+  principalCr,
+  annualRatePct,
+  amortizationYears,
+  drawQ,
+  operatingStartQ,
+  exitQ,
+  totalQuarters,
+}) {
+  const draws = new Array(totalQuarters + 1).fill(0);
+  const interestPayments = new Array(totalQuarters + 1).fill(0);
+  const principalPayments = new Array(totalQuarters + 1).fill(0);
+  const debtService = new Array(totalQuarters + 1).fill(0);
+  const balances = new Array(totalQuarters + 1).fill(0);
+
+  if (!(principalCr > 0) || !(annualRatePct > 0)) {
+    return {
+      draws, interestPayments, principalPayments, debtService, balances,
+      balloonRepaymentCr: 0, totalInterestCr: 0, quarterlyPayment: 0,
+    };
+  }
+
+  const qRate = Math.pow(1 + annualRatePct / 100, 0.25) - 1;
+  const nQ = Math.max(4, Math.round(amortizationYears * 4));
+  // Annuity quarterly payment — covers P&I as if amortized over full amort period
+  const quarterlyPayment = qRate > 0
+    ? principalCr * (qRate * Math.pow(1 + qRate, nQ)) / (Math.pow(1 + qRate, nQ) - 1)
+    : principalCr / nQ;
+
+  const fundQ = Math.max(1, Math.floor(drawQ));
+  const opStart = Math.max(fundQ, Math.floor(operatingStartQ));
+  const opEnd = Math.min(totalQuarters, Math.floor(exitQ));
+  draws[fundQ] = principalCr;
+
+  let balance = 0;
+  let totalInterest = 0;
+  for (let q = 0; q <= totalQuarters; q++) {
+    // Fund the loan
+    balance += draws[q];
+
+    if (q >= opStart && q <= opEnd && balance > 0) {
+      const interest = balance * qRate;
+      const principal = Math.max(0, Math.min(balance, quarterlyPayment - interest));
+      interestPayments[q] = interest;
+      principalPayments[q] = principal;
+      debtService[q] = interest + principal;
+      balance -= principal;
+      totalInterest += interest;
+    }
+
+    balances[q] = balance;
+  }
+
+  // Balloon remaining balance at exit
+  const balloonRepaymentCr = balances[opEnd] || 0;
+  if (opEnd >= 0 && opEnd <= totalQuarters) {
+    principalPayments[opEnd] += balloonRepaymentCr;
+    debtService[opEnd] += balloonRepaymentCr;
+    balances[opEnd] = 0;
+    for (let q = opEnd + 1; q <= totalQuarters; q++) balances[q] = 0;
+  }
+
+  return {
+    draws,
+    interestPayments,
+    principalPayments,
+    debtService,
+    balances,
+    balloonRepaymentCr,
+    totalInterestCr: totalInterest,
+    quarterlyPayment,
+  };
+}
+
 const round4 = (n) => (n != null && !isNaN(n) ? Math.round(n * 10000) / 10000 : null);
 const round2 = (n) => (n != null && !isNaN(n) ? Math.round(n * 100) / 100 : null);
 const roundQuarterYear = (n) => (n != null && !isNaN(n) ? Math.round(n * 4) / 4 : null);
@@ -421,10 +578,27 @@ function calculateResidentialApartments(input) {
   const architectCr      = constructionCostCr * (architectFeePct / 100);
   const pmcCr            = constructionCostCr * (pmcFeePct / 100);
   const marketingCostCr  = totalRevenueCr * (marketingCostPct / 100);
-  // Finance cost: weighted by average outstanding balance over construction period
-  // Land is outstanding from day 0; construction draws down over time (avg ~50% outstanding)
-  const landFinanceCr    = landCostCr * (financeCostPct / 100) * (durationMonths / 12);
-  const constFinanceCr   = hardCostCr * (financeCostPct / 100) * ((constructionEndMonths - constructionStartMonths) / 12) * 0.5;
+  // Finance cost: actual accrual on outstanding balance each quarter.
+  //   Land: outstanding from Q0 until project exit (funded at acquisition).
+  //   Construction: drawn on S-curve during construction window; interest
+  //   capitalizes on the actual balance each quarter rather than an averaged ×0.5 shortcut.
+  const totalQResidential = Math.ceil(durationMonths / 3);
+  const constStartQRes    = Math.max(1, Math.floor(constructionStartMonths / 3) + 1);
+  const constEndQRes      = Math.min(totalQResidential, Math.ceil(constructionEndMonths / 3));
+  const qFinRate          = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
+  // Land financing: interest accrues quarterly on the fixed land balance
+  const landFinanceCr     = landCostCr > 0 && totalQResidential > 0
+    ? landCostCr * (Math.pow(1 + qFinRate, totalQResidential) - 1)
+    : 0;
+  const constSchedule = buildDrawSchedule({
+    principalCr: hardCostCr,
+    annualRatePct: financeCostPct,
+    totalQuarters: totalQResidential,
+    drawStartQ: constStartQRes,
+    drawEndQ: constEndQRes,
+    capitalizeInterest: true,
+  });
+  const constFinanceCr   = constSchedule.totalInterestCr;
   const financeCostCr    = landFinanceCr + constFinanceCr;
   const softCostCr       = architectCr + pmcCr + approvalCostCr + marketingCostCr + financeCostCr;
 
@@ -483,9 +657,16 @@ function calculateResidentialApartments(input) {
   const mktDur   = mktEnd - mktStart + 1;
   if (mktDur > 0) for (let q = mktStart; q <= mktEnd; q++) cfs[q] -= marketingCostCr / mktDur;
 
-  // Finance cost: spread across project
+  // Finance cost: emit actual quarterly accrual so CF timing reflects true draw schedule
   if (financeCostCr > 0 && totalQ >= 1) {
-    for (let q = 1; q <= totalQ; q++) cfs[q] -= financeCostCr / totalQ;
+    const qFinRateCF = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
+    for (let q = 1; q <= totalQ; q++) {
+      // Land interest accrues every quarter on fixed land balance
+      const landQ = landCostCr * qFinRateCF;
+      // Construction interest from schedule (aligned on same quarter index)
+      const constQ = constSchedule.interest[q] || 0;
+      cfs[q] -= landQ + constQ;
+    }
   }
 
   // Revenue: right-skewed logistic — Indian milestone-linked collections
@@ -694,9 +875,23 @@ function calculatePlottedDevelopment(input) {
   const gstCostCr        = devCostCr * gstRateInput;
   const contingencyCr    = devCostCr * (contingencyPct / 100);
   const marketingCostCr  = totalRevenueCr * (marketingCostPct / 100);
-  // Finance cost: duration-weighted — land from day 0, dev costs drawn over time
-  const landFinPlotCr   = landCostCr * (financeCostPct / 100) * (durationMonths / 12);
-  const devFinPlotCr    = devCostCr * (financeCostPct / 100) * (durationMonths / 12) * 0.5;
+  // Finance cost: actual accrual on outstanding balance each quarter.
+  //   Land is funded at Q0 and carried until exit; dev costs draw via S-curve over ~70% of duration.
+  const totalQPlotted     = Math.ceil(durationMonths / 3);
+  const plottedDevEndQ    = Math.max(2, Math.ceil((durationMonths * 0.70) / 3));
+  const qFinRatePlot      = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
+  const landFinPlotCr     = landCostCr > 0 && totalQPlotted > 0
+    ? landCostCr * (Math.pow(1 + qFinRatePlot, totalQPlotted) - 1)
+    : 0;
+  const plottedSchedule = buildDrawSchedule({
+    principalCr: devCostCr,
+    annualRatePct: financeCostPct,
+    totalQuarters: totalQPlotted,
+    drawStartQ: 1,
+    drawEndQ: plottedDevEndQ,
+    capitalizeInterest: true,
+  });
+  const devFinPlotCr    = plottedSchedule.totalInterestCr;
   const financeCostCr   = landFinPlotCr + devFinPlotCr;
   const totalCostCr     = landCostCr + devCostCr + gstCostCr + stampDutyCr +
                           contingencyCr + approvalCostCr + marketingCostCr + financeCostCr;
@@ -731,7 +926,12 @@ function calculatePlottedDevelopment(input) {
   for (let q = 0; q < totalQ; q++) cfs[q + 1] += totalRevenueCr * (rweights[q] / rtotal);
 
   if (financeCostCr > 0 && totalQ >= 1) {
-    for (let q = 1; q <= totalQ; q++) cfs[q] -= financeCostCr / totalQ;
+    const qFinRateCF = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
+    for (let q = 1; q <= totalQ; q++) {
+      const landQ = landCostCr * qFinRateCF;
+      const devQ  = plottedSchedule.interest[q] || 0;
+      cfs[q] -= landQ + devQ;
+    }
   }
 
   const cashFlows = safeCashFlows(cfs);
@@ -842,6 +1042,7 @@ function calculateIncomeAsset(input) {
   const discountRatePct      = Number(input.discountRatePct) || 14;
   const debtCoverage         = resolveDebtRatio(input.debtCoverage, 0);
   const interestRatePct      = Number(input.interestRatePct) || 10;
+  const amortizationYears    = Math.max(5, Math.min(30, Number(input.amortizationYears) || 20));
   const contingencyPct         = Number(input.contingencyPct) || 4;
   const exitStrategy           = resolveExitStrategy(input.exitStrategy);
   const lrdLTV                 = resolveDebtRatio(input.lrdLTV, 0.65);
@@ -903,7 +1104,36 @@ function calculateIncomeAsset(input) {
   const cfs    = new Array(totalQ + 1).fill(0);
   const lrdRefinanceQ  = exitStrategy === 'lrd' ? Math.min(constQ + lrdRefinanceYear * 4, totalQ) : 0;
   const lrdProceeds    = exitStrategy === 'lrd' ? lrdLTV * entryValueCr : 0;
-  const lrdQInterest   = exitStrategy === 'lrd' ? (lrdProceeds * (lrdInterestRatePct / 100)) / 4 : 0;
+
+  // ── Operating-phase amortizing debt schedule (term loan) ──────────────────
+  // Principal sizes to debtCoverage × total dev cost; funded at construction
+  // completion; amortizes over `amortizationYears` with quarterly P&I service;
+  // balloon remaining balance at exit. For LRD, layer a separate refinance
+  // tranche that amortizes from the refinance quarter.
+  const termLoanPrincipalCr = debtCoverage > 0 ? totalDevCostCr * debtCoverage : 0;
+  const termLoanSchedule = termLoanPrincipalCr > 0
+    ? buildAmortizingSchedule({
+        principalCr: termLoanPrincipalCr,
+        annualRatePct: interestRatePct,
+        amortizationYears,
+        drawQ: constQ,
+        operatingStartQ: constQ + 1,
+        exitQ: totalQ,
+        totalQuarters: totalQ,
+      })
+    : null;
+
+  const lrdSchedule = (exitStrategy === 'lrd' && lrdProceeds > 0 && lrdRefinanceQ > 0)
+    ? buildAmortizingSchedule({
+        principalCr: lrdProceeds,
+        annualRatePct: lrdInterestRatePct,
+        amortizationYears,
+        drawQ: lrdRefinanceQ,
+        operatingStartQ: lrdRefinanceQ + 1,
+        exitQ: totalQ,
+        totalQuarters: totalQ,
+      })
+    : null;
 
   cfs[0] -= landCostCr + stampDutyCr + approvalCostCr * 0.25;
   if (constQ >= 2) { cfs[1] -= approvalCostCr * 0.375; cfs[2] -= approvalCostCr * 0.375; }
@@ -913,9 +1143,21 @@ function calculateIncomeAsset(input) {
     cfs[q + 1] -= (constructionCostCr + gstCostCr + contingencyCr) * cweights[q];
   }
   if (constQ >= 1) cfs[constQ] -= tiCostCr + lcCostCr;
-  if (!input._phase1Mode && exitStrategy === 'lrd' && lrdRefinanceQ > 0) cfs[lrdRefinanceQ] += lrdProceeds;
 
-  // Operating phase with lease-up ramp
+  // Term loan proceeds at construction completion — reduce equity outflow.
+  // Keeps unlevered NOI on the asset line; the amortizing service is added below.
+  if (!input._phase1Mode && termLoanSchedule) {
+    for (let q = 0; q <= totalQ; q++) {
+      if (termLoanSchedule.draws[q] > 0) cfs[q] += termLoanSchedule.draws[q];
+    }
+  }
+  if (!input._phase1Mode && lrdSchedule) {
+    for (let q = 0; q <= totalQ; q++) {
+      if (lrdSchedule.draws[q] > 0) cfs[q] += lrdSchedule.draws[q];
+    }
+  }
+
+  // Operating phase with lease-up ramp + amortizing debt service
   for (let q = 1; q <= opQ; q++) {
     const yearIdx         = Math.ceil(q / 4);
     const occupancyFactor = q <= 2 ? 0.60 : q === 3 ? 0.80 : (1 - vacancyPct / 100);
@@ -925,13 +1167,20 @@ function calculateIncomeAsset(input) {
     const cfIdx           = constQ + q;
     if (cfIdx <= totalQ) {
       cfs[cfIdx] += qNOI;
-      if (!input._phase1Mode && exitStrategy === 'lrd' && lrdQInterest > 0 && cfIdx >= lrdRefinanceQ) {
-        cfs[cfIdx] -= lrdQInterest;
+      if (!input._phase1Mode) {
+        if (termLoanSchedule && termLoanSchedule.debtService[cfIdx] > 0) {
+          cfs[cfIdx] -= termLoanSchedule.debtService[cfIdx];
+        }
+        if (lrdSchedule && lrdSchedule.debtService[cfIdx] > 0) {
+          cfs[cfIdx] -= lrdSchedule.debtService[cfIdx];
+        }
       }
     }
   }
   if (!input._phase1Mode) {
-    cfs[totalQ] += exitStrategy === 'lrd' ? effectiveExitValueCr - lrdProceeds : effectiveExitValueCr;
+    // Exit value nets out any debt balloon that's still captured in the schedule
+    // (buildAmortizingSchedule already booked the balloon at exitQ).
+    cfs[totalQ] += effectiveExitValueCr;
   }
   const rawCFs = [...cfs];
 
@@ -943,15 +1192,35 @@ function calculateIncomeAsset(input) {
   const totalReturns   = cashFlows.filter((c) => c > 0).reduce((a, b) => a + b, 0);
   const equityMultiple = totalDevCostCr > 0 ? totalReturns / totalDevCostCr : null;
 
-  // DSCR
+  // DSCR from the actual amortizing schedule (stabilized NOI / annualized debt service)
   let dscr = null;
-  if (debtCoverage > 0 && interestRatePct > 0) {
-    const debtAmt          = totalDevCostCr * debtCoverage;
-    const r                = interestRatePct / 100;
-    const n                = holdPeriodYears;
-    const annualDebtService = debtAmt * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-    dscr = annualDebtService > 0 ? round2(stabilizedNOICr / annualDebtService) : null;
+  if (termLoanSchedule && termLoanSchedule.quarterlyPayment > 0) {
+    const annualDebtService = termLoanSchedule.quarterlyPayment * 4;
+    dscr = round2(stabilizedNOICr / annualDebtService);
   }
+
+  // Expose debt schedule rows for UI / audit (skip the huge raw arrays)
+  const debtSchedule = (termLoanSchedule || lrdSchedule) ? {
+    termLoan: termLoanSchedule ? {
+      principalCr: round4(termLoanPrincipalCr),
+      annualRatePct: interestRatePct,
+      amortizationYears,
+      quarterlyPaymentCr: round4(termLoanSchedule.quarterlyPayment),
+      annualDebtServiceCr: round4(termLoanSchedule.quarterlyPayment * 4),
+      totalInterestCr: round4(termLoanSchedule.totalInterestCr),
+      balloonRepaymentCr: round4(termLoanSchedule.balloonRepaymentCr),
+    } : null,
+    lrd: lrdSchedule ? {
+      principalCr: round4(lrdProceeds),
+      annualRatePct: lrdInterestRatePct,
+      amortizationYears,
+      quarterlyPaymentCr: round4(lrdSchedule.quarterlyPayment),
+      annualDebtServiceCr: round4(lrdSchedule.quarterlyPayment * 4),
+      totalInterestCr: round4(lrdSchedule.totalInterestCr),
+      balloonRepaymentCr: round4(lrdSchedule.balloonRepaymentCr),
+      refinanceQuarter: lrdRefinanceQ,
+    } : null,
+  } : null;
 
   const sensitivity = buildIncomeSensitivity({
     leasableAreaSqft, constructionCostSqft, landCostCr, stampDutyCr,
@@ -976,7 +1245,7 @@ function calculateIncomeAsset(input) {
       effectiveDate: outputTimeline.effectiveDate,
       projectDurationYears: outputTimeline.projectDurationYears,
       projectDurationMonths: constructionMonths,
-      discountRatePct, debtCoverage, interestRatePct,
+      discountRatePct, debtCoverage, interestRatePct, amortizationYears,
       exitStrategy,
       lrdLTV: exitStrategy === 'lrd' ? lrdLTV : null,
       lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
@@ -1051,7 +1320,10 @@ function calculateIncomeAsset(input) {
       equityCr:    round4(totalDevCostCr * (1 - debtCoverage)),
       debtPct:     round2(debtCoverage * 100),
       equityPct:   round2((1 - debtCoverage) * 100),
+      interestRatePct,
+      amortizationYears,
       dscr,
+      debtSchedule,
     } : null,
     timeline: outputTimeline,
     cashFlows: structureCashFlows(cashFlows, outputTimeline),
@@ -1189,6 +1461,7 @@ function calculateHospitality(input) {
   const discountRatePct      = Number(input.discountRatePct) || 15;
   const debtCoverage         = resolveDebtRatio(input.debtCoverage, 0);
   const interestRatePct      = Number(input.interestRatePct) || 10.5;
+  const amortizationYearsHosp = Math.max(5, Math.min(30, Number(input.amortizationYears) || 15));
   const contingencyPct       = Number(input.contingencyPct) || 5;
   const exitStrategy         = resolveExitStrategy(input.exitStrategy);
   const lrdLTV               = resolveDebtRatio(input.lrdLTV, 0.55);
@@ -1254,7 +1527,31 @@ function calculateHospitality(input) {
   const cfs      = new Array(totalQ + 1).fill(0);
   const lrdRefinanceQ = exitStrategy === 'lrd' ? Math.min(constQ + lrdRefinanceYear * 4, totalQ) : 0;
   const lrdProceeds = exitStrategy === 'lrd' ? lrdLTV * entryValueCr : 0;
-  const lrdQInterest = exitStrategy === 'lrd' ? (lrdProceeds * (lrdInterestRatePct / 100)) / 4 : 0;
+
+  // Amortizing term loan + optional LRD (mirror of income-asset treatment)
+  const termLoanPrincipalCrH = debtCoverage > 0 ? totalDevCostCr * debtCoverage : 0;
+  const termLoanScheduleH = termLoanPrincipalCrH > 0
+    ? buildAmortizingSchedule({
+        principalCr: termLoanPrincipalCrH,
+        annualRatePct: interestRatePct,
+        amortizationYears: amortizationYearsHosp,
+        drawQ: constQ,
+        operatingStartQ: constQ + 1,
+        exitQ: totalQ,
+        totalQuarters: totalQ,
+      })
+    : null;
+  const lrdScheduleH = (exitStrategy === 'lrd' && lrdProceeds > 0 && lrdRefinanceQ > 0)
+    ? buildAmortizingSchedule({
+        principalCr: lrdProceeds,
+        annualRatePct: lrdInterestRatePct,
+        amortizationYears: amortizationYearsHosp,
+        drawQ: lrdRefinanceQ,
+        operatingStartQ: lrdRefinanceQ + 1,
+        exitQ: totalQ,
+        totalQuarters: totalQ,
+      })
+    : null;
 
   // Development phase
   cfs[0] -= landCostCr + stampDutyCr + approvalCostCr * 0.25;
@@ -1270,11 +1567,20 @@ function calculateHospitality(input) {
   for (let q = 0; q < constQ && q + 1 <= totalQ; q++) {
     cfs[q + 1] -= hardCostCr * cweights[q];
   }
-  if (exitStrategy === 'lrd' && lrdRefinanceQ > 0) {
-    cfs[lrdRefinanceQ] += lrdProceeds;
+
+  // Book debt draws (term loan at construction end; LRD at refinance quarter)
+  if (termLoanScheduleH) {
+    for (let q = 0; q <= totalQ; q++) {
+      if (termLoanScheduleH.draws[q] > 0) cfs[q] += termLoanScheduleH.draws[q];
+    }
+  }
+  if (lrdScheduleH) {
+    for (let q = 0; q <= totalQ; q++) {
+      if (lrdScheduleH.draws[q] > 0) cfs[q] += lrdScheduleH.draws[q];
+    }
   }
 
-  // Operating phase with ramp-up and annual ADR growth
+  // Operating phase with ramp-up, ADR growth, and amortizing debt service
   for (let q = 1; q <= opQ; q++) {
     const yearIdx = Math.ceil(q / 4); // 1-based
     const occ     = yearIdx <= 1 ? occupancyRamp[0] : yearIdx === 2 ? occupancyRamp[1] : occupancyRamp[2];
@@ -1286,12 +1592,15 @@ function calculateHospitality(input) {
     const cfIdx     = constQ + q;
     if (cfIdx <= totalQ) {
       cfs[cfIdx] += qEBITDA;
-      if (exitStrategy === 'lrd' && lrdQInterest > 0 && cfIdx >= lrdRefinanceQ) {
-        cfs[cfIdx] -= lrdQInterest;
+      if (termLoanScheduleH && termLoanScheduleH.debtService[cfIdx] > 0) {
+        cfs[cfIdx] -= termLoanScheduleH.debtService[cfIdx];
+      }
+      if (lrdScheduleH && lrdScheduleH.debtService[cfIdx] > 0) {
+        cfs[cfIdx] -= lrdScheduleH.debtService[cfIdx];
       }
     }
   }
-  cfs[totalQ] += exitStrategy === 'lrd' ? effectiveExitValueCr - lrdProceeds : effectiveExitValueCr;
+  cfs[totalQ] += effectiveExitValueCr;
 
   const cashFlows = safeCashFlows(cfs);
   let irrPct = null, npvCr = null;
@@ -1302,13 +1611,32 @@ function calculateHospitality(input) {
   const equityMultiple = totalDevCostCr > 0 ? totalReturns / totalDevCostCr : null;
 
   let dscr = null;
-  if (debtCoverage > 0 && interestRatePct > 0) {
-    const debtAmt          = totalDevCostCr * debtCoverage;
-    const r                = interestRatePct / 100;
-    const n                = holdPeriodYears;
-    const annualDebtService = debtAmt * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-    dscr = annualDebtService > 0 ? round2(ebitdaCrY1Stab / annualDebtService) : null;
+  if (termLoanScheduleH && termLoanScheduleH.quarterlyPayment > 0) {
+    const annualDebtService = termLoanScheduleH.quarterlyPayment * 4;
+    dscr = round2(ebitdaCrY1Stab / annualDebtService);
   }
+
+  const debtScheduleHosp = (termLoanScheduleH || lrdScheduleH) ? {
+    termLoan: termLoanScheduleH ? {
+      principalCr: round4(termLoanPrincipalCrH),
+      annualRatePct: interestRatePct,
+      amortizationYears: amortizationYearsHosp,
+      quarterlyPaymentCr: round4(termLoanScheduleH.quarterlyPayment),
+      annualDebtServiceCr: round4(termLoanScheduleH.quarterlyPayment * 4),
+      totalInterestCr: round4(termLoanScheduleH.totalInterestCr),
+      balloonRepaymentCr: round4(termLoanScheduleH.balloonRepaymentCr),
+    } : null,
+    lrd: lrdScheduleH ? {
+      principalCr: round4(lrdProceeds),
+      annualRatePct: lrdInterestRatePct,
+      amortizationYears: amortizationYearsHosp,
+      quarterlyPaymentCr: round4(lrdScheduleH.quarterlyPayment),
+      annualDebtServiceCr: round4(lrdScheduleH.quarterlyPayment * 4),
+      totalInterestCr: round4(lrdScheduleH.totalInterestCr),
+      balloonRepaymentCr: round4(lrdScheduleH.balloonRepaymentCr),
+      refinanceQuarter: lrdRefinanceQ,
+    } : null,
+  } : null;
 
   // Sensitivity: rows = occupancy, columns = ADR
   const occVars  = [-15, -10, 0, 10, 15].map((d) => Math.max(20, Math.min(95, stabilizedOccPct + d)));
@@ -1342,7 +1670,7 @@ function calculateHospitality(input) {
       projectDurationMonths: constructionMonths,
       holdPeriodYears, fbRevPct, otherRevPct,
       gopMarginPct, ebitdaMarginPct, exitCapRate, discountRatePct, debtCoverage,
-      interestRatePct, contingencyPct,
+      interestRatePct, amortizationYears: amortizationYearsHosp, contingencyPct,
       exitStrategy,
       lrdLTV: exitStrategy === 'lrd' ? lrdLTV : null,
       lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
@@ -1410,7 +1738,10 @@ function calculateHospitality(input) {
       equityCr:    round4(totalDevCostCr * (1 - debtCoverage)),
       debtPct:     round2(debtCoverage * 100),
       equityPct:   round2((1 - debtCoverage) * 100),
+      interestRatePct,
+      amortizationYears: amortizationYearsHosp,
       dscr,
+      debtSchedule: debtScheduleHosp,
     } : null,
     timeline: outputTimeline,
     cashFlows: structureCashFlows(cashFlows, outputTimeline),

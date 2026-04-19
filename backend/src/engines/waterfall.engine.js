@@ -1,81 +1,67 @@
 'use strict';
 
 /**
- * REDIP Waterfall Engine
- * Handles JDA (Joint Development Agreement) and JV (Joint Venture) profit distribution.
- * All monetary values in Crores (₹ Cr).
+ * REDIP Waterfall Engine — Backend / Institutional Grade
  *
- * JDA: Landowner delivers land; Developer builds and bears all costs.
- *      Output (area or revenue) is split by an agreed share %.
+ * Supports:
+ *   • JDA (Joint Development Agreement): area_share or revenue_share split
+ *   • JV (Joint Venture): capital return → preferred return (simple | compound)
+ *                         → GP catch-up (optional) → promote → residual equity split
+ *   • Debt draw/repayment schedule (shared with frontend)
  *
- * JV:  Landowner contributes land at an agreed valuation; Developer contributes cash.
- *      Profit flows through tranches: capital return → preferred return → promote → residual.
+ * All monetary values are in ₹ Crores. All percentages are percent (0–100), not fractional.
  */
 
 const round2 = (n) => (n != null && !isNaN(n) ? Math.round(n * 100) / 100 : null);
 const round4 = (n) => (n != null && !isNaN(n) ? Math.round(n * 10000) / 10000 : null);
 
-// ─── JDA / DEVELOPMENT AGREEMENT ─────────────────────────────────────────────
+const SUPPORTED_STRUCTURES = new Set(['area_share', 'revenue_share']);
+const SUPPORTED_PREF_TYPES = new Set(['simple', 'compound']);
 
-/**
- * Calculates the JDA waterfall.
- *
- * @param {object} params
- * @param {number} params.totalRevenueCr         - Total project revenue (₹ Cr)
- * @param {number} params.totalConstructionCostCr - Hard construction cost (₹ Cr)
- * @param {number} [params.approvalCostCr]        - Statutory + plan sanction costs
- * @param {number} [params.marketingCostCr]       - Sales & marketing costs
- * @param {number} [params.financeCostCr]         - Project finance/debt cost
- * @param {number} [params.landCostCr]            - Any upfront land payment by developer (partial)
- * @param {number} params.landownerSharePct       - Landowner's % share (0–100)
- * @param {string} [params.structureType]         - 'area_share' | 'revenue_share'
- */
-export function calculateJDAWaterfall({
-  totalRevenueCr,
-  totalConstructionCostCr,
-  approvalCostCr = 0,
-  marketingCostCr = 0,
-  financeCostCr = 0,
-  landCostCr = 0,
-  landownerSharePct,
-  structureType = 'area_share',
-}) {
+// ── JDA ────────────────────────────────────────────────────────────────────────
+
+function calculateJDA(params) {
+  const {
+    totalRevenueCr,
+    totalConstructionCostCr = 0,
+    approvalCostCr = 0,
+    marketingCostCr = 0,
+    financeCostCr = 0,
+    landCostCr = 0,
+    landownerSharePct,
+    structureType = 'area_share',
+  } = params || {};
+
   if (!(totalRevenueCr > 0)) return null;
   if (!(landownerSharePct >= 0 && landownerSharePct <= 100)) return null;
 
+  const effectiveStructure = SUPPORTED_STRUCTURES.has(structureType) ? structureType : 'area_share';
   const landownerRevenueCr = round2(totalRevenueCr * (landownerSharePct / 100));
   const developerRevenueCr = round2(totalRevenueCr - landownerRevenueCr);
 
   const devCostCr = round2(
     (totalConstructionCostCr || 0) +
-    (approvalCostCr || 0) +
-    (marketingCostCr || 0) +
-    (financeCostCr || 0) +
-    (landCostCr || 0)
+      (approvalCostCr || 0) +
+      (marketingCostCr || 0) +
+      (financeCostCr || 0) +
+      (landCostCr || 0)
   );
 
   const developerProfitCr = round2(developerRevenueCr - devCostCr);
   const developerMarginPct =
-    developerRevenueCr > 0
-      ? round2((developerProfitCr / developerRevenueCr) * 100)
-      : null;
+    developerRevenueCr > 0 ? round2((developerProfitCr / developerRevenueCr) * 100) : null;
   const projectProfitCr = round2(totalRevenueCr - devCostCr);
-  const projectMarginPct =
-    totalRevenueCr > 0
-      ? round2((projectProfitCr / totalRevenueCr) * 100)
-      : null;
-
-  // Effective land value implied by the area given away
-  const implicitLandValueCr = landownerRevenueCr;
+  const projectMarginPct = totalRevenueCr > 0 ? round2((projectProfitCr / totalRevenueCr) * 100) : null;
 
   return {
-    structureType,
-    landownerSharePct,
+    kind: 'jda',
+    structureType: effectiveStructure,
+    landownerSharePct: round2(landownerSharePct),
     developerSharePct: round2(100 - landownerSharePct),
     waterfall: [
       {
         party: 'Landowner',
-        label: structureType === 'revenue_share' ? 'Revenue Share' : 'Area Allocation',
+        label: effectiveStructure === 'revenue_share' ? 'Revenue Share' : 'Area Allocation',
         grossCr: landownerRevenueCr,
         costCr: 0,
         netCr: landownerRevenueCr,
@@ -98,7 +84,7 @@ export function calculateJDAWaterfall({
       landownerNetCr: landownerRevenueCr,
       developerNetCr: developerProfitCr,
       developerMarginPct,
-      implicitLandValueCr: round2(implicitLandValueCr),
+      implicitLandValueCr: landownerRevenueCr,
     },
     costBreakdown: {
       construction: round2(totalConstructionCostCr),
@@ -111,66 +97,47 @@ export function calculateJDAWaterfall({
   };
 }
 
-// ─── JOINT VENTURE ────────────────────────────────────────────────────────────
+// ── JV ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Calculates the JV equity waterfall with preferred return and developer promote.
+ * JV waterfall with configurable preferred return compounding and optional GP catch-up.
  *
  * Tranche order:
- *  1. Return of contributed capital (proportional to equity %)
- *  2. Preferred return (hurdle rate × hold period on equity)
- *  3. Developer promote (% of residual above promote threshold)
- *  4. Residual profit split by equity %
- *
- * @param {object} params
- * @param {number} params.totalRevenueCr              - Total project revenue (₹ Cr)
- * @param {number} params.totalCostCr                 - Total project cost (₹ Cr)
- * @param {number} params.landownerEquityCr           - Land value contributed (₹ Cr)
- * @param {number} params.developerEquityCr           - Cash / construction equity (₹ Cr)
- * @param {number} [params.preferredReturnPct]        - Hurdle rate % pa (default 8)
- * @param {number} [params.holdPeriodYears]           - Project/hold duration in years (default 3)
- * @param {number} [params.developerPromotePct]       - Developer carry above threshold (default 20)
- * @param {number} [params.promoteThresholdMultiple]  - Equity multiple to trigger promote (default 1.5)
+ *   1. Return of Capital — equity returned pro-rata
+ *   2. Preferred Return — hurdle hurdle × hold period on equity
+ *        simple:   equity × rate × years
+ *        compound: equity × ((1 + rate)^years - 1)    (default, institutional standard)
+ *   3. GP Catch-Up — (optional) developer catches up until split matches promote %
+ *   4. Promote — developer takes `developerPromotePct` of residual above threshold
+ *   5. Residual — remainder distributed by equity %
  */
-/**
- * Institutional JV waterfall.
- *
- * Tranches (mirrors backend engine):
- *   1. Return of Capital           — equity returned pro-rata
- *   2. Preferred Return            — simple or compound hurdle (default: compound)
- *   3. GP Catch-Up (optional)      — sponsor catches up to promote share
- *   4. Developer Promote           — sponsor takes promote % above threshold
- *   5. Residual Profit             — remainder split by equity %
- *
- * @param {object} params
- * @param {'simple'|'compound'} [params.preferredReturnType='compound']
- * @param {boolean} [params.useCatchUp=false]
- */
-export function calculateJVWaterfall({
-  totalRevenueCr,
-  totalCostCr,
-  landownerEquityCr,
-  developerEquityCr,
-  preferredReturnPct = 8,
-  preferredReturnType = 'compound',
-  holdPeriodYears = 3,
-  developerPromotePct = 20,
-  promoteThresholdMultiple = 1.5,
-  useCatchUp = false,
-}) {
+function calculateJV(params) {
+  const {
+    totalRevenueCr,
+    totalCostCr,
+    landownerEquityCr,
+    developerEquityCr,
+    preferredReturnPct = 8,
+    preferredReturnType = 'compound',
+    holdPeriodYears = 3,
+    developerPromotePct = 20,
+    promoteThresholdMultiple = 1.5,
+    useCatchUp = false,
+  } = params || {};
+
   if (!(totalRevenueCr > 0) || !(totalCostCr > 0)) return null;
   if (!(landownerEquityCr >= 0) || !(developerEquityCr >= 0)) return null;
 
-  const totalEquityCr = round2(landownerEquityCr + developerEquityCr);
+  const totalEquityCr = round2(Number(landownerEquityCr) + Number(developerEquityCr));
   if (!(totalEquityCr > 0)) return null;
 
-  const prefType = ['simple', 'compound'].includes(preferredReturnType)
-    ? preferredReturnType
-    : 'compound';
+  const prefType = SUPPORTED_PREF_TYPES.has(preferredReturnType) ? preferredReturnType : 'compound';
   const landownerEquityPct = round4((landownerEquityCr / totalEquityCr) * 100);
   const developerEquityPct = round4(100 - landownerEquityPct);
   const totalProjectProfitCr = round2(totalRevenueCr - totalCostCr);
-  const totalReturnMultiple = round2((totalEquityCr + Math.max(0, totalProjectProfitCr)) / totalEquityCr);
+  const totalReturnMultiple = round2(
+    (totalEquityCr + Math.max(0, totalProjectProfitCr)) / totalEquityCr
+  );
 
   const waterfall = [];
   let remaining = Math.max(0, totalProjectProfitCr);
@@ -178,14 +145,14 @@ export function calculateJVWaterfall({
   // T1: Return of Capital
   waterfall.push({
     tranche: 'Return of Capital',
-    landownerCr: round2(landownerEquityCr),
-    developerCr: round2(developerEquityCr),
+    landownerCr: round2(Number(landownerEquityCr)),
+    developerCr: round2(Number(developerEquityCr)),
     totalCr: round2(totalEquityCr),
     note: 'Equity contribution returned pro-rata',
     fromProfit: false,
   });
 
-  // T2: Preferred Return (compound default)
+  // T2: Preferred Return
   const r = preferredReturnPct / 100;
   const prefTotal = prefType === 'compound'
     ? round2(totalEquityCr * (Math.pow(1 + r, holdPeriodYears) - 1))
@@ -204,7 +171,8 @@ export function calculateJVWaterfall({
   });
   remaining = round2(remaining - actualPref);
 
-  // T3 (optional): GP Catch-Up
+  // T3 (optional): GP Catch-Up — developer receives 100% of residual until LP/GP split
+  // equals the promote % target. Standard institutional JV practice.
   let catchUpTriggered = false;
   if (
     useCatchUp &&
@@ -212,7 +180,9 @@ export function calculateJVWaterfall({
     developerPromotePct > 0 &&
     developerPromotePct < 100
   ) {
+    // Target: dev gets `developerPromotePct` of total above-pref distributions
     const promoteFrac = developerPromotePct / 100;
+    // Catch-up amount C such that prefDeveloper + C = promoteFrac × (prefLandowner + prefDeveloper + C)
     const catchUp = round2(
       (promoteFrac * (prefLandowner + prefDeveloper) - prefDeveloper) / (1 - promoteFrac)
     );
@@ -231,9 +201,13 @@ export function calculateJVWaterfall({
     }
   }
 
-  // T4: Developer Promote
+  // T4: Promote
   let promoteTriggered = false;
-  if (remaining > 0.001 && totalReturnMultiple >= promoteThresholdMultiple && developerPromotePct > 0) {
+  if (
+    remaining > 0.001 &&
+    totalReturnMultiple >= promoteThresholdMultiple &&
+    developerPromotePct > 0
+  ) {
     const promoteCr = round2(remaining * (developerPromotePct / 100));
     promoteTriggered = true;
     waterfall.push({
@@ -241,13 +215,13 @@ export function calculateJVWaterfall({
       landownerCr: 0,
       developerCr: promoteCr,
       totalCr: promoteCr,
-      note: `${totalReturnMultiple.toFixed(2)}x ≥ ${promoteThresholdMultiple}x threshold — promote triggered`,
+      note: `${totalReturnMultiple.toFixed(2)}x ≥ ${promoteThresholdMultiple}x threshold`,
       fromProfit: true,
     });
     remaining = round2(remaining - promoteCr);
   }
 
-  // T5: Residual Profit Split
+  // T5: Residual Split
   if (remaining > 0.001) {
     const residLandowner = round2(remaining * (landownerEquityPct / 100));
     const residDeveloper = round2(remaining - residLandowner);
@@ -261,14 +235,14 @@ export function calculateJVWaterfall({
     });
   }
 
-  // Totals
   const profitTranches = waterfall.filter((t) => t.fromProfit);
   const landownerProfit = round2(profitTranches.reduce((s, t) => s + (t.landownerCr || 0), 0));
   const developerProfit = round2(profitTranches.reduce((s, t) => s + (t.developerCr || 0), 0));
-  const landownerTotal = round2(landownerEquityCr + landownerProfit);
-  const developerTotal = round2(developerEquityCr + developerProfit);
+  const landownerTotal = round2(Number(landownerEquityCr) + landownerProfit);
+  const developerTotal = round2(Number(developerEquityCr) + developerProfit);
 
   return {
+    kind: 'jv',
     preferredReturnType: prefType,
     useCatchUp: !!useCatchUp,
     landownerEquityPct: round2(landownerEquityPct),
@@ -293,36 +267,25 @@ export function calculateJVWaterfall({
   };
 }
 
-// ─── DEBT SCHEDULE ────────────────────────────────────────────────────────────
+// ── Debt Schedule ──────────────────────────────────────────────────────────────
 
-/**
- * Builds a quarterly debt draw-and-repayment schedule.
- * Draws follow an S-curve during the construction window.
- * Repayment is a balloon at the end of the project (typical Indian construction finance).
- *
- * @param {object} params
- * @param {number} params.debtDrawnCr              - Total debt facility drawn (₹ Cr)
- * @param {number} params.debtRatePct              - Annual interest rate (%)
- * @param {number} params.projectDurationMonths    - Total project duration in months
- * @param {number} [params.constructionStartMonths] - Month when construction begins
- * @param {number} [params.constructionEndMonths]   - Month when construction completes
- */
-export function buildDebtSchedule({
-  debtDrawnCr,
-  debtRatePct,
-  projectDurationMonths,
-  constructionStartMonths = 0,
-  constructionEndMonths,
-}) {
+function buildDebtSchedule(params) {
+  const {
+    debtDrawnCr,
+    debtRatePct,
+    projectDurationMonths,
+    constructionStartMonths = 0,
+    constructionEndMonths,
+  } = params || {};
+
   if (!(debtDrawnCr > 0) || !(debtRatePct > 0) || !(projectDurationMonths > 0)) return null;
 
   const totalQ = Math.ceil(projectDurationMonths / 3);
   const constStartQ = Math.max(0, Math.floor(constructionStartMonths / 3));
   const constEndQ = Math.min(totalQ, Math.ceil((constructionEndMonths || projectDurationMonths * 0.85) / 3));
   const constDurQ = Math.max(2, constEndQ - constStartQ);
-  const quarterlyRate = debtRatePct / 100 / 4;
+  const quarterlyRate = Math.pow(1 + debtRatePct / 100, 0.25) - 1;
 
-  // S-curve weights for draw schedule
   const weights = Array.from({ length: constDurQ }, (_, q) => {
     const p = (q + 1) / constDurQ;
     return Math.max(0.01, Math.sin(p * Math.PI) * 1.5);
@@ -369,3 +332,9 @@ export function buildDebtSchedule({
     rows,
   };
 }
+
+module.exports = {
+  calculateJDA,
+  calculateJV,
+  buildDebtSchedule,
+};

@@ -1132,9 +1132,11 @@ function JVWaterfallPanel({ financials, deal }) {
     landownerEquityCr: mp?.costs?.land ?? '',
     developerEquityCr: '',
     preferredReturnPct: 8,
+    preferredReturnType: 'compound',
     holdPeriodYears: 3,
     developerPromotePct: 20,
     promoteThresholdMultiple: 1.5,
+    useCatchUp: false,
     totalRevenueCr: mp?.revenue?.totalRevenue ?? '',
     totalCostCr: mp?.costs?.total ?? '',
   }));
@@ -1160,9 +1162,11 @@ function JVWaterfallPanel({ financials, deal }) {
         landownerEquityCr: num(inputs.landownerEquityCr),
         developerEquityCr: num(inputs.developerEquityCr),
         preferredReturnPct: num(inputs.preferredReturnPct),
+        preferredReturnType: inputs.preferredReturnType || 'compound',
         holdPeriodYears: num(inputs.holdPeriodYears),
         developerPromotePct: num(inputs.developerPromotePct),
         promoteThresholdMultiple: num(inputs.promoteThresholdMultiple),
+        useCatchUp: !!inputs.useCatchUp,
       }),
     [inputs]
   );
@@ -1256,6 +1260,29 @@ function JVWaterfallPanel({ financials, deal }) {
                   onChange={(e) => set('promoteThresholdMultiple', e.target.value)}
                   className="input w-full" placeholder="1.5" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Pref Return Compounding</label>
+                <select
+                  value={inputs.preferredReturnType || 'compound'}
+                  onChange={(e) => set('preferredReturnType', e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="compound">Compound (institutional std)</option>
+                  <option value="simple">Simple</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-5">
+                <input
+                  id="jv-useCatchUp"
+                  type="checkbox"
+                  checked={!!inputs.useCatchUp}
+                  onChange={(e) => set('useCatchUp', e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <label htmlFor="jv-useCatchUp" className="text-xs font-medium text-gray-600">
+                  GP Catch-Up tranche
+                </label>
+              </div>
             </div>
           </div>
 
@@ -1277,6 +1304,16 @@ function JVWaterfallPanel({ financials, deal }) {
                 {result.promoteTriggered && (
                   <span className="text-amber-700 bg-amber-50 border border-amber-200 text-xs px-2 py-0.5 rounded">
                     Promote triggered
+                  </span>
+                )}
+                {result.catchUpTriggered && (
+                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-xs px-2 py-0.5 rounded">
+                    GP catch-up
+                  </span>
+                )}
+                {result.preferredReturnType && (
+                  <span className="text-gray-600 bg-white border border-gray-200 text-xs px-2 py-0.5 rounded">
+                    Pref: {result.preferredReturnType}
                   </span>
                 )}
               </div>
@@ -1407,10 +1444,19 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
     });
   }, [debtDrawnCr, debtRatePct, projectDurationMonths, constructionStartMonths, constructionEndMonths]);
 
-  if (!capitalStack || !(debtLTV > 0) || !schedule) return null;
+  // Backend-computed amortizing schedule for income assets + hospitality.
+  // Present when debtCoverage > 0 on an income-asset model.
+  const amortizingSchedule = capitalStack?.debtSchedule;
 
-  const rows = showAll ? schedule.rows : schedule.rows.slice(0, 10);
+  // Render if we have either (a) a construction-loan S-curve (residential/plotted
+  // with debtLTV > 0), or (b) a backend amortizing schedule (income/hospitality).
+  if (!capitalStack || (!schedule && !amortizingSchedule?.termLoan && !amortizingSchedule?.lrd)) {
+    return null;
+  }
+
+  const rows = schedule ? (showAll ? schedule.rows : schedule.rows.slice(0, 10)) : [];
   const fmtCr = (v) => (v != null && v !== 0 ? `₹${v.toFixed(2)} Cr` : '—');
+  const hasAmortizing = !!(amortizingSchedule?.termLoan || amortizingSchedule?.lrd);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200">
@@ -1422,12 +1468,21 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
         <div className="flex items-center gap-2">
           <Layers size={16} className="text-primary-600" />
           <span className="text-sm font-semibold text-gray-900">Debt Schedule</span>
-          <span className="text-xs text-gray-500">
-            ₹{schedule.totalDebtCr.toFixed(2)} Cr @ {schedule.debtRatePct}% pa
-          </span>
-          <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
-            {(debtLTV * 100).toFixed(0)}% LTV
-          </span>
+          {schedule && (
+            <span className="text-xs text-gray-500">
+              ₹{schedule.totalDebtCr.toFixed(2)} Cr @ {schedule.debtRatePct}% pa
+            </span>
+          )}
+          {hasAmortizing && (
+            <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2 py-0.5">
+              Amortizing — {amortizingSchedule.termLoan?.amortizationYears || amortizingSchedule.lrd?.amortizationYears}yr
+            </span>
+          )}
+          {debtLTV > 0 && (
+            <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
+              {(debtLTV * 100).toFixed(0)}% LTV
+            </span>
+          )}
         </div>
         <ChevronRight
           size={16}
@@ -1437,7 +1492,64 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
 
       {open && (
         <div className="border-t border-gray-100 p-5 space-y-4">
-          {/* Summary cards */}
+          {/* Amortizing term-loan summary (income assets / hospitality) */}
+          {hasAmortizing && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Operating-Phase Amortizing Debt
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {amortizingSchedule.termLoan && (
+                  <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
+                    <p className="text-xs font-semibold text-emerald-700 mb-2">Term Loan</p>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <dt className="text-gray-500">Principal</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.termLoan.principalCr)}</dd>
+                      <dt className="text-gray-500">Rate / Amort</dt>
+                      <dd className="text-right text-gray-800 font-medium">
+                        {amortizingSchedule.termLoan.annualRatePct}% / {amortizingSchedule.termLoan.amortizationYears}yr
+                      </dd>
+                      <dt className="text-gray-500">Quarterly P&amp;I</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.termLoan.quarterlyPaymentCr)}</dd>
+                      <dt className="text-gray-500">Annual Debt Service</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.termLoan.annualDebtServiceCr)}</dd>
+                      <dt className="text-gray-500">Total Interest</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.termLoan.totalInterestCr)}</dd>
+                      <dt className="text-gray-500">Balloon at Exit</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.termLoan.balloonRepaymentCr)}</dd>
+                    </dl>
+                  </div>
+                )}
+                {amortizingSchedule.lrd && (
+                  <div className="bg-sky-50 rounded-lg p-4 border border-sky-100">
+                    <p className="text-xs font-semibold text-sky-700 mb-2">LRD Refinance</p>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <dt className="text-gray-500">Principal</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.lrd.principalCr)}</dd>
+                      <dt className="text-gray-500">Rate / Amort</dt>
+                      <dd className="text-right text-gray-800 font-medium">
+                        {amortizingSchedule.lrd.annualRatePct}% / {amortizingSchedule.lrd.amortizationYears}yr
+                      </dd>
+                      <dt className="text-gray-500">Quarterly P&amp;I</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.lrd.quarterlyPaymentCr)}</dd>
+                      <dt className="text-gray-500">Annual Debt Service</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.lrd.annualDebtServiceCr)}</dd>
+                      <dt className="text-gray-500">Refinance Quarter</dt>
+                      <dd className="text-right text-gray-800 font-medium">Q{amortizingSchedule.lrd.refinanceQuarter}</dd>
+                      <dt className="text-gray-500">Balloon at Exit</dt>
+                      <dd className="text-right text-gray-800 font-medium">{fmtCr(amortizingSchedule.lrd.balloonRepaymentCr)}</dd>
+                    </dl>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Quarterly P&amp;I based on standard CRE annuity amortization; remaining balance paid as balloon at exit.
+              </p>
+            </div>
+          )}
+
+          {/* Construction S-curve summary (residential / plotted) */}
+          {schedule && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-amber-50 rounded-lg p-3">
               <p className="text-xs text-amber-500 mb-0.5">Total Debt Drawn</p>
@@ -1458,8 +1570,11 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
               </p>
             </div>
           </div>
+          )}
 
-          {/* Schedule table */}
+          {/* Construction S-curve schedule table */}
+          {schedule && (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1507,6 +1622,8 @@ function DebtSchedulePanel({ financials: rawFinancials, normalizedFinancials }) 
             Draw schedule follows construction S-curve. Repayment is a balloon at project completion
             (typical India construction finance). Interest accrues quarterly on outstanding balance.
           </p>
+          </>
+          )}
         </div>
       )}
     </div>
