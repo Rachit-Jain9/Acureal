@@ -845,6 +845,8 @@ function calculatePlottedDevelopment(input) {
   const financeCostPct     = Number(input.financeCostPct) || 12;
   const discountRatePct    = Number(input.discountRatePct) || 14;
   const contingencyPct     = Number(input.contingencyPct) || 3;
+  const debtLTV            = resolveDebtRatio(input.debtLTV, 0);
+  const debtRatePct        = Number(input.debtRatePct) || 13;
   const timeline = resolveTimelineInput(input, {
     defaultDurationYears: 2,
     defaultConstructionStartYears: 0,
@@ -939,6 +941,28 @@ function calculatePlottedDevelopment(input) {
   try { irrPct = calculateIRR(cashFlows); } catch { /* skip */ }
   try { npvCr  = calculateNPV(cashFlows, discountRatePct / 100); } catch { /* skip */ }
 
+  // ── LEVERED CASH FLOWS (equity perspective) ───────────────────────────────
+  const debtableBasePlotCr = landCostCr + devCostCr + gstCostCr + contingencyCr + approvalCostCr;
+  const debtDrawnCrPlot    = debtableBasePlotCr * debtLTV;
+  const debtInterestCrPlot = debtLTV > 0
+    ? debtDrawnCrPlot * (debtRatePct / 100) * (durationMonths / 12) * 0.55  // ~55% avg-balance factor across S-curve draw
+    : 0;
+  let leveredIrrPct = null, leveredNpvCr = null;
+  if (debtLTV > 0 && debtDrawnCrPlot > 0) {
+    const levCfs = [...cfs];
+    levCfs[0] += landCostCr * debtLTV;                // land debt draw at Q0
+    for (let q = 0; q < devQ && q + 1 <= totalQ; q++) {
+      levCfs[q + 1] += (devCostCr + gstCostCr + contingencyCr) * dweights[q] * debtLTV;
+    }
+    levCfs[0] += approvalCostCr * 0.25 * debtLTV;
+    if (totalQ >= 2) levCfs[1] += approvalCostCr * 0.375 * debtLTV;
+    if (totalQ >= 3) levCfs[2] += approvalCostCr * 0.375 * debtLTV;
+    levCfs[totalQ] -= debtDrawnCrPlot + debtInterestCrPlot;
+    const leveredCashFlows = safeCashFlows(levCfs);
+    try { leveredIrrPct = calculateIRR(leveredCashFlows); } catch { /* skip */ }
+    try { leveredNpvCr  = calculateNPV(leveredCashFlows, discountRatePct / 100); } catch { /* skip */ }
+  }
+
   const outputTimeline = buildTimeline(timeline);
 
   return {
@@ -954,12 +978,13 @@ function calculatePlottedDevelopment(input) {
       projectDurationMonths: durationMonths,
       discountRatePct,
       contingencyPct,
+      debtLTV, debtRatePct,
     },
     kpis: {
       irr: round4(irrPct), npv: round4(npvCr),
       equityMultiple: round4(equityMultiple), rlv: round4(rlvCr),
       grossMarginPct: round4(grossMarginPct),
-      leveredIrr: null, leveredNpv: null,
+      leveredIrr: round4(leveredIrrPct), leveredNpv: round4(leveredNpvCr),
       // Per-plot / per-sqft metrics
       revenuePerPlot: totalPlots > 0 ? round2((totalRevenueCr * 1e7) / totalPlots) : null,
       costPerPlot:    totalPlots > 0 ? round2((totalCostCr * 1e7) / totalPlots) : null,
@@ -997,7 +1022,16 @@ function calculatePlottedDevelopment(input) {
       grossMarginPct: round4(grossMarginPct),
       annualNOI: null, stabilizedNOI: null, exitValue: null,
     },
-    capitalStack: null,
+    capitalStack: debtLTV > 0 ? {
+      totalCostCr:    round4(totalCostCr),
+      debtCr:         round4(debtDrawnCrPlot),
+      equityCr:       round4(totalCostCr - debtDrawnCrPlot),
+      debtPct:        round2(debtLTV * 100),
+      equityPct:      round2((1 - debtLTV) * 100),
+      debtInterestCr: round4(debtInterestCrPlot),
+      debtLTV,
+      debtRatePct,
+    } : null,
     timeline: outputTimeline,
     cashFlows: structureCashFlows(cashFlows, outputTimeline),
     sensitivityMatrix: skipSensitivity
