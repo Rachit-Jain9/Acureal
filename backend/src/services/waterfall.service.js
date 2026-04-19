@@ -33,8 +33,8 @@ async function calculateAndSaveJDA(dealId, inputParams) {
   if (!result) throw createError('Invalid JDA inputs: totalRevenueCr and landownerSharePct are required.', 422);
 
   await query(
-    `INSERT INTO waterfall_distributions (deal_id, kind, inputs, result)
-     VALUES ($1, 'jda', $2, $3)
+    `INSERT INTO waterfall_distributions (deal_id, organization_id, kind, inputs, result)
+     VALUES ($1, (SELECT organization_id FROM deals WHERE id = $1), 'jda', $2, $3)
      ON CONFLICT (deal_id, kind)
      DO UPDATE SET inputs = EXCLUDED.inputs, result = EXCLUDED.result, updated_at = NOW()`,
     [dealId, JSON.stringify(inputParams || {}), JSON.stringify(result)]
@@ -50,8 +50,8 @@ async function calculateAndSaveJV(dealId, inputParams) {
   if (!result) throw createError('Invalid JV inputs: totalRevenueCr, totalCostCr, and equity contributions are required.', 422);
 
   await query(
-    `INSERT INTO waterfall_distributions (deal_id, kind, inputs, result)
-     VALUES ($1, 'jv', $2, $3)
+    `INSERT INTO waterfall_distributions (deal_id, organization_id, kind, inputs, result)
+     VALUES ($1, (SELECT organization_id FROM deals WHERE id = $1), 'jv', $2, $3)
      ON CONFLICT (deal_id, kind)
      DO UPDATE SET inputs = EXCLUDED.inputs, result = EXCLUDED.result, updated_at = NOW()`,
     [dealId, JSON.stringify(inputParams || {}), JSON.stringify(result)]

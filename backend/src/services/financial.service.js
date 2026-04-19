@@ -25,12 +25,12 @@ const persistScenarios = async (dealId, scenarios) => {
     const m    = SCENARIO_MULTIPLIERS[key];
     await query(
       `INSERT INTO financial_scenarios (
-         deal_id, scenario, label,
+         deal_id, organization_id, scenario, label,
          revenue_multiplier, cost_multiplier, duration_multiplier,
          irr_pct, npv_cr, equity_multiple, gross_margin_pct,
          total_revenue_cr, total_cost_cr,
          kpis, inputs
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       ) VALUES ($1, (SELECT organization_id FROM deals WHERE id = $1), $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (deal_id, scenario) DO UPDATE SET
          label = EXCLUDED.label,
          revenue_multiplier = EXCLUDED.revenue_multiplier,
