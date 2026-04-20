@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, X, Sparkles, Calculator, TrendingUp, Layers,
   GitFork, Landmark, Building2, IndianRupee, Waves,
-  ChevronRight, Gauge, Coins, Target, PiggyBank, Scale,
+  ChevronRight, ChevronDown, Gauge, Coins, Target, PiggyBank, Scale,
+  Route, ArrowRight, TrendingDown, Activity, Percent,
 } from 'lucide-react';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',        icon: Sparkles,    accent: 'from-indigo-500 to-violet-500' },
+  { id: 'dcfflow',    label: 'DCF Flow',        icon: Route,       accent: 'from-blue-500 to-indigo-500' },
   { id: 'kpis',       label: 'KPIs',            icon: Gauge,       accent: 'from-emerald-500 to-teal-500' },
   { id: 'cashflow',   label: 'Cash Flow',       icon: Waves,       accent: 'from-sky-500 to-cyan-500' },
+  { id: 'terminal',   label: 'Terminal Value',  icon: Target,      accent: 'from-violet-500 to-purple-500' },
   { id: 'costs',      label: 'Costs & Stack',   icon: Layers,      accent: 'from-rose-500 to-pink-500' },
   { id: 'waterfall',  label: 'Waterfall',       icon: GitFork,     accent: 'from-amber-500 to-orange-500' },
   { id: 'debt',       label: 'Debt',            icon: Landmark,    accent: 'from-slate-500 to-zinc-500' },
@@ -212,8 +215,10 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
             <div className="flex-1 overflow-y-auto bg-slate-50">
               <div className="mx-auto max-w-2xl px-6 py-6">
                 {tab === 'overview'  && <OverviewSection />}
+                {tab === 'dcfflow'   && <DCFFlowSection assetClass={assetClass} />}
                 {tab === 'kpis'      && <KpisSection />}
                 {tab === 'cashflow'  && <CashflowSection />}
+                {tab === 'terminal'  && <TerminalValueSection />}
                 {tab === 'costs'     && <CostsSection />}
                 {tab === 'waterfall' && <WaterfallSection />}
                 {tab === 'debt'      && <DebtSection />}
@@ -663,6 +668,424 @@ function ClassDeepDive({ data, assetClass }) {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────── DCF Flow Section ───────────────────── */
+
+const DCF_STAGES = [
+  {
+    id: 'revenue',
+    number: '01',
+    title: 'Revenue',
+    icon: IndianRupee,
+    gradient: 'from-emerald-500 to-teal-500',
+    border: 'border-emerald-200',
+    surface: 'from-emerald-50 to-teal-50',
+    text: 'text-emerald-900',
+    tagline: 'Top-line ingestion per quarter',
+    summary: 'For-sale: bookings × rate, recognized on the sellout curve. Income: leasable × rent × 12 × (1 − vacancy). Hospitality: ADR × occupancy × keys × 365.',
+    formulas: [
+      { k: 'For-sale',   f: 'Revenueₜ = Saleable × Rate × (1 + esc)^t' },
+      { k: 'Income',     f: 'Revenueₜ = Leasable × Rent × 12 × (1 − vacancy)' },
+      { k: 'Hospitality', f: 'Revenueₜ = ADR × Occ × Keys × 365' },
+    ],
+    inputs: ['Saleable area / Leasable sqft / Keys', 'Rate or rent or ADR', 'Escalation', 'Vacancy / occupancy'],
+  },
+  {
+    id: 'noi',
+    number: '02',
+    title: 'NOI',
+    icon: Activity,
+    gradient: 'from-blue-500 to-indigo-500',
+    border: 'border-blue-200',
+    surface: 'from-blue-50 to-indigo-50',
+    text: 'text-blue-900',
+    tagline: 'Net operating income after opex',
+    summary: 'EGI discounts gross revenue for vacancy. NOI subtracts opex (office ~18%, retail ~22%, industrial ~15%). Hospitality shifts to GOP / EBITDA margin on total revenue.',
+    formulas: [
+      { k: 'EGI',     f: 'Gross Rent × (1 − Vacancy %)' },
+      { k: 'NOI',     f: 'EGI × (1 − Opex %)' },
+      { k: 'EBITDA',  f: 'Revenue × EBITDA Margin %' },
+    ],
+    inputs: ['Opex % (asset-class specific)', 'Vacancy / bad-debt allowance', 'GOP / EBITDA margin (hospitality)'],
+  },
+  {
+    id: 'cashflow',
+    number: '03',
+    title: 'Cash Flow',
+    icon: Waves,
+    gradient: 'from-sky-500 to-cyan-500',
+    border: 'border-sky-200',
+    surface: 'from-sky-50 to-cyan-50',
+    text: 'text-sky-900',
+    tagline: 'Quarterly equity cash flow stream',
+    summary: 'Construction draws on S-curve (negative), operating NOI (positive), finance cost accruals, and debt draws / P&I. Output: quarterly equity cash flow feeding IRR and NPV.',
+    formulas: [
+      { k: 'Construction', f: 'Drawₜ = Hard × S-curveₜ  (beta 2,2)' },
+      { k: 'Finance',      f: 'Interestₜ = Balanceₜ₋₁ × (rate / 4)' },
+      { k: 'Equity CF',    f: 'Σ NOIₜ − Opexₜ − Debt Serviceₜ + Draws − Costs' },
+    ],
+    inputs: ['Construction window', 'Debt rate, LTV, term', 'Sellout / lease-up curve'],
+  },
+  {
+    id: 'terminal',
+    number: '04',
+    title: 'Terminal Value',
+    icon: Target,
+    gradient: 'from-violet-500 to-purple-500',
+    border: 'border-violet-200',
+    surface: 'from-violet-50 to-purple-50',
+    text: 'text-violet-900',
+    tagline: 'Exit valuation in year N',
+    summary: 'Four interchangeable methods: exit cap rate (default), exit multiple, Gordon perpetuity growth, or contractual forward purchase. The chosen TV is added to the final quarter\'s cash flow before IRR/NPV.',
+    formulas: [
+      { k: 'Exit Cap',   f: 'TV = NOI_exit ÷ Exit Cap Rate' },
+      { k: 'Multiple',   f: 'TV = NOI_stabilized × Exit Multiple (9–12×)' },
+      { k: 'Perpetuity', f: 'TV = NOI_exit × (1 + g) ÷ (r − g)' },
+      { k: 'Forward',    f: 'TV = Contractual Price (₹ Cr)' },
+    ],
+    inputs: ['Exit cap rate', 'Exit multiple', 'Perpetuity growth g', 'Forward-purchase price'],
+  },
+  {
+    id: 'npv',
+    number: '05',
+    title: 'NPV / IRR',
+    icon: Percent,
+    gradient: 'from-amber-500 to-orange-500',
+    border: 'border-amber-200',
+    surface: 'from-amber-50 to-orange-50',
+    text: 'text-amber-900',
+    tagline: 'Discounted return metrics',
+    summary: 'All quarterly equity cash flows (including the discounted TV injected in the terminal quarter) are discounted at WACC for NPV. IRR solves the same series for the rate at which NPV = 0.',
+    formulas: [
+      { k: 'NPV', f: 'Σ CFₜ ÷ (1 + r/4)^t  — r = discount rate' },
+      { k: 'IRR', f: 'Σ CFₜ ÷ (1 + IRR/4)^t = 0   (Newton-Raphson)' },
+      { k: 'PV of TV', f: 'TV ÷ (1 + r)^holdYears' },
+    ],
+    inputs: ['Discount rate / WACC', 'Hold period', 'Final-quarter terminal value'],
+  },
+];
+
+function DCFFlowSection({ assetClass }) {
+  const [expanded, setExpanded] = useState('terminal');
+  const assetNote = useMemo(() => {
+    const notes = {
+      residential_apartments: 'For-sale flow — the terminal stage is sellout completion, not a cap-rate exit. Use exit_multiple or implied developer margin instead of cap-rate TV.',
+      plotted_development: 'Plotted layouts exit via inventory sellout. TV typically = remaining unsold × escalated rate, not a capitalized NOI.',
+      commercial_office: 'Office TV is dominated by exit-cap sensitivity — a 50bps compression swings NPV materially. Run the Value-vs-Cap curve in the viz layer.',
+      retail: 'Retail blends anchor (discounted) + inline rents, and exit caps trade 75–125 bps wider than office.',
+      industrial_warehousing: 'Warehousing has the tightest opex ratio (~15%) and cap rates in the 7.5–9.5% band.',
+      hospitality: 'Hospitality substitutes EBITDA for NOI. TV default is exit multiple on stabilized EBITDA (9–12×).',
+    };
+    return notes[assetClass] || notes.commercial_office;
+  }, [assetClass]);
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle
+        icon={Route}
+        gradient="from-blue-500 to-indigo-500"
+        title="DCF Flow — End-to-End"
+        subtitle="Revenue → NOI → Cash Flow → Terminal Value → NPV / IRR"
+      />
+
+      <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 p-5 text-white shadow-sm">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-indigo-200">
+          <Sparkles size={12} /> The Five-Stage Pipeline
+        </div>
+        <p className="mt-1 text-sm leading-relaxed text-indigo-100/90">
+          Every rupee in the model flows through exactly these five stages. Click any card to expand its formulas,
+          required inputs, and cross-references to the code path that executes it.
+        </p>
+      </div>
+
+      {/* Pipeline strip */}
+      <div className="hidden md:flex items-center justify-between gap-1">
+        {DCF_STAGES.map((s, i) => {
+          const Icon = s.icon;
+          const isActive = expanded === s.id;
+          return (
+            <div key={s.id} className="flex items-center flex-1">
+              <button
+                type="button"
+                onClick={() => setExpanded(s.id)}
+                className={`flex-1 flex flex-col items-center gap-1 rounded-xl border p-2.5 transition ${
+                  isActive
+                    ? `bg-gradient-to-br ${s.surface} ${s.border} shadow-md scale-[1.02]`
+                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                }`}
+              >
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${s.gradient} text-white shadow`}>
+                  <Icon size={14} />
+                </div>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? s.text : 'text-slate-500'}`}>
+                  {s.number}
+                </div>
+                <div className={`text-xs font-bold ${isActive ? s.text : 'text-slate-800'}`}>{s.title}</div>
+              </button>
+              {i < DCF_STAGES.length - 1 && (
+                <ArrowRight size={14} className="mx-1 shrink-0 text-slate-400" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Expandable stage cards */}
+      <div className="space-y-3">
+        {DCF_STAGES.map((s) => {
+          const Icon = s.icon;
+          const isOpen = expanded === s.id;
+          return (
+            <div
+              key={s.id}
+              className={`rounded-xl border overflow-hidden transition-all ${
+                isOpen ? `${s.border} shadow-md` : 'border-slate-200'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setExpanded(isOpen ? null : s.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
+                  isOpen ? `bg-gradient-to-r ${s.surface}` : 'bg-white hover:bg-slate-50'
+                }`}
+              >
+                <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow`}>
+                  <Icon size={16} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isOpen ? s.text : 'text-slate-400'}`}>
+                      Stage {s.number}
+                    </span>
+                  </div>
+                  <div className={`text-sm font-bold ${isOpen ? s.text : 'text-slate-900'}`}>{s.title}</div>
+                  <div className="text-xs text-slate-600">{s.tagline}</div>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 transition-transform ${isOpen ? 'rotate-180 text-slate-700' : 'text-slate-400'}`}
+                />
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-white/50 bg-white/60 backdrop-blur-sm px-4 py-4 space-y-3">
+                  <p className="text-sm leading-relaxed text-slate-700">{s.summary}</p>
+
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Formulas</div>
+                    {s.formulas.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                        <span className={`text-[11px] font-semibold min-w-[90px] ${s.text}`}>{row.k}</span>
+                        <code className="flex-1 rounded bg-slate-50 px-2 py-1 text-[12px] font-mono text-slate-800">{row.f}</code>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">Driving Inputs</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {s.inputs.map((inp, i) => (
+                        <span key={i} className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                          {inp}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
+        <div className="flex items-center gap-2">
+          <Building2 size={14} className="text-violet-700" />
+          <span className="text-xs font-bold uppercase tracking-wider text-violet-900">
+            {ASSET_CLASS_DEEP_DIVE[assetClass]?.headline?.split('—')[0]?.trim() || 'Asset-Class Note'}
+          </span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-slate-700">{assetNote}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────── Terminal Value Section ───────────────────── */
+
+const TV_METHODS = [
+  {
+    id: 'exit_cap_rate',
+    title: 'Exit Cap Rate',
+    tagline: 'Most common for stabilized income assets',
+    icon: Gauge,
+    gradient: 'from-emerald-500 to-teal-500',
+    surface: 'from-emerald-50 to-teal-50',
+    border: 'border-emerald-200',
+    formula: 'TV = NOI_exit ÷ Exit Cap Rate',
+    example: 'NOI_exit = ₹42 Cr, Cap = 7.5% → TV = 42 ÷ 0.075 = ₹560 Cr',
+    when: 'Office, retail, industrial — anywhere a liquid cap-rate market exists. Buyers underwrite forward NOI.',
+    pros: ['Directly observable from recent sales', 'Market-consistent', 'Easy to sensitivity-test'],
+    cons: ['Caps change rapidly in tight cycles', 'Less robust for niche assets'],
+  },
+  {
+    id: 'exit_multiple',
+    title: 'Exit Multiple',
+    tagline: 'Hospitality / operating assets',
+    icon: Layers,
+    gradient: 'from-blue-500 to-indigo-500',
+    surface: 'from-blue-50 to-indigo-50',
+    border: 'border-blue-200',
+    formula: 'TV = NOI_stabilized × Exit Multiple',
+    example: 'EBITDA = ₹18 Cr, 10× → TV = ₹180 Cr',
+    when: 'Hotels, serviced apartments, student housing — wherever EBITDA-multiple comps are the market norm.',
+    pros: ['Aligns with how M&A/IPO markets price', 'Simpler to explain to operators'],
+    cons: ['Multiple range is wide (7–14×)', 'Hides embedded growth assumption'],
+  },
+  {
+    id: 'perpetuity_growth',
+    title: 'Perpetuity Growth (Gordon)',
+    tagline: 'Stabilized, long-hold, steady-state',
+    icon: TrendingUp,
+    gradient: 'from-violet-500 to-purple-500',
+    surface: 'from-violet-50 to-purple-50',
+    border: 'border-violet-200',
+    formula: 'TV = NOI_exit × (1 + g) ÷ (r − g)',
+    example: 'NOI = ₹42 Cr, g = 3%, r = 11% → TV = 42 × 1.03 ÷ 0.08 = ₹541 Cr',
+    when: 'Core-plus strategies assuming asset lives forever — India REIT underwriting, annuity-style income.',
+    pros: ['Academically rigorous', 'Smooth with long-dated cash flows'],
+    cons: ['r − g spread must be > 0 or the formula explodes', 'Highly sensitive to g — ±100bps swings TV 15–25%'],
+  },
+  {
+    id: 'forward_purchase',
+    title: 'Forward Purchase',
+    tagline: 'Contractual pre-committed exit',
+    icon: GitFork,
+    gradient: 'from-amber-500 to-orange-500',
+    surface: 'from-amber-50 to-orange-50',
+    border: 'border-amber-200',
+    formula: 'TV = Contractual Forward Price (₹ Cr)',
+    example: 'Signed forward with institutional buyer at ₹485 Cr → TV = ₹485 Cr',
+    when: 'Deal has a signed forward purchase agreement (BlackRock / Blackstone / GIC style pre-commitments).',
+    pros: ['Zero exit-pricing risk', 'Known, bankable exit date'],
+    cons: ['Lower price vs open-market', 'Counterparty / contingency risk'],
+  },
+];
+
+function TerminalValueSection() {
+  const [activeMethod, setActiveMethod] = useState('exit_cap_rate');
+  const active = TV_METHODS.find((m) => m.id === activeMethod) || TV_METHODS[0];
+  const ActiveIcon = active.icon;
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle
+        icon={Target}
+        gradient="from-violet-500 to-purple-500"
+        title="Terminal Value — The Exit Valuation"
+        subtitle="Four methods, one unified pipeline"
+      />
+
+      <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
+        <div className="flex items-center gap-2 text-violet-900">
+          <Sparkles size={14} />
+          <span className="text-sm font-bold">Terminal value is ≥50% of NPV for most income assets</span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-slate-700">
+          On a 5–7 year hold, the discounted terminal value typically accounts for 45–65% of total NPV.
+          Getting the exit assumption right matters more than squeezing an extra 10 bps of rent escalation.
+          REDIP supports four methods — pick the one that matches your market and thesis.
+        </p>
+      </div>
+
+      {/* Method picker */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {TV_METHODS.map((m) => {
+          const Icon = m.icon;
+          const isActive = activeMethod === m.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setActiveMethod(m.id)}
+              className={`relative rounded-xl border p-3 text-left transition ${
+                isActive
+                  ? `bg-gradient-to-br ${m.surface} ${m.border} shadow-md`
+                  : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+              }`}
+            >
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${m.gradient} text-white shadow-sm`}>
+                <Icon size={14} />
+              </div>
+              <div className="mt-2 text-xs font-bold text-slate-900">{m.title}</div>
+              <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{m.tagline}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active method detail */}
+      <div className={`rounded-xl border ${active.border} bg-gradient-to-br ${active.surface} p-5`}>
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${active.gradient} text-white shadow`}>
+            <ActiveIcon size={18} />
+          </div>
+          <div>
+            <div className="text-lg font-bold text-slate-900">{active.title}</div>
+            <div className="text-xs text-slate-600">{active.tagline}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg bg-white border border-white shadow-sm p-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Formula</div>
+          <code className="block rounded bg-slate-50 px-3 py-2 text-sm font-mono text-slate-900">{active.formula}</code>
+          <div className="mt-2 flex items-start gap-2 text-xs">
+            <span className="mt-0.5 inline-block rounded bg-slate-900 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">example</span>
+            <span className="font-mono text-slate-700">{active.example}</span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 mb-1.5">Pros</div>
+            <ul className="space-y-1 text-xs text-slate-700">
+              {active.pros.map((p, i) => <li key={i}>• {p}</li>)}
+            </ul>
+          </div>
+          <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-rose-800 mb-1.5">Cons</div>
+            <ul className="space-y-1 text-xs text-slate-700">
+              {active.cons.map((c, i) => <li key={i}>• {c}</li>)}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">When to use</div>
+          <p className="text-xs text-slate-700">{active.when}</p>
+        </div>
+      </div>
+
+      <Formula
+        label="PV of Terminal Value"
+        expr="PV_TV = TV ÷ (1 + discountRate)^holdPeriodYears"
+        note="The TV is computed in year N, then discounted back to t = 0 before being added into NPV. Engine injects the non-discounted TV into the final quarter's cash flow — the standard NPV formula handles the discount."
+      />
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex items-center gap-2 text-amber-900">
+          <TrendingDown size={14} />
+          <span className="text-sm font-bold">Perpetuity Growth — fallback logic</span>
+        </div>
+        <p className="mt-1 text-xs text-amber-900">
+          If <code className="font-mono font-bold">r ≤ g</code> (discount rate not strictly greater than growth), the perpetuity
+          formula is mathematically invalid (division by zero or negative). REDIP falls back to the exit-cap method in that case
+          rather than throwing, preserving auditability and preventing NaN propagation.
+        </p>
       </div>
     </div>
   );
