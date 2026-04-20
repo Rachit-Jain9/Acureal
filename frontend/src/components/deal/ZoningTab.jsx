@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   MapPin, Shield, AlertTriangle, CheckCircle2, FileText, ExternalLink,
-  Building2, Sparkles, Info, Layers, Ruler, Home, Car,
+  Building2, Sparkles, Info, Car,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
@@ -206,8 +206,9 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
   );
 }
 
-function ParkingPanel({ parking, unitLabel, unitCount }) {
+function ParkingPanel({ parking }) {
   if (!parking) return null;
+  const totalBays = (parking.cars || 0) + (parking.visitor_cars || 0);
   return (
     <div className="mt-4 rounded-xl border border-gray-100 bg-gradient-to-br from-gray-50/80 to-white p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -222,12 +223,10 @@ function ParkingPanel({ parking, unitLabel, unitCount }) {
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <ParkTile label="Car bays" value={fmtNum(parking.cars, 0)} tone="primary" />
+        <ParkTile label="Resident bays" value={fmtNum(parking.cars, 0)} tone="primary" />
         <ParkTile label="Visitor" value={fmtNum(parking.visitor_cars, 0)} tone="gray" />
         <ParkTile label="EV charging" value={fmtNum(parking.ev_bays, 0)} tone="emerald" />
-        {unitCount != null && (
-          <ParkTile label={unitLabel || 'Units'} value={fmtNum(unitCount, 0)} tone="indigo" />
-        )}
+        <ParkTile label="Total" value={fmtNum(totalBays, 0)} tone="indigo" />
       </div>
       <div className="mt-2 text-[11px] text-gray-500">{parking.basis}</div>
     </div>
@@ -381,12 +380,13 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                   : null}
               />
               <BigStat
-                label={buildability.unit_label || 'Units'}
-                value={buildability.unit_count != null ? fmtNum(buildability.unit_count, 0) : '\u2014'}
+                label="Ground coverage"
+                value={buildability.max_ground_coverage_sqft != null
+                  ? fmtNum(buildability.max_ground_coverage_sqft)
+                  : '\u2014'}
+                unit="sqft"
                 tone="primary"
-                hint={buildability.unit_size_sqft != null
-                  ? `@${fmtNum(buildability.unit_size_sqft)} sqft each`
-                  : 'Asset class not set'}
+                hint={`${fmtNum(buildability.ground_coverage_pct, 0)}% of parcel${buildability.ground_coverage_source === 'default' ? ' (default)' : ''}`}
               />
             </div>
 
@@ -456,7 +456,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
 
             {/* Parking & programming */}
             {buildability.parking && (
-              <ParkingPanel parking={buildability.parking} unitLabel={buildability.unit_label} unitCount={buildability.unit_count} />
+              <ParkingPanel parking={buildability.parking} />
             )}
 
             {buildability.flags.length > 0 && (
