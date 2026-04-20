@@ -222,6 +222,17 @@ export const riskAPI = {
   score:  (dealId)           => api.get(`/deals/${dealId}/risk/score`),
 };
 
+// Master Plan (regulatory zones)
+export const masterPlanAPI = {
+  listZones:    (params)              => api.get('/master-plan/zones', { params }),
+  getZone:      (id, params)          => api.get(`/master-plan/zones/${id}`, { params }),
+  getVersions:  (id)                  => api.get(`/master-plan/zones/${id}/versions`),
+  createZone:   (data)                => api.post('/master-plan/zones', data),
+  updateZone:   (id, data)            => api.put(`/master-plan/zones/${id}`, data),
+  reviewZone:   (id, data)            => api.put(`/master-plan/zones/${id}/review`, data),
+  listDocs:     (params)              => api.get('/master-plan/documents', { params }),
+};
+
 // Document Extraction
 export const extractionAPI = {
   extract:          (documentId, data)                            => api.post(`/documents/${documentId}/extract`, data),

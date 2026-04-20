@@ -9,6 +9,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import MasterPlanZonePanel from './MasterPlanZonePanel';
 
 const OVERLAY_CHECKS = [
   { key: 'lake_buffer',      label: 'Lake / Water Body Buffer (75 m)' },
@@ -107,8 +108,21 @@ export default function ZoningTab({ deal, dealId, setTab }) {
   const fmt = (n, decimals = 0) =>
     n == null ? '—' : Number(n).toLocaleString('en-IN', { maximumFractionDigits: decimals });
 
+  const property = deal?.property || (deal?.property_id
+    ? {
+        id: deal.property_id,
+        zone_id: deal.zone_id ?? null,
+        zone_notes: deal.zone_notes ?? null,
+        road_width_mtrs: road_width_mtrs ?? null,
+        permissible_fsi: permissible_fsi ?? null,
+      }
+    : null);
+
   return (
     <div className="space-y-5">
+      {/* 0 — Master Plan Zone (regulatory link) */}
+      <MasterPlanZonePanel property={property} />
+
       {/* 1 — Parcel Zoning Summary */}
       <SectionCard icon={MapPin} title="Parcel Zoning Summary">
         {hasParccelData ? (
