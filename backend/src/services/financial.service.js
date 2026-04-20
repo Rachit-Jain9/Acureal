@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { calculateFullFinancials, calculateScenarios } = require('../engines/financial.engine');
+const { computeKernelOverlay } = require('../engines/kernel.adapter');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const {
   resolveFinancialModelClass,
@@ -88,9 +89,19 @@ const calculateAndSave = async (dealId, inputData) => {
   const scenarios  = calculateScenarios(normalizedInput);
   const assetClass = selectedAssetClass;
   const leg        = computed._legacy || {};
-  const kpis       = computed.kpis   || {};
+  let   kpis       = computed.kpis   || {};
   const costs      = computed.costs  || {};
   const areas      = computed.areas  || {};
+
+  // FIN_KERNEL_V2: overlay canonical kernel KPIs over the legacy engine.
+  // Disabled by default; the adapter returns null unless the env flag is true.
+  const overlay = computeKernelOverlay(normalizedInput, modelAssetClass);
+  if (overlay) {
+    kpis = { ...kpis, ...overlay.kpis };
+    computed.kpis = kpis;
+    computed.engineVersion = overlay.engineVersion;
+    computed.kernelProvenance = overlay.provenance;
+  }
 
   // Store everything including scenarios in model_params (no separate column needed)
   const modelParams = JSON.stringify({
