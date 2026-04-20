@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
+import AssetClassProgrammeCard from './AssetClassProgrammeCard';
+import ScenarioComparisonCard from './ScenarioComparisonCard';
 import { useZone } from '../../hooks/useMasterPlan';
 import { computeBuildability, fmtNum } from '../../utils/buildability';
 
@@ -478,6 +480,20 @@ export default function ZoningTab({ deal, dealId, setTab }) {
           </>
         )}
       </SectionCard>
+
+      {/* Asset-class development programme — RERA carpet, leasable, keys, docks, revenue */}
+      {deal?.asset_class && buildability.realized_built_up_sqft != null && (
+        <AssetClassProgrammeCard buildability={buildability} property={property} />
+      )}
+
+      {/* Base FSI vs Premium FAR decision card — only shows if zone offers premium */}
+      {zone && property?.land_area_sqft != null && (
+        <ScenarioComparisonCard
+          zone={zone}
+          property={property}
+          assetClass={deal?.asset_class}
+        />
+      )}
 
       {/* Parcel inputs */}
       <SectionCard
