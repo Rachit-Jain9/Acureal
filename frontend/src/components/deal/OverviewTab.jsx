@@ -14,6 +14,7 @@ import {
 import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
 import Badge from '../common/Badge';
+import BuildabilitySummary from './BuildabilitySummary';
 import {
   formatCrores,
   formatPct,
@@ -127,6 +128,17 @@ export default function OverviewTab({ deal, id }) {
         : [];
   const keyRisks = Array.isArray(deal.key_risks) ? deal.key_risks : [];
 
+  const propertyForBuildability = deal?.property_id
+    ? {
+        id: deal.property_id,
+        zone_id: deal.zone_id ?? null,
+        zone_notes: deal.zone_notes ?? null,
+        road_width_mtrs: deal.road_width_mtrs ?? null,
+        permissible_fsi: deal.permissible_fsi ?? null,
+        land_area_sqft: deal.land_area_sqft ?? null,
+      }
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Key Metrics Grid */}
@@ -189,6 +201,14 @@ export default function OverviewTab({ deal, id }) {
           )}
         </div>
       </div>
+
+      {propertyForBuildability && (
+        <BuildabilitySummary
+          property={propertyForBuildability}
+          assetClass={deal.asset_class}
+          title="Buildable envelope"
+        />
+      )}
 
       {readiness && (
         <div className="card">
