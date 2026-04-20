@@ -28,6 +28,7 @@ const approvalsRoutes = require('./routes/approvals.routes');
 const riskRoutes = require('./routes/risk.routes');
 const extractionRoutes = require('./routes/extraction.routes');
 const fxRoutes = require('./routes/fx.routes');
+const masterPlanRoutes = require('./routes/masterplan.routes');
 
 const app = express();
 
@@ -145,6 +146,7 @@ app.use('/api', approvalsRoutes);
 app.use('/api', riskRoutes);
 app.use('/api', extractionRoutes);
 app.use('/api/fx', fxRoutes);
+app.use('/api/master-plan', masterPlanRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
