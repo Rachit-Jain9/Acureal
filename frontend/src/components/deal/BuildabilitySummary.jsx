@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Sparkles, Building2, Layers, Ruler, AlertTriangle, Info } from 'lucide-react';
+import { Sparkles, Building2, Layers, AlertTriangle, Info, Home, Car } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useZone } from '../../hooks/useMasterPlan';
 import { computeBuildability, fmtNum } from '../../utils/buildability';
@@ -17,6 +17,7 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
   if (!property?.id) return null;
 
   const hasEnough = result.effective_fsi != null && result.land_sqft != null;
+  const hasPremium = result.premium_fsi_available != null && result.premium_fsi_available > 0.01;
 
   return (
     <div className="card p-0 overflow-hidden">
@@ -47,45 +48,88 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
             </p>
             {result.missing_inputs.length > 0 && (
               <ul className="text-[11px] text-gray-400 space-y-0.5">
-                {result.missing_inputs.map((m) => <li key={m}>• {m}</li>)}
+                {result.missing_inputs.map((m) => <li key={m}>{'\u2022'} {m}</li>)}
               </ul>
             )}
           </div>
         ) : (
           <>
+            {/* FSI chip with breakdown */}
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">Effective FSI</span>
+                <span className="ml-2 text-2xl font-bold text-gray-900">{fmtNum(result.effective_fsi, 2)}</span>
+              </div>
+              {hasPremium && result.base_fsi != null && (
+                <span className="text-[11px] text-gray-500">
+                  = {fmtNum(result.base_fsi, 2)} base
+                  <span className="mx-1">+</span>
+                  <span className="text-indigo-600 font-semibold">{fmtNum(result.premium_fsi_available, 2)} premium</span>
+                </span>
+              )}
+              {result.matched_tier?.rule && (
+                <span className="text-[10px] text-gray-400 ml-auto">
+                  road {'\u2265'} {result.matched_tier.rule.road_width_m} m
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Tile
-                icon={Sparkles}
-                tone="primary"
-                label="Effective FSI"
-                value={fmtNum(result.effective_fsi, 2)}
-                hint={result.fsi_source === 'zone' && result.matched_tier
-                  ? `Tier ≥${result.matched_tier.rule.road_width_m} m`
-                  : result.fsi_source === 'zone' ? 'Base' : 'Manual'}
-              />
               <Tile
                 icon={Building2}
                 tone="emerald"
                 label="Max built-up"
-                value={fmtNum(result.max_built_up_sqft)}
+                value={fmtNum(result.realized_built_up_sqft)}
                 unit="sqft"
-              />
-              <Tile
-                icon={Ruler}
-                tone="indigo"
-                label="Ground cov."
-                value={fmtNum(result.max_ground_coverage_sqft)}
-                unit="sqft"
-                hint={`${fmtNum(result.ground_coverage_pct, 0)}%`}
+                hint={result.realized_built_up_sqft != null
+                  ? `${fmtNum(result.realized_built_up_sqft / 43560, 2)} ac`
+                  : null}
               />
               <Tile
                 icon={Layers}
                 tone="amber"
-                label={result.limiting_factor ? `Floors (${result.limiting_factor})` : 'Floors'}
-                value={fmtNum(result.max_floors, 1)}
-                hint={result.max_height_m ? `≤${result.max_height_m} m` : null}
+                label="Floors"
+                value={result.max_floors != null ? fmtNum(result.max_floors, 0) : '\u2014'}
+                hint={result.max_height_m ? `\u2264${result.max_height_m} m` : null}
+              />
+              <Tile
+                icon={Home}
+                tone="indigo"
+                label="Footprint"
+                value={result.typical_footprint_sqft != null
+                  ? fmtNum(result.typical_footprint_sqft)
+                  : '\u2014'}
+                unit="sqft"
+                hint={result.typical_footprint_sqft != null && result.land_sqft
+                  ? `${fmtNum((result.typical_footprint_sqft / result.land_sqft) * 100, 1)}%/floor`
+                  : null}
+              />
+              <Tile
+                icon={Sparkles}
+                tone="primary"
+                label={result.unit_label || 'Units'}
+                value={result.unit_count != null ? fmtNum(result.unit_count, 0) : '\u2014'}
+                hint={result.unit_size_sqft != null
+                  ? `@${fmtNum(result.unit_size_sqft)} sqft`
+                  : 'Set asset class'}
               />
             </div>
+
+            {result.parking && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-600">
+                <Car size={12} className="text-gray-500" />
+                <span className="font-semibold text-gray-700">{fmtNum(result.parking.cars, 0)}</span>
+                <span>car bays</span>
+                {result.parking.visitor_cars > 0 && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span>{fmtNum(result.parking.visitor_cars, 0)} visitor</span>
+                  </>
+                )}
+                <span className="text-gray-300">·</span>
+                <span>{fmtNum(result.parking.ev_bays, 0)} EV</span>
+              </div>
+            )}
 
             {result.flags.length > 0 && (
               <div className="mt-3 space-y-1.5">
