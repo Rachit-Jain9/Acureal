@@ -56,7 +56,10 @@ export function computeResidential(
   const architectFeePct = num(raw.architectFeePct, 2);
   const pmcFeePct = num(raw.pmcFeePct, 1.5);
   const debtLTV = Math.max(0, Math.min(1, num(raw.debtLTV, 0)));
+  const debtLTC = num(raw.debtLTC, 0);
   const debtRatePct = num(raw.debtRatePct, 10.5);
+  const debtTenorYears = num(raw.debtTenorYears, 0);
+  const debtTenorMonths = debtTenorYears > 0 ? debtTenorYears * 12 : undefined;
 
   const durationMonthsRaw = num(raw.projectDurationMonths, 36);
   const constructionStartMonthsRaw = raw.constructionStartMonths != null
@@ -169,15 +172,25 @@ export function computeResidential(
     totalCost: costs.totalCr,
     debtableBase: hardCostCr,
     debtLTV,
+    debtLTC: debtLTC > 0 ? debtLTC : undefined,
     debtRatePct,
     constructionMonths: constructionTenorMonths,
+    debtTenorMonths,
   });
+
+  // Merchant-sale DSCR — sellout proceeds ÷ total debt service (principal + capitalised interest).
+  // Mirrors master's PR #7 definition so kernel exports stay comparable.
+  const debtDrawnNum = financing?.debtDrawn.toNumber() ?? 0;
+  const debtInterestNum = financing?.debtInterest.toNumber() ?? 0;
+  const totalDebtService = debtDrawnNum + debtInterestNum;
+  const dscr = totalDebtService > 0 ? totalRevenueCr.toNumber() / totalDebtService : null;
 
   const kpiExtras: Record<string, number | null> = {
     costPerSqft: saleableAreaSqft > 0 ? (costs.totalCr.toNumber() * CRORE) / saleableAreaSqft : null,
     revenuePerSqft: saleableAreaSqft > 0 ? (totalRevenueCr.toNumber() * CRORE) / saleableAreaSqft : null,
     profitPerSqft: saleableAreaSqft > 0 ? (totalRevenueCr.sub(costs.totalCr).toNumber() * CRORE) / saleableAreaSqft : null,
     landCostPerSqft: plotAreaSqft > 0 ? (landCostCr * CRORE) / plotAreaSqft : null,
+    dscr,
   };
 
   const inputProv = [

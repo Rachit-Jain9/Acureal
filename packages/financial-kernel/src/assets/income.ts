@@ -166,12 +166,21 @@ export function computeIncomeAsset(
     }),
   );
 
+  const debtLTVin = Math.max(0, Math.min(1, num(raw.debtCoverage, 0)));
+  const debtLTCin = num(raw.debtLTC, 0);
+  const debtTenorYears = num(raw.debtTenorYears, 0);
+  const debtTenorMonths = debtTenorYears > 0 ? debtTenorYears * 12 : undefined;
+  const amortizationYearsIn = num(raw.amortizationYears, 0);
+  const debtRatePctIn = num(raw.interestRatePct, 10);
   const financing = maybeFinancing({
     totalCost: totalDevCostCr,
     debtableBase: hardCostCr,
-    debtLTV: Math.max(0, Math.min(1, num(raw.debtCoverage, 0))),
-    debtRatePct: num(raw.interestRatePct, 10),
+    debtLTV: debtLTVin,
+    debtLTC: debtLTCin > 0 ? debtLTCin : undefined,
+    debtRatePct: debtRatePctIn,
     constructionMonths: constructionMonths,
+    debtTenorMonths,
+    amortizationYears: amortizationYearsIn > 0 ? amortizationYearsIn : undefined,
   });
 
   const areas: AreaBreakdown = {
@@ -200,11 +209,20 @@ export function computeIncomeAsset(
     },
   });
 
+  // Interest-only DSCR approximation — stabilized NOI ÷ annual interest on drawn debt.
+  // Conservative (high) vs master's amortizing-schedule DSCR; a proper schedule lands in PR-B.
+  const drawnNumInc = financing?.debtDrawn.toNumber() ?? 0;
+  const annualInterestInc = drawnNumInc * (debtRatePctIn / 100);
+  const dscr = annualInterestInc > 0 ? stabilizedNOICr.toNumber() / annualInterestInc : null;
+
   const kpiExtras: Record<string, number | null> = {
     noi: stabilizedNOICr.toNumber(),
     yieldOnCost,
     exitValue: exitValueCr.toNumber(),
     entryValue: entryValueCr.toNumber(),
+    exitCapRate: exitCapRatePct,
+    entryCapRate: entryCapRatePct,
+    dscr,
     devCostPerSqft: leasableAreaSqft > 0 ? (totalDevCostCr.toNumber() * CRORE) / leasableAreaSqft : null,
     rentPerSqftAnnual: effectiveBaseRent * 12,
     noiPerSqft: leasableAreaSqft > 0 ? (stabilizedNOICr.toNumber() * CRORE) / leasableAreaSqft : null,

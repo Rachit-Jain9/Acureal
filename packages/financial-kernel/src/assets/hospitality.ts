@@ -137,12 +137,21 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     }),
   );
 
+  const debtLTVin = Math.max(0, Math.min(1, num(raw.debtCoverage, 0)));
+  const debtLTCin = num(raw.debtLTC, 0);
+  const debtTenorYears = num(raw.debtTenorYears, 0);
+  const debtTenorMonths = debtTenorYears > 0 ? debtTenorYears * 12 : undefined;
+  const amortizationYearsIn = num(raw.amortizationYears, 0);
+  const debtRatePctIn = num(raw.interestRatePct, 10.5);
   const financing = maybeFinancing({
     totalCost: totalDevCostCr,
     debtableBase: hardCostCr,
-    debtLTV: Math.max(0, Math.min(1, num(raw.debtCoverage, 0))),
-    debtRatePct: num(raw.interestRatePct, 10.5),
+    debtLTV: debtLTVin,
+    debtLTC: debtLTCin > 0 ? debtLTCin : undefined,
+    debtRatePct: debtRatePctIn,
     constructionMonths,
+    debtTenorMonths,
+    amortizationYears: amortizationYearsIn > 0 ? amortizationYearsIn : undefined,
   });
 
   const areas: AreaBreakdown = {
@@ -170,11 +179,17 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     },
   });
 
+  const drawnNumHosp = financing?.debtDrawn.toNumber() ?? 0;
+  const annualInterestHosp = drawnNumHosp * (debtRatePctIn / 100);
+  const dscr = annualInterestHosp > 0 ? ebitdaY1Cr.toNumber() / annualInterestHosp : null;
+
   const kpiExtras: Record<string, number | null> = {
     noi: ebitdaY1Cr.toNumber(),
     yieldOnCost,
     exitValue: exitValueCr.toNumber(),
     entryValue: entryValueCr.toNumber(),
+    exitCapRate: exitCapRatePct,
+    dscr,
     revPAR: revPARStabilised,
     gopMargin: gopMarginPct,
     devCostPerKey: (totalDevCostCr.toNumber() * CRORE) / keys,

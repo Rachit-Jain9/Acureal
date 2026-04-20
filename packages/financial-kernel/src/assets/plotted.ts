@@ -116,19 +116,32 @@ export function computePlotted(inputs: DealInputs): KernelResult {
     }),
   ];
 
+  const debtLTVin = Math.max(0, Math.min(1, num(raw.debtLTV, 0)));
+  const debtLTCin = num(raw.debtLTC, 0);
+  const debtTenorYears = num(raw.debtTenorYears, 0);
+  const debtTenorMonths = debtTenorYears > 0 ? debtTenorYears * 12 : undefined;
+
   const financing = maybeFinancing({
     totalCost: costs.totalCr,
     debtableBase: hardCostCr,
-    debtLTV: Math.max(0, Math.min(1, num(raw.debtLTV, 0))),
+    debtLTV: debtLTVin,
+    debtLTC: debtLTCin > 0 ? debtLTCin : undefined,
     debtRatePct: num(raw.debtRatePct, 10.5),
     constructionMonths: durationMonths,
+    debtTenorMonths,
   });
+
+  const debtDrawnNum = financing?.debtDrawn.toNumber() ?? 0;
+  const debtInterestNum = financing?.debtInterest.toNumber() ?? 0;
+  const totalDebtService = debtDrawnNum + debtInterestNum;
+  const dscr = totalDebtService > 0 ? totalRevenueCr.toNumber() / totalDebtService : null;
 
   const kpiExtras: Record<string, number | null> = {
     revenuePerPlot: totalPlots > 0 ? (totalRevenueCr.toNumber() * CRORE) / totalPlots : null,
     costPerPlot: totalPlots > 0 ? (costs.totalCr.toNumber() * CRORE) / totalPlots : null,
     revenuePerSqft: saleableLandSqft > 0 ? (totalRevenueCr.toNumber() * CRORE) / saleableLandSqft : null,
     landCostPerSqft: totalLandSqft > 0 ? (landCostCr * CRORE) / totalLandSqft : null,
+    dscr,
   };
 
   return finalizeResult({

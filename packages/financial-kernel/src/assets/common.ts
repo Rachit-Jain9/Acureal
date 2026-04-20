@@ -442,15 +442,30 @@ export function maybeFinancing({
   totalCost,
   debtableBase,
   debtLTV,
+  debtLTC,
   debtRatePct,
   constructionMonths,
+  debtTenorMonths,
+  amortizationYears,
 }: {
   totalCost: Decimal;
   debtableBase: Decimal;
   debtLTV: number;
+  debtLTC?: number;
   debtRatePct: number;
   constructionMonths: number;
+  debtTenorMonths?: number;
+  amortizationYears?: number;
 }): FinancingOutput | null {
   if (debtLTV <= 0) return null;
-  return buildFinancing({ totalCost, debtableBase, debtLTV, debtRatePct, constructionMonths });
+  return buildFinancing({
+    totalCost,
+    debtableBase,
+    debtLTV,
+    debtLTC,
+    debtRatePct,
+    constructionMonths,
+    debtTenorMonths,
+    amortizationYears,
+  });
 }
