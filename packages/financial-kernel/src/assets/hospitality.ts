@@ -4,6 +4,7 @@
 
 import { Decimal } from '../decimal';
 import { bulletInflow, bulletOutflow } from '../cashflow';
+import { buildAmortizingSchedule } from '../debtSchedule';
 import { buildPeriodIndex } from '../periods';
 import type { AreaBreakdown, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
@@ -179,9 +180,27 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     },
   });
 
+  // Amortizing-schedule DSCR — Y1 EBITDA ÷ annual debt service (P&I).
   const drawnNumHosp = financing?.debtDrawn.toNumber() ?? 0;
-  const annualInterestHosp = drawnNumHosp * (debtRatePctIn / 100);
-  const dscr = annualInterestHosp > 0 ? ebitdaY1Cr.toNumber() / annualInterestHosp : null;
+  let dscr: number | null = null;
+  if (drawnNumHosp > 0 && debtRatePctIn > 0) {
+    const amortYearsForDscr = amortizationYearsIn > 0 ? amortizationYearsIn : 20;
+    const totalQH = Math.max(4, Math.ceil(period.totalMonths / 3));
+    const opStartQ = Math.max(1, Math.ceil((period.constructionEndMonth + 1) / 3));
+    const sched = buildAmortizingSchedule({
+      principalCr: drawnNumHosp,
+      annualRatePct: debtRatePctIn,
+      amortizationYears: amortYearsForDscr,
+      drawQ: opStartQ,
+      operatingStartQ: opStartQ,
+      exitQ: totalQH,
+      totalQuarters: totalQH,
+    });
+    const y1End = Math.min(opStartQ + 3, totalQH - 1);
+    let y1DebtService = 0;
+    for (let q = opStartQ; q <= y1End; q++) y1DebtService += sched.debtService[q];
+    dscr = y1DebtService > 0 ? ebitdaY1Cr.toNumber() / y1DebtService : null;
+  }
 
   const kpiExtras: Record<string, number | null> = {
     noi: ebitdaY1Cr.toNumber(),

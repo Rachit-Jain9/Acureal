@@ -1,8 +1,15 @@
 /**
  * Capital stack / financing computations. Pure functions only.
+ *
+ * Master-parity: construction-phase interest accrues on a quarterly S-curve
+ * draw schedule with capitalised interest (see `debtSchedule.ts`), matching
+ * `backend/src/engines/financial.engine.js` PRs #4–#7. The carry window is
+ * capped at `min(constructionMonths, debtTenorMonths)` so finance costs do
+ * not balloon over the full hold period.
  */
 
 import { Decimal } from './decimal';
+import { buildDrawSchedule, type DrawScheduleResult } from './debtSchedule';
 import { prov } from './provenance';
 import type { FinancingOutput, ProvenanceEntry } from './types';
 
@@ -14,22 +21,19 @@ export interface FinancingInputs {
   readonly debtLTC?: number;
   readonly debtRatePct: number;
   readonly constructionMonths: number;
-  /**
-   * Loan term (months). When > 0 and < constructionMonths, caps the
-   * capitalised-interest carry window at loan maturity. Mirrors master's
-   * PR #7 "cap finance carry at loan term" behaviour.
-   */
   readonly debtTenorMonths?: number;
-  /** Amortization years — pass-through; not used by the simple accrual model. */
   readonly amortizationYears?: number;
 }
 
+export interface FinancingOutputWithSchedule extends FinancingOutput {
+  readonly drawSchedule: DrawScheduleResult | null;
+}
+
 /**
- * Simple capitalised-interest model: debt is drawn against `debtableBase`
- * at `debtLTV`; interest accrues on the drawn balance over the carry
- * window at `debtRatePct` annual. The carry window is `constructionMonths`
- * unless `debtTenorMonths` is smaller, in which case it is capped at the
- * loan term.
+ * Quarterly S-curve capitalised-interest model. Debt is sized at
+ * `debtLTV × debtableBase`; the principal is drawn over the carry window on
+ * an S-curve and interest accrues (compounds quarterly) on the outstanding
+ * balance. Mirrors master's `buildDrawSchedule` byte-for-byte.
  */
 export function buildFinancing({
   totalCost,
@@ -40,28 +44,39 @@ export function buildFinancing({
   constructionMonths,
   debtTenorMonths,
   amortizationYears,
-}: FinancingInputs): FinancingOutput {
+}: FinancingInputs): FinancingOutputWithSchedule {
   const clampedLTV = Math.max(0, Math.min(1, debtLTV));
   const clampedLTC = debtLTC != null ? Math.max(0, Math.min(1, debtLTC)) : null;
   const rate = Math.max(0, debtRatePct);
   const months = Math.max(0, constructionMonths);
-  const tenorCap = debtTenorMonths != null && debtTenorMonths > 0
-    ? Math.min(months, debtTenorMonths)
-    : months;
+  const tenorCapMonths =
+    debtTenorMonths != null && debtTenorMonths > 0 ? Math.min(months, debtTenorMonths) : months;
 
   const debtDrawn = debtableBase.mulNumber(clampedLTV);
-  const debtInterest =
-    clampedLTV > 0
-      ? debtDrawn.mulNumber(rate / 100).mulNumber(tenorCap / 12)
-      : Decimal.zero();
+
+  let drawSchedule: DrawScheduleResult | null = null;
+  let debtInterest = Decimal.zero();
+  if (clampedLTV > 0 && debtDrawn.toNumber() > 0 && tenorCapMonths > 0 && rate > 0) {
+    const totalQ = Math.max(1, Math.ceil(tenorCapMonths / 3));
+    drawSchedule = buildDrawSchedule({
+      principalCr: debtDrawn.toNumber(),
+      annualRatePct: rate,
+      totalQuarters: totalQ,
+      drawStartQ: 1,
+      drawEndQ: totalQ,
+      capitalizeInterest: true,
+    });
+    debtInterest = Decimal.fromNumber(drawSchedule.totalInterestCr);
+  }
+
   const equityInvested = totalCost.sub(debtDrawn).add(debtInterest);
 
   const provenance: ProvenanceEntry[] = [
     prov('financing.debtDrawn', 'input.debtLTV×debtableBase', 'debtLTV × debtableBase'),
     prov(
       'financing.debtInterest',
-      'derived.debtDrawn×rate×carryMonths',
-      'debtDrawn × (debtRatePct/100) × (min(constructionMonths, debtTenorMonths)/12)',
+      'derived.drawSchedule.totalInterestCr',
+      'quarterly S-curve draws × (1+rate)^(1/4)−1 compounding, capitalised',
     ),
     prov(
       'financing.equityInvested',
@@ -80,6 +95,7 @@ export function buildFinancing({
     debtDrawn,
     debtInterest,
     equityInvested,
+    drawSchedule,
     provenance,
   };
 }

@@ -8,6 +8,7 @@
 
 import { Decimal } from '../decimal';
 import { bulletInflow, bulletOutflow, uniformFlow } from '../cashflow';
+import { buildAmortizingSchedule } from '../debtSchedule';
 import { buildPeriodIndex } from '../periods';
 import type {
   AreaBreakdown,
@@ -209,11 +210,32 @@ export function computeIncomeAsset(
     },
   });
 
-  // Interest-only DSCR approximation — stabilized NOI ÷ annual interest on drawn debt.
-  // Conservative (high) vs master's amortizing-schedule DSCR; a proper schedule lands in PR-B.
+  // Amortizing-schedule DSCR — mirrors master's `buildAmortizingSchedule` on
+  // the operating phase. DSCR = stabilised NOI ÷ annualised debt service
+  // (interest + principal) for the first full operating year.
   const drawnNumInc = financing?.debtDrawn.toNumber() ?? 0;
-  const annualInterestInc = drawnNumInc * (debtRatePctIn / 100);
-  const dscr = annualInterestInc > 0 ? stabilizedNOICr.toNumber() / annualInterestInc : null;
+  let dscr: number | null = null;
+  if (drawnNumInc > 0 && debtRatePctIn > 0) {
+    const amortYearsForDscr = amortizationYearsIn > 0 ? amortizationYearsIn : 20;
+    const totalQInc = Math.max(4, Math.ceil(period.totalMonths / 3));
+    const opStartQ = Math.max(1, Math.ceil((period.constructionEndMonth + 1) / 3));
+    const sched = buildAmortizingSchedule({
+      principalCr: drawnNumInc,
+      annualRatePct: debtRatePctIn,
+      amortizationYears: amortYearsForDscr,
+      drawQ: opStartQ,
+      operatingStartQ: opStartQ,
+      exitQ: totalQInc,
+      totalQuarters: totalQInc,
+    });
+    // First 4 quarters of operations approximate stabilised-year debt service
+    // (principal + interest, pre-balloon). Exclude the exit quarter so the
+    // balloon doesn't distort Y1 DSCR.
+    const y1End = Math.min(opStartQ + 3, totalQInc - 1);
+    let y1DebtService = 0;
+    for (let q = opStartQ; q <= y1End; q++) y1DebtService += sched.debtService[q];
+    dscr = y1DebtService > 0 ? stabilizedNOICr.toNumber() / y1DebtService : null;
+  }
 
   const kpiExtras: Record<string, number | null> = {
     noi: stabilizedNOICr.toNumber(),
