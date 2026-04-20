@@ -9,6 +9,7 @@ import { calculateJDAWaterfall, calculateJVWaterfall, buildDebtSchedule } from '
 import MethodologyExplorer from '../components/financials/MethodologyExplorer';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
+import HospitalityProformaSection from '../components/financials/HospitalityProformaSection';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -460,7 +461,12 @@ function normalizeFinancials(financials) {
       fbRevenue: toNumber(revenue.fbRevenue),
       gop: toNumber(revenue.gop),
       ebitda: toNumber(revenue.ebitda),
+      usali_pnl: revenue.usali_pnl || null,
     },
+    // Preserve extended hospitality payloads
+    costsRaw: costs,
+    capitalStack: mp.capitalStack || null,
+    sourcesUses: costs.sources_uses || null,
     cashFlows: cashFlowSeries.map((cf, i) => ({ quarter: cf.quarter ?? i, value: toNumber(cf.net) ?? 0 })),
     yearlyCashFlows: (financials.cash_flows?.yearly || []).map((cf) => ({ year: cf.year, label: cf.label, value: toNumber(cf.net) ?? 0 })),
     sensitivity: {
@@ -1789,6 +1795,10 @@ export default function FinancialsPage() {
             financials={normalizedFinancials}
             inputs={normalizedFinancials.inputs}
           />
+
+          {normalizedFinancials.assetClass === 'hospitality' && (
+            <HospitalityProformaSection financials={normalizedFinancials} />
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <AreaBreakdown areas={normalizedFinancials.areas} assetClass={normalizedFinancials.assetClass} />
