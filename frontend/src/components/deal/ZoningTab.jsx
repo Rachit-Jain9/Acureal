@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   MapPin, Shield, AlertTriangle, CheckCircle2, FileText, ExternalLink,
-  Building2, Sparkles, Info,
+  Building2, Sparkles, Info, Layers, Ruler, Home, Car,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
@@ -101,6 +101,154 @@ function SetbackDiagram({ setbacks }) {
   );
 }
 
+function FsiStack({ buildability, usePremium, setUsePremium }) {
+  const base = buildability.base_fsi;
+  const premiumAvail = buildability.premium_fsi_available;
+  const premiumUsed = buildability.premium_fsi_used ?? 0;
+  const effective = buildability.effective_fsi;
+  const hasPremium = premiumAvail != null && premiumAvail > 0.01;
+  const tier = buildability.matched_tier;
+
+  return (
+    <div className="rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50/60 via-white to-indigo-50/50 p-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-indigo-500 flex items-center justify-center text-white shadow-sm">
+            <Sparkles size={16} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-primary-700/70">
+              Floor area ratio stack
+            </div>
+            <div className="text-2xl font-bold text-gray-900 leading-tight">
+              {fmtNum(effective, 2)}
+              <span className="ml-2 text-xs font-medium text-primary-600">effective FSI</span>
+            </div>
+            {tier?.rule && (
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                Tier: road {'\u2265'} {tier.rule.road_width_m} m
+              </div>
+            )}
+          </div>
+        </div>
+
+        {hasPremium && (
+          <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={usePremium}
+              onChange={(e) => setUsePremium(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            Use premium FAR ({fmtNum(premiumAvail, 2)} available)
+          </label>
+        )}
+      </div>
+
+      {/* Stacked bar */}
+      {(base != null || premiumAvail != null) && (
+        <div className="mt-3">
+          <div className="h-3 rounded-full overflow-hidden bg-gray-100 flex">
+            {base != null && (
+              <div
+                className="bg-gradient-to-r from-primary-500 to-primary-400"
+                style={{ width: `${(base / (base + (premiumAvail || 0))) * 100}%` }}
+                title={`Base FSI ${fmtNum(base, 2)}`}
+              />
+            )}
+            {hasPremium && (
+              <div
+                className={clsx(
+                  'transition-opacity',
+                  usePremium
+                    ? 'bg-gradient-to-r from-indigo-400 to-indigo-500 opacity-100'
+                    : 'bg-indigo-200 opacity-50',
+                )}
+                style={{ width: `${(premiumAvail / (base + premiumAvail)) * 100}%` }}
+                title={`Premium FAR ${fmtNum(premiumAvail, 2)}`}
+              />
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+            {base != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-primary-500" />
+                <span className="text-gray-600">Base</span>
+                <span className="font-semibold text-primary-700">{fmtNum(base, 2)}</span>
+              </span>
+            )}
+            {hasPremium && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className={clsx('h-2 w-2 rounded-full', usePremium ? 'bg-indigo-500' : 'bg-indigo-200')} />
+                <span className="text-gray-600">Premium</span>
+                <span className={clsx('font-semibold', usePremium ? 'text-indigo-700' : 'text-gray-400 line-through')}>
+                  +{fmtNum(premiumAvail, 2)}
+                </span>
+                <span className="text-[10px] text-gray-400">(paid to BDA)</span>
+              </span>
+            )}
+            {buildability.manual_fsi != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                <span className="text-gray-600">Manual override</span>
+                <span className="font-semibold text-amber-700">{fmtNum(buildability.manual_fsi, 2)}</span>
+              </span>
+            )}
+          </div>
+          {hasPremium && !usePremium && (
+            <div className="mt-1.5 text-[11px] text-gray-500 italic">
+              Premium FAR excluded from envelope. Toggle above to include (fee payable to BDA).
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ParkingPanel({ parking, unitLabel, unitCount }) {
+  if (!parking) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-gray-100 bg-gradient-to-br from-gray-50/80 to-white p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+          <Car size={13} />
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">
+            Parking programme
+          </div>
+          <div className="text-sm font-semibold text-gray-800">Estimated car bays</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <ParkTile label="Car bays" value={fmtNum(parking.cars, 0)} tone="primary" />
+        <ParkTile label="Visitor" value={fmtNum(parking.visitor_cars, 0)} tone="gray" />
+        <ParkTile label="EV charging" value={fmtNum(parking.ev_bays, 0)} tone="emerald" />
+        {unitCount != null && (
+          <ParkTile label={unitLabel || 'Units'} value={fmtNum(unitCount, 0)} tone="indigo" />
+        )}
+      </div>
+      <div className="mt-2 text-[11px] text-gray-500">{parking.basis}</div>
+    </div>
+  );
+}
+
+function ParkTile({ label, value, tone }) {
+  const tones = {
+    primary: 'bg-primary-50 text-primary-800',
+    emerald: 'bg-emerald-50 text-emerald-800',
+    indigo:  'bg-indigo-50 text-indigo-800',
+    gray:    'bg-gray-50 text-gray-700',
+  };
+  return (
+    <div className={clsx('rounded-lg px-3 py-2', tones[tone] || tones.gray)}>
+      <div className="text-[10px] uppercase tracking-[0.1em] opacity-70 font-medium">{label}</div>
+      <div className="mt-0.5 text-base font-bold leading-none">{value}</div>
+    </div>
+  );
+}
+
 function FlagRow({ flag }) {
   const styles = flag.level === 'warning'
     ? 'bg-amber-50 border border-amber-200 text-amber-900'
@@ -122,6 +270,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
     Object.fromEntries(OVERLAY_CHECKS.map((o) => [o.key, 'not_checked'])),
   );
   const [zoningNotes, setZoningNotes] = useState('');
+  const [usePremium, setUsePremium] = useState(true);
 
   const property = deal?.property || (deal?.property_id
     ? {
@@ -144,8 +293,9 @@ export default function ZoningTab({ deal, dealId, setTab }) {
       zone,
       property,
       assetClass: deal?.asset_class,
+      options: { usePremiumFar: usePremium },
     }),
-    [zone, property, deal?.asset_class],
+    [zone, property, deal?.asset_class, usePremium],
   );
 
   const zoningLabel = property?.zoning ? property.zoning.replace(/_/g, ' ') : null;
@@ -191,52 +341,56 @@ export default function ZoningTab({ deal, dealId, setTab }) {
             </p>
             <ul className="text-xs text-gray-500 space-y-1 inline-block text-left">
               {buildability.missing_inputs.map((m) => (
-                <li key={m}>• {m}</li>
+                <li key={m}>{'\u2022'} {m}</li>
               ))}
             </ul>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <BigStat
-                label="Effective FSI"
-                value={fmtNum(buildability.effective_fsi, 2)}
-                tone="primary"
-                hint={
-                  buildability.fsi_source === 'zone' && buildability.matched_tier
-                    ? `Tier: road ≥ ${buildability.matched_tier.rule.road_width_m} m`
-                    : buildability.fsi_source === 'zone'
-                      ? 'From zone base'
-                      : buildability.fsi_source === 'manual'
-                        ? 'Manual override'
-                        : null
-                }
-              />
+            {/* FSI stack: base + premium */}
+            <FsiStack buildability={buildability} usePremium={usePremium} setUsePremium={setUsePremium} />
+
+            {/* Primary envelope tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
               <BigStat
                 label="Max built-up"
-                value={fmtNum(buildability.max_built_up_sqft)}
+                value={fmtNum(buildability.realized_built_up_sqft)}
                 unit="sqft"
                 tone="emerald"
-                hint={buildability.max_built_up_sqft != null
-                  ? `${fmtNum(buildability.max_built_up_sqft / 43560, 2)} ac`
+                hint={buildability.realized_built_up_sqft != null
+                  ? `${fmtNum(buildability.realized_built_up_sqft / 43560, 2)} ac realized`
                   : null}
               />
               <BigStat
-                label="Ground coverage"
-                value={fmtNum(buildability.max_ground_coverage_sqft)}
-                unit="sqft"
-                tone="indigo"
-                hint={`${fmtNum(buildability.ground_coverage_pct, 0)}% of parcel${buildability.ground_coverage_source === 'default' ? ' (default)' : ''}`}
+                label="Max floors"
+                value={buildability.max_floors != null ? fmtNum(buildability.max_floors, 0) : '\u2014'}
+                tone="amber"
+                hint={buildability.max_height_m
+                  ? `\u2264${buildability.max_height_m} m @ ${fmtNum(buildability.floor_height_m, 1)} m/floor`
+                  : (buildability.limiting_factor ? `limited by ${buildability.limiting_factor}` : null)}
               />
               <BigStat
-                label={buildability.limiting_factor ? `Floors (by ${buildability.limiting_factor})` : 'Floors'}
-                value={fmtNum(buildability.max_floors, 1)}
-                tone="amber"
-                hint={buildability.max_height_m ? `Height cap ${buildability.max_height_m} m` : null}
+                label="Typical footprint"
+                value={buildability.typical_footprint_sqft != null
+                  ? fmtNum(buildability.typical_footprint_sqft)
+                  : '\u2014'}
+                unit="sqft"
+                tone="indigo"
+                hint={buildability.typical_footprint_sqft != null && buildability.land_sqft
+                  ? `${fmtNum((buildability.typical_footprint_sqft / buildability.land_sqft) * 100, 1)}% of plot / floor`
+                  : null}
+              />
+              <BigStat
+                label={buildability.unit_label || 'Units'}
+                value={buildability.unit_count != null ? fmtNum(buildability.unit_count, 0) : '\u2014'}
+                tone="primary"
+                hint={buildability.unit_size_sqft != null
+                  ? `@${fmtNum(buildability.unit_size_sqft)} sqft each`
+                  : 'Asset class not set'}
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 mt-4">
               <div>
                 <SetbackDiagram setbacks={buildability.setbacks} />
                 {!buildability.has_setbacks && (
@@ -251,7 +405,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                 <KeyValue
                   label="Parcel area"
                   value={buildability.land_sqft != null
-                    ? `${fmtNum(buildability.land_sqft)} sqft · ${fmtNum(buildability.land_acres, 2)} ac`
+                    ? `${fmtNum(buildability.land_sqft)} sqft \u00b7 ${fmtNum(buildability.land_acres, 2)} ac`
                     : 'Not set'}
                   muted={buildability.land_sqft == null}
                 />
@@ -260,6 +414,12 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                   value={buildability.road_width_m != null ? `${buildability.road_width_m} m` : 'Not set'}
                   muted={buildability.road_width_m == null}
                 />
+                <KeyValue
+                  label="Ground coverage cap"
+                  value={buildability.max_ground_coverage_sqft != null
+                    ? `${fmtNum(buildability.max_ground_coverage_sqft)} sqft \u00b7 ${fmtNum(buildability.ground_coverage_pct, 0)}%${buildability.ground_coverage_source === 'default' ? ' (default)' : ''}`
+                    : '\u2014'}
+                />
                 {buildability.net_plot && (
                   <KeyValue
                     label="Net plot after setbacks"
@@ -267,33 +427,37 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                   />
                 )}
                 <KeyValue
-                  label="Max floors by coverage"
-                  value={buildability.max_floors_by_coverage != null ? fmtNum(buildability.max_floors_by_coverage, 1) : '—'}
-                  muted={buildability.max_floors_by_coverage == null}
-                />
-                <KeyValue
-                  label="Max floors by height"
-                  value={buildability.max_floors_by_height != null ? `${fmtNum(buildability.max_floors_by_height, 1)} (at 3 m/floor)` : '—'}
-                  muted={buildability.max_floors_by_height == null}
-                />
-                <KeyValue
                   label="Height cap"
-                  value={buildability.max_height_m != null ? `${buildability.max_height_m} m` : 'Not set on zone'}
+                  value={buildability.max_height_m != null
+                    ? `${buildability.max_height_m} m \u2192 ${buildability.max_floors_by_height ?? '\u2014'} floors @ ${fmtNum(buildability.floor_height_m, 1)} m/floor`
+                    : 'Not set on zone'}
                   muted={buildability.max_height_m == null}
+                />
+                <KeyValue
+                  label="Min floors to reach FSI"
+                  value={buildability.min_floors_for_fsi != null
+                    ? `${buildability.min_floors_for_fsi} (at full coverage)`
+                    : '\u2014'}
+                  muted={buildability.min_floors_for_fsi == null}
                 />
                 {deal?.asset_class && (
                   <KeyValue
                     label="Asset class alignment"
                     value={
-                      buildability.alignment.status === 'aligned'  ? '✓ Permitted'
-                    : buildability.alignment.status === 'blocked'  ? '✗ Prohibited'
-                    : buildability.alignment.status === 'unclear'  ? '— Unclear'
-                    : '—'
+                      buildability.alignment.status === 'aligned'  ? '\u2713 Permitted'
+                    : buildability.alignment.status === 'blocked'  ? '\u2717 Prohibited'
+                    : buildability.alignment.status === 'unclear'  ? '\u2014 Unclear'
+                    : '\u2014'
                     }
                   />
                 )}
               </div>
             </div>
+
+            {/* Parking & programming */}
+            {buildability.parking && (
+              <ParkingPanel parking={buildability.parking} unitLabel={buildability.unit_label} unitCount={buildability.unit_count} />
+            )}
 
             {buildability.flags.length > 0 && (
               <div className="mt-4 space-y-2">
@@ -304,10 +468,11 @@ export default function ZoningTab({ deal, dealId, setTab }) {
             <div className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500 flex items-start gap-2">
               <Info size={12} className="mt-0.5 flex-shrink-0" />
               <div>
-                Deterministic rule-engine output. Ground coverage assumed 40% when the zone
-                does not specify a value. Floor estimate uses 3 m / floor and is capped by
-                whichever limit — coverage or height — binds first. Actual approvals
-                depend on site geometry, premium FSI purchase, and BBMP / BDA scrutiny.
+                Deterministic rule-engine output. Floors are whole numbers, capped by the
+                zone height limit at {fmtNum(buildability.floor_height_m, 1)} m per floor.
+                Unit counts are floor()'d to whole numbers. Premium FAR assumes full BDA
+                fee payment or TDR. Actual approvals depend on site geometry and
+                BBMP / BDA scrutiny.
               </div>
             </div>
           </>
