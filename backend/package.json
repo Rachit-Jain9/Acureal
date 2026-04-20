@@ -33,7 +33,6 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.11.3",
     "pptxgenjs": "^4.0.1",
-    "uuid": "^9.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

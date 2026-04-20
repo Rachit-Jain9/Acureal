@@ -720,10 +720,9 @@ function calculateResidentialApartments(input) {
   const sensitivity = skipSensitivity
     ? null
     : buildResidentialSensitivity({
-        plotAreaSqft, fsi, loadingFactor, constructionCostSqft, sellingRateSqft,
-        landCostCr, approvalCostCr, marketingCostPct, financeCostPct,
-        durationMonths, discountRatePct, developerMarginPct,
-        contingencyPct, architectFeePct, pmcFeePct,
+        ...input,
+        constructionCostPerSqft: constructionCostSqft,
+        sellingRatePerSqft: sellingRateSqft,
       });
 
   const outputTimeline = buildTimeline(timeline);
@@ -1063,9 +1062,9 @@ function calculatePlottedDevelopment(input) {
     sensitivityMatrix: skipSensitivity
       ? null
       : buildPlottedSensitivity({
-          totalLandSqft, saleableLandPct, avgPlotSizeSqft,
-          sellingRatePerSqft, landCostCr, devCostPerSqft, approvalCostCr,
-          marketingCostPct, financeCostPct, durationMonths, discountRatePct, contingencyPct,
+          ...input,
+          sellingRatePerSqft,
+          devCostPerSqft,
         }),
     _legacy: {
       plot_area_sqft: totalLandSqft, fsi: 1, loading_factor: saleableLandPct / 100,
@@ -1408,8 +1407,10 @@ function calculateIncomeAsset(input) {
 
 function buildResidentialSensitivity(p) {
   const vars = [-0.20, -0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20];
-  const sellingRates      = vars.map((v) => Math.round(p.sellingRateSqft * (1 + v)));
-  const constructionCosts = vars.map((v) => Math.round(p.constructionCostSqft * (1 + v)));
+  const baseSelling      = Number(p.sellingRatePerSqft);
+  const baseConstruction = Number(p.constructionCostPerSqft);
+  const sellingRates      = vars.map((v) => Math.round(baseSelling * (1 + v)));
+  const constructionCosts = vars.map((v) => Math.round(baseConstruction * (1 + v)));
   const irrGrid = constructionCosts.map((cc) =>
     sellingRates.map((sr) => {
       try {
@@ -1417,9 +1418,6 @@ function buildResidentialSensitivity(p) {
           ...p,
           constructionCostPerSqft: cc,
           sellingRatePerSqft: sr,
-          contingencyPct: p.contingencyPct,
-          architectFeePct: p.architectFeePct,
-          pmcFeePct: p.pmcFeePct,
           skipSensitivity: true,
         });
         return r.kpis.irr;
@@ -1435,8 +1433,10 @@ function buildResidentialSensitivity(p) {
 
 function buildPlottedSensitivity(p) {
   const vars = [-0.20, -0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20];
-  const sellingRates = vars.map((v) => Math.round(p.sellingRatePerSqft * (1 + v)));
-  const devCosts     = vars.map((v) => Math.round(p.devCostPerSqft * (1 + v)));
+  const baseSelling = Number(p.sellingRatePerSqft);
+  const baseDev     = Number(p.devCostPerSqft);
+  const sellingRates = vars.map((v) => Math.round(baseSelling * (1 + v)));
+  const devCosts     = vars.map((v) => Math.round(baseDev * (1 + v)));
   const irrGrid = devCosts.map((dc) =>
     sellingRates.map((sr) => {
       try {
@@ -1944,21 +1944,12 @@ function calculateFullFinancials(input) {
 
 function buildSensitivityMatrix(baseParams) {
   return buildResidentialSensitivity({
-    plotAreaSqft:         baseParams.plotAreaSqft,
-    fsi:                  baseParams.fsi,
-    loadingFactor:        baseParams.loadingFactor,
-    constructionCostSqft: baseParams.constructionCostPerSqft,
-    sellingRateSqft:      baseParams.sellingRatePerSqft,
-    landCostCr:           baseParams.landCostCr,
-    approvalCostCr:       baseParams.approvalCostCr,
-    marketingCostPct:     baseParams.marketingCostPct,
-    financeCostPct:       baseParams.financeCostPct,
-    durationMonths:       baseParams.projectDurationMonths,
-    discountRatePct:      baseParams.discountRatePct,
-    developerMarginPct:   baseParams.developerMarginPct,
-    contingencyPct:       baseParams.contingencyPct || 5,
-    architectFeePct:      baseParams.architectFeePct || 2,
-    pmcFeePct:            baseParams.pmcFeePct || 1.5,
+    ...baseParams,
+    constructionCostPerSqft: baseParams.constructionCostPerSqft,
+    sellingRatePerSqft:      baseParams.sellingRatePerSqft,
+    contingencyPct:          baseParams.contingencyPct || 5,
+    architectFeePct:         baseParams.architectFeePct || 2,
+    pmcFeePct:               baseParams.pmcFeePct || 1.5,
   });
 }
 
