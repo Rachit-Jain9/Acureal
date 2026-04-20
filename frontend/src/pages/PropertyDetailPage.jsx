@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useProperty, useGeocodeProperty, useUpdateProperty } from '../hooks/useProperties';
 import MasterPlanZonePanel from '../components/deal/MasterPlanZonePanel';
+import BuildabilitySummary from '../components/deal/BuildabilitySummary';
 import { useDeals } from '../hooks/useDeals';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
@@ -391,6 +392,8 @@ export default function PropertyDetailPage() {
       </div>
 
       <MasterPlanZonePanel property={property} />
+
+      <BuildabilitySummary property={property} />
 
       <section className="card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Related Deals</h2>
