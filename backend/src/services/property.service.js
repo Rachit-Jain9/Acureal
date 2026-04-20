@@ -106,6 +106,14 @@ const buildPropertyPayload = async (data = {}) => {
     ownershipType: data.ownershipType?.trim() || null,
     encumbranceStatus: data.encumbranceStatus?.trim() || null,
     notes: data.notes?.trim() || null,
+    zoneId:
+      data.zoneId === undefined && data.zone_id === undefined
+        ? undefined
+        : (data.zoneId ?? data.zone_id) || null,
+    zoneNotes:
+      data.zoneNotes === undefined && data.zone_notes === undefined
+        ? undefined
+        : (data.zoneNotes ?? data.zone_notes)?.trim() || null,
     ...geocodeMetadata,
   };
 };
@@ -113,19 +121,26 @@ const buildPropertyPayload = async (data = {}) => {
 const createProperty = async (data, userId) => {
   const payload = await buildPropertyPayload(data);
 
+  const zoneId = payload.zoneId ?? null;
+  const zoneAssignedBy = zoneId ? userId || null : null;
+  const zoneAssignedAt = zoneId ? new Date() : null;
+  const zoneNotes = payload.zoneNotes ?? null;
+
   const result = await query(
     `INSERT INTO properties (
       name, address, city, state, pincode, lat, lng, property_type,
       survey_number, owner_name, land_area_sqft, land_area_input_value, land_area_input_unit,
       zoning, circle_rate_per_sqft, permissible_fsi, road_width_mtrs,
       ownership_type, encumbrance_status, geocode_status, geocode_confidence,
-      geocode_message, geocode_last_attempt_at, notes, created_by
+      geocode_message, geocode_last_attempt_at, notes, created_by,
+      zone_id, zone_assigned_by, zone_assigned_at, zone_notes
     ) VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,
       $9,$10,$11,$12,$13,
       $14,$15,$16,$17,
       $18,$19,$20,$21,
-      $22,$23,$24,$25
+      $22,$23,$24,$25,
+      $26,$27,$28,$29
     )
     RETURNING *`,
     [
@@ -154,6 +169,10 @@ const createProperty = async (data, userId) => {
       payload.geocodeLastAttemptAt,
       payload.notes,
       userId,
+      zoneId,
+      zoneAssignedBy,
+      zoneAssignedAt,
+      zoneNotes,
     ]
   );
 
@@ -274,7 +293,7 @@ const getPropertyById = async (id) => {
   return result.rows[0];
 };
 
-const updateProperty = async (id, data) => {
+const updateProperty = async (id, data, userId = null) => {
   const existingProperty = await getPropertyById(id);
 
   // If any address field changed and the caller did not supply new explicit coords,
@@ -299,6 +318,12 @@ const updateProperty = async (id, data) => {
     landAreaInputValue: data.landAreaInputValue ?? existingProperty.land_area_input_value,
     landAreaInputUnit: data.landAreaInputUnit ?? existingProperty.land_area_input_unit,
   });
+
+  const zoneChanging = payload.zoneId !== undefined;
+  const newZoneId = zoneChanging ? payload.zoneId : existingProperty.zone_id;
+  const zoneActuallyChanged =
+    zoneChanging && (payload.zoneId ?? null) !== (existingProperty.zone_id ?? null);
+  const zoneNotesChanging = payload.zoneNotes !== undefined;
 
   const result = await query(
     `UPDATE properties SET
@@ -326,8 +351,20 @@ const updateProperty = async (id, data) => {
       geocode_message = $22,
       geocode_last_attempt_at = $23,
       notes = $24,
+      zone_id = $25,
+      zone_assigned_by = CASE
+        WHEN $26::boolean AND $25::uuid IS NOT NULL THEN $27::uuid
+        WHEN $26::boolean AND $25::uuid IS NULL THEN NULL
+        ELSE zone_assigned_by
+      END,
+      zone_assigned_at = CASE
+        WHEN $26::boolean AND $25::uuid IS NOT NULL THEN NOW()
+        WHEN $26::boolean AND $25::uuid IS NULL THEN NULL
+        ELSE zone_assigned_at
+      END,
+      zone_notes = CASE WHEN $28::boolean THEN $29 ELSE zone_notes END,
       updated_at = NOW()
-     WHERE id = $25
+     WHERE id = $30
      RETURNING *`,
     [
       payload.name,
@@ -354,6 +391,11 @@ const updateProperty = async (id, data) => {
       payload.geocodeMessage,
       payload.geocodeLastAttemptAt,
       payload.notes,
+      newZoneId,
+      zoneActuallyChanged,
+      userId,
+      zoneNotesChanging,
+      zoneNotesChanging ? payload.zoneNotes : null,
       id,
     ]
   );

@@ -380,6 +380,8 @@ const getDealById = async (id) => {
       p.circle_rate_per_sqft,
       p.permissible_fsi,
       p.road_width_mtrs,
+      p.zone_id,
+      p.zone_notes,
       u.email as assigned_to_email
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id

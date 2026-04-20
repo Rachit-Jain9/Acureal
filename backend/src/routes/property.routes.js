@@ -70,6 +70,8 @@ router.post(
     body('permissibleFsi').optional().isFloat({ min: 0, max: 20 }),
     body('lat').optional().isFloat({ min: -90, max: 90 }),
     body('lng').optional().isFloat({ min: -180, max: 180 }),
+    body('zoneId').optional({ nullable: true }).custom((v) => v === null || typeof v === 'string'),
+    body('zoneNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
   ],
   handleValidation,
   async (req, res, next) => {
@@ -111,11 +113,13 @@ router.put(
     body('permissibleFsi').optional().isFloat({ min: 0, max: 20 }),
     body('lat').optional().isFloat({ min: -90, max: 90 }),
     body('lng').optional().isFloat({ min: -180, max: 180 }),
+    body('zoneId').optional({ nullable: true }).custom((v) => v === null || typeof v === 'string'),
+    body('zoneNotes').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const property = await propertyService.updateProperty(req.params.id, req.body);
+      const property = await propertyService.updateProperty(req.params.id, req.body, req.user.id);
       res.json({ success: true, message: 'Property updated.', data: property });
     } catch (error) {
       next(error);

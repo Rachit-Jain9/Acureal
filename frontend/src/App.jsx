@@ -40,6 +40,7 @@ const DealComparePage = lazy(() => import('./pages/DealComparePage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
+const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function ProtectedRoute({ children }) {
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="compare" element={withSuspense(<DealComparePage />)} />
           <Route path="reports" element={withSuspense(<ReportsPage />)} />
           <Route path="settings" element={withSuspense(<SettingsPage />)} />
+          <Route path="settings/master-plan" element={withSuspense(<MasterPlanAdminPage />)} />
           {/* Legacy routes: redirect to deals */}
           <Route path="documents" element={<Navigate to="/dashboard/deals" replace />} />
           <Route path="activities" element={<Navigate to="/dashboard/deals" replace />} />
