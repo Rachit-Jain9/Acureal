@@ -23,6 +23,18 @@ const DEFAULT_GST_PCT_BY_ASSET_CLASS = Object.freeze({
 });
 const SUPPORTED_EXIT_STRATEGIES = new Set(['cap_rate_sale', 'lrd', 'forward_purchase']);
 
+// Terminal value methodologies for income-producing / hospitality assets.
+// - exit_cap_rate:    TV = NOI_exit / exitCapRate                          (default)
+// - exit_multiple:    TV = NOI_stabilized * exitMultiple                   (EBITDA × multiple, etc.)
+// - perpetuity_growth: TV = NOI_exit * (1+g) / (discountRate - g)          (Gordon growth)
+// - forward_purchase: TV = forwardPurchasePriceCr                          (contractual exit)
+const SUPPORTED_TERMINAL_VALUE_METHODS = new Set([
+  'exit_cap_rate',
+  'exit_multiple',
+  'perpetuity_growth',
+  'forward_purchase',
+]);
+
 // Scenario presets: adjustments applied to base inputs
 const SCENARIO_PRESETS = {
   base: {
@@ -300,6 +312,107 @@ function resolveDebtRatio(value, fallback = 0) {
 function resolveExitStrategy(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return SUPPORTED_EXIT_STRATEGIES.has(normalized) ? normalized : 'cap_rate_sale';
+}
+
+function resolveTerminalValueMethod(value, { exitStrategy, forwardPurchasePriceCr } = {}) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (SUPPORTED_TERMINAL_VALUE_METHODS.has(normalized)) return normalized;
+  // Infer from exit strategy when explicit method is not provided
+  if (exitStrategy === 'forward_purchase' && Number(forwardPurchasePriceCr) > 0) {
+    return 'forward_purchase';
+  }
+  return 'exit_cap_rate';
+}
+
+/**
+ * Unified terminal value calculator.
+ * Applies the selected methodology and returns both the nominal terminal value
+ * and its present value discounted to the effective date (t = 0).
+ *
+ * @param {object} p
+ * @param {string} p.method                      - one of SUPPORTED_TERMINAL_VALUE_METHODS
+ * @param {number} p.stabilizedNOICr             - stabilized NOI (or EBITDA) in ₹ Cr
+ * @param {number} p.noiAtExitCr                 - NOI/EBITDA grown to exit year
+ * @param {number} p.exitCapRatePct              - exit cap rate (%)
+ * @param {number} p.exitMultiple                - exit multiple (×)
+ * @param {number} p.perpetuityGrowthPct         - perpetuity growth rate (%)
+ * @param {number} p.discountRatePct             - unlevered discount rate (%)
+ * @param {number} p.forwardPurchasePriceCr      - contractual forward purchase price (₹ Cr)
+ * @param {number} p.holdPeriodYears             - hold period in years (for PV calc)
+ * @returns {{ method, terminalValueCr, terminalValuePVCr, formula, inputs }}
+ */
+function computeTerminalValue({
+  method,
+  stabilizedNOICr,
+  noiAtExitCr,
+  exitCapRatePct,
+  exitMultiple,
+  perpetuityGrowthPct,
+  discountRatePct,
+  forwardPurchasePriceCr,
+  holdPeriodYears,
+}) {
+  const safe = (n) => (Number.isFinite(n) ? n : 0);
+  const method_ = SUPPORTED_TERMINAL_VALUE_METHODS.has(method) ? method : 'exit_cap_rate';
+  const noiExit = safe(noiAtExitCr);
+  const noiStab = safe(stabilizedNOICr);
+  const capPct  = safe(exitCapRatePct);
+  const mult    = safe(exitMultiple);
+  const gPct    = safe(perpetuityGrowthPct);
+  const dPct    = safe(discountRatePct);
+  const fwdCr   = safe(forwardPurchasePriceCr);
+  const tYears  = safe(holdPeriodYears);
+
+  let tvCr = 0;
+  let formula = '';
+  const inputs = {};
+  switch (method_) {
+    case 'exit_multiple':
+      tvCr = noiStab * mult;
+      formula = 'Stabilized NOI × Exit Multiple';
+      inputs.stabilizedNOICr = round4(noiStab);
+      inputs.exitMultiple = round2(mult);
+      break;
+    case 'perpetuity_growth': {
+      const spread = (dPct - gPct) / 100;
+      if (spread > 0) {
+        tvCr = (noiExit * (1 + gPct / 100)) / spread;
+      } else {
+        // Fallback to cap rate method when spread is invalid (g >= r)
+        tvCr = capPct > 0 ? noiExit / (capPct / 100) : 0;
+      }
+      formula = 'NOI_exit × (1+g) / (r − g)';
+      inputs.noiAtExitCr = round4(noiExit);
+      inputs.perpetuityGrowthPct = round2(gPct);
+      inputs.discountRatePct = round2(dPct);
+      inputs.spreadPct = round2(dPct - gPct);
+      break;
+    }
+    case 'forward_purchase':
+      tvCr = fwdCr;
+      formula = 'Contractual Forward Purchase Price';
+      inputs.forwardPurchasePriceCr = round4(fwdCr);
+      break;
+    case 'exit_cap_rate':
+    default:
+      tvCr = capPct > 0 ? noiExit / (capPct / 100) : 0;
+      formula = 'NOI_exit ÷ Exit Cap Rate';
+      inputs.noiAtExitCr = round4(noiExit);
+      inputs.exitCapRatePct = round2(capPct);
+      break;
+  }
+
+  const tvPVCr = dPct >= 0 && Number.isFinite(tYears) && tYears >= 0
+    ? tvCr / Math.pow(1 + dPct / 100, tYears)
+    : tvCr;
+
+  return {
+    method: method_,
+    terminalValueCr: tvCr,
+    terminalValuePVCr: tvPVCr,
+    formula,
+    inputs,
+  };
 }
 
 function safeCashFlows(cfs) {
@@ -1111,6 +1224,12 @@ function calculateIncomeAsset(input) {
     ? Math.min(Number(input.lrdRefinanceYear), maxRefinanceYear)
     : Math.max(1, Math.floor(holdPeriodYears / 2));
   const forwardPurchasePriceCr = Number(input.forwardPurchasePriceCr) || 0;
+  const exitMultipleInput      = Number(input.exitMultiple) || 0;
+  const perpetuityGrowthPct    = Number(input.perpetuityGrowthPct);
+  const terminalValueMethod    = resolveTerminalValueMethod(input.terminalValueMethod, {
+    exitStrategy: resolveExitStrategy(input.exitStrategy),
+    forwardPurchasePriceCr,
+  });
   const timeline = resolveTimelineInput(input, {
     defaultDurationYears: 3,
     defaultConstructionStartYears: 0,
@@ -1153,9 +1272,22 @@ function calculateIncomeAsset(input) {
   const yieldOnCost  = totalDevCostCr > 0 ? (stabilizedNOICr / totalDevCostCr) * 100 : 0;
   const entryValueCr = stabilizedNOICr / (entryCapRate / 100);
   const noiAtExit              = stabilizedNOICr * Math.pow(1 + rentEscalationPct / 100, holdPeriodYears);
-  const exitValueCr            = noiAtExit / (exitCapRate / 100);
-  const effectiveExitValueCr   = exitStrategy === 'forward_purchase' && forwardPurchasePriceCr > 0
-    ? forwardPurchasePriceCr : exitValueCr;
+  const capRateTvCr            = noiAtExit / (exitCapRate / 100);
+
+  const tv = computeTerminalValue({
+    method: terminalValueMethod,
+    stabilizedNOICr,
+    noiAtExitCr: noiAtExit,
+    exitCapRatePct: exitCapRate,
+    exitMultiple: exitMultipleInput,
+    perpetuityGrowthPct: Number.isFinite(perpetuityGrowthPct) ? perpetuityGrowthPct : 0,
+    discountRatePct,
+    forwardPurchasePriceCr,
+    holdPeriodYears,
+  });
+  const exitValueCr          = capRateTvCr;  // Always retain cap-rate sale value for benchmarking
+  const effectiveExitValueCr = tv.terminalValueCr;
+  const terminalValuePVCr    = tv.terminalValuePVCr;
 
   const constQ = Math.ceil(constructionMonths / 3);
   const opQ    = holdPeriodYears * 4;
@@ -1310,6 +1442,11 @@ function calculateIncomeAsset(input) {
       lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
       lrdRefinanceYear: exitStrategy === 'lrd' ? lrdRefinanceYear : null,
       forwardPurchasePriceCr: exitStrategy === 'forward_purchase' ? forwardPurchasePriceCr : null,
+      terminalValueMethod,
+      exitMultiple: terminalValueMethod === 'exit_multiple' ? round2(exitMultipleInput) : null,
+      perpetuityGrowthPct: terminalValueMethod === 'perpetuity_growth'
+        ? round2(Number.isFinite(perpetuityGrowthPct) ? perpetuityGrowthPct : 0)
+        : null,
       contingencyPct,
       ...(assetClass === 'retail' ? { anchorPct, anchorRentDiscount } : {}),
     },
@@ -1322,10 +1459,15 @@ function calculateIncomeAsset(input) {
       leveredIrr:    null,
       leveredNpv:    null,
       noi:           round4(stabilizedNOICr),
+      noiAtExit:     round4(noiAtExit),
       yieldOnCost:   round4(yieldOnCost),
       dscr,
-      exitValue:     round4(effectiveExitValueCr),
-      terminalValue: round4(effectiveExitValueCr),
+      exitValue:        round4(effectiveExitValueCr),     // Applied terminal value (back-compat)
+      terminalValue:    round4(effectiveExitValueCr),
+      terminalValuePV:  round4(terminalValuePVCr),
+      terminalValueMethod,
+      terminalValueFormula: tv.formula,
+      capRateValuationCr: round4(exitValueCr),            // Always-computed cap-rate benchmark
       exitCapRate:   round4(exitCapRate),
       entryValue:    round4(entryValueCr),
       // Per-sqft and per-unit metrics
@@ -1370,7 +1512,13 @@ function calculateIncomeAsset(input) {
       grossMarginPct:   null,
       annualNOI:        round4(stabilizedNOICr),
       stabilizedNOI:    round4(stabilizedNOICr),
+      noiAtExit:        round4(noiAtExit),
       exitValue:        round4(effectiveExitValueCr),
+      terminalValue:    round4(effectiveExitValueCr),
+      terminalValuePV:  round4(terminalValuePVCr),
+      terminalValueMethod,
+      terminalValueFormula: tv.formula,
+      capRateValuationCr: round4(exitValueCr),
       grossFirstYearRent: round4(grossRevY1Cr),
       effectiveGrossRev: round4(effectiveGrossRevCr),
       opex:             round4(opexCr),
@@ -1392,9 +1540,10 @@ function calculateIncomeAsset(input) {
     _legacy: {
       land_cost_cr: landCostCr,
       total_cost_cr: round4(totalDevCostCr),
-      total_revenue_cr: round4(exitValueCr),
-      gross_profit_cr: round4(exitValueCr - totalDevCostCr),
-      gross_margin_pct: totalDevCostCr > 0 ? round4((exitValueCr - totalDevCostCr) / exitValueCr * 100) : null,
+      total_revenue_cr: round4(effectiveExitValueCr),
+      gross_profit_cr: round4(effectiveExitValueCr - totalDevCostCr),
+      gross_margin_pct: totalDevCostCr > 0 && effectiveExitValueCr > 0
+        ? round4((effectiveExitValueCr - totalDevCostCr) / effectiveExitValueCr * 100) : null,
       npv_cr: round4(npvCr), irr_pct: round4(irrPct),
       equity_multiple: round4(equityMultiple),
       project_duration_months: constQ * 3,
@@ -1533,6 +1682,12 @@ function calculateHospitality(input) {
     ? Math.min(Number(input.lrdRefinanceYear), maxRefinanceYear)
     : Math.max(1, Math.floor(holdPeriodYears / 2));
   const forwardPurchasePriceCr = Number(input.forwardPurchasePriceCr) || 0;
+  const exitMultipleInput      = Number(input.exitMultiple) || 0;
+  const perpetuityGrowthPct    = Number(input.perpetuityGrowthPct);
+  const terminalValueMethod    = resolveTerminalValueMethod(input.terminalValueMethod, {
+    exitStrategy,
+    forwardPurchasePriceCr,
+  });
   const timeline = resolveTimelineInput(input, {
     defaultDurationYears: 2.5,
     defaultConstructionStartYears: 0,
@@ -1576,11 +1731,23 @@ function calculateHospitality(input) {
 
   const yieldOnCost   = totalDevCostCr > 0 ? (ebitdaCrY1Stab / totalDevCostCr) * 100 : 0;
   const exitEBITDA    = ebitdaCrY1Stab * Math.pow(1 + adrGrowthPct / 100, holdPeriodYears);
-  const exitValueCr   = exitEBITDA / (exitCapRate / 100);
+  const capRateTvCr   = exitEBITDA / (exitCapRate / 100);
   const entryValueCr  = ebitdaCrY1Stab / (exitCapRate / 100);
-  const effectiveExitValueCr = exitStrategy === 'forward_purchase' && forwardPurchasePriceCr > 0
-    ? forwardPurchasePriceCr
-    : exitValueCr;
+
+  const tv = computeTerminalValue({
+    method: terminalValueMethod,
+    stabilizedNOICr: ebitdaCrY1Stab,
+    noiAtExitCr: exitEBITDA,
+    exitCapRatePct: exitCapRate,
+    exitMultiple: exitMultipleInput,
+    perpetuityGrowthPct: Number.isFinite(perpetuityGrowthPct) ? perpetuityGrowthPct : 0,
+    discountRatePct,
+    forwardPurchasePriceCr,
+    holdPeriodYears,
+  });
+  const exitValueCr = capRateTvCr;
+  const effectiveExitValueCr = tv.terminalValueCr;
+  const terminalValuePVCr    = tv.terminalValuePVCr;
 
   // Cash flows
   const constQ   = Math.ceil(constructionMonths / 3);
@@ -1738,6 +1905,11 @@ function calculateHospitality(input) {
       lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
       lrdRefinanceYear: exitStrategy === 'lrd' ? lrdRefinanceYear : null,
       forwardPurchasePriceCr: exitStrategy === 'forward_purchase' ? forwardPurchasePriceCr : null,
+      terminalValueMethod,
+      exitMultiple: terminalValueMethod === 'exit_multiple' ? round2(exitMultipleInput) : null,
+      perpetuityGrowthPct: terminalValueMethod === 'perpetuity_growth'
+        ? round2(Number.isFinite(perpetuityGrowthPct) ? perpetuityGrowthPct : 0)
+        : null,
     },
     kpis: {
       irr:           round4(irrPct),
@@ -1748,10 +1920,15 @@ function calculateHospitality(input) {
       leveredIrr:    null,
       leveredNpv:    null,
       noi:           round4(ebitdaCrY1Stab),
+      noiAtExit:     round4(exitEBITDA),
       yieldOnCost:   round4(yieldOnCost),
       dscr,
-      exitValue:     round4(effectiveExitValueCr),
-      terminalValue: round4(effectiveExitValueCr),
+      exitValue:        round4(effectiveExitValueCr),
+      terminalValue:    round4(effectiveExitValueCr),
+      terminalValuePV:  round4(terminalValuePVCr),
+      terminalValueMethod,
+      terminalValueFormula: tv.formula,
+      capRateValuationCr: round4(exitValueCr),
       exitCapRate:   round4(exitCapRate),
       entryValue:    round4(entryValueCr),
       revPAR:        round2(revPARStabilized),
@@ -1789,7 +1966,13 @@ function calculateHospitality(input) {
       grossMarginPct:     null,
       annualNOI:          round4(ebitdaCrY1Stab),
       stabilizedNOI:      round4(ebitdaCrY1Stab),
+      noiAtExit:          round4(exitEBITDA),
       exitValue:          round4(effectiveExitValueCr),
+      terminalValue:      round4(effectiveExitValueCr),
+      terminalValuePV:    round4(terminalValuePVCr),
+      terminalValueMethod,
+      terminalValueFormula: tv.formula,
+      capRateValuationCr: round4(exitValueCr),
       revPAR:             round2(revPARStabilized),
       roomsRevenue:       round4(roomsRevCrY1Stab),
       fbRevenue:          round4(fbRevCrY1Stab),
@@ -1813,8 +1996,8 @@ function calculateHospitality(input) {
     _legacy: {
       land_cost_cr:          landCostCr,
       total_cost_cr:         round4(totalDevCostCr),
-      total_revenue_cr:      round4(exitValueCr),
-      gross_profit_cr:       round4(exitValueCr - totalDevCostCr),
+      total_revenue_cr:      round4(effectiveExitValueCr),
+      gross_profit_cr:       round4(effectiveExitValueCr - totalDevCostCr),
       gross_margin_pct:      round4(ebitdaMarginPct),
       npv_cr:                round4(npvCr),
       irr_pct:               round4(irrPct),
@@ -2020,4 +2203,7 @@ module.exports = {
   calculateScenarios,
   buildSensitivityMatrix,
   buildCashFlows: buildLegacyCashFlows,
+  computeTerminalValue,
+  SUPPORTED_TERMINAL_VALUE_METHODS: Array.from(SUPPORTED_TERMINAL_VALUE_METHODS),
+  SUPPORTED_EXIT_STRATEGIES: Array.from(SUPPORTED_EXIT_STRATEGIES),
 };

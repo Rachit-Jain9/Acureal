@@ -8,6 +8,7 @@ import {
 import { calculateJDAWaterfall, calculateJVWaterfall, buildDebtSchedule } from '../utils/waterfall';
 import MethodologyExplorer from '../components/financials/MethodologyExplorer';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
+import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -34,6 +35,27 @@ const EXIT_STRATEGY_OPTIONS = [
   { value: 'cap_rate_sale', label: 'Cap Rate Sale' },
   { value: 'lrd', label: 'LRD' },
   { value: 'forward_purchase', label: 'Forward Purchase' },
+];
+
+const TERMINAL_VALUE_METHOD_OPTIONS = [
+  { value: 'exit_cap_rate',     label: 'Exit Cap Rate' },
+  { value: 'exit_multiple',     label: 'Exit Multiple (NOI / EBITDA)' },
+  { value: 'perpetuity_growth', label: 'Perpetuity Growth (Gordon)' },
+  { value: 'forward_purchase',  label: 'Forward Purchase' },
+];
+
+const TERMINAL_VALUE_METHOD_LABELS = {
+  exit_cap_rate:     'Exit Cap Rate',
+  exit_multiple:     'Exit Multiple',
+  perpetuity_growth: 'Perpetuity Growth',
+  forward_purchase:  'Forward Purchase',
+};
+
+// Terminal-value overlay fields reused for every income / hospitality class.
+const TERMINAL_VALUE_FIELDS = [
+  { name: 'terminalValueMethod', label: 'Terminal Value Method',              type: 'select', options: TERMINAL_VALUE_METHOD_OPTIONS, hint: 'DCF terminal value methodology. Cap rate is standard; perpetuity growth or exit multiple can override for specific investor conventions.' },
+  { name: 'exitMultiple',        label: 'Exit Multiple (× stabilized NOI)',   type: 'number', step: '0.5',  min: '0', max: '50', placeholder: '12', hint: 'Applied as Stabilized NOI × multiple. Office/Retail: 12–16×; Industrial: 10–14×; Hospitality: 8–11× stabilized EBITDA.', visibleWhen: (inputs) => inputs.terminalValueMethod === 'exit_multiple' },
+  { name: 'perpetuityGrowthPct', label: 'Perpetuity Growth (% pa)',           type: 'number', step: '0.25', min: '-10', max: '15', placeholder: '3', hint: 'Gordon growth rate g. Must be less than discount rate. India long-term nominal: 3–6%.', visibleWhen: (inputs) => inputs.terminalValueMethod === 'perpetuity_growth' },
 ];
 const ASSET_CLASSES = ASSET_CLASS_CONFIG;
 
@@ -93,6 +115,7 @@ const FIELD_DEFS = {
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2', hint: 'Months of base rent paid to broker' },
     { name: 'entryCapRate',           label: 'Entry Cap Rate (%)',              type: 'number', step: '0.25', placeholder: '7', hint: 'Prime Bengaluru office: 6.5–8%' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '7.5', hint: 'Typically 25–50 bps wider than entry' },
+    ...TERMINAL_VALUE_FIELDS,
     { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
     { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
     { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
@@ -119,6 +142,7 @@ const FIELD_DEFS = {
     { name: 'tiPerSqft',              label: 'Tenant Improvements (₹/sqft)',    type: 'number', placeholder: '800' },
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8', hint: 'Retail: 7.5–9%' },
+    ...TERMINAL_VALUE_FIELDS,
     { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
     { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.60', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
     { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
@@ -141,6 +165,7 @@ const FIELD_DEFS = {
     { name: 'vacancyPct',             label: 'Vacancy (%)',                     type: 'number', step: '1',    placeholder: '7', hint: 'Industrial: typically 5–10% in strong markets' },
     { name: 'opexPct',                label: 'Operating Expenses (% of EGR)',   type: 'number', step: '1',    placeholder: '15', hint: 'Industrial is lower opex than office' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8.5', hint: 'Warehousing/logistics: 7.5–9.5%' },
+    ...TERMINAL_VALUE_FIELDS,
     { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
     { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
     { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
@@ -167,6 +192,7 @@ const FIELD_DEFS = {
     { name: 'gopMarginPct',            label: 'GOP Margin (% of total revenue)',      type: 'number', step: '1',    placeholder: '35', hint: 'Gross Operating Profit. India branded hotels: 30–45%' },
     { name: 'ebitdaMarginPct',         label: 'EBITDA Margin (% of total revenue)',   type: 'number', step: '1',    placeholder: '28', hint: 'After management fee & reserve. India hotels: 22–32%' },
     { name: 'exitCapRate',             label: 'Exit Cap Rate (%)',                    type: 'number', step: '0.25', placeholder: '9',  hint: 'Hotel exit caps India: 8–11%' },
+    ...TERMINAL_VALUE_FIELDS,
     { name: 'exitStrategy',            label: 'Exit Strategy',                         type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized operating asset.' },
     { name: 'lrdLTV',                  label: 'Operating Refi LTV (0–1)',              type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.55', hint: 'Refinance sizing against stabilized entry value during hold.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
     { name: 'lrdInterestRatePct',      label: 'Operating Refi Rate (% pa)',            type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9.5', hint: 'Coupon / all-in cost on the operating refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
@@ -201,6 +227,7 @@ const DEFAULT_VALUES = {
     rentEscalationPct: '5', vacancyPct: '10', opexPct: '20',
     tiPerSqft: '500', lcMonths: '2',
     entryCapRate: '7', exitCapRate: '7.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '2', holdPeriodYears: '5',
+    terminalValueMethod: 'exit_cap_rate', exitMultiple: '14', perpetuityGrowthPct: '3',
     projectDurationYears: '3', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
     gstPct: '18',
   },
@@ -209,18 +236,21 @@ const DEFAULT_VALUES = {
     rentEscalationPct: '5', vacancyPct: '12', opexPct: '22',
     tiPerSqft: '800', lcMonths: '2',
     exitCapRate: '8', exitStrategy: 'cap_rate_sale', lrdLTV: '0.60', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
+    terminalValueMethod: 'exit_cap_rate', exitMultiple: '12', perpetuityGrowthPct: '3',
     projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '15',
     gstPct: '18',
   },
   industrial_warehousing: {
     rentEscalationPct: '4', vacancyPct: '7', opexPct: '15',
     exitCapRate: '8.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
+    terminalValueMethod: 'exit_cap_rate', exitMultiple: '11', perpetuityGrowthPct: '2.5',
     projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '13',
     gstPct: '18',
   },
   hospitality: {
     stabilizedOccPct: '65', adrGrowthPct: '5', fbRevPct: '25', otherRevPct: '10',
     gopMarginPct: '35', ebitdaMarginPct: '28', exitCapRate: '9', exitStrategy: 'cap_rate_sale', lrdLTV: '0.55', lrdInterestRatePct: '9.5', lrdRefinanceYear: '3',
+    terminalValueMethod: 'exit_cap_rate', exitMultiple: '9', perpetuityGrowthPct: '3',
     holdPeriodYears: '8', projectDurationYears: '2.5',
     debtCoverage: '0.55', interestRatePct: '10.5', contingencyPct: '5', discountRatePct: '15',
     gstPct: '18',
@@ -359,6 +389,7 @@ function normalizeFinancials(financials) {
 
   const cashFlowSeries = financials.cash_flows?.quarterly || [];
   const sm = financials.sensitivity_matrix || {};
+  const inputsRaw = mp.inputs || {};
 
   return {
     assetClass,
@@ -369,13 +400,21 @@ function normalizeFinancials(financials) {
       rlv: toNumber(kpis.rlv ?? financials.residual_land_value_cr),
       grossMarginPct: toNumber(kpis.grossMarginPct ?? financials.gross_margin_pct),
       noi: toNumber(kpis.noi ?? financials.noi_cr),
+      noiAtExit: toNumber(kpis.noiAtExit),
       yieldOnCost: toNumber(kpis.yieldOnCost ?? financials.yield_on_cost_pct),
       dscr: toNumber(kpis.dscr ?? financials.dscr),
       exitValue: toNumber(kpis.exitValue ?? financials.exit_value_cr),
       entryValue: toNumber(kpis.entryValue ?? financials.entry_value_cr),
+      exitCapRate: toNumber(kpis.exitCapRate ?? inputsRaw.exitCapRate),
+      terminalValue: toNumber(kpis.terminalValue ?? kpis.exitValue),
+      terminalValuePV: toNumber(kpis.terminalValuePV),
+      terminalValueMethod: kpis.terminalValueMethod || inputsRaw.terminalValueMethod || null,
+      terminalValueFormula: kpis.terminalValueFormula || null,
+      capRateValuationCr: toNumber(kpis.capRateValuationCr),
       revPAR: toNumber(kpis.revPAR),
       gopMargin: toNumber(kpis.gopMargin),
     },
+    inputs: inputsRaw,
     areas: {
       grossBuiltUp: toNumber(areas.grossBuiltUp ?? financials.gross_area_sqft),
       saleable: toNumber(areas.saleable ?? financials.saleable_area_sqft),
@@ -410,7 +449,13 @@ function normalizeFinancials(financials) {
       margin: toNumber(revenue.grossMarginPct ?? financials.gross_margin_pct),
       annualNOI: toNumber(revenue.annualNOI ?? financials.noi_cr),
       stabilizedNOI: toNumber(revenue.stabilizedNOI ?? financials.stabilized_noi_cr),
+      noiAtExit: toNumber(revenue.noiAtExit),
       exitValue: toNumber(revenue.exitValue ?? financials.exit_value_cr),
+      terminalValue: toNumber(revenue.terminalValue ?? revenue.exitValue),
+      terminalValuePV: toNumber(revenue.terminalValuePV),
+      terminalValueMethod: revenue.terminalValueMethod || null,
+      terminalValueFormula: revenue.terminalValueFormula || null,
+      capRateValuationCr: toNumber(revenue.capRateValuationCr),
       roomsRevenue: toNumber(revenue.roomsRevenue),
       fbRevenue: toNumber(revenue.fbRevenue),
       gop: toNumber(revenue.gop),
@@ -1739,6 +1784,11 @@ export default function FinancialsPage() {
       {hasResults && (
         <>
           <KPICards kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} />
+
+          <FinancialVisualizationLayer
+            financials={normalizedFinancials}
+            inputs={normalizedFinancials.inputs}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <AreaBreakdown areas={normalizedFinancials.areas} assetClass={normalizedFinancials.assetClass} />

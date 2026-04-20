@@ -378,4 +378,107 @@ describe('Financial Engine', () => {
       expect(result.revenue.exitValue).toBeCloseTo(260, 2);
     });
   });
+
+  describe('terminal value methodologies', () => {
+    const officeTvInput = {
+      assetClass: 'commercial_office',
+      leasableAreaSqft: 100000,
+      constructionCostPerSqft: 6000,
+      landCostCr: 40,
+      approvalCostPerSqft: 150,
+      gstPct: 18,
+      baseRentPerSqftMonth: 85,
+      rentEscalationPct: 5,
+      vacancyPct: 10,
+      opexPct: 20,
+      tiPerSqft: 500,
+      lcMonths: 2,
+      entryCapRate: 7,
+      exitCapRate: 7.5,
+      holdPeriodYears: 5,
+      projectDurationYears: 3,
+      debtCoverage: 0.65,
+      interestRatePct: 10,
+      discountRatePct: 14,
+    };
+
+    test('default method is exit_cap_rate with dynamic linkage to NOI_exit and cap rate', () => {
+      const result = calculateFullFinancials(officeTvInput);
+      expect(result.kpis.terminalValueMethod).toBe('exit_cap_rate');
+      // Terminal value ≈ NOI_exit / exitCapRate
+      const expected = result.kpis.noiAtExit / (result.kpis.exitCapRate / 100);
+      expect(result.kpis.terminalValue).toBeCloseTo(expected, 1);
+      // PV discount factor = (1+r)^-holdPeriodYears
+      const pvFactor = Math.pow(1 + result.inputs.discountRatePct / 100, result.inputs.holdPeriodYears);
+      expect(result.kpis.terminalValuePV).toBeCloseTo(result.kpis.terminalValue / pvFactor, 1);
+    });
+
+    test('exit_multiple method: TV = stabilized NOI × multiple', () => {
+      const result = calculateFullFinancials({
+        ...officeTvInput,
+        terminalValueMethod: 'exit_multiple',
+        exitMultiple: 15,
+      });
+      expect(result.kpis.terminalValueMethod).toBe('exit_multiple');
+      expect(result.inputs.exitMultiple).toBeCloseTo(15, 2);
+      // Applied exit value equals stabilized NOI * 15
+      const expected = result.kpis.noi * 15;
+      expect(result.kpis.terminalValue).toBeCloseTo(expected, 1);
+      expect(result.kpis.exitValue).toBeCloseTo(expected, 1);
+    });
+
+    test('perpetuity_growth: TV = NOI_exit * (1+g) / (r - g) and must be finite for r > g', () => {
+      const result = calculateFullFinancials({
+        ...officeTvInput,
+        terminalValueMethod: 'perpetuity_growth',
+        perpetuityGrowthPct: 3,
+      });
+      expect(result.kpis.terminalValueMethod).toBe('perpetuity_growth');
+      const r = result.inputs.discountRatePct / 100;
+      const g = 0.03;
+      const expected = result.kpis.noiAtExit * (1 + g) / (r - g);
+      expect(result.kpis.terminalValue).toBeCloseTo(expected, 0);
+    });
+
+    test('perpetuity_growth falls back to cap rate when r <= g (guards invalid spread)', () => {
+      const result = calculateFullFinancials({
+        ...officeTvInput,
+        terminalValueMethod: 'perpetuity_growth',
+        perpetuityGrowthPct: 25, // > discount rate, invalid
+      });
+      expect(result.kpis.terminalValue).toBeGreaterThan(0);
+      expect(Number.isFinite(result.kpis.terminalValue)).toBe(true);
+    });
+
+    test('forward_purchase method uses contractual price', () => {
+      const result = calculateFullFinancials({
+        ...officeTvInput,
+        terminalValueMethod: 'forward_purchase',
+        forwardPurchasePriceCr: 215,
+      });
+      expect(result.kpis.terminalValueMethod).toBe('forward_purchase');
+      expect(result.kpis.terminalValue).toBeCloseTo(215, 2);
+    });
+
+    test('capRateValuationCr is always populated for cross-method comparison', () => {
+      const result = calculateFullFinancials({
+        ...officeTvInput,
+        terminalValueMethod: 'exit_multiple',
+        exitMultiple: 15,
+      });
+      expect(result.kpis.capRateValuationCr).not.toBeNull();
+      expect(result.kpis.capRateValuationCr).toBeGreaterThan(0);
+    });
+
+    test('terminal value is included in final-quarter cash flow and therefore in NPV', () => {
+      const tvCapRate = calculateFullFinancials(officeTvInput);
+      const tvFwd = calculateFullFinancials({
+        ...officeTvInput,
+        terminalValueMethod: 'forward_purchase',
+        forwardPurchasePriceCr: tvCapRate.kpis.terminalValue * 2, // Double the TV
+      });
+      // Doubling TV should significantly increase NPV
+      expect(tvFwd.kpis.npv).toBeGreaterThan(tvCapRate.kpis.npv);
+    });
+  });
 });
