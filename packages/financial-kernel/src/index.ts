@@ -42,6 +42,17 @@ export {
   monthlyToQuarterly,
 } from './cashflow';
 export { buildFinancing } from './financing';
+export {
+  buildDrawSchedule,
+  buildAmortizingSchedule,
+  sCurveWeights as sCurveWeightsQuarterly,
+} from './debtSchedule';
+export type {
+  DrawScheduleInputs,
+  DrawScheduleResult,
+  AmortizingScheduleInputs,
+  AmortizingScheduleResult,
+} from './debtSchedule';
 
 export { computeDeal, isSupportedAssetClass, SUPPORTED_ASSET_CLASSES } from './registry';
 export type { ComputeDealOptions } from './registry';

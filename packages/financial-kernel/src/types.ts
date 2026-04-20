@@ -89,7 +89,26 @@ export interface MonthlyCashFlow {
 /** Financing output summary. */
 export interface FinancingOutput {
   readonly debtLTV: number;
+  /**
+   * Loan-to-cost covenant passed through from inputs. Informational only —
+   * the kernel sizes debt by `debtLTV × debtableBase`; `debtLTC` is
+   * preserved so downstream exports / capital stack views can compare the
+   * derived sizing against the covenant ceiling.
+   */
+  readonly debtLTC?: number | null;
   readonly debtRatePct: number;
+  /**
+   * Loan term in months. When provided, the capitalised-interest carry
+   * caps at `min(constructionMonths, debtTenorMonths)` rather than
+   * accruing for the whole construction window.
+   */
+  readonly debtTenorMonths?: number | null;
+  /**
+   * Amortization period in years for operating-phase term loans
+   * (income-producing assets). Pass-through; schedule construction is
+   * reserved for a later phase.
+   */
+  readonly amortizationYears?: number | null;
   readonly debtDrawn: Decimal;
   readonly debtInterest: Decimal;
   readonly equityInvested: Decimal;

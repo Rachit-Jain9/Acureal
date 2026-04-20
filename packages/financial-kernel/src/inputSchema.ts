@@ -208,14 +208,17 @@ const PERCENT_KEYS = [
   'entryCapRate', 'exitCapRate',
   'adrGrowthPct', 'stabilizedOccPct', 'fbRevPct', 'otherRevPct', 'gopMarginPct', 'ebitdaMarginPct',
   'landAppreciationPct',
-  'debtCoverage', 'interestRatePct', 'debtLTV', 'debtRatePct',
+  'interestRatePct', 'debtRatePct',
 ] as const;
+// Ratio keys — accept either fraction form (0.6) or percent form (60).
+// Normalised to fraction [0,1] to match master's `resolveDebtRatio` tolerance.
+const RATIO_KEYS = ['debtLTV', 'debtLTC', 'debtCoverage'] as const;
 const PER_SQFT_KEYS = [
   'constructionCostPerSqft', 'sellingRatePerSqft', 'devCostPerSqft',
   'baseRentPerSqftMonth', 'tiPerSqft', 'approvalCostPerSqft',
 ] as const;
 const COUNT_KEYS = ['keys', 'constructionCostPerKey', 'preOpeningCostPerKey', 'adr', 'lcMonths'] as const;
-const TENOR_KEYS = ['holdPeriodYears', 'holdYears'] as const;
+const TENOR_KEYS = ['holdPeriodYears', 'holdYears', 'debtTenorYears', 'amortizationYears'] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Main entry point
@@ -274,6 +277,15 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
       out[k] = toPercent(v);
     }
   }
+  for (const k of RATIO_KEYS) {
+    const v = raw[k];
+    if (v == null) continue;
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    // If |n| > 1 the caller almost certainly passed percent form (e.g. 60 → 0.6).
+    const frac = Math.abs(n) > 1 ? n / 100 : n;
+    out[k] = Math.max(0, Math.min(1, frac));
+  }
   for (const k of PER_SQFT_KEYS) {
     const v = readNum(raw, k);
     if (v !== undefined) out[k] = v;
@@ -310,6 +322,7 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
     ...MONEY_KEYS,
     ...MONTH_KEYS,
     ...PERCENT_KEYS,
+    ...RATIO_KEYS,
     ...PER_SQFT_KEYS,
     ...COUNT_KEYS,
     ...TENOR_KEYS,
