@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatCrores, formatPct, formatArea } from '../../utils/format';
+import ProvenanceGraphView from '../financials/ProvenanceGraphView';
 
 function MetricCard({ label, value, sub, highlight }) {
   return (
@@ -216,6 +217,13 @@ export default function FinancialTab({ deal }) {
           {f.dscr != null && <MetricCard label="DSCR" value={Number(f.dscr).toFixed(2)} />}
         </div>
       </div>
+
+      {/* Provenance graph — how the KPIs above are derived */}
+      <ProvenanceGraphView
+        facilityIds={mp.facilityIds || (f.finance_cost_cr ? ['construction-loan'] : [])}
+        tierIds={mp.tierIds || []}
+        hasCovenants={f.dscr != null}
+      />
 
       {/* Last updated */}
       {f.updated_at && (

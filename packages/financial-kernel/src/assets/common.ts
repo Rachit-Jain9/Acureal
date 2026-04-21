@@ -29,28 +29,29 @@ import type {
 } from '../types';
 import { equityMultiple, grossMarginPct, irrAnnualPct, npv, residualLandValue, totalInflow } from '../kpis';
 import { prov } from '../provenance';
+import { INDIA_CONFIG } from '../config';
 
-/** Indian stamp-duty default. */
-export const STAMP_DUTY_RATE = 0.05;
+/** Indian stamp-duty default. Re-exported from `config/india.ts`. */
+export const STAMP_DUTY_RATE = INDIA_CONFIG.STAMP_DUTY_RATE;
 /** Carpet / FAR ratio default — Indian residential norm. */
-export const CARPET_RATIO = 0.7;
+export const CARPET_RATIO = INDIA_CONFIG.CARPET_RATIO;
 /** Default loading factor on FAR for saleable. */
-export const DEFAULT_LOADING_FACTOR = 0.15;
+export const DEFAULT_LOADING_FACTOR = INDIA_CONFIG.DEFAULT_LOADING_FACTOR;
 /** 1 Crore in rupees. Used everywhere to flip between ₹/sqft-level inputs and Crore outputs. */
-export const CRORE = 1e7;
+export const CRORE = INDIA_CONFIG.CRORE;
 
 /** Asset-class specific default GST on construction. */
 export const DEFAULT_GST_BY_ASSET: Record<AssetClass, number> = {
-  residential_apartments: 0.18,
-  plotted_development: 0.12,
-  commercial_office: 0.18,
-  retail: 0.18,
-  industrial_warehousing: 0.18,
-  hospitality: 0.18,
-  mixed_use: 0.18,
-  land_parcel: 0.0,
-  villas: 0.18,
-  redevelopment: 0.18,
+  residential_apartments: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  plotted_development: INDIA_CONFIG.GST_CONSTRUCTION_PLOTTED,
+  commercial_office: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  retail: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  industrial_warehousing: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  hospitality: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  mixed_use: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  land_parcel: INDIA_CONFIG.GST_LAND_PARCEL,
+  villas: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
+  redevelopment: INDIA_CONFIG.GST_CONSTRUCTION_STANDARD,
 };
 
 /** Safe numeric coercion — returns `fallback` for non-finite or null input. */
