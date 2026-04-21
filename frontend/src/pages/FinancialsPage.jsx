@@ -20,13 +20,14 @@ import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
+import ProvenanceGraphView from '../components/financials/ProvenanceGraphView';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
-import StatCard from '../components/common/StatCard';
+import KPIStatCard from '../components/financials/KPIStatCard';
 import { formatCrores, formatPct, formatINR, formatArea } from '../utils/format';
 import {
   ASSET_CLASS_CONFIG,
@@ -648,18 +649,19 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading, prefi
   );
 }
 
-function KPICards({ kpis, assetClass }) {
+function KPICards({ kpis, assetClass, inputs }) {
   const modelAssetClass = getModelAssetClass(assetClass);
   const isIncome = INCOME_CLASSES.has(modelAssetClass);
   const isHospitality = HOSPITALITY_CLASSES.has(modelAssetClass);
+  const commonProps = { assetClass, inputs };
 
   if (isHospitality) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="RevPAR" value={kpis.revPAR != null ? formatINR(kpis.revPAR, 0) : '-'} subtitle="₹/key/night (stabilized)" icon={IndianRupee} />
-        <StatCard title="EBITDA" value={formatCrores(kpis.noi)} subtitle="Stabilized EBITDA / yr" icon={TrendingUp} />
-        <StatCard title="IRR" value={formatPct(kpis.irr)} subtitle="Unlevered, through exit" icon={Percent} />
-        <StatCard title="Exit Value" value={formatCrores(kpis.exitValue)} subtitle="EBITDA / exit cap rate" icon={DollarSign} />
+        <KPIStatCard kpiKey="revPAR"    {...commonProps} title="RevPAR"     value={kpis.revPAR != null ? formatINR(kpis.revPAR, 0) : '-'} subtitle="₹/key/night (stabilized)" icon={IndianRupee} />
+        <KPIStatCard kpiKey="noi"       {...commonProps} title="EBITDA"     value={formatCrores(kpis.noi)}                                subtitle="Stabilized EBITDA / yr"   icon={TrendingUp} />
+        <KPIStatCard kpiKey="irr"       {...commonProps} title="IRR"        value={formatPct(kpis.irr)}                                  subtitle="Unlevered, through exit"  icon={Percent} />
+        <KPIStatCard kpiKey="exitValue" {...commonProps} title="Exit Value" value={formatCrores(kpis.exitValue)}                         subtitle="EBITDA / exit cap rate"   icon={DollarSign} />
       </div>
     );
   }
@@ -667,10 +669,10 @@ function KPICards({ kpis, assetClass }) {
   if (isIncome) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Stabilized NOI" value={formatCrores(kpis.noi)} subtitle="Net Operating Income / yr" icon={IndianRupee} />
-        <StatCard title="Yield on Cost" value={kpis.yieldOnCost != null ? `${kpis.yieldOnCost.toFixed(2)}%` : '-'} subtitle="NOI / Total Dev. Cost" icon={Percent} />
-        <StatCard title="IRR" value={formatPct(kpis.irr)} subtitle="Unlevered, through exit" icon={TrendingUp} />
-        <StatCard title="Exit Value" value={formatCrores(kpis.exitValue)} subtitle="At exit cap rate" icon={DollarSign} />
+        <KPIStatCard kpiKey="noi"          {...commonProps} title="Stabilized NOI" value={formatCrores(kpis.noi)}                                                      subtitle="Net Operating Income / yr" icon={IndianRupee} />
+        <KPIStatCard kpiKey="yieldOnCost"  {...commonProps} title="Yield on Cost"  value={kpis.yieldOnCost != null ? `${kpis.yieldOnCost.toFixed(2)}%` : '-'}           subtitle="NOI / Total Dev. Cost"     icon={Percent} />
+        <KPIStatCard kpiKey="irr"          {...commonProps} title="IRR"            value={formatPct(kpis.irr)}                                                         subtitle="Unlevered, through exit"   icon={TrendingUp} />
+        <KPIStatCard kpiKey="exitValue"    {...commonProps} title="Exit Value"     value={formatCrores(kpis.exitValue)}                                                subtitle="At exit cap rate"          icon={DollarSign} />
       </div>
     );
   }
@@ -678,27 +680,12 @@ function KPICards({ kpis, assetClass }) {
   const hasDscr = kpis.dscr != null;
   return (
     <div className={`grid grid-cols-2 ${hasDscr ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
-      <StatCard title="IRR" value={formatPct(kpis.irr)} subtitle="Internal Rate of Return" icon={TrendingUp} />
-      <StatCard title="NPV" value={formatCrores(kpis.npv)} subtitle="Net Present Value" icon={IndianRupee} />
-      <StatCard
-        title="Equity Multiple"
-        value={kpis.equityMultiple != null ? `${kpis.equityMultiple.toFixed(2)}x` : '-'}
-        subtitle="Return on equity invested"
-        icon={DollarSign}
-      />
-      <StatCard
-        title="RLV"
-        value={formatCrores(kpis.rlv)}
-        subtitle="Residual Land Value"
-        icon={Percent}
-      />
+      <KPIStatCard kpiKey="irr"            {...commonProps} title="IRR"             value={formatPct(kpis.irr)}                                                subtitle="Internal Rate of Return"     icon={TrendingUp} />
+      <KPIStatCard kpiKey="npv"            {...commonProps} title="NPV"             value={formatCrores(kpis.npv)}                                             subtitle="Net Present Value"           icon={IndianRupee} />
+      <KPIStatCard kpiKey="equityMultiple" {...commonProps} title="Equity Multiple" value={kpis.equityMultiple != null ? `${kpis.equityMultiple.toFixed(2)}x` : '-'} subtitle="Return on equity invested" icon={DollarSign} />
+      <KPIStatCard kpiKey="rlv"            {...commonProps} title="RLV"             value={formatCrores(kpis.rlv)}                                             subtitle="Residual Land Value"         icon={Percent} />
       {hasDscr && (
-        <StatCard
-          title="DSCR"
-          value={`${kpis.dscr.toFixed(2)}x`}
-          subtitle="Revenue / total debt service"
-          icon={Percent}
-        />
+        <KPIStatCard kpiKey="dscr"         {...commonProps} title="DSCR"            value={`${kpis.dscr.toFixed(2)}x`}                                         subtitle="Revenue / total debt service" icon={Percent} />
       )}
     </div>
   );
@@ -1838,7 +1825,7 @@ export default function FinancialsPage() {
       {/* Results for existing financials */}
       {hasResults && (
         <>
-          <KPICards kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} />
+          <KPICards kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} inputs={normalizedFinancials.inputs} />
 
           <WhatIfSliders
             assetClass={normalizedFinancials.assetClass}
@@ -1856,6 +1843,11 @@ export default function FinancialsPage() {
             assetClass={normalizedFinancials.assetClass}
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
+          />
+
+          <ProvenanceGraphView
+            assetClass={normalizedFinancials.assetClass}
+            defaultOpen={false}
           />
 
           <FinancialVisualizationLayer
