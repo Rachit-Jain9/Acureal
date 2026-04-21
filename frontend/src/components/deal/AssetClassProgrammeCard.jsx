@@ -2,9 +2,12 @@ import { useMemo } from 'react';
 import {
   Layers, Home, Briefcase, Hotel, Warehouse, Factory, Cpu, Heart,
   GraduationCap, Store, TreePine, Users, Building2, Info, Sparkles, IndianRupee,
+  ArrowRightCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { computeProgramme, fmtNum, fmtInr } from '../../utils/buildability';
+import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
+import { toast } from '../common/Toast';
 
 // Asset-class → icon. Used purely for decoration.
 const CLASS_ICON = {
@@ -42,7 +45,7 @@ const CLASS_TONE = {
   education:              'from-sky-500 to-indigo-500',
 };
 
-export default function AssetClassProgrammeCard({ buildability, property }) {
+export default function AssetClassProgrammeCard({ buildability, property, dealId, setTab }) {
   const programme = useMemo(
     () => computeProgramme({ buildability, property }),
     [buildability, property],
@@ -51,6 +54,25 @@ export default function AssetClassProgrammeCard({ buildability, property }) {
   if (!programme) return null;
   const Icon = CLASS_ICON[programme.asset_class] || Layers;
   const tone = CLASS_TONE[programme.asset_class] || 'from-gray-500 to-slate-500';
+
+  const canApply = !!dealId && programme.has_programme
+    && (programme.unit_count != null || programme.keys != null || programme.leasable_sqft != null
+        || programme.build_cost_per_sqft != null);
+
+  const handleApply = () => {
+    const prefill = mapProgrammeToInputs({
+      assetClass: programme.asset_class,
+      programme,
+      buildability,
+    });
+    if (!prefill) {
+      toast.info('Nothing to apply — programme has no inputs mappable to the financial model yet.');
+      return;
+    }
+    stashPrefill(dealId, prefill);
+    toast.success('Buildability inputs staged for underwriting. Open the Financial tab to review.');
+    if (typeof setTab === 'function') setTab('financials');
+  };
 
   return (
     <div className="card p-0 overflow-hidden">
@@ -75,12 +97,25 @@ export default function AssetClassProgrammeCard({ buildability, property }) {
               )}
             </div>
           </div>
-          {programme.has_programme && (
-            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-white/20 text-white font-medium">
-              <Sparkles size={10} />
-              Asset-class tailored
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {programme.has_programme && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-white/20 text-white font-medium">
+                <Sparkles size={10} />
+                Asset-class tailored
+              </span>
+            )}
+            {canApply && (
+              <button
+                type="button"
+                onClick={handleApply}
+                className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-50 transition-colors"
+                title="Stage these programme outputs as starting inputs on the Financial tab"
+              >
+                <ArrowRightCircle size={12} />
+                Apply to underwriting
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

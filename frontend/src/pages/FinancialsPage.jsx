@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { useFinancials, useCalculateFinancials } from '../hooks/useFinancials';
 import { useDeal } from '../hooks/useDeals';
+import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
@@ -306,10 +307,14 @@ function monthsToYears(months) {
   return Math.round((n / 12) * 100) / 100;
 }
 
-function buildInitialInputs(financials, targetClass, deal) {
+function buildInitialInputs(financials, targetClass, deal, prefill) {
   const assetClass = targetClass || financials?.asset_class || 'residential_apartments';
   const defaults = getDefaultValues(assetClass);
   const stored = financials?.model_params?.inputs || {};
+  // Only overlay prefill when its recorded asset-class matches the active class —
+  // avoids pushing residential unit sizes into a hospitality form, etc.
+  const applyPrefill = prefill && (!prefill.__prefilledAssetClass
+    || prefill.__prefilledAssetClass === assetClass);
 
   // Deal provides plot area / land area for pre-population when no financials yet
   const dealLandSqft = deal?.land_area_sqft ?? null;
@@ -333,16 +338,17 @@ function buildInitialInputs(financials, targetClass, deal) {
       || (financials.approval_cost_cr && financials.gross_area_sqft
           ? Math.round((financials.approval_cost_cr * 1e7) / financials.gross_area_sqft)
           : '') || '';
+    const pre = applyPrefill ? prefill : {};
     return {
       effectiveDate,
-      plotAreaSqft:            financials.plot_area_sqft ?? dealLandSqft ?? '',
-      fsi:                     financials.fsi ?? '',
+      plotAreaSqft:            pre.plotAreaSqft ?? financials.plot_area_sqft ?? dealLandSqft ?? '',
+      fsi:                     pre.fsi ?? financials.fsi ?? '',
       loadingFactor:           normalizeResidentialLoadingFactor(
         stored.loadingFactor ?? financials.loading_factor,
         defaults.loadingFactor
       ),
-      avgUnitSizeSqft:         stored.avgUnitSizeSqft ?? financials.avg_unit_size_sqft ?? '',
-      constructionCostPerSqft: financials.construction_cost_per_sqft ?? '',
+      avgUnitSizeSqft:         pre.avgUnitSizeSqft ?? stored.avgUnitSizeSqft ?? financials.avg_unit_size_sqft ?? '',
+      constructionCostPerSqft: pre.constructionCostPerSqft ?? financials.construction_cost_per_sqft ?? '',
       sellingRatePerSqft:      financials.selling_rate_per_sqft ?? '',
       landCostCr:              financials.land_cost_cr ?? '',
       approvalCostPerSqft:     approvalPerSqft,
@@ -366,7 +372,12 @@ function buildInitialInputs(financials, targetClass, deal) {
   const fields = getFieldDefs(assetClass);
   const out = { effectiveDate };
   for (const f of fields) {
-    let val = stored[f.name] ?? defaults[f.name] ?? '';
+    // Prefill wins over stored wins over defaults. Prefill is always a string
+    // from mapProgrammeToInputs, so treat any non-empty string as a value.
+    const prefVal = applyPrefill && prefill[f.name] != null && prefill[f.name] !== ''
+      ? prefill[f.name]
+      : null;
+    let val = prefVal ?? stored[f.name] ?? defaults[f.name] ?? '';
     // Legacy migration: projectDurationYears may only exist as legacy months in stored
     if (!val && f.name === 'projectDurationYears' && storedDurationYears != null) {
       val = storedDurationYears;
@@ -480,15 +491,17 @@ function normalizeFinancials(financials) {
 
 // ─── SUB-COMPONENTS ────────────────────────────────────────────────────────
 
-function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading }) {
-  const [inputs, setInputs] = useState(() => buildInitialInputs(null, assetClass, deal));
+function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading, prefill, onPrefillConsumed }) {
+  const [inputs, setInputs] = useState(() => buildInitialInputs(null, assetClass, deal, prefill));
   const [hintOpen, setHintOpen] = useState(null);
   const modelAssetClass = getModelAssetClass(assetClass);
 
   useEffect(() => {
-    if (initialValues) setInputs(buildInitialInputs(initialValues, assetClass, deal));
-    else setInputs(buildInitialInputs(null, assetClass, deal));
-  }, [initialValues, assetClass, deal]);
+    if (initialValues) setInputs(buildInitialInputs(initialValues, assetClass, deal, prefill));
+    else setInputs(buildInitialInputs(null, assetClass, deal, prefill));
+    if (prefill && typeof onPrefillConsumed === 'function') onPrefillConsumed();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValues, assetClass, deal, prefill]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1713,6 +1726,27 @@ export default function FinancialsPage() {
   const [selectedClass, setSelectedClass] = useState(null); // null = use stored
   const activeClass = selectedClass || existingClass;
 
+  // Prefill staged on the Zoning tab via "Apply to underwriting" lives in
+  // sessionStorage until consumed. Read once; clear on first consumption so a
+  // page refresh doesn't keep re-applying it over user edits.
+  const [prefill, setPrefill] = useState(() => readPrefill(dealId));
+  useEffect(() => {
+    // If the user lands here from another deal, re-read the prefill.
+    setPrefill(readPrefill(dealId));
+  }, [dealId]);
+  useEffect(() => {
+    if (prefill) {
+      toast.success('Underwriting inputs pre-filled from buildability programme. Review and hit Calculate.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+  const handlePrefillConsumed = () => {
+    if (prefill) {
+      clearPrefill(dealId);
+      setPrefill(null);
+    }
+  };
+
   const normalizedFinancials = useMemo(() => normalizeFinancials(financials), [financials]);
   const hasResults = !!normalizedFinancials;
   const activeFinancialModelLabel = getFinancialModelLabel(activeClass);
@@ -1822,6 +1856,8 @@ export default function FinancialsPage() {
               deal={deal}
               onSubmit={handleCalculate}
               isLoading={calculateMutation.isPending}
+              prefill={prefill}
+              onPrefillConsumed={handlePrefillConsumed}
             />
           </div>
         </>
@@ -1836,6 +1872,8 @@ export default function FinancialsPage() {
             deal={deal}
             onSubmit={handleCalculate}
             isLoading={calculateMutation.isPending}
+            prefill={prefill}
+            onPrefillConsumed={handlePrefillConsumed}
           />
           {/* Waterfall panels available even before DCF is run */}
           <JDAWaterfallPanel financials={null} deal={deal} />

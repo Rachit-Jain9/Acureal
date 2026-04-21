@@ -483,7 +483,12 @@ export default function ZoningTab({ deal, dealId, setTab }) {
 
       {/* Asset-class development programme — RERA carpet, leasable, keys, docks, revenue */}
       {deal?.asset_class && buildability.realized_built_up_sqft != null && (
-        <AssetClassProgrammeCard buildability={buildability} property={property} />
+        <AssetClassProgrammeCard
+          buildability={buildability}
+          property={property}
+          dealId={dealId}
+          setTab={setTab}
+        />
       )}
 
       {/* Base FSI vs Premium FAR decision card — only shows if zone offers premium */}
