@@ -48,7 +48,13 @@ the kernel does not yet produce:
   lines 123–160 (INSERT/UPDATE column binding)
 
 **Before deleting `financial.engine.js`**, these need to exist on the kernel
-result (or a shim that synthesises them from kernel output). Plan:
+result (or a shim that synthesises them from kernel output). A file-by-file
+enumeration of every downstream consumer lives in
+[LEGACY_SHAPE_AUDIT.md](./LEGACY_SHAPE_AUDIT.md) — read that before touching
+the kernel, since the port has to be key-for-key identical or the UI/exports
+degrade silently.
+
+Plan:
 
 1. Port `capitalStack` synthesis from `financial.engine.js` to a kernel
    post-processor (`packages/financial-kernel/src/capitalStack.ts`).
