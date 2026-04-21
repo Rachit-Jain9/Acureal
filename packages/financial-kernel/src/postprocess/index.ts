@@ -44,3 +44,7 @@ export type {
   YearlyCashFlowEntry,
   BuildCashFlowsTimeline,
 } from './cashFlows';
+
+export { buildUsaliPnl, hospOccRamp } from './usaliPnl';
+
+export type { UsaliPnlRow, UsaliPnlInputs } from './usaliPnl';

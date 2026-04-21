@@ -126,6 +126,8 @@ export {
   normalizeEffectiveDate,
   addUtcDays,
   addUtcMonths,
+  buildUsaliPnl,
+  hospOccRamp,
 } from './postprocess';
 export type {
   CapitalStack,
@@ -145,6 +147,8 @@ export type {
   QuarterlyCashFlowEntry,
   YearlyCashFlowEntry,
   BuildCashFlowsTimeline,
+  UsaliPnlRow,
+  UsaliPnlInputs,
 } from './postprocess';
 
 // Phase 4 — pure HTTP handler for the investor-package endpoint.
