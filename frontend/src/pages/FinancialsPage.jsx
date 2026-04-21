@@ -18,6 +18,7 @@ import {
 import { useFinancials, useCalculateFinancials, useDefaultsMeta } from '../hooks/useFinancials';
 import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
+import SensitivityTornado from '../components/financials/SensitivityTornado';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
@@ -1839,6 +1840,12 @@ export default function FinancialsPage() {
           <KPICards kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} />
 
           <WhatIfSliders
+            assetClass={normalizedFinancials.assetClass}
+            baseInputs={normalizedFinancials.inputs}
+            baseKpis={normalizedFinancials.kpis}
+          />
+
+          <SensitivityTornado
             assetClass={normalizedFinancials.assetClass}
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
