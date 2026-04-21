@@ -19,6 +19,7 @@ import { useFinancials, useCalculateFinancials, useDefaultsMeta } from '../hooks
 import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
+import ScenarioComparison from '../components/financials/ScenarioComparison';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
@@ -1846,6 +1847,12 @@ export default function FinancialsPage() {
           />
 
           <SensitivityTornado
+            assetClass={normalizedFinancials.assetClass}
+            baseInputs={normalizedFinancials.inputs}
+            baseKpis={normalizedFinancials.kpis}
+          />
+
+          <ScenarioComparison
             assetClass={normalizedFinancials.assetClass}
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
