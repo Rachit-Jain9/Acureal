@@ -48,3 +48,33 @@ export type {
 export { buildUsaliPnl, hospOccRamp } from './usaliPnl';
 
 export type { UsaliPnlRow, UsaliPnlInputs } from './usaliPnl';
+
+export { buildLegacyShape } from './legacyShape';
+
+export type { LegacyShape, BuildLegacyShapeArgs } from './legacyShape';
+
+export {
+  buildSensitivityMatrix,
+  buildResidentialSensitivity,
+  buildPlottedSensitivity,
+  buildIncomeSensitivity,
+  buildHospSensitivity,
+} from './sensitivity';
+
+export type {
+  SensitivityMatrix,
+  HospSensitivity,
+  BuildSensitivityArgs,
+} from './sensitivity';
+
+export {
+  buildScenarios,
+  applyScenarioPreset,
+  SCENARIO_PRESETS,
+} from './scenarios';
+
+export type {
+  ScenarioCell,
+  ScenarioBundle,
+  BuildScenariosArgs,
+} from './scenarios';

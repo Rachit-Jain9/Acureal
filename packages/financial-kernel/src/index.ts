@@ -137,6 +137,15 @@ export {
   addUtcMonths,
   buildUsaliPnl,
   hospOccRamp,
+  buildLegacyShape,
+  buildSensitivityMatrix,
+  buildResidentialSensitivity,
+  buildPlottedSensitivity,
+  buildIncomeSensitivity,
+  buildHospSensitivity,
+  buildScenarios,
+  applyScenarioPreset,
+  SCENARIO_PRESETS,
 } from './postprocess';
 export type {
   CapitalStack,
@@ -158,6 +167,14 @@ export type {
   BuildCashFlowsTimeline,
   UsaliPnlRow,
   UsaliPnlInputs,
+  LegacyShape,
+  BuildLegacyShapeArgs,
+  SensitivityMatrix,
+  HospSensitivity,
+  BuildSensitivityArgs,
+  ScenarioCell,
+  ScenarioBundle,
+  BuildScenariosArgs,
 } from './postprocess';
 
 // Phase 4 — pure HTTP handler for the investor-package endpoint.
