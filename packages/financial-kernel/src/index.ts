@@ -77,6 +77,14 @@ export {
 } from './assumptions';
 
 export {
+  INDIA_CONFIG,
+  INDIA_CONFIG_JSON,
+  sqftToAcres,
+  acresToSqft,
+  rupeesToCrore,
+} from './config';
+
+export {
   DealInputError,
   normalizeDealInput,
   normalizedDealInputs,
