@@ -466,7 +466,7 @@ function DocumentsPanel() {
   return (
     <div className="space-y-2">
       {docs.map((d) => (
-        <div key={d.id} className="card flex items-center justify-between">
+        <div key={d.id} className="card-editorial flex items-center justify-between">
           <div>
             <div className="font-semibold text-gray-800">{d.plan_name}</div>
             <div className="text-xs text-gray-500">

@@ -57,7 +57,7 @@ function RiskScoreCard({ score, flagCount }) {
   if (score == null && flagCount === 0) return null;
 
   return (
-    <div className="card">
+    <div className="card-editorial">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
           <ShieldAlert size={16} className={label?.color || 'text-gray-400'} />
@@ -111,7 +111,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
   };
 
   return (
-    <div className="card">
+    <div className="card-editorial">
       {editing && editData ? (
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -285,7 +285,7 @@ export default function RiskTab({ dealId }) {
 
   if (isError) {
     return (
-      <div className="card text-center py-12">
+      <div className="card-editorial text-center py-12">
         <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
         <p className="text-sm text-red-600 mb-3">Failed to load risk flags.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">Retry</button>
@@ -311,7 +311,7 @@ export default function RiskTab({ dealId }) {
       </div>
 
       {showForm && (
-        <div className="card border-red-100 bg-red-50/20">
+        <div className="card-editorial border-red-100 bg-red-50/20">
           <h4 className="text-sm font-semibold text-gray-900 mb-3">New Risk Flag</h4>
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -406,7 +406,7 @@ export default function RiskTab({ dealId }) {
 
       {/* Flags List */}
       {flags.length === 0 ? (
-        <div className="card text-center py-16">
+        <div className="card-editorial text-center py-16">
           <ShieldAlert size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-600 mb-1">No risk flags registered</p>
           <p className="text-xs text-gray-400">

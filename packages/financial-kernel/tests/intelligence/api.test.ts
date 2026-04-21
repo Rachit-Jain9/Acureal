@@ -75,7 +75,6 @@ describe('handleInvestorPackage — pure HTTP handler', () => {
     };
     delete process.env.DEBT_ENGINE_KILL;
     delete process.env.DEBT_ENGINE_V2_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
   });
   afterEach(() => { process.env = { ...prior }; });
 
@@ -97,13 +96,12 @@ describe('handleInvestorPackage — pure HTTP handler', () => {
     const body = res.body as {
       package: { summary: { engineVersion: string; kpi: { cumulativeDebtServiceCr: number } } };
       engineVersion: string;
-      flagState: { pythonUrl: string | null; killSwitch: boolean };
+      flagState: { killSwitch: boolean };
     };
     expect(body.package).toBeDefined();
     expect(body.engineVersion).toBe('inline');
     expect(body.package.summary.engineVersion).toBe('inline');
     expect(body.flagState.killSwitch).toBe(false);
-    expect(body.flagState.pythonUrl).toBeNull();
     // Real compute ran: cumulative debt service is positive for a 50Cr 9% 24-month facility.
     expect(body.package.summary.kpi.cumulativeDebtServiceCr).toBeGreaterThan(0);
   });
@@ -115,7 +113,6 @@ describe('handleInvestorPackage — pure HTTP handler', () => {
       DEBT_ENGINE_SILENT: '1',
     };
     delete process.env.DEBT_ENGINE_V2_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
     const res = await handleInvestorPackage(validInput(), process.env);
     expect(res.status).toBe(200);
     const body = res.body as {
@@ -138,7 +135,6 @@ describe('handleInvestorPackage — pure HTTP handler', () => {
       DEBT_ENGINE_SILENT: '1',
     };
     delete process.env.DEBT_ENGINE_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
     const res = await handleInvestorPackage(validInput(), process.env);
     expect(res.status).toBe(200);
     const body = res.body as {
@@ -147,19 +143,5 @@ describe('handleInvestorPackage — pure HTTP handler', () => {
     };
     expect(body.engineVersion).toBe('safe-mode');
     expect(body.flagState.killSwitch).toBe(true);
-  });
-
-  test('flagState echoes pythonUrl when configured', async () => {
-    process.env = {
-      ...prior,
-      DEBT_ENGINE_PY_URL: 'http://kernel.local',
-      DEBT_ENGINE_SILENT: '1',
-    };
-    delete process.env.DEBT_ENGINE_KILL;
-    delete process.env.DEBT_ENGINE_V2_KILL;
-    const res = await handleInvestorPackage(validInput(), process.env);
-    expect(res.status).toBe(200);
-    const body = res.body as { flagState: { pythonUrl: string | null } };
-    expect(body.flagState.pythonUrl).toBe('http://kernel.local');
   });
 });

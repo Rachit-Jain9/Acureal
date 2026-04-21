@@ -2,19 +2,20 @@
  * Engine routing + ops escape hatches.
  *
  * The debt engine is always on — no rollout, no cohort bucketing, no
- * version toggling. What remains here are three operational knobs:
+ * version toggling, and no external runtime. Two operational knobs remain:
  *
- *   - `DEBT_ENGINE_PY_URL`    — if set, calls route to the Python
- *                               FastAPI canonical service; otherwise
- *                               the in-process TS runtime handles it.
- *   - `DEBT_ENGINE_KILL`      — emergency kill-switch. When truthy,
- *                               every call returns the `safe-mode`
- *                               zero-overlay so an incident in the
- *                               engine never breaks deal pages. Legacy
- *                               name `DEBT_ENGINE_V2_KILL` still works.
+ *   - `DEBT_ENGINE_KILL`      — emergency kill-switch. When truthy, every
+ *                               call returns the `safe-mode` zero-overlay
+ *                               so an incident in the engine never breaks
+ *                               deal pages. Legacy name
+ *                               `DEBT_ENGINE_V2_KILL` still works.
  *   - `DEBT_ENGINE_SILENT`    — suppress decision log lines in tests.
  *                               Legacy name `DEBT_ENGINE_V2_SILENT`
  *                               also accepted.
+ *
+ * The prior Python FastAPI companion service and its routing flag
+ * (`DEBT_ENGINE_PY_URL`) were retired in the 2026-04 consolidation. The
+ * in-process TypeScript kernel is now the sole runtime.
  *
  * Determinism: `dealBucket(dealId)` gives a stable 0-99 value per deal.
  * Callers don't gate on it anymore but monitoring uses it to detect
@@ -47,17 +48,6 @@ export function isKillSwitchOn(env: NodeJS.ProcessEnv = process.env): boolean {
   return TRUTHY.has(raw.toLowerCase());
 }
 
-/**
- * Return the Python service base URL, or null if calls should run
- * in-process. Empty strings count as null so accidental empty env
- * values don't route traffic into the void.
- */
-export function getPythonUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  const raw = env.DEBT_ENGINE_PY_URL;
-  if (!raw || typeof raw !== 'string' || raw.trim() === '') return null;
-  return raw.trim();
-}
-
 /** Suppress decision/monitoring log lines (used by the test suite). */
 export function isSilent(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = envFirst(env, ['DEBT_ENGINE_SILENT', 'DEBT_ENGINE_V2_SILENT']);
@@ -85,32 +75,19 @@ export function dealBucket(dealId: string): number {
  *
  * Decision order:
  *   1. Kill-switch on → `safe-mode` (empty overlays; compute path short-circuits).
- *   2. `DEBT_ENGINE_PY_URL` set → `python`.
- *   3. Otherwise → `inline`.
+ *   2. Otherwise → `inline`.
  */
 export function selectEngine(
   dealId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): EngineDecision {
   const killed = isKillSwitchOn(env);
-  const pyUrl = getPythonUrl(env);
   const bucket = dealBucket(dealId);
-  let engineVersion: EngineVersion;
-  let reason: string;
-  if (killed) {
-    engineVersion = 'safe-mode';
-    reason = 'kill_switch_on';
-  } else if (pyUrl) {
-    engineVersion = 'python';
-    reason = 'python_url_configured';
-  } else {
-    engineVersion = 'inline';
-    reason = 'inline_default';
-  }
+  const engineVersion: EngineVersion = killed ? 'safe-mode' : 'inline';
+  const reason = killed ? 'kill_switch_on' : 'inline_default';
   return {
     engineVersion,
     killed,
-    pythonAvailable: !killed && pyUrl != null,
     bucket,
     reason,
   };

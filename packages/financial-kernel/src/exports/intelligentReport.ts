@@ -2,9 +2,6 @@
  * Builds the investor-facing `InvestorPackage` from an orchestrator
  * output. Keeps the shape flat, numeric, and serialization-ready so
  * the UI / PDF / XLSX pipelines don't need kernel internals.
- *
- * Mirrors the Python `intelligence.report.build_investor_package`
- * shape so the HTTP boundary is engine-agnostic.
  */
 import { Decimal } from '../decimal';
 import type { Insight, IntelligenceReport, IntelligenceKPIs } from '../intelligence/types';

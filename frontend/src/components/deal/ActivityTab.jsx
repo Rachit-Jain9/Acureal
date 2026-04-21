@@ -112,7 +112,7 @@ export default function ActivityTab({ dealId }) {
 
   if (isError) {
     return (
-      <div className="card text-center py-12">
+      <div className="card-editorial text-center py-12">
         <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
         <p className="text-sm text-red-600 mb-3">Failed to load activities.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">
@@ -140,7 +140,7 @@ export default function ActivityTab({ dealId }) {
 
       {/* Add Activity Form */}
       {showForm && (
-        <div className="card border-primary-200 bg-primary-50/30">
+        <div className="card-editorial border-accent-200 bg-accent-50/40">
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Log Activity</h3>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -246,7 +246,7 @@ export default function ActivityTab({ dealId }) {
 
       {/* Activity List */}
       {sorted.length === 0 ? (
-        <div className="card text-center py-16">
+        <div className="card-editorial text-center py-16">
           <StickyNote size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-600 mb-1">No activities logged yet</p>
           <p className="text-xs text-gray-400">
@@ -254,7 +254,7 @@ export default function ActivityTab({ dealId }) {
           </p>
         </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
+        <div className="card-editorial p-0 overflow-hidden">
           <ul className="divide-y divide-gray-100">
             {sorted.map((activity) => {
               const actType = activity.activity_type || activity.type || 'note';

@@ -4,8 +4,7 @@ const {
   normalizeAreaUnit,
   normalizeLandPricingBasis,
 } = require('../constants/domain');
-
-const SQFT_PER_ACRE = 43560;
+const { SQFT_PER_ACRE } = require('../config/india');
 
 const round = (value, precision = 2) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {

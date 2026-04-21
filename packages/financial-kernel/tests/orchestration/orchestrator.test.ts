@@ -48,7 +48,6 @@ describe('FinancialOrchestrator — engine selection', () => {
     process.env = { ...prior, DEBT_ENGINE_SILENT: '1' };
     delete process.env.DEBT_ENGINE_KILL;
     delete process.env.DEBT_ENGINE_V2_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
     const out = await orch.compute(makeInput());
     expect(out.engineVersion).toBe('inline');
@@ -61,7 +60,6 @@ describe('FinancialOrchestrator — engine selection', () => {
 
   test('kill-switch returns safe-mode shape with zero overlays', async () => {
     process.env = { ...prior, DEBT_ENGINE_KILL: '1', DEBT_ENGINE_SILENT: '1' };
-    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
     const out = await orch.compute(makeInput());
     expect(out.engineVersion).toBe('safe-mode');
@@ -74,7 +72,6 @@ describe('FinancialOrchestrator — engine selection', () => {
   test('legacy DEBT_ENGINE_V2_KILL still engages safe-mode', async () => {
     process.env = { ...prior, DEBT_ENGINE_V2_KILL: '1', DEBT_ENGINE_SILENT: '1' };
     delete process.env.DEBT_ENGINE_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
     const out = await orch.compute(makeInput());
     expect(out.engineVersion).toBe('safe-mode');
@@ -85,21 +82,9 @@ describe('FinancialOrchestrator — engine selection', () => {
     process.env = { ...prior, DEBT_ENGINE_SILENT: '1' };
     delete process.env.DEBT_ENGINE_KILL;
     delete process.env.DEBT_ENGINE_V2_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
     const orch = new FinancialOrchestrator();
     const out = await orch.compute({ ...makeInput(), forceEngine: 'safe-mode' });
     expect(out.engineVersion).toBe('safe-mode');
-  });
-
-  test('forceEngine=inline overrides a python-URL env', async () => {
-    process.env = {
-      ...prior,
-      DEBT_ENGINE_PY_URL: 'http://unreachable.invalid:9/',
-      DEBT_ENGINE_SILENT: '1',
-    };
-    const orch = new FinancialOrchestrator();
-    const out = await orch.compute({ ...makeInput(), forceEngine: 'inline' });
-    expect(out.engineVersion).toBe('inline');
   });
 });
 
@@ -108,7 +93,6 @@ describe('FinancialOrchestrator — covenants and KPIs', () => {
     process.env.DEBT_ENGINE_SILENT = '1';
     delete process.env.DEBT_ENGINE_KILL;
     delete process.env.DEBT_ENGINE_V2_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
   });
 
   test('computes monthly DSCR and mins', async () => {

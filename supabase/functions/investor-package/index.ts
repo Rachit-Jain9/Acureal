@@ -1,23 +1,27 @@
 // supabase/functions/investor-package/index.ts
-// Deno edge function that proxies to the canonical Python investor
-// intelligence service. The debt engine is always on; the only
+// Deno edge function that proxies to the canonical TypeScript investor
+// intelligence service on Vercel. The debt engine is always on; the only
 // operational knob is a kill-switch that short-circuits to a safe-mode
 // response so deal pages survive an incident without crashing.
+//
+// History: the prior Python FastAPI companion was retired in the
+// 2026-04 consolidation. The proxy URL is unchanged; the backing runtime
+// is now the in-process TypeScript kernel.
 //
 // Why an edge function at all:
 //   — centralizes auth (Supabase verifies the caller JWT automatically)
 //   — writes monitoring_logs + investor_package_snapshots from trusted
 //     server-side with service-role credentials, so the browser can't
 //     forge engine-version claims
-//   — keeps the Python compute hot on Vercel while the edge function
-//     gives us a single-origin surface at
+//   — gives us a single-origin surface at
 //     `<project>.supabase.co/functions/v1/investor-package`
 //
 // Deploy:
 //   supabase functions deploy investor-package --project-ref $PROJECT_REF
 //
 // Required env (set via `supabase secrets set`):
-//   FASTAPI_URL                 — full URL to /investor-package (Vercel)
+//   KERNEL_URL                  — full URL to /investor-package on Vercel
+//                                 (legacy name `FASTAPI_URL` still accepted)
 //   SUPABASE_URL                — auto-injected
 //   SUPABASE_SERVICE_ROLE_KEY   — auto-injected
 //   DEBT_ENGINE_KILL            — '1' to flip every call to safe-mode
@@ -53,7 +57,7 @@ function dealBucket(dealId: string): number {
 }
 
 type EngineDecision = {
-  engineVersion: 'python' | 'safe-mode';
+  engineVersion: 'inline' | 'safe-mode';
   killed: boolean;
   bucket: number;
   reason: string;
@@ -66,7 +70,7 @@ function selectEngine(dealId: string): EngineDecision {
   const killed = killRaw === '1' || killRaw === 'true' || killRaw === 'on' || killRaw === 'yes';
   const bucket = dealBucket(dealId);
   if (killed) return { engineVersion: 'safe-mode', killed: true, bucket, reason: 'kill_switch_on' };
-  return { engineVersion: 'python', killed: false, bucket, reason: 'python_default' };
+  return { engineVersion: 'inline', killed: false, bucket, reason: 'inline_default' };
 }
 
 async function sha256Hex(s: string): Promise<string> {
@@ -116,11 +120,13 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
 
   // Default to the Vercel production alias so the edge function is
-  // immediately usable without `supabase secrets set FASTAPI_URL=...`.
-  const FASTAPI_URL = Deno.env.get('FASTAPI_URL') || 'https://redip.vercel.app/api/investor-package';
+  // immediately usable without `supabase secrets set KERNEL_URL=...`.
+  const KERNEL_URL = Deno.env.get('KERNEL_URL')
+    || Deno.env.get('FASTAPI_URL')
+    || 'https://redip.vercel.app/api/investor-package';
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_KEY') || '';
-  if (!FASTAPI_URL) return json(500, { error: 'fastapi_url_not_configured' });
+  if (!KERNEL_URL) return json(500, { error: 'kernel_url_not_configured' });
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: 'invalid_json' }); }
@@ -134,7 +140,7 @@ Deno.serve(async (req) => {
   const decision = selectEngine(dealId);
   const organizationId = typeof body?.organization_id === 'string' ? body.organization_id : null;
 
-  // Kill-switch: short-circuit to safe-mode without touching FastAPI.
+  // Kill-switch: short-circuit to safe-mode without touching upstream.
   if (decision.engineVersion === 'safe-mode') {
     const pkg = safeModePackage(dealId);
     if (sb) {
@@ -148,11 +154,11 @@ Deno.serve(async (req) => {
     return json(200, { package: pkg, engineVersion: 'safe-mode', flagState: decision, reason: 'kill_switch_on' });
   }
 
-  // Default path: proxy to Vercel FastAPI and capture its full payload.
+  // Default path: proxy to the Vercel TS kernel endpoint and capture its payload.
   const t0 = performance.now();
   let resp: Response;
   try {
-    resp = await fetch(FASTAPI_URL, {
+    resp = await fetch(KERNEL_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -161,12 +167,12 @@ Deno.serve(async (req) => {
     if (sb) {
       await sb.from('monitoring_logs').insert({
         organization_id: organizationId, deal_id: dealId,
-        source: 'supabase-edge', event: 'fastapi_fetch_failed',
-        severity: 'high', engine_version: 'python',
+        source: 'supabase-edge', event: 'kernel_fetch_failed',
+        severity: 'high', engine_version: 'inline',
         payload: { error: String(err) },
       });
     }
-    return json(502, { error: 'fastapi_unreachable', detail: String(err) });
+    return json(502, { error: 'kernel_unreachable', detail: String(err) });
   }
   const elapsedMs = performance.now() - t0;
 
@@ -177,12 +183,12 @@ Deno.serve(async (req) => {
     if (sb) {
       await sb.from('monitoring_logs').insert({
         organization_id: organizationId, deal_id: dealId,
-        source: 'supabase-edge', event: 'fastapi_error',
-        severity: 'high', engine_version: 'python',
+        source: 'supabase-edge', event: 'kernel_error',
+        severity: 'high', engine_version: 'inline',
         payload: { status: resp.status, body: pkg, elapsedMs },
       });
     }
-    return json(resp.status, pkg ?? { error: 'fastapi_error' });
+    return json(resp.status, pkg ?? { error: 'kernel_error' });
   }
 
   if (sb) {
@@ -196,7 +202,7 @@ Deno.serve(async (req) => {
     };
     await sb.from('investor_packages').upsert({
       deal_id: dealId, organization_id: organizationId,
-      engine_version: 'python', source: 'supabase-edge',
+      engine_version: 'inline', source: 'supabase-edge',
       headline: summary.headline ?? null, narrative: summary.narrative ?? null,
       irr_levered_pct: num(kpi.irrLeveredPct), min_dscr: num(kpi.minDSCR),
       moic: num(kpi.moic), llcr: num(kpi.llcr),
@@ -208,16 +214,16 @@ Deno.serve(async (req) => {
     }, { onConflict: 'deal_id' });
     await sb.from('investor_package_snapshots').insert({
       organization_id: organizationId, deal_id: dealId,
-      engine_version: 'python', source: 'supabase-edge',
+      engine_version: 'inline', source: 'supabase-edge',
       input_hash: hash, body: pkg,
     });
     await sb.from('monitoring_logs').insert({
       organization_id: organizationId, deal_id: dealId,
       source: 'supabase-edge', event: 'investor_package_ok',
-      severity: 'info', engine_version: 'python',
+      severity: 'info', engine_version: 'inline',
       payload: { elapsedMs, hasInsights: Array.isArray(summary.insights) && (summary.insights as unknown[]).length > 0, hash, bucket: decision.bucket },
     });
   }
 
-  return json(200, { package: pkg, engineVersion: 'python', flagState: decision });
+  return json(200, { package: pkg, engineVersion: 'inline', flagState: decision });
 });

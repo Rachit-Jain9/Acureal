@@ -2,28 +2,23 @@
  * Parity harness: legacy JS engine vs TS financial-kernel v2, across every
  * asset class handled by both engines.
  *
- * The 2026-04-21 roast's top cleanup ask is "delete the legacy JS engine once
- * v2 parity is 100%." This harness is the gate. For each canonical deal we
- * split KPI checks into two groups:
+ * The 2026-04-21 roast's top cleanup ask was "delete the legacy JS engine once
+ * v2 parity is 100%." This harness is the gate: every KPI comparison is a
+ * HARD assertion. Any drift fails CI, so the legacy engine and the TS kernel
+ * stay locked until the legacy engine is removed.
  *
- *   1. HARD ASSERTIONS — KPIs that already match (revenue, stamp duty, GST,
- *      result shape). Any regression fails CI.
- *   2. PARITY REPORT   — KPIs that may diverge (totalCost, grossMargin, RLV,
- *      NOI / yield for income classes, etc.). Deltas are logged so the
- *      engineering team tracks the gap over time. They do NOT fail the build.
+ * Status as of this file's current HEAD:
+ *   residential_apartments   — HARD (revenue, stamp, GST, totalCost, margin, RLV)
+ *   plotted_development      — HARD (revenue, totalCost, margin)
+ *   commercial_office        — HARD (totalCost, revenue, NOI, yield-on-cost)
+ *   retail                   — HARD (same income-class suite)
+ *   industrial_warehousing   — HARD (same income-class suite)
+ *   hospitality              — HARD (totalCost, revenue, margin, exit value)
  *
- * When every delta in the PARITY REPORT is within epsilon for every asset
- * class, the log lines can be promoted to hard assertions — that is the
- * green light to delete `backend/src/engines/financial.engine.js`. See
- * `docs/CLEANUP_INVENTORY.md` for the deletion plan.
- *
- * Status post 2026-04-21 finance-cost alignment:
- *   residential_apartments   — HARD (all match within epsilon)
- *   plotted_development      — HARD (all match within epsilon)
- *   commercial_office        — PARITY REPORT (income-class KPIs still align)
- *   retail                   — PARITY REPORT
- *   industrial_warehousing   — PARITY REPORT
- *   hospitality              — PARITY REPORT
+ * Kernel-only classes (villas, mixed_use, redevelopment) are covered by
+ * `kernel.kernelOnly.acceptance.test.js` as deterministic acceptance checks
+ * on the kernel output alone, since no legacy JS path exists to compare
+ * against. See `docs/CLEANUP_INVENTORY.md` for the deletion plan.
  *
  * Run: `cd backend && npm test -- kernel.parity.test.js`
  */

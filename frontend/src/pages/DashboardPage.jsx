@@ -35,26 +35,35 @@ import {
   STAGE_CONFIG,
 } from '../utils/format';
 
+// Editorial monochrome palette for charts — single ink scale, no rainbow.
+// Ordered dark→light so the biggest slice reads strongest.
 const PIE_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#06b6d4', '#3b82f6',
+  '#141413', '#2b2b29', '#3f3f3c', '#5d5d58',
+  '#8a8a83', '#b9b9b2', '#d9d9d4', '#ececea',
+  '#9ca3af', '#6b7280',
 ];
+const INK_BAR_FILL = '#2b2b29';
 
-// ── Tooltip overrides for dark mode ──────────────────────────────────────────
 const TOOLTIP_STYLE = {
-  borderRadius: '8px',
-  border: '1px solid rgb(55 65 81)',
-  backgroundColor: 'rgb(31 41 55)',
-  color: '#f9fafb',
-  fontSize: '13px',
+  borderRadius: '6px',
+  border: '1px solid rgb(217, 217, 212)',
+  backgroundColor: 'rgb(251, 251, 248)',
+  color: '#141413',
+  fontSize: '12px',
+  fontFeatureSettings: '"tnum"',
+  boxShadow: '0 4px 14px -4px rgb(17 17 17 / 0.08)',
 };
 
-function SectionCard({ title, children, action }) {
+function SectionCard({ title, children, action, eyebrow }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h3>
+    <div className="rounded-lg border border-line bg-paper-100 p-5 shadow-editorial dark:border-slate-700 dark:bg-slate-900">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          {eyebrow && <p className="eyebrow mb-0.5 dark:text-slate-400">{eyebrow}</p>}
+          <h3 className="font-display text-base font-semibold tracking-tight text-ink-900 dark:text-white">
+            {title}
+          </h3>
+        </div>
         {action && action}
       </div>
       {children}
@@ -110,7 +119,7 @@ export default function DashboardPage() {
     .map((item) => ({
       stage: STAGE_CONFIG[item.stage]?.label || item.stage,
       count: item.count,
-      fill: '#6366f1',
+      fill: INK_BAR_FILL,
     }))
     .filter((d) => d.count > 0);
 
@@ -126,8 +135,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        eyebrow="REDIP — Deal Intelligence"
         title="Dashboard"
-        description="Live overview of your real estate deal pipeline"
+        description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         actions={
           <Link to="/dashboard/deals" className="btn btn-secondary text-sm flex items-center gap-1.5">
             All Deals <ArrowRight size={14} />
@@ -167,44 +177,32 @@ export default function DashboardPage() {
 
       {/* ── Secondary KPI row ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
-            <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Investor-Grade</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">{icReadyDeals}</p>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-50 dark:bg-red-900/30 rounded-lg">
-            <AlertTriangle size={18} className="text-red-500 dark:text-red-400" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Open Risks</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">{dealsWithRisk}</p>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-            <Briefcase size={18} className="text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Documents</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">{docsUploaded}</p>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
-            <IndianRupee size={18} className="text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Closed Value</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">
-              {closedValue > 0 ? formatCrores(closedValue) : '—'}
-            </p>
-          </div>
-        </div>
+        <StatCard
+          title="Investor-grade"
+          value={icReadyDeals}
+          icon={CheckCircle2}
+          subtitle="IC-ready deals"
+          accent={icReadyDeals > 0 ? 'green' : undefined}
+        />
+        <StatCard
+          title="Open risks"
+          value={dealsWithRisk}
+          icon={AlertTriangle}
+          subtitle="Deals with flags"
+          accent={dealsWithRisk > 0 ? 'red' : undefined}
+        />
+        <StatCard
+          title="Documents"
+          value={docsUploaded}
+          icon={Briefcase}
+          subtitle="Uploaded across deals"
+        />
+        <StatCard
+          title="Closed value"
+          value={closedValue > 0 ? formatCrores(closedValue) : '—'}
+          icon={IndianRupee}
+          subtitle="Deals marked closed"
+        />
       </div>
 
       {/* ── Charts row ─────────────────────────────────────────────────────── */}
@@ -232,9 +230,9 @@ export default function DashboardPage() {
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
-                  cursor={{ fill: 'rgba(99,102,241,0.08)' }}
+                  cursor={{ fill: 'rgba(43,43,41,0.06)' }}
                 />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} name="Deals" />
+                <Bar dataKey="count" fill={INK_BAR_FILL} radius={[3, 3, 0, 0]} name="Deals" />
               </BarChart>
             </ResponsiveContainer>
           ) : (

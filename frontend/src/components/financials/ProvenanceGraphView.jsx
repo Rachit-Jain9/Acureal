@@ -91,7 +91,7 @@ export default function ProvenanceGraphView({
     highlighted && (!highlighted.has(from) || !highlighted.has(to)) ? 0.1 : 0.6;
 
   return (
-    <div className="card">
+    <div className="card-editorial">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

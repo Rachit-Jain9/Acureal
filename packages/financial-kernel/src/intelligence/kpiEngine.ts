@@ -2,9 +2,7 @@
  * TS KPI engine — IRR (XIRR), MOIC, DSCR profile, LLCR/PLCR,
  * debt capacity, payback month, peak equity outflow.
  *
- * This is the canonical source of truth for local execution. The
- * Python kernel at /orchestrate mirrors these formulas for production
- * parity — reconciliation lives in the golden tests.
+ * Canonical source of truth for all KPI math in the kernel.
  */
 import { Decimal, sum as decSum } from '../decimal';
 import type {

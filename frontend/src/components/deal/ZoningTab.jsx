@@ -11,6 +11,7 @@ import ExtractionBadge from './ExtractionBadge';
 import { useZone } from '../../hooks/useMasterPlan';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { computeBuildability, fmtNum } from '../../utils/buildability';
+import { SQFT_PER_ACRE } from '../../config/india';
 
 const OVERLAY_CHECKS = [
   { key: 'lake_buffer',      label: 'Lake / water body buffer (75 m)' },
@@ -367,7 +368,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                 unit="sqft"
                 tone="emerald"
                 hint={buildability.realized_built_up_sqft != null
-                  ? `${fmtNum(buildability.realized_built_up_sqft / 43560, 2)} ac realized`
+                  ? `${fmtNum(buildability.realized_built_up_sqft / SQFT_PER_ACRE, 2)} ac realized`
                   : null}
               />
               <BigStat

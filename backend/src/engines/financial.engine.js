@@ -9,7 +9,12 @@
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const STAMP_DUTY_RATE = 0.05;  // Stamp duty on land (avg India, varies 3-8%)
+const {
+  STAMP_DUTY_RATE,
+  KARNATAKA_STAMP_REG_RATE,
+  GST_CONSTRUCTION_STANDARD,
+} = require('../config/india');
+
 const CARPET_RATIO    = 0.70;  // Carpet / Saleable area
 const MIN_PROJECT_DURATION_YEARS = 1;
 const MAX_PROJECT_DURATION_YEARS = 15;
@@ -1672,7 +1677,6 @@ function buildIncomeQuickCFs(p) {
 // Sources: HVS India, JLL HotelIntel 2025, CBRE / Knight Frank Bangalore reports,
 //          BBMP property tax circular 2024, RERA-K listings, Marriott / IHG HMAs.
 
-const KARNATAKA_STAMP_REG_RATE = 0.066;
 const HOSP_DEFAULT_SQFT_PER_KEY = 550;
 const HOSP_DAYS_PER_YEAR = 365;
 
@@ -2440,7 +2444,7 @@ function hospQuickIRR({
 }) {
   const bua = keys * (sqftPerKey || HOSP_DEFAULT_SQFT_PER_KEY);
   const hard = (bua * hardCostPerSqft) / 1e7;
-  const gst  = hard * 0.18;
+  const gst  = hard * GST_CONSTRUCTION_STANDARD;
   const ffe  = (keys * ffePerKey) / 1e7;
   const ose  = (keys * osePerKey) / 1e7;
   const pre  = (keys * preOpeningPerKey) / 1e7;

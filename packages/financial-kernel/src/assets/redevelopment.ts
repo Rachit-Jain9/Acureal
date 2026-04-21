@@ -2,38 +2,31 @@
  * Redevelopment — residential model with a tenant-rehousing carry cost
  * overlay. Inputs: `rehousingCostCr` (paid to existing occupiers during
  * construction). If absent, behaves identically to `residential_apartments`.
+ *
+ * Implementation: rehousing is layered into the soft-cost bucket via the
+ * residential engine's `extraSoftCostCr` adapter hook, so it flows through
+ * the normal approvals schedule and gets picked up by finance-cost,
+ * contingency-on-base, and the cash-flow rollup with no post-hoc patching.
  */
 
-import type { DealInputs, KernelResult, MonthlyLineItem } from '../types';
+import type { DealInputs, KernelResult } from '../types';
 import { computeResidential } from './residential';
-import { D, num, uniformAcrossProject } from './common';
+import { num } from './common';
 
 export function computeRedevelopment(inputs: DealInputs): KernelResult {
   const rehousingCostCr = num(inputs.raw.rehousingCostCr, 0);
-  const base = computeResidential(
-    { ...inputs, assetClass: 'redevelopment' },
-    { assetClassOverride: 'redevelopment' },
-  );
-  if (rehousingCostCr <= 0) return base;
+  if (rehousingCostCr <= 0) {
+    return computeResidential(
+      { ...inputs, assetClass: 'redevelopment' },
+      { assetClassOverride: 'redevelopment' },
+    );
+  }
 
-  const extraItem: MonthlyLineItem = uniformAcrossProject({
-    period: base.period,
-    amount: D(rehousingCostCr),
-    category: 'soft_cost',
-    subcategory: 'rehousing',
-  });
-
-  const items = [...base.cashFlow.items, extraItem];
-  // Rebuild net via residential finalizer would require input round-trip;
-  // a cleaner approach is to rebuild through `computeResidential` after
-  // injecting rehousing into the raw budget. Done that way to keep all
-  // summation math in `finalizeResult`.
+  const existingExtra = num((inputs.raw as Record<string, unknown>).extraSoftCostCr, 0);
   const rawWithRehousing = {
     ...inputs.raw,
-    // Add rehousing as a dedicated cost; residential rolls it into soft costs.
-    _kernelExtraSoftCostCr: rehousingCostCr,
+    extraSoftCostCr: existingExtra + rehousingCostCr,
   };
-  void items; // silence unused
   return computeResidential(
     { ...inputs, raw: rawWithRehousing, assetClass: 'redevelopment' },
     { assetClassOverride: 'redevelopment' },

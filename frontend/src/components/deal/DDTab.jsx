@@ -234,7 +234,7 @@ function DDSection({ dealId }) {
 
       {/* Add Item Form */}
       {showForm && (
-        <div className="card border-primary-200 bg-primary-50/30">
+        <div className="card-editorial border-accent-200 bg-accent-50/40">
           <h4 className="text-sm font-semibold text-gray-900 mb-3">New DD Item</h4>
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -316,7 +316,7 @@ function DDSection({ dealId }) {
             const catLabel = DD_CATEGORIES.find((c) => c.value === catKey)?.label || catKey;
             const isOpen = !collapsed[catKey];
             return (
-              <div key={catKey} className="card p-0 overflow-hidden">
+              <div key={catKey} className="card-editorial p-0 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => toggleGroup(catKey)}
@@ -486,7 +486,7 @@ function ApprovalsSection({ dealId }) {
 
       {/* Add Form */}
       {showForm && (
-        <div className="card border-primary-200 bg-primary-50/30">
+        <div className="card-editorial border-accent-200 bg-accent-50/40">
           <h4 className="text-sm font-semibold text-gray-900 mb-3">New Approval Item</h4>
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -628,7 +628,7 @@ function ApprovalsSection({ dealId }) {
           No approval items yet. Seed the standard checklist or add items manually.
         </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
+        <div className="card-editorial p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">

@@ -1,6 +1,5 @@
 import {
   isKillSwitchOn,
-  getPythonUrl,
   isSilent,
   hash32,
   dealBucket,
@@ -37,18 +36,6 @@ describe('featureFlag — kill-switch', () => {
   });
 });
 
-describe('featureFlag — getPythonUrl', () => {
-  test('returns null when unset or empty', () => {
-    expect(getPythonUrl({} as NodeJS.ProcessEnv)).toBeNull();
-    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: '' } as NodeJS.ProcessEnv)).toBeNull();
-    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: '   ' } as NodeJS.ProcessEnv)).toBeNull();
-  });
-
-  test('trims whitespace', () => {
-    expect(getPythonUrl({ DEBT_ENGINE_PY_URL: ' http://x  ' } as NodeJS.ProcessEnv)).toBe('http://x');
-  });
-});
-
 describe('featureFlag — isSilent', () => {
   test('accepts DEBT_ENGINE_SILENT=1', () => {
     expect(isSilent({ DEBT_ENGINE_SILENT: '1' } as NodeJS.ProcessEnv)).toBe(true);
@@ -81,31 +68,19 @@ describe('featureFlag — hash determinism', () => {
 });
 
 describe('featureFlag — selectEngine', () => {
-  test('defaults to inline when no env configured', () => {
+  test('defaults to inline when kill-switch is off', () => {
     const d = selectEngine('deal-1', {} as NodeJS.ProcessEnv);
     expect(d.engineVersion).toBe('inline');
     expect(d.killed).toBe(false);
-    expect(d.pythonAvailable).toBe(false);
     expect(d.reason).toBe('inline_default');
-  });
-
-  test('returns python when DEBT_ENGINE_PY_URL is set', () => {
-    const d = selectEngine('deal-1', {
-      DEBT_ENGINE_PY_URL: 'http://kernel.local',
-    } as NodeJS.ProcessEnv);
-    expect(d.engineVersion).toBe('python');
-    expect(d.pythonAvailable).toBe(true);
-    expect(d.reason).toBe('python_url_configured');
   });
 
   test('kill-switch always wins', () => {
     const d = selectEngine('deal-1', {
       DEBT_ENGINE_KILL: '1',
-      DEBT_ENGINE_PY_URL: 'http://kernel.local',
     } as NodeJS.ProcessEnv);
     expect(d.engineVersion).toBe('safe-mode');
     expect(d.killed).toBe(true);
-    expect(d.pythonAvailable).toBe(false);
     expect(d.reason).toBe('kill_switch_on');
   });
 
@@ -118,7 +93,7 @@ describe('featureFlag — selectEngine', () => {
   });
 
   test('decision is deterministic for a given (deal, env)', () => {
-    const env = { DEBT_ENGINE_PY_URL: 'http://x' } as NodeJS.ProcessEnv;
+    const env = {} as NodeJS.ProcessEnv;
     const d1 = selectEngine('deal-42', env);
     const d2 = selectEngine('deal-42', env);
     expect(d1.engineVersion).toBe(d2.engineVersion);

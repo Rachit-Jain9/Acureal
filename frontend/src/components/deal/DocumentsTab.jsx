@@ -141,7 +141,7 @@ export default function DocumentsTab({ dealId }) {
 
   if (isError) {
     return (
-      <div className="card text-center py-12">
+      <div className="card-editorial text-center py-12">
         <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
         <p className="text-sm text-red-600 mb-3">Failed to load documents.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">
@@ -169,7 +169,7 @@ export default function DocumentsTab({ dealId }) {
 
       {/* Upload Form */}
       {showUploadForm && (
-        <div className="card border-primary-200 bg-primary-50/30">
+        <div className="card-editorial border-accent-200 bg-accent-50/40">
           <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Upload size={15} className="text-primary-600" />
             Upload New Document
@@ -252,7 +252,7 @@ export default function DocumentsTab({ dealId }) {
 
       {/* Documents List */}
       {docs.length === 0 ? (
-        <div className="card text-center py-16">
+        <div className="card-editorial text-center py-16">
           <FileText size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-600 mb-1">No documents uploaded yet</p>
           <p className="text-xs text-gray-400">
@@ -265,7 +265,7 @@ export default function DocumentsTab({ dealId }) {
           {Object.entries(grouped).map(([catKey, items]) => {
             const catConfig = CATEGORY_MAP[catKey] || CATEGORY_MAP.other;
             return (
-              <div key={catKey} className="card p-0 overflow-hidden">
+              <div key={catKey} className="card-editorial p-0 overflow-hidden">
                 <div className={clsx('px-4 py-2.5 border-b border-gray-100', catConfig.color)}>
                   <span className="text-xs font-semibold uppercase tracking-wider">
                     {catConfig.label}
