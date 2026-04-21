@@ -98,12 +98,22 @@ export function finalizeResult(args: {
   developerMarginPct?: number;
   kpiExtras?: Readonly<Record<string, number | null>>;
   extraProvenance?: readonly ProvenanceEntry[];
+  /**
+   * When an asset class reports a different margin convention than the
+   * generic `(revenue - totalCost) / revenue` (for example, hospitality
+   * reports USALI EBITDA margin), pass it here. Both `kpis.grossMarginPct`
+   * and `revenue.grossMarginPct` will use this value instead.
+   */
+  grossMarginPctOverride?: number | null;
 }): KernelResult {
   const net = aggregateNet(args.items, args.period);
   const totalRevenue = args.revenue.totalRevenueCr ?? (args.revenue.exitValueCr ?? Decimal.zero());
   const totalCost = args.costs.totalCr;
   const grossProfitCr = totalRevenue.sub(totalCost);
-  const grossMarginPctVal = grossMarginPct(totalRevenue, totalCost);
+  const grossMarginPctVal =
+    args.grossMarginPctOverride != null && Number.isFinite(args.grossMarginPctOverride)
+      ? args.grossMarginPctOverride
+      : grossMarginPct(totalRevenue, totalCost);
 
   const irrVal = irrAnnualPct(net);
   const npvVal = npv(net, args.discountRatePct / 100);

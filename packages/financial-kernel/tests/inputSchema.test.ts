@@ -192,9 +192,10 @@ describe('computeDeal — normalises inputs end-to-end', () => {
       },
     });
 
-    // Revenue + total cost should match the canonical fixture to 1 decimal Cr
+    // Revenue + total cost should match the canonical fixture.
+    // Post 2026-04-21 finance-cost alignment (compound quarterly + S-curve draws).
     expect(result.kpis.revenue.toNumber()).toBeCloseTo(362.25, 1);
-    expect(result.kpis.totalCost.toNumber()).toBeCloseTo(306.0, 0);
+    expect(result.kpis.totalCost.toNumber()).toBeCloseTo(313.47, 0);
   });
 
   test('scenario override changes discount rate → NPV changes', () => {

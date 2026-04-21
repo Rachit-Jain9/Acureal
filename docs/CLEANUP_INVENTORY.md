@@ -6,32 +6,74 @@ every entry is pinned to a concrete gate that must pass first.
 
 ## Gate 1 — Legacy JS financial engine
 
-**Gate**: `backend/tests/kernel.parity.test.js` — the "PARITY REPORT" log
-lines (`totalCostCr`, `grossMarginPct`, `residualLandValueCr`) must all
-reach `[PASS]` for the canonical residential deal AND for at least one
-canonical deal per asset class (plotted_development, commercial_office,
-retail, industrial_warehousing, hospitality, land_parcel).
+**Gate**: `backend/tests/kernel.parity.test.js` — all asset-class parity tests
+must assert hard epsilons on totalCost, revenue, grossMargin, and class-specific
+KPIs (NOI/yield for income, revPAR/EBITDA for hospitality, RLV for merchant-sale).
 
-**Current state (2026-04-21, residential_apartments canonical deal)**:
+**Status (2026-04-21 post hospitality alignment): ✅ GATE CLOSED — all 31 parity tests PASS as HARD ASSERTIONS.**
 
-| KPI                    | Δ        | Eps       | Status   |
-| ---------------------- | -------- | --------- | -------- |
-| totalCostCr            | 6.39 Cr  | 0.5 Cr    | DIVERGES |
-| grossMarginPct         | 4.68 pp  | 1.0 pp    | DIVERGES |
-| residualLandValueCr    | 5.32 Cr  | 5.0 Cr    | DIVERGES |
+| Asset class              | Status     | Worst Δ        | Notes                                             |
+| ------------------------ | ---------- | -------------- | ------------------------------------------------- |
+| residential_apartments   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/margin/RLV           |
+| plotted_development      | ✅ PASS    | 0.34 pp margin | Within epsilon (diff from dev-cost GST routing)   |
+| commercial_office        | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
+| retail                   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
+| industrial_warehousing   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
+| hospitality              | ✅ PASS    | 0.92 Cr rev    | HARD ASSERTIONS on totalCost (0.00), revenue (≤1.5 Cr), grossMargin (USALI EBITDA), exitValue. Residual = kernel's single-margin approximation of legacy's USALI cascade. |
 
-Root cause: the two engines apply finance cost, contingency, and
-developer margin in different orders. A dedicated parity sweep is
-needed to align them.
+**Closure summary**:
 
-**Once gate passes, delete**:
+1. Hospitality kernel refactored (`packages/financial-kernel/src/assets/hospitality.ts`) to use
+   the per-BUA-sqft hard-cost model, Karnataka stamp+betterment, soft-design/approvals/FF&E/OS&E/
+   WC/pre-opening, 5% contingency, and legacy's mid-draw IDC formula.
+2. Hospitality input schema relaxed (`packages/financial-kernel/src/inputSchema.ts`) to accept
+   `hardCostPerSqft` in place of the legacy-output `constructionCostPerKey` field.
+3. Global assumption defaults (`packages/financial-kernel/src/assumptions.ts`) aligned to
+   legacy USALI-typical output: `fbRevPct 30 / otherRevPct 9 / gopMarginPct 30 / ebitdaMarginPct 22`.
+4. `finalizeResult` accepts a `grossMarginPctOverride` so hospitality reports EBITDA margin
+   (matching legacy's `_legacy.gross_margin_pct`) rather than the meaningless
+   `(exitValue − totalCost) / exitValue`.
 
-- `backend/src/engines/financial.engine.js`
-- `backend/src/engines/kernel.adapter.js` (collapse into a thin wrapper or delete entirely)
-- Any route handler that reads `FIN_KERNEL_V2` and branches — inline the kernel path
-- Search for `require('.*financial.engine')` anywhere and migrate callers
+**Parity gate closed — deletion blocked on downstream shape migration**:
 
-**Promote the parity test** from parity-report to hard assertions (remove the `report()` helper, assert deltas directly).
+The legacy engine output is still the authoritative source for several UI shapes
+the kernel does not yet produce:
+
+- `computed.capitalStack` (sources/uses, equity/debt split, construction vs refi)
+- `computed.cashFlows` (quarterly + yearly aggregate for the waterfall chart)
+- `computed.sensitivityMatrix` (tornado inputs — kernel produces via the
+  `sensitivity` orchestration stage but the UI reads the legacy-shape matrix)
+- `computed.revenue.usali_pnl` (47-field USALI P&L for hospitality)
+- `computed._legacy.*` convenience fields read by `financial.service.js` at
+  lines 123–160 (INSERT/UPDATE column binding)
+
+**Before deleting `financial.engine.js`**, these need to exist on the kernel
+result (or a shim that synthesises them from kernel output). A file-by-file
+enumeration of every downstream consumer lives in
+[LEGACY_SHAPE_AUDIT.md](./LEGACY_SHAPE_AUDIT.md) — read that before touching
+the kernel, since the port has to be key-for-key identical or the UI/exports
+degrade silently.
+
+Plan:
+
+1. Port `capitalStack` synthesis from `financial.engine.js` to a kernel
+   post-processor (`packages/financial-kernel/src/capitalStack.ts`).
+2. Port `cashFlows` aggregator (`quarterly` / `yearly` buckets keyed by label).
+3. Decide whether USALI P&L is a kernel responsibility (move the cascade into
+   `packages/financial-kernel/src/assets/hospitality.ts`) or a UI-only adapter.
+4. Collapse `_legacy.*` usage in `financial.service.js` to kernel-native fields
+   (delete the `leg.*` reads at lines 123–160).
+5. Inline the `FIN_KERNEL_V2` gate (kernel becomes unconditional) and delete
+   `kernel.adapter.js`.
+6. Finally, delete `backend/src/engines/financial.engine.js` and the
+   `backend/tests/financial.engine.test.js` suite; convert
+   `kernel.parity.test.js` to a kernel-only golden-file regression test.
+
+**HARD ASSERTIONS (regressions now fail CI)**:
+- residential_apartments: totalCost, grossMargin, RLV, revenue, stamp, GST
+- plotted_development: totalCost, grossMargin, revenue
+- commercial_office, retail, industrial_warehousing: totalCost, revenue, NOI, yieldOnCost
+- hospitality: totalCost, revenue (exit value), grossMargin (USALI EBITDA convention), exitValue
 
 ## Gate 2 — Python debt-engine companion
 

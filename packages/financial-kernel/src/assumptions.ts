@@ -13,60 +13,27 @@
  */
 
 import type { AssetClass, AssumptionSet } from './types';
+import {
+  GLOBAL_DEFAULTS_VALUES,
+  ASSET_DEFAULTS_VALUES,
+} from './config/defaults';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Global defaults — Bengaluru / India first.
-//  These are deliberately conservative; specific deals override them.
+//  Global defaults + per-asset overrides are sourced from the single
+//  registry at `config/defaults.ts`. The value-only projections preserve
+//  the legacy `Readonly<Record<string, number>>` shape so every existing
+//  import site (kernel adapters, tests, service layer) continues working
+//  unchanged. The registry carries metadata (unit, range, source,
+//  lastReviewed) that the UI can surface via `getAssetDefaultsMeta`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const GLOBAL_DEFAULTS: Readonly<Record<string, number>> = Object.freeze({
-  stampDutyPct: 5,
-  registrationPct: 1,
-  gstOnConstructionPct: 18, // adapter applies 0 for land_parcel / 12 for plotted
-  marketingCostPct: 4,
-  financeCostPct: 12,
-  architectFeePct: 2,
-  pmcFeePct: 1.5,
-  contingencyPct: 5,
-  developerMarginPct: 20,
-  discountRatePct: 14,
-  loadingFactor: 0.15,
-  carpetRatio: 0.7,
-
-  // Income-asset defaults
-  vacancyPct: 10,
-  opexPct: 20,
-  rentEscalationPct: 5,
-  exitCapRatePct: 8,
-  entryCapRatePct: 8,
-  holdPeriodYears: 5,
-
-  // Hospitality defaults
-  stabilizedOccPct: 65,
-  adrGrowthPct: 5,
-  fbRevPct: 25,
-  otherRevPct: 10,
-  gopMarginPct: 35,
-  ebitdaMarginPct: 28,
-
-  // Land parcel
-  landAppreciationPct: 8,
-});
+export const GLOBAL_DEFAULTS: Readonly<Record<string, number>> =
+  GLOBAL_DEFAULTS_VALUES;
 
 /** Asset-class-specific overrides applied on top of `GLOBAL_DEFAULTS`. */
-export const ASSET_DEFAULTS: Readonly<Record<AssetClass, Readonly<Record<string, number>>>> =
-  Object.freeze({
-    residential_apartments: Object.freeze({}),
-    villas: Object.freeze({ fsi: 0.8, loadingFactor: 0.05 }),
-    plotted_development: Object.freeze({ gstOnConstructionPct: 12, saleableLandPct: 55 }),
-    commercial_office: Object.freeze({ vacancyPct: 10, exitCapRatePct: 7.5 }),
-    retail: Object.freeze({ vacancyPct: 12, anchorPct: 40, anchorRentDiscount: 20, exitCapRatePct: 8 }),
-    industrial_warehousing: Object.freeze({ vacancyPct: 8, opexPct: 15, exitCapRatePct: 8.5 }),
-    hospitality: Object.freeze({ exitCapRatePct: 9, discountRatePct: 15 }),
-    mixed_use: Object.freeze({}),
-    land_parcel: Object.freeze({ gstOnConstructionPct: 0, stampDutyPct: 5 }),
-    redevelopment: Object.freeze({}),
-  });
+export const ASSET_DEFAULTS: Readonly<
+  Record<AssetClass, Readonly<Record<string, number>>>
+> = ASSET_DEFAULTS_VALUES;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Merge utility

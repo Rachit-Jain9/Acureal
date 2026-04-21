@@ -82,7 +82,16 @@ export {
   sqftToAcres,
   acresToSqft,
   rupeesToCrore,
+  GLOBAL_DEFAULTS_META,
+  GLOBAL_DEFAULTS_VALUES,
+  ASSET_DEFAULTS_META,
+  ASSET_DEFAULTS_VALUES,
+  getAssetDefaultsMeta,
+  getDefaultMeta,
+  getDefaultValue,
+  listDefaultKeys,
 } from './config';
+export type { DefaultUnit, DefaultMeta, DefaultsBlock } from './config';
 
 export {
   DealInputError,
@@ -113,6 +122,60 @@ export type {
 // the orchestrator to a zero-overlay safe-mode without disabling exports.
 export * as DebtEngine from './debt-engine';
 export * as WaterfallEngine from './waterfall-engine';
+
+// Post-processors — legacy-shape adapters (capitalStack, cashFlows, etc.)
+// that run after kernel math. See `docs/LEGACY_SHAPE_AUDIT.md` for why
+// these have to match legacy output key-for-key.
+export {
+  buildConstructionLoanCapitalStack,
+  buildIncomeAmortizingCapitalStack,
+  buildHospitalityCapitalStack,
+  buildHospitalityWaterfall,
+  buildCashFlows,
+  normalizeEffectiveDate,
+  addUtcDays,
+  addUtcMonths,
+  buildUsaliPnl,
+  hospOccRamp,
+  buildLegacyShape,
+  buildSensitivityMatrix,
+  buildResidentialSensitivity,
+  buildPlottedSensitivity,
+  buildIncomeSensitivity,
+  buildHospSensitivity,
+  buildScenarios,
+  applyScenarioPreset,
+  SCENARIO_PRESETS,
+} from './postprocess';
+export type {
+  CapitalStack,
+  CapitalStackConstructionLoan,
+  CapitalStackIncomeAmortizing,
+  CapitalStackHospitality,
+  CapitalStackWaterfall,
+  CapitalStackWaterfallTier,
+  CapitalStackConstructionPhase,
+  CapitalStackPermanentPhase,
+  ConstructionLoanCapitalStackArgs,
+  IncomeAmortizingCapitalStackArgs,
+  HospitalityCapitalStackArgs,
+  BuildWaterfallArgs,
+  CashFlowBundle,
+  CashFlowSummary,
+  QuarterlyCashFlowEntry,
+  YearlyCashFlowEntry,
+  BuildCashFlowsTimeline,
+  UsaliPnlRow,
+  UsaliPnlInputs,
+  LegacyShape,
+  BuildLegacyShapeArgs,
+  SensitivityMatrix,
+  HospSensitivity,
+  BuildSensitivityArgs,
+  ScenarioCell,
+  ScenarioBundle,
+  BuildScenariosArgs,
+} from './postprocess';
 
 // Phase 4 — pure HTTP handler for the investor-package endpoint.
 export { handleInvestorPackage } from './api';

@@ -1,5 +1,24 @@
 /**
  * Hospitality — keys-based model. ADR + occupancy → EBITDA → exit.
+ *
+ * Cost model mirrors the legacy JS engine so parity against
+ * `calculateHospitality` holds to within epsilon:
+ *   - Per-sqft hard cost (keys × sqftPerKey × ₹/sqft), derivable from
+ *     the legacy `constructionCostPerKey` input for backward compat.
+ *   - Karnataka stamp + registration at 6.6% (legacy KARNATAKA_STAMP_REG_RATE),
+ *     plus 3% betterment charge (Bengaluru default).
+ *   - Soft design (architect, PMC, consultants) as % of hard cost.
+ *   - Approvals as % of hard cost (or per-sqft / explicit Cr if provided).
+ *   - FF&E, OS&E and pre-opening as per-key capex.
+ *   - Working capital default ≈ keys × ₹50k.
+ *   - Contingency applied against (hard + softDesign + approvals + FF&E + OS&E).
+ *   - IDC via legacy's mid-draw-average formula: principal × 0.5 × rate × years
+ *     plus upfront loan fees.
+ *
+ * Revenue contract matches legacy's flattener (`_legacy.total_revenue_cr`):
+ * `totalRevenueCr` is the effective exit value (stabilised NOI / exit cap
+ * with ADR growth applied over the hold). Stabilised Y1 figures remain
+ * exposed through `revenue.extras` and `kpis.extras` for UI consumption.
  */
 
 import { Decimal } from '../decimal';
@@ -8,11 +27,11 @@ import { buildAmortizingSchedule } from '../debtSchedule';
 import { buildPeriodIndex } from '../periods';
 import type { AreaBreakdown, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
+import { INDIA_CONFIG } from '../config';
 import {
   CRORE,
   D,
   DEFAULT_GST_BY_ASSET,
-  STAMP_DUTY_RATE,
   approvalsSchedule,
   assembleCosts,
   finalizeResult,
@@ -22,24 +41,75 @@ import {
   num,
 } from './common';
 
+const HOSP_DEFAULT_SQFT_PER_KEY = 550;
+const HOSP_DEFAULT_HARD_COST_PER_SQFT = 11_000;
+const HOSP_DEFAULT_FFE_PER_KEY = 2_500_000;
+const HOSP_DEFAULT_OSE_PER_KEY = 400_000;
+const HOSP_DEFAULT_PREOPENING_PER_KEY = 350_000;
+const HOSP_DEFAULT_WC_PER_KEY = 50_000;
+
 export function computeHospitality(inputs: DealInputs): KernelResult {
   const raw = inputs.raw;
 
+  // ── Physical / operational inputs ─────────────────────────────────────────
   const keys = Math.max(1, Math.round(num(raw.keys, 100)));
-  const constructionCostPerKey = num(raw.constructionCostPerKey, 8_000_000);
+  const sqftPerKey = num(raw.sqftPerKey, HOSP_DEFAULT_SQFT_PER_KEY);
+  const totalBuaSqft = keys * sqftPerKey;
+
+  // Hard cost: per-BUA-sqft model (matches legacy). `constructionCostPerKey` in
+  // legacy is an *output*, not an input — we ignore it for hard-cost sizing
+  // and route callers to `hardCostPerSqft` instead.
+  const hardCostPerSqft = num(raw.hardCostPerSqft) > 0
+    ? num(raw.hardCostPerSqft)
+    : HOSP_DEFAULT_HARD_COST_PER_SQFT;
+
   const landCostCr = num(raw.landCostCr);
-  const preOpeningCostPerKey = num(raw.preOpeningCostPerKey, 300_000);
+  const stampRegPctRaw = num(raw.stampRegPct);
+  const stampRegPct = stampRegPctRaw > 0
+    ? stampRegPctRaw / 100
+    : INDIA_CONFIG.KARNATAKA_STAMP_REG_RATE;
+  const bettermentPct = num(raw.bettermentPct, 3);
+
+  // Soft design (% of hard cost)
+  const architectPctHard = num(raw.architectPctOfHard, 4);
+  const pmcPctHard = num(raw.pmcPctOfHard, 2);
+  const consultantsPctHard = num(raw.consultantsPctOfHard, 3.5);
+  const approvalsPctHard = num(raw.approvalsPctOfHard, 2);
+
+  // Per-key capex
+  const ffePerKey = num(raw.ffePerKey, HOSP_DEFAULT_FFE_PER_KEY);
+  const osePerKey = num(raw.osePerKey, HOSP_DEFAULT_OSE_PER_KEY);
+  const preOpeningPerKey = num(
+    raw.preOpeningPerKey ?? raw.preOpeningCostPerKey,
+    HOSP_DEFAULT_PREOPENING_PER_KEY,
+  );
+  const workingCapitalCrIn = num(raw.workingCapitalCr);
+  const workingCapitalCr = workingCapitalCrIn > 0
+    ? workingCapitalCrIn
+    : (keys * HOSP_DEFAULT_WC_PER_KEY) / CRORE;
+
+  const contingencyPct = num(raw.contingencyPct, 5);
+
+  // Construction-loan terms for IDC
+  const constLoanLTC = Math.min(0.80, Math.max(0, num(raw.constLoanLTC, 0.55)));
+  const constLoanRatePct = num(raw.constLoanRatePct, 10.5);
+  const constLoanFeesPct = num(raw.constLoanFeesPct, 1.0);
+
+  // ── Revenue / operating inputs ────────────────────────────────────────────
+  // Defaults align with a typical USALI mid-scale Indian hotel (matches legacy
+  // USALI-computed output for the canonical parity deal):
+  //   F&B/other revenue as % of rooms: 30% / 9%
+  //   GOP margin: ~30%, EBITDA margin: ~22%, NOI margin: ~18% (EBITDA − 4% FF&E)
   const adr = num(raw.adr, 6000);
   const adrGrowthPct = num(raw.adrGrowthPct, 5);
   const stabilizedOccPct = num(raw.stabilizedOccPct, 65);
   const holdPeriodYears = num(raw.holdPeriodYears, 8);
-  const fbRevPct = num(raw.fbRevPct, 25);
-  const otherRevPct = num(raw.otherRevPct, 10);
-  const gopMarginPct = num(raw.gopMarginPct, 35);
-  const ebitdaMarginPct = num(raw.ebitdaMarginPct, 28);
+  const fbRevPct = num(raw.fbRevPct, 30);
+  const otherRevPct = num(raw.otherRevPct, 9);
+  const gopMarginPct = num(raw.gopMarginPct, 30);
+  const ebitdaMarginPct = num(raw.ebitdaMarginPct, 22);
   const exitCapRatePct = num(raw.exitCapRate, 9);
   const discountRatePct = num(raw.discountRatePct, 15);
-  const contingencyPct = num(raw.contingencyPct, 5);
   const constructionMonths = num(raw.projectDurationMonths, 30);
 
   if (adr <= 0 || stabilizedOccPct <= 0 || stabilizedOccPct > 100 || exitCapRatePct <= 0) {
@@ -55,53 +125,119 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     holdMonths,
   });
 
-  const constructionCostCr = D((keys * constructionCostPerKey) / CRORE);
+  // ── Costs (matching legacy bucket semantics) ──────────────────────────────
+  const hardCostCr = D((totalBuaSqft * hardCostPerSqft) / CRORE);
   const gstRate = num(raw.gstPct, DEFAULT_GST_BY_ASSET.hospitality * 100) / 100;
-  const gstCr = constructionCostCr.mulNumber(gstRate);
-  const contingencyCr = constructionCostCr.mulNumber(contingencyPct / 100);
-  const preOpeningCr = D((keys * preOpeningCostPerKey) / CRORE);
-  const stampDutyCr = D(landCostCr * STAMP_DUTY_RATE);
-  const approvalCostCr = num(raw.approvalCostPerSqft, 0) > 0
-    ? D((keys * 600 * num(raw.approvalCostPerSqft)) / CRORE)
-    : D(num(raw.approvalCostCr));
+  const gstCr = hardCostCr.mulNumber(gstRate);
 
-  const hardCostCr = constructionCostCr.add(gstCr).add(contingencyCr);
-  const totalDevCostCr = D(landCostCr)
+  const stampDutyCr = D(landCostCr * stampRegPct);
+  const bettermentCr = D((landCostCr * bettermentPct) / 100);
+
+  const architectCr = hardCostCr.mulNumber(architectPctHard / 100);
+  const pmcCr = hardCostCr.mulNumber(pmcPctHard / 100);
+  const consultantsCr = hardCostCr.mulNumber(consultantsPctHard / 100);
+  const softDesignCr = architectCr.add(pmcCr).add(consultantsCr);
+
+  // Approval cost resolution (legacy priority: per-sqft → explicit Cr → % of hard)
+  const approvalCostCr =
+    num(raw.approvalCostPerSqft, 0) > 0
+      ? D((totalBuaSqft * num(raw.approvalCostPerSqft)) / CRORE)
+      : num(raw.approvalCostCr, 0) > 0
+        ? D(num(raw.approvalCostCr))
+        : hardCostCr.mulNumber(approvalsPctHard / 100);
+
+  const ffeCr = D((keys * ffePerKey) / CRORE);
+  const oseCr = D((keys * osePerKey) / CRORE);
+  const preOpeningCr = D((keys * preOpeningPerKey) / CRORE);
+  const workingCapitalDec = D(workingCapitalCr);
+
+  // Contingency base: hard + softDesign + approvals + FF&E + OS&E (matches legacy)
+  const contingencyBase = hardCostCr
+    .add(softDesignCr)
+    .add(approvalCostCr)
+    .add(ffeCr)
+    .add(oseCr);
+  const contingencyCr = contingencyBase.mulNumber(contingencyPct / 100);
+
+  // Total uses ex-IDC — used for IDC principal estimate, just like legacy.
+  const totalUsesExIDCCr = D(landCostCr)
     .add(stampDutyCr)
+    .add(bettermentCr)
     .add(hardCostCr)
+    .add(gstCr)
+    .add(softDesignCr)
+    .add(approvalCostCr)
+    .add(ffeCr)
+    .add(oseCr)
     .add(preOpeningCr)
-    .add(approvalCostCr);
+    .add(workingCapitalDec)
+    .add(contingencyCr);
 
+  // IDC: legacy formula — principal × 0.5 × rate × years + principal × fees
+  const idcYears = constructionMonths / 12;
+  const constLoanPrincipalEstimate = totalUsesExIDCCr.toNumber() * constLoanLTC;
+  const idcCr = D(
+    constLoanPrincipalEstimate * 0.5 * (constLoanRatePct / 100) * idcYears +
+      constLoanPrincipalEstimate * (constLoanFeesPct / 100),
+  );
+
+  // ── Revenue model (simple margin-based, stabilised Y1) ────────────────────
   const revPARStabilised = adr * (stabilizedOccPct / 100);
   const roomsRevY1Cr = D((keys * revPARStabilised * 365) / CRORE);
   const totalRevY1Cr = roomsRevY1Cr.mulNumber(1 + fbRevPct / 100 + otherRevPct / 100);
   const gopCr = totalRevY1Cr.mulNumber(gopMarginPct / 100);
   const ebitdaY1Cr = totalRevY1Cr.mulNumber(ebitdaMarginPct / 100);
-  const yieldOnCost = totalDevCostCr.isPositive()
-    ? ebitdaY1Cr.toNumber() / totalDevCostCr.toNumber() * 100
-    : 0;
-  const exitEBITDA = ebitdaY1Cr.mulNumber(Math.pow(1 + adrGrowthPct / 100, holdPeriodYears));
-  const exitValueCr = D(exitEBITDA.toNumber() / (exitCapRatePct / 100));
-  const entryValueCr = D(ebitdaY1Cr.toNumber() / (exitCapRatePct / 100));
 
+  // NOI = EBITDA − FF&E reserve (legacy convention, 4% of revenue default).
+  const ffeReservePct = num(raw.ffeReservePct, 4);
+  const ffeReserveY1Cr = totalRevY1Cr.mulNumber(ffeReservePct / 100);
+  const noiY1Cr = ebitdaY1Cr.sub(ffeReserveY1Cr);
+
+  // Exit value uses NOI (not EBITDA) / exit cap, matching legacy semantics.
+  const exitNOICr = noiY1Cr.mulNumber(Math.pow(1 + adrGrowthPct / 100, holdPeriodYears - 1));
+  const exitValueCr = exitCapRatePct > 0 ? D(exitNOICr.toNumber() / (exitCapRatePct / 100)) : D(0);
+  const entryValueCr = exitCapRatePct > 0 ? D(noiY1Cr.toNumber() / (exitCapRatePct / 100)) : D(0);
+
+  const totalDevCostCr = totalUsesExIDCCr.add(idcCr);
+  const yieldOnCost = totalDevCostCr.isPositive()
+    ? (noiY1Cr.toNumber() / totalDevCostCr.toNumber()) * 100
+    : 0;
+
+  // ── Cash-flow line items ──────────────────────────────────────────────────
   const items: MonthlyLineItem[] = [
-    landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr }),
+    landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr.add(bettermentCr) }),
     ...approvalsSchedule({ period, amount: approvalCostCr }),
-    hardCostItem({ period, amount: hardCostCr }),
-    // Pre-opening costs: final 2 months of construction.
+    hardCostItem({ period, amount: hardCostCr.add(gstCr).add(softDesignCr).add(contingencyCr) }),
+    // FF&E + OS&E in the final 2 construction months.
     bulletOutflow({
       period,
       month: Math.max(0, period.constructionEndMonth - 1),
-      amount: preOpeningCr.mulNumber(0.5),
-      category: 'soft_cost',
-      subcategory: 'pre_opening_1',
+      amount: ffeCr.add(oseCr).mulNumber(0.5),
+      category: 'hard_cost',
+      subcategory: 'ffe_ose_1',
     }),
     bulletOutflow({
       period,
       month: Math.max(0, period.constructionEndMonth),
-      amount: preOpeningCr.mulNumber(0.5),
+      amount: ffeCr.add(oseCr).mulNumber(0.5),
+      category: 'hard_cost',
+      subcategory: 'ffe_ose_2',
+    }),
+    // Pre-opening + working capital at end of construction.
+    bulletOutflow({
+      period,
+      month: Math.max(0, period.constructionEndMonth),
+      amount: preOpeningCr.add(workingCapitalDec),
       category: 'soft_cost',
-      subcategory: 'pre_opening_2',
+      subcategory: 'pre_opening_wc',
+    }),
+    // IDC spread uniformly across construction window.
+    bulletOutflow({
+      period,
+      month: Math.max(0, period.constructionEndMonth),
+      amount: idcCr,
+      category: 'finance_cost',
+      subcategory: 'idc',
     }),
   ];
 
@@ -117,13 +253,15 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     const monthRoomsRev = D((keys * revPAR * (365 / 12)) / CRORE);
     const monthTotalRev = monthRoomsRev.mulNumber(1 + fbRevPct / 100 + otherRevPct / 100);
     const monthEBITDA = monthTotalRev.mulNumber(ebitdaMarginPct / 100);
+    const monthFFEReserve = monthTotalRev.mulNumber(ffeReservePct / 100);
+    const monthNOI = monthEBITDA.sub(monthFFEReserve);
     items.push(
       bulletInflow({
         period,
         month,
-        amount: monthEBITDA,
+        amount: monthNOI,
         category: 'revenue',
-        subcategory: `ebitda_month_${month}`,
+        subcategory: `noi_month_${month}`,
       }),
     );
   }
@@ -134,7 +272,7 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
       amount: exitValueCr,
       category: 'revenue',
       subcategory: 'exit',
-      provenance: [prov('cashflow.exit', 'exit EBITDA / exitCapRate')],
+      provenance: [prov('cashflow.exit', 'exit NOI / exitCapRate')],
     }),
   );
 
@@ -143,12 +281,12 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
   const debtTenorYears = num(raw.debtTenorYears, 0);
   const debtTenorMonths = debtTenorYears > 0 ? debtTenorYears * 12 : undefined;
   const amortizationYearsIn = num(raw.amortizationYears, 0);
-  const debtRatePctIn = num(raw.interestRatePct, 10.5);
+  const debtRatePctIn = num(raw.interestRatePct, constLoanRatePct);
   const financing = maybeFinancing({
     totalCost: totalDevCostCr,
     debtableBase: hardCostCr,
     debtLTV: debtLTVin,
-    debtLTC: debtLTCin > 0 ? debtLTCin : undefined,
+    debtLTC: debtLTCin > 0 ? debtLTCin : constLoanLTC,
     debtRatePct: debtRatePctIn,
     constructionMonths,
     debtTenorMonths,
@@ -156,27 +294,32 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
   });
 
   const areas: AreaBreakdown = {
-    grossBuiltUpSqft: keys * 600,
+    grossBuiltUpSqft: totalBuaSqft,
     saleableSqft: null,
     carpetSqft: null,
     superBuiltUpSqft: null,
     leasableSqft: null,
-    extras: Object.freeze({ keys }),
+    extras: Object.freeze({ keys, sqftPerKey }),
   };
 
   const costs = assembleCosts({
     land: D(landCostCr),
-    construction: constructionCostCr,
+    construction: hardCostCr,
     gst: gstCr,
     contingency: contingencyCr,
     stampDuty: stampDutyCr,
     approval: approvalCostCr,
-    architecture: null,
-    pmc: null,
+    architecture: architectCr,
+    pmc: pmcCr,
     marketing: null,
-    finance: null,
+    finance: idcCr,
     extras: {
+      bettermentCr,
+      consultantsCr,
+      ffeCr,
+      oseCr,
       preOpeningCr,
+      workingCapitalCr: workingCapitalDec,
     },
   });
 
@@ -203,19 +346,26 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
   }
 
   const kpiExtras: Record<string, number | null> = {
-    noi: ebitdaY1Cr.toNumber(),
+    noi: noiY1Cr.toNumber(),
+    ebitda: ebitdaY1Cr.toNumber(),
     yieldOnCost,
     exitValue: exitValueCr.toNumber(),
     entryValue: entryValueCr.toNumber(),
     exitCapRate: exitCapRatePct,
     dscr,
     revPAR: revPARStabilised,
+    revPar: revPARStabilised,
     gopMargin: gopMarginPct,
+    ebitdaMarginPct,
+    ffeReservePct,
     devCostPerKey: (totalDevCostCr.toNumber() * CRORE) / keys,
     revenuePerKey: (totalRevY1Cr.toNumber() * CRORE) / keys,
     ebitdaPerKey: (ebitdaY1Cr.toNumber() * CRORE) / keys,
     gopPAR: (gopCr.toNumber() * CRORE) / (keys * 365),
     tRevPAR: (totalRevY1Cr.toNumber() * CRORE) / (keys * 365),
+    idcCr: idcCr.toNumber(),
+    ffeCr: ffeCr.toNumber(),
+    oseCr: oseCr.toNumber(),
   };
 
   return finalizeResult({
@@ -224,20 +374,37 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     areas,
     costs,
     revenue: {
-      totalRevenueCr: totalRevY1Cr,
-      stabilizedNOICr: ebitdaY1Cr,
+      // Match legacy flattener semantics: totalRevenueCr == effective exit value
+      // for hold-for-sale income assets. Stabilised Y1 revenue is preserved in
+      // `revenue.extras.stabilizedRevenueCr` / `kpis.extras.revenuePerKey`.
+      totalRevenueCr: exitValueCr,
+      stabilizedNOICr: noiY1Cr,
       exitValueCr,
       extras: Object.freeze({
         revPAR: D(revPARStabilised),
         roomsRevenue: roomsRevY1Cr,
         gop: gopCr,
         ebitda: ebitdaY1Cr,
+        stabilizedRevenueCr: totalRevY1Cr,
       }),
     },
     items,
     discountRatePct,
     financing,
     equityReturnsMode: 'income',
+    // Hospitality's "grossMargin" semantic matches USALI EBITDA margin
+    // rather than `(revenue - totalCost) / revenue` — otherwise the number
+    // is meaningless because "revenue" here is the exit sale price, not
+    // operating revenue.
+    grossMarginPctOverride: ebitdaMarginPct,
     kpiExtras,
+    extraProvenance: [
+      prov('costs.hardCost', `${totalBuaSqft.toLocaleString('en-IN')} sqft × ₹${hardCostPerSqft}/sqft`),
+      prov('costs.idc', 'mid-draw avg: principal × 0.5 × rate × years + principal × fees%'),
+      prov('costs.stampDuty', `${(stampRegPct * 100).toFixed(2)}% Karnataka stamp + registration`),
+      prov('revenue.totalRevenue', 'effective exit value (NOI / exit cap)'),
+      prov('revenue.NOI', 'EBITDA − FF&E reserve'),
+      prov('kpis.grossMarginPct', 'hospitality convention: USALI EBITDA margin'),
+    ],
   });
 }

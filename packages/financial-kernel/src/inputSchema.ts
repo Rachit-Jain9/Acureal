@@ -81,7 +81,10 @@ const REQUIRED_BY_CLASS: Record<AssetClass, readonly string[]> = {
     'baseRentPerSqftMonth',
     'landCostCr',
   ],
-  hospitality: ['keys', 'constructionCostPerKey', 'adr', 'landCostCr'],
+  // Hospitality accepts either `constructionCostPerKey` (legacy convenience)
+  // or `hardCostPerSqft` (preferred, matches how both engines actually size
+  // hard cost today). The OR check lives below in `validateAnyOf`.
+  hospitality: ['keys', 'adr', 'landCostCr'],
   land_parcel: ['landCostCr'],
 };
 
@@ -216,6 +219,7 @@ const RATIO_KEYS = ['debtLTV', 'debtLTC', 'debtCoverage'] as const;
 const PER_SQFT_KEYS = [
   'constructionCostPerSqft', 'sellingRatePerSqft', 'devCostPerSqft',
   'baseRentPerSqftMonth', 'tiPerSqft', 'approvalCostPerSqft',
+  'hardCostPerSqft', 'sqftPerKey',
 ] as const;
 const COUNT_KEYS = ['keys', 'constructionCostPerKey', 'preOpeningCostPerKey', 'adr', 'lcMonths'] as const;
 const TENOR_KEYS = ['holdPeriodYears', 'holdYears', 'debtTenorYears', 'amortizationYears'] as const;
@@ -363,6 +367,19 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
     const v = out[req];
     if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
       errors.push({ field: req, message: 'is required, finite, and > 0' });
+    }
+  }
+  // Class-specific "any-of" requirements.
+  if (assetClass === 'hospitality') {
+    const ccpk = out['constructionCostPerKey'];
+    const hcps = out['hardCostPerSqft'];
+    const ccpkOk = typeof ccpk === 'number' && Number.isFinite(ccpk) && ccpk > 0;
+    const hcpsOk = typeof hcps === 'number' && Number.isFinite(hcps) && hcps > 0;
+    if (!ccpkOk && !hcpsOk) {
+      errors.push({
+        field: 'hardCostPerSqft|constructionCostPerKey',
+        message: 'one of hardCostPerSqft or constructionCostPerKey is required, finite, and > 0',
+      });
     }
   }
   if (errors.length) throw new DealInputError(errors);

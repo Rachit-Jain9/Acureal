@@ -48,17 +48,21 @@ function upstream(graph, targetId) {
 }
 
 /**
- * Read-only SVG view of the kernel's FinancialGraph (the standard topology
- * the orchestrator builds at runtime). Click any node to highlight its
- * upstream dependency chain.
+ * Read-only SVG view of the kernel's FinancialGraph for the deal being viewed.
+ * Topology is asset-class-aware — income assets get an NOI/CapRate chain,
+ * hospitality gets RevPAR/GOP/EBITDA, merchant-sale classes get RLV, and so on.
+ * Click any node to highlight its upstream dependency chain.
  *
  * Props:
+ *   - assetClass: one of the REDIP asset classes. Drives which upstream
+ *     computation nodes appear.
  *   - facilityIds, tierIds, hasDSRA, hasCashTraps, hasCovenants
  *     Passed to `buildStandardGraph`; if you pass nothing, sensible defaults
  *     render a 1-facility / covenanted chain.
  *   - defaultOpen: collapse/expand control
  */
 export default function ProvenanceGraphView({
+  assetClass,
   facilityIds,
   tierIds,
   hasDSRA = false,
@@ -70,8 +74,8 @@ export default function ProvenanceGraphView({
   const [selected, setSelected] = useState(null);
 
   const graph = useMemo(
-    () => buildStandardGraph({ facilityIds, tierIds, hasDSRA, hasCashTraps, hasCovenants }),
-    [facilityIds, tierIds, hasDSRA, hasCashTraps, hasCovenants],
+    () => buildStandardGraph({ assetClass, facilityIds, tierIds, hasDSRA, hasCashTraps, hasCovenants }),
+    [assetClass, facilityIds, tierIds, hasDSRA, hasCashTraps, hasCovenants],
   );
   const laid = useMemo(() => layoutGraph(graph), [graph]);
 

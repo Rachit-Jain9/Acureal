@@ -47,3 +47,28 @@ export function useScenarios(dealId) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Provenance-carrying defaults registry for the current asset class. The
+// effective map merges globals with per-class overrides. Values are static
+// at kernel-build time, so stale-time is long.
+export function useDefaultsMeta(assetClass) {
+  return useQuery({
+    queryKey: ['defaults-meta', assetClass],
+    queryFn: () => financialsAPI.defaults(assetClass).then((r) => r.data.data),
+    enabled: !!assetClass,
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+// Stateless what-if runner. Takes raw assumption set + assetClass and
+// returns the kernel's {kpis, costs, revenue, areas}. No DB write, no
+// toast on success — the caller renders deltas inline next to the slider.
+export function useQuickCompute() {
+  return useMutation({
+    mutationFn: (data) => financialsAPI.quickCompute(data).then((r) => r.data.data),
+    // Errors surface via the returned `error` — the what-if panel shows
+    // them inline. No global toast so rapid-fire slider changes don't
+    // spam the user.
+  });
+}
