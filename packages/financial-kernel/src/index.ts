@@ -122,6 +122,10 @@ export {
   buildIncomeAmortizingCapitalStack,
   buildHospitalityCapitalStack,
   buildHospitalityWaterfall,
+  buildCashFlows,
+  normalizeEffectiveDate,
+  addUtcDays,
+  addUtcMonths,
 } from './postprocess';
 export type {
   CapitalStack,
@@ -136,6 +140,11 @@ export type {
   IncomeAmortizingCapitalStackArgs,
   HospitalityCapitalStackArgs,
   BuildWaterfallArgs,
+  CashFlowBundle,
+  CashFlowSummary,
+  QuarterlyCashFlowEntry,
+  YearlyCashFlowEntry,
+  BuildCashFlowsTimeline,
 } from './postprocess';
 
 // Phase 4 — pure HTTP handler for the investor-package endpoint.

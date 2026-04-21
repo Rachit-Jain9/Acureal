@@ -29,3 +29,18 @@ export type {
   HospitalityCapitalStackArgs,
   BuildWaterfallArgs,
 } from './capitalStack';
+
+export {
+  buildCashFlows,
+  normalizeEffectiveDate,
+  addUtcDays,
+  addUtcMonths,
+} from './cashFlows';
+
+export type {
+  CashFlowBundle,
+  CashFlowSummary,
+  QuarterlyCashFlowEntry,
+  YearlyCashFlowEntry,
+  BuildCashFlowsTimeline,
+} from './cashFlows';
