@@ -164,6 +164,90 @@ router.get('/defaults/:assetClass?', authenticate, (req, res, next) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// POST /financials/quick-compute
+//
+// Stateless kernel-first "what-if" runner. Takes { assetClass, raw } in the
+// body, runs the canonical kernel's `computeDeal`, and returns a compact
+// `{ kpis, costs, revenue, areas, engineVersion }` payload. No DB read,
+// no DB write, no legacy-engine fallback — this endpoint exists to power
+// the live what-if slider UI, so every extra layer is latency the user
+// feels.
+//
+// Registered BEFORE `/:dealId` so Express doesn't match "quick-compute"
+// as a UUID. Auth + role gate unchanged from /calculate.
+// ────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/quick-compute',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [...baseValidation, ...modelValidation],
+  handleValidation,
+  (req, res) => {
+    let kernel;
+    try {
+      // eslint-disable-next-line global-require
+      kernel = require('../../../packages/financial-kernel/dist');
+    } catch (err) {
+      return res.status(503).json({
+        success: false,
+        message: 'Financial-kernel dist/ not built. Run '
+          + '`cd packages/financial-kernel && npx tsc -p tsconfig.build.json`.',
+      });
+    }
+
+    const { computeDeal, isSupportedAssetClass } = kernel;
+    const assetClass = req.body.assetClass || 'residential_apartments';
+    if (!isSupportedAssetClass(assetClass)) {
+      return res.status(422).json({
+        success: false,
+        message: `Asset class "${assetClass}" is not supported by the kernel.`,
+      });
+    }
+
+    try {
+      const result = computeDeal({ assetClass, raw: req.body });
+      const { kpis, costs, revenue, areas } = result;
+      // Unwrap Decimal → number at the boundary. The kernel keeps high-
+      // precision decimals internally; the UI only needs display numbers.
+      const toNum = (d) => (d && typeof d.toNumber === 'function' ? d.toNumber() : d);
+      return res.json({
+        success: true,
+        data: {
+          assetClass,
+          engineVersion: 'v2',
+          kpis: {
+            revenue: toNum(kpis.revenue),
+            totalCost: toNum(kpis.totalCost),
+            grossProfit: toNum(kpis.grossProfit),
+            grossMarginPct: kpis.grossMarginPct,
+            npv: toNum(kpis.npv),
+            irr: kpis.irr,
+            equityMultiple: kpis.equityMultiple,
+            residualLandValue: kpis.residualLandValue ? toNum(kpis.residualLandValue) : null,
+            ...(kpis.extras || {}),
+          },
+          costs: costs
+            ? Object.fromEntries(Object.entries(costs).map(([k, v]) => [k, toNum(v)]))
+            : null,
+          revenue: revenue
+            ? Object.fromEntries(Object.entries(revenue).map(([k, v]) => [k, toNum(v)]))
+            : null,
+          areas: areas || null,
+        },
+      });
+    } catch (err) {
+      if (err && err.name === 'DealInputError') {
+        return res.status(422).json({ success: false, message: err.message });
+      }
+      return res.status(500).json({
+        success: false,
+        message: `quick-compute failed: ${err.message}`,
+      });
+    }
+  }
+);
+
 // POST /financials/:dealId/calculate
 router.post(
   '/:dealId/calculate',

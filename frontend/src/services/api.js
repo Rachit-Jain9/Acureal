@@ -114,6 +114,8 @@ export const financialsAPI = {
   sensitivity: (dealId, data) => api.post(`/financials/${dealId}/sensitivity`, data),
   scenarios: (dealId) => api.get(`/financials/${dealId}/scenarios`),
   exportCSV: (dealId) => api.get(`/financials/${dealId}/export/csv`, { responseType: 'blob' }),
+  // Stateless kernel-first what-if runner. No DB touch; powers live sliders.
+  quickCompute: (data) => api.post('/financials/quick-compute', data),
   // Single-source-of-truth defaults registry with provenance metadata.
   // Without assetClass → full registry; with assetClass → effective map
   // (globals ∪ asset overrides) for that class.

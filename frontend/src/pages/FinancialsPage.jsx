@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { useFinancials, useCalculateFinancials, useDefaultsMeta } from '../hooks/useFinancials';
 import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
+import WhatIfSliders from '../components/financials/WhatIfSliders';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
@@ -1836,6 +1837,12 @@ export default function FinancialsPage() {
       {hasResults && (
         <>
           <KPICards kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} />
+
+          <WhatIfSliders
+            assetClass={normalizedFinancials.assetClass}
+            baseInputs={normalizedFinancials.inputs}
+            baseKpis={normalizedFinancials.kpis}
+          />
 
           <FinancialVisualizationLayer
             financials={normalizedFinancials}

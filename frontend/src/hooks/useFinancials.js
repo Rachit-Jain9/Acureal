@@ -60,3 +60,15 @@ export function useDefaultsMeta(assetClass) {
     retry: 1,
   });
 }
+
+// Stateless what-if runner. Takes raw assumption set + assetClass and
+// returns the kernel's {kpis, costs, revenue, areas}. No DB write, no
+// toast on success — the caller renders deltas inline next to the slider.
+export function useQuickCompute() {
+  return useMutation({
+    mutationFn: (data) => financialsAPI.quickCompute(data).then((r) => r.data.data),
+    // Errors surface via the returned `error` — the what-if panel shows
+    // them inline. No global toast so rapid-fire slider changes don't
+    // spam the user.
+  });
+}
