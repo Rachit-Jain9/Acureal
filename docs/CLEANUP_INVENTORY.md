@@ -34,12 +34,34 @@ KPIs (NOI/yield for income, revPAR/EBITDA for hospitality, RLV for merchant-sale
    (matching legacy's `_legacy.gross_margin_pct`) rather than the meaningless
    `(exitValue − totalCost) / exitValue`.
 
-**Ready to delete (next commit)**:
+**Parity gate closed — deletion blocked on downstream shape migration**:
 
-- `backend/src/engines/financial.engine.js`
-- `backend/src/engines/kernel.adapter.js` (collapse into a thin wrapper or delete entirely)
-- Any route handler that reads `FIN_KERNEL_V2` and branches — inline the kernel path
-- Search for `require('.*financial.engine')` anywhere and migrate callers
+The legacy engine output is still the authoritative source for several UI shapes
+the kernel does not yet produce:
+
+- `computed.capitalStack` (sources/uses, equity/debt split, construction vs refi)
+- `computed.cashFlows` (quarterly + yearly aggregate for the waterfall chart)
+- `computed.sensitivityMatrix` (tornado inputs — kernel produces via the
+  `sensitivity` orchestration stage but the UI reads the legacy-shape matrix)
+- `computed.revenue.usali_pnl` (47-field USALI P&L for hospitality)
+- `computed._legacy.*` convenience fields read by `financial.service.js` at
+  lines 123–160 (INSERT/UPDATE column binding)
+
+**Before deleting `financial.engine.js`**, these need to exist on the kernel
+result (or a shim that synthesises them from kernel output). Plan:
+
+1. Port `capitalStack` synthesis from `financial.engine.js` to a kernel
+   post-processor (`packages/financial-kernel/src/capitalStack.ts`).
+2. Port `cashFlows` aggregator (`quarterly` / `yearly` buckets keyed by label).
+3. Decide whether USALI P&L is a kernel responsibility (move the cascade into
+   `packages/financial-kernel/src/assets/hospitality.ts`) or a UI-only adapter.
+4. Collapse `_legacy.*` usage in `financial.service.js` to kernel-native fields
+   (delete the `leg.*` reads at lines 123–160).
+5. Inline the `FIN_KERNEL_V2` gate (kernel becomes unconditional) and delete
+   `kernel.adapter.js`.
+6. Finally, delete `backend/src/engines/financial.engine.js` and the
+   `backend/tests/financial.engine.test.js` suite; convert
+   `kernel.parity.test.js` to a kernel-only golden-file regression test.
 
 **HARD ASSERTIONS (regressions now fail CI)**:
 - residential_apartments: totalCost, grossMargin, RLV, revenue, stamp, GST
