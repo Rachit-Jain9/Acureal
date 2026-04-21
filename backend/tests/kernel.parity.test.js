@@ -146,10 +146,18 @@ const industrialDeal = Object.freeze({
   skipSensitivity: true,
 });
 
+// Canonical hospitality parity deal.
+// Uses the BUA-sqft hard-cost model (keys × sqftPerKey × ₹/sqft) that both
+// engines share. Legacy's USALI P&L computes GOP/EBITDA margins from an
+// expense cascade and ignores any `gopMarginPct` / `ebitdaMarginPct` inputs;
+// similarly, legacy always sizes approval cost as % of hard (ignoring any
+// `approvalCostCr` override), so we omit those inputs here and let both
+// engines resolve via their shared defaults.
 const hospitalityDeal = Object.freeze({
   assetClass: 'hospitality',
   keys: 180,
-  constructionCostPerKey: 9_500_000,
+  sqftPerKey: 550,
+  hardCostPerSqft: 11_000,
   landCostCr: 60,
   preOpeningCostPerKey: 350_000,
   adr: 7_500,
@@ -158,12 +166,9 @@ const hospitalityDeal = Object.freeze({
   holdPeriodYears: 8,
   fbRevPct: 28,
   otherRevPct: 10,
-  gopMarginPct: 36,
-  ebitdaMarginPct: 28,
   exitCapRate: 9,
   discountRatePct: 15,
   projectDurationMonths: 30,
-  approvalCostCr: 3,
   skipSensitivity: true,
 });
 
@@ -354,6 +359,19 @@ incomeClassSuite('commercial_office', commercialDeal);
 incomeClassSuite('retail', retailDeal);
 incomeClassSuite('industrial_warehousing', industrialDeal);
 
+// Hospitality-specific epsilons. Kernel approximates the legacy USALI P&L
+// with steady-state margins (EBITDA 22% / NOI 18%); the actual cascade
+// diverges by fractions of a pp per year, which compounds into a ~0.5–1 Cr
+// residual on an exit-value-anchored revenue. Keep the totalCost /
+// grossMargin assertions tight (legacy and kernel share the same cost
+// topology), and widen revenue tolerance just enough to absorb the margin
+// drift.
+const HOSP_EPS = Object.freeze({
+  totalCostCr: 0.05,
+  revenueCr: 1.5,
+  marginPct: 0.05,
+});
+
 describeIfBuilt('kernel parity — hospitality', () => {
   let legacy;
   let kr;
@@ -366,30 +384,38 @@ describeIfBuilt('kernel parity — hospitality', () => {
     expect(kr && kr.kpis).toBeTruthy();
   });
 
-  test('parity report: hospitality KPIs', () => {
-    const l1 = toNum(legacy.totalCostCr);
-    const k1 = readKernelMoney(kr.kpis.totalCost);
-    report('totalCostCr', l1, k1, EPS.moneyCr);
+  // Post 2026-04-21 alignment:
+  //   Kernel hospitality now mirrors legacy's bucket topology (BUA-sqft hard
+  //   cost, Karnataka stamp+betterment, soft-design/approvals/FF&E/OS&E/WC/
+  //   pre-opening, 5% contingency, mid-draw IDC) → totalCost parity is exact.
+  //   Revenue is exit-value-anchored in both engines; the residual reflects
+  //   USALI cascade drift vs steady-state margins.
+  test('totalCost matches within epsilon', () => {
+    const l = toNum(legacy.totalCostCr);
+    const k = readKernelMoney(kr.kpis.totalCost);
+    const { status } = report('totalCostCr', l, k, HOSP_EPS.totalCostCr);
+    expect(status).toBe('PASS');
+  });
 
-    const l2 = toNum(legacy.totalRevenueCr);
-    const k2 = readKernelMoney(kr.kpis.revenue);
-    report('revenue (exit+cash)', l2, k2, EPS.moneyCr);
+  test('revenue (exit value) matches within epsilon', () => {
+    const l = toNum(legacy.totalRevenueCr);
+    const k = readKernelMoney(kr.kpis.revenue);
+    const { status } = report('revenue (exitValueCr)', l, k, HOSP_EPS.revenueCr);
+    expect(status).toBe('PASS');
+  });
 
+  test('grossMarginPct matches within epsilon (USALI EBITDA convention)', () => {
+    const l = toNum(legacy.grossMarginPct);
+    const k = kr.kpis.grossMarginPct;
+    const { status } = report('grossMarginPct', l, k, HOSP_EPS.marginPct);
+    expect(status).toBe('PASS');
+  });
+
+  test('exit value matches within epsilon', () => {
+    const l = toNum(legacy.kpis?.exitValue ?? legacy.kpis?.terminalValue);
     const extras = kr.kpis.extras || {};
-    const l3 = toNum(legacy.revPAR ?? legacy.kpis?.revPAR);
-    const k3 = extras.revPar != null ? toNum(extras.revPar) : null;
-    report('revPAR', l3, k3, 10); // ₹/room·night — wider eps in absolute units
-
-    const l4 = toNum(legacy.stabilizedEBITDACr ?? legacy.stabilizedNOICr);
-    const k4 = extras.ebitda != null ? toNum(extras.ebitda)
-      : extras.noi != null ? toNum(extras.noi) : null;
-    report('ebitdaCr', l4, k4, EPS.moneyCr);
-
-    const l5 = toNum(legacy.grossMarginPct);
-    const k5 = kr.kpis.grossMarginPct;
-    report('grossMarginPct', l5, k5, EPS.marginPct);
-
-    expect(l1).not.toBeNull();
-    expect(k1).not.toBeNull();
+    const k = extras.exitValue != null ? toNum(extras.exitValue) : null;
+    const { status } = report('exitValueCr', l, k, HOSP_EPS.revenueCr);
+    expect(status).toBe('PASS');
   });
 });

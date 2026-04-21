@@ -41,13 +41,17 @@ export const GLOBAL_DEFAULTS: Readonly<Record<string, number>> = Object.freeze({
   entryCapRatePct: 8,
   holdPeriodYears: 5,
 
-  // Hospitality defaults
+  // Hospitality defaults — calibrated to the legacy USALI P&L output for a
+  // typical Indian mid-scale hotel. Legacy computes these margins from an
+  // expense cascade; here we approximate with the steady-state percentages
+  // the cascade produces (~30% GOP, ~22% EBITDA, ~18% NOI after 4% FF&E
+  // reserve). Override per deal when comp data warrants a different profile.
   stabilizedOccPct: 65,
   adrGrowthPct: 5,
-  fbRevPct: 25,
-  otherRevPct: 10,
-  gopMarginPct: 35,
-  ebitdaMarginPct: 28,
+  fbRevPct: 30,
+  otherRevPct: 9,
+  gopMarginPct: 30,
+  ebitdaMarginPct: 22,
 
   // Land parcel
   landAppreciationPct: 8,

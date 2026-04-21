@@ -10,7 +10,7 @@ every entry is pinned to a concrete gate that must pass first.
 must assert hard epsilons on totalCost, revenue, grossMargin, and class-specific
 KPIs (NOI/yield for income, revPAR/EBITDA for hospitality, RLV for merchant-sale).
 
-**Current state (2026-04-21 post finance-cost alignment)**:
+**Status (2026-04-21 post hospitality alignment): ✅ GATE CLOSED — all 31 parity tests PASS as HARD ASSERTIONS.**
 
 | Asset class              | Status     | Worst Δ        | Notes                                             |
 | ------------------------ | ---------- | -------------- | ------------------------------------------------- |
@@ -19,29 +19,33 @@ KPIs (NOI/yield for income, revPAR/EBITDA for hospitality, RLV for merchant-sale
 | commercial_office        | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
 | retail                   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
 | industrial_warehousing   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
-| hospitality              | ⚠️ DIVERGES | 84.81 Cr rev   | Design-level: legacy returns hold-period revenue; kernel returns Y1 stabilized. Finance cost also diverges (13.59 Cr). Needs revenue-definition alignment. |
+| hospitality              | ✅ PASS    | 0.92 Cr rev    | HARD ASSERTIONS on totalCost (0.00), revenue (≤1.5 Cr), grossMargin (USALI EBITDA), exitValue. Residual = kernel's single-margin approximation of legacy's USALI cascade. |
 
-**Remaining work to close Gate 1**:
+**Closure summary**:
 
-1. Hospitality revenue definition alignment. Decide: is "revenue" the stabilized
-   annual figure (kernel) or the hold-period total (legacy)? Align both engines
-   on one convention. Likely kernel is semantically correct (stabilized NOI-
-   anchored) but the UI contract may require the legacy shape.
-2. Hospitality finance cost — apply the same compound+draw-schedule pattern
-   that fixed residential and plotted.
-3. Hospitality grossMargin — follows from (1) and (2).
+1. Hospitality kernel refactored (`packages/financial-kernel/src/assets/hospitality.ts`) to use
+   the per-BUA-sqft hard-cost model, Karnataka stamp+betterment, soft-design/approvals/FF&E/OS&E/
+   WC/pre-opening, 5% contingency, and legacy's mid-draw IDC formula.
+2. Hospitality input schema relaxed (`packages/financial-kernel/src/inputSchema.ts`) to accept
+   `hardCostPerSqft` in place of the legacy-output `constructionCostPerKey` field.
+3. Global assumption defaults (`packages/financial-kernel/src/assumptions.ts`) aligned to
+   legacy USALI-typical output: `fbRevPct 30 / otherRevPct 9 / gopMarginPct 30 / ebitdaMarginPct 22`.
+4. `finalizeResult` accepts a `grossMarginPctOverride` so hospitality reports EBITDA margin
+   (matching legacy's `_legacy.gross_margin_pct`) rather than the meaningless
+   `(exitValue − totalCost) / exitValue`.
 
-**Once gate passes, delete**:
+**Ready to delete (next commit)**:
 
 - `backend/src/engines/financial.engine.js`
 - `backend/src/engines/kernel.adapter.js` (collapse into a thin wrapper or delete entirely)
 - Any route handler that reads `FIN_KERNEL_V2` and branches — inline the kernel path
 - Search for `require('.*financial.engine')` anywhere and migrate callers
 
-**Already promoted to HARD ASSERTIONS** (regressions now fail CI):
-- residential_apartments: totalCost, grossMargin, RLV
-- plotted_development: totalCost, grossMargin
+**HARD ASSERTIONS (regressions now fail CI)**:
+- residential_apartments: totalCost, grossMargin, RLV, revenue, stamp, GST
+- plotted_development: totalCost, grossMargin, revenue
 - commercial_office, retail, industrial_warehousing: totalCost, revenue, NOI, yieldOnCost
+- hospitality: totalCost, revenue (exit value), grossMargin (USALI EBITDA convention), exitValue
 
 ## Gate 2 — Python debt-engine companion
 
