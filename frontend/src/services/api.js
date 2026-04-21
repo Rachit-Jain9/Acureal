@@ -237,6 +237,7 @@ export const masterPlanAPI = {
 export const extractionAPI = {
   extract:          (documentId, data)                            => api.post(`/documents/${documentId}/extract`, data),
   getResult:        (documentId)                                  => api.get(`/documents/${documentId}/extraction`),
+  listForDeal:      (dealId)                                      => api.get(`/deals/${dealId}/extractions`),
   applyCorrections: (documentId, extractionId, corrections)       => api.put(`/documents/${documentId}/extraction/${extractionId}/corrections`, { corrections }),
 };
 

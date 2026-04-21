@@ -602,6 +602,145 @@ async function getExtractionByDocument(documentId) {
   return result.rows[0] || null;
 }
 
+// Deal-scoped roll-up for UI provenance badges. Returns only the latest
+// extraction per document (so corrections win over stale AI passes), and only
+// extractions currently in a completed state. Callers that need raw history
+// should read document_extractions directly.
+async function getDealExtractions(dealId) {
+  const result = await query(
+    `SELECT DISTINCT ON (de.document_id)
+            de.id,
+            de.document_id,
+            de.doc_type,
+            de.extraction_status,
+            de.structured_fields,
+            de.confidence_scores,
+            de.human_corrections,
+            de.language_detected,
+            de.extracted_at,
+            de.reviewed_at,
+            d.name AS document_name,
+            d.file_url
+       FROM document_extractions de
+       JOIN documents d ON d.id = de.document_id
+      WHERE de.deal_id = $1
+        AND de.extraction_status IN ('completed','reviewed')
+      ORDER BY de.document_id, de.created_at DESC`,
+    [dealId],
+  );
+
+  const extractions = result.rows.map((row) => {
+    const corrections = row.human_corrections || {};
+    const fields = { ...(row.structured_fields || {}), ...corrections };
+    return {
+      id: row.id,
+      document_id: row.document_id,
+      document_name: row.document_name,
+      file_url: row.file_url,
+      doc_type: row.doc_type,
+      status: row.extraction_status,
+      language_detected: row.language_detected,
+      extracted_at: row.extracted_at,
+      reviewed_at: row.reviewed_at,
+      fields,
+      confidence: row.confidence_scores || {},
+      has_corrections: Object.keys(corrections).length > 0,
+    };
+  });
+
+  // Also roll up a "field map" keyed by canonical buildability/underwriting
+  // keys → best source, so the frontend can hang a provenance badge next to
+  // the matching input without re-scanning structured_fields client-side.
+  const fieldMap = buildFieldMap(extractions);
+
+  return {
+    count: extractions.length,
+    extractions,
+    field_map: fieldMap,
+  };
+}
+
+// Canonical field key → list of (source_key, boost) pairs to search in the
+// extraction's structured_fields. Keep this conservative — only fields the
+// deterministic buildability engine actually consumes, and only where Gemini
+// prompts have a stable output shape.
+const FIELD_MAP_RULES = {
+  land_area_sqft: [
+    ['land_area_sqft', 1.0],
+    ['plot_area_sqft', 0.98],
+    ['site_area_sqft', 0.95],
+  ],
+  land_area_acres: [
+    ['land_area_acres', 1.0],
+    ['plot_area_acres', 0.98],
+  ],
+  road_width_m: [
+    ['road_width_m', 1.0],
+    ['abutting_road_width_m', 0.95],
+    ['road_width_ft', 0.7], // lower boost — needs unit conversion
+  ],
+  survey_number: [
+    ['survey_number', 1.0],
+    ['survey_no', 1.0],
+    ['sy_no', 0.95],
+  ],
+  khata_number: [
+    ['khata_number', 1.0],
+    ['khata_no', 1.0],
+  ],
+  owner_name: [
+    ['owner_name', 1.0],
+    ['seller_name', 0.9],
+    ['vendor_name', 0.9],
+  ],
+  consideration_inr: [
+    ['consideration_inr', 1.0],
+    ['sale_price_inr', 0.95],
+    ['total_consideration_inr', 1.0],
+  ],
+  circle_rate_per_sqft: [
+    ['circle_rate_per_sqft', 1.0],
+    ['guidance_value_per_sqft', 0.95],
+  ],
+  zone_code: [
+    ['zone_code', 1.0],
+    ['zoning_classification', 0.95],
+  ],
+  fsi: [
+    ['permissible_fsi', 1.0],
+    ['fsi', 0.9],
+  ],
+};
+
+function buildFieldMap(extractions) {
+  const map = {};
+  for (const ext of extractions) {
+    for (const [canonical, candidates] of Object.entries(FIELD_MAP_RULES)) {
+      for (const [sourceKey, boost] of candidates) {
+        const value = ext.fields?.[sourceKey];
+        if (value == null || value === '') continue;
+        const confidence = Number(ext.confidence?.[sourceKey] ?? 0);
+        const effective = confidence * boost;
+        const existing = map[canonical];
+        if (!existing || effective > existing.confidence) {
+          map[canonical] = {
+            value,
+            raw_key: sourceKey,
+            confidence: effective,
+            from_corrections: ext.has_corrections && ext.fields?.[sourceKey] !== undefined,
+            document_id: ext.document_id,
+            document_name: ext.document_name,
+            doc_type: ext.doc_type,
+            extraction_id: ext.id,
+          };
+        }
+        break; // first match in this extraction's candidate list wins
+      }
+    }
+  }
+  return map;
+}
+
 async function applyCorrections(extractionId, corrections, userId) {
   // Append to correction history
   const existing = await query(
@@ -643,6 +782,7 @@ module.exports = {
   classifyDocument,
   extractDocument,
   getExtractionByDocument,
+  getDealExtractions,
   applyCorrections,
   GEMINI_EXTRACTION_PROMPTS,
 };

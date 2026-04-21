@@ -64,6 +64,19 @@ router.get('/documents/:documentId/extraction', authenticate, async (req, res, n
   }
 });
 
+// GET /deals/:dealId/extractions
+// Deal-scoped roll-up of every completed extraction attached to this deal,
+// plus a pre-computed field_map keyed by canonical buildability/underwriting
+// field names. Powers the provenance badges on the Parcel / Zoning tabs.
+router.get('/deals/:dealId/extractions', authenticate, async (req, res, next) => {
+  try {
+    const data = await extractionService.getDealExtractions(req.params.dealId);
+    return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PUT /documents/:documentId/extraction/:extractionId/corrections
 router.put('/documents/:documentId/extraction/:extractionId/corrections', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {

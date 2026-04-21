@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Sparkles, Building2, Layers, AlertTriangle, Info, Home, Car } from 'lucide-react';
+import { Sparkles, Building2, Layers, AlertTriangle, Info, Home, Car, Ruler } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useZone } from '../../hooks/useMasterPlan';
 import { computeBuildability, fmtNum } from '../../utils/buildability';
@@ -105,13 +105,14 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
                   : null}
               />
               <Tile
-                icon={Sparkles}
+                icon={Ruler}
                 tone="primary"
-                label={result.unit_label || 'Units'}
-                value={result.unit_count != null ? fmtNum(result.unit_count, 0) : '\u2014'}
-                hint={result.unit_size_sqft != null
-                  ? `@${fmtNum(result.unit_size_sqft)} sqft`
-                  : 'Set asset class'}
+                label="Ground cov."
+                value={result.max_ground_coverage_sqft != null
+                  ? fmtNum(result.max_ground_coverage_sqft)
+                  : '\u2014'}
+                unit="sqft"
+                hint={`${fmtNum(result.ground_coverage_pct, 0)}%${result.ground_coverage_source === 'default' ? ' (default)' : ''}`}
               />
             </div>
 

@@ -1652,258 +1652,621 @@ function buildIncomeQuickCFs(p) {
   return safeCashFlows(cfs);
 }
 
-// ─── HOSPITALITY ─────────────────────────────────────────────────────────────
-// Hotel underwriting: keys-based model, RevPAR → GOP → EBITDA → Exit
+// ─── HOSPITALITY (USALI 11e, India / Bangalore) ──────────────────────────────
+// Hotel underwriting adapted for Karnataka. Full USALI P&L with departmental,
+// undistributed and fixed operating lines, India-specific Sources & Uses,
+// construction loan → permanent refi capital stack, and LP/GP waterfall.
+// Deterministic — see CLAUDE.md.
+//
+// Benchmarks referenced (2025-26, Bengaluru 5-star / upscale full service):
+//  • Stamp + reg = 5.0 + 1.0 + cess/surcharge ≈ 6.6% (Karnataka urban)
+//  • GST on hospitality construction = 18%
+//  • Key BUA: 450–600 sqft (includes lobby / MEP / BOH / corridors)
+//  • Hard cost: ₹9 000–14 000 / sqft
+//  • FF&E:  ₹20–35 lakh / key   OS&E: ₹3–5 lakh / key
+//  • Pre-opening: ₹3–5 lakh / key; Working cap: ₹0.5 lakh / key
+//  • Mgmt fee: base 2.5–3.5 % of rev + incentive 8–10 % of GOP
+//  • Brand: royalty 4–6 % of rooms + res/mkt 1.5–2.5 %
+//  • Property tax (BBMP) 1.5–2.5 % of rev; Insurance 0.8–1.2 % of rev
+//  • FF&E reserve: 3–4 % of total revenue (USALI)
+// Sources: HVS India, JLL HotelIntel 2025, CBRE / Knight Frank Bangalore reports,
+//          BBMP property tax circular 2024, RERA-K listings, Marriott / IHG HMAs.
+
+const KARNATAKA_STAMP_REG_RATE = 0.066;
+const HOSP_DEFAULT_SQFT_PER_KEY = 550;
+const HOSP_DAYS_PER_YEAR = 365;
 
 function calculateHospitality(input) {
-  const keys                 = Math.round(Number(input.keys) || 100);
-  const constructionCostKey  = Number(input.constructionCostPerKey) || 8000000; // ₹ per key (not Cr)
+  // ─── 1. Read inputs ────────────────────────────────────────────────────────
+  const keys                 = Math.round(Number(input.keys) || 200);
+  const sqftPerKey           = Number(input.sqftPerKey) || HOSP_DEFAULT_SQFT_PER_KEY;
+  const totalBuaSqft         = keys * sqftPerKey;
+
   const landCostCr           = Number(input.landCostCr) || 0;
-  const preOpeningCostKey    = Number(input.preOpeningCostPerKey) || 300000;    // ₹ per key
-  const adr                  = Number(input.adr) || 6000;                      // Average Daily Rate ₹
+  const stampRegPctInput     = Number(input.stampRegPct);
+  const stampRegPct          = stampRegPctInput > 0 ? stampRegPctInput / 100 : KARNATAKA_STAMP_REG_RATE;
+  const bettermentPct        = Number(input.bettermentPct) || 3;
+
+  // Key mix — owner-rate (contracted / guaranteed-occ) + market-rate
+  const ownerRateKeys        = Math.min(keys, Math.max(0, Math.round(Number(input.ownerRateKeys) || 0)));
+  const marketRateKeys       = Math.max(0, keys - ownerRateKeys);
+  const ownerRateADR         = Number(input.ownerRateADR) || 0;
+  const ownerRateGuaranteedOcc = Math.min(1, Math.max(0, (Number(input.ownerRateGuaranteedOccPct) || 0) / 100));
+
+  const adr                  = Number(input.adr) || 8500;
   const adrGrowthPct         = Number(input.adrGrowthPct) || 5;
-  const stabilizedOccPct     = Number(input.stabilizedOccPct) || 65;
-  const holdPeriodYears      = Number(input.holdPeriodYears) || 8;
-  const fbRevPct             = Number(input.fbRevPct) || 25;                   // F&B as % of rooms rev
-  const otherRevPct          = Number(input.otherRevPct) || 10;                // Other revenue as %
-  const gopMarginPct         = Number(input.gopMarginPct) || 35;               // GOP % of total revenue
-  const ebitdaMarginPct      = Number(input.ebitdaMarginPct) || 28;            // EBITDA after mgmt fee
-  const exitCapRate          = Number(input.exitCapRate) || 9;
-  const discountRatePct      = Number(input.discountRatePct) || 15;
-  const debtCoverage         = resolveDebtRatio(input.debtCoverage, 0);
-  const interestRatePct      = Number(input.interestRatePct) || 10.5;
-  const amortizationYearsHosp = Math.max(5, Math.min(30, Number(input.amortizationYears) || 15));
+  const stabilizedOccPct     = Number(input.stabilizedOccPct) || 70;
+  const initialOccPct        = Number(input.initialOccPct) || 45;
+  const stabilizationYear    = Math.max(2, Math.min(6, Number(input.stabilizationYear) || 4));
+  const holdPeriodYears      = Math.max(5, Math.min(15, Number(input.holdPeriodYears) || 10));
+
+  // Non-room revenue drivers (% of rooms revenue)
+  const fbRestaurantPctRooms = Number(input.fbRestaurantPctOfRooms) || 18;
+  const fbBanquetPctRooms    = Number(input.fbBanquetPctOfRooms) || 12;
+  const otherOperatedPctRooms = Number(input.otherOperatedPctOfRooms) || 7;
+  const parkingPctRooms      = Number(input.parkingPctOfRooms) || 2;
+  const leaseIncomeCrPa      = Number(input.leaseIncomeCrPa) || 0;
+
+  // USALI departmental expense ratios
+  const roomsDeptCostPct     = Number(input.roomsDeptCostPct) || 28;
+  const fbDeptCostPct        = Number(input.fbDeptCostPct) || 75;
+  const otherDeptCostPct     = Number(input.otherDeptCostPct) || 52;
+
+  // USALI undistributed expenses (% of total revenue)
+  const aAndGPct             = Number(input.aAndGPct) || 7.5;
+  const itPct                = Number(input.itPct) || 2.0;
+  const smPct                = Number(input.smPct) || 5.5;
+  const pomPct               = Number(input.pomPct) || 4.5;
+  const utilitiesPct         = Number(input.utilitiesPct) || 5.0;
+
+  // Management fee
+  const mgmtBasePct          = Number(input.mgmtBasePct) || 3.0;
+  const mgmtIncentivePct     = Number(input.mgmtIncentivePct) || 9.0;
+
+  // Brand fees
+  const brandRoyaltyPctRooms = Number(input.brandRoyaltyPctOfRooms) || 5.0;
+  const brandMktReservPctRooms = Number(input.brandMktReservPctOfRooms) || 2.0;
+
+  // Fixed expenses
+  const propertyTaxPctRev    = Number(input.propertyTaxPctRev) || 2.0;
+  const insurancePctRev      = Number(input.insurancePctRev) || 1.0;
+  const groundLeaseCrPa      = Number(input.groundLeaseCrPa) || 0;
+
+  // FF&E reserve
+  const ffeReservePct        = Number(input.ffeReservePct) || 4.0;
+
+  // Capex (India benchmarks)
+  const hardCostPerSqft      = Number(input.hardCostPerSqft) || 11000;
+  const architectPctHard     = Number(input.architectPctOfHard) || 4;
+  const pmcPctHard           = Number(input.pmcPctOfHard) || 2;
+  const consultantsPctHard   = Number(input.consultantsPctOfHard) || 3.5;
+  const approvalsPctHard     = Number(input.approvalsPctOfHard) || 2;
+  const ffePerKey            = Number(input.ffePerKey) || 2500000;
+  const osePerKey            = Number(input.osePerKey) || 400000;
+  const preOpeningPerKey     = Number(input.preOpeningPerKey) || 350000;
+  const workingCapitalCr     = Number(input.workingCapitalCr) || (keys * 50000) / 1e7;
   const contingencyPct       = Number(input.contingencyPct) || 5;
+
+  // Capital stack
+  const constLoanLTC         = Math.min(0.80, Math.max(0, Number(input.constLoanLTC) || 0.55));
+  const constLoanRatePct     = Number(input.constLoanRatePct) || 10.5;
+  const constLoanFeesPct     = Number(input.constLoanFeesPct) || 1.0;
+  const refiLTV              = Math.min(0.70, Math.max(0, Number(input.refiLTV) || 0.55));
+  const refiCapRate          = Number(input.refiCapRatePct) || 8.5;
+  const refiInterestRate     = Number(input.refiInterestRatePct) || 9.25;
+  const refiIOYears          = Math.max(0, Number(input.refiIOYears) || 2);
+  const refiAmortYears       = Math.max(10, Math.min(30, Number(input.refiAmortYears) || 20));
+  const refiYear             = Math.max(stabilizationYear, Math.min(holdPeriodYears - 1, Number(input.refiYear) || stabilizationYear));
+
+  // Exit + discount
+  const exitCapRate          = Number(input.exitCapRate) || 8.25;
+  const discountRatePct      = Number(input.discountRatePct) || 14;
+  const saleExpPct           = Number(input.saleExpensesPct) || 4;
+
+  // Legacy / compatibility fields
+  const debtCoverage         = resolveDebtRatio(input.debtCoverage, constLoanLTC);
+  const interestRatePct      = constLoanRatePct;
+  const amortizationYearsHosp = refiAmortYears;
   const exitStrategy         = resolveExitStrategy(input.exitStrategy);
-  const lrdLTV               = resolveDebtRatio(input.lrdLTV, 0.55);
-  const lrdInterestRatePct   = Number(input.lrdInterestRatePct) || 9.5;
-  const maxRefinanceYear     = Math.max(1, holdPeriodYears - 1);
-  const lrdRefinanceYear     = Number(input.lrdRefinanceYear) > 0
-    ? Math.min(Number(input.lrdRefinanceYear), maxRefinanceYear)
-    : Math.max(1, Math.floor(holdPeriodYears / 2));
   const forwardPurchasePriceCr = Number(input.forwardPurchasePriceCr) || 0;
-  const exitMultipleInput      = Number(input.exitMultiple) || 0;
-  const perpetuityGrowthPct    = Number(input.perpetuityGrowthPct);
-  const terminalValueMethod    = resolveTerminalValueMethod(input.terminalValueMethod, {
-    exitStrategy,
-    forwardPurchasePriceCr,
+  const exitMultipleInput    = Number(input.exitMultiple) || 0;
+  const perpetuityGrowthPct  = Number(input.perpetuityGrowthPct);
+  const terminalValueMethod  = resolveTerminalValueMethod(input.terminalValueMethod, {
+    exitStrategy, forwardPurchasePriceCr,
   });
+
   const timeline = resolveTimelineInput(input, {
-    defaultDurationYears: 2.5,
+    defaultDurationYears: 3,
     defaultConstructionStartYears: 0,
     defaultConstructionEndRatio: 1,
   });
   const constructionMonths = timeline.projectDurationMonths;
 
-  if (keys <= 0)                   throw new Error('Number of keys must be positive');
-  if (constructionCostKey <= 0)    throw new Error('Construction cost per key must be positive');
-  if (adr <= 0)                    throw new Error('ADR must be positive');
+  if (keys <= 0) throw new Error('Number of keys must be positive');
+  if (adr <= 0 && ownerRateADR <= 0) throw new Error('ADR must be positive');
   if (stabilizedOccPct <= 0 || stabilizedOccPct > 100) throw new Error('Occupancy must be 0–100%');
   if (exitCapRate <= 0 || exitCapRate > 30) throw new Error('Exit cap rate must be 0–30%');
   if (timeline.projectDurationYears < MIN_PROJECT_DURATION_YEARS || timeline.projectDurationYears > MAX_PROJECT_DURATION_YEARS) {
     throw new Error(`Project duration must be between ${MIN_PROJECT_DURATION_YEARS} and ${MAX_PROJECT_DURATION_YEARS} years`);
   }
 
-  // Development costs
-  const constructionCostCr = (keys * constructionCostKey) / 1e7;
-  const gstRateInput       = resolveGstRate(input, 'hospitality');
-  const gstCostCr          = constructionCostCr * gstRateInput;
-  const contingencyCr      = constructionCostCr * (contingencyPct / 100);
-  const preOpeningCostCr   = (keys * preOpeningCostKey) / 1e7;
-  const stampDutyCr        = landCostCr * STAMP_DUTY_RATE;
-  const approvalCostCr     = Number(input.approvalCostPerSqft) > 0
-    ? (keys * 600 * Number(input.approvalCostPerSqft)) / 1e7
-    : Number(input.approvalCostCr) || 0;
-  const hardCostCr         = constructionCostCr + gstCostCr + contingencyCr;
-  const totalDevCostCr     = landCostCr + stampDutyCr + hardCostCr + preOpeningCostCr + approvalCostCr;
+  // ─── 2. Sources & Uses ────────────────────────────────────────────────────
+  const stampDutyCr          = landCostCr * stampRegPct;
+  const bettermentCr         = landCostCr * (bettermentPct / 100);
+  const hardCostCr           = (totalBuaSqft * hardCostPerSqft) / 1e7;
+  const gstRateInput         = resolveGstRate(input, 'hospitality');
+  const gstCostCr            = hardCostCr * gstRateInput;
+  const architectCr          = hardCostCr * (architectPctHard / 100);
+  const pmcCr                = hardCostCr * (pmcPctHard / 100);
+  const consultantsCr        = hardCostCr * (consultantsPctHard / 100);
+  const softDesignCr         = architectCr + pmcCr + consultantsCr;
+  const approvalsCr          = hardCostCr * (approvalsPctHard / 100);
+  const ffeCapexCr           = (keys * ffePerKey) / 1e7;
+  const oseCapexCr           = (keys * osePerKey) / 1e7;
+  const preOpeningCr         = (keys * preOpeningPerKey) / 1e7;
+  const contingencyBase      = hardCostCr + softDesignCr + approvalsCr + ffeCapexCr + oseCapexCr;
+  const contingencyCr        = contingencyBase * (contingencyPct / 100);
 
-  // Stabilized Year 1 Operating Model
-  // Ramp-up schedule: 40% occ Y1, 55% Y2, stabilized from Y3
-  const occupancyRamp = [0.40, 0.55, stabilizedOccPct / 100];
+  const totalUsesExIDCCr = landCostCr + stampDutyCr + bettermentCr
+    + hardCostCr + gstCostCr + softDesignCr + approvalsCr
+    + ffeCapexCr + oseCapexCr + preOpeningCr + workingCapitalCr + contingencyCr;
 
-  const revPARStabilized  = adr * (stabilizedOccPct / 100);                    // ₹/key/night
-  const roomsRevCrY1Stab  = (keys * revPARStabilized * 365) / 1e7;
-  const fbRevCrY1Stab     = roomsRevCrY1Stab * (fbRevPct / 100);
-  const otherRevCrY1Stab  = roomsRevCrY1Stab * (otherRevPct / 100);
-  const totalRevCrY1Stab  = roomsRevCrY1Stab + fbRevCrY1Stab + otherRevCrY1Stab;
-  const gopCrY1Stab       = totalRevCrY1Stab * (gopMarginPct / 100);
-  const ebitdaCrY1Stab    = totalRevCrY1Stab * (ebitdaMarginPct / 100);
+  // IDC on construction loan — mid-draw average method
+  const idcYears = constructionMonths / 12;
+  const constLoanPrincipalEstimate = totalUsesExIDCCr * constLoanLTC;
+  const idcCr = constLoanPrincipalEstimate * 0.5 * (constLoanRatePct / 100) * idcYears
+              + constLoanPrincipalEstimate * (constLoanFeesPct / 100);
 
-  const yieldOnCost   = totalDevCostCr > 0 ? (ebitdaCrY1Stab / totalDevCostCr) * 100 : 0;
-  const exitEBITDA    = ebitdaCrY1Stab * Math.pow(1 + adrGrowthPct / 100, holdPeriodYears);
-  const capRateTvCr   = exitEBITDA / (exitCapRate / 100);
-  const entryValueCr  = ebitdaCrY1Stab / (exitCapRate / 100);
+  const totalDevCostCr = totalUsesExIDCCr + idcCr;
+  const finalConstDebtCr = totalDevCostCr * constLoanLTC;
+  const equityCr = Math.max(0, totalDevCostCr - finalConstDebtCr);
+
+  // Legacy field — sum of "hard" cost bucket for back-compat
+  const preOpeningCostCr = preOpeningCr;
+  const approvalCostCr = approvalsCr;
+  const constructionCostCr = hardCostCr;
+
+  // ─── 3. Annual USALI P&L (10-year) ─────────────────────────────────────────
+  const years = holdPeriodYears;
+  const occRamp = hospOccRamp({ initialOccPct, stabilizedOccPct, stabilizationYear, years });
+
+  const annual = [];
+  for (let y = 1; y <= years; y++) {
+    const mktOcc = occRamp[y - 1] / 100;
+    const adrY   = adr * Math.pow(1 + adrGrowthPct / 100, y - 1);
+
+    // Rooms revenue: owner-rate (contracted) + market-rate
+    const ownerRoomsCr = (ownerRateKeys * ownerRateADR * ownerRateGuaranteedOcc * HOSP_DAYS_PER_YEAR) / 1e7;
+    const mktRoomsCr   = (marketRateKeys * adrY * mktOcc * HOSP_DAYS_PER_YEAR) / 1e7;
+    const roomsCr      = ownerRoomsCr + mktRoomsCr;
+
+    const blendedOcc = keys > 0
+      ? ((ownerRateKeys * ownerRateGuaranteedOcc) + (marketRateKeys * mktOcc)) / keys
+      : mktOcc;
+    const blendedADR = (blendedOcc > 0 && keys > 0)
+      ? (roomsCr * 1e7) / (keys * HOSP_DAYS_PER_YEAR * blendedOcc)
+      : adrY;
+    const revPAR = keys > 0 ? (roomsCr * 1e7) / (keys * HOSP_DAYS_PER_YEAR) : 0;
+
+    // Non-room revenue
+    const fbRestCr  = roomsCr * (fbRestaurantPctRooms / 100);
+    const fbBanqCr  = roomsCr * (fbBanquetPctRooms / 100);
+    const fbCr      = fbRestCr + fbBanqCr;
+    const otherOpCr = roomsCr * (otherOperatedPctRooms / 100);
+    const parkingCr = roomsCr * (parkingPctRooms / 100);
+    const leaseCr   = leaseIncomeCrPa;
+    const totalRevCr = roomsCr + fbCr + otherOpCr + parkingCr + leaseCr;
+
+    // Departmental expenses
+    const roomsDeptExpCr = roomsCr * (roomsDeptCostPct / 100);
+    const fbDeptExpCr    = fbCr * (fbDeptCostPct / 100);
+    const otherDeptExpCr = (otherOpCr + parkingCr) * (otherDeptCostPct / 100);
+    const totalDeptExpCr = roomsDeptExpCr + fbDeptExpCr + otherDeptExpCr;
+    const totalDeptProfitCr = totalRevCr - leaseCr - totalDeptExpCr;
+
+    // Undistributed expenses
+    const aAndGCr = totalRevCr * (aAndGPct / 100);
+    const itCr    = totalRevCr * (itPct / 100);
+    const smCr    = totalRevCr * (smPct / 100);
+    const pomCr   = totalRevCr * (pomPct / 100);
+    const utilCr  = totalRevCr * (utilitiesPct / 100);
+    const totalUndistCr = aAndGCr + itCr + smCr + pomCr + utilCr;
+
+    // Brand fees
+    const brandRoyaltyCr   = roomsCr * (brandRoyaltyPctRooms / 100);
+    const brandMktReservCr = roomsCr * (brandMktReservPctRooms / 100);
+    const totalBrandCr     = brandRoyaltyCr + brandMktReservCr;
+
+    // GOP
+    const gopCr = totalDeptProfitCr + leaseCr - totalUndistCr - totalBrandCr;
+
+    // Management fees
+    const mgmtBaseCr      = totalRevCr * (mgmtBasePct / 100);
+    const mgmtIncentiveCr = Math.max(0, gopCr) * (mgmtIncentivePct / 100);
+    const totalMgmtCr     = mgmtBaseCr + mgmtIncentiveCr;
+
+    // IBFC → Fixed → EBITDA → FF&E reserve → NOI
+    const ibfcCr       = gopCr - totalMgmtCr;
+    const propTaxCr    = totalRevCr * (propertyTaxPctRev / 100);
+    const insuranceCr  = totalRevCr * (insurancePctRev / 100);
+    const groundLeaseCr = groundLeaseCrPa;
+    const totalFixedCr = propTaxCr + insuranceCr + groundLeaseCr;
+    const ebitdaCr     = ibfcCr - totalFixedCr;
+    const ffeReserveCr = totalRevCr * (ffeReservePct / 100);
+    const noiCr        = ebitdaCr - ffeReserveCr;
+
+    annual.push({
+      year: y,
+      occupancy: round4(blendedOcc * 100),
+      adr: round2(blendedADR),
+      revPAR: round2(revPAR),
+      trevPAR: keys > 0 ? round2((totalRevCr * 1e7) / (keys * HOSP_DAYS_PER_YEAR)) : null,
+      roomsRevenueCr: round4(roomsCr),
+      ownerRoomsCr: round4(ownerRoomsCr),
+      marketRoomsCr: round4(mktRoomsCr),
+      fbRevenueCr: round4(fbCr),
+      fbRestaurantCr: round4(fbRestCr),
+      fbBanquetCr: round4(fbBanqCr),
+      otherOperatedCr: round4(otherOpCr),
+      parkingCr: round4(parkingCr),
+      leaseIncomeCr: round4(leaseCr),
+      totalRevenueCr: round4(totalRevCr),
+      roomsDeptExpCr: round4(roomsDeptExpCr),
+      fbDeptExpCr: round4(fbDeptExpCr),
+      otherDeptExpCr: round4(otherDeptExpCr),
+      totalDeptExpCr: round4(totalDeptExpCr),
+      deptProfitCr: round4(totalDeptProfitCr),
+      deptProfitMarginPct: totalRevCr > 0 ? round2((totalDeptProfitCr / totalRevCr) * 100) : null,
+      aAndGCr: round4(aAndGCr),
+      itCr: round4(itCr),
+      smCr: round4(smCr),
+      pomCr: round4(pomCr),
+      utilitiesCr: round4(utilCr),
+      totalUndistCr: round4(totalUndistCr),
+      brandRoyaltyCr: round4(brandRoyaltyCr),
+      brandMktReservCr: round4(brandMktReservCr),
+      gopCr: round4(gopCr),
+      gopMarginPct: totalRevCr > 0 ? round2((gopCr / totalRevCr) * 100) : null,
+      gopPAR: keys > 0 ? round2((gopCr * 1e7) / keys) : null,
+      mgmtBaseCr: round4(mgmtBaseCr),
+      mgmtIncentiveCr: round4(mgmtIncentiveCr),
+      totalMgmtCr: round4(totalMgmtCr),
+      ibfcCr: round4(ibfcCr),
+      propTaxCr: round4(propTaxCr),
+      insuranceCr: round4(insuranceCr),
+      groundLeaseCr: round4(groundLeaseCr),
+      totalFixedCr: round4(totalFixedCr),
+      ebitdaCr: round4(ebitdaCr),
+      ebitdaMarginPct: totalRevCr > 0 ? round2((ebitdaCr / totalRevCr) * 100) : null,
+      ebitdaPAR: keys > 0 ? round2((ebitdaCr * 1e7) / keys) : null,
+      ffeReserveCr: round4(ffeReserveCr),
+      noiCr: round4(noiCr),
+      noiMarginPct: totalRevCr > 0 ? round2((noiCr / totalRevCr) * 100) : null,
+    });
+  }
+
+  const stabIdx = Math.min(annual.length - 1, Math.max(0, stabilizationYear - 1));
+  const stab = annual[stabIdx];
+  const stabilizedNOICr     = stab.noiCr;
+  const stabilizedEBITDACr  = stab.ebitdaCr;
+  const stabilizedRevCr     = stab.totalRevenueCr;
+  const stabilizedGOPCr     = stab.gopCr;
+
+  // Legacy Y1-stab aliases (for back-compat with old UI readouts)
+  const totalRevCrY1Stab = stabilizedRevCr;
+  const roomsRevCrY1Stab = stab.roomsRevenueCr;
+  const fbRevCrY1Stab    = stab.fbRevenueCr;
+  const gopCrY1Stab      = stabilizedGOPCr;
+  const ebitdaCrY1Stab   = stabilizedEBITDACr;
+  const revPARStabilized = stab.revPAR;
+  const gopMarginPct     = stab.gopMarginPct;
+  const ebitdaMarginPct  = stab.ebitdaMarginPct;
+  const fbRevPct         = fbRestaurantPctRooms + fbBanquetPctRooms;
+  const otherRevPct      = otherOperatedPctRooms + parkingPctRooms;
+
+  const yieldOnCost = totalDevCostCr > 0 ? (stabilizedNOICr / totalDevCostCr) * 100 : 0;
+  const exitYearNOI = annual[years - 1].noiCr;
+  const exitYearEBITDA = annual[years - 1].ebitdaCr;
+  const exitEBITDA = exitYearEBITDA;
+  const grossExitValueCr = exitYearNOI / (exitCapRate / 100);
+  const netExitValueCr = grossExitValueCr * (1 - saleExpPct / 100);
+  const entryValueCr = stabilizedNOICr / (exitCapRate / 100);
 
   const tv = computeTerminalValue({
     method: terminalValueMethod,
-    stabilizedNOICr: ebitdaCrY1Stab,
-    noiAtExitCr: exitEBITDA,
+    stabilizedNOICr,
+    noiAtExitCr: exitYearNOI,
     exitCapRatePct: exitCapRate,
     exitMultiple: exitMultipleInput,
-    perpetuityGrowthPct: Number.isFinite(perpetuityGrowthPct) ? perpetuityGrowthPct : 0,
+    perpetuityGrowthPct: Number.isFinite(perpetuityGrowthPct) ? perpetuityGrowthPct : 3,
     discountRatePct,
     forwardPurchasePriceCr,
     holdPeriodYears,
   });
-  const exitValueCr = capRateTvCr;
+  const exitValueCr = grossExitValueCr;
   const effectiveExitValueCr = tv.terminalValueCr;
   const terminalValuePVCr    = tv.terminalValuePVCr;
 
-  // Cash flows
-  const constQ   = Math.ceil(constructionMonths / 3);
-  const opQ      = holdPeriodYears * 4;
-  const totalQ   = constQ + opQ;
-  const cfs      = new Array(totalQ + 1).fill(0);
-  const lrdRefinanceQ = exitStrategy === 'lrd' ? Math.min(constQ + lrdRefinanceYear * 4, totalQ) : 0;
-  const lrdProceeds = exitStrategy === 'lrd' ? lrdLTV * entryValueCr : 0;
+  // ─── 4. Cash flows ────────────────────────────────────────────────────────
+  const constQ  = Math.max(1, Math.ceil(constructionMonths / 3));
+  const opQ     = years * 4;
+  const totalQ  = constQ + opQ;
+  const cfs     = new Array(totalQ + 1).fill(0);
+  const unleveredCfs = new Array(totalQ + 1).fill(0);
 
-  // Amortizing term loan + optional LRD (mirror of income-asset treatment)
-  const termLoanPrincipalCrH = debtCoverage > 0 ? totalDevCostCr * debtCoverage : 0;
-  const termLoanScheduleH = termLoanPrincipalCrH > 0
-    ? buildAmortizingSchedule({
-        principalCr: termLoanPrincipalCrH,
-        annualRatePct: interestRatePct,
-        amortizationYears: amortizationYearsHosp,
-        drawQ: constQ,
-        operatingStartQ: constQ + 1,
-        exitQ: totalQ,
-        totalQuarters: totalQ,
-      })
-    : null;
-  const lrdScheduleH = (exitStrategy === 'lrd' && lrdProceeds > 0 && lrdRefinanceQ > 0)
-    ? buildAmortizingSchedule({
-        principalCr: lrdProceeds,
-        annualRatePct: lrdInterestRatePct,
-        amortizationYears: amortizationYearsHosp,
-        drawQ: lrdRefinanceQ,
-        operatingStartQ: lrdRefinanceQ + 1,
-        exitQ: totalQ,
-        totalQuarters: totalQ,
-      })
-    : null;
+  // Development outflows
+  cfs[0] -= landCostCr + stampDutyCr + bettermentCr;
+  unleveredCfs[0] -= landCostCr + stampDutyCr + bettermentCr;
 
-  // Development phase
-  cfs[0] -= landCostCr + stampDutyCr + approvalCostCr * 0.25;
-  if (constQ >= 2) { cfs[1] -= approvalCostCr * 0.375; }
-  if (constQ >= 3) { cfs[2] -= approvalCostCr * 0.375; }
-  // Pre-opening costs in final 2 construction quarters
-  const preOpenQ = Math.min(2, constQ);
-  for (let q = constQ - preOpenQ; q < constQ; q++) {
-    if (q + 1 <= totalQ) cfs[q + 1] -= preOpeningCostCr / preOpenQ;
+  // Approvals over first half of construction
+  const approvalsEnd = Math.max(1, Math.ceil(constQ / 2));
+  for (let q = 1; q <= approvalsEnd; q++) {
+    cfs[q] -= approvalsCr / approvalsEnd;
+    unleveredCfs[q] -= approvalsCr / approvalsEnd;
   }
-  // Construction S-curve (hard costs)
+
+  // Hard + GST + soft + contingency on S-curve
   const cweights = sCurveWeights(constQ);
+  const scurveTotal = hardCostCr + gstCostCr + softDesignCr + contingencyCr;
   for (let q = 0; q < constQ && q + 1 <= totalQ; q++) {
-    cfs[q + 1] -= hardCostCr * cweights[q];
+    const spend = scurveTotal * cweights[q];
+    cfs[q + 1] -= spend;
+    unleveredCfs[q + 1] -= spend;
   }
 
-  // Book debt draws (term loan at construction end; LRD at refinance quarter)
-  if (termLoanScheduleH) {
-    for (let q = 0; q <= totalQ; q++) {
-      if (termLoanScheduleH.draws[q] > 0) cfs[q] += termLoanScheduleH.draws[q];
-    }
-  }
-  if (lrdScheduleH) {
-    for (let q = 0; q <= totalQ; q++) {
-      if (lrdScheduleH.draws[q] > 0) cfs[q] += lrdScheduleH.draws[q];
+  // FF&E + OS&E in final 2 construction quarters
+  const ffePhaseQ = Math.min(2, constQ);
+  for (let q = constQ - ffePhaseQ; q < constQ; q++) {
+    if (q + 1 <= totalQ) {
+      const spend = (ffeCapexCr + oseCapexCr) / ffePhaseQ;
+      cfs[q + 1] -= spend;
+      unleveredCfs[q + 1] -= spend;
     }
   }
 
-  // Operating phase with ramp-up, ADR growth, and amortizing debt service
-  for (let q = 1; q <= opQ; q++) {
-    const yearIdx = Math.ceil(q / 4); // 1-based
-    const occ     = yearIdx <= 1 ? occupancyRamp[0] : yearIdx === 2 ? occupancyRamp[1] : occupancyRamp[2];
-    const adrThis = adr * Math.pow(1 + adrGrowthPct / 100, yearIdx - 1);
-    const revPAR  = adrThis * occ;
-    const qRoomsRev = (keys * revPAR * 91.25) / 1e7;                          // ~91.25 days/quarter
-    const qTotalRev = qRoomsRev * (1 + fbRevPct / 100 + otherRevPct / 100);
-    const qEBITDA   = qTotalRev * (ebitdaMarginPct / 100);
-    const cfIdx     = constQ + q;
-    if (cfIdx <= totalQ) {
-      cfs[cfIdx] += qEBITDA;
-      if (termLoanScheduleH && termLoanScheduleH.debtService[cfIdx] > 0) {
-        cfs[cfIdx] -= termLoanScheduleH.debtService[cfIdx];
-      }
-      if (lrdScheduleH && lrdScheduleH.debtService[cfIdx] > 0) {
-        cfs[cfIdx] -= lrdScheduleH.debtService[cfIdx];
+  // Pre-opening + working capital at end of construction
+  cfs[constQ] -= preOpeningCr + workingCapitalCr;
+  unleveredCfs[constQ] -= preOpeningCr + workingCapitalCr;
+
+  // Construction loan — draw at end of construction (simplified), paid off at refi
+  const constLoanSched = finalConstDebtCr > 0 ? buildAmortizingSchedule({
+    principalCr: finalConstDebtCr,
+    annualRatePct: constLoanRatePct,
+    amortizationYears: Math.max(2, refiYear),
+    drawQ: constQ,
+    operatingStartQ: constQ + 1,
+    exitQ: constQ + refiYear * 4,
+    totalQuarters: totalQ,
+  }) : null;
+  if (constLoanSched) {
+    for (let q = 0; q <= totalQ; q++) {
+      if (constLoanSched.draws[q] > 0) cfs[q] += constLoanSched.draws[q];
+    }
+  }
+
+  // Operating NOI — spread annual NOI across 4 quarters
+  for (let y = 1; y <= years; y++) {
+    const yNoi = annual[y - 1].noiCr;
+    for (let q = 1; q <= 4; q++) {
+      const idx = constQ + (y - 1) * 4 + q;
+      if (idx <= totalQ) {
+        cfs[idx] += yNoi / 4;
+        unleveredCfs[idx] += yNoi / 4;
       }
     }
   }
-  cfs[totalQ] += effectiveExitValueCr;
+
+  // Permanent refinance at refiYear (sized off stabilized NOI / going-in cap × LTV)
+  const stabilizedValueForRefi = stabilizedNOICr / (refiCapRate / 100);
+  const refiPrincipalCr = stabilizedValueForRefi * refiLTV;
+  const refiQ = Math.min(totalQ, constQ + refiYear * 4);
+  const refiSched = refiPrincipalCr > 0 ? buildAmortizingSchedule({
+    principalCr: refiPrincipalCr,
+    annualRatePct: refiInterestRate,
+    amortizationYears: refiAmortYears,
+    drawQ: refiQ,
+    operatingStartQ: refiQ + refiIOYears * 4 + 1,
+    exitQ: totalQ,
+    totalQuarters: totalQ,
+  }) : null;
+
+  // Construction-loan debt service until refi, plus balloon at refi
+  if (constLoanSched) {
+    for (let q = 0; q <= refiQ && q <= totalQ; q++) {
+      if (constLoanSched.debtService[q] > 0) cfs[q] -= constLoanSched.debtService[q];
+    }
+  }
+  // Refi proceeds, then refi service
+  if (refiSched) {
+    cfs[refiQ] += refiPrincipalCr;
+    for (let q = refiQ + 1; q <= totalQ; q++) {
+      if (refiSched.debtService[q] > 0) cfs[q] -= refiSched.debtService[q];
+    }
+  }
+
+  // Exit (net of sale expenses + balloon repayment of permanent loan)
+  const permBalanceAtExit = refiSched ? (refiSched.balances[totalQ - 1] || 0) : 0;
+  cfs[totalQ] += netExitValueCr - permBalanceAtExit;
+  unleveredCfs[totalQ] += netExitValueCr;
 
   const cashFlows = safeCashFlows(cfs);
-  let irrPct = null, npvCr = null;
+  const unleveredCashFlows = safeCashFlows(unleveredCfs);
+
+  let irrPct = null, unleveredIRR = null, npvCr = null;
   try { irrPct = calculateIRR(cashFlows); } catch { /* skip */ }
-  try { npvCr  = calculateNPV(cashFlows, discountRatePct / 100); } catch { /* skip */ }
+  try { unleveredIRR = calculateIRR(unleveredCashFlows); } catch { /* skip */ }
+  try { npvCr = calculateNPV(cashFlows, discountRatePct / 100); } catch { /* skip */ }
 
   const totalReturns   = cashFlows.filter((c) => c > 0).reduce((a, b) => a + b, 0);
-  const equityMultiple = totalDevCostCr > 0 ? totalReturns / totalDevCostCr : null;
+  const totalOutflows  = Math.abs(cashFlows.filter((c) => c < 0).reduce((a, b) => a + b, 0));
+  const equityMultiple = totalOutflows > 0 ? totalReturns / totalOutflows : null;
 
-  let dscr = null;
-  if (termLoanScheduleH && termLoanScheduleH.quarterlyPayment > 0) {
-    const annualDebtService = termLoanScheduleH.quarterlyPayment * 4;
-    dscr = round2(ebitdaCrY1Stab / annualDebtService);
+  // DSCR at stabilization (permanent loan)
+  let dscr = null, debtYieldPct = null, minDSCR = null;
+  if (refiSched && refiSched.quarterlyPayment > 0) {
+    const annDS = refiSched.quarterlyPayment * 4;
+    dscr = round2(stabilizedNOICr / annDS);
+    debtYieldPct = refiPrincipalCr > 0 ? round2((stabilizedNOICr / refiPrincipalCr) * 100) : null;
+    let mn = Infinity;
+    for (let y = refiYear + 1; y <= years; y++) {
+      const r = annual[y - 1].noiCr / annDS;
+      if (r < mn) mn = r;
+    }
+    minDSCR = isFinite(mn) ? round2(mn) : null;
+  } else if (constLoanSched && constLoanSched.quarterlyPayment > 0) {
+    dscr = round2(stabilizedNOICr / (constLoanSched.quarterlyPayment * 4));
   }
 
-  const debtScheduleHosp = (termLoanScheduleH || lrdScheduleH) ? {
-    termLoan: termLoanScheduleH ? {
-      principalCr: round4(termLoanPrincipalCrH),
-      annualRatePct: interestRatePct,
-      amortizationYears: amortizationYearsHosp,
-      quarterlyPaymentCr: round4(termLoanScheduleH.quarterlyPayment),
-      annualDebtServiceCr: round4(termLoanScheduleH.quarterlyPayment * 4),
-      totalInterestCr: round4(termLoanScheduleH.totalInterestCr),
-      balloonRepaymentCr: round4(termLoanScheduleH.balloonRepaymentCr),
+  // Debt schedule summary (back-compat wrapper)
+  const debtScheduleHosp = (constLoanSched || refiSched) ? {
+    termLoan: constLoanSched ? {
+      principalCr: round4(finalConstDebtCr),
+      annualRatePct: constLoanRatePct,
+      amortizationYears: refiYear,
+      quarterlyPaymentCr: round4(constLoanSched.quarterlyPayment),
+      annualDebtServiceCr: round4(constLoanSched.quarterlyPayment * 4),
+      totalInterestCr: round4(constLoanSched.totalInterestCr),
+      balloonRepaymentCr: round4(constLoanSched.balloonRepaymentCr),
     } : null,
-    lrd: lrdScheduleH ? {
-      principalCr: round4(lrdProceeds),
-      annualRatePct: lrdInterestRatePct,
-      amortizationYears: amortizationYearsHosp,
-      quarterlyPaymentCr: round4(lrdScheduleH.quarterlyPayment),
-      annualDebtServiceCr: round4(lrdScheduleH.quarterlyPayment * 4),
-      totalInterestCr: round4(lrdScheduleH.totalInterestCr),
-      balloonRepaymentCr: round4(lrdScheduleH.balloonRepaymentCr),
-      refinanceQuarter: lrdRefinanceQ,
+    lrd: refiSched ? {
+      principalCr: round4(refiPrincipalCr),
+      annualRatePct: refiInterestRate,
+      amortizationYears: refiAmortYears,
+      quarterlyPaymentCr: round4(refiSched.quarterlyPayment),
+      annualDebtServiceCr: round4(refiSched.quarterlyPayment * 4),
+      totalInterestCr: round4(refiSched.totalInterestCr),
+      balloonRepaymentCr: round4(refiSched.balloonRepaymentCr),
+      refinanceQuarter: refiQ,
     } : null,
   } : null;
 
-  // Sensitivity: rows = occupancy, columns = ADR
-  const occVars  = [-15, -10, 0, 10, 15].map((d) => Math.max(20, Math.min(95, stabilizedOccPct + d)));
-  const adrVars  = [-0.20, -0.10, 0, 0.10, 0.20].map((v) => Math.round(adr * (1 + v)));
-  const irrGrid  = occVars.map((occ) =>
-    adrVars.map((a) => {
-      try {
-        return calculateIRR(safeCashFlows(buildHospitalityQuickCFs({
-          keys, constructionCostCr: hardCostCr, landCostCr, stampDutyCr, approvalCostCr,
-          preOpeningCostCr, adr: a, stabilizedOccPct: occ, adrGrowthPct,
-          fbRevPct, otherRevPct, ebitdaMarginPct, exitCapRate, holdPeriodYears, constQ, opQ,
-        })));
-      } catch { return null; }
-    })
-  );
-
-  const outputTimeline = buildTimeline({
-    ...timeline,
-    holdPeriodYears,
+  // ─── 5. Multi-axis sensitivity ────────────────────────────────────────────
+  const sensitivity = buildHospSensitivity({
+    baseInput: input,
+    keys, sqftPerKey, adr, stabilizedOccPct, exitCapRate, constLoanRatePct,
   });
+
+  // ─── 6. Waterfall ─────────────────────────────────────────────────────────
+  const waterfall = buildHospWaterfall({
+    equityCr, cashFlows, holdPeriodYears: years, constQ,
+    lpPct: Number(input.lpPct) || 0.90,
+    gpPct: Number(input.gpPct) || 0.10,
+    tier2Hurdle: Number(input.tier2HurdlePct) || 10,
+    tier3Hurdle: Number(input.tier3HurdlePct) || 15,
+    tier4Hurdle: Number(input.tier4HurdlePct) || 20,
+    tier2PromotePct: Number(input.tier2PromotePct) || 10,
+    tier3PromotePct: Number(input.tier3PromotePct) || 20,
+    tier4PromotePct: Number(input.tier4PromotePct) || 30,
+  });
+
+  const outputTimeline = buildTimeline({ ...timeline, holdPeriodYears });
+
+  // ─── 7. Sources & Uses payload ────────────────────────────────────────────
+  const sourcesUses = {
+    uses: [
+      { category: 'Land & Acquisition', subtotalCr: round4(landCostCr + stampDutyCr + bettermentCr), items: [
+        { label: 'Land cost',                                              valueCr: round4(landCostCr) },
+        { label: `Stamp + registration (${round2(stampRegPct * 100)}%)`,   valueCr: round4(stampDutyCr) },
+        { label: `Betterment charges (${bettermentPct}%)`,                 valueCr: round4(bettermentCr) },
+      ] },
+      { category: 'Approvals', subtotalCr: round4(approvalsCr), items: [
+        { label: 'BBMP / KSPCB / Fire / FSSAI / hotel classification',     valueCr: round4(approvalsCr) },
+      ] },
+      { category: 'Design & Soft Costs', subtotalCr: round4(softDesignCr), items: [
+        { label: `Architect (${architectPctHard}% of hard)`,               valueCr: round4(architectCr) },
+        { label: `PMC (${pmcPctHard}% of hard)`,                           valueCr: round4(pmcCr) },
+        { label: `MEP + Structural + F&B + ID (${consultantsPctHard}%)`,    valueCr: round4(consultantsCr) },
+      ] },
+      { category: 'Hard Construction', subtotalCr: round4(hardCostCr + gstCostCr), items: [
+        { label: `Hard cost (${Math.round(totalBuaSqft).toLocaleString('en-IN')} sqft × ₹${hardCostPerSqft}/sqft)`, valueCr: round4(hardCostCr) },
+        { label: `GST on construction (${round2(gstRateInput * 100)}%)`,   valueCr: round4(gstCostCr) },
+      ] },
+      { category: 'FF&E + OS&E', subtotalCr: round4(ffeCapexCr + oseCapexCr), items: [
+        { label: `FF&E (₹${(ffePerKey / 1e5).toFixed(1)} L/key × ${keys})`, valueCr: round4(ffeCapexCr) },
+        { label: `OS&E (₹${(osePerKey / 1e5).toFixed(1)} L/key × ${keys})`, valueCr: round4(oseCapexCr) },
+      ] },
+      { category: 'Pre-opening & Working Capital', subtotalCr: round4(preOpeningCr + workingCapitalCr), items: [
+        { label: `Pre-opening (₹${(preOpeningPerKey / 1e5).toFixed(1)} L/key)`, valueCr: round4(preOpeningCr) },
+        { label: 'Working capital / opening inventory',                    valueCr: round4(workingCapitalCr) },
+      ] },
+      { category: 'Contingency', subtotalCr: round4(contingencyCr), items: [
+        { label: `Contingency (${contingencyPct}% of hard + soft + FF&E)`, valueCr: round4(contingencyCr) },
+      ] },
+      { category: 'Interest During Construction', subtotalCr: round4(idcCr), items: [
+        { label: `Capitalized interest + ${constLoanFeesPct}% loan fees`,  valueCr: round4(idcCr) },
+      ] },
+    ],
+    usesTotalCr: round4(totalDevCostCr),
+    sources: [
+      { label: `Construction loan (${round2(constLoanLTC * 100)}% LTC @ ${constLoanRatePct}%)`, valueCr: round4(finalConstDebtCr), category: 'debt' },
+      { label: 'Sponsor / LP equity',                                                            valueCr: round4(equityCr),         category: 'equity' },
+    ],
+    sourcesTotalCr: round4(totalDevCostCr),
+    refinance: {
+      refiYear,
+      refiPrincipalCr:         round4(refiPrincipalCr),
+      refiLTVPct:              round2(refiLTV * 100),
+      refiCapRatePct:          refiCapRate,
+      refiInterestRatePct:     refiInterestRate,
+      refiIOYears, refiAmortYears,
+      stabilizedValueForRefiCr: round4(stabilizedValueForRefi),
+    },
+  };
 
   return {
     assetClass: 'hospitality',
     inputs: {
-      keys, constructionCostPerKey: constructionCostKey, landCostCr, approvalCostCr,
+      keys, sqftPerKey,
+      totalBuaSqft: round2(totalBuaSqft),
+      ownerRateKeys, marketRateKeys,
+      ownerRateADR,
+      ownerRateGuaranteedOccPct: round2(ownerRateGuaranteedOcc * 100),
+      constructionCostPerKey: round2(hardCostPerSqft * sqftPerKey),
+      landCostCr, approvalCostCr,
       approvalCostPerSqft: Number(input.approvalCostPerSqft) || null,
+      stampRegPct: round2(stampRegPct * 100),
+      bettermentPct,
+      hardCostPerSqft,
+      architectPctOfHard: architectPctHard,
+      pmcPctOfHard: pmcPctHard,
+      consultantsPctOfHard: consultantsPctHard,
+      approvalsPctOfHard: approvalsPctHard,
       gstPct: round2(gstRateInput * 100),
-      preOpeningCostPerKey: preOpeningCostKey, adr, adrGrowthPct, stabilizedOccPct,
+      ffePerKey, osePerKey,
+      preOpeningPerKey, preOpeningCostPerKey: preOpeningPerKey,
+      workingCapitalCr: round4(workingCapitalCr),
+      adr, adrGrowthPct, stabilizedOccPct, initialOccPct, stabilizationYear,
+      fbRestaurantPctOfRooms: fbRestaurantPctRooms,
+      fbBanquetPctOfRooms:    fbBanquetPctRooms,
+      otherOperatedPctOfRooms: otherOperatedPctRooms,
+      parkingPctOfRooms:      parkingPctRooms,
+      leaseIncomeCrPa,
+      roomsDeptCostPct, fbDeptCostPct, otherDeptCostPct,
+      aAndGPct, itPct, smPct, pomPct, utilitiesPct,
+      mgmtBasePct, mgmtIncentivePct,
+      brandRoyaltyPctOfRooms:   brandRoyaltyPctRooms,
+      brandMktReservPctOfRooms: brandMktReservPctRooms,
+      propertyTaxPctRev, insurancePctRev, groundLeaseCrPa,
+      ffeReservePct,
       effectiveDate: outputTimeline.effectiveDate,
       projectDurationYears: outputTimeline.projectDurationYears,
       projectDurationMonths: constructionMonths,
-      holdPeriodYears, fbRevPct, otherRevPct,
-      gopMarginPct, ebitdaMarginPct, exitCapRate, discountRatePct, debtCoverage,
-      interestRatePct, amortizationYears: amortizationYearsHosp, contingencyPct,
+      holdPeriodYears,
+      // Back-compat aliases
+      fbRevPct, otherRevPct,
+      gopMarginPct, ebitdaMarginPct,
+      exitCapRate, discountRatePct, saleExpensesPct: saleExpPct,
+      debtCoverage,
+      interestRatePct,
+      amortizationYears: amortizationYearsHosp,
+      contingencyPct,
+      constLoanLTC: round2(constLoanLTC * 100),
+      constLoanRatePct, constLoanFeesPct,
+      refiLTV: round2(refiLTV * 100),
+      refiCapRatePct: refiCapRate,
+      refiInterestRatePct: refiInterestRate,
+      refiIOYears, refiAmortYears, refiYear,
       exitStrategy,
-      lrdLTV: exitStrategy === 'lrd' ? lrdLTV : null,
-      lrdInterestRatePct: exitStrategy === 'lrd' ? lrdInterestRatePct : null,
-      lrdRefinanceYear: exitStrategy === 'lrd' ? lrdRefinanceYear : null,
       forwardPurchasePriceCr: exitStrategy === 'forward_purchase' ? forwardPurchasePriceCr : null,
       terminalValueMethod,
       exitMultiple: terminalValueMethod === 'exit_multiple' ? round2(exitMultipleInput) : null,
@@ -1913,17 +2276,25 @@ function calculateHospitality(input) {
     },
     kpis: {
       irr:           round4(irrPct),
+      leveredIrr:    round4(irrPct),
+      unleveredIrr:  round4(unleveredIRR),
+      leveredNpv:    round4(npvCr),
       npv:           round4(npvCr),
       equityMultiple: round4(equityMultiple),
       rlv:           null,
       grossMarginPct: round4(ebitdaMarginPct),
-      leveredIrr:    null,
-      leveredNpv:    null,
-      noi:           round4(ebitdaCrY1Stab),
-      noiAtExit:     round4(exitEBITDA),
+      noi:           round4(stabilizedNOICr),
+      noiAtExit:     round4(exitYearNOI),
+      stabilizedNOI: round4(stabilizedNOICr),
+      stabilizedEBITDA: round4(stabilizedEBITDACr),
+      stabilizedRevenue: round4(stabilizedRevCr),
+      stabilizedOccupancy: round2(stab.occupancy),
+      stabilizedADR:   round2(stab.adr),
       yieldOnCost:   round4(yieldOnCost),
-      dscr,
+      dscr, minDSCR, debtYieldPct,
       exitValue:        round4(effectiveExitValueCr),
+      exitValueGross:   round4(grossExitValueCr),
+      exitValueNet:     round4(netExitValueCr),
       terminalValue:    round4(effectiveExitValueCr),
       terminalValuePV:  round4(terminalValuePVCr),
       terminalValueMethod,
@@ -1933,17 +2304,22 @@ function calculateHospitality(input) {
       entryValue:    round4(entryValueCr),
       revPAR:        round2(revPARStabilized),
       gopMargin:     round2(gopMarginPct),
+      gopMarginPct:  round2(gopMarginPct),
+      ebitdaMarginPct: round2(ebitdaMarginPct),
+      noiMarginPct:  round2(stab.noiMarginPct),
       // Per-key metrics
-      devCostPerKey:   keys > 0 ? round2((totalDevCostCr * 1e7) / keys) : null,
-      revenuePerKey:   keys > 0 ? round2((totalRevCrY1Stab * 1e7) / keys) : null,
-      ebitdaPerKey:    keys > 0 ? round2((ebitdaCrY1Stab * 1e7) / keys) : null,
-      gopPAR:          keys > 0 ? round2((gopCrY1Stab * 1e7) / (keys * 365)) : null,
-      tRevPAR:         keys > 0 ? round2((totalRevCrY1Stab * 1e7) / (keys * 365)) : null,
+      devCostPerKey: keys > 0 ? round2((totalDevCostCr * 1e7) / keys) : null,
+      revenuePerKey: keys > 0 ? round2((totalRevCrY1Stab * 1e7) / keys) : null,
+      ebitdaPerKey:  keys > 0 ? round2((stabilizedEBITDACr * 1e7) / keys) : null,
+      gopPAR:        round2(stab.gopPAR),
+      ebitdaPAR:     round2(stab.ebitdaPAR),
+      tRevPAR:       round2(stab.trevPAR),
+      trevPAR:       round2(stab.trevPAR),
     },
     areas: {
-      leasable:    null,
-      grossBuiltUp: round2(keys * 600),
-      saleable:    null, carpet: null, superBuiltUp: null,
+      leasable: null,
+      grossBuiltUp: round2(totalBuaSqft),
+      saleable: null, carpet: null, superBuiltUp: null,
       keys,
     },
     costs: {
@@ -1952,21 +2328,31 @@ function calculateHospitality(input) {
       gst:            round4(gstCostCr),
       contingency:    round4(contingencyCr),
       stampDuty:      round4(stampDutyCr),
+      betterment:     round4(bettermentCr),
       approval:       round4(approvalCostCr),
       preOpening:     round4(preOpeningCostCr),
-      architecture:   null, pmc: null, marketing: null, finance: null,
-      hardCostTotal:  round4(landCostCr + stampDutyCr + hardCostCr),
-      softCostTotal:  round4(approvalCostCr + preOpeningCostCr),
+      ffe:            round4(ffeCapexCr),
+      ose:            round4(oseCapexCr),
+      workingCapital: round4(workingCapitalCr),
+      idc:            round4(idcCr),
+      architecture:   round4(architectCr),
+      pmc:            round4(pmcCr),
+      consultants:    round4(consultantsCr),
+      marketing:      null,
+      finance:        round4(idcCr),
+      hardCostTotal:  round4(landCostCr + stampDutyCr + bettermentCr + hardCostCr + gstCostCr + ffeCapexCr + oseCapexCr),
+      softCostTotal:  round4(softDesignCr + approvalsCr + preOpeningCostCr + workingCapitalCr + contingencyCr + idcCr),
       total:          round4(totalDevCostCr),
       tenantImprovements: null, leasingCommissions: null,
+      sources_uses:   sourcesUses,
     },
     revenue: {
       totalRevenueCr:     round4(totalRevCrY1Stab),
-      grossProfitCr:      null,
-      grossMarginPct:     null,
-      annualNOI:          round4(ebitdaCrY1Stab),
-      stabilizedNOI:      round4(ebitdaCrY1Stab),
-      noiAtExit:          round4(exitEBITDA),
+      grossProfitCr:      round4(stabilizedEBITDACr),
+      grossMarginPct:     round4(ebitdaMarginPct),
+      annualNOI:          round4(stabilizedNOICr),
+      stabilizedNOI:      round4(stabilizedNOICr),
+      noiAtExit:          round4(exitYearNOI),
       exitValue:          round4(effectiveExitValueCr),
       terminalValue:      round4(effectiveExitValueCr),
       terminalValuePV:    round4(terminalValuePVCr),
@@ -1977,22 +2363,46 @@ function calculateHospitality(input) {
       roomsRevenue:       round4(roomsRevCrY1Stab),
       fbRevenue:          round4(fbRevCrY1Stab),
       gop:                round4(gopCrY1Stab),
-      ebitda:             round4(ebitdaCrY1Stab),
+      ebitda:             round4(stabilizedEBITDACr),
+      usali_pnl:          annual,
     },
-    capitalStack: debtCoverage > 0 ? {
+    capitalStack: {
       totalCostCr: round4(totalDevCostCr),
-      debtCr:      round4(totalDevCostCr * debtCoverage),
-      equityCr:    round4(totalDevCostCr * (1 - debtCoverage)),
-      debtPct:     round2(debtCoverage * 100),
-      equityPct:   round2((1 - debtCoverage) * 100),
+      debtCr:      round4(finalConstDebtCr),
+      equityCr:    round4(equityCr),
+      debtPct:     totalDevCostCr > 0 ? round2((finalConstDebtCr / totalDevCostCr) * 100) : 0,
+      equityPct:   totalDevCostCr > 0 ? round2((equityCr / totalDevCostCr) * 100) : 100,
       interestRatePct,
       amortizationYears: amortizationYearsHosp,
-      dscr,
+      dscr, minDSCR, debtYieldPct,
       debtSchedule: debtScheduleHosp,
-    } : null,
+      construction: constLoanSched ? {
+        principalCr: round4(finalConstDebtCr),
+        ltcPct:      round2(constLoanLTC * 100),
+        ratePct:     constLoanRatePct,
+        feesPct:     constLoanFeesPct,
+        idcCr:       round4(idcCr),
+        termYears:   refiYear,
+      } : null,
+      permanent: refiSched ? {
+        principalCr:         round4(refiPrincipalCr),
+        ltvPct:              round2(refiLTV * 100),
+        ratePct:             refiInterestRate,
+        ioYears:             refiIOYears,
+        amortYears:          refiAmortYears,
+        refiYear,
+        sizingCapRate:       refiCapRate,
+        stabilizedValueCr:   round4(stabilizedValueForRefi),
+        quarterlyPaymentCr:  round4(refiSched.quarterlyPayment),
+        annualDebtServiceCr: round4(refiSched.quarterlyPayment * 4),
+        totalInterestCr:     round4(refiSched.totalInterestCr),
+        balloonRepaymentCr:  round4(refiSched.balloonRepaymentCr),
+      } : null,
+      waterfall,
+    },
     timeline: outputTimeline,
     cashFlows: structureCashFlows(cashFlows, outputTimeline),
-    sensitivityMatrix: { sellingRates: adrVars, constructionCosts: occVars, irrGrid, axis: ['Occupancy (%)', 'ADR (₹)'], variations: occVars.map((o) => `${o}%`) },
+    sensitivityMatrix: sensitivity,
     _legacy: {
       land_cost_cr:          landCostCr,
       total_cost_cr:         round4(totalDevCostCr),
@@ -2008,26 +2418,170 @@ function calculateHospitality(input) {
   };
 }
 
-function buildHospitalityQuickCFs(p) {
-  const { keys, constructionCostCr, landCostCr, stampDutyCr, approvalCostCr,
-    preOpeningCostCr, adr, stabilizedOccPct, adrGrowthPct, fbRevPct, otherRevPct,
-    ebitdaMarginPct, exitCapRate, holdPeriodYears, constQ, opQ } = p;
+// ─── Hospitality helpers ─────────────────────────────────────────────────────
+
+function hospOccRamp({ initialOccPct, stabilizedOccPct, stabilizationYear, years }) {
+  const out = [];
+  const steps = Math.max(1, stabilizationYear - 1);
+  const delta = (stabilizedOccPct - initialOccPct) / steps;
+  for (let y = 1; y <= years; y++) {
+    out.push(y < stabilizationYear ? initialOccPct + delta * (y - 1) : stabilizedOccPct);
+  }
+  return out;
+}
+
+// Lightweight IRR recompute used for sensitivity cells — deterministic, no
+// full USALI walk. Good enough to show directional sensitivity without
+// re-building the whole model per cell.
+function hospQuickIRR({
+  keys, sqftPerKey, adr, stabilizedOccPct, exitCapRate, constLoanRatePct,
+  hardCostPerSqft, landCostCr, ffePerKey, osePerKey, preOpeningPerKey,
+  holdPeriodYears, constQ, noiMarginPct,
+}) {
+  const bua = keys * (sqftPerKey || HOSP_DEFAULT_SQFT_PER_KEY);
+  const hard = (bua * hardCostPerSqft) / 1e7;
+  const gst  = hard * 0.18;
+  const ffe  = (keys * ffePerKey) / 1e7;
+  const ose  = (keys * osePerKey) / 1e7;
+  const pre  = (keys * preOpeningPerKey) / 1e7;
+  const soft = hard * 0.115;
+  const appr = hard * 0.02;
+  const base = hard + soft + appr + ffe + ose;
+  const cont = base * 0.05;
+  const idc  = (landCostCr * 1.066 + base + cont) * 0.55 * 0.5 * (constLoanRatePct / 100) * (constQ / 4)
+             + (landCostCr * 1.066 + base + cont) * 0.55 * 0.01;
+  const total = landCostCr * 1.066 + base + gst + cont + pre + idc;
+
+  const opQ = holdPeriodYears * 4;
   const totalQ = constQ + opQ;
   const cfs = new Array(totalQ + 1).fill(0);
-  cfs[0] = -(landCostCr + stampDutyCr + approvalCostCr + constructionCostCr + preOpeningCostCr);
-  const ramp = [0.40, 0.55, stabilizedOccPct / 100];
-  for (let q = 1; q <= opQ; q++) {
-    const yi    = Math.ceil(q / 4);
-    const occ   = yi <= 1 ? ramp[0] : yi === 2 ? ramp[1] : ramp[2];
-    const aDR   = adr * Math.pow(1 + adrGrowthPct / 100, yi - 1);
-    const rev   = (keys * aDR * occ * 91.25) / 1e7 * (1 + fbRevPct / 100 + otherRevPct / 100);
-    const ebi   = rev * (ebitdaMarginPct / 100);
-    if (constQ + q <= totalQ) cfs[constQ + q] = ebi;
+  cfs[0] = -total;
+
+  const ramp = hospOccRamp({ initialOccPct: 45, stabilizedOccPct, stabilizationYear: 4, years: holdPeriodYears });
+  for (let y = 1; y <= holdPeriodYears; y++) {
+    const occ = ramp[y - 1] / 100;
+    const adrY = adr * Math.pow(1.05, y - 1);
+    const roomsRev = (keys * adrY * occ * HOSP_DAYS_PER_YEAR) / 1e7;
+    const totalRev = roomsRev * 1.39;
+    const noi = totalRev * (noiMarginPct / 100);
+    for (let q = 1; q <= 4; q++) {
+      if (constQ + (y - 1) * 4 + q <= totalQ) cfs[constQ + (y - 1) * 4 + q] += noi / 4;
+    }
   }
-  const stab = (keys * adr * (stabilizedOccPct/100) * 365 / 1e7) * (1 + fbRevPct/100 + otherRevPct/100);
-  const exitE = stab * (ebitdaMarginPct/100) * Math.pow(1 + adrGrowthPct/100, holdPeriodYears);
-  cfs[totalQ] += exitE / (exitCapRate / 100);
-  return safeCashFlows(cfs);
+  const exitOcc = stabilizedOccPct / 100;
+  const exitADR = adr * Math.pow(1.05, holdPeriodYears - 1);
+  const exitRooms = (keys * exitADR * exitOcc * HOSP_DAYS_PER_YEAR) / 1e7 * 1.39;
+  const exitNoi = exitRooms * (noiMarginPct / 100);
+  cfs[totalQ] += (exitNoi / (exitCapRate / 100)) * 0.96;  // net of 4% sale expenses
+  try { return calculateIRR(safeCashFlows(cfs)); } catch { return null; }
+}
+
+function buildHospSensitivity({ baseInput, keys, sqftPerKey, adr, stabilizedOccPct, exitCapRate, constLoanRatePct }) {
+  const baseParams = {
+    keys, sqftPerKey, adr, stabilizedOccPct, exitCapRate, constLoanRatePct,
+    hardCostPerSqft: Number(baseInput.hardCostPerSqft) || 11000,
+    landCostCr:      Number(baseInput.landCostCr) || 0,
+    ffePerKey:       Number(baseInput.ffePerKey) || 2500000,
+    osePerKey:       Number(baseInput.osePerKey) || 400000,
+    preOpeningPerKey: Number(baseInput.preOpeningPerKey) || 350000,
+    holdPeriodYears: Math.max(5, Math.min(15, Number(baseInput.holdPeriodYears) || 10)),
+    constQ: 12,
+    noiMarginPct: 28,
+  };
+  const occVars = [-15, -10, 0, 10, 15].map((d) => Math.max(40, Math.min(90, stabilizedOccPct + d)));
+  const adrVars = [-0.20, -0.10, 0, 0.10, 0.20].map((v) => Math.round(adr * (1 + v)));
+  const occAdrIrrGrid = occVars.map((o) => adrVars.map((a) => hospQuickIRR({ ...baseParams, adr: a, stabilizedOccPct: o })));
+
+  const hcVars = [-15, -10, 0, 10, 15];
+  const irVars = [-150, -75, 0, 75, 150];
+  const crVars = [-100, -50, 0, 50, 100];
+  const hardCostIrr = hcVars.map((pct) => hospQuickIRR({ ...baseParams, hardCostPerSqft: baseParams.hardCostPerSqft * (1 + pct / 100) }));
+  const interestIrr = irVars.map((bps) => hospQuickIRR({ ...baseParams, constLoanRatePct: baseParams.constLoanRatePct + bps / 100 }));
+  const capRateIrr  = crVars.map((bps) => hospQuickIRR({ ...baseParams, exitCapRate: baseParams.exitCapRate + bps / 100 }));
+
+  return {
+    axis: ['Occupancy (%)', 'ADR (₹)'],
+    sellingRates: adrVars,
+    constructionCosts: occVars,
+    variations: occVars.map((o) => `${Math.round(o)}%`),
+    irrGrid: occAdrIrrGrid,
+    occAdr:       { rows: occVars, cols: adrVars, irrGrid: occAdrIrrGrid, rowLabel: 'Occupancy (%)', colLabel: 'ADR (₹)' },
+    hardCost:     { variations: hcVars.map((v) => `${v >= 0 ? '+' : ''}${v}%`), irr: hardCostIrr.map((n) => round4(n)) },
+    interestRate: { variations: irVars.map((v) => `${v >= 0 ? '+' : ''}${v} bps`), irr: interestIrr.map((n) => round4(n)) },
+    capRate:      { variations: crVars.map((v) => `${v >= 0 ? '+' : ''}${v} bps`), irr: capRateIrr.map((n) => round4(n)) },
+  };
+}
+
+// European back-end waterfall — 4 tiers (RoC → 10% → 15% → 20%+). Returns
+// LP and GP dollar allocations plus equity multiples.
+function buildHospWaterfall({
+  equityCr, cashFlows, holdPeriodYears, constQ,
+  lpPct, gpPct,
+  tier2Hurdle, tier3Hurdle, tier4Hurdle,
+  tier2PromotePct, tier3PromotePct, tier4PromotePct,
+}) {
+  const annualLevered = new Array(holdPeriodYears + 1).fill(0);
+  let initialOutflow = 0;
+  for (let q = 0; q <= constQ; q++) initialOutflow += cashFlows[q] || 0;
+  annualLevered[0] = initialOutflow;
+  for (let y = 1; y <= holdPeriodYears; y++) {
+    for (let q = 1; q <= 4; q++) {
+      annualLevered[y] += cashFlows[constQ + (y - 1) * 4 + q] || 0;
+    }
+  }
+
+  const lpCapital = equityCr * lpPct;
+  const gpCapital = equityCr * gpPct;
+  const totalDistributions = annualLevered.reduce((s, v, i) => i === 0 ? s : s + Math.max(0, v), 0);
+
+  // Tier 1 — pro rata return of capital
+  const t1 = Math.min(totalDistributions, equityCr);
+  const t1LP = t1 * lpPct;
+  const t1GP = t1 * gpPct;
+  let remaining = Math.max(0, totalDistributions - t1);
+
+  const hurdleGross = (rate) => lpCapital * (Math.pow(1 + rate / 100, holdPeriodYears) - 1);
+
+  // Tier 2 — LP preferred return up to tier2 IRR, then promote kicks in
+  const tier2Need = hurdleGross(tier2Hurdle) - hurdleGross(0);
+  const tier2Pool = Math.min(remaining, tier2Need / Math.max(0.01, 1 - tier2PromotePct / 100));
+  const t2LP = tier2Pool * (1 - tier2PromotePct / 100);
+  const t2GP = tier2Pool * (tier2PromotePct / 100);
+  remaining -= tier2Pool;
+
+  // Tier 3
+  const tier3Need = hurdleGross(tier3Hurdle) - hurdleGross(tier2Hurdle);
+  const tier3Pool = Math.max(0, Math.min(remaining, tier3Need / Math.max(0.01, 1 - tier3PromotePct / 100)));
+  const t3LP = tier3Pool * (1 - tier3PromotePct / 100);
+  const t3GP = tier3Pool * (tier3PromotePct / 100);
+  remaining -= tier3Pool;
+
+  // Tier 4 — residual above tier3 hurdle
+  const tier4Pool = Math.max(0, remaining);
+  const t4LP = tier4Pool * (1 - tier4PromotePct / 100);
+  const t4GP = tier4Pool * (tier4PromotePct / 100);
+
+  const totalLP = t1LP + t2LP + t3LP + t4LP;
+  const totalGP = t1GP + t2GP + t3GP + t4GP;
+
+  return {
+    lpPct: round2(lpPct * 100),
+    gpPct: round2(gpPct * 100),
+    totalEquityCr: round4(equityCr),
+    lpCapitalCr:   round4(lpCapital),
+    gpCapitalCr:   round4(gpCapital),
+    totalDistributionsCr: round4(totalDistributions),
+    tiers: [
+      { name: 'Tier 1 — Return of Capital', hurdlePct: 0,          lpSharePct: round2(lpPct * 100),                   gpSharePct: round2(gpPct * 100),          lpCr: round4(t1LP), gpCr: round4(t1GP) },
+      { name: `Tier 2 — to ${tier2Hurdle}% IRR`, hurdlePct: tier2Hurdle, lpSharePct: round2((1 - tier2PromotePct / 100) * 100), gpSharePct: round2(tier2PromotePct), lpCr: round4(t2LP), gpCr: round4(t2GP) },
+      { name: `Tier 3 — to ${tier3Hurdle}% IRR`, hurdlePct: tier3Hurdle, lpSharePct: round2((1 - tier3PromotePct / 100) * 100), gpSharePct: round2(tier3PromotePct), lpCr: round4(t3LP), gpCr: round4(t3GP) },
+      { name: `Tier 4 — above ${tier3Hurdle}% IRR`, hurdlePct: tier4Hurdle, lpSharePct: round2((1 - tier4PromotePct / 100) * 100), gpSharePct: round2(tier4PromotePct), lpCr: round4(t4LP), gpCr: round4(t4GP) },
+    ],
+    totalLPCr: round4(totalLP),
+    totalGPCr: round4(totalGP),
+    lpEquityMultiple: lpCapital > 0 ? round4(totalLP / lpCapital) : null,
+    gpEquityMultiple: gpCapital > 0 ? round4(totalGP / gpCapital) : null,
+  };
 }
 
 // ─── SCENARIO ANALYSIS ───────────────────────────────────────────────────────
