@@ -1,15 +1,16 @@
 import { useMemo } from 'react';
 import {
   Layers, Home, Briefcase, Hotel, Warehouse, Factory, Cpu, Heart,
-  GraduationCap, Store, TreePine, Users, Building2, Info, Sparkles, IndianRupee,
-  ArrowRightCircle,
+  GraduationCap, Store, TreePine, Users, Building2, Info,
+  ArrowRight, IndianRupee,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { computeProgramme, fmtNum, fmtInr } from '../../utils/buildability';
 import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
 import { toast } from '../common/Toast';
 
-// Asset-class → icon. Used purely for decoration.
+// Asset-class glyph. Single monochrome icon — no colored chips or tone
+// gradients. The editorial design anchors on typography, not decoration.
 const CLASS_ICON = {
   residential_apartments: Home,
   residential_villas:     Home,
@@ -27,24 +28,6 @@ const CLASS_ICON = {
   education:              GraduationCap,
 };
 
-// Asset-class → gradient tone for the header.
-const CLASS_TONE = {
-  residential_apartments: 'from-emerald-500 to-teal-500',
-  residential_villas:     'from-emerald-500 to-lime-500',
-  plotted_development:    'from-lime-500 to-emerald-500',
-  commercial_office:      'from-indigo-500 to-blue-500',
-  commercial_retail:      'from-pink-500 to-rose-500',
-  mixed_use:              'from-violet-500 to-indigo-500',
-  industrial:             'from-slate-500 to-gray-500',
-  warehousing:            'from-amber-500 to-orange-500',
-  hospitality:            'from-rose-500 to-pink-500',
-  data_center:            'from-cyan-500 to-blue-500',
-  senior_living:          'from-teal-500 to-emerald-500',
-  student_housing:        'from-fuchsia-500 to-pink-500',
-  healthcare:             'from-red-500 to-rose-500',
-  education:              'from-sky-500 to-indigo-500',
-};
-
 export default function AssetClassProgrammeCard({ buildability, property, dealId, setTab }) {
   const programme = useMemo(
     () => computeProgramme({ buildability, property }),
@@ -53,7 +36,6 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
 
   if (!programme) return null;
   const Icon = CLASS_ICON[programme.asset_class] || Layers;
-  const tone = CLASS_TONE[programme.asset_class] || 'from-gray-500 to-slate-500';
 
   const canApply = !!dealId && programme.has_programme
     && (programme.unit_count != null || programme.keys != null || programme.leasable_sqft != null
@@ -75,73 +57,58 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
   };
 
   return (
-    <div className="card p-0 overflow-hidden">
-      {/* Gradient header */}
-      <div className={clsx('px-5 py-4 text-white bg-gradient-to-r', tone)}>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <Icon size={18} />
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-white/80">
-                Development programme
-              </div>
-              <div className="text-lg font-semibold leading-tight">
-                {programme.profile_label || 'Programme'}
-              </div>
-              {programme.has_programme && buildability?.realized_built_up_sqft != null && (
-                <div className="text-[11px] text-white/80 mt-0.5">
-                  Derived from {fmtNum(buildability.realized_built_up_sqft)} sqft realized envelope
-                </div>
-              )}
-            </div>
+    <div className="rounded-lg border border-line bg-paper-100 shadow-editorial overflow-hidden dark:border-slate-700 dark:bg-slate-900">
+      {/* Editorial header — no gradient, hairline separator */}
+      <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4 border-b border-line dark:border-slate-700">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper-200 text-ink-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <Icon size={16} strokeWidth={1.75} />
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {programme.has_programme && (
-              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-white/20 text-white font-medium">
-                <Sparkles size={10} />
-                Asset-class tailored
-              </span>
-            )}
-            {canApply && (
-              <button
-                type="button"
-                onClick={handleApply}
-                className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-50 transition-colors"
-                title="Stage these programme outputs as starting inputs on the Financial tab"
-              >
-                <ArrowRightCircle size={12} />
-                Apply to underwriting
-              </button>
+          <div className="min-w-0">
+            <p className="eyebrow dark:text-slate-400">Development programme</p>
+            <p className="mt-0.5 font-display text-lg font-semibold leading-tight text-ink-900 dark:text-white truncate">
+              {programme.profile_label || 'Programme'}
+            </p>
+            {programme.has_programme && buildability?.realized_built_up_sqft != null && (
+              <p className="mt-1 text-caption text-ink-500 dark:text-slate-400">
+                Derived from <span className="tabular-nums">{fmtNum(buildability.realized_built_up_sqft)}</span> sqft realized envelope
+              </p>
             )}
           </div>
         </div>
+        {canApply && (
+          <button
+            type="button"
+            onClick={handleApply}
+            className="inline-flex items-center gap-1.5 rounded-md border border-ink-800 bg-ink-900 px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-ink-800 focus:outline-none focus:ring-2 focus:ring-ink-300 focus:ring-offset-1 dark:border-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            title="Stage these programme outputs as starting inputs on the Financial tab"
+          >
+            Apply to underwriting
+            <ArrowRight size={12} strokeWidth={2} />
+          </button>
+        )}
       </div>
 
       {/* Body */}
       <div className="p-5">
         {!programme.has_programme ? (
-          <p className="text-xs text-gray-500 italic flex items-center gap-1.5">
+          <p className="flex items-center gap-1.5 text-caption italic text-ink-500 dark:text-slate-400">
             <Info size={12} /> {programme.note}
           </p>
         ) : (
           <>
-            {/* Metric tiles */}
             {programme.metrics.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-line rounded-md overflow-hidden border border-line dark:bg-slate-700 dark:border-slate-700">
                 {programme.metrics.map((m, i) => <MetricTile key={i} {...m} />)}
               </div>
             )}
 
-            {/* Residential unit mix table */}
             {Array.isArray(programme.unit_mix) && programme.unit_mix.length > 0 && (
               <UnitMixTable mix={programme.unit_mix} totalUnits={programme.unit_count} />
             )}
 
-            {/* Revenue + cost strip */}
             {(programme.build_cost_inr != null || programme.gross_revenue_inr != null || programme.stabilised_value_inr != null) && (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {programme.build_cost_inr != null && (
                   <FinancialStrip
                     label="Construction cost"
@@ -149,7 +116,6 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
                     sub={programme.build_cost_per_sqft
                       ? `\u20b9${fmtNum(programme.build_cost_per_sqft)}/sqft × ${fmtNum(programme.realized_bua_sqft)} sqft BUA`
                       : null}
-                    tone="amber"
                   />
                 )}
                 {programme.gross_revenue_inr != null && (
@@ -159,7 +125,6 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
                       : 'Gross revenue (sale-out)'}
                     value={fmtInr(programme.gross_revenue_inr)}
                     sub={programme.cap_rate ? `at ${(programme.cap_rate * 100).toFixed(1)}% cap` : 'indicative'}
-                    tone="emerald"
                   />
                 )}
                 {programme.stabilised_value_inr != null && (
@@ -167,28 +132,28 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
                     label="Stabilised asset value"
                     value={fmtInr(programme.stabilised_value_inr)}
                     sub="rent ÷ cap rate"
-                    tone="indigo"
                   />
                 )}
               </div>
             )}
 
-            {/* Assumptions footer */}
             {programme.assumptions.length > 0 && (
-              <details className="mt-4 rounded-lg bg-gray-50 border border-gray-100">
-                <summary className="px-3 py-2 cursor-pointer text-[11px] font-semibold text-gray-700 uppercase tracking-[0.1em] list-none flex items-center justify-between">
-                  <span className="flex items-center gap-1.5"><Info size={11} /> Assumptions used</span>
-                  <span className="text-[10px] font-normal text-gray-400">Bengaluru 2026 benchmarks</span>
+              <details className="mt-5 rounded-md border border-line bg-paper-50 dark:border-slate-700 dark:bg-slate-900/60">
+                <summary className="flex cursor-pointer items-center justify-between px-4 py-2.5 text-caption list-none">
+                  <span className="eyebrow flex items-center gap-1.5 dark:text-slate-400">
+                    <Info size={11} /> Assumptions used
+                  </span>
+                  <span className="text-micro text-ink-400 dark:text-slate-500">Bengaluru 2026 benchmarks</span>
                 </summary>
-                <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-1 px-4 pb-3 sm:grid-cols-2">
                   {programme.assumptions.map((a, i) => (
-                    <div key={i} className="flex justify-between text-[11px] py-0.5 border-b border-gray-100 last:border-0">
-                      <span className="text-gray-500">{a.label}</span>
-                      <span className="font-medium text-gray-700">{a.value}</span>
+                    <div key={i} className="flex justify-between border-b border-line-soft py-1 text-caption last:border-0 dark:border-slate-700">
+                      <span className="text-ink-500 dark:text-slate-400">{a.label}</span>
+                      <span className="font-medium text-ink-800 tabular-nums dark:text-slate-200">{a.value}</span>
                     </div>
                   ))}
                 </div>
-                <div className="px-3 pb-3 text-[10px] text-gray-400 italic">
+                <div className="px-4 pb-3 text-micro italic text-ink-400 dark:text-slate-500">
                   Benchmarks from RERA Karnataka (carpet ratios), BBMP bye-laws (lifts / parking),
                   CBRE &amp; Knight Frank 2025 Bengaluru market reports, RMP 2031 Draft.
                   Override any input on the Parcel or Financial tab to tailor the programme.
@@ -202,35 +167,32 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
   );
 }
 
-// -- Helpers ----------------------------------------------------------------
-
 function MetricTile({ label, value, unit, hint }) {
   return (
-    <div className="rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-100 p-3">
-      <div className="text-[10px] uppercase tracking-[0.1em] font-medium text-gray-500">{label}</div>
-      <div className="mt-1 flex items-baseline gap-1">
-        <span className="text-lg font-bold text-gray-800 leading-none">{value}</span>
-        {unit && <span className="text-[10px] text-gray-500">{unit}</span>}
+    <div className="bg-paper-100 p-3 dark:bg-slate-900">
+      <div className="eyebrow dark:text-slate-400">{label}</div>
+      <div className="mt-1.5 flex items-baseline gap-1">
+        <span className="font-display text-xl font-semibold tabular-nums leading-none text-ink-900 dark:text-white">
+          {value}
+        </span>
+        {unit && <span className="text-caption text-ink-500 dark:text-slate-400">{unit}</span>}
       </div>
-      {hint && <div className="mt-1 text-[10px] text-gray-400">{hint}</div>}
+      {hint && <div className="mt-1 text-micro text-ink-400 dark:text-slate-500">{hint}</div>}
     </div>
   );
 }
 
-function FinancialStrip({ label, value, sub, tone }) {
-  const tones = {
-    amber:   'from-amber-50 to-amber-100/60 border-amber-100 text-amber-900',
-    emerald: 'from-emerald-50 to-emerald-100/60 border-emerald-100 text-emerald-900',
-    indigo:  'from-indigo-50 to-indigo-100/60 border-indigo-100 text-indigo-900',
-  };
+function FinancialStrip({ label, value, sub }) {
   return (
-    <div className={clsx('rounded-xl bg-gradient-to-br border p-3', tones[tone] || tones.amber)}>
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] font-semibold opacity-70">
-        <IndianRupee size={10} />
+    <div className="rounded-md border border-line bg-paper-100 px-3 py-3 dark:border-slate-700 dark:bg-slate-900">
+      <div className="eyebrow flex items-center gap-1.5 dark:text-slate-400">
+        <IndianRupee size={10} strokeWidth={2} />
         {label}
       </div>
-      <div className="mt-1 text-xl font-bold leading-none">{value}</div>
-      {sub && <div className="mt-1 text-[10px] opacity-70">{sub}</div>}
+      <div className="mt-1.5 font-display text-lg font-semibold leading-tight text-ink-900 tabular-nums dark:text-white">
+        {value}
+      </div>
+      {sub && <div className="mt-1 text-micro text-ink-500 dark:text-slate-400">{sub}</div>}
     </div>
   );
 }
@@ -238,39 +200,37 @@ function FinancialStrip({ label, value, sub, tone }) {
 function UnitMixTable({ mix, totalUnits }) {
   const totalCarpet = mix.reduce((s, m) => s + (m.carpet_total_sqft || 0), 0);
   return (
-    <div className="mt-4 rounded-xl border border-gray-100 overflow-hidden">
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-gray-700">
-          Suggested unit mix
-        </div>
-        <div className="text-[11px] text-gray-500">
-          Total <span className="font-semibold text-gray-800">{fmtNum(totalUnits, 0)}</span> units
+    <div className="mt-5 overflow-hidden rounded-md border border-line dark:border-slate-700">
+      <div className="flex items-center justify-between border-b border-line bg-paper-200 px-4 py-2 dark:border-slate-700 dark:bg-slate-800">
+        <div className="eyebrow dark:text-slate-400">Suggested unit mix</div>
+        <div className="text-caption text-ink-500 dark:text-slate-400">
+          Total <span className="font-semibold tabular-nums text-ink-900 dark:text-white">{fmtNum(totalUnits, 0)}</span> units
         </div>
       </div>
-      <table className="w-full text-sm">
-        <thead className="bg-white border-b border-gray-100 text-[10px] uppercase tracking-[0.08em] text-gray-500">
-          <tr>
-            <th className="text-left px-4 py-1.5 font-medium">Type</th>
-            <th className="text-right px-3 py-1.5 font-medium">Share</th>
-            <th className="text-right px-3 py-1.5 font-medium">Carpet / unit</th>
-            <th className="text-right px-4 py-1.5 font-medium">Count</th>
-            <th className="text-right px-4 py-1.5 font-medium">Total carpet</th>
+      <table className="w-full text-caption">
+        <thead className="border-b border-line bg-paper-100 dark:border-slate-700 dark:bg-slate-900">
+          <tr className="eyebrow text-ink-500 dark:text-slate-400">
+            <th className="px-4 py-1.5 text-left font-medium">Type</th>
+            <th className="px-3 py-1.5 text-right font-medium">Share</th>
+            <th className="px-3 py-1.5 text-right font-medium">Carpet / unit</th>
+            <th className="px-4 py-1.5 text-right font-medium">Count</th>
+            <th className="px-4 py-1.5 text-right font-medium">Total carpet</th>
           </tr>
         </thead>
         <tbody>
           {mix.map((m) => (
-            <tr key={m.type} className="border-b border-gray-50 last:border-0">
-              <td className="px-4 py-1.5 text-gray-800 font-medium">{m.type}</td>
-              <td className="px-3 py-1.5 text-right text-gray-600 text-xs">{Math.round(m.share * 100)}%</td>
-              <td className="px-3 py-1.5 text-right text-gray-600 text-xs">{fmtNum(m.carpet_sqft)} sqft</td>
-              <td className="px-4 py-1.5 text-right font-semibold text-gray-800">{fmtNum(m.count, 0)}</td>
-              <td className="px-4 py-1.5 text-right text-gray-700 text-xs">{fmtNum(m.carpet_total_sqft)}</td>
+            <tr key={m.type} className="border-b border-line-soft last:border-0 dark:border-slate-700">
+              <td className="px-4 py-1.5 font-medium text-ink-800 dark:text-slate-200">{m.type}</td>
+              <td className="px-3 py-1.5 text-right text-ink-500 tabular-nums dark:text-slate-400">{Math.round(m.share * 100)}%</td>
+              <td className="px-3 py-1.5 text-right text-ink-500 tabular-nums dark:text-slate-400">{fmtNum(m.carpet_sqft)} sqft</td>
+              <td className="px-4 py-1.5 text-right font-semibold tabular-nums text-ink-900 dark:text-white">{fmtNum(m.count, 0)}</td>
+              <td className="px-4 py-1.5 text-right text-ink-500 tabular-nums dark:text-slate-400">{fmtNum(m.carpet_total_sqft)}</td>
             </tr>
           ))}
-          <tr className="bg-gray-50">
-            <td className="px-4 py-1.5 text-[11px] uppercase tracking-[0.08em] font-semibold text-gray-600" colSpan={3}>Total</td>
-            <td className="px-4 py-1.5 text-right font-bold text-gray-800">{fmtNum(totalUnits, 0)}</td>
-            <td className="px-4 py-1.5 text-right font-bold text-gray-800 text-xs">{fmtNum(totalCarpet)} sqft</td>
+          <tr className="bg-paper-200 dark:bg-slate-800">
+            <td className="eyebrow px-4 py-1.5 dark:text-slate-400" colSpan={3}>Total</td>
+            <td className="px-4 py-1.5 text-right font-semibold tabular-nums text-ink-900 dark:text-white">{fmtNum(totalUnits, 0)}</td>
+            <td className="px-4 py-1.5 text-right font-semibold tabular-nums text-ink-900 dark:text-white">{fmtNum(totalCarpet)} sqft</td>
           </tr>
         </tbody>
       </table>

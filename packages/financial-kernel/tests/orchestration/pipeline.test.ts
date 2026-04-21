@@ -33,7 +33,6 @@ describe('pipeline — end-to-end orchestration', () => {
     };
     delete process.env.DEBT_ENGINE_KILL;
     delete process.env.DEBT_ENGINE_V2_KILL;
-    delete process.env.DEBT_ENGINE_PY_URL;
   });
   afterEach(() => {
     process.env = { ...prior };

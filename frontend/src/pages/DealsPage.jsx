@@ -257,7 +257,7 @@ export default function DealsPage() {
                 <Link
                   key={deal.id}
                   to={`/dashboard/deals/${deal.id}`}
-                  className="card hover:shadow-md transition-shadow cursor-pointer"
+                  className="card-editorial hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="font-semibold text-gray-900 truncate pr-2">{deal.name}</h3>

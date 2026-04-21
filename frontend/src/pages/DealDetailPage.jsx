@@ -332,7 +332,7 @@ export default function DealDetailPage() {
 
       {/* Stage Transition Panel (collapsible, always visible above tabs) */}
       {nextStages.length > 0 && !deal.is_archived && canEdit && (
-        <div className="card mb-5 p-0 overflow-hidden">
+        <div className="card-editorial mb-5 p-0 overflow-hidden">
           <button
             type="button"
             onClick={() => setStageExpanded((v) => !v)}

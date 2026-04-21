@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, MapPin, AlertCircle, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
 import { formatArea, formatDate } from '../../utils/format';
+import { SQFT_PER_ACRE } from '../../config/india';
 import { useProperties, useCreateProperty } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
 import SiteWeatherCard from './SiteWeatherCard';
@@ -297,7 +298,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
 
   const landAreaAcres =
     deal.land_area_sqft != null
-      ? (deal.land_area_sqft / 43560).toFixed(3) + ' acres'
+      ? (deal.land_area_sqft / SQFT_PER_ACRE).toFixed(3) + ' acres'
       : null;
 
   const geocodeLabel = deal.geocode_status
@@ -350,7 +351,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
       )}
 
       {/* Site Details Grid */}
-      <div className="card">
+      <div className="card-editorial">
         <h3 className="text-base font-semibold text-gray-900 mb-4">Site Information</h3>
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
           <FieldRow label="Property Name" value={deal.property_name} />
@@ -390,7 +391,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
       </div>
 
       {/* Map Section */}
-      <div className="card">
+      <div className="card-editorial">
         <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <MapPin size={16} className="text-gray-400" />
           Location Map
@@ -464,7 +465,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
 
       {/* Additional Technical Details */}
       {(deal.rera_number || deal.target_launch_date || deal.expected_close_date) && (
-        <div className="card">
+        <div className="card-editorial">
           <h3 className="text-base font-semibold text-gray-900 mb-4">Project Details</h3>
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             <FieldRow label="RERA Number" value={deal.rera_number} />

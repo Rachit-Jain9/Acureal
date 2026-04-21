@@ -15,8 +15,9 @@
 // Mirrors backend/src/services/masterplan.service.js calculateEffectiveFSI()
 // and the Postgres rules engine at regulatory_data.effective_fsi().
 
+import { SQFT_PER_ACRE } from '../config/india';
+
 const SQFT_PER_SQM = 10.76391041671;
-const SQFT_PER_ACRE = 43560;
 const FLOOR_HEIGHT_M_DEFAULT = 3.0; // typical floor-to-floor for residential
 const EV_BAY_PCT = 0.05;            // Section 9.6: at least 5% EV charging
 const VISITOR_PARK_PCT = 0.10;      // Section 9.6: 10% visitor for residential

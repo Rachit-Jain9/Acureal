@@ -1,4 +1,6 @@
-export const SQFT_PER_ACRE = 43560;
+import { SQFT_PER_ACRE } from '../config/india';
+
+export { SQFT_PER_ACRE };
 
 const toNumber = (value) => {
   if (value === null || value === undefined || value === '') {

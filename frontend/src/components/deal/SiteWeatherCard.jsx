@@ -45,7 +45,7 @@ export default function SiteWeatherCard({ lat, lng, city }) {
   if (lat == null || lng == null) return null;
 
   return (
-    <div className="card">
+    <div className="card-editorial">
       <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
         <Cloud size={16} className="text-sky-500" />
         Site Weather & Climate Context

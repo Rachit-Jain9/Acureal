@@ -61,7 +61,7 @@ function HospitalityHeader({ inputs, kpis }) {
     { label: 'Dev / Key',       value: fmtInrLakh(kpis.devCostPerKey),                      unit: '' },
   ];
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       <div className="px-5 py-4 bg-gradient-to-r from-rose-500 via-pink-500 to-orange-500 text-white flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
           <Hotel size={18} />
@@ -107,7 +107,7 @@ function RevenueMixCard({ pnl }) {
   const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
-    <div className="card p-5">
+    <div className="card-editorial p-5">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-pink-500 text-white flex items-center justify-center">
           <PieIcon size={14} />
@@ -152,7 +152,7 @@ function NOIEvolutionCard({ pnl }) {
   }));
 
   return (
-    <div className="card p-5">
+    <div className="card-editorial p-5">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center">
           <TrendingUp size={14} />
@@ -230,7 +230,7 @@ function USALIProfitLossTable({ pnl }) {
   ];
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-2">
         <BarChart3 size={14} className="text-gray-600" />
         <div className="text-sm font-semibold text-gray-800">USALI 10-year profit & loss (₹ Cr)</div>
@@ -283,7 +283,7 @@ function SourcesUsesCard({ sourcesUses }) {
   const usesCategories = uses.map((u) => u.category);
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-amber-50 via-white to-rose-50 flex items-center gap-2">
         <Receipt size={14} className="text-amber-600" />
         <div className="text-sm font-semibold text-gray-800">Sources & Uses</div>
@@ -376,7 +376,7 @@ function RefiRow({ label, value }) {
 // ─── Capital stack timeline (construction → refi → exit) ────────────────────
 function CapitalStackTimelineCard({ construction, permanent, kpis }) {
   return (
-    <div className="card p-5">
+    <div className="card-editorial p-5">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white flex items-center justify-center">
           <Layers size={14} />
@@ -449,7 +449,7 @@ function WaterfallCard({ waterfall }) {
   const chartData = tiers.map((t) => ({ name: t.name.split('\u2014')[0].trim(), LP: t.lpCr, GP: t.gpCr }));
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 via-white to-indigo-50 flex items-center gap-2">
         <Users size={14} className="text-violet-600" />
         <div className="text-sm font-semibold text-gray-800">LP / GP Waterfall</div>

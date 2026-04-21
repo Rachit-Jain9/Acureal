@@ -4,12 +4,12 @@
  * An orchestration pass takes a deal (inputs + facility specs + waterfall
  * tiers) and returns the unified financial picture: base kernel result,
  * debt schedule, CFADS, covenants, waterfall, and KPIs — together with
- * engine provenance so we can reason about which runtime produced which
- * number.
+ * engine provenance so we can reason about how each number was produced.
  *
- * The debt engine is always on. An operator kill-switch
- * (`DEBT_ENGINE_KILL=1`) exists as an emergency escape hatch that
- * reduces the pipeline to a safe no-op overlay; see featureFlag.ts.
+ * The in-process TypeScript kernel is the single source of truth. An
+ * operator kill-switch (`DEBT_ENGINE_KILL=1`) exists as an emergency
+ * escape hatch that reduces the pipeline to a safe no-op overlay; see
+ * featureFlag.ts.
  */
 
 import type { Decimal } from '../decimal';
@@ -41,12 +41,12 @@ export interface CovenantSummary {
 
 /**
  * Where the pipeline ran:
- *   - `inline`   — in-process TypeScript kernel
- *   - `python`   — remote Python FastAPI (DEBT_ENGINE_PY_URL set)
+ *   - `inline`   — in-process TypeScript kernel (the default and only
+ *                  production path since the 2026-04 consolidation)
  *   - `safe-mode` — kill-switch on; pipeline produced zero-overlay so
  *                   callers degrade gracefully without crashing
  */
-export type EngineVersion = 'inline' | 'python' | 'safe-mode';
+export type EngineVersion = 'inline' | 'safe-mode';
 
 /**
  * Input shape expected by `FinancialOrchestrator.compute`. Deliberately
@@ -138,26 +138,10 @@ export interface EngineDecision {
   readonly engineVersion: EngineVersion;
   /** True when the operator kill-switch forced safe-mode. */
   readonly killed: boolean;
-  /** True when a Python endpoint was configured and reachable. */
-  readonly pythonAvailable: boolean;
   /** Deterministic 0-99 hash bucket — used by telemetry to spot drift. */
   readonly bucket: number;
-  /** Human-readable label: `python`, `inline`, `kill_switch_on`, `forceEngine=...`. */
+  /** Human-readable label: `inline`, `kill_switch_on`, `forceEngine=...`. */
   readonly reason: string;
-}
-
-/** Minimal JSON-safe facility row used on the Python wire format. */
-export interface WireFacilityRow {
-  facilityId: string;
-  month: number;
-  openingBalance: string;
-  draw: string;
-  interestAccrued: string;
-  interestPaid: string;
-  interestCapitalized: string;
-  principalPaid: string;
-  prepaymentPaid: string;
-  closingBalance: string;
 }
 
 export type FacilityRow = FacilityPeriodRow;

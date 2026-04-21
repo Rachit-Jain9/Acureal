@@ -230,7 +230,7 @@ export default function PropertyDetailPage() {
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="card lg:col-span-2">
+        <section className="card-editorial lg:col-span-2">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Property Overview</h2>
           <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             <DetailField
@@ -261,7 +261,7 @@ export default function PropertyDetailPage() {
           )}
         </section>
 
-        <section className="card space-y-5">
+        <section className="card-editorial space-y-5">
           <div>
             <h2 className="mb-4 text-lg font-semibold text-gray-900">At a Glance</h2>
             <div className="space-y-4">
@@ -395,7 +395,7 @@ export default function PropertyDetailPage() {
 
       <BuildabilitySummary property={property} />
 
-      <section className="card">
+      <section className="card-editorial">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Related Deals</h2>
 
         {relatedDeals.length === 0 ? (

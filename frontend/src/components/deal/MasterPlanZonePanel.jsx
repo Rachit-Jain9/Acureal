@@ -59,7 +59,7 @@ export default function MasterPlanZonePanel({ property }) {
 
   if (!property?.id) {
     return (
-      <div className="card">
+      <div className="card-editorial">
         <div className="flex items-center gap-2 mb-2">
           <Shield size={16} className="text-primary-600" />
           <h3 className="text-sm font-semibold text-gray-800">Master Plan Zone</h3>
@@ -72,7 +72,7 @@ export default function MasterPlanZonePanel({ property }) {
   }
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       {/* Header */}
       <div className={clsx(
         'relative px-5 py-4 flex items-start justify-between gap-3',

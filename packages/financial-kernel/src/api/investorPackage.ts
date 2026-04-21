@@ -21,7 +21,7 @@ import type { InvestorPackage } from '../exports/types';
 
 export interface InvestorPackageResponseBody {
   readonly package: InvestorPackage;
-  readonly engineVersion: 'inline' | 'python' | 'safe-mode';
+  readonly engineVersion: 'inline' | 'safe-mode';
   readonly flagState: ReturnType<typeof getServiceStatus>;
 }
 

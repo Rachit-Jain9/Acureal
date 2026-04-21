@@ -29,7 +29,7 @@ function sampleBody() {
   return {
     summary: {
       dealId: TEST_DEAL_ID,
-      engineVersion: 'python',
+      engineVersion: 'inline',
       generatedAt: new Date().toISOString(),
       headline: 'Test IRR 12.3% · Min DSCR 1.42x',
       narrative: 'Synthetic snapshot for reconciliation test.',
@@ -97,7 +97,7 @@ d('investor_package_snapshots reconciliation', () => {
       },
       body: JSON.stringify({
         deal_id: TEST_DEAL_ID,
-        engine_version: 'python',
+        engine_version: 'inline',
         source: 'jest-reconciliation',
         input_hash,
         body,
@@ -119,7 +119,7 @@ d('investor_package_snapshots reconciliation', () => {
     }>;
     expect(rows.length).toBe(1);
     const row = rows[0];
-    expect(row.engine_version).toBe('python');
+    expect(row.engine_version).toBe('inline');
     expect(row.input_hash).toBe(input_hash);
     expect(row.body.summary.kpi.irrLeveredPct).toBeCloseTo(12.345, 5);
     expect(row.body.summary.kpi.minDSCR).toBeCloseTo(1.42, 5);

@@ -268,7 +268,7 @@ export default function MapPage() {
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[390px_minmax(0,1fr)] gap-6">
-        <aside className="card flex h-[calc(100vh-180px)] min-h-[720px] flex-col overflow-hidden">
+        <aside className="card-editorial flex h-[calc(100vh-180px)] min-h-[720px] flex-col overflow-hidden">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-4 dark:border-blue-900/60 dark:bg-blue-950/45">
               <p className="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">Visible Properties</p>
@@ -660,7 +660,7 @@ export default function MapPage() {
           </div>
         </aside>
 
-        <section className="card overflow-hidden p-0">
+        <section className="card-editorial overflow-hidden p-0">
           <MapCanvas
             properties={filteredProperties}
             selectedProperty={selectedProperty}

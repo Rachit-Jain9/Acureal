@@ -26,7 +26,7 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
   const verdict = computeVerdict({ uplift, fee: premium_fee_estimate?.fee_inr, additionalBuildCost, feeKnown });
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 via-white to-primary-50 border-b border-gray-100 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-primary-500 text-white flex items-center justify-center shadow-sm">

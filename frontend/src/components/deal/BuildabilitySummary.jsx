@@ -3,6 +3,7 @@ import { Sparkles, Building2, Layers, AlertTriangle, Info, Home, Car, Ruler } fr
 import { clsx } from 'clsx';
 import { useZone } from '../../hooks/useMasterPlan';
 import { computeBuildability, fmtNum } from '../../utils/buildability';
+import { SQFT_PER_ACRE } from '../../config/india';
 
 // Compact buildability readout. Drop on property detail pages, deal overview
 // cards, and anywhere else a one-glance envelope figure is useful.
@@ -20,7 +21,7 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
   const hasPremium = result.premium_fsi_available != null && result.premium_fsi_available > 0.01;
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card-editorial p-0 overflow-hidden">
       <div className="px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white shadow-sm">
@@ -82,7 +83,7 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
                 value={fmtNum(result.realized_built_up_sqft)}
                 unit="sqft"
                 hint={result.realized_built_up_sqft != null
-                  ? `${fmtNum(result.realized_built_up_sqft / 43560, 2)} ac`
+                  ? `${fmtNum(result.realized_built_up_sqft / SQFT_PER_ACRE, 2)} ac`
                   : null}
               />
               <Tile

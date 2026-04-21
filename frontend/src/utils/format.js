@@ -1,3 +1,5 @@
+import { SQFT_PER_ACRE } from '../config/india';
+
 const CURRENCY_SYMBOLS = {
   INR: '₹',
   USD: '$',
@@ -78,7 +80,7 @@ export const formatArea = (value) => {
     return `${sqm.toLocaleString('en-IN', { maximumFractionDigits: 1 })} sqm`;
   }
   if (unit === 'acres') {
-    const acres = num / 43560;
+    const acres = num / SQFT_PER_ACRE;
     return `${acres.toLocaleString('en-IN', { maximumFractionDigits: 3 })} acres`;
   }
   return `${num.toLocaleString('en-IN')} sqft`;

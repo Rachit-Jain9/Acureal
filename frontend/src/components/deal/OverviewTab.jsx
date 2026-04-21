@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
+import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
 import BuildabilitySummary from './BuildabilitySummary';
 import {
@@ -143,7 +144,7 @@ export default function OverviewTab({ deal, id }) {
     <div className="space-y-6">
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4">
+        <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
             <IndianRupee size={14} className="text-gray-400" />
             <span className="text-xs text-gray-500 uppercase tracking-wide">Ask Price</span>
@@ -158,7 +159,7 @@ export default function OverviewTab({ deal, id }) {
           )}
         </div>
 
-        <div className="card p-4">
+        <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
             <MapPin size={14} className="text-gray-400" />
             <span className="text-xs text-gray-500 uppercase tracking-wide">Land Area</span>
@@ -168,12 +169,12 @@ export default function OverviewTab({ deal, id }) {
           </p>
           {deal.land_area_sqft && (
             <p className="text-xs text-gray-400 mt-1">
-              {(deal.land_area_sqft / 43560).toFixed(3)} acres
+              {(deal.land_area_sqft / SQFT_PER_ACRE).toFixed(3)} acres
             </p>
           )}
         </div>
 
-        <div className="card p-4">
+        <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
             <Layers size={14} className="text-gray-400" />
             <span className="text-xs text-gray-500 uppercase tracking-wide">Asset Class</span>
@@ -188,7 +189,7 @@ export default function OverviewTab({ deal, id }) {
           )}
         </div>
 
-        <div className="card p-4">
+        <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-gray-400" />
             <span className="text-xs text-gray-500 uppercase tracking-wide">Deal Type</span>
@@ -211,7 +212,7 @@ export default function OverviewTab({ deal, id }) {
       )}
 
       {readiness && (
-        <div className="card">
+        <div className="card-editorial">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h3 className="text-base font-semibold text-gray-900">Deal Readiness</h3>
@@ -279,7 +280,7 @@ export default function OverviewTab({ deal, id }) {
 
       {/* Financial Summary */}
       {financials && (
-        <div className="card">
+        <div className="card-editorial">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
               <IndianRupee size={16} className="text-gray-400" />
@@ -334,7 +335,7 @@ export default function OverviewTab({ deal, id }) {
       )}
 
       {/* AI Deal Analysis */}
-      <div className="card">
+      <div className="card-editorial">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
             <Brain size={16} className="text-primary-600" />
@@ -383,7 +384,7 @@ export default function OverviewTab({ deal, id }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stage History */}
         {stageHistory.length > 0 && (
-          <div className="card">
+          <div className="card-editorial">
             <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Clock size={16} className="text-gray-400" />
               Stage History
@@ -437,7 +438,7 @@ export default function OverviewTab({ deal, id }) {
 
         {/* Next Steps */}
         {nextStepGroups.length > 0 && (
-          <div className="card">
+          <div className="card-editorial">
             <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <CheckCircle2 size={16} className="text-primary-600" />
               Next Steps
@@ -467,7 +468,7 @@ export default function OverviewTab({ deal, id }) {
 
       {/* Recent Activities */}
       {recentActivities.length > 0 && (
-        <div className="card">
+        <div className="card-editorial">
           <h3 className="text-base font-semibold text-gray-900 mb-4">Recent Activities</h3>
           <ul className="divide-y divide-gray-100">
             {recentActivities.slice(0, 5).map((activity) => {
@@ -502,7 +503,7 @@ export default function OverviewTab({ deal, id }) {
 
       {/* Deal Notes */}
       {deal.notes && (
-        <div className="card">
+        <div className="card-editorial">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">
             Notes
           </h3>

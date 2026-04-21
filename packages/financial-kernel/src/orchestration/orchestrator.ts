@@ -10,16 +10,13 @@
  *   6. covenants + KPIs rolled up
  *
  * Runtime selection (see `selectEngine` in featureFlag.ts):
- *   - `inline`    — in-process TypeScript kernel (default)
- *   - `python`    — remote Python FastAPI (when `DEBT_ENGINE_PY_URL` set,
- *                   falls back to inline on error)
+ *   - `inline`    — in-process TypeScript kernel (the production path)
  *   - `safe-mode` — kill-switch engaged; returns a zero-overlay so a deal
  *                   page never crashes on engine failure
  *
- * No rollout, no cohort, no A/B. The engine is always on; operators have
- * a single emergency kill-switch (`DEBT_ENGINE_KILL=1`) as an escape hatch.
- * `forceEngine` on the input is still honored — useful for tests and
- * failover drills.
+ * The engine is always on; operators have a single emergency kill-switch
+ * (`DEBT_ENGINE_KILL=1`) as an escape hatch. `forceEngine` on the input
+ * is honored for tests and failover drills.
  */
 
 import { Decimal, sum as decSum } from '../decimal';
@@ -43,14 +40,8 @@ import { buildStandardGraph } from './financialGraph';
 import {
   logEngineDecision,
   selectEngine,
-  getPythonUrl,
   recordMonitoring,
 } from './featureFlag';
-import {
-  callPythonOrchestrate,
-  rehydrateAggregate,
-  rehydrateCFADS,
-} from './pythonClient';
 import {
   computeKPIs,
   evaluateDeal,
@@ -84,8 +75,6 @@ export class FinancialOrchestrator {
    *
    * Invariants:
    *   - Throws only on malformed inputs (negative/zero `totalMonths`).
-   *   - Python failures degrade to inline silently; `engineDecision.reason`
-   *     records the fall-back so ops can see it in monitoring_logs.
    *   - Kill-switch always wins — safe-mode returns zero overlays so the
    *     deal page stays renderable during an incident.
    *   - `forceEngine` is respected for tests + drills.
@@ -99,19 +88,16 @@ export class FinancialOrchestrator {
     // Engine selection is pure: (dealId, env) → EngineDecision.
     let decision = selectEngine(input.dealId, this.env);
     if (input.forceEngine && input.forceEngine !== decision.engineVersion) {
-      const pyUrl = getPythonUrl(this.env);
       decision = {
         ...decision,
         engineVersion: input.forceEngine,
-        pythonAvailable:
-          input.forceEngine === 'python' ? pyUrl != null : decision.pythonAvailable,
         reason: `forceEngine=${input.forceEngine}`,
       };
     }
     logEngineDecision(input.dealId, decision);
 
-    // Base kernel always runs — asset-adapter output is the legacy-equivalent
-    // shape every caller has depended on since Phase 1.
+    // Base kernel always runs — asset-adapter output is the canonical
+    // deal shape every caller has depended on since the kernel landed.
     const baseResult = computeDeal(input.dealInputs);
 
     let engineVersion: EngineVersion;
@@ -124,37 +110,10 @@ export class FinancialOrchestrator {
       // deal page renders and CFADS still reflects operations. No throws.
       ({ aggregate, scheduleByFacility, cfads } = this.emptyOverlay(input));
       engineVersion = 'safe-mode';
-    } else if (decision.engineVersion === 'python' && decision.pythonAvailable) {
-      try {
-        const pyResp = await this.runPython(input);
-        aggregate = rehydrateAggregate(pyResp, input.totalMonths);
-        cfads = rehydrateCFADS(pyResp);
-        engineVersion = 'python';
-      } catch (err) {
-        // Python unreachable → inline fallback. Never fail a deal page
-        // because a remote service is down.
-        if (this.env.DEBT_ENGINE_SILENT !== '1' && this.env.DEBT_ENGINE_V2_SILENT !== '1') {
-          console.warn(
-            `[financial.orchestrator] python fallback → inline: ${(err as Error).message}`,
-          );
-        }
-        ({ aggregate, scheduleByFacility, cfads } = this.computeInline(input));
-        engineVersion = 'inline';
-        decision = {
-          ...decision,
-          engineVersion: 'inline',
-          pythonAvailable: false,
-          reason: `python_error_fallback`,
-        };
-      }
     } else {
       // Default path: in-process TypeScript kernel.
       ({ aggregate, scheduleByFacility, cfads } = this.computeInline(input));
       engineVersion = 'inline';
-      if (decision.engineVersion !== 'inline') {
-        // Forced python but no URL / unavailable → reflect actual runtime.
-        decision = { ...decision, engineVersion: 'inline', reason: 'python_unavailable_fallback' };
-      }
     }
 
     const covenants = this.computeCovenantSummary(input, aggregate, cfads);
@@ -314,7 +273,7 @@ export class FinancialOrchestrator {
       graph,
       narrative: buildNarrative(insights, kpis),
       generatedAt: new Date().toISOString(),
-      source: engineVersion === 'python' ? 'python' : 'inline',
+      source: 'inline',
     };
   }
 
@@ -378,23 +337,6 @@ export class FinancialOrchestrator {
       closingBalanceByMonth: zeros(),
       provenance: [],
     };
-  }
-
-  private async runPython(input: OrchestrationInput) {
-    const url = getPythonUrl(this.env);
-    if (!url) throw new Error('DEBT_ENGINE_PY_URL not set');
-    return callPythonOrchestrate({
-      url,
-      dealId: input.dealId,
-      facilities: input.facilities,
-      cfadsInputs: input.cfadsInputs,
-      tiers: input.waterfall?.tiers ?? [],
-      availableByMonth: input.waterfall?.availableByMonth ?? [],
-      totalMonths: input.totalMonths,
-      projectCostCr: input.covenantInputs?.projectCostCr,
-      propertyValueCr: input.covenantInputs?.propertyValueCr,
-      sculptTarget: input.sculptTarget,
-    });
   }
 
   private computeCovenantSummary(

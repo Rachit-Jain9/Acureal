@@ -2,16 +2,15 @@
  * @redip/financial-kernel/orchestration
  *
  * End-to-end financial pipeline: base kernel, debt roll-forward, CFADS,
- * covenants, waterfall, and KPIs behind a single call. The engine is
- * unconditional — the only operational knob is a kill-switch
- * (`DEBT_ENGINE_KILL=1`) that degrades to a safe zero-overlay so deal
- * pages survive an incident without crashing.
+ * covenants, waterfall, and KPIs behind a single call. The in-process
+ * TypeScript kernel is the sole runtime; an operator kill-switch
+ * (`DEBT_ENGINE_KILL=1`) degrades to a safe zero-overlay so deal pages
+ * survive an incident without crashing.
  */
 
 export { FinancialOrchestrator, orchestrate } from './orchestrator';
 export {
   isKillSwitchOn,
-  getPythonUrl,
   isSilent,
   hash32,
   dealBucket,
@@ -35,7 +34,5 @@ export type {
   OrchestratedKPIs,
   OrchestrationInput,
   OrchestrationOutput,
-  WireFacilityRow,
   FacilityRow,
 } from './types';
-export type { PythonOrchestrateResponse } from './pythonClient';

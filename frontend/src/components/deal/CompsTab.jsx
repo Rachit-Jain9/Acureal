@@ -76,7 +76,7 @@ function BenchmarkCard({ benchmark, city }) {
 
   if (benchmark.found === false) {
     return (
-      <div className="card">
+      <div className="card-editorial">
         <div className="flex items-center gap-2 mb-2">
           <TrendingUp size={16} className="text-gray-400" />
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Market Benchmark — {city || 'Location'}</h3>
@@ -99,7 +99,7 @@ function BenchmarkCard({ benchmark, city }) {
   ];
 
   return (
-    <div className="card">
+    <div className="card-editorial">
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp size={16} className="text-primary-600" />
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -174,7 +174,7 @@ export default function CompsTab({ deal }) {
         benchmarkLoading ? (
           <LoadingSpinner className="py-8" />
         ) : benchmarkError ? (
-          <div className="card text-center py-8">
+          <div className="card-editorial text-center py-8">
             <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
             <p className="text-sm text-red-600 mb-2">Failed to load benchmark data.</p>
             <button onClick={refetchBenchmark} className="btn btn-secondary text-sm">Retry</button>
@@ -186,7 +186,7 @@ export default function CompsTab({ deal }) {
 
       {/* Nearby Comps */}
       {hasLatLng && (
-        <div className="card p-0 overflow-hidden">
+        <div className="card-editorial p-0 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
               <MapPin size={16} className="text-gray-400" />

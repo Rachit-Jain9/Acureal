@@ -62,7 +62,7 @@ export default function FinancialTab({ deal }) {
 
   if (!financials) {
     return (
-      <div className="card text-center py-20">
+      <div className="card-editorial text-center py-20">
         <BarChart3 size={40} className="text-gray-300 mx-auto mb-4" />
         <p className="text-base font-semibold text-gray-700 mb-1">No financial model yet</p>
         <p className="text-sm text-gray-400 mb-6">
@@ -100,7 +100,7 @@ export default function FinancialTab({ deal }) {
       </div>
 
       {/* Returns */}
-      <div className="card">
+      <div className="card-editorial">
         <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
           Returns
         </h4>
@@ -126,7 +126,7 @@ export default function FinancialTab({ deal }) {
       </div>
 
       {/* Revenue & Profit */}
-      <div className="card">
+      <div className="card-editorial">
         <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
           {isIncome ? 'Income & Valuation' : isHospitality ? 'Revenue & EBITDA' : 'Revenue & Profit'}
         </h4>
@@ -158,7 +158,7 @@ export default function FinancialTab({ deal }) {
 
       {/* Per-unit KPIs */}
       {(kpis.costPerSqft || kpis.revenuePerPlot || kpis.devCostPerSqft || kpis.devCostPerKey) && (
-        <div className="card">
+        <div className="card-editorial">
           <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Unit Economics
           </h4>
@@ -185,7 +185,7 @@ export default function FinancialTab({ deal }) {
       )}
 
       {/* Costs */}
-      <div className="card">
+      <div className="card-editorial">
         <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
           Costs
         </h4>
@@ -198,7 +198,7 @@ export default function FinancialTab({ deal }) {
       </div>
 
       {/* Areas */}
-      <div className="card">
+      <div className="card-editorial">
         <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
           Area Breakdown
         </h4>

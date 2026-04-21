@@ -2,10 +2,6 @@
  * Exports layer types — the investor-facing payload the UI and PDF/XLSX
  * renderers consume. Every field is strongly typed so downstream code
  * can render without inspecting raw kernel internals.
- *
- * Must round-trip the shape emitted by the Python
- * `intelligence.report.build_investor_package` so the HTTP boundary
- * stays engine-agnostic.
  */
 import type { Decimal } from '../decimal';
 import type { Insight, IntelligenceReport } from '../intelligence/types';
@@ -43,7 +39,7 @@ export interface InsightsByKind {
 export interface InvestorSummary {
   readonly dealId: string;
   /** Which runtime produced the numbers. Matches orchestration EngineVersion. */
-  readonly engineVersion: 'inline' | 'python' | 'safe-mode';
+  readonly engineVersion: 'inline' | 'safe-mode';
   readonly generatedAt: string;
   readonly headline: string;
   readonly kpi: InvestorKPI;

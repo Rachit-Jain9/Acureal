@@ -110,9 +110,14 @@ export function computeResidential(
   // SOFT
   const architectCr = constructionCostCr.mulNumber(architectFeePct / 100);
   const pmcCr = constructionCostCr.mulNumber(pmcFeePct / 100);
-  const approvalCostCr = num(raw.approvalCostPerSqft, 0) > 0
-    ? D((grossAreaSqft * num(raw.approvalCostPerSqft)) / CRORE)
-    : D(num(raw.approvalCostCr));
+  const baseApprovalCostCr = num(raw.approvalCostPerSqft, 0) > 0
+    ? (grossAreaSqft * num(raw.approvalCostPerSqft)) / CRORE
+    : num(raw.approvalCostCr);
+  // Adapter extension point: redevelopment uses this to layer rehousing
+  // (paid to displaced occupiers) into the soft-cost bucket on the same
+  // schedule as approvals. Villas / mixed_use / residential leave it 0.
+  const extraSoftCostCr = num(raw.extraSoftCostCr, 0);
+  const approvalCostCr = D(baseApprovalCostCr + extraSoftCostCr);
   const marketingCr = totalRevenueCr.mulNumber(marketingCostPct / 100);
 
   const hardCostCr = constructionCostCr.add(gstCr).add(contingencyCr);

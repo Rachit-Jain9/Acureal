@@ -1,6 +1,6 @@
 /**
  * Intelligence layer — shared types for KPI engine, decision engine,
- * sensitivity, and the financial graph. Mirrors the Python wire shape.
+ * sensitivity, and the financial graph.
  */
 import type { Decimal } from '../decimal';
 
@@ -92,5 +92,5 @@ export interface IntelligenceReport {
   readonly narrative: string;
   readonly generatedAt: string;
   /** Which runtime produced this report — matches EngineVersion. */
-  readonly source: 'inline' | 'python';
+  readonly source: 'inline';
 }

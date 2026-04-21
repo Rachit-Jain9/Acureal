@@ -8,7 +8,7 @@ const fixtures: Record<string, any> = {
   retail: (F as any).retailSample,
   industrial_warehousing: (F as any).industrialSample,
   hospitality: (F as any).hospitalitySample,
-  villas: (F as any).villaSample,
+  villas: (F as any).villasSample,
   mixed_use: (F as any).mixedUseSample,
   redevelopment: (F as any).redevelopmentSample,
   land_parcel: (F as any).landParcelSample,
