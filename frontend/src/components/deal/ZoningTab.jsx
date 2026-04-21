@@ -7,7 +7,9 @@ import { clsx } from 'clsx';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
 import AssetClassProgrammeCard from './AssetClassProgrammeCard';
 import ScenarioComparisonCard from './ScenarioComparisonCard';
+import ExtractionBadge from './ExtractionBadge';
 import { useZone } from '../../hooks/useMasterPlan';
+import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { computeBuildability, fmtNum } from '../../utils/buildability';
 
 const OVERLAY_CHECKS = [
@@ -61,12 +63,15 @@ function BigStat({ label, value, unit, tone = 'default', hint }) {
   );
 }
 
-function KeyValue({ label, value, muted }) {
+function KeyValue({ label, value, muted, extraction }) {
   return (
-    <div className="flex items-start justify-between py-1.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={clsx('text-xs font-medium text-right', muted ? 'text-gray-400 italic' : 'text-gray-800')}>
-        {value}
+    <div className="flex items-start justify-between py-1.5 border-b border-gray-50 last:border-0 gap-2">
+      <span className="text-xs text-gray-500 flex-shrink-0">{label}</span>
+      <span className="flex items-center gap-1.5 flex-wrap justify-end">
+        <span className={clsx('text-xs font-medium text-right', muted ? 'text-gray-400 italic' : 'text-gray-800')}>
+          {value}
+        </span>
+        {extraction && <ExtractionBadge source={extraction} compact />}
       </span>
     </div>
   );
@@ -288,6 +293,9 @@ export default function ZoningTab({ deal, dealId, setTab }) {
     : null);
 
   const { data: zone } = useZone(property?.zone_id);
+  const { data: extractionsBundle } = useDealExtractions(dealId);
+  const fieldMap = extractionsBundle?.field_map || {};
+  const extractionCount = extractionsBundle?.count || 0;
 
   const buildability = useMemo(
     () => computeBuildability({
@@ -410,11 +418,13 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                     ? `${fmtNum(buildability.land_sqft)} sqft \u00b7 ${fmtNum(buildability.land_acres, 2)} ac`
                     : 'Not set'}
                   muted={buildability.land_sqft == null}
+                  extraction={fieldMap.land_area_sqft || fieldMap.land_area_acres}
                 />
                 <KeyValue
                   label="Road width"
                   value={buildability.road_width_m != null ? `${buildability.road_width_m} m` : 'Not set'}
                   muted={buildability.road_width_m == null}
+                  extraction={fieldMap.road_width_m}
                 />
                 <KeyValue
                   label="Ground coverage cap"
@@ -505,24 +515,31 @@ export default function ZoningTab({ deal, dealId, setTab }) {
         icon={MapPin}
         title="Parcel inputs"
         kicker={
-          setTab && (
-            <button
-              onClick={() => setTab('parcel')}
-              className="text-[11px] text-primary-600 hover:underline"
-            >
-              Edit in Parcel / Site
-            </button>
-          )
+          <div className="flex items-center gap-2">
+            {extractionCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                {Object.keys(fieldMap).length} field{Object.keys(fieldMap).length === 1 ? '' : 's'} auto-matched from {extractionCount} doc{extractionCount === 1 ? '' : 's'}
+              </span>
+            )}
+            {setTab && (
+              <button
+                onClick={() => setTab('parcel')}
+                className="text-[11px] text-primary-600 hover:underline"
+              >
+                Edit in Parcel / Site
+              </button>
+            )}
+          </div>
         }
       >
         {hasAnyParcelData ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-            <KeyValue label="Zoning (high-level)"   value={zoningLabel || 'Not set'}           muted={!zoningLabel} />
-            <KeyValue label="Land area (sqft)"      value={landSqft ? fmtNum(landSqft) : 'Not set'} muted={!landSqft} />
-            <KeyValue label="Road width (m)"        value={property?.road_width_mtrs ? `${property.road_width_mtrs} m` : 'Not set'} muted={!property?.road_width_mtrs} />
-            <KeyValue label="Permissible FSI"       value={property?.permissible_fsi != null ? fmtNum(property.permissible_fsi, 2) : 'Not set'} muted={property?.permissible_fsi == null} />
+            <KeyValue label="Zoning (high-level)"   value={zoningLabel || 'Not set'}           muted={!zoningLabel} extraction={fieldMap.zone_code} />
+            <KeyValue label="Land area (sqft)"      value={landSqft ? fmtNum(landSqft) : 'Not set'} muted={!landSqft} extraction={fieldMap.land_area_sqft} />
+            <KeyValue label="Road width (m)"        value={property?.road_width_mtrs ? `${property.road_width_mtrs} m` : 'Not set'} muted={!property?.road_width_mtrs} extraction={fieldMap.road_width_m} />
+            <KeyValue label="Permissible FSI"       value={property?.permissible_fsi != null ? fmtNum(property.permissible_fsi, 2) : 'Not set'} muted={property?.permissible_fsi == null} extraction={fieldMap.fsi} />
             <KeyValue label="Existing / consumed FSI" value={property?.existing_fsi != null ? fmtNum(property.existing_fsi, 2) : 'Not set'} muted={property?.existing_fsi == null} />
-            <KeyValue label="Circle rate"           value={circleRate ? `₹${fmtNum(circleRate)}/sqft` : 'Not set'} muted={!circleRate} />
+            <KeyValue label="Circle rate"           value={circleRate ? `₹${fmtNum(circleRate)}/sqft` : 'Not set'} muted={!circleRate} extraction={fieldMap.circle_rate_per_sqft} />
           </div>
         ) : (
           <p className="text-sm text-gray-400 italic">
