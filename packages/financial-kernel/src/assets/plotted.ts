@@ -5,6 +5,7 @@
 
 import { Decimal } from '../decimal';
 import { buildPeriodIndex } from '../periods';
+import { buildDrawSchedule } from '../debtSchedule';
 import type { AreaBreakdown, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
 import { frontLoadedSales } from '../cashflow';
@@ -69,11 +70,29 @@ export function computePlotted(inputs: DealInputs): KernelResult {
   const marketingCr = totalRevenueCr.mulNumber(marketingCostPct / 100);
 
   const hardCostCr = devCostCr.add(gstCr).add(contingencyCr);
-  const landFinanceCr = D(landCostCr * (financeCostPct / 100) * (durationMonths / 12));
-  const constFinanceCr = hardCostCr
-    .mulNumber(financeCostPct / 100)
-    .mulNumber(durationMonths / 12)
-    .mulNumber(0.5);
+
+  // Finance cost: match legacy plotted — quarterly compound land carry,
+  // S-curve dev draws with capitalised interest over ~70% of duration.
+  const totalQPlotted = Math.max(1, Math.ceil(durationMonths / 3));
+  const plottedDevEndQ = Math.max(2, Math.ceil((durationMonths * 0.70) / 3));
+  const debtTenorYearsRaw = num(raw.debtTenorYears, 0);
+  const debtTenorMonthsPlot = debtTenorYearsRaw > 0
+    ? debtTenorYearsRaw * 12
+    : Math.min(durationMonths, durationMonths * 0.70 + 3);
+  const carryQPlot = Math.min(totalQPlotted, Math.max(1, Math.ceil(debtTenorMonthsPlot / 3)));
+  const qFinRatePlot = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
+  const landFinanceCr = landCostCr > 0 && carryQPlot > 0
+    ? D(landCostCr * (Math.pow(1 + qFinRatePlot, carryQPlot) - 1))
+    : D(0);
+  const plottedSchedule = buildDrawSchedule({
+    principalCr: devCostCr.toNumber(),
+    annualRatePct: financeCostPct,
+    totalQuarters: carryQPlot,
+    drawStartQ: 1,
+    drawEndQ: Math.min(plottedDevEndQ, carryQPlot),
+    capitalizeInterest: true,
+  });
+  const constFinanceCr = D(plottedSchedule.totalInterestCr);
   const financeCr = landFinanceCr.add(constFinanceCr);
 
   const areas: AreaBreakdown = {

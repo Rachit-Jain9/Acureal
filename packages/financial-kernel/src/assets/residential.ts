@@ -8,6 +8,7 @@
 
 import { Decimal, sum as decSum } from '../decimal';
 import { buildPeriodIndex } from '../periods';
+import { buildDrawSchedule } from '../debtSchedule';
 import type { AreaBreakdown, AssetClass, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
 import {
@@ -119,11 +120,36 @@ export function computeResidential(
     1,
     period.constructionEndMonth - period.constructionStartMonth,
   );
-  const landFinanceCr = D(landCostCr * (financeCostPct / 100) * (period.totalMonths / 12));
-  const constFinanceCr = hardCostCr
-    .mulNumber(financeCostPct / 100)
-    .mulNumber(constructionTenorMonths / 12)
-    .mulNumber(0.5);
+
+  // Finance cost: actual accrual on outstanding balance each quarter.
+  // Land funded at acquisition, accrues quarterly-compounding until loan
+  // maturity (or construction-end + 1 qtr if no tenor given).
+  // Construction drawn on S-curve; interest capitalises on actual balance
+  // each quarter. Mirrors legacy residential engine byte-for-byte so parity
+  // holds — simple ×0.5 shortcut was an approximation, this is the real cost.
+  const totalQResidential = Math.max(1, Math.ceil(period.totalMonths / 3));
+  const constStartQRes = Math.max(1, Math.floor(period.constructionStartMonth / 3) + 1);
+  const constEndQRes = Math.min(
+    totalQResidential,
+    Math.max(constStartQRes, Math.ceil(period.constructionEndMonth / 3)),
+  );
+  const debtTenorMonthsIn = debtTenorMonths && debtTenorMonths > 0
+    ? debtTenorMonths
+    : Math.min(period.totalMonths, period.constructionEndMonth + 3);
+  const carryQRes = Math.min(totalQResidential, Math.max(1, Math.ceil(debtTenorMonthsIn / 3)));
+  const qFinRate = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
+  const landFinanceCr = landCostCr > 0 && carryQRes > 0
+    ? D(landCostCr * (Math.pow(1 + qFinRate, carryQRes) - 1))
+    : D(0);
+  const constSchedule = buildDrawSchedule({
+    principalCr: hardCostCr.toNumber(),
+    annualRatePct: financeCostPct,
+    totalQuarters: carryQRes,
+    drawStartQ: constStartQRes,
+    drawEndQ: Math.min(constEndQRes, carryQRes),
+    capitalizeInterest: true,
+  });
+  const constFinanceCr = D(constSchedule.totalInterestCr);
   const financeCr = landFinanceCr.add(constFinanceCr);
 
   // Areas
@@ -199,7 +225,7 @@ export function computeResidential(
     prov('costs.construction', 'input.saleableSqft × constructionCostPerSqft / 1e7'),
     prov('costs.gst', 'derived.constructionCr × gstRate'),
     prov('costs.stampDuty', 'input.landCostCr × STAMP_DUTY_RATE'),
-    prov('costs.finance', 'landFinance + 0.5×hardCost×rate×tenor'),
+    prov('costs.finance', 'landFinance (quarterly compound) + construction (S-curve draws + capitalised interest)'),
   ];
 
   return finalizeResult({

@@ -6,23 +6,30 @@ every entry is pinned to a concrete gate that must pass first.
 
 ## Gate 1 — Legacy JS financial engine
 
-**Gate**: `backend/tests/kernel.parity.test.js` — the "PARITY REPORT" log
-lines (`totalCostCr`, `grossMarginPct`, `residualLandValueCr`) must all
-reach `[PASS]` for the canonical residential deal AND for at least one
-canonical deal per asset class (plotted_development, commercial_office,
-retail, industrial_warehousing, hospitality, land_parcel).
+**Gate**: `backend/tests/kernel.parity.test.js` — all asset-class parity tests
+must assert hard epsilons on totalCost, revenue, grossMargin, and class-specific
+KPIs (NOI/yield for income, revPAR/EBITDA for hospitality, RLV for merchant-sale).
 
-**Current state (2026-04-21, residential_apartments canonical deal)**:
+**Current state (2026-04-21 post finance-cost alignment)**:
 
-| KPI                    | Δ        | Eps       | Status   |
-| ---------------------- | -------- | --------- | -------- |
-| totalCostCr            | 6.39 Cr  | 0.5 Cr    | DIVERGES |
-| grossMarginPct         | 4.68 pp  | 1.0 pp    | DIVERGES |
-| residualLandValueCr    | 5.32 Cr  | 5.0 Cr    | DIVERGES |
+| Asset class              | Status     | Worst Δ        | Notes                                             |
+| ------------------------ | ---------- | -------------- | ------------------------------------------------- |
+| residential_apartments   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/margin/RLV           |
+| plotted_development      | ✅ PASS    | 0.34 pp margin | Within epsilon (diff from dev-cost GST routing)   |
+| commercial_office        | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
+| retail                   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
+| industrial_warehousing   | ✅ PASS    | 0.0000         | HARD ASSERTIONS on totalCost/revenue/NOI/yield    |
+| hospitality              | ⚠️ DIVERGES | 84.81 Cr rev   | Design-level: legacy returns hold-period revenue; kernel returns Y1 stabilized. Finance cost also diverges (13.59 Cr). Needs revenue-definition alignment. |
 
-Root cause: the two engines apply finance cost, contingency, and
-developer margin in different orders. A dedicated parity sweep is
-needed to align them.
+**Remaining work to close Gate 1**:
+
+1. Hospitality revenue definition alignment. Decide: is "revenue" the stabilized
+   annual figure (kernel) or the hold-period total (legacy)? Align both engines
+   on one convention. Likely kernel is semantically correct (stabilized NOI-
+   anchored) but the UI contract may require the legacy shape.
+2. Hospitality finance cost — apply the same compound+draw-schedule pattern
+   that fixed residential and plotted.
+3. Hospitality grossMargin — follows from (1) and (2).
 
 **Once gate passes, delete**:
 
@@ -31,7 +38,10 @@ needed to align them.
 - Any route handler that reads `FIN_KERNEL_V2` and branches — inline the kernel path
 - Search for `require('.*financial.engine')` anywhere and migrate callers
 
-**Promote the parity test** from parity-report to hard assertions (remove the `report()` helper, assert deltas directly).
+**Already promoted to HARD ASSERTIONS** (regressions now fail CI):
+- residential_apartments: totalCost, grossMargin, RLV
+- plotted_development: totalCost, grossMargin
+- commercial_office, retail, industrial_warehousing: totalCost, revenue, NOI, yieldOnCost
 
 ## Gate 2 — Python debt-engine companion
 

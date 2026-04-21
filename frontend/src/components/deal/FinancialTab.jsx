@@ -220,6 +220,7 @@ export default function FinancialTab({ deal }) {
 
       {/* Provenance graph — how the KPIs above are derived */}
       <ProvenanceGraphView
+        assetClass={assetClass}
         facilityIds={mp.facilityIds || (f.finance_cost_cr ? ['construction-loan'] : [])}
         tierIds={mp.tierIds || []}
         hasCovenants={f.dscr != null}

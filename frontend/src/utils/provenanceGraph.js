@@ -1,6 +1,8 @@
 /**
  * Client-side mirror of `buildStandardGraph` from
- * `packages/financial-kernel/src/orchestration/financialGraph.ts`.
+ * `packages/financial-kernel/src/orchestration/financialGraph.ts`, extended
+ * with asset-class-specific upstream topology so the UI shows the actual
+ * computation chain for the deal being viewed (not a one-size-fits-all DAG).
  *
  * The kernel builds the same topology at runtime. We replicate it here
  * so the UI can render the provenance DAG without requiring a full
@@ -8,18 +10,35 @@
  * shape evolves, update this mirror in lock-step.
  */
 
+const INCOME_CLASSES = new Set([
+  'commercial_office',
+  'retail',
+  'industrial_warehousing',
+]);
+const HOSPITALITY_CLASSES = new Set(['hospitality']);
+const LAND_ONLY_CLASSES = new Set(['land_parcel']);
+const MERCHANT_SALE_CLASSES = new Set([
+  'residential_apartments',
+  'plotted_development',
+  'villas',
+  'mixed_use',
+  'redevelopment',
+]);
+
 /**
- * Build a topology graph describing how a deal's KPIs are derived.
+ * Build an asset-class-aware topology graph for the KPIs of a single deal.
  *
  * @param {object} opts
- * @param {string[]} [opts.facilityIds] one entry per debt facility
- * @param {string[]} [opts.tierIds]     one entry per waterfall tier
+ * @param {string}   [opts.assetClass]   one of the REDIP asset classes
+ * @param {string[]} [opts.facilityIds]  one entry per debt facility
+ * @param {string[]} [opts.tierIds]      one entry per waterfall tier
  * @param {boolean}  [opts.hasDSRA]
  * @param {boolean}  [opts.hasCashTraps]
  * @param {boolean}  [opts.hasCovenants]
  * @returns {{nodes: Array, edges: Array}}
  */
 export function buildStandardGraph({
+  assetClass,
   facilityIds = ['construction-loan'],
   tierIds = [],
   hasDSRA = false,
@@ -37,10 +56,73 @@ export function buildStandardGraph({
     for (const from of dependsOn) edges.push({ from, to: id });
   };
 
+  // ── Inputs ────────────────────────────────────────────────────────────────
   addNode('assumptions', 'input', 'Deal assumptions');
-  addNode('cfads_inputs', 'input', 'Revenue, opex, taxes, capex');
   facilityIds.forEach((id) => addNode(`facility:${id}`, 'input', `Facility ${id}`));
 
+  // ── Asset-class-specific revenue/cost pipeline ────────────────────────────
+  const isIncome = INCOME_CLASSES.has(assetClass);
+  const isHospitality = HOSPITALITY_CLASSES.has(assetClass);
+  const isLandOnly = LAND_ONLY_CLASSES.has(assetClass);
+  const isMerchant = MERCHANT_SALE_CLASSES.has(assetClass) ||
+    (!isIncome && !isHospitality && !isLandOnly);
+
+  if (isIncome) {
+    addNode('input.area', 'input', 'Leasable area, rent, cap rates');
+    addNode('comp.rent', 'computation', 'Gross rent (PGI)', ['input.area', 'assumptions']);
+    addNode('comp.egi', 'computation', 'EGI (− vacancy)', ['comp.rent']);
+    addNode('comp.opex', 'computation', 'OPEX', ['comp.egi', 'assumptions']);
+    addNode('comp.noi', 'computation', 'Stabilized NOI', ['comp.egi', 'comp.opex']);
+    addNode('comp.entryValue', 'computation', 'Entry value (NOI / entryCap)', ['comp.noi']);
+    addNode('comp.exitValue', 'computation', 'Exit value (NOI_exit / exitCap)', ['comp.noi']);
+    addNode('comp.yieldOnCost', 'computation', 'Yield on cost', ['comp.noi']);
+    addNode('cfads_inputs', 'computation', 'Revenue stream (NOI + exit)', [
+      'comp.noi', 'comp.exitValue',
+    ]);
+  } else if (isHospitality) {
+    addNode('input.keys', 'input', 'Keys, ADR, occupancy');
+    addNode('comp.revPar', 'computation', 'RevPAR (ADR × Occ)', ['input.keys', 'assumptions']);
+    addNode('comp.rooms', 'computation', 'Rooms revenue', ['comp.revPar']);
+    addNode('comp.fb', 'computation', 'F&B revenue', ['comp.rooms', 'assumptions']);
+    addNode('comp.totalRev', 'computation', 'Total revenue', ['comp.rooms', 'comp.fb']);
+    addNode('comp.gop', 'computation', 'GOP (USALI)', ['comp.totalRev', 'assumptions']);
+    addNode('comp.ebitda', 'computation', 'EBITDA (GOP − FF&E)', ['comp.gop']);
+    addNode('comp.exitValue', 'computation', 'Exit value (EBITDA / cap)', ['comp.ebitda']);
+    addNode('cfads_inputs', 'computation', 'Revenue stream (opex, FF&E)', [
+      'comp.ebitda', 'comp.exitValue',
+    ]);
+  } else if (isLandOnly) {
+    addNode('input.landArea', 'input', 'Land area, appreciation rate');
+    addNode('comp.holdingCost', 'computation', 'Holding cost over period', ['assumptions']);
+    addNode('comp.exitValue', 'computation', 'Exit price (compounded)', ['input.landArea']);
+    addNode('cfads_inputs', 'computation', 'Net proceeds − holding', [
+      'comp.exitValue', 'comp.holdingCost',
+    ]);
+  } else if (isMerchant) {
+    addNode('input.area', 'input', 'Plot, FSI, loading, saleable');
+    addNode('comp.revenue', 'computation', 'Sales revenue (area × rate)', [
+      'input.area', 'assumptions',
+    ]);
+    addNode('comp.hardCost', 'computation', 'Hard cost (area × ₹/sqft)', [
+      'input.area', 'assumptions',
+    ]);
+    addNode('comp.softCost', 'computation', 'Soft cost (approval, arch, PMC, mktg)', [
+      'comp.hardCost', 'comp.revenue',
+    ]);
+    addNode('comp.financeCost', 'computation', 'Finance cost (S-curve draws + capitalised interest)', [
+      'comp.hardCost', 'assumptions',
+    ]);
+    addNode('comp.rlv', 'computation', 'Residual land value', [
+      'comp.revenue', 'comp.hardCost', 'comp.softCost', 'comp.financeCost',
+    ]);
+    addNode('cfads_inputs', 'computation', 'Quarterly cash flows', [
+      'comp.revenue', 'comp.hardCost', 'comp.softCost', 'comp.financeCost',
+    ]);
+  } else {
+    addNode('cfads_inputs', 'input', 'Revenue, opex, taxes, capex');
+  }
+
+  // ── Debt service and availability ─────────────────────────────────────────
   addNode(
     'debt_service',
     'computation',
@@ -64,12 +146,25 @@ export function buildStandardGraph({
     addNode('covenants', 'computation', 'Covenant evaluation', ['cfads', 'debt_service']);
   }
 
+  // ── KPIs ──────────────────────────────────────────────────────────────────
   const tierDeps = tierIds.map((t) => `tier:${t}`);
   addNode('kpi:irr', 'computation', 'IRR (levered / unlevered)', ['available_cash', ...tierDeps]);
   addNode('kpi:dscr_profile', 'computation', 'DSCR profile', ['cfads', 'debt_service']);
   addNode('kpi:llcr', 'computation', 'LLCR', ['cfads', 'debt_service']);
   addNode('kpi:debt_capacity', 'computation', 'Max debt at target DSCR', ['cfads']);
 
+  if (isMerchant) {
+    addNode('kpi:grossMargin', 'computation', 'Gross margin %', ['comp.revenue']);
+    addNode('kpi:rlv', 'computation', 'Residual land value', ['comp.rlv']);
+  } else if (isIncome) {
+    addNode('kpi:yield', 'computation', 'Yield on cost', ['comp.yieldOnCost']);
+    addNode('kpi:spread', 'computation', 'Spread over exit cap', ['comp.yieldOnCost']);
+  } else if (isHospitality) {
+    addNode('kpi:revPar', 'computation', 'RevPAR', ['comp.revPar']);
+    addNode('kpi:gopPar', 'computation', 'GOPPAR', ['comp.gop', 'input.keys']);
+  }
+
+  // ── Outputs ───────────────────────────────────────────────────────────────
   const insightDeps = ['kpi:irr', 'kpi:dscr_profile', 'kpi:llcr', 'kpi:debt_capacity'];
   if (hasCovenants) insightDeps.push('covenants');
   addNode('insights', 'output', 'Investor insights', insightDeps);
