@@ -87,6 +87,83 @@ const modelValidation = [
   body('adrGrowthPct').optional().isFloat({ min: 0, max: 30 }),
 ];
 
+// ────────────────────────────────────────────────────────────────────────────
+// GET /financials/defaults[/:assetClass]
+//
+// Return the single-source-of-truth defaults registry from
+// packages/financial-kernel/src/config/defaults.ts. Every entry carries
+// the metadata envelope { value, unit, range, source, lastReviewed,
+// description } so the UI can render provenance badges and what-if
+// sliders that respect declared ranges.
+//
+// Without :assetClass → full registry (globals + every asset class).
+// With    :assetClass → that class's effective map (globals ∪ asset
+// overrides, asset wins). Unknown class = 404.
+//
+// Registered BEFORE the `/:dealId` handlers below so Express doesn't
+// match "defaults" as a UUID.
+// ────────────────────────────────────────────────────────────────────────────
+router.get('/defaults/:assetClass?', authenticate, (req, res, next) => {
+  try {
+    let kernel;
+    try {
+      // eslint-disable-next-line global-require
+      kernel = require('../../../packages/financial-kernel/dist');
+    } catch (err) {
+      return res.status(503).json({
+        success: false,
+        message: 'Financial-kernel dist/ not built. Run '
+          + '`cd packages/financial-kernel && npx tsc -p tsconfig.build.json`.',
+      });
+    }
+
+    const {
+      GLOBAL_DEFAULTS_META,
+      ASSET_DEFAULTS_META,
+      SUPPORTED_ASSET_CLASSES,
+      listDefaultKeys,
+      getDefaultMeta,
+    } = kernel;
+
+    if (!req.params.assetClass) {
+      return res.json({
+        success: true,
+        data: {
+          global: GLOBAL_DEFAULTS_META,
+          perAsset: ASSET_DEFAULTS_META,
+          supportedAssetClasses: SUPPORTED_ASSET_CLASSES,
+        },
+      });
+    }
+
+    const cls = req.params.assetClass;
+    if (!SUPPORTED_ASSET_CLASSES.includes(cls)) {
+      return res.status(404).json({
+        success: false,
+        message: `Unknown asset class "${cls}". Supported: `
+          + SUPPORTED_ASSET_CLASSES.join(', '),
+      });
+    }
+
+    const effective = {};
+    for (const key of listDefaultKeys(cls)) {
+      effective[key] = getDefaultMeta(cls, key);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        assetClass: cls,
+        effective,
+        globalOnly: GLOBAL_DEFAULTS_META,
+        assetOverridesOnly: ASSET_DEFAULTS_META[cls],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /financials/:dealId/calculate
 router.post(
   '/:dealId/calculate',

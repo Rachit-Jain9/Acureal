@@ -10,6 +10,7 @@ import MethodologyExplorer from '../components/financials/MethodologyExplorer';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
 import HospitalityProformaSection from '../components/financials/HospitalityProformaSection';
+import DefaultsInspector from '../components/financials/DefaultsInspector';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -1774,6 +1775,7 @@ export default function FinancialsPage() {
         description="Multi-asset-class financial modeling"
         actions={
           <div className="flex items-center gap-2">
+            <DefaultsInspector assetClass={activeClass} />
             <MethodologyExplorer assetClass={activeClass} />
             <Link to={`/dashboard/deals/${dealId}`} className="btn btn-secondary flex items-center gap-1.5">
               <ArrowLeft size={16} /> Back to Deal

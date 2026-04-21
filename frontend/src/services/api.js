@@ -114,6 +114,12 @@ export const financialsAPI = {
   sensitivity: (dealId, data) => api.post(`/financials/${dealId}/sensitivity`, data),
   scenarios: (dealId) => api.get(`/financials/${dealId}/scenarios`),
   exportCSV: (dealId) => api.get(`/financials/${dealId}/export/csv`, { responseType: 'blob' }),
+  // Single-source-of-truth defaults registry with provenance metadata.
+  // Without assetClass → full registry; with assetClass → effective map
+  // (globals ∪ asset overrides) for that class.
+  defaults: (assetClass) => api.get(
+    assetClass ? `/financials/defaults/${assetClass}` : '/financials/defaults'
+  ),
 };
 
 // Waterfall (JDA / JV / debt schedule)
