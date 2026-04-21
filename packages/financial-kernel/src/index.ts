@@ -114,6 +114,30 @@ export type {
 export * as DebtEngine from './debt-engine';
 export * as WaterfallEngine from './waterfall-engine';
 
+// Post-processors — legacy-shape adapters (capitalStack, cashFlows, etc.)
+// that run after kernel math. See `docs/LEGACY_SHAPE_AUDIT.md` for why
+// these have to match legacy output key-for-key.
+export {
+  buildConstructionLoanCapitalStack,
+  buildIncomeAmortizingCapitalStack,
+  buildHospitalityCapitalStack,
+  buildHospitalityWaterfall,
+} from './postprocess';
+export type {
+  CapitalStack,
+  CapitalStackConstructionLoan,
+  CapitalStackIncomeAmortizing,
+  CapitalStackHospitality,
+  CapitalStackWaterfall,
+  CapitalStackWaterfallTier,
+  CapitalStackConstructionPhase,
+  CapitalStackPermanentPhase,
+  ConstructionLoanCapitalStackArgs,
+  IncomeAmortizingCapitalStackArgs,
+  HospitalityCapitalStackArgs,
+  BuildWaterfallArgs,
+} from './postprocess';
+
 // Phase 4 — pure HTTP handler for the investor-package endpoint.
 export { handleInvestorPackage } from './api';
 export type { InvestorPackageResponseBody, HandlerResult } from './api';
