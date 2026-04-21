@@ -15,7 +15,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts';
-import { useFinancials, useCalculateFinancials } from '../hooks/useFinancials';
+import { useFinancials, useCalculateFinancials, useDefaultsMeta } from '../hooks/useFinancials';
+import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
@@ -496,6 +497,8 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading, prefi
   const [inputs, setInputs] = useState(() => buildInitialInputs(null, assetClass, deal, prefill));
   const [hintOpen, setHintOpen] = useState(null);
   const modelAssetClass = getModelAssetClass(assetClass);
+  const { data: defaultsData } = useDefaultsMeta(modelAssetClass);
+  const defaultsMeta = defaultsData?.effective || null;
 
   useEffect(() => {
     if (initialValues) setInputs(buildInitialInputs(initialValues, assetClass, deal, prefill));
@@ -575,15 +578,22 @@ function InputForm({ initialValues, assetClass, deal, onSubmit, isLoading, prefi
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {fields.map((field) => (
           <div key={field.name}>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor={field.name} className="text-sm font-medium text-gray-700">
-                {field.label}
+            <div className="flex items-center justify-between mb-1 gap-1">
+              <label htmlFor={field.name} className="text-sm font-medium text-gray-700 flex items-center gap-1.5 min-w-0">
+                <span className="truncate">{field.label}</span>
+                {defaultsMeta?.[field.name] && (
+                  <DefaultFieldBadge
+                    meta={defaultsMeta[field.name]}
+                    currentValue={inputs[field.name]}
+                    size="xs"
+                  />
+                )}
               </label>
               {field.hint && (
                 <button
                   type="button"
                   onClick={() => setHintOpen(hintOpen === field.name ? null : field.name)}
-                  className="text-xs text-gray-400 hover:text-primary-600"
+                  className="text-xs text-gray-400 hover:text-primary-600 shrink-0"
                 >
                   ?
                 </button>

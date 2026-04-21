@@ -47,3 +47,16 @@ export function useScenarios(dealId) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Provenance-carrying defaults registry for the current asset class. The
+// effective map merges globals with per-class overrides. Values are static
+// at kernel-build time, so stale-time is long.
+export function useDefaultsMeta(assetClass) {
+  return useQuery({
+    queryKey: ['defaults-meta', assetClass],
+    queryFn: () => financialsAPI.defaults(assetClass).then((r) => r.data.data),
+    enabled: !!assetClass,
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
