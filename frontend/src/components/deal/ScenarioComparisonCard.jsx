@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { GitCompareArrows, TrendingUp, Wallet, Info, Sparkles } from 'lucide-react';
+import { TrendingUp, Wallet, Info } from 'lucide-react';
 import { clsx } from 'clsx';
 import { computeScenarios, fmtNum, fmtInr } from '../../utils/buildability';
 
@@ -26,18 +26,13 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
   const verdict = computeVerdict({ uplift, fee: premium_fee_estimate?.fee_inr, additionalBuildCost, feeKnown });
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 via-white to-primary-50 border-b border-gray-100 flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-primary-500 text-white flex items-center justify-center shadow-sm">
-            <GitCompareArrows size={15} />
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-stone-200 flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+            Premium FAR decision
           </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-gray-500">
-              Premium FAR decision
-            </div>
-            <div className="text-sm font-semibold text-gray-800">Base FSI vs With Premium FAR</div>
-          </div>
+          <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Base FSI vs With Premium FAR</div>
         </div>
         <Verdict verdict={verdict} />
       </div>
@@ -62,9 +57,9 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
         </div>
 
         {/* Delta summary */}
-        <div className="mt-4 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white p-4">
-          <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-indigo-700 mb-3 flex items-center gap-1.5">
-            <Sparkles size={11} /> Incremental impact of going premium
+        <div className="mt-4 rounded-sm border border-stone-200 bg-stone-50 p-4">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-3">
+            Incremental impact of going premium
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <DeltaTile
@@ -129,8 +124,8 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
 
 function ScenarioCol({ title, subtitle, buildability, programme, tone, highlight }) {
   const tones = {
-    gray:   'border-gray-200 bg-gradient-to-br from-gray-50/80 to-white',
-    indigo: 'border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-white to-primary-50/40 shadow-sm',
+    gray:   'border-stone-200 bg-white',
+    indigo: 'border-[#c2410c] bg-stone-50',
   };
   return (
     <div className={clsx('rounded-xl border p-4 relative', tones[tone] || tones.gray)}>

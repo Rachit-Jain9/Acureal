@@ -77,8 +77,8 @@ export default function MasterPlanZonePanel({ property }) {
       <div className={clsx(
         'relative px-5 py-4 flex items-start justify-between gap-3',
         zone
-          ? 'bg-gradient-to-r from-primary-600 via-primary-500 to-indigo-500 text-white'
-          : 'bg-gradient-to-r from-gray-50 to-white border-b border-gray-100',
+          ? 'bg-stone-50 text-white'
+          : 'bg-stone-50 border-b border-gray-100',
       )}>
         <div className="flex items-start gap-3">
           <div className={clsx(
@@ -90,7 +90,7 @@ export default function MasterPlanZonePanel({ property }) {
           <div>
             <div className={clsx(
               'text-[10px] font-semibold uppercase tracking-[0.14em]',
-              zone ? 'text-white/80' : 'text-gray-500',
+              zone ? 'text-stone-500' : 'text-gray-500',
             )}>
               Master Plan Zone
             </div>
@@ -99,7 +99,7 @@ export default function MasterPlanZonePanel({ property }) {
                 <div className="text-base font-semibold mt-0.5">
                   {zone.zone_code} <span className="opacity-80 font-normal">— {zone.zone_name}</span>
                 </div>
-                <div className="text-[11px] mt-0.5 text-white/80">
+                <div className="text-[11px] mt-0.5 text-stone-500">
                   {zone.plan_version || 'Bengaluru Master Plan'}
                   {zone.source_section ? ` · ${zone.source_section}` : ''}
                   {zone.source_page ? ` · p.${zone.source_page}` : ''}
@@ -133,7 +133,7 @@ export default function MasterPlanZonePanel({ property }) {
             {zone && (
               <button
                 onClick={clearZone}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/90 text-xs"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-stone-500 text-xs"
                 title="Unassign zone"
               >
                 <Unlink size={11} />
@@ -216,7 +216,7 @@ export default function MasterPlanZonePanel({ property }) {
 
             {/* Tiers */}
             {Array.isArray(zone.fsi_road_width_rules) && zone.fsi_road_width_rules.length > 0 && (
-              <div className="rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-100 p-3">
+              <div className="rounded-xl bg-white border border-gray-100 p-3">
                 <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-[0.1em] mb-2">
                   Road-width FSI tiers
                 </div>
@@ -352,7 +352,7 @@ export default function MasterPlanZonePanel({ property }) {
 
 function HeadlineStat({ label, value, accent, icon: Icon }) {
   const cls = accent === 'primary'
-    ? 'bg-gradient-to-br from-primary-50 to-indigo-50 border border-primary-100'
+    ? 'bg-white border border-primary-100'
     : 'bg-gray-50 border border-gray-100';
   const textCls = accent === 'primary' ? 'text-primary-700' : 'text-gray-800';
   return (

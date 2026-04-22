@@ -148,10 +148,10 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group relative inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-gradient-to-r from-indigo-50 via-violet-50 to-fuchsia-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:shadow-md hover:border-indigo-300 hover:from-indigo-100 hover:to-fuchsia-100"
+        className="group relative inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-stone-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:shadow-md hover:border-indigo-300 hover:from-indigo-100 hover:to-fuchsia-100"
         aria-label="How this model works"
       >
-        <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-sm">
+        <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-white text-white shadow-sm">
           <BookOpen size={12} strokeWidth={2.5} />
           <span className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition" />
         </span>
@@ -168,8 +168,8 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
             onClick={() => setOpen(false)}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
-            <header className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 px-6 py-5 text-white">
-              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-400/30 to-indigo-400/10 blur-2xl" />
+            <header className="relative overflow-hidden border-b border-slate-200 bg-white px-6 py-5 text-white">
+              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white blur-2xl" />
               <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl" />
               <div className="relative flex items-start justify-between">
                 <div>
@@ -185,7 +185,7 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                  className="rounded-lg p-2 text-stone-500 hover:bg-white/10 hover:text-white"
                 >
                   <X size={18} />
                 </button>
@@ -301,7 +301,7 @@ function OverviewSection() {
         title="Deterministic, Defensible, Disclosed"
         subtitle="LLMs never touch the math. Every rupee is a formula."
       />
-      <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-4">
+      <div className="rounded-xl border border-indigo-100 bg-white p-4">
         <p className="text-sm leading-relaxed text-slate-700">
           REDIP's Financial Engine is built on the same principles you'd find in an institutional IC memo:
           <span className="font-semibold text-indigo-900"> transparency over cleverness</span>. Every KPI card,
@@ -402,7 +402,7 @@ function CashflowSection() {
     <div className="space-y-5">
       <SectionTitle icon={Waves} gradient="from-sky-500 to-cyan-500" title="Cash Flow Construction" subtitle="How per-quarter numbers are built" />
 
-      <div className="rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50 to-cyan-50 p-4">
+      <div className="rounded-xl border border-sky-100 bg-white p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">S-Curve Construction Draws</div>
         <p className="mt-1 text-sm leading-relaxed text-slate-700">
           Construction doesn't draw linearly — it ramps. REDIP builds a <span className="font-semibold">Beta(2, 2) S-curve</span>
@@ -521,7 +521,7 @@ function WaterfallSection() {
     <div className="space-y-5">
       <SectionTitle icon={GitFork} gradient="from-amber-500 to-orange-500" title="Waterfall & Promote" subtitle="How profits split between LP and GP" />
 
-      <div className="rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+      <div className="rounded-xl border border-amber-100 bg-white p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-amber-900">The 4-Tranche JV Waterfall</div>
         <div className="mt-3 space-y-2">
           {[
@@ -639,7 +639,7 @@ function ClassDeepDive({ data, assetClass }) {
         subtitle="Class-specific mechanics & benchmarks"
       />
 
-      <div className="rounded-xl border border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 to-purple-50 p-4">
+      <div className="rounded-xl border border-fuchsia-100 bg-white p-4">
         <div className="text-sm font-bold text-fuchsia-900">{data.headline}</div>
         <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{data.thesis}</p>
       </div>
@@ -792,7 +792,7 @@ function DCFFlowSection({ assetClass }) {
         subtitle="Revenue → NOI → Cash Flow → Terminal Value → NPV / IRR"
       />
 
-      <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 p-5 text-white shadow-sm">
+      <div className="rounded-xl border border-blue-100 bg-white p-5 text-white shadow-sm">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-indigo-200">
           <Sparkles size={12} /> The Five-Stage Pipeline
         </div>
@@ -902,7 +902,7 @@ function DCFFlowSection({ assetClass }) {
         })}
       </div>
 
-      <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
+      <div className="rounded-xl border border-violet-200 bg-white p-4">
         <div className="flex items-center gap-2">
           <Building2 size={14} className="text-violet-700" />
           <span className="text-xs font-bold uppercase tracking-wider text-violet-900">
@@ -990,7 +990,7 @@ function TerminalValueSection() {
         subtitle="Four methods, one unified pipeline"
       />
 
-      <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
+      <div className="rounded-xl border border-violet-200 bg-white p-4">
         <div className="flex items-center gap-2 text-violet-900">
           <Sparkles size={14} />
           <span className="text-sm font-bold">Terminal value is ≥50% of NPV for most income assets</span>

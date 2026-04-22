@@ -47,10 +47,10 @@ function SectionCard({ icon: Icon, title, kicker, children, className }) {
 function BigStat({ label, value, unit, tone = 'default', hint }) {
   const tones = {
     default: 'bg-gray-50 text-gray-800',
-    primary: 'bg-gradient-to-br from-primary-50 to-primary-100/60 text-primary-800 border border-primary-100',
-    emerald: 'bg-gradient-to-br from-emerald-50 to-emerald-100/60 text-emerald-800 border border-emerald-100',
-    indigo:  'bg-gradient-to-br from-indigo-50 to-indigo-100/60 text-indigo-800 border border-indigo-100',
-    amber:   'bg-gradient-to-br from-amber-50 to-amber-100/60 text-amber-800 border border-amber-100',
+    primary: 'bg-white text-primary-800 border border-primary-100',
+    emerald: 'bg-white text-emerald-800 border border-emerald-100',
+    indigo:  'bg-white text-indigo-800 border border-indigo-100',
+    amber:   'bg-white text-amber-800 border border-amber-100',
   };
   return (
     <div className={clsx('rounded-xl p-3', tones[tone])}>
@@ -85,7 +85,7 @@ function SetbackDiagram({ setbacks }) {
   const r = setbacks.rear_m ?? '-';
   const s = setbacks.side_m ?? '-';
   return (
-    <div className="relative mx-auto w-full max-w-[240px] aspect-[5/4] rounded-xl bg-gradient-to-br from-primary-50 to-white border border-primary-100 p-5">
+    <div className="relative mx-auto w-full max-w-[240px] aspect-[5/4] rounded-xl bg-white border border-primary-100 p-5">
       <div className="absolute inset-5 rounded-lg border-2 border-dashed border-primary-300 bg-white/70" />
       <div className="absolute inset-0 flex items-start justify-center pt-0.5">
         <span className="text-[10px] font-semibold text-primary-700">Front {f} m</span>
@@ -118,10 +118,10 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
   const tier = buildability.matched_tier;
 
   return (
-    <div className="rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50/60 via-white to-indigo-50/50 p-4">
+    <div className="rounded-xl border border-primary-100 bg-white p-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-indigo-500 flex items-center justify-center text-white shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-white shadow-sm">
             <Sparkles size={16} />
           </div>
           <div>
@@ -159,7 +159,7 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
           <div className="h-3 rounded-full overflow-hidden bg-gray-100 flex">
             {base != null && (
               <div
-                className="bg-gradient-to-r from-primary-500 to-primary-400"
+                className="bg-stone-50"
                 style={{ width: `${(base / (base + (premiumAvail || 0))) * 100}%` }}
                 title={`Base FSI ${fmtNum(base, 2)}`}
               />
@@ -169,7 +169,7 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
                 className={clsx(
                   'transition-opacity',
                   usePremium
-                    ? 'bg-gradient-to-r from-indigo-400 to-indigo-500 opacity-100'
+                    ? 'bg-stone-50 opacity-100'
                     : 'bg-indigo-200 opacity-50',
                 )}
                 style={{ width: `${(premiumAvail / (base + premiumAvail)) * 100}%` }}
@@ -218,7 +218,7 @@ function ParkingPanel({ parking }) {
   if (!parking) return null;
   const totalBays = (parking.cars || 0) + (parking.visitor_cars || 0);
   return (
-    <div className="mt-4 rounded-xl border border-gray-100 bg-gradient-to-br from-gray-50/80 to-white p-4">
+    <div className="mt-4 rounded-xl border border-gray-100 bg-white p-4">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
           <Car size={13} />

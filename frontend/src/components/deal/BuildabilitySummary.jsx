@@ -22,9 +22,9 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
 
   return (
     <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-gray-100">
+      <div className="px-5 py-3 flex items-center justify-between gap-3 bg-stone-50 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-white shadow-sm">
             <Sparkles size={14} />
           </div>
           <div>

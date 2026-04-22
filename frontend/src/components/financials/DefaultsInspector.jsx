@@ -134,13 +134,13 @@ export default function DefaultsInspector({
         onClick={() => setOpen(true)}
         className={
           compactTrigger
-            ? 'inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
-            : 'group inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
+            ? 'inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-stone-50 px-3 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
+            : 'group inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-stone-50 px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
         }
         aria-label="View underwriting defaults with provenance"
         title="View all defaults and sources for this asset class"
       >
-        <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 text-white shadow-sm">
+        <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-white text-white shadow-sm">
           <Database size={12} strokeWidth={2.5} />
         </span>
         <span className="tracking-wide">Defaults & Sources</span>
@@ -155,8 +155,8 @@ export default function DefaultsInspector({
             onClick={() => setOpen(false)}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
-            <header className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-900 px-6 py-5 text-white">
-              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-400/30 to-sky-400/10 blur-2xl" />
+            <header className="relative overflow-hidden border-b border-slate-200 bg-white px-6 py-5 text-white">
+              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white blur-2xl" />
               <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-teal-400/20 blur-2xl" />
               <div className="relative flex items-start justify-between">
                 <div>
@@ -173,7 +173,7 @@ export default function DefaultsInspector({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                  className="rounded-lg p-2 text-stone-500 hover:bg-white/10 hover:text-white"
                 >
                   <X size={18} />
                 </button>

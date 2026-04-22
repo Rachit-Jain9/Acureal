@@ -253,7 +253,7 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-sky-50 to-cyan-50 flex items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-gray-100 bg-stone-50 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-md bg-sky-600 text-white flex items-center justify-center shrink-0">
             <BarChart3 size={14} />

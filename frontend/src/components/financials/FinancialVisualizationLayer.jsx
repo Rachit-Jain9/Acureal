@@ -127,30 +127,30 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-violet-50 via-white to-violet-50 rounded-xl shadow-sm border border-violet-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 flex items-center gap-2">
-        <Target className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Terminal Value</h3>
-        <span className="ml-auto text-[11px] font-semibold uppercase tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full">
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <Target className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">Terminal Value</h3>
+        <span className="ml-auto text-[11px] font-semibold uppercase tracking-wider border border-stone-200 text-stone-600 px-2 py-0.5 rounded-sm">
           {METHOD_LABELS[method] || method}
         </span>
       </div>
 
       <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-violet-100 p-4">
-          <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">Terminal Value</div>
+        <div className="bg-white rounded-lg border border-stone-200 p-4">
+          <div className="text-[11px] font-semibold uppercase text-stone-500 tracking-wide">Terminal Value</div>
           <div className="mt-1 text-2xl font-bold text-gray-900">{formatCrores(tv)}</div>
           <div className="mt-1 text-[11px] text-gray-500">At end of hold (Y{Math.round(hold)})</div>
         </div>
 
-        <div className="bg-white rounded-lg border border-violet-100 p-4">
-          <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">PV of Terminal Value</div>
+        <div className="bg-white rounded-lg border border-stone-200 p-4">
+          <div className="text-[11px] font-semibold uppercase text-stone-500 tracking-wide">PV of Terminal Value</div>
           <div className="mt-1 text-2xl font-bold text-gray-900">{formatCrores(tvPv)}</div>
           <div className="mt-1 text-[11px] text-gray-500">Discounted at {discountPct.toFixed(1)}% to t=0</div>
         </div>
 
-        <div className="bg-white rounded-lg border border-violet-100 p-4">
-          <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">% of NPV from TV</div>
+        <div className="bg-white rounded-lg border border-stone-200 p-4">
+          <div className="text-[11px] font-semibold uppercase text-stone-500 tracking-wide">% of NPV from TV</div>
           <div className="mt-1 text-2xl font-bold text-gray-900">
             {kpis?.npv && tvPv ? `${((tvPv / (Number(kpis.npv) + tvPv)) * 100).toFixed(1)}%` : '-'}
           </div>
@@ -159,8 +159,8 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
       </div>
 
       <div className="px-5 pb-3">
-        <div className="rounded-lg bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 p-3">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-violet-800 mb-1">Formula in use</div>
+        <div className="rounded-sm bg-stone-50 border border-stone-200 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-1">Formula in use</div>
           <div className="font-mono text-[13px] text-gray-900">{formulaMap[method] || '—'}</div>
         </div>
       </div>
@@ -222,11 +222,11 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-3 flex items-center gap-2">
-        <Activity className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">NOI Progression</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <Activity className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">NOI Progression</h3>
+        <span className="ml-auto text-[10px] font-semibold text-stone-500">
           {escPct.toFixed(1)}% pa growth
         </span>
       </div>
@@ -302,11 +302,11 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
   const currentValue = noiAtExit / (currentCap / 100);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-3 flex items-center gap-2">
-        <Gauge className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Terminal Value Sensitivity</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <Gauge className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">Terminal Value Sensitivity</h3>
+        <span className="ml-auto text-[10px] font-semibold text-stone-500">
           Current: {currentCap.toFixed(2)}%  →  {formatCrores(currentValue)}
         </span>
       </div>
@@ -388,11 +388,11 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-slate-800 to-gray-900 px-5 py-3 flex items-center gap-2">
-        <Layers className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cash Flow Composition</h3>
-        <div className="ml-auto flex items-center gap-3 text-[10px] font-semibold text-white/90">
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <Layers className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">Cash Flow Composition</h3>
+        <div className="ml-auto flex items-center gap-3 text-[10px] font-semibold text-stone-500">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm" style={{ background: PHASE_COLORS.construction }} />Construction
           </span>
@@ -437,11 +437,11 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
   const breakEvenIdx = data.findIndex((d) => d.cumulative >= 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cumulative Return Trajectory</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <TrendingUp className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">Cumulative Return Trajectory</h3>
+        <span className="ml-auto text-[10px] font-semibold text-stone-500">
           IRR: {kpis?.irr != null ? formatPct(kpis.irr) : '-'}
         </span>
       </div>
@@ -512,16 +512,16 @@ export function KPIDashboard({ kpis, assetClass, revenue, costs }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Investor KPI Dashboard</h3>
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <BarChart3 className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">Investor KPI Dashboard</h3>
       </div>
       <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
         {entries.map(({ label, value, tone, icon: Icon }) => (
           <div
             key={label}
-            className={`bg-gradient-to-br rounded-lg border p-3 ${toneClass[tone]}`}
+            className={`rounded-sm border p-3 bg-white ${toneClass[tone]}`}
           >
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider opacity-80">
               <Icon className="w-3 h-3" />
@@ -558,11 +558,11 @@ export function CostCompositionChart({ costs }) {
   const total = items.reduce((s, x) => s + x.value, 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-3 flex items-center gap-2">
-        <Layers className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cost Composition</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">Total: {formatCrores(total)}</span>
+    <div className="bg-white rounded-sm border border-stone-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2 bg-white">
+        <Layers className="w-4 h-4 text-stone-500" />
+        <h3 className="font-serif text-sm font-semibold text-stone-900">Cost Composition</h3>
+        <span className="ml-auto text-[10px] font-semibold text-stone-500">Total: {formatCrores(total)}</span>
       </div>
       <div className="p-4 h-72">
         <ResponsiveContainer width="100%" height="100%">

@@ -1,6 +1,6 @@
 import {
   Home, Landmark, Building2, Store, Warehouse, Hotel,
-  TrendingUp, ArrowUpRight, Sparkles, Target,
+  TrendingUp, ArrowUpRight, Target,
 } from 'lucide-react';
 
 const CLASS_INSIGHTS = {
@@ -104,55 +104,42 @@ const CLASS_INSIGHTS = {
 
 export default function AssetClassInsightBanner({ assetClass }) {
   const insight = CLASS_INSIGHTS[assetClass] || CLASS_INSIGHTS.residential_apartments;
-  const Icon = insight.icon;
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${insight.soft} ring-1 ${insight.ring} shadow-sm`}>
-      <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-white/40 blur-3xl" />
-      <div className="absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-white/30 blur-2xl" />
-
-      <div className="relative p-5">
+    <div className="bg-white border border-stone-200 rounded-sm">
+      <div className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${insight.gradient} text-white shadow-md`}>
-              <Icon size={20} strokeWidth={2.2} />
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+              Investment thesis
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`text-[11px] font-semibold uppercase tracking-widest ${insight.text}/80`}>
-                  Investment Thesis
-                </span>
-                <Sparkles size={10} className={insight.text} />
-              </div>
-              <h3 className={`text-base font-bold ${insight.text}`}>{insight.tagline}</h3>
-            </div>
+            <h3 className="font-serif text-lg font-semibold text-stone-900 leading-tight mt-0.5">
+              {insight.tagline}
+            </h3>
           </div>
-
-          <div className={`inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/70 px-3 py-1 text-[11px] font-semibold ${insight.text} shadow-sm backdrop-blur`}>
-            <Target size={11} />
-            Bengaluru-first • India-priority
+          <div className="inline-flex items-center gap-1.5 border border-stone-200 bg-stone-50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-stone-600 rounded-sm">
+            <Target size={10} />
+            Bengaluru-first <span className="text-stone-400">·</span> India-priority
           </div>
         </div>
 
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-700">
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-stone-700">
           {insight.thesis}
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-px bg-stone-100 border border-stone-200 sm:grid-cols-4">
           {insight.kpis.map((k, i) => (
-            <div key={i} className="rounded-xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{k.label}</div>
-              <div className={`font-mono text-base font-bold ${k.color}`}>{k.value}</div>
+            <div key={i} className="bg-white px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-stone-500">{k.label}</div>
+              <div className="font-serif text-base font-semibold text-stone-900 tabular-nums mt-0.5">{k.value}</div>
             </div>
           ))}
         </div>
 
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-2 backdrop-blur">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white">
-            <ArrowUpRight size={12} strokeWidth={2.5} />
-          </div>
-          <p className="text-xs font-medium italic text-slate-700">
-            <span className="font-semibold not-italic text-slate-900">IC insight:</span> {insight.persuasion}
+        <div className="mt-4 flex items-start gap-2 border-l-2 border-[#c2410c] bg-stone-50 px-3 py-2">
+          <ArrowUpRight size={14} className="text-[#c2410c] mt-0.5 shrink-0" strokeWidth={2.2} />
+          <p className="text-xs italic text-stone-700 leading-relaxed">
+            <span className="font-semibold not-italic text-stone-900">IC insight:</span> {insight.persuasion}
           </p>
         </div>
       </div>

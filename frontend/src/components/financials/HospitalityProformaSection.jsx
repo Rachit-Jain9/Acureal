@@ -325,7 +325,7 @@ function SourcesUsesCard({ sourcesUses }) {
           </div>
 
           {refinance && (
-            <div className="mt-3 rounded-lg border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-white p-3">
+            <div className="mt-3 rounded-sm border border-stone-200 bg-stone-50 p-3">
               <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-indigo-700 mb-1 flex items-center gap-1.5">
                 <Sparkles size={10} /> Permanent refinance (at stabilization)
               </div>
@@ -402,8 +402,8 @@ function CapitalStackTimelineCard({ construction, permanent, kpis }) {
 
 function StackColumn({ title, subtitle, tone, rows }) {
   const tones = {
-    rose:   'bg-gradient-to-br from-rose-50 to-white border-rose-100',
-    indigo: 'bg-gradient-to-br from-indigo-50 to-white border-indigo-100',
+    rose:   'bg-stone-50 border-stone-200',
+    indigo: 'bg-white border-[#c2410c]',
   };
   return (
     <div className={clsx('rounded-xl border p-4', tones[tone] || tones.rose)}>
@@ -497,8 +497,8 @@ function WaterfallCard({ waterfall }) {
 
 function SummaryCard({ label, tone, capital, total, multiple }) {
   const tones = {
-    indigo: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
-    rose:   'bg-gradient-to-br from-rose-500 to-pink-600 text-white',
+    indigo: 'bg-stone-900 text-white',
+    rose:   'bg-[#c2410c] text-white',
   };
   return (
     <div className={clsx('rounded-xl p-4', tones[tone] || tones.indigo)}>

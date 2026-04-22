@@ -333,7 +333,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-violet-50 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-100 bg-stone-50 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-indigo-600 text-white flex items-center justify-center">
             <Sliders size={14} />
