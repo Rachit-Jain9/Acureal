@@ -1,26 +1,51 @@
 /**
- * PageHeader — editorial page banner.
+ * PageHeader — editorial page banner (Precision Analysis).
  *
- * Pattern: small uppercase eyebrow above a tight display title, then a
- * supporting caption. Mirrors the FT / Bloomberg / Linear doc-header feel.
- * Actions sit on the right, separated by a hairline on large screens so
- * the title stays the visual anchor.
- *
- * API unchanged: `{ title, description, actions }`. New optional prop
- * `eyebrow` for the tiny uppercase context line above the title.
+ * Small uppercase eyebrow above a tight display title, then a supporting
+ * caption. All ink routes through CSS variables so the banner repaints
+ * on a single `data-theme` attribute flip.
  */
 export default function PageHeader({ title, description, actions, eyebrow }) {
   return (
-    <div className="mb-8 flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between">
+    <div
+      className="mb-8 flex flex-col gap-4 pb-5 md:flex-row md:items-end md:justify-between"
+      style={{ borderBottom: '1px solid var(--color-border-primary)' }}
+    >
       <div className="min-w-0">
         {eyebrow && (
-          <p className="eyebrow mb-1.5 dark:text-slate-400">{eyebrow}</p>
+          <p
+            className="mb-1.5"
+            style={{
+              fontSize: '0.6875rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.14em',
+              color: 'var(--color-text-muted)',
+              fontWeight: 500,
+            }}
+          >
+            {eyebrow}
+          </p>
         )}
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-900 dark:text-white">
+        <h1
+          className="font-display tracking-tight"
+          style={{
+            fontSize: '1.75rem',
+            fontWeight: 600,
+            color: 'var(--color-text-primary)',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.15,
+          }}
+        >
           {title}
         </h1>
         {description && (
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-500 dark:text-slate-400">
+          <p
+            className="mt-1.5 max-w-2xl leading-relaxed"
+            style={{
+              fontSize: '0.875rem',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
             {description}
           </p>
         )}

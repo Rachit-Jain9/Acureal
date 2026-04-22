@@ -10,19 +10,23 @@ import {
 } from 'lucide-react';
 import { formatCrores, formatPct, formatINR } from '../../utils/format';
 
-// ─── DESIGN TOKENS ────────────────────────────────────────────────────────
+// ─── DESIGN TOKENS (Precision Analysis) ───────────────────────────────────
+// Mirrors --chart-* CSS vars + data-signal palette. Kept as hex so Recharts
+// SVG fills stay predictable; if the theme toggle shifts hues significantly
+// the charts still read correctly because we chose hues that hold up in
+// both modes.
 
 const PHASE_COLORS = {
-  construction:  '#ef4444',   // red-500
-  operating:     '#10b981',   // emerald-500
-  debt:          '#f59e0b',   // amber-500
-  terminal:      '#8b5cf6',   // violet-500
-  noi:           '#3b82f6',   // blue-500
-  equity:        '#6366f1',   // indigo-500
-  value:         '#0ea5e9',   // sky-500
-  sensitivityHi: '#10b981',
-  sensitivityMid:'#f59e0b',
-  sensitivityLo: '#ef4444',
+  construction:  '#EF4444',   // data-negative  (cost phase)
+  operating:     '#22C55E',   // data-positive  (income phase)
+  debt:          '#F5B800',   // premium amber  (capital structure)
+  terminal:      '#A78BFA',   // chart-5 violet (exit event)
+  noi:           '#60A5FA',   // chart-1 blue   (NOI)
+  equity:        '#3B82F6',   // brand accent   (equity CFs)
+  value:         '#14B8A6',   // data-highlight (valuation)
+  sensitivityHi: '#22C55E',
+  sensitivityMid:'#F5B800',
+  sensitivityLo: '#EF4444',
 };
 
 const METHOD_LABELS = {
@@ -37,24 +41,43 @@ const METHOD_LABELS = {
 const safeNumber = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 
 const tooltipStyle = {
-  backgroundColor: 'rgba(17,24,39,0.95)',
-  color: '#f9fafb',
-  border: '1px solid rgba(55,65,81,0.5)',
+  backgroundColor: 'var(--color-bg-elevated)',
+  color: 'var(--color-text-primary)',
+  border: '1px solid var(--color-border-primary)',
   borderRadius: '8px',
   padding: '8px 12px',
   fontSize: '12px',
+  boxShadow: 'var(--shadow-elevated)',
 };
 
 function Tip({ active, payload, label, valueFormatter = (v) => `₹${Number(v).toFixed(2)} Cr` }) {
   if (!active || !payload?.length) return null;
   return (
     <div style={tooltipStyle}>
-      <div className="text-[11px] uppercase tracking-wide text-gray-300 mb-1">{label}</div>
+      <div
+        className="mb-1"
+        style={{
+          fontSize: '11px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          color: 'var(--color-text-muted)',
+        }}
+      >
+        {label}
+      </div>
       {payload.map((p) => (
         <div key={p.dataKey} className="flex items-center gap-2 text-xs">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: p.color }} />
-          <span className="text-gray-200">{p.name}:</span>
-          <span className="font-semibold">{valueFormatter(p.value)}</span>
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ background: p.color }}
+          />
+          <span style={{ color: 'var(--color-text-secondary)' }}>{p.name}:</span>
+          <span
+            className="font-semibold tabular-nums"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
+            {valueFormatter(p.value)}
+          </span>
         </div>
       ))}
     </div>

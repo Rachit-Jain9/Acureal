@@ -386,18 +386,38 @@ export default function DealDetailPage() {
       )}
 
       {/* Tab navigation */}
-      <div className="border-b border-gray-200 mb-6 overflow-x-auto">
+      <div
+        className="mb-6 overflow-x-auto"
+        style={{ borderBottom: '1px solid var(--color-border-primary)' }}
+      >
         <nav className="flex gap-0 min-w-max">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setTab(tab.id)}
-              className={clsx(
-                'px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                activeTab === tab.id
-                  ? 'border-primary-600 text-primary-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              )}
+              className="px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap"
+              style={{
+                borderBottom: `2px solid ${
+                  activeTab === tab.id ? 'var(--color-brand-accent)' : 'transparent'
+                }`,
+                color:
+                  activeTab === tab.id
+                    ? 'var(--color-brand-accent)'
+                    : 'var(--color-text-muted)',
+                marginBottom: '-1px',
+              }}
+              onMouseEnter={(e) => {
+                if (activeTab !== tab.id) {
+                  e.currentTarget.style.color = 'var(--color-text-primary)';
+                  e.currentTarget.style.borderBottomColor = 'var(--color-border-strong)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== tab.id) {
+                  e.currentTarget.style.color = 'var(--color-text-muted)';
+                  e.currentTarget.style.borderBottomColor = 'transparent';
+                }
+              }}
             >
               {tab.label}
             </button>

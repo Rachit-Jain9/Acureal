@@ -3,7 +3,6 @@ import {
   Layers, Loader2, ArrowUpRight, ArrowDownRight, Minus, TrendingUp, TrendingDown,
   FileText,
 } from 'lucide-react';
-import { clsx } from 'clsx';
 import { financialsAPI } from '../../services/api';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
 import { preflightDealInput } from '../../utils/dealInputPreflight';
@@ -235,21 +234,56 @@ const fmtDelta = (delta, decimals, suffix) => {
 
 function ScenarioHeader({ name, summary, tone, kpisReady }) {
   const palette = {
-    downside: { bg: 'bg-rose-50',    ring: 'border-rose-200',    icon: 'text-rose-600',    Icon: TrendingDown },
-    base:     { bg: 'bg-gray-50',    ring: 'border-gray-200',    icon: 'text-gray-600',    Icon: Minus },
-    upside:   { bg: 'bg-emerald-50', ring: 'border-emerald-200', icon: 'text-emerald-600', Icon: TrendingUp },
+    downside: {
+      bg:     'rgba(239,68,68,0.08)',
+      border: 'rgba(239,68,68,0.25)',
+      icon:   'var(--color-data-negative)',
+      Icon:   TrendingDown,
+    },
+    base: {
+      bg:     'var(--color-surface)',
+      border: 'var(--color-border-primary)',
+      icon:   'var(--color-text-secondary)',
+      Icon:   Minus,
+    },
+    upside: {
+      bg:     'rgba(34,197,94,0.10)',
+      border: 'rgba(34,197,94,0.25)',
+      icon:   'var(--color-data-positive)',
+      Icon:   TrendingUp,
+    },
   }[tone];
 
   return (
-    <div className={clsx('px-3 py-2.5 border-b', palette.bg, palette.ring)}>
+    <div
+      className="px-3 py-2.5"
+      style={{
+        backgroundColor: palette.bg,
+        borderBottom: `1px solid ${palette.border}`,
+      }}
+    >
       <div className="flex items-center gap-1.5">
-        <palette.Icon size={14} className={palette.icon} />
-        <span className="text-xs font-semibold text-gray-900">{name}</span>
+        <palette.Icon size={14} style={{ color: palette.icon }} />
+        <span
+          className="text-xs font-semibold"
+          style={{ color: 'var(--color-text-primary)' }}
+        >
+          {name}
+        </span>
         {!kpisReady && (
-          <Loader2 size={11} className="animate-spin text-gray-400 ml-auto" />
+          <Loader2
+            size={11}
+            className="animate-spin ml-auto"
+            style={{ color: 'var(--color-text-muted)' }}
+          />
         )}
       </div>
-      <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{summary}</p>
+      <p
+        className="leading-tight mt-0.5"
+        style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}
+      >
+        {summary}
+      </p>
     </div>
   );
 }
@@ -263,26 +297,35 @@ function KPICell({ value, baseValue, row, showDelta, tone }) {
   const isFlat = delta != null && Math.abs(delta) < eps;
   const isBetter = delta != null && !isFlat && (row.good === 'up' ? delta > 0 : delta < 0);
 
-  const deltaTone = tone === 'base'
-    ? 'text-gray-400'
-    : isFlat
-    ? 'text-gray-400'
+  const deltaColor = tone === 'base' || isFlat
+    ? 'var(--color-text-muted)'
     : isBetter
-    ? 'text-emerald-600'
-    : 'text-rose-600';
+      ? 'var(--color-data-positive)'
+      : 'var(--color-data-negative)';
 
   const DeltaIcon = isFlat ? Minus : isBetter ? ArrowUpRight : ArrowDownRight;
 
   return (
-    <div className="px-3 py-2 border-b border-gray-100 last:border-b-0">
+    <div
+      className="px-3 py-2 last:border-b-0"
+      style={{ borderBottom: '1px solid var(--color-border-secondary)' }}
+    >
       <div className="flex items-baseline gap-1">
-        <span className="text-sm font-semibold text-gray-900 tabular-nums">
+        <span
+          className="text-sm font-semibold tabular-nums"
+          style={{ color: 'var(--color-text-primary)' }}
+        >
           {fmtNumber(scaled, row.decimals)}
         </span>
-        <span className="text-[10px] text-gray-500">{row.suffix.trim()}</span>
+        <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+          {row.suffix.trim()}
+        </span>
       </div>
       {showDelta && tone !== 'base' && delta != null && (
-        <div className={clsx('flex items-center gap-0.5 text-[10px] font-medium mt-0.5 tabular-nums', deltaTone)}>
+        <div
+          className="flex items-center gap-0.5 font-medium mt-0.5 tabular-nums"
+          style={{ fontSize: '10px', color: deltaColor }}
+        >
           <DeltaIcon size={10} />
           <span>{isFlat ? 'unchanged' : fmtDelta(delta, row.decimals, row.suffix)}</span>
         </div>
@@ -294,7 +337,13 @@ function KPICell({ value, baseValue, row, showDelta, tone }) {
 // Renders one of three columns. `data.kpis` is null until the fetch lands.
 function ScenarioColumn({ scenario, baseKpis, showDelta }) {
   return (
-    <div className="flex-1 min-w-0 border border-gray-200 rounded-lg overflow-hidden bg-white">
+    <div
+      className="flex-1 min-w-0 rounded-editorial overflow-hidden"
+      style={{
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--color-border-primary)',
+      }}
+    >
       <ScenarioHeader
         name={scenario.label}
         summary={scenario.summary}
@@ -393,31 +442,65 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, o
   if (!recipe) return null;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50 flex items-center justify-between gap-3">
+    <div
+      className="rounded-editorial overflow-hidden"
+      style={{
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--color-border-primary)',
+        boxShadow: 'var(--shadow-card)',
+      }}
+    >
+      <div
+        className="px-4 py-3 flex items-center justify-between gap-3"
+        style={{
+          borderBottom: '1px solid var(--color-border-primary)',
+          backgroundColor: 'var(--color-bg-secondary)',
+        }}
+      >
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-md bg-amber-600 text-white flex items-center justify-center shrink-0">
+          <div
+            className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+            style={{
+              backgroundColor: 'var(--color-brand-premium)',
+              color: 'var(--color-bg-primary)',
+            }}
+          >
             <Layers size={14} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900">Scenario Comparison</h3>
-            <p className="text-[11px] text-gray-500 leading-tight truncate">
+            <h3
+              className="text-sm font-semibold"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Scenario Comparison
+            </h3>
+            <p
+              className="leading-tight truncate"
+              style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}
+            >
               IC-ready downside / base / upside — rerun through the kernel, rows = KPIs, deltas vs base.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isLoading && (
-            <span className="flex items-center gap-1 text-[10px] text-amber-700 font-medium">
+            <span
+              className="flex items-center gap-1 font-medium"
+              style={{ fontSize: '10px', color: 'var(--color-brand-premium)' }}
+            >
               <Loader2 size={12} className="animate-spin" /> Running…
             </span>
           )}
-          <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-700 cursor-pointer">
+          <label
+            className="flex items-center gap-1.5 font-medium cursor-pointer"
+            style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}
+          >
             <input
               type="checkbox"
               checked={showDelta}
               onChange={(e) => setShowDelta(e.target.checked)}
-              className="h-3 w-3 rounded text-amber-600 focus:ring-amber-500"
+              className="h-3 w-3 rounded"
+              style={{ accentColor: 'var(--color-brand-premium)' }}
             />
             Show deltas
           </label>
@@ -425,7 +508,14 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, o
       </div>
 
       {error ? (
-        <div className="px-4 py-3 text-xs text-rose-700 bg-rose-50 border-t border-rose-200">
+        <div
+          className="px-4 py-3 text-xs"
+          style={{
+            color: 'var(--color-data-negative)',
+            backgroundColor: 'rgba(239,68,68,0.08)',
+            borderTop: '1px solid rgba(239,68,68,0.25)',
+          }}
+        >
           {error}
         </div>
       ) : (
@@ -440,7 +530,10 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, o
               />
             ))}
           </div>
-          <div className="px-4 pb-3 flex items-start gap-2 text-[10px] text-gray-500">
+          <div
+            className="px-4 pb-3 flex items-start gap-2"
+            style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}
+          >
             <FileText size={11} className="mt-[1px] shrink-0" />
             <span>
               Downside/Upside perturbations are asset-class specific and reflect typical

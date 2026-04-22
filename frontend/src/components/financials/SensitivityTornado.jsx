@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Loader2, Info } from 'lucide-react';
-import { clsx } from 'clsx';
 import { financialsAPI } from '../../services/api';
 import { useDefaultsMeta } from '../../hooks/useFinancials';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
@@ -252,32 +251,71 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
   if (varList.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-sky-50 to-cyan-50 flex items-center justify-between gap-3">
+    <div
+      className="rounded-editorial overflow-hidden"
+      style={{
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--color-border-primary)',
+        boxShadow: 'var(--shadow-card)',
+      }}
+    >
+      <div
+        className="px-4 py-3 flex items-center justify-between gap-3"
+        style={{
+          borderBottom: '1px solid var(--color-border-primary)',
+          backgroundColor: 'var(--color-bg-secondary)',
+        }}
+      >
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-md bg-sky-600 text-white flex items-center justify-center shrink-0">
+          <div
+            className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+            style={{
+              backgroundColor: 'var(--color-data-highlight)',
+              color: 'white',
+            }}
+          >
             <BarChart3 size={14} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900">Sensitivity Tornado</h3>
-            <p className="text-[11px] text-gray-500 leading-tight truncate">
+            <h3
+              className="text-sm font-semibold"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Sensitivity Tornado
+            </h3>
+            <p
+              className="leading-tight truncate"
+              style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}
+            >
               Each bar: {kpi.label} change when the input swings ±15% around base. Ranked by impact.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isComputing && (
-            <span className="flex items-center gap-1 text-[10px] text-sky-600 font-medium">
+            <span
+              className="flex items-center gap-1 font-medium"
+              style={{ fontSize: '10px', color: 'var(--color-data-highlight)' }}
+            >
               <Loader2 size={12} className="animate-spin" />
               Running {varList.length * 2} scenarios…
             </span>
           )}
-          <label className="text-[11px] font-medium text-gray-600">
+          <label
+            className="font-medium"
+            style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}
+          >
             KPI:
             <select
               value={kpiKey}
               onChange={(e) => setKpiKey(e.target.value)}
-              className="ml-1.5 text-[11px] font-medium px-2 py-1 rounded border border-gray-300 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="ml-1.5 font-medium px-2 py-1 rounded cursor-pointer focus:outline-none"
+              style={{
+                fontSize: '11px',
+                border: '1px solid var(--color-border-primary)',
+                backgroundColor: 'var(--color-bg-elevated)',
+                color: 'var(--color-text-primary)',
+              }}
             >
               {KPI_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>{o.label}</option>
@@ -288,21 +326,38 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
       </div>
 
       {error ? (
-        <div className="px-4 py-3 text-xs text-rose-700 bg-rose-50 border-t border-rose-200">
+        <div
+          className="px-4 py-3 text-xs"
+          style={{
+            color: 'var(--color-data-negative)',
+            backgroundColor: 'rgba(239,68,68,0.08)',
+            borderTop: '1px solid rgba(239,68,68,0.25)',
+          }}
+        >
           {error}
         </div>
       ) : bars.length === 0 && !isComputing ? (
-        <div className="px-4 py-6 text-center text-xs text-gray-500">
+        <div
+          className="px-4 py-6 text-center text-xs"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
           No variable in this model moves {kpi.label} by a measurable amount.
         </div>
       ) : (
         <div className="p-4">
           <TornadoChart bars={bars} maxMagnitude={maxMagnitude} kpi={kpi} />
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2 text-[10px] text-gray-500">
+          <div
+            className="mt-4 pt-3 flex items-start gap-2"
+            style={{
+              fontSize: '10px',
+              color: 'var(--color-text-muted)',
+              borderTop: '1px solid var(--color-border-secondary)',
+            }}
+          >
             <Info size={11} className="mt-[1px] shrink-0" />
             <span>
               Left bar = KPI at 15% below base value. Right bar = KPI at 15% above. Color
-              reflects whether the move helps (emerald) or hurts (rose) the deal — the
+              reflects whether the move helps (green) or hurts (red) the deal — the
               direction is set by the kernel's computed return, not by an asset-class
               heuristic.
             </span>
@@ -321,10 +376,10 @@ function TornadoChart({ bars, maxMagnitude, kpi }) {
         const upPct   = maxMagnitude > 0 ? Math.min(50, (Math.abs(b.up)   / maxMagnitude) * 50) : 0;
         const downLeft = 50 - downPct;
 
-        const downTone = b.down < 0 ? 'bg-rose-400' : 'bg-emerald-400';
-        const upTone   = b.up   > 0 ? 'bg-emerald-400' : 'bg-rose-400';
-        const downLabelTone = b.down < 0 ? 'text-rose-700' : 'text-emerald-700';
-        const upLabelTone   = b.up   > 0 ? 'text-emerald-700' : 'text-rose-700';
+        const downFill = b.down < 0 ? 'var(--color-data-negative)' : 'var(--color-data-positive)';
+        const upFill   = b.up   > 0 ? 'var(--color-data-positive)' : 'var(--color-data-negative)';
+        const downLabelColor = b.down < 0 ? 'var(--color-data-negative)' : 'var(--color-data-positive)';
+        const upLabelColor   = b.up   > 0 ? 'var(--color-data-positive)' : 'var(--color-data-negative)';
 
         return (
           <div
@@ -332,24 +387,47 @@ function TornadoChart({ bars, maxMagnitude, kpi }) {
             className="grid grid-cols-[8rem_1fr_9rem] items-center gap-3 text-xs group"
             title={`Base ${b.current.toLocaleString('en-IN')} → tested ${b.low.toLocaleString('en-IN')} … ${b.high.toLocaleString('en-IN')}`}
           >
-            <div className="text-gray-700 font-medium truncate text-right">
+            <div
+              className="font-medium truncate text-right"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
               {b.label}
             </div>
             <div className="relative h-7">
-              <div className="absolute inset-y-0 left-1/2 w-px bg-gray-300" />
               <div
-                className={clsx('absolute top-1 bottom-1 rounded-l-sm transition-all duration-300', downTone)}
-                style={{ left: `${downLeft}%`, width: `${downPct}%` }}
+                className="absolute inset-y-0 left-1/2 w-px"
+                style={{ backgroundColor: 'var(--color-border-strong)' }}
               />
               <div
-                className={clsx('absolute top-1 bottom-1 rounded-r-sm transition-all duration-300', upTone)}
-                style={{ left: '50%', width: `${upPct}%` }}
+                className="absolute top-1 bottom-1 rounded-l-sm transition-all duration-300"
+                style={{
+                  left: `${downLeft}%`,
+                  width: `${downPct}%`,
+                  backgroundColor: downFill,
+                  opacity: 0.85,
+                }}
+              />
+              <div
+                className="absolute top-1 bottom-1 rounded-r-sm transition-all duration-300"
+                style={{
+                  left: '50%',
+                  width: `${upPct}%`,
+                  backgroundColor: upFill,
+                  opacity: 0.85,
+                }}
               />
             </div>
-            <div className="flex items-center justify-between tabular-nums text-[10.5px] font-medium">
-              <span className={downLabelTone}>{fmtDelta(b.down, kpi.decimals, kpi.suffix)}</span>
-              <span className="text-gray-300">|</span>
-              <span className={upLabelTone}>{fmtDelta(b.up, kpi.decimals, kpi.suffix)}</span>
+            <div
+              className="flex items-center justify-between tabular-nums font-medium"
+              style={{ fontSize: '10.5px' }}
+            >
+              <span style={{ color: downLabelColor }}>
+                {fmtDelta(b.down, kpi.decimals, kpi.suffix)}
+              </span>
+              <span style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}>|</span>
+              <span style={{ color: upLabelColor }}>
+                {fmtDelta(b.up, kpi.decimals, kpi.suffix)}
+              </span>
             </div>
           </div>
         );

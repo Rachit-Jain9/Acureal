@@ -1,22 +1,21 @@
-import { clsx } from 'clsx';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 /**
- * StatCard — editorial metric card.
+ * StatCard — editorial metric card (Precision Analysis).
  *
- * Design intent: Bloomberg/Linear-grade density. Uppercase eyebrow label,
- * large tabular number as the hero, optional signed delta pill, optional
- * caption. Icons render as subtle monochrome glyphs — no colored chips,
- * no pastel backgrounds. `accent` kept as a soft tinted left-rail so the
- * card can signal classification (green/amber/red) without shouting.
- *
- * Backwards-compatible with prior StatCard API: `{title, value, subtitle,
- * icon, trend, accent}`.
+ * Routes through semantic CSS variables so the card repaints on a single
+ * `data-theme` flip. Accent rail uses the data signal palette:
+ *   green  → positive (above bench / upside)
+ *   amber  → premium (rare — top deal, exceptional)
+ *   red    → negative (risk)
+ *   blue   → neutral (trust / default)
  */
 const ACCENT_RAIL = {
-  green: 'before:bg-emerald-500/70',
-  amber: 'before:bg-amber-500/70',
-  red:   'before:bg-rose-500/70',
+  green:   'var(--color-data-positive)',
+  amber:   'var(--color-brand-premium)',
+  red:     'var(--color-data-negative)',
+  blue:    'var(--color-brand-accent)',
+  neutral: 'var(--color-brand-accent)',
 };
 
 export default function StatCard({
@@ -27,9 +26,9 @@ export default function StatCard({
   trend,
   accent,
   delta,         // preferred over `trend`; e.g. { value: '+12.4%', positive: true }
-  deltaLabel,    // optional caption under delta (e.g. "vs. base case")
+  deltaLabel,    // optional caption under delta
 }) {
-  const rail = accent ? ACCENT_RAIL[accent] : null;
+  const railColor = accent ? ACCENT_RAIL[accent] : null;
   const computedDelta = delta ?? (trend != null
     ? {
         value: `${trend > 0 ? '+' : ''}${trend}%`,
@@ -40,45 +39,81 @@ export default function StatCard({
 
   return (
     <div
-      className={clsx(
-        'relative rounded-lg border border-line bg-paper-100 px-5 py-4',
-        'shadow-editorial transition-colors hover:border-line-strong',
-        'dark:border-slate-700 dark:bg-slate-900',
-        rail && [
-          'before:absolute before:inset-y-3 before:left-0 before:w-0.5',
-          'before:rounded-full pl-6',
-          rail,
-        ],
-      )}
+      className="relative rounded-editorial px-5 py-4 transition-colors"
+      style={{
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--color-border-primary)',
+        boxShadow: 'var(--shadow-card)',
+        paddingLeft: railColor ? '1.5rem' : undefined,
+      }}
     >
+      {railColor && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-3 left-0 w-0.5 rounded-r-sm"
+          style={{ backgroundColor: railColor, opacity: 0.85 }}
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
-        <p className="eyebrow truncate">{title}</p>
+        <p
+          className="truncate"
+          style={{
+            fontSize: '0.6875rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.14em',
+            color: 'var(--color-text-secondary)',
+            fontWeight: 500,
+          }}
+        >
+          {title}
+        </p>
         {Icon && (
           <Icon
-            className="text-ink-400 shrink-0 dark:text-slate-500"
             size={14}
             strokeWidth={1.75}
+            className="shrink-0"
+            style={{ color: 'var(--color-text-muted)' }}
           />
         )}
       </div>
 
-      <p className="metric mt-2 truncate">{value}</p>
+      <p
+        className="mt-2 truncate tabular-nums"
+        style={{
+          fontSize: '1.75rem',
+          fontWeight: 600,
+          color: 'var(--color-text-primary)',
+          letterSpacing: '-0.015em',
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </p>
 
       {(subtitle || computedDelta) && (
         <div className="mt-3 flex items-end justify-between gap-3">
           {subtitle && (
-            <p className="text-caption text-ink-500 truncate dark:text-slate-400">
+            <p
+              className="truncate"
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--color-text-muted)',
+                letterSpacing: '0.02em',
+              }}
+            >
               {subtitle}
             </p>
           )}
           {computedDelta && (
             <span
-              className={clsx(
-                'inline-flex items-center gap-0.5 text-caption font-medium tabular-nums shrink-0',
-                computedDelta.positive
-                  ? 'text-pos dark:text-emerald-400'
-                  : 'text-neg dark:text-rose-400',
-              )}
+              className="inline-flex items-center gap-0.5 tabular-nums shrink-0"
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: computedDelta.positive
+                  ? 'var(--color-data-positive)'
+                  : 'var(--color-data-negative)',
+              }}
             >
               {computedDelta.positive ? (
                 <ArrowUpRight size={12} strokeWidth={2} />
@@ -87,7 +122,10 @@ export default function StatCard({
               )}
               {computedDelta.value}
               {computedDelta.trailing && (
-                <span className="text-ink-400 font-normal ml-1 dark:text-slate-500">
+                <span
+                  className="ml-1"
+                  style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}
+                >
                   {computedDelta.trailing}
                 </span>
               )}
@@ -96,7 +134,16 @@ export default function StatCard({
         </div>
       )}
       {deltaLabel && !subtitle && (
-        <p className="text-caption text-ink-400 mt-1 dark:text-slate-500">{deltaLabel}</p>
+        <p
+          className="mt-1"
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--color-text-muted)',
+            letterSpacing: '0.02em',
+          }}
+        >
+          {deltaLabel}
+        </p>
       )}
     </div>
   );
