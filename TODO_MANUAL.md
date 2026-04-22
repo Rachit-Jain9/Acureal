@@ -98,18 +98,23 @@ Track those in:
 
 These were raised in the 2026-04-21 roast. They need design, credentials, or infrastructure this repo doesn't have, and should NOT be faked:
 
-### 7. Delete legacy JS financial engine
+### 7. ~~Delete legacy JS financial engine~~ ✅ DONE (2026-04-22)
 
-- Gated by `backend/tests/kernel.parity.test.js`. The "PARITY REPORT" log lines in that test must all reach `[PASS]` before deletion.
-- Current gap (residential_apartments canonical deal): totalCostCr Δ=6.39 Cr, grossMarginPct Δ=4.68 pp, RLV Δ=5.32 Cr.
-- Root cause: legacy and kernel use different finance-cost formulas and different order of developer-margin vs contingency application. A dedicated parity sweep (non-trivial) is needed to align them.
-- Once PASS, delete `backend/src/engines/financial.engine.js` and its adapter; remove the `FIN_KERNEL_V2` kill switch; keep the kernel as the single path.
+- Parity gate closed; legacy engine (`financial.engine.js`, `kernel.adapter.js`)
+  and all six parity test suites deleted.
+- `backend/src/engines/kernel.service.js` composes the TS kernel with its
+  post-processors and is the sole path called by `financial.service.js`.
+- `FIN_KERNEL_V2` kill switch removed; kernel is unconditional.
+- 28-test `kernel.service.acceptance.test.js` suite pins golden values for
+  every asset class at 1-bp / 50k-INR tolerance.
+- Full regression: 101 backend tests + 392 kernel tests green.
 
-### 8. Delete Python debt-engine companion
+### 8. ~~Delete Python debt-engine companion~~ ✅ DONE (retired pre-session)
 
-- Needs explicit user confirmation — it's a separate service with its own deploy story.
-- Route: `packages/financial-kernel/src/debt-engine/*` (TS) vs. the Python FastAPI under `api/` or similar. Kill switch: `DEBT_ENGINE_PY_URL`.
-- Before deletion: confirm no client depends on the Python endpoint, and the TS debt engine has parity for all scenarios the Python one was handling.
+- Confirmed 2026-04-22: no `.py` files, no `debt-engine-py/` directory,
+  no runtime reads of `DEBT_ENGINE_PY_URL`.
+- TS debt engine (`packages/financial-kernel/src/debt-engine/*`) is the
+  sole runtime. `orchestration/featureFlag.ts` records the retirement.
 
 ### 9. Cryptographic signing of investor packages
 
