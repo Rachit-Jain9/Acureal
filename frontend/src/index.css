@@ -42,6 +42,49 @@
   }
 }
 
+@layer utilities {
+  /* Scroll-reveal — landing page sections */
+  .redip-reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  .redip-revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Hero backdrop animations — slow, translucent, non-distracting */
+  @keyframes redip-drift {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-28px, -28px, 0); }
+  }
+  @keyframes redip-skyline-pan {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-140px, 0, 0); }
+  }
+  @keyframes redip-orbit-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .redip-hero-drift {
+    animation: redip-drift 24s linear infinite;
+  }
+  .redip-hero-skyline {
+    animation: redip-skyline-pan 60s linear infinite;
+  }
+  .redip-hero-orbit {
+    transform-origin: center;
+    animation: redip-orbit-spin 90s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .redip-reveal { opacity: 1; transform: none; transition: none; }
+    .redip-hero-drift, .redip-hero-skyline, .redip-hero-orbit { animation: none; }
+  }
+}
+
 @layer components {
   .btn,
   .btn-primary {

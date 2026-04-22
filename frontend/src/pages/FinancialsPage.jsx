@@ -6,11 +6,10 @@ import {
   GitFork, Users, Layers, ChevronRight,
 } from 'lucide-react';
 import { calculateJDAWaterfall, calculateJVWaterfall, buildDebtSchedule } from '../utils/waterfall';
-import MethodologyExplorer from '../components/financials/MethodologyExplorer';
+import ReferenceDock from '../components/financials/ReferenceDock';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
 import HospitalityProformaSection from '../components/financials/HospitalityProformaSection';
-import DefaultsInspector from '../components/financials/DefaultsInspector';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -20,7 +19,6 @@ import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
-import ProvenanceGraphView from '../components/financials/ProvenanceGraphView';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
@@ -1780,8 +1778,7 @@ export default function FinancialsPage() {
         description="Multi-asset-class financial modeling"
         actions={
           <div className="flex items-center gap-2">
-            <DefaultsInspector assetClass={activeClass} />
-            <MethodologyExplorer assetClass={activeClass} />
+            <ReferenceDock assetClass={activeClass} />
             <Link to={`/dashboard/deals/${dealId}`} className="btn btn-secondary flex items-center gap-1.5">
               <ArrowLeft size={16} /> Back to Deal
             </Link>
@@ -1851,11 +1848,6 @@ export default function FinancialsPage() {
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
             onEditInputs={scrollToInputs}
-          />
-
-          <ProvenanceGraphView
-            assetClass={normalizedFinancials.assetClass}
-            defaultOpen={false}
           />
 
           <FinancialVisualizationLayer

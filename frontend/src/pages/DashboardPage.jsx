@@ -35,14 +35,14 @@ import {
   STAGE_CONFIG,
 } from '../utils/format';
 
-// Editorial monochrome palette for charts — single ink scale, no rainbow.
-// Ordered dark→light so the biggest slice reads strongest.
+// Editorial palette — burnt-orange accent scaled against warm stone neutrals.
+// Biggest slice reads as the strongest accent; remaining slices step into stone.
 const PIE_COLORS = [
-  '#141413', '#2b2b29', '#3f3f3c', '#5d5d58',
-  '#8a8a83', '#b9b9b2', '#d9d9d4', '#ececea',
-  '#9ca3af', '#6b7280',
+  '#c2410c', '#9a3412', '#ea580c', '#7c2d12',
+  '#a8a29e', '#78716c', '#57534e', '#44403c',
+  '#d6d3d1', '#292524',
 ];
-const INK_BAR_FILL = '#2b2b29';
+const ACCENT_BAR_FILL = '#c2410c';
 
 const TOOLTIP_STYLE = {
   borderRadius: '6px',
@@ -119,7 +119,7 @@ export default function DashboardPage() {
     .map((item) => ({
       stage: STAGE_CONFIG[item.stage]?.label || item.stage,
       count: item.count,
-      fill: INK_BAR_FILL,
+      fill: ACCENT_BAR_FILL,
     }))
     .filter((d) => d.count > 0);
 
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                   contentStyle={TOOLTIP_STYLE}
                   cursor={{ fill: 'rgba(43,43,41,0.06)' }}
                 />
-                <Bar dataKey="count" fill={INK_BAR_FILL} radius={[3, 3, 0, 0]} name="Deals" />
+                <Bar dataKey="count" fill={ACCENT_BAR_FILL} radius={[3, 3, 0, 0]} name="Deals" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
