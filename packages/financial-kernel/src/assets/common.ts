@@ -14,6 +14,7 @@ import {
   bulletOutflow,
 } from '../cashflow';
 import { buildFinancing } from '../financing';
+import { type CurveOverride, resolveCurveWeights } from '../curves';
 import type {
   AreaBreakdown,
   AssetClass,
@@ -408,18 +409,54 @@ export function financeDrag({
   });
 }
 
+/**
+ * Build a provenance source label that reflects what the resolver
+ * actually did, not what the user asked for. Explicit weights that
+ * were rejected fall back to the default curve AND the default label,
+ * so the methodology drawer never misreports the timing.
+ */
+function curveSourceLabel({
+  months,
+  defaultKind,
+  override,
+  defaultLabel,
+  slot,
+}: {
+  months: number;
+  defaultKind: 'sCurve' | 'logistic' | 'frontLoaded' | 'uniform';
+  override?: CurveOverride | null;
+  defaultLabel: string;
+  slot: string;
+}): string {
+  const resolved = resolveCurveWeights(months, defaultKind, override ?? null);
+  if (resolved.source === 'default') return defaultLabel;
+  if (resolved.source === 'explicit') return `deal-override explicit ${slot}`;
+  // Parametric: use the resolved kind (uniform / logistic / frontLoaded / sCurve).
+  return `deal-override ${resolved.kind} ${slot}`;
+}
+
 /** Shared helper: sales distribution across a custom window. */
 export function salesMilestoneCollections({
   period,
   amount,
   startMonth,
   endMonth,
+  curveOverride,
 }: {
   period: PeriodIndex;
   amount: Decimal;
   startMonth: number;
   endMonth: number;
+  curveOverride?: CurveOverride | null;
 }): MonthlyLineItem {
+  const months = Math.max(1, endMonth - startMonth + 1);
+  const sourceLabel = curveSourceLabel({
+    months,
+    defaultKind: 'logistic',
+    override: curveOverride,
+    defaultLabel: 'logistic milestone schedule',
+    slot: 'schedule',
+  });
   return milestoneSales({
     period,
     amount,
@@ -427,7 +464,8 @@ export function salesMilestoneCollections({
     endMonth,
     category: 'revenue',
     subcategory: 'sales',
-    provenance: [prov('cashflow.revenue.sales', 'logistic milestone schedule')],
+    provenance: [prov('cashflow.revenue.sales', sourceLabel)],
+    curveOverride,
   });
 }
 
@@ -435,16 +473,27 @@ export function salesMilestoneCollections({
 export function hardCostItem({
   period,
   amount,
+  curveOverride,
 }: {
   period: PeriodIndex;
   amount: Decimal;
+  curveOverride?: CurveOverride | null;
 }): MonthlyLineItem {
+  const months = Math.max(1, period.constructionEndMonth - period.constructionStartMonth);
+  const sourceLabel = curveSourceLabel({
+    months,
+    defaultKind: 'sCurve',
+    override: curveOverride,
+    defaultLabel: 'S-curve over construction window',
+    slot: 'construction schedule',
+  });
   return sCurveConstruction({
     period,
     amount,
     category: 'hard_cost',
     subcategory: 'construction+gst+contingency',
-    provenance: [prov('cashflow.hardCost', 'S-curve over construction window')],
+    provenance: [prov('cashflow.hardCost', sourceLabel)],
+    curveOverride,
   });
 }
 

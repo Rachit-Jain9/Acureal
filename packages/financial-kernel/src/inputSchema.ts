@@ -35,11 +35,16 @@ import {
 
 /**
  * The normalised input record the kernel's asset adapters now consume.
- * Every key is either a plain number in canonical units (sqft / Cr /
- * months / percent) or a string (`effectiveDate`). Adapters never see a
- * `{value, unit}` tuple or a free-form name.
+ * Primitive fields (numbers, strings in canonical units) cover 99% of
+ * keys — adapters read them via `num()` / `readStr()` helpers. A narrow
+ * set of structured fields (`constructionCurve`, `salesCurve`) carry
+ * nested override configs parsed by `parseCurveOverride`.
+ *
+ * Anything `unknown`-typed here is expected to be produced by
+ * `normalizeDealInput`, which drops anything it doesn't recognise — so
+ * adapters never see a random `{value, unit}` tuple or a free-form name.
  */
-export type NormalizedRaw = Readonly<Record<string, number | string>>;
+export type NormalizedRaw = Readonly<Record<string, unknown>>;
 
 /** Error thrown when a required canonical field is missing or nonsensical. */
 export class DealInputError extends Error {
@@ -248,7 +253,7 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
   }
 
   const warnings: string[] = [];
-  const out: Record<string, number | string> = {};
+  const out: Record<string, unknown> = {};
 
   // effectiveDate passthrough
   const effectiveDate = readStr(raw, 'effectiveDate');
@@ -332,18 +337,34 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
     ...TENOR_KEYS,
     'effectiveDate',
   ]);
+  // Curve-override passthrough. These are nested objects (see
+  // `parseCurveOverride` in curves.ts) — structural validation happens
+  // later at the asset-adapter read site, so we just copy the reference.
+  for (const curveKey of ['constructionCurve', 'salesCurve']) {
+    const v = raw[curveKey];
+    if (v && typeof v === 'object') {
+      out[curveKey] = v;
+    }
+  }
+
   for (const [k, v] of Object.entries(raw)) {
     if (known.has(k) || consumedAliases.has(k)) continue;
+    if (k === 'constructionCurve' || k === 'salesCurve') continue;
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
     else if (typeof v === 'string') out[k] = v;
   }
 
   // Merge assumption layers. Scenario overrides (if any) ALWAYS win over
   // both the deal inputs and the defaults — otherwise a scenario can't
-  // move a value the deal already set.
+  // move a value the deal already set. Curve overrides are not
+  // assumptions and are excluded from the assumption set.
+  const dealOverrideView: Record<string, number | string> = {};
+  for (const [k, v] of Object.entries(out)) {
+    if (typeof v === 'number' || typeof v === 'string') dealOverrideView[k] = v;
+  }
   const assumptions = resolveAssumptions({
     assetClass,
-    dealOverrides: Object.freeze({ ...(out as Record<string, number | string>) }) as AssumptionSet,
+    dealOverrides: Object.freeze(dealOverrideView) as AssumptionSet,
     scenarioOverrides: args.scenarioOverrides ?? null,
   });
   // Backfill missing fields from globals / asset defaults.

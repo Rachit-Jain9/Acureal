@@ -6,6 +6,7 @@
 import { Decimal } from '../decimal';
 import { buildPeriodIndex } from '../periods';
 import { buildDrawSchedule } from '../debtSchedule';
+import { parseCurveOverride, resolveCurveWeights } from '../curves';
 import type { AreaBreakdown, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
 import { frontLoadedSales } from '../cashflow';
@@ -120,10 +121,22 @@ export function computePlotted(inputs: DealInputs): KernelResult {
     finance: financeCr,
   });
 
+  // Optional per-deal curve overrides — see packages/financial-kernel/src/curves.ts
+  const constructionCurve = parseCurveOverride(raw.constructionCurve);
+  const salesCurve = parseCurveOverride(raw.salesCurve);
+  const salesWindowMonths = Math.max(1, period.totalMonths - 1 + 1);
+  const salesResolved = resolveCurveWeights(salesWindowMonths, 'frontLoaded', salesCurve ?? null);
+  const salesProvLabel =
+    salesResolved.source === 'default'
+      ? 'front-loaded launch sales'
+      : salesResolved.source === 'explicit'
+        ? 'deal-override explicit launch sales'
+        : `deal-override ${salesResolved.kind} launch sales`;
+
   const items: MonthlyLineItem[] = [
     landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr }),
     ...approvalsSchedule({ period, amount: approvalCostCr }),
-    hardCostItem({ period, amount: hardCostCr }),
+    hardCostItem({ period, amount: hardCostCr, curveOverride: constructionCurve }),
     marketingSchedule({ period, amount: marketingCr }),
     financeDrag({ period, amount: financeCr }),
     frontLoadedSales({
@@ -131,7 +144,8 @@ export function computePlotted(inputs: DealInputs): KernelResult {
       amount: totalRevenueCr,
       startMonth: 1,
       endMonth: period.totalMonths,
-      provenance: [prov('cashflow.revenue.plotted', 'front-loaded launch sales')],
+      provenance: [prov('cashflow.revenue.plotted', salesProvLabel)],
+      curveOverride: salesCurve,
     }),
   ];
 
