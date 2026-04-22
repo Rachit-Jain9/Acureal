@@ -10,6 +10,7 @@ import { Decimal } from '../decimal';
 import { bulletInflow, bulletOutflow, uniformFlow } from '../cashflow';
 import { buildAmortizingSchedule } from '../debtSchedule';
 import { buildPeriodIndex } from '../periods';
+import { parseCurveOverride } from '../curves';
 import type {
   AreaBreakdown,
   AssetClass,
@@ -121,10 +122,13 @@ export function computeIncomeAsset(
   const noiAtExit = stabilizedNOICr.mulNumber(Math.pow(1 + rentEscalationPct / 100, holdPeriodYears));
   const exitValueCr = D(noiAtExit.toNumber() / (exitCapRatePct / 100));
 
+  // Optional per-deal curve override — see packages/financial-kernel/src/curves.ts
+  const constructionCurve = parseCurveOverride(raw.constructionCurve);
+
   const items: MonthlyLineItem[] = [
     landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr }),
     ...approvalsSchedule({ period, amount: approvalCostCr }),
-    hardCostItem({ period, amount: hardCostCr }),
+    hardCostItem({ period, amount: hardCostCr, curveOverride: constructionCurve }),
     bulletOutflow({
       period,
       month: period.constructionEndMonth,

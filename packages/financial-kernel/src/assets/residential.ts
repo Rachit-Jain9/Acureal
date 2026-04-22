@@ -9,6 +9,7 @@
 import { Decimal, sum as decSum } from '../decimal';
 import { buildPeriodIndex } from '../periods';
 import { buildDrawSchedule } from '../debtSchedule';
+import { parseCurveOverride } from '../curves';
 import type { AreaBreakdown, AssetClass, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
 import {
@@ -183,12 +184,16 @@ export function computeResidential(
     finance: financeCr,
   });
 
+  // Optional per-deal curve overrides — see packages/financial-kernel/src/curves.ts
+  const constructionCurve = parseCurveOverride(raw.constructionCurve);
+  const salesCurve = parseCurveOverride(raw.salesCurve);
+
   // Cash-flow items (shared primitives only)
   const items: MonthlyLineItem[] = [
     landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr }),
     ...approvalsSchedule({ period, amount: approvalCostCr }),
     preConstructionSoftCosts({ period, architect: architectCr, pmc: pmcCr }),
-    hardCostItem({ period, amount: hardCostCr }),
+    hardCostItem({ period, amount: hardCostCr, curveOverride: constructionCurve }),
     marketingSchedule({ period, amount: marketingCr }),
     financeDrag({ period, amount: financeCr }),
     salesMilestoneCollections({
@@ -196,6 +201,7 @@ export function computeResidential(
       amount: totalRevenueCr,
       startMonth: Math.max(1, period.constructionStartMonth),
       endMonth: period.totalMonths,
+      curveOverride: salesCurve,
     }),
   ];
 

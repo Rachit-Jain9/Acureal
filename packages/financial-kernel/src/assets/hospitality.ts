@@ -25,6 +25,7 @@ import { Decimal } from '../decimal';
 import { bulletInflow, bulletOutflow } from '../cashflow';
 import { buildAmortizingSchedule } from '../debtSchedule';
 import { buildPeriodIndex } from '../periods';
+import { parseCurveOverride } from '../curves';
 import type { AreaBreakdown, DealInputs, KernelResult, MonthlyLineItem } from '../types';
 import { prov } from '../provenance';
 import { INDIA_CONFIG } from '../config';
@@ -203,11 +204,14 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     ? (noiY1Cr.toNumber() / totalDevCostCr.toNumber()) * 100
     : 0;
 
+  // Optional per-deal curve overrides — see packages/financial-kernel/src/curves.ts
+  const constructionCurve = parseCurveOverride(raw.constructionCurve);
+
   // ── Cash-flow line items ──────────────────────────────────────────────────
   const items: MonthlyLineItem[] = [
     landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr.add(bettermentCr) }),
     ...approvalsSchedule({ period, amount: approvalCostCr }),
-    hardCostItem({ period, amount: hardCostCr.add(gstCr).add(softDesignCr).add(contingencyCr) }),
+    hardCostItem({ period, amount: hardCostCr.add(gstCr).add(softDesignCr).add(contingencyCr), curveOverride: constructionCurve }),
     // FF&E + OS&E in the final 2 construction months.
     bulletOutflow({
       period,

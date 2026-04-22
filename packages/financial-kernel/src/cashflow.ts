@@ -9,7 +9,8 @@
 
 import { Decimal, sum as decSum } from './decimal';
 import type { MonthlyLineItem, PeriodIndex, ProvenanceEntry } from './types';
-import { frontLoadedWeights, logisticRevenueWeights, sCurveWeights, uniformWeights } from './periods';
+import { uniformWeights } from './periods';
+import { type CurveOverride, resolveCurveWeights } from './curves';
 import { prov } from './provenance';
 
 /** Fills a zeroed monthly Decimal array for a given period. */
@@ -198,27 +199,29 @@ export function sCurveConstruction({
   category = 'hard_cost',
   subcategory,
   provenance,
+  curveOverride,
 }: {
   period: PeriodIndex;
   amount: Decimal;
   category?: string;
   subcategory?: string;
   provenance?: readonly ProvenanceEntry[];
+  curveOverride?: CurveOverride | null;
 }): MonthlyLineItem {
   const months = Math.max(1, period.constructionEndMonth - period.constructionStartMonth);
-  const weights = sCurveWeights(months);
+  const resolved = resolveCurveWeights(months, 'sCurve', curveOverride);
   return distributeOutflow({
     period,
     startMonth: period.constructionStartMonth,
     amount,
-    weights,
+    weights: resolved.weights,
     category,
     subcategory,
     provenance,
   });
 }
 
-/** Milestone-linked sales collections (right-skewed logistic). */
+/** Milestone-linked sales collections (right-skewed logistic by default). */
 export function milestoneSales({
   period,
   amount,
@@ -227,6 +230,7 @@ export function milestoneSales({
   category = 'sales',
   subcategory,
   provenance,
+  curveOverride,
 }: {
   period: PeriodIndex;
   amount: Decimal;
@@ -235,21 +239,22 @@ export function milestoneSales({
   category?: string;
   subcategory?: string;
   provenance?: readonly ProvenanceEntry[];
+  curveOverride?: CurveOverride | null;
 }): MonthlyLineItem {
   const months = Math.max(1, endMonth - startMonth + 1);
-  const weights = logisticRevenueWeights(months);
+  const resolved = resolveCurveWeights(months, 'logistic', curveOverride);
   return distributeInflow({
     period,
     startMonth,
     amount,
-    weights,
+    weights: resolved.weights,
     category,
     subcategory,
     provenance,
   });
 }
 
-/** Plotted-style launch bookings — front-loaded Gaussian bump. */
+/** Plotted-style launch bookings — front-loaded Gaussian bump by default. */
 export function frontLoadedSales({
   period,
   amount,
@@ -258,6 +263,7 @@ export function frontLoadedSales({
   category = 'sales',
   subcategory,
   provenance,
+  curveOverride,
 }: {
   period: PeriodIndex;
   amount: Decimal;
@@ -266,14 +272,15 @@ export function frontLoadedSales({
   category?: string;
   subcategory?: string;
   provenance?: readonly ProvenanceEntry[];
+  curveOverride?: CurveOverride | null;
 }): MonthlyLineItem {
   const months = Math.max(1, endMonth - startMonth + 1);
-  const weights = frontLoadedWeights(months);
+  const resolved = resolveCurveWeights(months, 'frontLoaded', curveOverride);
   return distributeInflow({
     period,
     startMonth,
     amount,
-    weights,
+    weights: resolved.weights,
     category,
     subcategory,
     provenance,
