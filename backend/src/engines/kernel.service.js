@@ -31,6 +31,7 @@
  */
 
 const kernel = require('../../../packages/financial-kernel/dist');
+const orchestration = require('../../../packages/financial-kernel/dist/orchestration');
 
 const {
   computeDeal,
@@ -45,6 +46,8 @@ const {
   buildAmortizingSchedule,
   monthlyToQuarterly,
 } = kernel;
+
+const { FinancialGraph } = orchestration;
 
 // ── Rounding helpers (byte-compatible with financial.engine.js) ─────────────
 
@@ -424,6 +427,188 @@ function buildQuarterlyCashFlows(result) {
   });
 }
 
+// ── Provenance graph ────────────────────────────────────────────────────────
+
+/**
+ * Build a dependency DAG of every computation in a deal run. The graph is
+ * off the hot path — constructed from the already-computed kernel result,
+ * so it never affects math. Consumers (MethodologyExplorer, IC decks,
+ * audit replay) use it to answer:
+ *   - "What inputs feed this KPI?"   (upstream)
+ *   - "What downstream breaks if I change X?"  (downstream)
+ *   - "Show the full derivation chain for insights."  (snapshot)
+ *
+ * Node IDs are stable: `input.*`, `cost.*`, `revenue.*`, `kpi.*`, `output.*`.
+ * Values carry the exact rounded number the UI renders, so hovering a node
+ * in a DAG view shows the same figure as the KPI card.
+ */
+function buildFinancialGraph(assetClass, raw, result, flatKpis, flatCosts, flatRevenue, capitalStack) {
+  const g = new FinancialGraph();
+  const isIncomeFamily = INCOME_FAMILY.has(assetClass);
+  const isHosp = assetClass === 'hospitality';
+  const isLand = assetClass === 'land_parcel';
+
+  // ── Inputs ────────────────────────────────────────────────────────────────
+  g.addInput('input.land.area', 'Plot area', numOr(raw.plotAreaSqft), 'sqft');
+  g.addInput('input.land.rate', 'Land rate',
+    numOr(raw.landRatePerSqft, numOr(raw.landCostPerSqft)), 'INR/sqft');
+  if (!isLand) {
+    g.addInput('input.area.grossBuiltUp', 'Gross built-up area', flatKpis ? null : null, 'sqft');
+    g.addInput('input.construction.hardCost', 'Hard cost per sqft',
+      numOr(raw.hardCostPerSqft, numOr(raw.constructionCostPerSqft)), 'INR/sqft');
+    g.addInput('input.construction.softCostPct', 'Soft cost % of hard',
+      numOr(raw.softCostPct, 15), '%');
+  }
+  g.addInput('input.finance.debtLTV', 'Debt LTV',
+    numOr(raw.debtLTV, numOr(raw.debtLTC, 0.55)), 'ratio');
+  g.addInput('input.finance.debtRate', 'Debt rate',
+    numOr(raw.debtRatePct, 10.5), '%');
+  g.addInput('input.finance.equityIRR', 'Equity hurdle',
+    numOr(raw.equityIRRHurdlePct, numOr(raw.targetIRRPct, 18)), '%');
+  g.addInput('input.timing.months', 'Project duration',
+    numOr(raw.projectDurationMonths, numOr(raw.totalMonths)), 'months');
+  if (isHosp) {
+    g.addInput('input.hotel.keys', 'Number of keys', numOr(raw.numberOfKeys), 'keys');
+    g.addInput('input.hotel.adr', 'Stabilised ADR', numOr(raw.adr), 'INR');
+    g.addInput('input.hotel.occupancy', 'Stabilised occupancy',
+      numOr(raw.stabilizedOccupancyPct, numOr(raw.occupancyPct, 72)), '%');
+  }
+  if (isIncomeFamily) {
+    g.addInput('input.income.leaseRate', 'Lease rate',
+      numOr(raw.leaseRatePerSqftPerMonth, numOr(raw.rentPerSqftPerMonth)), 'INR/sqft/mo');
+    g.addInput('input.income.exitCapRate', 'Exit cap rate',
+      numOr(raw.exitCapRatePct, 8.5), '%');
+  }
+  if (!isIncomeFamily && !isLand && !isHosp) {
+    g.addInput('input.sales.pricePerSqft', 'Selling price per sqft',
+      numOr(raw.sellingPricePerSqft), 'INR/sqft');
+  }
+  if (assetClass === 'plotted_development') {
+    g.addInput('input.plots.pricePerSqft', 'Plot sale rate',
+      numOr(raw.plotSaleRatePerSqft, numOr(raw.sellingPricePerSqft)), 'INR/sqft');
+  }
+
+  // ── Computations ──────────────────────────────────────────────────────────
+  g.addComputation('cost.land', 'Land cost',
+    ['input.land.area', 'input.land.rate'],
+    flatCosts.land, 'Cr');
+  if (!isLand) {
+    g.addComputation('cost.construction', 'Hard construction cost',
+      ['input.area.grossBuiltUp', 'input.construction.hardCost'],
+      flatCosts.construction, 'Cr');
+    g.addComputation('cost.softCosts', 'Soft costs (design + approvals + PMC + marketing)',
+      ['cost.construction', 'input.construction.softCostPct'],
+      flatCosts.softCostTotal, 'Cr');
+    g.addComputation('cost.finance', 'Interest during construction',
+      ['cost.land', 'cost.construction', 'input.finance.debtLTV', 'input.finance.debtRate', 'input.timing.months'],
+      flatCosts.finance, 'Cr');
+  }
+  g.addComputation('cost.total', 'Total project cost',
+    isLand ? ['cost.land']
+           : ['cost.land', 'cost.construction', 'cost.softCosts', 'cost.finance'],
+    flatCosts.total, 'Cr');
+
+  if (isHosp) {
+    g.addComputation('revenue.operating', 'Stabilised room revenue',
+      ['input.hotel.keys', 'input.hotel.adr', 'input.hotel.occupancy'],
+      flatRevenue.totalRevenueCr, 'Cr');
+    g.addComputation('revenue.noi', 'Stabilised NOI',
+      ['revenue.operating', 'cost.total'],
+      flatRevenue.stabilizedNOI, 'Cr');
+    g.addComputation('revenue.total', 'Total revenue (hold-period)',
+      ['revenue.operating', 'input.timing.months'],
+      flatRevenue.totalRevenueCr, 'Cr');
+  } else if (isIncomeFamily) {
+    g.addComputation('revenue.operating', 'Stabilised NOI',
+      ['input.area.grossBuiltUp', 'input.income.leaseRate'],
+      flatRevenue.stabilizedNOI, 'Cr');
+    g.addComputation('revenue.exitValue', 'Exit value',
+      ['revenue.operating', 'input.income.exitCapRate'],
+      flatRevenue.exitValue, 'Cr');
+    g.addComputation('revenue.total', 'Total revenue (NOI + exit)',
+      ['revenue.operating', 'revenue.exitValue'],
+      flatRevenue.totalRevenueCr, 'Cr');
+  } else if (isLand) {
+    g.addComputation('revenue.total', 'Land residual value',
+      ['cost.land'],
+      flatRevenue.totalRevenueCr, 'Cr');
+  } else {
+    g.addComputation('revenue.total', 'Total sale revenue',
+      ['input.area.grossBuiltUp', 'input.sales.pricePerSqft'],
+      flatRevenue.totalRevenueCr, 'Cr');
+  }
+
+  g.addComputation('kpi.grossProfit', 'Gross profit (revenue − cost)',
+    ['revenue.total', 'cost.total'],
+    flatRevenue.grossProfitCr, 'Cr');
+  g.addComputation('kpi.grossMargin', 'Gross margin',
+    ['kpi.grossProfit', 'revenue.total'],
+    flatKpis.grossMarginPct, '%');
+  g.addComputation('cashFlows', 'Quarterly levered cash flows',
+    isLand
+      ? ['cost.total', 'revenue.total', 'input.timing.months']
+      : ['cost.total', 'revenue.total', 'input.finance.debtLTV', 'input.timing.months'],
+    null, 'Cr/q');
+  g.addComputation('kpi.irr', 'Project IRR',
+    ['cashFlows'],
+    flatKpis.irr, '%');
+  g.addComputation('kpi.npv', 'NPV at equity hurdle',
+    ['cashFlows', 'input.finance.equityIRR'],
+    flatKpis.npv, 'Cr');
+  g.addComputation('kpi.rlv', 'Residual land value',
+    isLand ? ['revenue.total']
+           : ['revenue.total', 'cost.construction', 'cost.softCosts', 'cost.finance', 'input.finance.equityIRR'],
+    flatKpis.rlv, 'Cr');
+  g.addComputation('kpi.equityMultiple', 'Equity multiple',
+    ['cashFlows', 'input.finance.debtLTV'],
+    flatKpis.equityMultiple, 'x');
+
+  if (capitalStack) {
+    const stackDeps = ['cost.total', 'input.finance.debtLTV', 'input.finance.debtRate'];
+    if (isHosp) stackDeps.push('revenue.noi');
+    if (isIncomeFamily) stackDeps.push('revenue.operating');
+    g.addComputation('capitalStack', 'Capital stack (debt + equity)',
+      stackDeps, null, '');
+  }
+
+  // ── Outputs ───────────────────────────────────────────────────────────────
+  g.addOutput('output.totalCost', 'Total cost', ['cost.total'], flatCosts.total, 'Cr');
+  g.addOutput('output.revenue', 'Revenue', ['revenue.total'], flatRevenue.totalRevenueCr, 'Cr');
+  g.addOutput('output.irr', 'IRR', ['kpi.irr'], flatKpis.irr, '%');
+  g.addOutput('output.npv', 'NPV', ['kpi.npv'], flatKpis.npv, 'Cr');
+  g.addOutput('output.rlv', 'Residual land value', ['kpi.rlv'], flatKpis.rlv, 'Cr');
+  g.addOutput('output.equityMultiple', 'Equity multiple',
+    ['kpi.equityMultiple'], flatKpis.equityMultiple, 'x');
+  g.addOutput('output.grossMargin', 'Gross margin',
+    ['kpi.grossMargin'], flatKpis.grossMarginPct, '%');
+  if (capitalStack) {
+    g.addOutput('output.capitalStack', 'Capital stack',
+      ['capitalStack'], null, '');
+  }
+
+  // Snapshot — flatten Decimal values to numbers for JSON serialisation.
+  const snap = g.snapshot();
+  const nodes = snap.nodes.map((n) => ({
+    id: n.id,
+    kind: n.kind,
+    label: n.label,
+    dependsOn: n.dependsOn,
+    value: typeof n.value === 'object' && n.value && typeof n.value.toNumber === 'function'
+      ? toNum(n.value)
+      : n.value ?? null,
+    unit: n.unit || null,
+  }));
+  return {
+    nodes,
+    edges: snap.edges.map((e) => ({ from: e.from, to: e.to })),
+    nodeCount: nodes.length,
+    edgeCount: snap.edges.length,
+    assetClass,
+    engineVersion: 'kernel-v2',
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // ── Public entry points ─────────────────────────────────────────────────────
 
 /**
@@ -465,6 +650,9 @@ function computeFullFinancials(input) {
   const sensitivityMatrix = input.skipSensitivity
     ? null
     : buildSensitivityMatrix({ raw, assetClass });
+  const financialGraph = input.skipGraph
+    ? null
+    : buildFinancialGraph(assetClass, raw, result, flatKpis, flatCosts, flatRevenue, capitalStack);
 
   return {
     assetClass,
@@ -476,6 +664,7 @@ function computeFullFinancials(input) {
     capitalStack,
     cashFlows,
     sensitivityMatrix,
+    financialGraph,
     // Kernel canonical block preserved for provenance / debug surfaces.
     kernel: {
       kpis: result.kpis,

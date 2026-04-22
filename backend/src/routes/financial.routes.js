@@ -316,6 +316,20 @@ router.get('/:dealId/scenarios', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /financials/:dealId/financial-graph — provenance DAG for the deal's model
+// Returns: { nodes, edges, nodeCount, edgeCount, assetClass, engineVersion, generatedAt }
+// Every KPI, cost bucket, and revenue line traces back through computations
+// to the user-supplied inputs. Powers the MethodologyExplorer DAG view + IC
+// deck "show derivation" drawers.
+router.get('/:dealId/financial-graph', authenticate, async (req, res, next) => {
+  try {
+    const graph = await financialService.getFinancialGraph(req.params.dealId);
+    res.json({ success: true, data: graph });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /financials/:dealId/export/csv — download financial model as CSV
 router.get('/:dealId/export/csv', authenticate, async (req, res, next) => {
   try {
