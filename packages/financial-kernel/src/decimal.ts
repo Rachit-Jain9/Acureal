@@ -160,6 +160,24 @@ export class Decimal {
     return Number(whole) + Number(frac) / Number(divisor);
   }
 
+  /**
+   * JSON serialization hook. Returns a plain IEEE-754 number so that
+   * `JSON.stringify` (and therefore Express `res.json`, Postgres JSONB
+   * writes, log lines, etc.) never encounter the BigInt-backed `q`
+   * field. Lossy by design — this matches the kernel's convention of
+   * unwrapping to `toNumber()` at every display / persistence boundary.
+   *
+   * Without this, `JSON.stringify(new Decimal(...))` throws
+   * `TypeError: Do not know how to serialize a BigInt` at the first
+   * Decimal it encounters, which surfaces in production as
+   * "quick-compute failed" / "calculate failed" with no other signal.
+   * Defense-in-depth against nested-Decimal leaks anywhere in the
+   * output tree (e.g. `costs.extras`, `revenue.extras`, `financing.*`).
+   */
+  toJSON(): number {
+    return this.toNumber();
+  }
+
   /** Canonical decimal-string form at current scale. */
   toString(): string {
     if (this.scale === 0) return this.q.toString();
