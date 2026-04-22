@@ -1,15 +1,43 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REDIP Landing — editorial, IC-grade.
-// Design intent: Bloomberg + Stripe + Linear. Dense, typographic, grown-up.
-// No gradient hero, no icon-in-colored-box, no "AI-powered" marketing surface.
+// Bloomberg + Stripe + Linear. Typographic, grown-up. Single burnt-orange accent.
+// Animated translucent grid behind the hero; scroll-reveal on subsequent sections.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ACCENT = 'text-[#c2410c]'; // burnt-orange, single accent across the page
+const ACCENT = 'text-[#c2410c]';
 const ACCENT_BG = 'bg-[#c2410c]';
-const ACCENT_BORDER = 'border-[#c2410c]';
 const ACCENT_WEAK = 'text-[#9a3412]';
+
+// Intersection-observer driven fade/slide-in. One-shot.
+function Reveal({ children, delay = 0, className = '' }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            el.style.transitionDelay = `${delay}ms`;
+            el.classList.add('redip-revealed');
+            io.unobserve(el);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [delay]);
+  return (
+    <div ref={ref} className={`redip-reveal ${className}`}>
+      {children}
+    </div>
+  );
+}
 
 function Nav() {
   const navigate = useNavigate();
@@ -43,15 +71,68 @@ function Nav() {
   );
 }
 
-// ── Hero — typographic, no gradient, editorial kicker + real numbers strip ──
+// Translucent animated background: slow-drifting grid + orbiting accent lines.
+// Pure SVG + CSS — no deps, renders crisply at any size, ~0 CPU.
+function HeroBackdrop() {
+  return (
+    <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* Warm paper wash */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white via-[#fdfaf4] to-white" />
+      {/* Drifting architectural grid */}
+      <svg
+        className="absolute inset-0 w-full h-full opacity-[0.35] redip-hero-drift"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <pattern id="redip-grid-fine" width="28" height="28" patternUnits="userSpaceOnUse">
+            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#d6d3d1" strokeWidth="0.5" />
+          </pattern>
+          <pattern id="redip-grid-bold" width="140" height="140" patternUnits="userSpaceOnUse">
+            <path d="M 140 0 L 0 0 0 140" fill="none" stroke="#b8b5b1" strokeWidth="0.7" />
+          </pattern>
+          <radialGradient id="redip-spot" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="65%" stopColor="#ffffff" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
+          </radialGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#redip-grid-fine)" />
+        <rect width="100%" height="100%" fill="url(#redip-grid-bold)" />
+        <rect width="100%" height="100%" fill="url(#redip-spot)" />
+      </svg>
+      {/* Skyline silhouette — translucent, slow pan */}
+      <svg
+        className="absolute bottom-0 left-0 w-[140%] h-[38%] opacity-[0.08] redip-hero-skyline"
+        viewBox="0 0 1400 300"
+        preserveAspectRatio="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          fill="#1c1917"
+          d="M0 300 V220 H40 V160 H80 V200 H120 V120 H180 V170 H220 V90 H280 V140 H320 V60 H380 V130 H430 V180 H470 V110 H520 V40 H580 V100 H630 V170 H680 V80 H740 V130 H790 V60 H850 V20 H900 V80 H950 V140 H1000 V70 H1060 V110 H1110 V30 H1170 V90 H1220 V150 H1270 V60 H1330 V120 H1400 V300 Z"
+        />
+      </svg>
+      {/* Accent orbit — a single slow burnt-orange arc */}
+      <svg
+        className="absolute -top-20 -right-20 w-[520px] h-[520px] opacity-30 redip-hero-orbit"
+        viewBox="0 0 200 200"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle cx="100" cy="100" r="90" fill="none" stroke="#c2410c" strokeWidth="0.4" strokeDasharray="2 6" />
+        <circle cx="100" cy="100" r="70" fill="none" stroke="#c2410c" strokeWidth="0.3" strokeDasharray="1 5" />
+        <circle cx="100" cy="100" r="50" fill="none" stroke="#c2410c" strokeWidth="0.3" strokeDasharray="1 4" />
+      </svg>
+    </div>
+  );
+}
+
 function Hero() {
   const navigate = useNavigate();
   return (
-    <section className="bg-white border-b border-stone-200">
-      <div className="max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
+    <section className="relative bg-white border-b border-stone-200 overflow-hidden">
+      <HeroBackdrop />
+      <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
         <div className="text-[11px] uppercase tracking-[0.22em] text-stone-500 mb-6">
-          <span className={ACCENT_WEAK}>Volume I · Issue 01</span>
-          <span className="mx-3 text-stone-300">·</span>
           Bengaluru / Greater Bengaluru priority
         </div>
         <h1 className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight text-stone-900 max-w-4xl">
@@ -69,22 +150,20 @@ function Hero() {
           >
             Start a deal →
           </button>
-          <a
-            href="#kernel"
+          <button
+            onClick={() => navigate('/login')}
             className="text-sm font-medium text-stone-900 border-b border-stone-400 hover:border-stone-900 pb-0.5"
           >
-            How the kernel works
-          </a>
+            Request access
+          </button>
         </div>
 
-        {/* Editorial KPI strip — real numbers, not icons */}
-        <div className="mt-20 border-t border-stone-200 pt-8 grid grid-cols-2 md:grid-cols-5 gap-y-6 gap-x-8">
+        <div className="mt-20 border-t border-stone-200 pt-8 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8">
           {[
             ['10', 'Asset classes', 'residential → hospitality'],
             ['15y', 'Quarterly horizon', 'per cash-flow line'],
             ['7', 'DD layers', 'title → physical'],
             ['8', 'Deal structures', 'outright · JV · JDA · …'],
-            ['₹', 'INR-native', 'lakh · crore · sqft'],
           ].map(([stat, label, note]) => (
             <div key={label}>
               <div className="font-serif text-3xl md:text-4xl font-medium text-stone-900 leading-none">
@@ -102,68 +181,6 @@ function Hero() {
   );
 }
 
-// ── The kernel — section that shows an actual artifact, not a claim ──
-function Kernel() {
-  return (
-    <section id="kernel" className="bg-stone-50 border-b border-stone-200">
-      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
-        <div className="md:col-span-5">
-          <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
-            § The kernel
-          </div>
-          <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
-            Deterministic. Provenance&#8209;traced. Defensible.
-          </h2>
-          <p className="mt-5 text-stone-700 leading-relaxed">
-            Every KPI on a deal page resolves to a directed graph of inputs,
-            derived values, and the formula that produced it. No LLM touches
-            the math. A partner reading your memo can drill from IRR all the
-            way to the stamp-duty assumption — in one click.
-          </p>
-          <ul className="mt-6 space-y-2.5 text-sm text-stone-800">
-            {[
-              'One kernel, ten asset classes, zero Python duplicates',
-              'IRR, NPV, equity multiple, DSCR, yield on cost',
-              'JDA · JV · revenue share · area share · profit share',
-              'Kernel DAG visible in the UI — no black boxes',
-            ].map((line) => (
-              <li key={line} className="flex gap-3">
-                <span className={`${ACCENT} font-serif leading-none pt-1`}>§</span>
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Faux kernel output — makes the claim visible */}
-        <div className="md:col-span-7">
-          <div className="rounded-sm border border-stone-300 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.03)]">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-stone-200 bg-stone-100 text-[11px] uppercase tracking-[0.14em] text-stone-500">
-              <span>Provenance · deal 2026-BLR-127</span>
-              <span className="tabular-nums">residential_apartments</span>
-            </div>
-            <div className="p-5 font-mono text-[12.5px] leading-[1.75] text-stone-800">
-              <div><span className="text-stone-400">kpi.</span>irr <span className="text-stone-400">=</span> <span className={ACCENT_WEAK}>14.03%</span></div>
-              <div className="pl-5"><span className="text-stone-400">←</span> cashflow.equity <span className="text-stone-400">[60 quarters]</span></div>
-              <div className="pl-10"><span className="text-stone-400">←</span> derived.netRevenue</div>
-              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.sellingRatePerSqft <span className="text-stone-400">=</span> 9,850</div>
-              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.plotAreaSqft × input.fsi <span className="text-stone-400">= BUA</span></div>
-              <div className="pl-10"><span className="text-stone-400">←</span> derived.totalCost</div>
-              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.landCostCr <span className="text-stone-400">=</span> 42.00</div>
-              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.constructionCostPerSqft <span className="text-stone-400">=</span> 3,200</div>
-              <div className="pl-[60px]"><span className="text-stone-400">←</span> derived.stampDutyCr <span className="text-stone-400">=</span> landCostCr × 0.056</div>
-              <div className="mt-4 pt-3 border-t border-stone-200 text-stone-500 text-[11px]">
-                Every IRR you show an IC is the root of a graph like this.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ── Three-column editorial: Underwrite / Diligence / Report ──
 function Columns() {
   const columns = [
     {
@@ -189,8 +206,8 @@ function Columns() {
     <section className="bg-white border-b border-stone-200">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-3 gap-10 md:gap-8">
-          {columns.map((c) => (
-            <div key={c.tag}>
+          {columns.map((c, i) => (
+            <Reveal key={c.tag} delay={i * 90}>
               <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
                 {c.tag}
               </div>
@@ -206,7 +223,7 @@ function Columns() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -214,7 +231,6 @@ function Columns() {
   );
 }
 
-// ── Asset classes — typographic grid, no chips ──
 function AssetClasses() {
   const rows = [
     ['Residential apartments', 'Mumbai / NCR / Bengaluru stacks'],
@@ -232,7 +248,7 @@ function AssetClasses() {
     <section className="bg-stone-50 border-b border-stone-200">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-12 gap-8">
-          <div className="md:col-span-4">
+          <Reveal className="md:col-span-4">
             <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
               § Asset coverage
             </div>
@@ -244,22 +260,21 @@ function AssetClasses() {
               shape — apartment absorption is not a plotted layout, and a hotel
               is nobody&rsquo;s office tower.
             </p>
-          </div>
+          </Reveal>
           <div className="md:col-span-8">
             <div className="border-t border-stone-300">
               {rows.map(([name, note], i) => (
-                <div
-                  key={name}
-                  className="flex items-baseline justify-between border-b border-stone-200 py-3.5"
-                >
-                  <div className="flex items-baseline gap-4">
-                    <span className="font-mono text-[11px] text-stone-400 tabular-nums">
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span className="text-stone-900 font-medium">{name}</span>
+                <Reveal key={name} delay={i * 30}>
+                  <div className="flex items-baseline justify-between border-b border-stone-200 py-3.5">
+                    <div className="flex items-baseline gap-4">
+                      <span className="font-mono text-[11px] text-stone-400 tabular-nums">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span className="text-stone-900 font-medium">{name}</span>
+                    </div>
+                    <span className="text-[12.5px] text-stone-500">{note}</span>
                   </div>
-                  <span className="text-[12.5px] text-stone-500">{note}</span>
-                </div>
+                </Reveal>
               ))}
             </div>
           </div>
@@ -269,45 +284,45 @@ function AssetClasses() {
   );
 }
 
-// ── India-first — short, specific ──
 function IndiaFirst() {
   return (
     <section className="bg-white border-b border-stone-200">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
-        <div className="md:col-span-5">
+        <Reveal className="md:col-span-5">
           <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
             § India, not a port
           </div>
           <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
             A Western model bent onto Indian inputs breaks on contact.
           </h2>
-        </div>
-        <div className="md:col-span-7 text-[15px] text-stone-700 leading-relaxed space-y-4">
-          <p>
-            Stamp duty and registration as a first-class kernel input. Plot area
-            in sqft, sqyd, or acres — the same field. Money in lakh, crore, or
-            INR. Dates in en-IN. RTC, Pahani, encumbrance certificates, JDA and
-            JV clauses — parsed including Kannada-language records.
-          </p>
-          <p>
-            Bengaluru-first by default: BBMP zoning, BDA khata, BMRDA layout
-            approvals. The rest of the country arrives by configuration, not by
-            rewrite.
-          </p>
-        </div>
+        </Reveal>
+        <Reveal className="md:col-span-7" delay={120}>
+          <div className="text-[15px] text-stone-700 leading-relaxed space-y-4">
+            <p>
+              Stamp duty and registration as a first-class kernel input. Plot area
+              in sqft, sqyd, or acres — the same field. Money in lakh, crore, or
+              INR. Dates in en-IN. RTC, Pahani, encumbrance certificates, JDA and
+              JV clauses — parsed including Kannada-language records.
+            </p>
+            <p>
+              Bengaluru-first by default: BBMP zoning, BDA khata, BMRDA layout
+              approvals. The rest of the country arrives by configuration, not by
+              rewrite.
+            </p>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-// ── Closing ──
 function Close() {
   const navigate = useNavigate();
   return (
     <section className="bg-stone-950 text-stone-100">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="max-w-3xl">
-          <div className={`text-[11px] uppercase tracking-[0.22em] mb-5 text-[#fb923c]`}>
+          <div className="text-[11px] uppercase tracking-[0.22em] mb-5 text-[#fb923c]">
             § Deploy
           </div>
           <h2 className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight text-white">
@@ -364,7 +379,6 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white text-stone-900 antialiased">
       <Nav />
       <Hero />
-      <Kernel />
       <Columns />
       <AssetClasses />
       <IndiaFirst />
