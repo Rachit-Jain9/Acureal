@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Calculator, TrendingUp, DollarSign, BarChart3,
@@ -1727,6 +1727,11 @@ export default function FinancialsPage() {
   const [selectedClass, setSelectedClass] = useState(null); // null = use stored
   const activeClass = selectedClass || existingClass;
 
+  const inputsRef = useRef(null);
+  const scrollToInputs = () => {
+    inputsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   // Prefill staged on the Zoning tab via "Apply to underwriting" lives in
   // sessionStorage until consumed. Read once; clear on first consumption so a
   // page refresh doesn't keep re-applying it over user edits.
@@ -1831,18 +1836,21 @@ export default function FinancialsPage() {
             assetClass={normalizedFinancials.assetClass}
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
+            onEditInputs={scrollToInputs}
           />
 
           <SensitivityTornado
             assetClass={normalizedFinancials.assetClass}
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
+            onEditInputs={scrollToInputs}
           />
 
           <ScenarioComparison
             assetClass={normalizedFinancials.assetClass}
             baseInputs={normalizedFinancials.inputs}
             baseKpis={normalizedFinancials.kpis}
+            onEditInputs={scrollToInputs}
           />
 
           <ProvenanceGraphView
@@ -1873,7 +1881,7 @@ export default function FinancialsPage() {
           <JVWaterfallPanel financials={normalizedFinancials} deal={deal} />
           <DebtSchedulePanel financials={financials} normalizedFinancials={normalizedFinancials} />
 
-          <div className="border-t pt-6">
+          <div className="border-t pt-6" ref={inputsRef}>
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Recalculate</h3>
             <InputForm
               initialValues={financials}

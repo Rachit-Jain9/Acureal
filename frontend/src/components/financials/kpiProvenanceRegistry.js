@@ -47,15 +47,15 @@ export const KPI_PROVENANCE = {
       'Total cash returned to equity per rupee invested. A 2.0\u00d7 doubles your money regardless of time; IRR tells you how fast.',
     drivers: ['equityInvested', 'projectDurationMonths'],
     benchmark: {
-      residential: '1.5\u20131.9\u00d7 typical for merchant-build residential',
-      income:      '1.8\u20132.3\u00d7 typical for 5-year income holds',
+      residential: '1.5–1.9\u00d7 typical for merchant-build residential',
+      income:      '1.8–2.3\u00d7 typical for 5-year income holds',
     },
     confidence: 'High',
   },
   rlv: {
     name: 'Residual Land Value',
     formula:
-      'Revenue \u2212 (Construction + Soft Costs + Marketing + Finance + Required Margin)',
+      'Revenue − (Construction + Soft Costs + Marketing + Finance + Required Margin)',
     definition:
       'The maximum land price at which the deal still clears the developer\u2019s required margin. Use it to bid land, or to check if the asking land cost leaves any margin.',
     drivers: ['sellingRatePerSqft', 'constructionCostPerSqft', 'financeCostPct', 'marginRequiredPct'],
@@ -66,11 +66,11 @@ export const KPI_PROVENANCE = {
     name: 'Debt Service Coverage Ratio',
     formula: 'Operating Cash Flow / (Interest + Principal)',
     definition:
-      'How many times over the asset covers its debt service from operations. Below 1.0\u00d7 = shortfall. Institutional lenders require 1.25\u20131.40\u00d7.',
+      'How many times over the asset covers its debt service from operations. Below 1.0\u00d7 = shortfall. Institutional lenders require 1.25–1.40\u00d7.',
     drivers: ['debtLTV', 'debtRatePct', 'vacancyPct', 'baseRentPerSqftMonth'],
     benchmark: {
-      income:      '1.30\u20131.45\u00d7 for stabilized Indian commercial',
-      hospitality: '1.35\u20131.50\u00d7 for stabilized hotel debt',
+      income:      '1.30–1.45\u00d7 for stabilized Indian commercial',
+      hospitality: '1.35–1.50\u00d7 for stabilized hotel debt',
     },
     confidence: 'Medium',
   },
@@ -81,7 +81,7 @@ export const KPI_PROVENANCE = {
       'The single most-quoted hotel KPI. Blends price and volume into one number per day per available key.',
     drivers: ['adr', 'stabilizedOccPct'],
     benchmark: {
-      hospitality: '\u20b94,500\u2013\u20b96,500 for a stabilized Bengaluru 4-star',
+      hospitality: '₹4,500–₹6,500 for a stabilized Bengaluru 4-star',
     },
     confidence: 'High',
   },
@@ -89,18 +89,18 @@ export const KPI_PROVENANCE = {
     name: 'Yield on Cost',
     formula: 'Stabilized NOI / Total Development Cost',
     definition:
-      'The day-one going-in yield delivered on total cost basis. Should exceed the exit cap rate by 50\u2013150bps ("development spread") to justify the build-vs-buy risk.',
+      'The day-one going-in yield delivered on total cost basis. Should exceed the exit cap rate by 50–150bps ("development spread") to justify the build-vs-buy risk.',
     drivers: ['baseRentPerSqftMonth', 'vacancyPct', 'constructionCostPerSqft', 'landCostCr'],
     benchmark: {
-      income: '8.0\u20139.5% for Grade-A office; lower \u2192 margin too thin',
+      income: '8.0–9.5% for Grade-A office; lower \u2192 margin too thin',
     },
     confidence: 'High',
   },
   noi: {
     name: 'Net Operating Income',
-    formula: 'Revenue \u00d7 (1 \u2212 Vacancy) \u2212 OpEx',
+    formula: 'Revenue \u00d7 (1 − Vacancy) − OpEx',
     definition:
-      'Recurring cash yield the property produces before debt service and taxes. Core valuation input \u2014 exit value = NOI / exit cap rate.',
+      'Recurring cash yield the property produces before debt service and taxes. Core valuation input — exit value = NOI / exit cap rate.',
     drivers: ['baseRentPerSqftMonth', 'leasableAreaSqft', 'vacancyPct', 'opExPerSqftMonth'],
     benchmark: null,
     confidence: 'High',
@@ -109,11 +109,11 @@ export const KPI_PROVENANCE = {
     name: 'Exit Value',
     formula: 'Stabilized NOI / Exit Cap Rate',
     definition:
-      'Terminal sale value at exit. Direct-capitalization approach \u2014 relies on an exit cap rate you take from the market, not from the kernel.',
+      'Terminal sale value at exit. Direct-capitalization approach — relies on an exit cap rate you take from the market, not from the kernel.',
     drivers: ['baseRentPerSqftMonth', 'vacancyPct', 'exitCapRate'],
     benchmark: {
-      income:      'Exit cap: 7.5\u20138.5% Grade-A BLR office, 8.5\u20139.5% retail',
-      hospitality: 'Exit cap: 8.0\u20139.5% for stabilized 4-star hotels',
+      income:      'Exit cap: 7.5–8.5% Grade-A BLR office, 8.5–9.5% retail',
+      hospitality: 'Exit cap: 8.0–9.5% for stabilized 4-star hotels',
     },
     confidence: 'Medium',
   },

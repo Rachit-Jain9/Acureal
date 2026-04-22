@@ -6,6 +6,8 @@ import {
 import { clsx } from 'clsx';
 import { financialsAPI } from '../../services/api';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
+import { preflightDealInput } from '../../utils/dealInputPreflight';
+import MissingInputsCard from './MissingInputsCard';
 
 // Per-asset-class scenario perturbations. Each scenario multiplies/adds
 // to a set of drivers — the shape is `{ driver: { mult?, add? } }`.
@@ -192,10 +194,9 @@ const SCENARIO_RECIPES = {
   },
 };
 
-// KPIs rendered in the comparison table. `scale` converts kernel units
-// to display (IRR is decimal; others are already in display form).
+// Kernel returns all KPIs in display units (IRR already in percent form).
 const KPI_ROWS = [
-  { key: 'irr',            label: 'IRR',          suffix: '%',   decimals: 2, scale: 100, good: 'up' },
+  { key: 'irr',            label: 'IRR',          suffix: '%',   decimals: 2, scale: 1,   good: 'up' },
   { key: 'equityMultiple', label: 'Equity Mult.', suffix: '×',   decimals: 2, scale: 1,   good: 'up' },
   { key: 'npv',            label: 'NPV',          suffix: ' Cr', decimals: 2, scale: 1,   good: 'up' },
   { key: 'grossMarginPct', label: 'Gross Margin', suffix: '%',   decimals: 2, scale: 1,   good: 'up' },
@@ -316,9 +317,11 @@ function ScenarioColumn({ scenario, baseKpis, showDelta }) {
   );
 }
 
-export default function ScenarioComparison({ assetClass, baseInputs, baseKpis }) {
+export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, onEditInputs }) {
   const modelClass = resolveFinancialModelClass(assetClass) || assetClass;
   const recipe = SCENARIO_RECIPES[modelClass] || SCENARIO_RECIPES[assetClass];
+
+  const preflight = preflightDealInput(baseInputs, modelClass);
 
   const [downKpis,   setDownKpis]   = useState(null);
   const [upKpis,     setUpKpis]     = useState(null);
@@ -329,6 +332,11 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis })
   // Fire downside + upside quick-compute in parallel. No fetch for base —
   // we already have baseKpis from the parent.
   useEffect(() => {
+    if (!preflight.ok) {
+      setDownKpis(null);
+      setUpKpis(null);
+      return undefined;
+    }
     if (!recipe || !baseInputs) {
       setDownKpis(null);
       setUpKpis(null);
@@ -377,6 +385,10 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis })
       { label: recipe.upside.label,   summary: recipe.upside.summary,   tone: 'upside',   kpis: upKpis     },
     ];
   }, [recipe, downKpis, upKpis, baseKpis]);
+
+  if (!preflight.ok) {
+    return <MissingInputsCard missing={preflight.missing} panelLabel="Scenario Comparison" onEditInputs={onEditInputs} />;
+  }
 
   if (!recipe) return null;
 

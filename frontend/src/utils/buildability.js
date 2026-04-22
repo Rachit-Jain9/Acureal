@@ -502,13 +502,13 @@ export function computeBuildability({ zone, property, assetClass, options = {} }
 
 // UI helper: IN-style number formatter with safe fallbacks.
 export function fmtNum(n, decimals = 0) {
-  if (n == null || !Number.isFinite(Number(n))) return '\u2014';
+  if (n == null || !Number.isFinite(Number(n))) return '—';
   return Number(n).toLocaleString('en-IN', { maximumFractionDigits: decimals });
 }
 
 // Convert sqft → acres label
 export function fmtAreaCompact(sqft, decimals = 2) {
-  if (sqft == null || !Number.isFinite(Number(sqft))) return '\u2014';
+  if (sqft == null || !Number.isFinite(Number(sqft))) return '—';
   const acres = sqft / SQFT_PER_ACRE;
   if (acres >= 1) return `${fmtNum(acres, decimals)} ac`;
   return `${fmtNum(sqft, 0)} sqft`;
@@ -516,12 +516,12 @@ export function fmtAreaCompact(sqft, decimals = 2) {
 
 // INR compact formatter — ₹1.23 Cr, ₹45.6 L, ₹12,345
 export function fmtInr(n) {
-  if (n == null || !Number.isFinite(Number(n))) return '\u2014';
+  if (n == null || !Number.isFinite(Number(n))) return '—';
   const v = Number(n);
   const abs = Math.abs(v);
-  if (abs >= 1e7) return `\u20b9${(v / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
-  if (abs >= 1e5) return `\u20b9${(v / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L`;
-  return `\u20b9${Math.round(v).toLocaleString('en-IN')}`;
+  if (abs >= 1e7) return `₹${(v / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
+  if (abs >= 1e5) return `₹${(v / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L`;
+  return `₹${Math.round(v).toLocaleString('en-IN')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -714,7 +714,7 @@ export function estimatePremiumFarCost({ property, premium_bua_sqft }) {
     fee_inr: feePerSqft * bua,
     fee_per_sqft_inr: feePerSqft,
     rate_pct: ratePct,
-    note: `${Math.round(ratePct * 100)}% of guidance \u20b9${fmtNum(guidanceSqft, 0)}/sqft × ${fmtNum(bua, 0)} sqft premium BUA`,
+    note: `${Math.round(ratePct * 100)}% of guidance ₹${fmtNum(guidanceSqft, 0)}/sqft × ${fmtNum(bua, 0)} sqft premium BUA`,
   };
 }
 
@@ -818,13 +818,13 @@ export function computeProgramme({ buildability, property, options = {} }) {
 
       pushMetric({ label: 'Saleable (SBUA)',  value: fmtNum(saleable), unit: 'sqft', hint: `${fmtNum(resShare * 100, 0)}% residential share` });
       pushMetric({ label: 'Carpet (RERA)',    value: fmtNum(carpet),   unit: 'sqft', hint: '72% efficiency' });
-      pushMetric({ label: 'Total units',      value: fmtNum(totalUnits, 0), unit: 'DUs', hint: `${towers ?? '\u2014'} tower${towers === 1 ? '' : 's'}` });
+      pushMetric({ label: 'Total units',      value: fmtNum(totalUnits, 0), unit: 'DUs', hint: `${towers ?? '—'} tower${towers === 1 ? '' : 's'}` });
       pushMetric({ label: 'Lifts required',   value: fmtNum(lifts, 0), unit: 'cars', hint: '1 per 50 DU' });
 
       pushAssumption({ label: 'Super built-up → carpet', value: '72%' });
       pushAssumption({ label: 'Floor plate', value: `${fmtNum(floorPlate)} sqft` });
-      pushAssumption({ label: 'Build cost',  value: `\u20b9${fmtNum(costRate)}/sqft BUA` });
-      pushAssumption({ label: 'Market rate', value: `\u20b9${fmtNum(mktRate)}/sqft SBUA (mid-segment)` });
+      pushAssumption({ label: 'Build cost',  value: `₹${fmtNum(costRate)}/sqft BUA` });
+      pushAssumption({ label: 'Market rate', value: `₹${fmtNum(mktRate)}/sqft SBUA (mid-segment)` });
       break;
     }
 
@@ -847,7 +847,7 @@ export function computeProgramme({ buildability, property, options = {} }) {
 
       pushAssumption({ label: 'Typical plot', value: `${fmtNum(profile.typical_plot_sqft)} sqft (40×60)` });
       pushAssumption({ label: 'Net developable', value: `${fmtNum(profile.net_developable_pct * 100, 0)}% after roads/amenity` });
-      pushAssumption({ label: 'Build cost',  value: `\u20b9${fmtNum(profile.build_cost_per_sqft)}/sqft BUA` });
+      pushAssumption({ label: 'Build cost',  value: `₹${fmtNum(profile.build_cost_per_sqft)}/sqft BUA` });
       break;
     }
 
@@ -868,7 +868,7 @@ export function computeProgramme({ buildability, property, options = {} }) {
 
       pushAssumption({ label: 'Plot size', value: `${fmtNum(profile.typical_plot_sqft)} sqft (30×60)` });
       pushAssumption({ label: 'Net developable', value: `${fmtNum(profile.net_developable_pct * 100, 0)}%` });
-      pushAssumption({ label: 'Infra cost', value: `\u20b9${fmtNum(profile.build_cost_per_sqft_infra)}/sqft land` });
+      pushAssumption({ label: 'Infra cost', value: `₹${fmtNum(profile.build_cost_per_sqft_infra)}/sqft land` });
       break;
     }
 
@@ -894,9 +894,9 @@ export function computeProgramme({ buildability, property, options = {} }) {
       pushMetric({ label: 'Workstations',  value: fmtNum(workstations, 0), unit: 'seats', hint: '1/80 sqft' });
       pushMetric({ label: 'Parking cars',  value: fmtNum(parkingCars, 0), unit: 'bays', hint: `${profile.parking_per_1000_sqft_leasable}/1,000 sqft leasable` });
 
-      pushAssumption({ label: 'Rent',      value: `\u20b9${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo Grade A` });
+      pushAssumption({ label: 'Rent',      value: `₹${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo Grade A` });
       pushAssumption({ label: 'Cap rate',  value: `${fmtNum(profile.cap_rate * 100, 1)}%` });
-      pushAssumption({ label: 'Build cost', value: `\u20b9${fmtNum(profile.build_cost_per_sqft)}/sqft BUA` });
+      pushAssumption({ label: 'Build cost', value: `₹${fmtNum(profile.build_cost_per_sqft)}/sqft BUA` });
       break;
     }
 
@@ -917,7 +917,7 @@ export function computeProgramme({ buildability, property, options = {} }) {
       pushMetric({ label: 'Line shops',    value: fmtNum(line),   unit: 'sqft', hint: `${Math.round(profile.line_share * 100)}%` });
       pushMetric({ label: 'Stab. revenue', value: fmtInr(rentAnnual), hint: 'annual' });
 
-      pushAssumption({ label: 'Rent', value: `\u20b9${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo (high-street/mall)` });
+      pushAssumption({ label: 'Rent', value: `₹${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo (high-street/mall)` });
       pushAssumption({ label: 'Cap rate', value: `${fmtNum(profile.cap_rate * 100, 1)}%` });
       break;
     }
@@ -940,9 +940,9 @@ export function computeProgramme({ buildability, property, options = {} }) {
       pushMetric({ label: 'MICE / ballroom', value: fmtNum(ballroom), unit: 'sqft', hint: `${Math.round(profile.ballroom_mice_share * 100)}%` });
       pushMetric({ label: 'Back of house',   value: fmtNum(boh), unit: 'sqft', hint: `${Math.round(profile.boh_share * 100)}%` });
 
-      pushAssumption({ label: 'ADR',   value: `\u20b9${fmtNum(profile.adr_inr)}/night (mid-scale BLR)` });
+      pushAssumption({ label: 'ADR',   value: `₹${fmtNum(profile.adr_inr)}/night (mid-scale BLR)` });
       pushAssumption({ label: 'Occupancy', value: `${Math.round(profile.occupancy * 100)}%` });
-      pushAssumption({ label: 'Build cost', value: `\u20b9${fmtNum(profile.build_cost_per_sqft)}/sqft BUA` });
+      pushAssumption({ label: 'Build cost', value: `₹${fmtNum(profile.build_cost_per_sqft)}/sqft BUA` });
       break;
     }
 
@@ -965,7 +965,7 @@ export function computeProgramme({ buildability, property, options = {} }) {
       pushMetric({ label: 'Dock doors',   value: fmtNum(dockCount, 0), unit: 'docks', hint: `1 per ${fmtNum(profile.dock_per_sqft)} sqft` });
       pushMetric({ label: 'Truck court',  value: `${profile.truck_court_depth_m} m`, hint: 'min depth Grade A' });
 
-      pushAssumption({ label: 'Rent',     value: `\u20b9${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo` });
+      pushAssumption({ label: 'Rent',     value: `₹${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo` });
       pushAssumption({ label: 'Cap rate', value: `${fmtNum(profile.cap_rate * 100, 1)}%` });
       pushAssumption({ label: 'FSI is usually NOT binding', value: 'coverage + clear height drive envelope' });
       break;
@@ -982,7 +982,7 @@ export function computeProgramme({ buildability, property, options = {} }) {
       pushMetric({ label: 'Clear height', value: fmtNum(profile.clear_height_m_min, 1), unit: 'm', hint: 'minimum' });
       pushMetric({ label: 'Utility land', value: fmtNum(landSqft * profile.utility_land_pct), unit: 'sqft', hint: 'substation / ETP' });
 
-      pushAssumption({ label: 'Rent', value: `\u20b9${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo` });
+      pushAssumption({ label: 'Rent', value: `₹${fmtNum(profile.market_rent_per_sqft_month)}/sqft/mo` });
       break;
     }
 
@@ -1001,7 +1001,7 @@ export function computeProgramme({ buildability, property, options = {} }) {
       pushMetric({ label: 'MEP area',     value: fmtNum(realizedBua * profile.mep_share), unit: 'sqft', hint: 'cooling + electrical' });
 
       pushAssumption({ label: 'PUE target', value: String(profile.pue) });
-      pushAssumption({ label: 'Build cost', value: `\u20b9${fmtNum(profile.build_cost_per_sqft)}/sqft (shell + MEP)` });
+      pushAssumption({ label: 'Build cost', value: `₹${fmtNum(profile.build_cost_per_sqft)}/sqft (shell + MEP)` });
       break;
     }
 

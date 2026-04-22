@@ -3,6 +3,8 @@ import { Sliders, ArrowUpRight, ArrowDownRight, Minus, RotateCcw } from 'lucide-
 import { clsx } from 'clsx';
 import { useQuickCompute, useDefaultsMeta } from '../../hooks/useFinancials';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
+import { preflightDealInput } from '../../utils/dealInputPreflight';
+import MissingInputsCard from './MissingInputsCard';
 
 // Fields the user can scrub per asset class. Keys MUST match the kernel's
 // input-schema names (see packages/financial-kernel/src/inputSchema.ts) so
@@ -77,11 +79,9 @@ const KPI_CARDS = [
   { key: 'grossMarginPct', label: 'Gross Margin', suffix: '%', decimals: 2, good: 'up'  },
 ];
 
-// Display-scale adjust: kernel returns IRR as a decimal fraction (0.22 for
-// 22%). The other fields are already in their display units.
-const scaleForDisplay = (value, key) => {
+// Kernel returns IRR already in percent form (14.0 for 14% p.a.). Do NOT scale.
+const scaleForDisplay = (value) => {
   if (value == null || !Number.isFinite(value)) return null;
-  if (key === 'irr') return value * 100;
   return value;
 };
 
@@ -138,8 +138,8 @@ const metaFor = (defaults, key) => {
 };
 
 function KPIDelta({ baseValue, currentValue, decimals, suffix, label, good }) {
-  const base = scaleForDisplay(baseValue, label === 'IRR' ? 'irr' : null);
-  const curr = scaleForDisplay(currentValue, label === 'IRR' ? 'irr' : null);
+  const base = scaleForDisplay(baseValue);
+  const curr = scaleForDisplay(currentValue);
 
   const delta = (base != null && curr != null) ? curr - base : null;
   const eps = 10 ** -(decimals + 1);
@@ -239,10 +239,12 @@ function SliderRow({ field, currentValue, range, onChange, onReset, isResetDisab
 // The component is self-contained: it picks its own field list, fetches
 // its own defaults meta, and runs the kernel-first `/financials/quick-
 // compute` endpoint with a 250ms debounce.
-export default function WhatIfSliders({ assetClass, baseInputs, baseKpis }) {
+export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEditInputs }) {
   const modelClass = resolveFinancialModelClass(assetClass) || assetClass;
   const { data: defaultsData } = useDefaultsMeta(modelClass);
   const defaults = defaultsData?.effective || null;
+
+  const preflight = preflightDealInput(baseInputs, modelClass);
 
   const fieldList = useMemo(
     () => (SLIDER_FIELDS[modelClass] || SLIDER_FIELDS[assetClass] || []),
@@ -287,6 +289,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis }) {
   // Fire a compute whenever the debounced slider state changes and it
   // differs from the base (saves one round-trip at mount).
   useEffect(() => {
+    if (!preflight.ok) return;
     if (sliderRows.length === 0) return;
     if (Object.keys(debouncedValues).length === 0) return;
 
@@ -306,6 +309,10 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis }) {
     // quickCompute mutation object is stable across renders — safe to skip
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedValues, assetClass, baseInputs, sliderRows.length]);
+
+  if (!preflight.ok) {
+    return <MissingInputsCard missing={preflight.missing} panelLabel="What-If Sliders" onEditInputs={onEditInputs} />;
+  }
 
   if (sliderRows.length === 0) {
     return null;

@@ -4,6 +4,8 @@ import { clsx } from 'clsx';
 import { financialsAPI } from '../../services/api';
 import { useDefaultsMeta } from '../../hooks/useFinancials';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
+import { preflightDealInput } from '../../utils/dealInputPreflight';
+import MissingInputsCard from './MissingInputsCard';
 
 // Variables to perturb per asset class. Keys MUST exist in the kernel's
 // input schema for `computeDeal({ raw })` — we stick to fields that
@@ -73,11 +75,9 @@ const TORNADO_VARS = {
   ],
 };
 
-// KPIs the user can analyze. `scale` converts kernel units to the display
-// unit shown in the axis label (IRR is a decimal fraction inside the
-// kernel; everything else already matches its display form).
+// Kernel returns all KPIs in display units (IRR already in percent form).
 const KPI_OPTIONS = [
-  { key: 'irr',            label: 'IRR',          suffix: '%',   decimals: 2, scale: 100 },
+  { key: 'irr',            label: 'IRR',          suffix: '%',   decimals: 2, scale: 1   },
   { key: 'npv',            label: 'NPV',          suffix: ' Cr', decimals: 2, scale: 1   },
   { key: 'equityMultiple', label: 'Equity Mult.', suffix: '×',   decimals: 2, scale: 1   },
   { key: 'grossMarginPct', label: 'Gross Margin', suffix: '%',   decimals: 2, scale: 1   },
@@ -118,10 +118,12 @@ const fmtDelta = (delta, decimals, suffix) => {
   return `${sign}${trimmed}${suffix.trim()}`;
 };
 
-export default function SensitivityTornado({ assetClass, baseInputs, baseKpis }) {
+export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, onEditInputs }) {
   const modelClass = resolveFinancialModelClass(assetClass) || assetClass;
   const { data: defaultsData } = useDefaultsMeta(modelClass);
   const defaults = defaultsData?.effective || null;
+
+  const preflight = preflightDealInput(baseInputs, modelClass);
 
   const [kpiKey, setKpiKey] = useState('irr');
   const [isComputing, setIsComputing] = useState(false);
@@ -144,6 +146,10 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis })
   // `cancelled` flag guards against result bleed if the user switches
   // classes mid-flight.
   useEffect(() => {
+    if (!preflight.ok) {
+      setResults([]);
+      return undefined;
+    }
     if (varList.length === 0 || !baseInputs) {
       setResults([]);
       return undefined;
@@ -238,6 +244,10 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis })
   }, [results, baseKpis, kpi]);
 
   const maxMagnitude = bars.length > 0 ? bars[0].magnitude : 0;
+
+  if (!preflight.ok) {
+    return <MissingInputsCard missing={preflight.missing} panelLabel="Sensitivity Tornado" onEditInputs={onEditInputs} />;
+  }
 
   if (varList.length === 0) return null;
 
