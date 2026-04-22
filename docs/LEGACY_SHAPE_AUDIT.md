@@ -1,5 +1,12 @@
 # Legacy-engine shape audit
 
+> **2026-04-22 update — historical document.** The legacy JS engine
+> (`backend/src/engines/financial.engine.js`) was retired on 2026-04-22.
+> This audit is kept for reference because it documents the exact
+> downstream-consumer shapes that `backend/src/engines/kernel.service.js`
+> now synthesises from the kernel. The file/line citations below point at
+> git history, not live code.
+
 Pre-flight for Step 1 of the `financial.engine.js` deletion plan in
 [CLEANUP_INVENTORY.md](./CLEANUP_INVENTORY.md).
 
@@ -11,8 +18,9 @@ means no call-site changes and no risk of silent regressions; any
 simplification we decide to do comes *after* the port lands and has parity
 tests.
 
-Audit window: 2026-04-21. Source of truth for legacy shape is
-`backend/src/engines/financial.engine.js` — line numbers below are from the
+Audit window: 2026-04-21. Source of truth for legacy shape was
+`backend/src/engines/financial.engine.js` (deleted 2026-04-22; line
+numbers below are from the final pre-delete commit):
 current HEAD of `claude/festive-wilson-234dcf`.
 
 ---

@@ -20,13 +20,20 @@ Today the four deal-scoped surfaces — Zoning, Financials, DD, Comps — operat
 
 ### Why now isn't now
 
-- Path B kernel consolidation (Gate 1 `✅ CLOSED`) is done, but legacy JS engine retirement and Python-debt-engine removal are still open. Building shared state on top of a moving kernel is premature.
+- Path B kernel consolidation is done, the legacy JS engine is retired
+  (2026-04-22 — see `docs/CLEANUP_INVENTORY.md`), and the Python debt
+  engine was retired pre-session. The only remaining gate is the
+  editorial migration.
 - Consolidation-polish branch is mid-flight; merging an architecture change now fights the editorial-design migration for review attention.
 
 ### Entry criteria (unblock the DEFERRED flag)
 
-1. Legacy `backend/src/engines/financial.engine.js` (2,763 lines) fully retired — kernel overlay is the only path.
-2. Python parity engine decision finalized: either kept behind `DEBT_ENGINE_PY_URL` with a documented reconciliation cadence, or retired.
+1. ~~Legacy `backend/src/engines/financial.engine.js` retired~~ ✅ **Done
+   2026-04-22.** `kernel.service.js` is the sole path; `FIN_KERNEL_V2`
+   flag removed.
+2. ~~Python parity engine decision finalized~~ ✅ **Retired pre-session.**
+   No `.py` files, no runtime references to `DEBT_ENGINE_PY_URL`; TS
+   kernel is sole runtime.
 3. `consolidation-polish` branch merged to master (editorial token migration complete).
 4. Backend tests green on master for 5 consecutive days.
 
@@ -97,22 +104,23 @@ Last reviewed: 2026-04-21 (resumption from session `festive-wilson-234dcf`).
 
 ## 2. Legacy JS Engine Retirement
 
-**Status: PLANNED**
+**Status: ✅ COMPLETE (2026-04-22)**
 
-`backend/src/engines/financial.engine.js` (2,763 lines) still ships as fallback when `FIN_KERNEL_V2=false` or when an asset class falls outside `KERNEL_SUPPORTED`.
+`backend/src/engines/financial.engine.js`, `kernel.adapter.js`, and the
+six `kernel.*.parity.test.js` suites are deleted. The backend service
+imports `computeFullFinancials` / `computeScenarios` directly from
+`backend/src/engines/kernel.service.js`, which composes the TS kernel
+(`@redip/financial-kernel`) with its post-processors. `FIN_KERNEL_V2`
+flag is removed.
 
-### Entry criteria
+Verification: 101 backend tests + 392 kernel tests green.
 
-- All 10 asset classes in `KERNEL_SUPPORTED` — `✅` already true.
-- Kernel parity reconciliation tests (TS ↔ Python) pass hard in CI — `✅` 31/31 HARD PASS per `docs/CLEANUP_INVENTORY.md`.
-- 30 days of production traffic with `FIN_KERNEL_V2=true` and zero kernel-overlay fallbacks observed.
+### Follow-up (not blocking)
 
-### Scope
-
-- Delete `backend/src/engines/financial.engine.js` entirely.
-- Collapse `backend/src/engines/kernel.adapter.js` from overlay-bridge to direct kernel invocation.
-- Remove `FIN_KERNEL_V2` flag; kernel is unconditional.
-- Retire `postprocess/legacyShape.ts` once no readers remain.
+- `postprocess/legacyShape.ts` (inside the kernel) is still used to emit
+  the snake_case `_legacy` block for DB column bindings. Retire only
+  after the financial_scenarios / deal persistence layer is refactored
+  to read from `kpis.*` / `costs.*` / `revenue.*` directly.
 
 ### Non-goals
 
@@ -120,26 +128,19 @@ Last reviewed: 2026-04-21 (resumption from session `festive-wilson-234dcf`).
 
 ---
 
-## 3. Python Parity Engine — Keep or Retire
+## 3. Python Parity Engine — Retired
 
-**Status: DEFERRED**
+**Status: ✅ COMPLETE (pre-session, confirmed 2026-04-22 audit).**
 
-The Python FastAPI at `packages/financial-kernel/src/debt-engine-py/` exists as a `Decimal`-arithmetic parity reference, enforced via reconciliation tests. Kill-switch `DEBT_ENGINE_KILL=1`, remote path via `DEBT_ENGINE_PY_URL`.
+A repo-wide audit confirms no `.py` files, no `debt-engine-py/`
+directory, and no `DEBT_ENGINE_PY_URL` runtime references remain. The
+TypeScript debt engine (`packages/financial-kernel/src/debt-engine/*`)
+is the sole runtime. `packages/financial-kernel/src/orchestration/featureFlag.ts:16-18`
+records the retirement.
 
-### Decision required
-
-One of:
-
-- **Keep** — document reconciliation cadence (weekly? per-release?), commit to maintaining parity indefinitely, pay the operational cost.
-- **Retire** — delete the service, port any unique logic into TS kernel with `Decimal.js`, remove the reconciliation test gate, simplify the orchestrator's `selectEngine()` to 2 modes (`inline` + `safe-mode`).
-
-### Forcing function
-
-Pick by 2026-05-31. Until then, the service is untouched; reconciliation tests continue to gate kernel changes.
-
-### Memo note
-
-The memory record (`project_consolidation_plan.md`) describes an intent to retire. Current state is aligned with "keep as parity reference." Update the memory file when the decision is made.
+Operator escape hatches that remain:
+- `DEBT_ENGINE_KILL=1` — emergency zero-overlay fallback.
+- `DEBT_ENGINE_SILENT=1` — suppresses decision log lines (test use).
 
 ---
 

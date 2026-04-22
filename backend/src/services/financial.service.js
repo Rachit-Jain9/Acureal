@@ -1,7 +1,9 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
-const { calculateFullFinancials, calculateScenarios } = require('../engines/financial.engine');
-const { computeKernelOverlay } = require('../engines/kernel.adapter');
+const {
+  computeFullFinancials,
+  computeScenarios,
+} = require('../engines/kernel.service');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const {
   resolveFinancialModelClass,
@@ -85,23 +87,13 @@ const calculateAndSave = async (dealId, inputData) => {
     assetClass: modelAssetClass,
   };
 
-  const computed   = calculateFullFinancials(normalizedInput);
-  const scenarios  = calculateScenarios(normalizedInput);
+  const computed   = computeFullFinancials(normalizedInput);
+  const scenarios  = computeScenarios(normalizedInput);
   const assetClass = selectedAssetClass;
   const leg        = computed._legacy || {};
-  let   kpis       = computed.kpis   || {};
-  const costs      = computed.costs  || {};
-  const areas      = computed.areas  || {};
-
-  // FIN_KERNEL_V2: overlay canonical kernel KPIs over the legacy engine.
-  // Disabled by default; the adapter returns null unless the env flag is true.
-  const overlay = computeKernelOverlay(normalizedInput, modelAssetClass);
-  if (overlay) {
-    kpis = { ...kpis, ...overlay.kpis };
-    computed.kpis = kpis;
-    computed.engineVersion = overlay.engineVersion;
-    computed.kernelProvenance = overlay.provenance;
-  }
+  const kpis       = computed.kpis    || {};
+  const costs      = computed.costs   || {};
+  const areas      = computed.areas   || {};
 
   // Store everything including scenarios in model_params (no separate column needed)
   const modelParams = JSON.stringify({
@@ -115,6 +107,11 @@ const calculateAndSave = async (dealId, inputData) => {
     revenue:      computed.revenue,
     capitalStack: computed.capitalStack,
     scenarios,    // embedded — no scenarios_data column needed
+    // Audit trail: engine version + computation timestamp. Investor-grade
+    // reports can cite this alongside the deal's commit hash to prove which
+    // kernel + input set produced the saved numbers.
+    engineVersion: computed.engineVersion || 'kernel-v2',
+    computedAt: new Date().toISOString(),
   });
 
   const params = [
@@ -264,7 +261,7 @@ const runSensitivity = async (dealId, params) => {
     ...stored,
     ...params,
   };
-  const result = calculateFullFinancials(baseParams);
+  const result = computeFullFinancials(baseParams);
   const matrix = result.sensitivityMatrix;
   await query(
     'UPDATE financials SET sensitivity_matrix = $1, updated_at = NOW() WHERE deal_id = $2',
@@ -300,7 +297,7 @@ const getScenarios = async (dealId) => {
     projectDurationMonths:   stored.projectDurationMonths   ?? fin.project_duration_months ?? 36,
     developerMarginPct:      stored.developerMarginPct      ?? fin.developer_margin_pct ?? 20,
   };
-  return calculateScenarios(baseParams);
+  return computeScenarios(baseParams);
 };
 
 // ─── CSV EXPORT ───────────────────────────────────────────────────────────────

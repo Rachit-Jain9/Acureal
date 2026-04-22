@@ -322,7 +322,7 @@ function OverviewSection() {
         <StepRow idx="1" tone="emerald" title="Inputs are validated server-side"
           body="Express-validator enforces bounds (e.g., FSI 0.1–20, cap rates 1–30%). Illegal combinations fail fast with a 422 and a plain-English message — not a silent NaN." />
         <StepRow idx="2" tone="sky" title="Deterministic engine runs the math"
-          body="backend/src/engines/financial.engine.js executes pure JS — no LLMs, no Monte Carlo noise. The same inputs always produce the same outputs, down to four decimal places." />
+          body="The TypeScript financial kernel (@redip/financial-kernel) executes BigInt-backed Decimal math — no LLMs, no Monte Carlo noise. The same inputs always produce the same outputs, down to four decimal places." />
         <StepRow idx="3" tone="indigo" title="Cash flows built on a per-quarter grid"
           body="Construction draws follow an S-curve; revenue collections are anchored to sellout velocity; operating NOI is compounded by escalation. Interest accrues on the actual outstanding balance each quarter." />
         <StepRow idx="4" tone="amber" title="KPIs computed by standard finance"
