@@ -108,6 +108,7 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
     costs,
     revenue:      computed.revenue,
     capitalStack: computed.capitalStack,
+    proforma:     computed.proforma,   // quarter × category sources/uses waterfall
     scenarios,    // embedded — no scenarios_data column needed
     // Audit trail: engine version + computation timestamp. Investor-grade
     // reports can cite this alongside the deal's commit hash to prove which

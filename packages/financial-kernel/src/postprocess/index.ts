@@ -78,3 +78,12 @@ export type {
   ScenarioBundle,
   BuildScenariosArgs,
 } from './scenarios';
+
+export { buildQuarterlyProforma } from './proforma';
+
+export type {
+  ProformaQuarterCell,
+  ProformaRow,
+  ProformaSection,
+  ProformaSummary,
+} from './proforma';
