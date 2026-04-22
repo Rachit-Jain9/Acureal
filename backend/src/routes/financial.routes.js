@@ -257,7 +257,11 @@ router.post(
   handleValidation,
   async (req, res, next) => {
     try {
-      const result = await financialService.calculateAndSave(req.params.dealId, req.body);
+      const result = await financialService.calculateAndSave(
+        req.params.dealId,
+        req.body,
+        { actorId: req.user?.id || null },
+      );
       res.status(201).json({ success: true, message: 'Financials calculated and saved.', data: result });
     } catch (error) {
       // Engine validation errors should surface as 422 with the actual message
@@ -288,7 +292,11 @@ router.put(
   handleValidation,
   async (req, res, next) => {
     try {
-      const result = await financialService.updateFinancials(req.params.dealId, req.body);
+      const result = await financialService.updateFinancials(
+        req.params.dealId,
+        req.body,
+        { actorId: req.user?.id || null },
+      );
       res.json({ success: true, message: 'Financials updated.', data: result });
     } catch (error) {
       next(error);
@@ -299,7 +307,11 @@ router.put(
 // POST /financials/:dealId/sensitivity
 router.post('/:dealId/sensitivity', authenticate, async (req, res, next) => {
   try {
-    const matrix = await financialService.runSensitivity(req.params.dealId, req.body);
+    const matrix = await financialService.runSensitivity(
+      req.params.dealId,
+      req.body,
+      { actorId: req.user?.id || null },
+    );
     res.json({ success: true, data: matrix });
   } catch (error) {
     next(error);
@@ -329,6 +341,51 @@ router.get('/:dealId/financial-graph', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Investor-grade audit trail.
+//
+// GET    /financials/:dealId/events                   — list signed events
+// GET    /financials/:dealId/events/:eventId/verify   — hash + HMAC check
+// POST   /financials/:dealId/events/:eventId/replay   — re-run kernel, diff
+//
+// Rows come from `deal_events` (HMAC-signed on write, append-only via RLS).
+// The verify endpoint performs the cryptographic check; replay additionally
+// re-executes the kernel from the stored inputs and compares outputs — this
+// is the "prove the number on the pitch deck" primitive.
+// ──────────────────────────────────────────────────────────────────────────
+router.get('/:dealId/events', authenticate, async (req, res, next) => {
+  try {
+    const limit = Number.parseInt(req.query.limit, 10) || 50;
+    const events = await financialService.listDealEvents(req.params.dealId, { limit });
+    res.json({ success: true, data: events });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:dealId/events/:eventId/verify', authenticate, async (req, res, next) => {
+  try {
+    const result = await financialService.verifyDealEvent(req.params.dealId, req.params.eventId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post(
+  '/:dealId/events/:eventId/replay',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const result = await financialService.replayDealEvent(req.params.dealId, req.params.eventId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // GET /financials/:dealId/export/csv — download financial model as CSV
 router.get('/:dealId/export/csv', authenticate, async (req, res, next) => {
