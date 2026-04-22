@@ -3,6 +3,7 @@ import { ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatCrores, formatPct, formatArea } from '../../utils/format';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
+import AuditTimelineView from '../financials/AuditTimelineView';
 
 function MetricCard({ label, value, sub, highlight }) {
   return (
@@ -229,6 +230,12 @@ export default function FinancialTab({ deal }) {
         tierIds={mp.tierIds || []}
         hasCovenants={f.dscr != null}
       />
+
+      {/* Signed audit trail — immutable HMAC-SHA256 log of every kernel run.
+          Verify re-hashes stored JSON; replay re-executes the deterministic
+          kernel against the stored inputs. This is the "prove the pitch-deck
+          number came from this engine + these inputs" primitive. */}
+      <AuditTimelineView dealId={dealId} />
 
       {/* Last updated */}
       {f.updated_at && (

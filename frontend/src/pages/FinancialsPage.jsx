@@ -19,6 +19,7 @@ import DefaultFieldBadge from '../components/financials/DefaultFieldBadge';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
+import AuditTimelineView from '../components/financials/AuditTimelineView';
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
@@ -1872,6 +1873,11 @@ export default function FinancialsPage() {
           <JDAWaterfallPanel financials={normalizedFinancials} deal={deal} />
           <JVWaterfallPanel financials={normalizedFinancials} deal={deal} />
           <DebtSchedulePanel financials={financials} normalizedFinancials={normalizedFinancials} />
+
+          {/* Signed audit trail — HMAC-SHA256 log of every kernel run with
+              verify + kernel-replay primitives. Proves reproducibility of
+              the numbers above from first principles. */}
+          <AuditTimelineView dealId={dealId} />
 
           <div className="border-t pt-6" ref={inputsRef}>
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Recalculate</h3>
