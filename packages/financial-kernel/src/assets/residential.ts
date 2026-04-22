@@ -106,7 +106,7 @@ export function computeResidential(
     num(raw.gstPct, DEFAULT_GST_BY_ASSET[assetClass] * 100) / 100;
   const gstCr = constructionCostCr.mulNumber(gstRate);
   const contingencyCr = constructionCostCr.mulNumber(contingencyPct / 100);
-  const stampDutyCr = D(landCostCr * STAMP_DUTY_RATE);
+  const stampDutyCr = D(landCostCr).mulNumber(STAMP_DUTY_RATE);
 
   // SOFT
   const architectCr = constructionCostCr.mulNumber(architectFeePct / 100);
@@ -145,7 +145,7 @@ export function computeResidential(
   const carryQRes = Math.min(totalQResidential, Math.max(1, Math.ceil(debtTenorMonthsIn / 3)));
   const qFinRate = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
   const landFinanceCr = landCostCr > 0 && carryQRes > 0
-    ? D(landCostCr * (Math.pow(1 + qFinRate, carryQRes) - 1))
+    ? D(landCostCr).mulNumber(Math.pow(1 + qFinRate, carryQRes) - 1)
     : D(0);
   const constSchedule = buildDrawSchedule({
     principalCr: hardCostCr.toNumber(),

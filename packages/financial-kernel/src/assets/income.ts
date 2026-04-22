@@ -95,7 +95,7 @@ export function computeIncomeAsset(
   const gstRate = num(raw.gstPct, DEFAULT_GST_BY_ASSET[assetClass] * 100) / 100;
   const gstCr = constructionCostCr.mulNumber(gstRate);
   const contingencyCr = constructionCostCr.mulNumber(contingencyPct / 100);
-  const stampDutyCr = D(landCostCr * STAMP_DUTY_RATE);
+  const stampDutyCr = D(landCostCr).mulNumber(STAMP_DUTY_RATE);
   const tiCostCr = D((leasableAreaSqft * tiPerSqft) / CRORE);
   const lcCostCr = D((leasableAreaSqft * effectiveBaseRent * lcMonths) / CRORE);
   const approvalCostCr = num(raw.approvalCostPerSqft, 0) > 0

@@ -47,10 +47,10 @@ export function computeLandParcel(inputs: DealInputs): KernelResult {
     constructionEndMonth: holdMonths,
   });
 
-  const stampDutyCr = D(landCostCr * STAMP_DUTY_RATE);
+  const stampDutyCr = D(landCostCr).mulNumber(STAMP_DUTY_RATE);
   const approvalCostCr = D(num(raw.approvalCostCr));
-  const holdingCostTotalCr = D(holdingCostPerYearCr * holdYears);
-  const exitValueCr = D(landCostCr * Math.pow(1 + appreciationPct / 100, holdYears));
+  const holdingCostTotalCr = D(holdingCostPerYearCr).mulNumber(holdYears);
+  const exitValueCr = D(landCostCr).mulNumber(Math.pow(1 + appreciationPct / 100, holdYears));
 
   const items: MonthlyLineItem[] = [
     landAndStamp({ period, land: D(landCostCr), stampDuty: stampDutyCr }),

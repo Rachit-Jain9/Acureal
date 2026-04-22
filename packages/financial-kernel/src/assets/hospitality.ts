@@ -131,8 +131,8 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
   const gstRate = num(raw.gstPct, DEFAULT_GST_BY_ASSET.hospitality * 100) / 100;
   const gstCr = hardCostCr.mulNumber(gstRate);
 
-  const stampDutyCr = D(landCostCr * stampRegPct);
-  const bettermentCr = D((landCostCr * bettermentPct) / 100);
+  const stampDutyCr = D(landCostCr).mulNumber(stampRegPct);
+  const bettermentCr = D(landCostCr).mulNumber(bettermentPct).divInt(100);
 
   const architectCr = hardCostCr.mulNumber(architectPctHard / 100);
   const pmcCr = hardCostCr.mulNumber(pmcPctHard / 100);
