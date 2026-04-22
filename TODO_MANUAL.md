@@ -10,12 +10,14 @@ Files:
 
 - `database/migrations/20260411_deal_centric_expansion.sql`
 - `database/migrations/20260411_documents_and_security_alignment.sql`
+- `database/migrations/20260422_deal_events.sql` (new — immutable audit log)
 
-Run them against the target Postgres/Supabase database before using DD, approvals, risks, extraction history, or the updated document metadata / RLS alignment.
+Run them against the target Postgres/Supabase database before using DD, approvals, risks, extraction history, or the updated document metadata / RLS alignment. The `20260422_deal_events.sql` migration gates the new `/api/financials/:dealId/events` + replay endpoints — without it, every persisted calc logs a warning but the save itself still succeeds.
 
 ```powershell
 psql "$DATABASE_URL" -f database/migrations/20260411_deal_centric_expansion.sql
 psql "$DATABASE_URL" -f database/migrations/20260411_documents_and_security_alignment.sql
+psql "$DATABASE_URL" -f database/migrations/20260422_deal_events.sql
 ```
 
 Current assumption:
@@ -36,6 +38,14 @@ Recommended routing defaults:
 - `AI_PROVIDER_DOCUMENT_EXTRACTION=gemini`
 - `AI_PROVIDER_TRANSLATION=gemini`
 - `AI_PROVIDER_REASONING=claude`
+
+Also required for the investor-grade audit log:
+
+- `DEAL_EVENTS_HMAC_KEY` — secret used to HMAC-sign every `deal_events` row.
+  Minimum 16 chars, generated once and rotated per your operator policy.
+  In production the audit service refuses to sign with a dev fallback; a
+  missing key logs a warning on `calculate_and_save` but does not block the
+  calc. Suggested: `openssl rand -hex 32`.
 
 ### 3. Verify document storage configuration
 
@@ -122,10 +132,26 @@ These were raised in the 2026-04-21 roast. They need design, credentials, or inf
 - Blocked on: signing key provisioning, rotation policy, and a compliance sign-off on the chosen scheme (RSA/ECDSA, envelope format).
 - Do NOT mock this — a fake signature is worse than no signature.
 
-### 10. Immutable audit log for underwriting runs
+### 10. ~~Immutable audit log for underwriting runs~~ ✅ DONE (2026-04-22)
 
-- Needs a dedicated append-only table (or WORM storage), retention policy, and a read UI.
-- Blocked on: schema decision (Postgres with insert-only RLS vs. separate store), retention duration, who can read audit rows.
+- Append-only `deal_events` table landed in `database/migrations/20260422_deal_events.sql`
+  with org-scoped RLS that grants `SELECT` + `INSERT` only (no `UPDATE`/`DELETE` policy).
+- `backend/src/services/audit.service.js` signs every row with HMAC-SHA256 over
+  `(inputs_hash || "|" || outputs_hash || "|" || engine_version)` using
+  `DEAL_EVENTS_HMAC_KEY`. `recordEvent` wired into `calculate_and_save` +
+  `sensitivity_run` paths; failures log and do not block the underlying save.
+- `verifyEvent` re-hashes the stored JSON and replays the HMAC against the
+  current key. `replayEvent` additionally re-executes the kernel from the
+  stored inputs and compares output hashes — this is the primitive that
+  proves the number on the pitch deck was produced by the exact engine +
+  inputs on file.
+- Routes: `GET /api/financials/:dealId/events`, `GET …/events/:eventId/verify`,
+  `POST …/events/:eventId/replay`. 23-test `audit.service.test.js` suite
+  covers stable-stringify, deterministic signing, tamper detection, and a
+  real residential kernel replay.
+- Retention + read-UI: retention is "forever" today (no pruner). A per-deal
+  audit timeline UI is the next-up frontend piece; it can consume the
+  existing list endpoint without changes.
 
 ### 11. Self-hosted OCR / fine-tuned Kannada model
 

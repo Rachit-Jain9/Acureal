@@ -116,6 +116,14 @@ export const financialsAPI = {
   // Authoritative provenance DAG — every KPI/cost/revenue node traces back
   // to user inputs. Use for "how was this number produced" drill-downs.
   financialGraph: (dealId) => api.get(`/financials/${dealId}/financial-graph`),
+  // Immutable, HMAC-signed audit trail. `events` lists the most recent
+  // calc/scenario/sensitivity runs; `verifyEvent` re-hashes stored JSON and
+  // re-signs with the current key; `replayEvent` additionally re-runs the
+  // kernel from the stored inputs so we can prove the pitch-deck number
+  // came from this exact engine+input tuple.
+  events: (dealId, limit = 50) => api.get(`/financials/${dealId}/events`, { params: { limit } }),
+  verifyEvent: (dealId, eventId) => api.get(`/financials/${dealId}/events/${eventId}/verify`),
+  replayEvent: (dealId, eventId) => api.post(`/financials/${dealId}/events/${eventId}/replay`),
   exportCSV: (dealId) => api.get(`/financials/${dealId}/export/csv`, { responseType: 'blob' }),
   // Stateless kernel-first what-if runner. No DB touch; powers live sliders.
   quickCompute: (data) => api.post('/financials/quick-compute', data),
