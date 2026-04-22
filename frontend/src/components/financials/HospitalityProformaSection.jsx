@@ -61,30 +61,25 @@ function HospitalityHeader({ inputs, kpis }) {
     { label: 'Dev / Key',       value: fmtInrLakh(kpis.devCostPerKey),                      unit: '' },
   ];
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-4 bg-gradient-to-r from-rose-500 via-pink-500 to-orange-500 text-white flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-          <Hotel size={18} />
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-stone-200">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+          USALI-compliant hotel proforma
         </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-white/80">
-            USALI-compliant hotel proforma
-          </div>
-          <div className="text-lg font-semibold leading-tight">
-            Hospitality financial engine — India / Bengaluru
-          </div>
-          <div className="text-[11px] text-white/80 mt-0.5">
-            10-year annual P&L • Sources & Uses • Construction \u2192 Permanent refi • LP/GP waterfall
-          </div>
+        <div className="font-serif text-xl font-semibold text-stone-900 leading-tight mt-0.5">
+          Hospitality financial engine <span className="text-stone-400">·</span> India / Bengaluru
+        </div>
+        <div className="text-xs text-stone-500 mt-1">
+          10-year annual P&amp;L • Sources &amp; Uses • Construction → Permanent refi • LP/GP waterfall
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-gray-100 border-b border-gray-100">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-stone-100">
         {stats.map((s, i) => (
           <div key={i} className="bg-white px-3 py-2.5">
-            <div className="text-[10px] uppercase tracking-[0.1em] font-medium text-gray-500">{s.label}</div>
-            <div className="mt-0.5 flex items-baseline gap-1">
-              <span className="text-sm font-bold text-gray-900">{s.value}</span>
-              {s.unit && <span className="text-[10px] text-gray-400">{s.unit}</span>}
+            <div className="text-[10px] uppercase tracking-[0.14em] text-stone-500">{s.label}</div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="font-serif text-base font-semibold text-stone-900 tabular-nums">{s.value}</span>
+              {s.unit && <span className="text-[10px] text-stone-400">{s.unit}</span>}
             </div>
           </div>
         ))}
@@ -107,15 +102,10 @@ function RevenueMixCard({ pnl }) {
   const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
-    <div className="card-editorial p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-pink-500 text-white flex items-center justify-center">
-          <PieIcon size={14} />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">Revenue mix (stabilized)</div>
-          <div className="text-sm font-semibold text-gray-800">Year {stab.year} — ₹{total.toFixed(1)} Cr total revenue</div>
-        </div>
+    <div className="bg-white border border-stone-200 rounded-sm p-5">
+      <div className="mb-3">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Revenue mix (stabilized)</div>
+        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Year {stab.year} <span className="text-stone-400">·</span> ₹{total.toFixed(1)} Cr total revenue</div>
       </div>
       <div className="flex items-center gap-4">
         <ResponsiveContainer width="55%" height={220}>
@@ -153,14 +143,9 @@ function NOIEvolutionCard({ pnl }) {
 
   return (
     <div className="card-editorial p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center">
-          <TrendingUp size={14} />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">Operating evolution</div>
-          <div className="text-sm font-semibold text-gray-800">Revenue \u2192 GOP \u2192 EBITDA \u2192 NOI — 10 years</div>
-        </div>
+      <div className="mb-3">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Operating evolution</div>
+        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Revenue → GOP → EBITDA → NOI <span className="text-stone-400">·</span> 10 years</div>
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
@@ -230,11 +215,10 @@ function USALIProfitLossTable({ pnl }) {
   ];
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-2">
-        <BarChart3 size={14} className="text-gray-600" />
-        <div className="text-sm font-semibold text-gray-800">USALI 10-year profit & loss (₹ Cr)</div>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.12em] text-gray-400">Uniform System of Accounts, 11e</span>
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">USALI 10-year profit &amp; loss <span className="text-stone-400">(₹ Cr)</span></div>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-stone-400">Uniform System of Accounts, 11e</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -283,11 +267,10 @@ function SourcesUsesCard({ sourcesUses }) {
   const usesCategories = uses.map((u) => u.category);
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-amber-50 via-white to-rose-50 flex items-center gap-2">
-        <Receipt size={14} className="text-amber-600" />
-        <div className="text-sm font-semibold text-gray-800">Sources & Uses</div>
-        <span className="ml-auto text-[10px] text-gray-500">Total ₹{usesTotalCr?.toFixed(1)} Cr</span>
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">Sources &amp; Uses</div>
+        <span className="ml-auto text-[11px] text-stone-500 tabular-nums">Total ₹{usesTotalCr?.toFixed(1)} Cr</span>
       </div>
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Uses breakdown */}
@@ -376,15 +359,10 @@ function RefiRow({ label, value }) {
 // ─── Capital stack timeline (construction → refi → exit) ────────────────────
 function CapitalStackTimelineCard({ construction, permanent, kpis }) {
   return (
-    <div className="card-editorial p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white flex items-center justify-center">
-          <Layers size={14} />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">Capital structure timeline</div>
-          <div className="text-sm font-semibold text-gray-800">Construction loan \u2192 Permanent refi</div>
-        </div>
+    <div className="bg-white border border-stone-200 rounded-sm p-5">
+      <div className="mb-3">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Capital structure timeline</div>
+        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Construction loan → Permanent refi</div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {construction && (
@@ -449,12 +427,11 @@ function WaterfallCard({ waterfall }) {
   const chartData = tiers.map((t) => ({ name: t.name.split('—')[0].trim(), LP: t.lpCr, GP: t.gpCr }));
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 via-white to-indigo-50 flex items-center gap-2">
-        <Users size={14} className="text-violet-600" />
-        <div className="text-sm font-semibold text-gray-800">LP / GP Waterfall</div>
-        <span className="ml-auto text-[10px] text-gray-500">
-          Total distributions ₹{totalDistributionsCr?.toFixed(1)} Cr • Equity ₹{totalEquityCr?.toFixed(1)} Cr
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">LP / GP Waterfall</div>
+        <span className="ml-auto text-[11px] text-stone-500 tabular-nums">
+          Total distributions ₹{totalDistributionsCr?.toFixed(1)} Cr <span className="text-stone-400">·</span> Equity ₹{totalEquityCr?.toFixed(1)} Cr
         </span>
       </div>
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
