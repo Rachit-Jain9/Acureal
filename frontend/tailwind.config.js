@@ -73,6 +73,14 @@ export default {
         neg: { DEFAULT: '#b91c1c', soft: '#fef2f2' },
       },
       fontFamily: {
+        serif: [
+          'Source Serif 4',
+          'Source Serif Pro',
+          'Georgia',
+          'Cambria',
+          'Times New Roman',
+          'serif',
+        ],
         sans: [
           'Inter',
           'ui-sans-serif',
