@@ -64,7 +64,7 @@ export function computePlotted(inputs: DealInputs): KernelResult {
   const gstRate = num(raw.gstPct, DEFAULT_GST_BY_ASSET.plotted_development * 100) / 100;
   const gstCr = devCostCr.mulNumber(gstRate);
   const contingencyCr = devCostCr.mulNumber(contingencyPct / 100);
-  const stampDutyCr = D(landCostCr * STAMP_DUTY_RATE);
+  const stampDutyCr = D(landCostCr).mulNumber(STAMP_DUTY_RATE);
   const approvalCostCr = num(raw.approvalCostPerSqft, 0) > 0
     ? D((totalLandSqft * num(raw.approvalCostPerSqft)) / CRORE)
     : D(num(raw.approvalCostCr));
@@ -83,7 +83,7 @@ export function computePlotted(inputs: DealInputs): KernelResult {
   const carryQPlot = Math.min(totalQPlotted, Math.max(1, Math.ceil(debtTenorMonthsPlot / 3)));
   const qFinRatePlot = Math.pow(1 + financeCostPct / 100, 0.25) - 1;
   const landFinanceCr = landCostCr > 0 && carryQPlot > 0
-    ? D(landCostCr * (Math.pow(1 + qFinRatePlot, carryQPlot) - 1))
+    ? D(landCostCr).mulNumber(Math.pow(1 + qFinRatePlot, carryQPlot) - 1)
     : D(0);
   const plottedSchedule = buildDrawSchedule({
     principalCr: devCostCr.toNumber(),
