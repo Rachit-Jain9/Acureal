@@ -149,9 +149,12 @@ These were raised in the 2026-04-21 roast. They need design, credentials, or inf
   `POST …/events/:eventId/replay`. 23-test `audit.service.test.js` suite
   covers stable-stringify, deterministic signing, tamper detection, and a
   real residential kernel replay.
-- Retention + read-UI: retention is "forever" today (no pruner). A per-deal
-  audit timeline UI is the next-up frontend piece; it can consume the
-  existing list endpoint without changes.
+- Retention: "forever" today (no pruner) — revisit once volume justifies it.
+- Read UI: `frontend/src/components/financials/AuditTimelineView.jsx` now
+  consumes the list/verify/replay endpoints. Wired into both `FinancialTab`
+  (deal workspace) and `FinancialsPage` (dedicated Financial Engine page).
+  Replay button is role-gated to admin/analyst to mirror the backend's
+  `requireRole` policy on `POST …/events/:eventId/replay`.
 
 ### 11. Self-hosted OCR / fine-tuned Kannada model
 
