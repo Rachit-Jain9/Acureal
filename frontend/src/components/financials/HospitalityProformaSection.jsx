@@ -53,38 +53,33 @@ function HospitalityHeader({ inputs, kpis }) {
   const stats = [
     { label: 'Keys',            value: fmtNum(inputs.keys, 0),                              unit: '' },
     { label: 'Stabilized ADR',  value: fmtInr(kpis.stabilizedADR),                          unit: '/night' },
-    { label: 'Stabilized Occ',  value: kpis.stabilizedOccupancy != null ? `${Number(kpis.stabilizedOccupancy).toFixed(1)}%` : '\u2014', unit: '' },
+    { label: 'Stabilized Occ',  value: kpis.stabilizedOccupancy != null ? `${Number(kpis.stabilizedOccupancy).toFixed(1)}%` : '—', unit: '' },
     { label: 'RevPAR',          value: fmtInr(kpis.revPAR),                                 unit: '/night' },
-    { label: 'GOP Margin',      value: kpis.gopMarginPct != null ? `${kpis.gopMarginPct.toFixed(1)}%` : '\u2014', unit: '' },
-    { label: 'Yield on Cost',   value: kpis.yieldOnCost != null ? `${kpis.yieldOnCost.toFixed(2)}%` : '\u2014', unit: '' },
-    { label: 'Levered IRR',     value: kpis.leveredIrr != null ? `${kpis.leveredIrr.toFixed(2)}%` : '\u2014', unit: '' },
+    { label: 'GOP Margin',      value: kpis.gopMarginPct != null ? `${kpis.gopMarginPct.toFixed(1)}%` : '—', unit: '' },
+    { label: 'Yield on Cost',   value: kpis.yieldOnCost != null ? `${kpis.yieldOnCost.toFixed(2)}%` : '—', unit: '' },
+    { label: 'Levered IRR',     value: kpis.leveredIrr != null ? `${kpis.leveredIrr.toFixed(2)}%` : '—', unit: '' },
     { label: 'Dev / Key',       value: fmtInrLakh(kpis.devCostPerKey),                      unit: '' },
   ];
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-4 bg-gradient-to-r from-rose-500 via-pink-500 to-orange-500 text-white flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-          <Hotel size={18} />
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-stone-200">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+          USALI-compliant hotel proforma
         </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-white/80">
-            USALI-compliant hotel proforma
-          </div>
-          <div className="text-lg font-semibold leading-tight">
-            Hospitality financial engine \u2014 India / Bengaluru
-          </div>
-          <div className="text-[11px] text-white/80 mt-0.5">
-            10-year annual P&L \u2022 Sources & Uses \u2022 Construction \u2192 Permanent refi \u2022 LP/GP waterfall
-          </div>
+        <div className="font-serif text-xl font-semibold text-stone-900 leading-tight mt-0.5">
+          Hospitality financial engine <span className="text-stone-400">·</span> India / Bengaluru
+        </div>
+        <div className="text-xs text-stone-500 mt-1">
+          10-year annual P&amp;L • Sources &amp; Uses • Construction → Permanent refi • LP/GP waterfall
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-gray-100 border-b border-gray-100">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-stone-100">
         {stats.map((s, i) => (
           <div key={i} className="bg-white px-3 py-2.5">
-            <div className="text-[10px] uppercase tracking-[0.1em] font-medium text-gray-500">{s.label}</div>
-            <div className="mt-0.5 flex items-baseline gap-1">
-              <span className="text-sm font-bold text-gray-900">{s.value}</span>
-              {s.unit && <span className="text-[10px] text-gray-400">{s.unit}</span>}
+            <div className="text-[10px] uppercase tracking-[0.14em] text-stone-500">{s.label}</div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="font-serif text-base font-semibold text-stone-900 tabular-nums">{s.value}</span>
+              {s.unit && <span className="text-[10px] text-stone-400">{s.unit}</span>}
             </div>
           </div>
         ))}
@@ -107,15 +102,10 @@ function RevenueMixCard({ pnl }) {
   const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
-    <div className="card-editorial p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-pink-500 text-white flex items-center justify-center">
-          <PieIcon size={14} />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">Revenue mix (stabilized)</div>
-          <div className="text-sm font-semibold text-gray-800">Year {stab.year} \u2014 \u20b9{total.toFixed(1)} Cr total revenue</div>
-        </div>
+    <div className="bg-white border border-stone-200 rounded-sm p-5">
+      <div className="mb-3">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Revenue mix (stabilized)</div>
+        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Year {stab.year} <span className="text-stone-400">·</span> ₹{total.toFixed(1)} Cr total revenue</div>
       </div>
       <div className="flex items-center gap-4">
         <ResponsiveContainer width="55%" height={220}>
@@ -123,7 +113,7 @@ function RevenueMixCard({ pnl }) {
             <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
               {data.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Pie>
-            <Tooltip formatter={(v) => `\u20b9${Number(v).toFixed(2)} Cr`} />
+            <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
           </PieChart>
         </ResponsiveContainer>
         <div className="flex-1 space-y-1.5">
@@ -131,7 +121,7 @@ function RevenueMixCard({ pnl }) {
             <div key={i} className="flex items-center gap-2 text-xs">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: d.color }} />
               <span className="flex-1 text-gray-700">{d.name}</span>
-              <span className="font-semibold text-gray-900">\u20b9{d.value.toFixed(2)} Cr</span>
+              <span className="font-semibold text-gray-900">₹{d.value.toFixed(2)} Cr</span>
               <span className="text-gray-400 w-10 text-right">{((d.value / total) * 100).toFixed(1)}%</span>
             </div>
           ))}
@@ -153,21 +143,16 @@ function NOIEvolutionCard({ pnl }) {
 
   return (
     <div className="card-editorial p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center">
-          <TrendingUp size={14} />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">Operating evolution</div>
-          <div className="text-sm font-semibold text-gray-800">Revenue \u2192 GOP \u2192 EBITDA \u2192 NOI \u2014 10 years</div>
-        </div>
+      <div className="mb-3">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Operating evolution</div>
+        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Revenue → GOP → EBITDA → NOI <span className="text-stone-400">·</span> 10 years</div>
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="#f3f4f6" strokeDasharray="3 3" />
           <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#6b7280' }} />
-          <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `\u20b9${v}`} />
-          <Tooltip formatter={(v) => `\u20b9${Number(v).toFixed(2)} Cr`} />
+          <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `₹${v}`} />
+          <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Area type="monotone" dataKey="Revenue" fill="#c7d2fe" stroke="#6366f1" fillOpacity={0.25} />
           <Line type="monotone" dataKey="GOP"    stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} />
@@ -183,14 +168,14 @@ function NOIEvolutionCard({ pnl }) {
 function USALIProfitLossTable({ pnl }) {
   const years = pnl.map((y) => y.year);
   const rows = [
-    { key: 'Occupancy %',    field: 'occupancy', fmt: (v) => v != null ? `${Number(v).toFixed(1)}%` : '\u2014', bold: false },
+    { key: 'Occupancy %',    field: 'occupancy', fmt: (v) => v != null ? `${Number(v).toFixed(1)}%` : '—', bold: false },
     { key: 'ADR (blended)',  field: 'adr', fmt: fmtInr },
     { key: 'RevPAR',         field: 'revPAR', fmt: fmtInr },
     { key: 'TRevPAR',        field: 'trevPAR', fmt: fmtInr },
     null,
     { key: 'Rooms revenue',       field: 'roomsRevenueCr', fmt: fmtCr, group: 'revenue' },
-    { key: 'F&B \u2014 Restaurant', field: 'fbRestaurantCr', fmt: fmtCr, group: 'revenue', indent: 1 },
-    { key: 'F&B \u2014 Banquet',    field: 'fbBanquetCr', fmt: fmtCr, group: 'revenue', indent: 1 },
+    { key: 'F&B — Restaurant', field: 'fbRestaurantCr', fmt: fmtCr, group: 'revenue', indent: 1 },
+    { key: 'F&B — Banquet',    field: 'fbBanquetCr', fmt: fmtCr, group: 'revenue', indent: 1 },
     { key: 'Other operated',      field: 'otherOperatedCr', fmt: fmtCr, group: 'revenue', indent: 1 },
     { key: 'Parking',             field: 'parkingCr', fmt: fmtCr, group: 'revenue', indent: 1 },
     { key: 'Lease income',        field: 'leaseIncomeCr', fmt: fmtCr, group: 'revenue', indent: 1 },
@@ -211,10 +196,10 @@ function USALIProfitLossTable({ pnl }) {
     { key: 'Brand mkt + reservation', field: 'brandMktReservCr', fmt: fmtCrNeg, group: 'brand', indent: 1 },
     null,
     { key: 'GOP', field: 'gopCr', fmt: fmtCr, group: 'gop', bold: true },
-    { key: 'GOP margin %', field: 'gopMarginPct', fmt: (v) => v != null ? `${v.toFixed(1)}%` : '\u2014', group: 'gop' },
+    { key: 'GOP margin %', field: 'gopMarginPct', fmt: (v) => v != null ? `${v.toFixed(1)}%` : '—', group: 'gop' },
     null,
-    { key: 'Management fee \u2014 base',      field: 'mgmtBaseCr',      fmt: fmtCrNeg, group: 'mgmt', indent: 1 },
-    { key: 'Management fee \u2014 incentive', field: 'mgmtIncentiveCr', fmt: fmtCrNeg, group: 'mgmt', indent: 1 },
+    { key: 'Management fee — base',      field: 'mgmtBaseCr',      fmt: fmtCrNeg, group: 'mgmt', indent: 1 },
+    { key: 'Management fee — incentive', field: 'mgmtIncentiveCr', fmt: fmtCrNeg, group: 'mgmt', indent: 1 },
     { key: 'IBFC', field: 'ibfcCr', fmt: fmtCr, group: 'mgmt', bold: true },
     null,
     { key: 'Property tax (BBMP)', field: 'propTaxCr',    fmt: fmtCrNeg, group: 'fixed', indent: 1 },
@@ -222,19 +207,18 @@ function USALIProfitLossTable({ pnl }) {
     { key: 'Ground lease',        field: 'groundLeaseCr',fmt: fmtCrNeg, group: 'fixed', indent: 1 },
     null,
     { key: 'EBITDA', field: 'ebitdaCr', fmt: fmtCr, group: 'ebitda', bold: true, highlight: 'emerald' },
-    { key: 'EBITDA margin %', field: 'ebitdaMarginPct', fmt: (v) => v != null ? `${v.toFixed(1)}%` : '\u2014', group: 'ebitda' },
+    { key: 'EBITDA margin %', field: 'ebitdaMarginPct', fmt: (v) => v != null ? `${v.toFixed(1)}%` : '—', group: 'ebitda' },
     null,
     { key: 'FF&E reserve', field: 'ffeReserveCr', fmt: fmtCrNeg, group: 'noi', indent: 1 },
     { key: 'NOI', field: 'noiCr', fmt: fmtCr, group: 'noi', bold: true, highlight: 'indigo' },
-    { key: 'NOI margin %', field: 'noiMarginPct', fmt: (v) => v != null ? `${v.toFixed(1)}%` : '\u2014', group: 'noi' },
+    { key: 'NOI margin %', field: 'noiMarginPct', fmt: (v) => v != null ? `${v.toFixed(1)}%` : '—', group: 'noi' },
   ];
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-2">
-        <BarChart3 size={14} className="text-gray-600" />
-        <div className="text-sm font-semibold text-gray-800">USALI 10-year profit & loss (₹ Cr)</div>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.12em] text-gray-400">Uniform System of Accounts, 11e</span>
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">USALI 10-year profit &amp; loss <span className="text-stone-400">(₹ Cr)</span></div>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-stone-400">Uniform System of Accounts, 11e</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -283,11 +267,10 @@ function SourcesUsesCard({ sourcesUses }) {
   const usesCategories = uses.map((u) => u.category);
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-amber-50 via-white to-rose-50 flex items-center gap-2">
-        <Receipt size={14} className="text-amber-600" />
-        <div className="text-sm font-semibold text-gray-800">Sources & Uses</div>
-        <span className="ml-auto text-[10px] text-gray-500">Total \u20b9{usesTotalCr?.toFixed(1)} Cr</span>
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">Sources &amp; Uses</div>
+        <span className="ml-auto text-[11px] text-stone-500 tabular-nums">Total ₹{usesTotalCr?.toFixed(1)} Cr</span>
       </div>
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Uses breakdown */}
@@ -302,7 +285,7 @@ function SourcesUsesCard({ sourcesUses }) {
                     <span className="text-xs font-semibold text-gray-800">{u.category}</span>
                   </div>
                   <div className="text-xs font-bold text-gray-900">
-                    \u20b9{u.subtotalCr?.toFixed(2)} Cr
+                    ₹{u.subtotalCr?.toFixed(2)} Cr
                     <span className="ml-2 text-[10px] font-medium text-gray-400">
                       {usesTotalCr > 0 ? ((u.subtotalCr / usesTotalCr) * 100).toFixed(1) : '0'}%
                     </span>
@@ -311,7 +294,7 @@ function SourcesUsesCard({ sourcesUses }) {
                 {u.items?.map((it, j) => (
                   <div key={j} className="flex items-center justify-between text-[11px] pl-4">
                     <span className="text-gray-600">{it.label}</span>
-                    <span className="text-gray-700 tabular-nums">\u20b9{it.valueCr?.toFixed(2)} Cr</span>
+                    <span className="text-gray-700 tabular-nums">₹{it.valueCr?.toFixed(2)} Cr</span>
                   </div>
                 ))}
               </div>
@@ -331,7 +314,7 @@ function SourcesUsesCard({ sourcesUses }) {
                 <div className="text-[11px] text-gray-600">{s.label}</div>
                 <div className="mt-0.5 flex items-baseline justify-between">
                   <span className={clsx('text-lg font-bold', s.category === 'debt' ? 'text-rose-900' : 'text-emerald-900')}>
-                    \u20b9{s.valueCr?.toFixed(2)} Cr
+                    ₹{s.valueCr?.toFixed(2)} Cr
                   </span>
                   <span className="text-[10px] text-gray-500">
                     {sourcesTotalCr > 0 ? ((s.valueCr / sourcesTotalCr) * 100).toFixed(1) : '0'}%
@@ -348,10 +331,10 @@ function SourcesUsesCard({ sourcesUses }) {
               </div>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <RefiRow label="Year"            value={`Y${refinance.refiYear}`} />
-                <RefiRow label="Stabilized value" value={`\u20b9${refinance.stabilizedValueForRefiCr?.toFixed(1)} Cr`} />
+                <RefiRow label="Stabilized value" value={`₹${refinance.stabilizedValueForRefiCr?.toFixed(1)} Cr`} />
                 <RefiRow label="Going-in cap"    value={`${refinance.refiCapRatePct}%`} />
                 <RefiRow label="LTV"             value={`${refinance.refiLTVPct}%`} />
-                <RefiRow label="Principal"       value={`\u20b9${refinance.refiPrincipalCr?.toFixed(1)} Cr`} />
+                <RefiRow label="Principal"       value={`₹${refinance.refiPrincipalCr?.toFixed(1)} Cr`} />
                 <RefiRow label="Rate"            value={`${refinance.refiInterestRatePct}%`} />
                 <RefiRow label="IO period"       value={`${refinance.refiIOYears} yrs`} />
                 <RefiRow label="Amort"           value={`${refinance.refiAmortYears} yrs`} />
@@ -376,25 +359,20 @@ function RefiRow({ label, value }) {
 // ─── Capital stack timeline (construction → refi → exit) ────────────────────
 function CapitalStackTimelineCard({ construction, permanent, kpis }) {
   return (
-    <div className="card-editorial p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white flex items-center justify-center">
-          <Layers size={14} />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">Capital structure timeline</div>
-          <div className="text-sm font-semibold text-gray-800">Construction loan \u2192 Permanent refi</div>
-        </div>
+    <div className="bg-white border border-stone-200 rounded-sm p-5">
+      <div className="mb-3">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Capital structure timeline</div>
+        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Construction loan → Permanent refi</div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {construction && (
           <StackColumn
             title="Construction loan"
-            subtitle={`LTC ${construction.ltcPct}% \u2022 ${construction.ratePct}% interest`}
+            subtitle={`LTC ${construction.ltcPct}% • ${construction.ratePct}% interest`}
             tone="rose"
             rows={[
-              { label: 'Principal',     value: `\u20b9${construction.principalCr?.toFixed(2)} Cr` },
-              { label: 'IDC + fees',    value: `\u20b9${construction.idcCr?.toFixed(2)} Cr` },
+              { label: 'Principal',     value: `₹${construction.principalCr?.toFixed(2)} Cr` },
+              { label: 'IDC + fees',    value: `₹${construction.idcCr?.toFixed(2)} Cr` },
               { label: 'Term',          value: `${construction.termYears} yrs` },
               { label: 'Loan fees',     value: `${construction.feesPct}%` },
             ]}
@@ -406,14 +384,14 @@ function CapitalStackTimelineCard({ construction, permanent, kpis }) {
             subtitle={`LTV ${permanent.ltvPct}% on stab. value @ ${permanent.sizingCapRate}% cap`}
             tone="indigo"
             rows={[
-              { label: 'Principal',        value: `\u20b9${permanent.principalCr?.toFixed(2)} Cr` },
+              { label: 'Principal',        value: `₹${permanent.principalCr?.toFixed(2)} Cr` },
               { label: 'Rate',             value: `${permanent.ratePct}%` },
               { label: 'IO / Amort',       value: `${permanent.ioYears}y IO + ${permanent.amortYears}y amort` },
-              { label: 'Annual DS',        value: `\u20b9${permanent.annualDebtServiceCr?.toFixed(2)} Cr` },
-              { label: 'DSCR',             value: kpis.dscr != null ? kpis.dscr.toFixed(2) : '\u2014' },
-              { label: 'Debt yield',       value: kpis.debtYieldPct != null ? `${kpis.debtYieldPct.toFixed(2)}%` : '\u2014' },
-              { label: 'Min DSCR',         value: kpis.minDSCR != null ? kpis.minDSCR.toFixed(2) : '\u2014' },
-              { label: 'Balloon at exit',  value: `\u20b9${permanent.balloonRepaymentCr?.toFixed(2)} Cr` },
+              { label: 'Annual DS',        value: `₹${permanent.annualDebtServiceCr?.toFixed(2)} Cr` },
+              { label: 'DSCR',             value: kpis.dscr != null ? kpis.dscr.toFixed(2) : '—' },
+              { label: 'Debt yield',       value: kpis.debtYieldPct != null ? `${kpis.debtYieldPct.toFixed(2)}%` : '—' },
+              { label: 'Min DSCR',         value: kpis.minDSCR != null ? kpis.minDSCR.toFixed(2) : '—' },
+              { label: 'Balloon at exit',  value: `₹${permanent.balloonRepaymentCr?.toFixed(2)} Cr` },
             ]}
           />
         )}
@@ -446,15 +424,14 @@ function StackColumn({ title, subtitle, tone, rows }) {
 // ─── Waterfall ──────────────────────────────────────────────────────────────
 function WaterfallCard({ waterfall }) {
   const { tiers, totalLPCr, totalGPCr, lpEquityMultiple, gpEquityMultiple, totalEquityCr, lpCapitalCr, gpCapitalCr, totalDistributionsCr } = waterfall;
-  const chartData = tiers.map((t) => ({ name: t.name.split('\u2014')[0].trim(), LP: t.lpCr, GP: t.gpCr }));
+  const chartData = tiers.map((t) => ({ name: t.name.split('—')[0].trim(), LP: t.lpCr, GP: t.gpCr }));
 
   return (
-    <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 via-white to-indigo-50 flex items-center gap-2">
-        <Users size={14} className="text-violet-600" />
-        <div className="text-sm font-semibold text-gray-800">LP / GP Waterfall</div>
-        <span className="ml-auto text-[10px] text-gray-500">
-          Total distributions \u20b9{totalDistributionsCr?.toFixed(1)} Cr \u2022 Equity \u20b9{totalEquityCr?.toFixed(1)} Cr
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">LP / GP Waterfall</div>
+        <span className="ml-auto text-[11px] text-stone-500 tabular-nums">
+          Total distributions ₹{totalDistributionsCr?.toFixed(1)} Cr <span className="text-stone-400">·</span> Equity ₹{totalEquityCr?.toFixed(1)} Cr
         </span>
       </div>
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -462,9 +439,9 @@ function WaterfallCard({ waterfall }) {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 0, left: 90 }}>
               <CartesianGrid stroke="#f3f4f6" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `\u20b9${v}`} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `₹${v}`} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#374151' }} width={90} />
-              <Tooltip formatter={(v) => `\u20b9${Number(v).toFixed(2)} Cr`} />
+              <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="LP" fill="#6366f1" stackId="a" />
               <Bar dataKey="GP" fill="#f43f5e" stackId="a" />
@@ -486,11 +463,11 @@ function WaterfallCard({ waterfall }) {
               {tiers.map((t, i) => (
                 <tr key={i} className="border-b border-gray-50">
                   <td className="px-3 py-1.5 text-gray-800 font-medium">{t.name}</td>
-                  <td className="px-3 py-1.5 text-right text-gray-600">{t.hurdlePct ? `${t.hurdlePct}% IRR` : '\u2014'}</td>
+                  <td className="px-3 py-1.5 text-right text-gray-600">{t.hurdlePct ? `${t.hurdlePct}% IRR` : '—'}</td>
                   <td className="px-3 py-1.5 text-right text-gray-600">{t.lpSharePct}%</td>
                   <td className="px-3 py-1.5 text-right text-gray-600">{t.gpSharePct}%</td>
-                  <td className="px-3 py-1.5 text-right font-semibold text-indigo-700 tabular-nums">\u20b9{t.lpCr?.toFixed(2)}</td>
-                  <td className="px-3 py-1.5 text-right font-semibold text-rose-700 tabular-nums">\u20b9{t.gpCr?.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold text-indigo-700 tabular-nums">₹{t.lpCr?.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold text-rose-700 tabular-nums">₹{t.gpCr?.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -526,11 +503,11 @@ function SummaryCard({ label, tone, capital, total, multiple }) {
   return (
     <div className={clsx('rounded-xl p-4', tones[tone] || tones.indigo)}>
       <div className="text-[10px] uppercase tracking-[0.12em] opacity-80">{label}</div>
-      <div className="mt-1 text-2xl font-bold">{multiple != null ? `${multiple.toFixed(2)}\u00d7` : '\u2014'}</div>
+      <div className="mt-1 text-2xl font-bold">{multiple != null ? `${multiple.toFixed(2)}\u00d7` : '—'}</div>
       <div className="text-[11px] opacity-80">equity multiple</div>
       <div className="mt-3 space-y-0.5 text-[11px]">
-        <div className="flex justify-between"><span className="opacity-80">Contributed</span><span className="font-semibold tabular-nums">\u20b9{capital?.toFixed(2)} Cr</span></div>
-        <div className="flex justify-between"><span className="opacity-80">Distributed</span><span className="font-semibold tabular-nums">\u20b9{total?.toFixed(2)} Cr</span></div>
+        <div className="flex justify-between"><span className="opacity-80">Contributed</span><span className="font-semibold tabular-nums">₹{capital?.toFixed(2)} Cr</span></div>
+        <div className="flex justify-between"><span className="opacity-80">Distributed</span><span className="font-semibold tabular-nums">₹{total?.toFixed(2)} Cr</span></div>
       </div>
     </div>
   );
@@ -538,23 +515,23 @@ function SummaryCard({ label, tone, capital, total, multiple }) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function fmtNum(n, digits = 2) {
-  if (n == null || isNaN(n)) return '\u2014';
+  if (n == null || isNaN(n)) return '—';
   return Number(n).toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits === 0 ? 0 : 0 });
 }
 function fmtInr(n) {
-  if (n == null || isNaN(n)) return '\u2014';
-  return `\u20b9${Math.round(n).toLocaleString('en-IN')}`;
+  if (n == null || isNaN(n)) return '—';
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 function fmtInrLakh(n) {
-  if (n == null || isNaN(n)) return '\u2014';
+  if (n == null || isNaN(n)) return '—';
   const lakh = n / 1e5;
-  return lakh >= 100 ? `\u20b9${(lakh / 100).toFixed(2)} Cr` : `\u20b9${lakh.toFixed(1)} L`;
+  return lakh >= 100 ? `₹${(lakh / 100).toFixed(2)} Cr` : `₹${lakh.toFixed(1)} L`;
 }
 function fmtCr(n) {
-  if (n == null || isNaN(n)) return '\u2014';
+  if (n == null || isNaN(n)) return '—';
   return Number(n).toFixed(2);
 }
 function fmtCrNeg(n) {
-  if (n == null || isNaN(n)) return '\u2014';
+  if (n == null || isNaN(n)) return '—';
   return `(${Math.abs(Number(n)).toFixed(2)})`;
 }

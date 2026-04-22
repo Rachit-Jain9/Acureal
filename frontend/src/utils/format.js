@@ -67,6 +67,14 @@ export const formatPct = (value, decimals = 1) => {
   return `${num.toFixed(decimals)}%`;
 };
 
+// Kernel returns IRR in percent form (14.0 for 14% p.a.). No * 100 anywhere.
+export const formatIRR = (value, decimals = 2) => {
+  if (value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '—';
+  return `${num.toFixed(decimals)}%`;
+};
+
 /**
  * Format area — respects pref_areaUnit (sqft | sqm | acres)
  */

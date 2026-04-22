@@ -55,19 +55,19 @@ function prettyDriverName(key) {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, (c) => c.toUpperCase())
     .replace(/ Pct$/, ' (%)')
-    .replace(/ Cr$/, ' (\u20b9Cr)')
+    .replace(/ Cr$/, ' (₹Cr)')
     .replace(/ Sqft$/, ' (sqft)')
     .replace(/ Months$/, ' (months)')
     .trim();
 }
 
 function formatDriverValue(val, key) {
-  if (!Number.isFinite(val)) return '\u2014';
+  if (!Number.isFinite(val)) return '—';
   if (/Pct$|Rate$/.test(key)) return `${val.toFixed(2)}%`;
-  if (/Cr$/.test(key)) return `\u20b9${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
+  if (/Cr$/.test(key)) return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
   if (/Sqft$/.test(key)) return `${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })} sqft`;
   if (/Months$/.test(key)) return `${Math.round(val)} mo`;
-  if (/adr|rent/i.test(key)) return `\u20b9${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  if (/adr|rent/i.test(key)) return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
   return val.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 

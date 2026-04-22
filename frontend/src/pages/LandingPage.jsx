@@ -1,113 +1,99 @@
 import { useNavigate } from 'react-router-dom';
-import {
-  Brain,
-  FileText,
-  TrendingUp,
-  CheckSquare,
-  Shield,
-  BarChart3,
-  MapPin,
-  Zap,
-  ArrowRight,
-  Upload,
-  Cpu,
-  LineChart,
-  Download,
-  Building2,
-  IndianRupee,
-  ChevronRight,
-} from 'lucide-react';
 
-// ─── Nav ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// REDIP Landing — editorial, IC-grade.
+// Design intent: Bloomberg + Stripe + Linear. Dense, typographic, grown-up.
+// No gradient hero, no icon-in-colored-box, no "AI-powered" marketing surface.
+// ─────────────────────────────────────────────────────────────────────────────
 
-function Navbar() {
+const ACCENT = 'text-[#c2410c]'; // burnt-orange, single accent across the page
+const ACCENT_BG = 'bg-[#c2410c]';
+const ACCENT_BORDER = 'border-[#c2410c]';
+const ACCENT_WEAK = 'text-[#9a3412]';
+
+function Nav() {
   const navigate = useNavigate();
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-gray-950/80 border-b border-gray-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-        <span className="text-xl font-extrabold text-primary-600 tracking-tight">REDIP</span>
-        <div className="flex items-center gap-3">
+    <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="flex items-baseline gap-6">
+          <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">
+            REDIP<span className={ACCENT}>.</span>
+          </span>
+          <span className="hidden sm:inline text-[11px] uppercase tracking-[0.18em] text-stone-500">
+            Real Estate Deal Intelligence · India
+          </span>
+        </div>
+        <div className="flex items-center gap-5">
           <button
             onClick={() => navigate('/login')}
-            className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+            className="text-sm text-stone-700 hover:text-stone-900"
           >
-            Sign In
+            Sign in
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="px-4 py-2 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+            className={`text-sm font-medium text-white px-3.5 py-1.5 rounded-sm ${ACCENT_BG} hover:brightness-95`}
           >
-            Get Access
+            Request access →
           </button>
         </div>
       </div>
-    </header>
+    </nav>
   );
 }
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
-
-const workflowSteps = [
-  { icon: Upload, label: 'Upload Documents' },
-  { icon: Cpu, label: 'Extract & Classify' },
-  { icon: MapPin, label: 'Evaluate Parcel' },
-  { icon: LineChart, label: 'Underwrite' },
-  { icon: Download, label: 'Investor-Grade Outputs' },
-];
-
+// ── Hero — typographic, no gradient, editorial kicker + real numbers strip ──
 function Hero() {
   const navigate = useNavigate();
   return (
-    <section className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-[#0d1b4b] flex flex-col justify-center pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24 md:py-32">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 bg-primary-600/10 border border-primary-600/30 text-primary-400 text-xs font-semibold tracking-widest uppercase px-4 py-1.5 rounded-full mb-8">
-          AI-Native · India First · Bengaluru/GBA Priority
+    <section className="bg-white border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
+        <div className="text-[11px] uppercase tracking-[0.22em] text-stone-500 mb-6">
+          <span className={ACCENT_WEAK}>Volume I · Issue 01</span>
+          <span className="mx-3 text-stone-300">·</span>
+          Bengaluru / Greater Bengaluru priority
         </div>
-
-        {/* H1 */}
-        <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white leading-tight tracking-tight max-w-4xl mb-6">
-          Deal Intelligence
-          <span className="block text-primary-500">&amp; Underwriting</span>
+        <h1 className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight text-stone-900 max-w-4xl">
+          Underwriting is a <em className="italic">first-class</em> engineering problem.
         </h1>
-
-        {/* Subheading */}
-        <p className="text-lg md:text-xl text-gray-400 max-w-2xl mb-10 leading-relaxed">
-          AI-powered due diligence, zoning evaluation, financial modelling, and investor reporting
-          for India's land and real estate market.
+        <p className="mt-7 text-lg md:text-xl text-stone-700 leading-relaxed max-w-2xl">
+          REDIP is the operating system for live real-estate deal work in India —
+          a deterministic financial kernel, provenance-traced diligence, and IC-ready
+          outputs. Built for GPs who will not ship a memo whose math they cannot defend.
         </p>
-
-        {/* CTAs */}
-        <div className="flex flex-wrap gap-4 mb-20">
+        <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
           <button
             onClick={() => navigate('/login')}
-            className="flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-lg shadow-primary-900/40"
+            className={`text-sm font-medium text-white px-5 py-2.5 rounded-sm ${ACCENT_BG} hover:brightness-95`}
           >
-            Start a Deal <ArrowRight size={16} />
+            Start a deal →
           </button>
-          <button
-            onClick={() => {
-              document.getElementById('what-it-solves')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="flex items-center gap-2 px-6 py-3 border border-gray-600 hover:border-gray-400 text-gray-300 hover:text-white rounded-lg text-sm font-semibold transition-colors"
+          <a
+            href="#kernel"
+            className="text-sm font-medium text-stone-900 border-b border-stone-400 hover:border-stone-900 pb-0.5"
           >
-            Learn More <ChevronRight size={16} />
-          </button>
+            How the kernel works
+          </a>
         </div>
 
-        {/* Workflow strip */}
-        <div className="flex flex-wrap items-center gap-0">
-          {workflowSteps.map((step, idx) => (
-            <div key={step.label} className="flex items-center">
-              <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700 rounded-lg px-4 py-2.5">
-                <step.icon size={15} className="text-primary-400 flex-shrink-0" />
-                <span className="text-xs font-medium text-gray-300 whitespace-nowrap">
-                  {step.label}
-                </span>
+        {/* Editorial KPI strip — real numbers, not icons */}
+        <div className="mt-20 border-t border-stone-200 pt-8 grid grid-cols-2 md:grid-cols-5 gap-y-6 gap-x-8">
+          {[
+            ['10', 'Asset classes', 'residential → hospitality'],
+            ['15y', 'Quarterly horizon', 'per cash-flow line'],
+            ['7', 'DD layers', 'title → physical'],
+            ['8', 'Deal structures', 'outright · JV · JDA · …'],
+            ['₹', 'INR-native', 'lakh · crore · sqft'],
+          ].map(([stat, label, note]) => (
+            <div key={label}>
+              <div className="font-serif text-3xl md:text-4xl font-medium text-stone-900 leading-none">
+                {stat}
               </div>
-              {idx < workflowSteps.length - 1 && (
-                <ArrowRight size={14} className="text-gray-600 mx-1 flex-shrink-0" />
-              )}
+              <div className="mt-2 text-xs uppercase tracking-[0.16em] text-stone-500">
+                {label}
+              </div>
+              <div className="mt-1 text-[11px] text-stone-400">{note}</div>
             </div>
           ))}
         </div>
@@ -116,308 +102,60 @@ function Hero() {
   );
 }
 
-// ─── What It Solves ───────────────────────────────────────────────────────────
-
-const problems = [
-  {
-    problem: 'Fragmented evidence',
-    solution: 'All documents, DD items, and approvals organised inside each deal',
-    icon: FileText,
-  },
-  {
-    problem: 'Manual underwriting',
-    solution: 'Structured financial engine across 10 asset classes and all deal structures',
-    icon: LineChart,
-  },
-  {
-    problem: 'Opaque next steps',
-    solution: 'Deterministic deal readiness scoring with actionable next steps',
-    icon: CheckSquare,
-  },
-  {
-    problem: 'Unreliable comps',
-    solution: 'Confidence-weighted market intelligence from verified sources',
-    icon: BarChart3,
-  },
-  {
-    problem: 'Slow due diligence',
-    solution: 'AI-powered extraction from title deeds, EC, RTC, and JDA documents — including Kannada-language records',
-    icon: Zap,
-  },
-  {
-    problem: 'Investor-Grade prep delays',
-    solution: 'One-click investor-grade reports, PDFs, and Excel models',
-    icon: Download,
-  },
-];
-
-function WhatItSolves() {
+// ── The kernel — section that shows an actual artifact, not a claim ──
+function Kernel() {
   return (
-    <section id="what-it-solves" className="bg-white py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            Built for Real Deal Work
-          </h2>
-          <p className="text-gray-500 text-lg">
-            Each feature maps to a friction point that slows India-market deal teams.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {problems.map(({ problem, solution, icon: Icon }) => (
-            <div
-              key={problem}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
-                  <Icon size={18} className="text-primary-600" />
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-1">
-                    {problem}
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{solution}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Product Workflow ─────────────────────────────────────────────────────────
-
-const workflowPhases = [
-  {
-    number: '01',
-    title: 'Ingest Deal & Site',
-    description:
-      'Upload property details, parcel data, and linked documents in minutes. Unknown parcel names and partial addresses are supported from day one.',
-  },
-  {
-    number: '02',
-    title: 'Extract & Evaluate',
-    description:
-      'AI classifies, extracts, and structures evidence from Indian land documents including Kannada-language records, EC transactions, and RTC fields.',
-  },
-  {
-    number: '03',
-    title: 'Underwrite',
-    description:
-      'Deterministic financial engine models land, residential, commercial, plotted, JDA, JV, and hybrid structures with 15-year quarterly horizons.',
-  },
-  {
-    number: '04',
-    title: 'Generate Outputs',
-    description:
-      'Investor-grade memos, financial models, DD summaries, risk reports, and export packages — ready for investor review without manual reformatting.',
-  },
-];
-
-function ProductWorkflow() {
-  return (
-    <section className="bg-gray-50 py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            From Source to Investor-Grade Decisions in One Platform
-          </h2>
-          <p className="text-gray-500 text-lg">
-            A single deal workspace replaces fragmented spreadsheets, shared drives, and email
-            threads.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {workflowPhases.map((phase, idx) => (
-            <div key={phase.number} className="relative">
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 h-full">
-                <div className="text-4xl font-black text-primary-100 mb-3 leading-none">
-                  {phase.number}
-                </div>
-                <h3 className="text-base font-bold text-gray-900 mb-2">{phase.title}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{phase.description}</p>
-              </div>
-              {idx < workflowPhases.length - 1 && (
-                <div className="hidden lg:flex absolute top-1/2 -right-3 -translate-y-1/2 z-10 w-6 h-6 items-center justify-center bg-gray-100 rounded-full border border-gray-200">
-                  <ArrowRight size={12} className="text-gray-500" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── AI Capabilities ──────────────────────────────────────────────────────────
-
-const documentIntelligenceItems = [
-  'Document classification and categorisation',
-  'PDF and image content extraction',
-  'Kannada to English translation',
-  'EC transaction parsing',
-  'RTC/Pahani field extraction',
-  'JDA/JV clause extraction',
-];
-
-const dealReasoningItems = [
-  'DD synthesis and missing-item detection',
-  'Risk narrative generation',
-  'Next-step recommendations',
-  'Investor-grade memo drafting',
-  'Market and comps synthesis',
-  'Financing structure guidance',
-];
-
-function AICapabilities() {
-  return (
-    <section className="bg-white py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            AI Routed by Task, Not by Guesswork
-          </h2>
-          <p className="text-gray-500 text-lg">
-            Each AI capability is applied only where it materially improves accuracy. No AI is used
-            for deterministic math, rule-engine decisions, or financial calculations.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Document Intelligence */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <Cpu size={18} className="text-emerald-600" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
-                  Document AI
-                </div>
-                <div className="text-base font-bold text-gray-900">Document Intelligence</div>
-              </div>
-            </div>
-            <ul className="space-y-2.5">
-              {documentIntelligenceItems.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700">
-                  <span className="mt-1 w-4 h-4 rounded-full bg-emerald-100 flex-shrink-0 flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  </span>
-                  {item}
-                </li>
-              ))}
-            </ul>
+    <section id="kernel" className="bg-stone-50 border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
+        <div className="md:col-span-5">
+          <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+            § The kernel
           </div>
-
-          {/* Deal Reasoning */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
-                <Brain size={18} className="text-primary-600" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-primary-600 uppercase tracking-wider">
-                  Reasoning AI
-                </div>
-                <div className="text-base font-bold text-gray-900">Deal Reasoning</div>
-              </div>
-            </div>
-            <ul className="space-y-2.5">
-              {dealReasoningItems.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700">
-                  <span className="mt-1 w-4 h-4 rounded-full bg-primary-100 flex-shrink-0 flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-                  </span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Financial Engine ─────────────────────────────────────────────────────────
-
-const engineStats = [
-  {
-    stat: '10+ Asset Classes',
-    description: 'Residential, plotted, commercial, industrial, hospitality, mixed-use, and more',
-    icon: Building2,
-  },
-  {
-    stat: '8 Deal Structures',
-    description:
-      'Outright, JV, JDA, revenue share, area share, ground lease, profit share, hybrid',
-    icon: IndianRupee,
-  },
-  {
-    stat: '15-Year Horizon',
-    description:
-      'Quarterly and annual views with phased development and use-transition support',
-    icon: TrendingUp,
-  },
-];
-
-const engineOutputs = [
-  'IRR (levered + unlevered)',
-  'NPV',
-  'MOIC',
-  'DSCR',
-  'Yield on Cost',
-  'Sources & Uses',
-  'Quarterly Cash Flows',
-  'Waterfall distributions',
-];
-
-function FinancialEngine() {
-  return (
-    <section className="bg-gray-900 py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-            Institutional-Grade Underwriting Engine
+          <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
+            Deterministic. Provenance&#8209;traced. Defensible.
           </h2>
-          <p className="text-gray-400 text-lg">
-            All calculations are deterministic — no LLM math, no ambiguous assumptions.
+          <p className="mt-5 text-stone-700 leading-relaxed">
+            Every KPI on a deal page resolves to a directed graph of inputs,
+            derived values, and the formula that produced it. No LLM touches
+            the math. A partner reading your memo can drill from IRR all the
+            way to the stamp-duty assumption — in one click.
           </p>
-        </div>
-
-        {/* Stat grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {engineStats.map(({ stat, description, icon: Icon }) => (
-            <div
-              key={stat}
-              className="bg-gray-800 rounded-xl border border-gray-700 p-6"
-            >
-              <div className="w-10 h-10 rounded-lg bg-primary-600/20 flex items-center justify-center mb-4">
-                <Icon size={18} className="text-primary-400" />
-              </div>
-              <div className="text-xl font-bold text-white mb-1">{stat}</div>
-              <p className="text-sm text-gray-400 leading-relaxed">{description}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Key outputs */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-            Key Outputs
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {engineOutputs.map((output) => (
-              <span
-                key={output}
-                className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-full text-xs font-medium text-gray-300"
-              >
-                {output}
-              </span>
+          <ul className="mt-6 space-y-2.5 text-sm text-stone-800">
+            {[
+              'One kernel, ten asset classes, zero Python duplicates',
+              'IRR, NPV, equity multiple, DSCR, yield on cost',
+              'JDA · JV · revenue share · area share · profit share',
+              'Kernel DAG visible in the UI — no black boxes',
+            ].map((line) => (
+              <li key={line} className="flex gap-3">
+                <span className={`${ACCENT} font-serif leading-none pt-1`}>§</span>
+                <span>{line}</span>
+              </li>
             ))}
+          </ul>
+        </div>
+
+        {/* Faux kernel output — makes the claim visible */}
+        <div className="md:col-span-7">
+          <div className="rounded-sm border border-stone-300 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-stone-200 bg-stone-100 text-[11px] uppercase tracking-[0.14em] text-stone-500">
+              <span>Provenance · deal 2026-BLR-127</span>
+              <span className="tabular-nums">residential_apartments</span>
+            </div>
+            <div className="p-5 font-mono text-[12.5px] leading-[1.75] text-stone-800">
+              <div><span className="text-stone-400">kpi.</span>irr <span className="text-stone-400">=</span> <span className={ACCENT_WEAK}>14.03%</span></div>
+              <div className="pl-5"><span className="text-stone-400">←</span> cashflow.equity <span className="text-stone-400">[60 quarters]</span></div>
+              <div className="pl-10"><span className="text-stone-400">←</span> derived.netRevenue</div>
+              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.sellingRatePerSqft <span className="text-stone-400">=</span> 9,850</div>
+              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.plotAreaSqft × input.fsi <span className="text-stone-400">= BUA</span></div>
+              <div className="pl-10"><span className="text-stone-400">←</span> derived.totalCost</div>
+              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.landCostCr <span className="text-stone-400">=</span> 42.00</div>
+              <div className="pl-[60px]"><span className="text-stone-400">←</span> input.constructionCostPerSqft <span className="text-stone-400">=</span> 3,200</div>
+              <div className="pl-[60px]"><span className="text-stone-400">←</span> derived.stampDutyCr <span className="text-stone-400">=</span> landCostCr × 0.056</div>
+              <div className="mt-4 pt-3 border-t border-stone-200 text-stone-500 text-[11px]">
+                Every IRR you show an IC is the root of a graph like this.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -425,178 +163,212 @@ function FinancialEngine() {
   );
 }
 
-// ─── Due Diligence Engine ─────────────────────────────────────────────────────
-
-const ddLayers = [
-  'Title & Ownership',
-  'Land Classification & Regulatory Status',
-  'Seller / Transaction Validity',
-  'Statutory / Development Approvals',
-  'Financial / Commercial DD',
-  'Project-Specific DD',
-  'Physical / Technical DD',
-];
-
-function DueDiligenceEngine() {
+// ── Three-column editorial: Underwrite / Diligence / Report ──
+function Columns() {
+  const columns = [
+    {
+      tag: '§ Underwrite',
+      title: 'A deterministic financial engine.',
+      body: 'Ten asset classes. Eight deal structures. Fifteen-year quarterly horizons. Sources & uses, debt schedules, JDA / JV waterfalls, scenario comparison, and sensitivity tornadoes — all from a single kernel in TypeScript.',
+      bullets: ['Quick-compute < 50ms', 'What-If sliders with live KPI deltas', 'Downside / Base / Upside scenarios'],
+    },
+    {
+      tag: '§ Diligence',
+      title: 'Seven layers, each scored by deal impact.',
+      body: 'Title, regulatory, seller validity, statutory approvals, financial, project, and physical. Each DD item is classified as Deal-Breaker, Buildability-Blocker, Commercial-Blocker, or Secondary. Evidence links live inside the deal — not in a separate drive.',
+      bullets: ['Kannada-language EC/RTC extraction', 'JDA/JV clause parsing', 'Missing-item detection'],
+    },
+    {
+      tag: '§ Report',
+      title: 'IC-ready outputs without reformatting.',
+      body: 'A memo, a model, a DD summary, and a risk narrative. One click each. Every number is traced to its source — so the pushback in the IC room is about the deal, not about the spreadsheet.',
+      bullets: ['Investor-grade PDF memo', 'Excel model export', 'Structured risk narrative'],
+    },
+  ];
   return (
-    <section className="bg-white py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            Structured DD, Not a Checklist
-          </h2>
-          <p className="text-gray-500 text-lg">
-            Seven layers of due diligence — each item classified by deal impact.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-          {ddLayers.map((layer) => (
-            <div
-              key={layer}
-              className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-5"
-            >
-              <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
-                <Shield size={15} className="text-primary-600" />
+    <section className="bg-white border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
+        <div className="grid md:grid-cols-3 gap-10 md:gap-8">
+          {columns.map((c) => (
+            <div key={c.tag}>
+              <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+                {c.tag}
               </div>
-              <span className="text-sm font-medium text-gray-800">{layer}</span>
+              <h3 className="font-serif text-2xl leading-snug tracking-tight text-stone-900">
+                {c.title}
+              </h3>
+              <p className="mt-4 text-sm text-stone-700 leading-relaxed">{c.body}</p>
+              <ul className="mt-5 space-y-2 text-[13px] text-stone-800 border-t border-stone-200 pt-4">
+                {c.bullets.map((b) => (
+                  <li key={b} className="flex items-baseline gap-2">
+                    <span className="text-stone-400 font-mono text-[11px]">→</span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>
-        <div className="bg-gray-50 rounded-xl border border-gray-200 px-6 py-4">
-          <p className="text-sm text-gray-600">
-            <span className="font-semibold text-gray-900">Item severity classification: </span>
-            Each item is classified as{' '}
-            <span className="font-semibold text-red-600">Deal Breaker</span>,{' '}
-            <span className="font-semibold text-orange-600">Buildability Blocker</span>,{' '}
-            <span className="font-semibold text-yellow-600">Commercial Blocker</span>, or{' '}
-            <span className="font-semibold text-gray-600">Secondary</span>.
-          </p>
-        </div>
       </div>
     </section>
   );
 }
 
-// ─── Asset Classes ────────────────────────────────────────────────────────────
-
-const assetClasses = [
-  'Raw Land',
-  'Plotted Development',
-  'Residential Apartments',
-  'Villas',
-  'Commercial Office',
-  'Retail',
-  'Industrial / Warehousing',
-  'Hospitality',
-  'Mixed-Use',
-  'Redevelopment / Distressed',
-];
-
+// ── Asset classes — typographic grid, no chips ──
 function AssetClasses() {
+  const rows = [
+    ['Residential apartments', 'Mumbai / NCR / Bengaluru stacks'],
+    ['Villas', 'low-rise, plotted-adjacent'],
+    ['Plotted development', 'layout approvals, saleable %'],
+    ['Commercial office', 'Grade-A, leasing + yield'],
+    ['Retail', 'high-street + mall'],
+    ['Industrial / warehousing', 'logistics parks, peripheral'],
+    ['Hospitality', 'ADR + occupancy stabilisation'],
+    ['Mixed-use', 'residential + retail + office'],
+    ['Redevelopment', 'FSI premiums + existing tenant TDR'],
+    ['Raw land', 'appreciation-play, zone transitions'],
+  ];
   return (
-    <section className="bg-gray-50 py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-            All Indian Asset Classes
-          </h2>
-          <p className="text-gray-500 text-lg">
-            One platform covers every asset type common in India's land and real estate market.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {assetClasses.map((cls) => (
-            <span
-              key={cls}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 shadow-sm hover:border-primary-300 hover:text-primary-700 transition-colors"
-            >
-              {cls}
-            </span>
-          ))}
+    <section className="bg-stone-50 border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
+        <div className="grid md:grid-cols-12 gap-8">
+          <div className="md:col-span-4">
+            <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+              § Asset coverage
+            </div>
+            <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
+              Every asset class an Indian GP actually underwrites.
+            </h2>
+            <p className="mt-5 text-stone-700 leading-relaxed text-[15px]">
+              Not a toy subset. Each class is modelled against its own cash-flow
+              shape — apartment absorption is not a plotted layout, and a hotel
+              is nobody&rsquo;s office tower.
+            </p>
+          </div>
+          <div className="md:col-span-8">
+            <div className="border-t border-stone-300">
+              {rows.map(([name, note], i) => (
+                <div
+                  key={name}
+                  className="flex items-baseline justify-between border-b border-stone-200 py-3.5"
+                >
+                  <div className="flex items-baseline gap-4">
+                    <span className="font-mono text-[11px] text-stone-400 tabular-nums">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-stone-900 font-medium">{name}</span>
+                  </div>
+                  <span className="text-[12.5px] text-stone-500">{note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-// ─── CTA ──────────────────────────────────────────────────────────────────────
+// ── India-first — short, specific ──
+function IndiaFirst() {
+  return (
+    <section className="bg-white border-b border-stone-200">
+      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
+        <div className="md:col-span-5">
+          <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+            § India, not a port
+          </div>
+          <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
+            A Western model bent onto Indian inputs breaks on contact.
+          </h2>
+        </div>
+        <div className="md:col-span-7 text-[15px] text-stone-700 leading-relaxed space-y-4">
+          <p>
+            Stamp duty and registration as a first-class kernel input. Plot area
+            in sqft, sqyd, or acres — the same field. Money in lakh, crore, or
+            INR. Dates in en-IN. RTC, Pahani, encumbrance certificates, JDA and
+            JV clauses — parsed including Kannada-language records.
+          </p>
+          <p>
+            Bengaluru-first by default: BBMP zoning, BDA khata, BMRDA layout
+            approvals. The rest of the country arrives by configuration, not by
+            rewrite.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-function CTASection() {
+// ── Closing ──
+function Close() {
   const navigate = useNavigate();
   return (
-    <section className="bg-primary-600 py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
-        <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-          Start Your First Deal
-        </h2>
-        <p className="text-primary-100 text-lg mb-10 max-w-xl mx-auto">
-          Set up a deal workspace, link a parcel, and run end-to-end diligence — no
-          spreadsheet migrations required.
-        </p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <button
-            onClick={() => navigate('/login')}
-            className="px-6 py-3 bg-white hover:bg-gray-50 text-primary-700 rounded-lg text-sm font-semibold transition-colors shadow-md"
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => navigate('/login')}
-            className="px-6 py-3 border border-primary-400 hover:border-white text-white rounded-lg text-sm font-semibold transition-colors"
-          >
-            Register
-          </button>
+    <section className="bg-stone-950 text-stone-100">
+      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
+        <div className="max-w-3xl">
+          <div className={`text-[11px] uppercase tracking-[0.22em] mb-5 text-[#fb923c]`}>
+            § Deploy
+          </div>
+          <h2 className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight text-white">
+            Put REDIP on your pipeline.
+          </h2>
+          <p className="mt-5 text-stone-400 text-lg max-w-2xl leading-relaxed">
+            Spin up a deal workspace, link a parcel, run the kernel, and export
+            an IC memo in the time it would have taken to reconcile your
+            spreadsheet tabs.
+          </p>
+          <div className="mt-10 flex flex-wrap gap-4">
+            <button
+              onClick={() => navigate('/login')}
+              className={`text-sm font-medium text-white px-5 py-2.5 rounded-sm ${ACCENT_BG} hover:brightness-110`}
+            >
+              Request access →
+            </button>
+            <button
+              onClick={() => navigate('/login')}
+              className="text-sm font-medium text-stone-200 border border-stone-700 hover:border-stone-400 px-5 py-2.5 rounded-sm"
+            >
+              Sign in
+            </button>
+          </div>
         </div>
       </div>
     </section>
   );
 }
-
-// ─── Footer ───────────────────────────────────────────────────────────────────
 
 function Footer() {
   return (
-    <footer className="bg-gray-950 border-t border-gray-800 py-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
-          <div>
-            <div className="text-lg font-extrabold text-primary-500 tracking-tight mb-1">
-              REDIP
-            </div>
-            <div className="text-sm text-gray-500">AI-powered Deal Intelligence for India</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs font-medium text-gray-500 leading-relaxed">
-              India First · Bengaluru Priority
-              <br />
-              No mock data · No fabricated facts
-            </div>
-          </div>
-          <div className="md:text-right">
-            <div className="text-xs text-gray-600">
-              &copy; {new Date().getFullYear()} REDIP. All rights reserved.
-            </div>
-          </div>
+    <footer className="bg-stone-950 text-stone-500 border-t border-stone-800">
+      <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px]">
+        <div>
+          <span className="font-serif text-stone-300 text-base">REDIP<span className="text-[#c2410c]">.</span></span>
+          <span className="ml-3 uppercase tracking-[0.18em] text-stone-500 text-[10.5px]">
+            Real Estate Deal Intelligence
+          </span>
+        </div>
+        <div className="text-stone-500">
+          India-first · No mock data · No fabricated facts
+        </div>
+        <div className="text-stone-600 tabular-nums">
+          © {new Date().getFullYear()} REDIP
         </div>
       </div>
     </footer>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function LandingPage() {
   return (
-    <div className="min-h-screen">
-      <Navbar />
+    <div className="min-h-screen bg-white text-stone-900 antialiased">
+      <Nav />
       <Hero />
-      <WhatItSolves />
-      <ProductWorkflow />
-      <AICapabilities />
-      <FinancialEngine />
-      <DueDiligenceEngine />
+      <Kernel />
+      <Columns />
       <AssetClasses />
-      <CTASection />
+      <IndiaFirst />
+      <Close />
       <Footer />
     </div>
   );

@@ -114,7 +114,7 @@ export default function AssetClassProgrammeCard({ buildability, property, dealId
                     label="Construction cost"
                     value={fmtInr(programme.build_cost_inr)}
                     sub={programme.build_cost_per_sqft
-                      ? `\u20b9${fmtNum(programme.build_cost_per_sqft)}/sqft × ${fmtNum(programme.realized_bua_sqft)} sqft BUA`
+                      ? `₹${fmtNum(programme.build_cost_per_sqft)}/sqft × ${fmtNum(programme.realized_bua_sqft)} sqft BUA`
                       : null}
                   />
                 )}

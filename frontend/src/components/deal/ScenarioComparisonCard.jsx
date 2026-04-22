@@ -86,7 +86,7 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
             <DeltaTile
               icon={TrendingUp}
               label={hasValueUplift ? 'Asset-value uplift' : 'Revenue uplift'}
-              value={uplift ? fmtInr(uplift) : '\u2014'}
+              value={uplift ? fmtInr(uplift) : '—'}
               hint={hasValueUplift
                 ? 'stabilised value at same cap rate'
                 : 'sale-out revenue at market rate'}
@@ -95,7 +95,7 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
             <DeltaTile
               icon={TrendingUp}
               label="Net uplift"
-              value={feeKnown && uplift != null ? fmtInr(net_uplift_inr) : '\u2014'}
+              value={feeKnown && uplift != null ? fmtInr(net_uplift_inr) : '—'}
               hint={feeKnown && uplift != null
                 ? 'uplift − premium fee (ex. extra build cost)'
                 : 'needs circle rate to compute'}
@@ -204,7 +204,7 @@ function DeltaTile({ icon: Icon, label, value, unit, hint, tone, negative, stron
       </div>
       <div className="mt-1 flex items-baseline gap-1">
         <span className={clsx('leading-tight', strong ? 'text-lg font-bold' : 'text-base font-semibold')}>
-          {negative && typeof value === 'string' && value.startsWith('\u20b9') ? `\u2212${value.slice(1)}` : value}
+          {negative && typeof value === 'string' && value.startsWith('₹') ? `−${value.slice(1)}` : value}
         </span>
         {unit && <span className="text-[10px] opacity-60">{unit}</span>}
       </div>
