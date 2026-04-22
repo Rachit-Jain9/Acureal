@@ -300,6 +300,45 @@ const getScenarios = async (dealId) => {
   return computeScenarios(baseParams);
 };
 
+// ─── PROVENANCE GRAPH ─────────────────────────────────────────────────────────
+
+/**
+ * Return the dependency DAG for a saved deal's financial model.
+ *
+ * Every KPI, cost bucket, and revenue line traces back through computations
+ * to the user-supplied inputs. The UI (MethodologyExplorer DAG view, IC
+ * deck derivation hovers) consumes this snapshot so investors can answer
+ * "how was this number produced" without re-running the kernel.
+ *
+ * Recomputed from persisted inputs on each read — cheap (<200 nodes), and
+ * guarantees the graph structure tracks the current kernel version rather
+ * than whatever shape was saved. Matches `getScenarios` cadence.
+ */
+const getFinancialGraph = async (dealId) => {
+  const fin = await getFinancials(dealId);
+  const assetClass = fin.asset_class || 'residential_apartments';
+  const stored = fin.model_params?.inputs || {};
+  const baseParams = {
+    assetClass: resolveFinancialModelClass(assetClass),
+    ...stored,
+    plotAreaSqft:            stored.plotAreaSqft            ?? fin.plot_area_sqft,
+    fsi:                     stored.fsi                     ?? fin.fsi,
+    loadingFactor:           stored.loadingFactor           ?? fin.loading_factor,
+    constructionCostPerSqft: stored.constructionCostPerSqft ?? fin.construction_cost_per_sqft,
+    sellingRatePerSqft:      stored.sellingRatePerSqft      ?? fin.selling_rate_per_sqft,
+    landCostCr:              stored.landCostCr              ?? fin.land_cost_cr   ?? 0,
+    approvalCostCr:          stored.approvalCostCr          ?? fin.approval_cost_cr ?? 0,
+    marketingCostPct:        stored.marketingCostPct        ?? fin.marketing_cost_pct ?? 5,
+    financeCostPct:          stored.financeCostPct          ?? fin.finance_cost_pct  ?? 12,
+    discountRatePct:         stored.discountRatePct         ?? fin.discount_rate_pct ?? 14,
+    projectDurationMonths:   stored.projectDurationMonths   ?? fin.project_duration_months ?? 36,
+    developerMarginPct:      stored.developerMarginPct      ?? fin.developer_margin_pct ?? 20,
+    skipSensitivity: true, // graph endpoint doesn't need sensitivity matrix
+  };
+  const result = computeFullFinancials(baseParams);
+  return result.financialGraph;
+};
+
 // ─── CSV EXPORT ───────────────────────────────────────────────────────────────
 
 const exportFinancialCSV = async (dealId) => {
@@ -383,5 +422,6 @@ module.exports = {
   updateFinancials,
   runSensitivity,
   getScenarios,
+  getFinancialGraph,
   exportFinancialCSV,
 };

@@ -113,6 +113,9 @@ export const financialsAPI = {
   update: (dealId, data) => api.put(`/financials/${dealId}`, data),
   sensitivity: (dealId, data) => api.post(`/financials/${dealId}/sensitivity`, data),
   scenarios: (dealId) => api.get(`/financials/${dealId}/scenarios`),
+  // Authoritative provenance DAG — every KPI/cost/revenue node traces back
+  // to user inputs. Use for "how was this number produced" drill-downs.
+  financialGraph: (dealId) => api.get(`/financials/${dealId}/financial-graph`),
   exportCSV: (dealId) => api.get(`/financials/${dealId}/export/csv`, { responseType: 'blob' }),
   // Stateless kernel-first what-if runner. No DB touch; powers live sliders.
   quickCompute: (data) => api.post('/financials/quick-compute', data),

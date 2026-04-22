@@ -218,8 +218,12 @@ export default function FinancialTab({ deal }) {
         </div>
       </div>
 
-      {/* Provenance graph — how the KPIs above are derived */}
+      {/* Provenance graph — how the KPIs above are derived. Passes
+          dealId so the component fetches the authoritative kernel-v2 DAG
+          with live node values; falls back to client-side topology if the
+          backend graph isn't available (new / unsaved deal). */}
       <ProvenanceGraphView
+        dealId={dealId}
         assetClass={assetClass}
         facilityIds={mp.facilityIds || (f.finance_cost_cr ? ['construction-loan'] : [])}
         tierIds={mp.tierIds || []}
