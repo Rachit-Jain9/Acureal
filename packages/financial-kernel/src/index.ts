@@ -146,6 +146,7 @@ export {
   buildScenarios,
   applyScenarioPreset,
   SCENARIO_PRESETS,
+  buildQuarterlyProforma,
 } from './postprocess';
 export type {
   CapitalStack,
@@ -175,6 +176,10 @@ export type {
   ScenarioCell,
   ScenarioBundle,
   BuildScenariosArgs,
+  ProformaQuarterCell,
+  ProformaRow,
+  ProformaSection,
+  ProformaSummary,
 } from './postprocess';
 
 // Phase 4 — pure HTTP handler for the investor-package endpoint.

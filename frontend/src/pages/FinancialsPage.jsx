@@ -10,6 +10,7 @@ import ReferenceDock from '../components/financials/ReferenceDock';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
 import HospitalityProformaSection from '../components/financials/HospitalityProformaSection';
+import QuarterlyProformaPanel from '../components/financials/QuarterlyProformaPanel';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -485,6 +486,10 @@ function normalizeFinancials(financials) {
     sourcesUses: costs.sources_uses || null,
     cashFlows: cashFlowSeries.map((cf, i) => ({ quarter: cf.quarter ?? i, value: toNumber(cf.net) ?? 0 })),
     yearlyCashFlows: (financials.cash_flows?.yearly || []).map((cf) => ({ year: cf.year, label: cf.label, value: toNumber(cf.net) ?? 0 })),
+    // Quarterly proforma waterfall — persisted on every save via
+    // kernel.service.js → financial.service.js model_params. Shape from
+    // packages/financial-kernel/src/postprocess/proforma.ts.
+    proforma: mp.proforma || null,
     sensitivity: {
       sellingRates: sm.sellingRates || [],
       constructionCosts: sm.constructionCosts || [],
@@ -1867,6 +1872,7 @@ export default function FinancialsPage() {
           </div>
 
           <CashFlowChart cashFlows={normalizedFinancials.cashFlows} yearlyCashFlows={normalizedFinancials.yearlyCashFlows} assetClass={normalizedFinancials.assetClass} />
+          <QuarterlyProformaPanel proforma={normalizedFinancials.proforma} />
           <SensitivityTable sensitivity={normalizedFinancials.sensitivity} assetClass={normalizedFinancials.assetClass} />
 
           {/* Structure waterfall panels */}

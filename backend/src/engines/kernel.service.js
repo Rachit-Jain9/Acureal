@@ -44,6 +44,7 @@ const {
   buildHospitalityWaterfall,
   buildScenarios,
   buildAmortizingSchedule,
+  buildQuarterlyProforma,
   monthlyToQuarterly,
 } = kernel;
 
@@ -647,6 +648,7 @@ function computeFullFinancials(input) {
   const legacyShape = buildLegacyShape({ raw, result, assetClass });
   const capitalStack = buildCapitalStack(assetClass, raw, result);
   const cashFlows = buildQuarterlyCashFlows(result);
+  const proforma = input.skipProforma ? null : buildQuarterlyProforma(result);
   const sensitivityMatrix = input.skipSensitivity
     ? null
     : buildSensitivityMatrix({ raw, assetClass });
@@ -663,6 +665,7 @@ function computeFullFinancials(input) {
     revenue: flatRevenue,
     capitalStack,
     cashFlows,
+    proforma,
     sensitivityMatrix,
     financialGraph,
     // Kernel canonical block preserved for provenance / debug surfaces.
