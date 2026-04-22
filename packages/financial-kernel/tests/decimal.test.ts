@@ -40,4 +40,49 @@ describe('Decimal', () => {
     expect(Decimal.fromNumber(2).compare(Decimal.fromNumber(2))).toBe(0);
     expect(Decimal.fromNumber(3).compare(Decimal.fromNumber(2))).toBe(1);
   });
+
+  // Regression: without `toJSON`, `JSON.stringify(decimal)` walks the
+  // instance's own properties and hits `q: bigint`, throwing
+  // `TypeError: Do not know how to serialize a BigInt`. That surfaces
+  // in production as "quick-compute failed" / "calculate failed" any
+  // time a raw Decimal leaks into `res.json()` or a JSONB write (e.g.
+  // `costs.extras`, `revenue.extras`, `financing.debtDrawn`). The fix
+  // is `Decimal.prototype.toJSON` returning `toNumber()`, which JSON
+  // automatically invokes at every serialization boundary.
+  describe('JSON serialization', () => {
+    test('a bare Decimal stringifies to its number form', () => {
+      const d = Decimal.fromNumber(123.45);
+      expect(() => JSON.stringify(d)).not.toThrow();
+      expect(JSON.stringify(d)).toBe('123.45');
+    });
+
+    test('Decimal inside an object becomes a number in the JSON output', () => {
+      const obj = {
+        landCr: Decimal.fromNumber(30),
+        stampDutyCr: Decimal.fromNumber(1.65),
+        extras: { tenantImprovementsCr: Decimal.fromNumber(2.5) },
+      };
+      const parsed = JSON.parse(JSON.stringify(obj));
+      expect(parsed.landCr).toBeCloseTo(30, 6);
+      expect(parsed.stampDutyCr).toBeCloseTo(1.65, 6);
+      expect(parsed.extras.tenantImprovementsCr).toBeCloseTo(2.5, 6);
+    });
+
+    test('nested arrays of Decimals stringify without BigInt errors', () => {
+      const values = [1.1, 2.2, 3.3].map((n) => Decimal.fromNumber(n));
+      const payload = { monthly: { values } };
+      expect(() => JSON.stringify(payload)).not.toThrow();
+      const parsed = JSON.parse(JSON.stringify(payload));
+      expect(parsed.monthly.values).toEqual([
+        expect.closeTo(1.1, 6),
+        expect.closeTo(2.2, 6),
+        expect.closeTo(3.3, 6),
+      ]);
+    });
+
+    test('zero and negative Decimals round-trip through JSON', () => {
+      expect(JSON.stringify(Decimal.zero())).toBe('0');
+      expect(JSON.stringify(Decimal.fromNumber(-0.05))).toBe('-0.05');
+    });
+  });
 });
