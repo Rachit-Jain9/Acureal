@@ -1,29 +1,74 @@
 /** @type {import('tailwindcss').Config} */
 /**
- * Editorial design tokens for REDIP.
+ * REDIP — Precision Analysis design system.
  *
- * Intent: a Bloomberg/Stripe/Linear-caliber finance app — not a pastel
- * AI-demo dashboard. Neutral ink on paper, single cool accent, tight type
- * scale with tabular numerals for every financial figure.
+ * All color classes resolve to CSS variables, so the whole site repaints
+ * on a single `data-theme="light" | "dark"` attribute flip. Named groups:
  *
- * Tokens:
- *   - `ink`   — warm near-black text and heavy ink. Stable across themes.
- *   - `paper` — card / surface background. Warm off-white in light mode.
- *   - `line`  — hairline borders (lighter than any legacy `gray-200`).
- *   - `accent` — single editorial indigo. Use sparingly, for primary CTAs
- *                and active-state underlines only.
- *   - `pos` / `neg` — financial signals (emerald / rose). Used for deltas,
- *                     not decoration.
+ *   bg-primary / bg-secondary / bg-elevated / surface — surfaces
+ *   text-primary / text-secondary / text-muted       — text ink
+ *   border-primary / border-secondary / border-strong — hairlines
+ *   data-positive / data-negative / data-neutral / data-highlight — signals
+ *   accent (blue, trust)                              — primary CTA
+ *   premium (amber, rare)                             — above-bench badge
  *
- * Legacy `primary-*` palette is retained so existing components keep
- * compiling while we migrate page-by-page.
+ * Tailwind native `gray-*`/`slate-*` classes still compile; existing call
+ * sites keep working while we migrate file-by-file.
  */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
-  darkMode: 'class',
+  darkMode: ['selector', 'html[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
+        // Semantic — the ONLY classes new code should use.
+        bg: {
+          DEFAULT:  'var(--color-bg-primary)',
+          primary:  'var(--color-bg-primary)',
+          secondary:'var(--color-bg-secondary)',
+          elevated: 'var(--color-bg-elevated)',
+        },
+        surface: {
+          DEFAULT: 'var(--color-surface)',
+          2:       'var(--color-surface-2)',
+        },
+        content: {
+          primary:   'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted:     'var(--color-text-muted)',
+          inverse:   'var(--color-text-inverse)',
+        },
+        hairline: {
+          DEFAULT:   'var(--color-border-primary)',
+          soft:      'var(--color-border-secondary)',
+          strong:    'var(--color-border-strong)',
+        },
+        data: {
+          positive:  'var(--color-data-positive)',
+          negative:  'var(--color-data-negative)',
+          neutral:   'var(--color-data-neutral)',
+          highlight: 'var(--color-data-highlight)',
+        },
+        accent: {
+          DEFAULT: 'var(--color-brand-accent)',
+          soft:    'var(--color-brand-accent-soft)',
+          50:  '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
+        },
+        premium: {
+          DEFAULT: 'var(--color-brand-premium)',
+          soft:    'var(--color-brand-premium-soft)',
+        },
+
+        // Legacy aliases so existing components keep compiling.
         primary: {
           50:  '#eff6ff',
           100: '#dbeafe',
@@ -50,27 +95,19 @@ export default {
           950: '#0a0a09',
         },
         paper: {
-          DEFAULT: '#fbfbf8',
-          50:  '#ffffff',
-          100: '#fbfbf8',
-          200: '#f6f5f0',
-          300: '#eeede6',
+          DEFAULT: 'var(--color-bg-elevated)',
+          50:  'var(--color-bg-primary)',
+          100: 'var(--color-bg-elevated)',
+          200: 'var(--color-surface)',
+          300: 'var(--color-surface-2)',
         },
         line: {
-          DEFAULT: '#e8e6df',
-          soft:    '#efece6',
-          strong:  '#d6d3c9',
+          DEFAULT: 'var(--color-border-primary)',
+          soft:    'var(--color-border-secondary)',
+          strong:  'var(--color-border-strong)',
         },
-        accent: {
-          50:  '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          500: '#4f46e5',
-          600: '#4338ca',
-          700: '#3730a3',
-        },
-        pos: { DEFAULT: '#047857', soft: '#ecfdf5' },
-        neg: { DEFAULT: '#b91c1c', soft: '#fef2f2' },
+        pos: { DEFAULT: 'var(--color-data-positive)', soft: 'rgba(34,197,94,0.14)' },
+        neg: { DEFAULT: 'var(--color-data-negative)', soft: 'rgba(239,68,68,0.14)' },
       },
       fontFamily: {
         serif: [
@@ -109,18 +146,24 @@ export default {
         ],
       },
       fontSize: {
-        'micro':   ['0.6875rem', { lineHeight: '1rem',    letterSpacing: '0.06em' }],
-        'caption': ['0.75rem',   { lineHeight: '1.1rem',  letterSpacing: '0.02em' }],
-        'eyebrow': ['0.6875rem', { lineHeight: '0.9rem',  letterSpacing: '0.12em' }],
-        'metric':  ['1.75rem',   { lineHeight: '2rem',    letterSpacing: '-0.015em' }],
-        'metric-lg': ['2.25rem', { lineHeight: '2.5rem',  letterSpacing: '-0.02em' }],
+        'micro':    ['0.6875rem', { lineHeight: '1rem',    letterSpacing: '0.06em' }],
+        'caption':  ['0.75rem',   { lineHeight: '1.1rem',  letterSpacing: '0.02em' }],
+        'eyebrow':  ['0.6875rem', { lineHeight: '0.9rem',  letterSpacing: '0.14em' }],
+        'metric':   ['1.75rem',   { lineHeight: '2rem',    letterSpacing: '-0.015em' }],
+        'metric-lg':['2.25rem',   { lineHeight: '2.5rem',  letterSpacing: '-0.02em' }],
       },
       letterSpacing: {
-        'eyebrow': '0.12em',
+        'eyebrow': '0.14em',
+      },
+      spacing: {
+        '4.5': '1.125rem',
+      },
+      borderRadius: {
+        'editorial': '10px',
       },
       boxShadow: {
-        'editorial':    '0 1px 2px 0 rgb(17 17 17 / 0.04), 0 1px 1px 0 rgb(17 17 17 / 0.03)',
-        'editorial-lg': '0 4px 14px -4px rgb(17 17 17 / 0.08), 0 2px 6px -2px rgb(17 17 17 / 0.04)',
+        'editorial':    'var(--shadow-card)',
+        'editorial-lg': 'var(--shadow-elevated)',
       },
     },
   },

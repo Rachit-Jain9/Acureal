@@ -1,15 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useThemeStore from '../store/themeStore';
+import { Moon, Sun } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REDIP Landing — editorial, IC-grade.
-// Bloomberg + Stripe + Linear. Typographic, grown-up. Single burnt-orange accent.
-// Animated translucent grid behind the hero; scroll-reveal on subsequent sections.
+// REDIP Landing — Precision Analysis system.
+// Bloomberg DNA: near-black surface, crisp typography, blue trust accent,
+// amber premium signal, tabular numerals everywhere.
+// Fully themed: flips on html[data-theme] from dark → light.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const ACCENT = 'text-[#c2410c]';
-const ACCENT_BG = 'bg-[#c2410c]';
-const ACCENT_WEAK = 'text-[#9a3412]';
 
 // Intersection-observer driven fade/slide-in. One-shot.
 function Reveal({ children, delay = 0, className = '' }) {
@@ -41,27 +40,52 @@ function Reveal({ children, delay = 0, className = '' }) {
 
 function Nav() {
   const navigate = useNavigate();
+  const mode = useThemeStore((s) => s.mode);
+  const toggleTheme = useThemeStore((s) => s.toggle);
   return (
-    <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur border-b border-stone-200">
+    <nav
+      className="sticky top-0 z-50 backdrop-blur"
+      style={{
+        backgroundColor: mode === 'dark' ? 'rgba(5,5,7,0.82)' : 'rgba(255,255,255,0.85)',
+        borderBottom: '1px solid var(--color-border-primary)',
+      }}
+    >
       <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
         <div className="flex items-baseline gap-6">
-          <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">
-            REDIP<span className={ACCENT}>.</span>
+          <span
+            className="font-serif text-xl font-semibold tracking-tight"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
+            REDIP
+            <span style={{ color: 'var(--color-brand-premium)' }}>.</span>
           </span>
-          <span className="hidden sm:inline text-[11px] uppercase tracking-[0.18em] text-stone-500">
+          <span
+            className="hidden sm:inline text-[11px] uppercase tracking-[0.18em]"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
             Real Estate Deal Intelligence · India
           </span>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="p-2 rounded-md transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            {mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm text-stone-700 hover:text-stone-900"
+            className="text-sm px-3 py-1.5 rounded-md transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             Sign in
           </button>
           <button
             onClick={() => navigate('/login')}
-            className={`text-sm font-medium text-white px-3.5 py-1.5 rounded-sm ${ACCENT_BG} hover:brightness-95`}
+            className="text-sm font-medium text-white px-3.5 py-1.5 rounded-md hover:brightness-110"
+            style={{ backgroundColor: 'var(--color-brand-accent)' }}
           >
             Request access →
           </button>
@@ -71,57 +95,124 @@ function Nav() {
   );
 }
 
-// Translucent animated background: slow-drifting grid + orbiting accent lines.
-// Pure SVG + CSS — no deps, renders crisply at any size, ~0 CPU.
+// Animated hero backdrop: drifting grid, subtle skyline, accent orbit, ticker.
 function HeroBackdrop() {
+  const mode = useThemeStore((s) => s.mode);
+  const isDark = mode === 'dark';
+  const gridStroke = isDark ? '#1e293b' : '#e2e8f0';
+  const boldStroke = isDark ? '#334155' : '#cbd5e1';
+  const spotStop   = isDark ? '#050507' : '#ffffff';
+  const skylineFill = isDark ? '#f1f5f9' : '#0f172a';
+  const skylineOp   = isDark ? 0.06 : 0.05;
+
   return (
     <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden">
-      {/* Warm paper wash */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white via-[#fdfaf4] to-white" />
-      {/* Drifting architectural grid */}
+      {/* Gradient wash */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: isDark
+            ? 'radial-gradient(1200px 600px at 12% -10%, rgba(59,130,246,0.12), transparent 55%), radial-gradient(800px 500px at 90% 10%, rgba(245,184,0,0.08), transparent 55%), #050507'
+            : 'radial-gradient(1200px 600px at 12% -10%, rgba(37,99,235,0.08), transparent 60%), radial-gradient(800px 500px at 90% 10%, rgba(245,184,0,0.06), transparent 60%), #ffffff',
+        }}
+      />
+      {/* Drifting data grid */}
       <svg
-        className="absolute inset-0 w-full h-full opacity-[0.35] redip-hero-drift"
+        className="absolute inset-0 w-full h-full redip-hero-drift redip-hero-pulse"
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
           <pattern id="redip-grid-fine" width="28" height="28" patternUnits="userSpaceOnUse">
-            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#d6d3d1" strokeWidth="0.5" />
+            <path d="M 28 0 L 0 0 0 28" fill="none" stroke={gridStroke} strokeWidth="0.5" />
           </pattern>
           <pattern id="redip-grid-bold" width="140" height="140" patternUnits="userSpaceOnUse">
-            <path d="M 140 0 L 0 0 0 140" fill="none" stroke="#b8b5b1" strokeWidth="0.7" />
+            <path d="M 140 0 L 0 0 0 140" fill="none" stroke={boldStroke} strokeWidth="0.6" />
           </pattern>
-          <radialGradient id="redip-spot" cx="50%" cy="40%" r="60%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
-            <stop offset="65%" stopColor="#ffffff" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
+          <radialGradient id="redip-spot" cx="50%" cy="40%" r="70%">
+            <stop offset="0%"  stopColor={spotStop} stopOpacity="0" />
+            <stop offset="60%" stopColor={spotStop} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={spotStop} stopOpacity="0.95" />
           </radialGradient>
         </defs>
         <rect width="100%" height="100%" fill="url(#redip-grid-fine)" />
         <rect width="100%" height="100%" fill="url(#redip-grid-bold)" />
         <rect width="100%" height="100%" fill="url(#redip-spot)" />
       </svg>
-      {/* Skyline silhouette — translucent, slow pan */}
+      {/* Skyline silhouette */}
       <svg
-        className="absolute bottom-0 left-0 w-[140%] h-[38%] opacity-[0.08] redip-hero-skyline"
+        className="absolute bottom-0 left-0 w-[140%] h-[42%] redip-hero-skyline"
+        style={{ opacity: skylineOp }}
         viewBox="0 0 1400 300"
         preserveAspectRatio="none"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
-          fill="#1c1917"
+          fill={skylineFill}
           d="M0 300 V220 H40 V160 H80 V200 H120 V120 H180 V170 H220 V90 H280 V140 H320 V60 H380 V130 H430 V180 H470 V110 H520 V40 H580 V100 H630 V170 H680 V80 H740 V130 H790 V60 H850 V20 H900 V80 H950 V140 H1000 V70 H1060 V110 H1110 V30 H1170 V90 H1220 V150 H1270 V60 H1330 V120 H1400 V300 Z"
         />
       </svg>
-      {/* Accent orbit — a single slow burnt-orange arc */}
+      {/* Accent orbit */}
       <svg
-        className="absolute -top-20 -right-20 w-[520px] h-[520px] opacity-30 redip-hero-orbit"
+        className="absolute -top-24 -right-24 w-[560px] h-[560px] redip-hero-orbit"
+        style={{ opacity: isDark ? 0.35 : 0.25 }}
         viewBox="0 0 200 200"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <circle cx="100" cy="100" r="90" fill="none" stroke="#c2410c" strokeWidth="0.4" strokeDasharray="2 6" />
-        <circle cx="100" cy="100" r="70" fill="none" stroke="#c2410c" strokeWidth="0.3" strokeDasharray="1 5" />
-        <circle cx="100" cy="100" r="50" fill="none" stroke="#c2410c" strokeWidth="0.3" strokeDasharray="1 4" />
+        <circle cx="100" cy="100" r="92" fill="none" stroke="var(--color-brand-accent)" strokeWidth="0.4" strokeDasharray="2 6" />
+        <circle cx="100" cy="100" r="72" fill="none" stroke="var(--color-brand-accent)" strokeWidth="0.3" strokeDasharray="1 5" />
+        <circle cx="100" cy="100" r="52" fill="none" stroke="var(--color-brand-premium)" strokeWidth="0.35" strokeDasharray="1 4" />
       </svg>
+    </div>
+  );
+}
+
+// Live-style ticker — real asset-class labels, not fake symbols.
+function LiveTicker() {
+  const items = [
+    ['BLR · Residential', '14.0% IRR', 'pos'],
+    ['BLR · Office',      '7.6% cap',   'neu'],
+    ['MUM · Mixed-use',   '12.2% IRR',  'pos'],
+    ['HYD · Logistics',   '9.4% yield', 'pos'],
+    ['BLR · Plotted',     '26.1% IRR',  'pos'],
+    ['NCR · Retail',      '8.0% cap',   'neu'],
+    ['BLR · Hospitality', 'ADR ₹9,820', 'pre'],
+    ['BLR · Redevelopment', '21.8% IRR', 'pos'],
+  ];
+  const row = [...items, ...items];
+  return (
+    <div
+      className="relative overflow-hidden"
+      style={{
+        borderTop: '1px solid var(--color-border-primary)',
+        borderBottom: '1px solid var(--color-border-primary)',
+        backgroundColor: 'var(--color-bg-secondary)',
+      }}
+    >
+      <div className="py-2 flex redip-ticker whitespace-nowrap">
+        {row.map(([label, metric, tone], i) => (
+          <div
+            key={i}
+            className="flex items-baseline gap-3 px-6 text-[12px] tabular-nums"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            <span className="uppercase tracking-[0.12em] text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+              {label}
+            </span>
+            <span
+              style={{
+                color:
+                  tone === 'pos' ? 'var(--color-data-positive)' :
+                  tone === 'pre' ? 'var(--color-brand-premium)' :
+                                   'var(--color-data-neutral)',
+                fontWeight: 600,
+              }}
+            >
+              {metric}
+            </span>
+            <span style={{ color: 'var(--color-text-muted)' }}>·</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -129,16 +220,29 @@ function HeroBackdrop() {
 function Hero() {
   const navigate = useNavigate();
   return (
-    <section className="relative bg-white border-b border-stone-200 overflow-hidden">
+    <section className="relative overflow-hidden" style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
       <HeroBackdrop />
       <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
-        <div className="text-[11px] uppercase tracking-[0.22em] text-stone-500 mb-6">
-          Bengaluru / Greater Bengaluru priority
+        <div
+          className="text-[11px] uppercase tracking-[0.22em] mb-6 flex items-center gap-2"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: 'var(--color-data-positive)', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }}
+          />
+          Live · Bengaluru / Greater Bengaluru priority
         </div>
-        <h1 className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight text-stone-900 max-w-4xl">
-          Underwriting is a <em className="italic">first-class</em> engineering problem.
+        <h1
+          className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight max-w-4xl"
+          style={{ color: 'var(--color-text-primary)' }}
+        >
+          Underwriting is a <em className="italic" style={{ color: 'var(--color-brand-accent)' }}>first-class</em> engineering problem.
         </h1>
-        <p className="mt-7 text-lg md:text-xl text-stone-700 leading-relaxed max-w-2xl">
+        <p
+          className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl"
+          style={{ color: 'var(--color-text-secondary)' }}
+        >
           REDIP is the operating system for live real-estate deal work in India —
           a deterministic financial kernel, provenance-traced diligence, and IC-ready
           outputs. Built for GPs who will not ship a memo whose math they cannot defend.
@@ -146,33 +250,54 @@ function Hero() {
         <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
           <button
             onClick={() => navigate('/login')}
-            className={`text-sm font-medium text-white px-5 py-2.5 rounded-sm ${ACCENT_BG} hover:brightness-95`}
+            className="text-sm font-medium text-white px-5 py-2.5 rounded-md hover:brightness-110"
+            style={{ backgroundColor: 'var(--color-brand-accent)' }}
           >
             Start a deal →
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm font-medium text-stone-900 border-b border-stone-400 hover:border-stone-900 pb-0.5"
+            className="text-sm font-medium px-5 py-2.5 rounded-md"
+            style={{
+              color: 'var(--color-text-primary)',
+              border: '1px solid var(--color-border-strong)',
+              backgroundColor: 'transparent',
+            }}
           >
             Request access
           </button>
         </div>
 
-        <div className="mt-20 border-t border-stone-200 pt-8 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8">
+        {/* Editorial KPI strip with colored data signals */}
+        <div
+          className="mt-20 pt-8 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8"
+          style={{ borderTop: '1px solid var(--color-border-primary)' }}
+        >
           {[
-            ['10', 'Asset classes', 'residential → hospitality'],
-            ['15y', 'Quarterly horizon', 'per cash-flow line'],
-            ['7', 'DD layers', 'title → physical'],
-            ['8', 'Deal structures', 'outright · JV · JDA · …'],
-          ].map(([stat, label, note]) => (
+            ['10',  'Asset classes',    'residential → hospitality', 'neu'],
+            ['15y', 'Quarterly horizon','per cash-flow line',         'neu'],
+            ['7',   'DD layers',        'title → physical',           'pos'],
+            ['8',   'Deal structures',  'outright · JV · JDA · …',    'pre'],
+          ].map(([stat, label, note, tone]) => (
             <div key={label}>
-              <div className="font-serif text-3xl md:text-4xl font-medium text-stone-900 leading-none">
+              <div
+                className="font-serif text-3xl md:text-4xl font-medium leading-none tabular-nums"
+                style={{
+                  color:
+                    tone === 'pos' ? 'var(--color-data-positive)' :
+                    tone === 'pre' ? 'var(--color-brand-premium)' :
+                                     'var(--color-text-primary)',
+                }}
+              >
                 {stat}
               </div>
-              <div className="mt-2 text-xs uppercase tracking-[0.16em] text-stone-500">
+              <div
+                className="mt-2 text-xs uppercase tracking-[0.16em]"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
                 {label}
               </div>
-              <div className="mt-1 text-[11px] text-stone-400">{note}</div>
+              <div className="mt-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{note}</div>
             </div>
           ))}
         </div>
@@ -188,37 +313,53 @@ function Columns() {
       title: 'A deterministic financial engine.',
       body: 'Ten asset classes. Eight deal structures. Fifteen-year quarterly horizons. Sources & uses, debt schedules, JDA / JV waterfalls, scenario comparison, and sensitivity tornadoes — all from a single kernel in TypeScript.',
       bullets: ['Quick-compute < 50ms', 'What-If sliders with live KPI deltas', 'Downside / Base / Upside scenarios'],
+      tone: 'neu',
     },
     {
       tag: '§ Diligence',
       title: 'Seven layers, each scored by deal impact.',
       body: 'Title, regulatory, seller validity, statutory approvals, financial, project, and physical. Each DD item is classified as Deal-Breaker, Buildability-Blocker, Commercial-Blocker, or Secondary. Evidence links live inside the deal — not in a separate drive.',
       bullets: ['Kannada-language EC/RTC extraction', 'JDA/JV clause parsing', 'Missing-item detection'],
+      tone: 'pos',
     },
     {
       tag: '§ Report',
       title: 'IC-ready outputs without reformatting.',
       body: 'A memo, a model, a DD summary, and a risk narrative. One click each. Every number is traced to its source — so the pushback in the IC room is about the deal, not about the spreadsheet.',
       bullets: ['Investor-grade PDF memo', 'Excel model export', 'Structured risk narrative'],
+      tone: 'pre',
     },
   ];
+  const toneColor = (t) =>
+    t === 'pos' ? 'var(--color-data-positive)' :
+    t === 'pre' ? 'var(--color-brand-premium)' :
+                  'var(--color-brand-accent)';
+
   return (
-    <section className="bg-white border-b border-stone-200">
+    <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-3 gap-10 md:gap-8">
           {columns.map((c, i) => (
             <Reveal key={c.tag} delay={i * 90}>
-              <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+              <div className="text-[11px] uppercase tracking-[0.22em] mb-4" style={{ color: toneColor(c.tone) }}>
                 {c.tag}
               </div>
-              <h3 className="font-serif text-2xl leading-snug tracking-tight text-stone-900">
+              <h3
+                className="font-serif text-2xl leading-snug tracking-tight"
+                style={{ color: 'var(--color-text-primary)' }}
+              >
                 {c.title}
               </h3>
-              <p className="mt-4 text-sm text-stone-700 leading-relaxed">{c.body}</p>
-              <ul className="mt-5 space-y-2 text-[13px] text-stone-800 border-t border-stone-200 pt-4">
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                {c.body}
+              </p>
+              <ul
+                className="mt-5 space-y-2 text-[13px] pt-4"
+                style={{ borderTop: '1px solid var(--color-border-primary)' }}
+              >
                 {c.bullets.map((b) => (
-                  <li key={b} className="flex items-baseline gap-2">
-                    <span className="text-stone-400 font-mono text-[11px]">→</span>
+                  <li key={b} className="flex items-baseline gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                    <span className="font-mono text-[11px]" style={{ color: toneColor(c.tone) }}>→</span>
                     <span>{b}</span>
                   </li>
                 ))}
@@ -245,34 +386,55 @@ function AssetClasses() {
     ['Raw land', 'appreciation-play, zone transitions'],
   ];
   return (
-    <section className="bg-stone-50 border-b border-stone-200">
+    <section
+      style={{
+        backgroundColor: 'var(--color-bg-secondary)',
+        borderBottom: '1px solid var(--color-border-primary)',
+      }}
+    >
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-12 gap-8">
           <Reveal className="md:col-span-4">
-            <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+            <div className="text-[11px] uppercase tracking-[0.22em] mb-4" style={{ color: 'var(--color-brand-accent)' }}>
               § Asset coverage
             </div>
-            <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
+            <h2
+              className="font-serif text-3xl md:text-4xl leading-tight tracking-tight"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
               Every asset class an Indian GP actually underwrites.
             </h2>
-            <p className="mt-5 text-stone-700 leading-relaxed text-[15px]">
+            <p
+              className="mt-5 leading-relaxed text-[15px]"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
               Not a toy subset. Each class is modelled against its own cash-flow
               shape — apartment absorption is not a plotted layout, and a hotel
               is nobody&rsquo;s office tower.
             </p>
           </Reveal>
           <div className="md:col-span-8">
-            <div className="border-t border-stone-300">
+            <div style={{ borderTop: '1px solid var(--color-border-strong)' }}>
               {rows.map(([name, note], i) => (
                 <Reveal key={name} delay={i * 30}>
-                  <div className="flex items-baseline justify-between border-b border-stone-200 py-3.5">
+                  <div
+                    className="flex items-baseline justify-between py-3.5"
+                    style={{ borderBottom: '1px solid var(--color-border-primary)' }}
+                  >
                     <div className="flex items-baseline gap-4">
-                      <span className="font-mono text-[11px] text-stone-400 tabular-nums">
+                      <span
+                        className="font-mono text-[11px] tabular-nums"
+                        style={{ color: 'var(--color-text-muted)' }}
+                      >
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span className="text-stone-900 font-medium">{name}</span>
+                      <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                        {name}
+                      </span>
                     </div>
-                    <span className="text-[12.5px] text-stone-500">{note}</span>
+                    <span className="text-[12.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                      {note}
+                    </span>
                   </div>
                 </Reveal>
               ))}
@@ -286,18 +448,27 @@ function AssetClasses() {
 
 function IndiaFirst() {
   return (
-    <section className="bg-white border-b border-stone-200">
+    <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
         <Reveal className="md:col-span-5">
-          <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${ACCENT_WEAK}`}>
+          <div
+            className="text-[11px] uppercase tracking-[0.22em] mb-4"
+            style={{ color: 'var(--color-brand-premium)' }}
+          >
             § India, not a port
           </div>
-          <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-stone-900">
+          <h2
+            className="font-serif text-3xl md:text-4xl leading-tight tracking-tight"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
             A Western model bent onto Indian inputs breaks on contact.
           </h2>
         </Reveal>
         <Reveal className="md:col-span-7" delay={120}>
-          <div className="text-[15px] text-stone-700 leading-relaxed space-y-4">
+          <div
+            className="text-[15px] leading-relaxed space-y-4"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
             <p>
               Stamp duty and registration as a first-class kernel input. Plot area
               in sqft, sqyd, or acres — the same field. Money in lakh, crore, or
@@ -319,16 +490,29 @@ function IndiaFirst() {
 function Close() {
   const navigate = useNavigate();
   return (
-    <section className="bg-stone-950 text-stone-100">
+    <section
+      style={{
+        backgroundColor: 'var(--color-bg-secondary)',
+      }}
+    >
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="max-w-3xl">
-          <div className="text-[11px] uppercase tracking-[0.22em] mb-5 text-[#fb923c]">
+          <div
+            className="text-[11px] uppercase tracking-[0.22em] mb-5"
+            style={{ color: 'var(--color-brand-premium)' }}
+          >
             § Deploy
           </div>
-          <h2 className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight text-white">
+          <h2
+            className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
             Put REDIP on your pipeline.
           </h2>
-          <p className="mt-5 text-stone-400 text-lg max-w-2xl leading-relaxed">
+          <p
+            className="mt-5 text-lg max-w-2xl leading-relaxed"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
             Spin up a deal workspace, link a parcel, run the kernel, and export
             an IC memo in the time it would have taken to reconcile your
             spreadsheet tabs.
@@ -336,13 +520,19 @@ function Close() {
           <div className="mt-10 flex flex-wrap gap-4">
             <button
               onClick={() => navigate('/login')}
-              className={`text-sm font-medium text-white px-5 py-2.5 rounded-sm ${ACCENT_BG} hover:brightness-110`}
+              className="text-sm font-medium text-white px-5 py-2.5 rounded-md hover:brightness-110"
+              style={{ backgroundColor: 'var(--color-brand-accent)' }}
             >
               Request access →
             </button>
             <button
               onClick={() => navigate('/login')}
-              className="text-sm font-medium text-stone-200 border border-stone-700 hover:border-stone-400 px-5 py-2.5 rounded-sm"
+              className="text-sm font-medium px-5 py-2.5 rounded-md"
+              style={{
+                color: 'var(--color-text-primary)',
+                border: '1px solid var(--color-border-strong)',
+                backgroundColor: 'transparent',
+              }}
             >
               Sign in
             </button>
@@ -355,18 +545,29 @@ function Close() {
 
 function Footer() {
   return (
-    <footer className="bg-stone-950 text-stone-500 border-t border-stone-800">
+    <footer
+      style={{
+        backgroundColor: 'var(--color-bg-primary)',
+        borderTop: '1px solid var(--color-border-primary)',
+      }}
+    >
       <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px]">
         <div>
-          <span className="font-serif text-stone-300 text-base">REDIP<span className="text-[#c2410c]">.</span></span>
-          <span className="ml-3 uppercase tracking-[0.18em] text-stone-500 text-[10.5px]">
+          <span className="font-serif text-base" style={{ color: 'var(--color-text-primary)' }}>
+            REDIP
+            <span style={{ color: 'var(--color-brand-premium)' }}>.</span>
+          </span>
+          <span
+            className="ml-3 uppercase tracking-[0.18em] text-[10.5px]"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
             Real Estate Deal Intelligence
           </span>
         </div>
-        <div className="text-stone-500">
+        <div style={{ color: 'var(--color-text-muted)' }}>
           India-first · No mock data · No fabricated facts
         </div>
-        <div className="text-stone-600 tabular-nums">
+        <div className="tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
           © {new Date().getFullYear()} REDIP
         </div>
       </div>
@@ -376,9 +577,13 @@ function Footer() {
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white text-stone-900 antialiased">
+    <div
+      className="min-h-screen antialiased"
+      style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}
+    >
       <Nav />
       <Hero />
+      <LiveTicker />
       <Columns />
       <AssetClasses />
       <IndiaFirst />

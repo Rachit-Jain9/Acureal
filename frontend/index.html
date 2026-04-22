@@ -1,21 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="REDIP — Real Estate Deal Intelligence Platform. India-first underwriting, diligence, and IC-ready reporting for GPs and institutional investors." />
-    <meta name="theme-color" content="#fafaf9" />
+    <meta name="theme-color" content="#050507" />
     <title>REDIP — Real Estate Deal Intelligence</title>
     <link
       rel="icon"
       type="image/svg+xml"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231c1917'/><text x='50' y='62' text-anchor='middle' font-size='46' font-weight='600' fill='%23fafaf9' font-family='Georgia, Cambria, serif'>R</text><rect x='78' y='74' width='10' height='10' fill='%23c2410c'/></svg>"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23050507'/><text x='50' y='62' text-anchor='middle' font-size='46' font-weight='600' fill='%23F4F4F5' font-family='Georgia, Cambria, serif'>R</text><rect x='78' y='74' width='10' height='10' fill='%23F5B800'/></svg>"
     />
+    <script>
+      // Prime the theme attribute before React mounts to avoid a flash
+      (function () {
+        try {
+          var saved = localStorage.getItem('redip.theme');
+          var mode = saved === 'light' || saved === 'dark' ? saved : 'dark';
+          document.documentElement.setAttribute('data-theme', mode);
+          document.documentElement.classList.toggle('dark', mode === 'dark');
+          document.documentElement.style.colorScheme = mode;
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400;1,8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400;1,8..60,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
-  <body class="bg-stone-50 text-stone-900 antialiased">
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

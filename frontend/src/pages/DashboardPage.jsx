@@ -28,6 +28,7 @@ import StatCard from '../components/common/StatCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import useThemeStore from '../store/themeStore';
 import {
   formatCrores,
   formatPct,
@@ -35,32 +36,70 @@ import {
   STAGE_CONFIG,
 } from '../utils/format';
 
-// Editorial palette — burnt-orange accent scaled against warm stone neutrals.
-// Biggest slice reads as the strongest accent; remaining slices step into stone.
-const PIE_COLORS = [
-  '#c2410c', '#9a3412', '#ea580c', '#7c2d12',
-  '#a8a29e', '#78716c', '#57534e', '#44403c',
-  '#d6d3d1', '#292524',
-];
-const ACCENT_BAR_FILL = '#c2410c';
+// Precision Analysis chart palette — colorblind-safe, layered:
+//   neutral blue (trust)  → primary / default
+//   positive green        → upside / revenue
+//   amber premium         → rare / above-bench signals
+//   highlight teal        → secondary series
+//   violet + coral        → long-tail categorical
+// These hexes mirror --chart-1 through --chart-6 so tooltips and SVG both
+// stay in sync with CSS vars the rest of the app uses.
+const CHART_PALETTE_DARK = ['#60A5FA', '#22C55E', '#F5B800', '#14B8A6', '#A78BFA', '#F87171', '#38BDF8', '#34D399', '#FBBF24', '#FB7185'];
+const CHART_PALETTE_LIGHT = ['#2563EB', '#16A34A', '#B45309', '#0D9488', '#7C3AED', '#DC2626', '#0EA5E9', '#059669', '#D97706', '#E11D48'];
 
-const TOOLTIP_STYLE = {
-  borderRadius: '6px',
-  border: '1px solid rgb(217, 217, 212)',
-  backgroundColor: 'rgb(251, 251, 248)',
-  color: '#141413',
-  fontSize: '12px',
-  fontFeatureSettings: '"tnum"',
-  boxShadow: '0 4px 14px -4px rgb(17 17 17 / 0.08)',
-};
+function useChartPalette() {
+  const mode = useThemeStore((s) => s.mode);
+  return mode === 'light' ? CHART_PALETTE_LIGHT : CHART_PALETTE_DARK;
+}
+
+function useTooltipStyle() {
+  return {
+    borderRadius: '8px',
+    border: '1px solid var(--color-border-primary)',
+    backgroundColor: 'var(--color-bg-elevated)',
+    color: 'var(--color-text-primary)',
+    fontSize: '12px',
+    fontFeatureSettings: '"tnum"',
+    boxShadow: 'var(--shadow-elevated)',
+    padding: '8px 10px',
+  };
+}
 
 function SectionCard({ title, children, action, eyebrow }) {
   return (
-    <div className="rounded-lg border border-line bg-paper-100 p-5 shadow-editorial dark:border-slate-700 dark:bg-slate-900">
+    <div
+      className="rounded-editorial p-5"
+      style={{
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--color-border-primary)',
+        boxShadow: 'var(--shadow-card)',
+      }}
+    >
       <div className="mb-4 flex items-center justify-between">
         <div>
-          {eyebrow && <p className="eyebrow mb-0.5 dark:text-slate-400">{eyebrow}</p>}
-          <h3 className="font-display text-base font-semibold tracking-tight text-ink-900 dark:text-white">
+          {eyebrow && (
+            <p
+              className="mb-0.5"
+              style={{
+                fontSize: '0.6875rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.14em',
+                color: 'var(--color-text-muted)',
+                fontWeight: 500,
+              }}
+            >
+              {eyebrow}
+            </p>
+          )}
+          <h3
+            className="font-display tracking-tight"
+            style={{
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary)',
+              letterSpacing: '-0.01em',
+            }}
+          >
             {title}
           </h3>
         </div>
@@ -73,6 +112,9 @@ function SectionCard({ title, children, action, eyebrow }) {
 
 export default function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useDashboard();
+  const chartPalette = useChartPalette();
+  const tooltipStyle = useTooltipStyle();
+  const accentBarFill = chartPalette[0];
 
   if (isLoading) {
     return (
@@ -85,11 +127,23 @@ export default function DashboardPage() {
   if (isError) {
     return (
       <div className="text-center py-20">
-        <AlertTriangle size={36} className="text-red-400 mx-auto mb-3" />
-        <p className="text-base font-semibold text-gray-800 dark:text-gray-200">
+        <AlertTriangle
+          size={36}
+          className="mx-auto mb-3"
+          style={{ color: 'var(--color-data-negative)' }}
+        />
+        <p
+          className="text-base font-semibold"
+          style={{ color: 'var(--color-text-primary)' }}
+        >
           Failed to load dashboard
         </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{error?.message}</p>
+        <p
+          className="text-sm mt-1"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          {error?.message}
+        </p>
         <button onClick={() => refetch()} className="btn btn-secondary mt-4">
           Retry
         </button>
@@ -119,7 +173,7 @@ export default function DashboardPage() {
     .map((item) => ({
       stage: STAGE_CONFIG[item.stage]?.label || item.stage,
       count: item.count,
-      fill: ACCENT_BAR_FILL,
+      fill: accentBarFill,
     }))
     .filter((d) => d.count > 0);
 
@@ -139,7 +193,10 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         actions={
-          <Link to="/dashboard/deals" className="btn btn-secondary text-sm flex items-center gap-1.5">
+          <Link
+            to="/dashboard/deals"
+            className="btn btn-secondary text-sm flex items-center gap-1.5"
+          >
             All Deals <ArrowRight size={14} />
           </Link>
         }
@@ -208,38 +265,60 @@ export default function DashboardPage() {
       {/* ── Charts row ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pipeline Distribution */}
-        <SectionCard title="Pipeline Distribution">
+        <SectionCard title="Pipeline Distribution" eyebrow="Stage mix">
           {pipelineChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
                 data={pipelineChartData}
                 margin={{ top: 4, right: 10, bottom: 4, left: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,114,128,0.15)" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border-primary)"
+                  strokeOpacity={0.5}
+                />
                 <XAxis
                   dataKey="stage"
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  axisLine={{ stroke: 'rgba(107,114,128,0.2)' }}
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  axisLine={{ stroke: 'var(--color-border-primary)' }}
                   tickLine={false}
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  cursor={{ fill: 'rgba(43,43,41,0.06)' }}
+                  contentStyle={tooltipStyle}
+                  cursor={{ fill: 'var(--color-brand-accent-soft)' }}
                 />
-                <Bar dataKey="count" fill={ACCENT_BAR_FILL} radius={[3, 3, 0, 0]} name="Deals" />
+                <Bar
+                  dataKey="count"
+                  fill={accentBarFill}
+                  radius={[3, 3, 0, 0]}
+                  name="Deals"
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
             <div className="py-16 text-center">
-              <Briefcase size={28} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 dark:text-gray-500">No pipeline data yet</p>
-              <Link to="/dashboard/deals" className="text-xs text-primary-600 hover:underline mt-1 inline-block">
+              <Briefcase
+                size={28}
+                className="mx-auto mb-2"
+                style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}
+              />
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                No pipeline data yet
+              </p>
+              <Link
+                to="/dashboard/deals"
+                className="text-xs mt-1 inline-block hover:underline"
+                style={{ color: 'var(--color-brand-accent)' }}
+              >
                 Create your first deal
               </Link>
             </div>
@@ -247,7 +326,7 @@ export default function DashboardPage() {
         </SectionCard>
 
         {/* City Distribution */}
-        <SectionCard title="City Distribution">
+        <SectionCard title="City Distribution" eyebrow="Geography">
           {cityChartData.length > 0 ? (
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-center">
               <ResponsiveContainer width="100%" height={260}>
@@ -265,17 +344,31 @@ export default function DashboardPage() {
                     isAnimationActive={false}
                   >
                     {cityChartData.map((item, idx) => (
-                      <Cell key={item.name} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                      <Cell
+                        key={item.name}
+                        fill={chartPalette[idx % chartPalette.length]}
+                      />
                     ))}
                     <Label
                       content={({ viewBox }) => {
                         if (!viewBox || typeof viewBox.cx !== 'number') return null;
                         return (
                           <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
-                            <tspan x={viewBox.cx} y={viewBox.cy - 4} fill="#111827" fontSize="22" fontWeight="700">
+                            <tspan
+                              x={viewBox.cx}
+                              y={viewBox.cy - 4}
+                              fill="var(--color-text-primary)"
+                              fontSize="22"
+                              fontWeight="700"
+                            >
                               {totalCityDeals}
                             </tspan>
-                            <tspan x={viewBox.cx} y={viewBox.cy + 16} fill="#6b7280" fontSize="11">
+                            <tspan
+                              x={viewBox.cx}
+                              y={viewBox.cy + 16}
+                              fill="var(--color-text-muted)"
+                              fontSize="11"
+                            >
                               deals
                             </tspan>
                           </text>
@@ -288,7 +381,7 @@ export default function DashboardPage() {
                       `${value} deal${value === 1 ? '' : 's'}`,
                       entry.payload.name,
                     ]}
-                    contentStyle={TOOLTIP_STYLE}
+                    contentStyle={tooltipStyle}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -300,21 +393,36 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={item.name}
-                      className="flex items-center justify-between rounded-lg bg-gray-50 dark:bg-gray-700/50 px-3 py-2"
+                      className="flex items-center justify-between rounded-md px-3 py-2"
+                      style={{
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1px solid var(--color-border-secondary)',
+                      }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span
                           className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
+                          style={{ backgroundColor: chartPalette[idx % chartPalette.length] }}
                         />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p
+                            className="text-sm font-medium truncate"
+                            style={{ color: 'var(--color-text-primary)' }}
+                          >
                             {item.name}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{pct}%</p>
+                          <p
+                            className="text-xs tabular-nums"
+                            style={{ color: 'var(--color-text-muted)' }}
+                          >
+                            {pct}%
+                          </p>
                         </div>
                       </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100 ml-2">
+                      <span
+                        className="text-sm font-bold ml-2 tabular-nums"
+                        style={{ color: 'var(--color-text-primary)' }}
+                      >
                         {item.value}
                       </span>
                     </div>
@@ -324,7 +432,10 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="py-16 text-center">
-              <p className="text-sm text-gray-400 dark:text-gray-500">
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 Cities will appear once deals have location data
               </p>
             </div>
@@ -337,32 +448,50 @@ export default function DashboardPage() {
         {/* Recent Activities */}
         <SectionCard
           title="Recent Activities"
+          eyebrow="Timeline"
           action={
             <Link
               to="/dashboard/deals"
-              className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+              className="text-xs hover:underline flex items-center gap-1"
+              style={{ color: 'var(--color-brand-accent)' }}
             >
               View all <ArrowRight size={12} />
             </Link>
           }
         >
           {recent_activities.length > 0 ? (
-            <ul className="space-y-3 max-h-72 overflow-y-auto pr-1">
+            <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {recent_activities.map((activity, idx) => (
                 <li
                   key={activity.id || idx}
-                  className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                  className="flex items-start gap-3 p-3 rounded-md"
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border-secondary)',
+                  }}
                 >
-                  <div className="w-2 h-2 mt-1.5 rounded-full bg-primary-500 flex-shrink-0" />
+                  <div
+                    className="w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: 'var(--color-brand-accent)' }}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
+                    <p
+                      className="text-sm leading-snug"
+                      style={{ color: 'var(--color-text-primary)' }}
+                    >
                       {activity.description}
                     </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
                       <Clock size={10} className="inline mr-1" />
                       {formatRelativeTime(activity.activity_date || activity.created_at)}
                       {activity.deal_name && (
-                        <span className="ml-1 text-gray-500 dark:text-gray-400">
+                        <span
+                          className="ml-1"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
                           &middot; {activity.deal_name}
                         </span>
                       )}
@@ -373,8 +502,16 @@ export default function DashboardPage() {
             </ul>
           ) : (
             <div className="py-10 text-center">
-              <p className="text-sm text-gray-400 dark:text-gray-500">No activities yet</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                No activities yet
+              </p>
+              <p
+                className="text-xs mt-1"
+                style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}
+              >
                 Activities logged on deals will appear here
               </p>
             </div>
@@ -384,10 +521,12 @@ export default function DashboardPage() {
         {/* Top Deals by IRR */}
         <SectionCard
           title="Top Deals by IRR"
+          eyebrow="Performance"
           action={
             <Link
               to="/dashboard/deals"
-              className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+              className="text-xs hover:underline flex items-center gap-1"
+              style={{ color: 'var(--color-brand-accent)' }}
             >
               All deals <ArrowRight size={12} />
             </Link>
@@ -397,17 +536,49 @@ export default function DashboardPage() {
             <div className="overflow-x-auto -mx-1">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-700">
-                    <th className="text-left py-2 pr-3 font-medium text-gray-500 dark:text-gray-400">
+                  <tr style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                    <th
+                      className="text-left py-2 pr-3 font-medium"
+                      style={{
+                        color: 'var(--color-text-muted)',
+                        fontSize: '0.6875rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
                       Deal
                     </th>
-                    <th className="text-left py-2 pr-3 font-medium text-gray-500 dark:text-gray-400">
+                    <th
+                      className="text-left py-2 pr-3 font-medium"
+                      style={{
+                        color: 'var(--color-text-muted)',
+                        fontSize: '0.6875rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
                       Stage
                     </th>
-                    <th className="text-right py-2 pr-3 font-medium text-gray-500 dark:text-gray-400">
+                    <th
+                      className="text-right py-2 pr-3 font-medium"
+                      style={{
+                        color: 'var(--color-text-muted)',
+                        fontSize: '0.6875rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
                       Value
                     </th>
-                    <th className="text-right py-2 font-medium text-gray-500 dark:text-gray-400">
+                    <th
+                      className="text-right py-2 font-medium"
+                      style={{
+                        color: 'var(--color-text-muted)',
+                        fontSize: '0.6875rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
                       IRR
                     </th>
                   </tr>
@@ -415,15 +586,30 @@ export default function DashboardPage() {
                 <tbody>
                   {top_deals_by_irr.map((deal, idx) => {
                     const stageConf = STAGE_CONFIG[deal.stage] || {};
+                    const irrColor = Number(deal.irr_pct) >= 20
+                      ? 'var(--color-data-positive)'
+                      : Number(deal.irr_pct) >= 15
+                        ? 'var(--color-brand-premium)'
+                        : 'var(--color-brand-accent)';
                     return (
                       <tr
                         key={deal.id || idx}
-                        className="border-b border-gray-50 dark:border-gray-700/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                        className="transition-colors"
+                        style={{
+                          borderBottom: '1px solid var(--color-border-secondary)',
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.backgroundColor = 'var(--color-surface)')
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.backgroundColor = 'transparent')
+                        }
                       >
                         <td className="py-2.5 pr-3">
                           <Link
                             to={`/dashboard/deals/${deal.id}`}
-                            className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 truncate max-w-[140px] block"
+                            className="font-medium truncate max-w-[140px] block"
+                            style={{ color: 'var(--color-text-primary)' }}
                           >
                             {deal.name}
                           </Link>
@@ -433,16 +619,16 @@ export default function DashboardPage() {
                             {stageConf.label || deal.stage}
                           </Badge>
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        <td
+                          className="py-2.5 pr-3 text-right whitespace-nowrap tabular-nums"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
                           {formatCrores(deal.total_revenue_cr)}
                         </td>
-                        <td className={`py-2.5 text-right font-bold whitespace-nowrap ${
-                          Number(deal.irr_pct) >= 20
-                            ? 'text-green-600 dark:text-green-400'
-                            : Number(deal.irr_pct) >= 15
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : 'text-primary-600 dark:text-primary-400'
-                        }`}>
+                        <td
+                          className="py-2.5 text-right font-semibold whitespace-nowrap tabular-nums"
+                          style={{ color: irrColor }}
+                        >
                           {formatPct(deal.irr_pct)}
                         </td>
                       </tr>
@@ -453,8 +639,15 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="py-10 text-center">
-              <TrendingUp size={28} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 dark:text-gray-500">
+              <TrendingUp
+                size={28}
+                className="mx-auto mb-2"
+                style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}
+              />
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 Run a financial model on a deal to see IRR rankings
               </p>
             </div>
