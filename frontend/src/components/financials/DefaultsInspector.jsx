@@ -15,37 +15,37 @@ const CATEGORIES = [
   {
     id: 'land',       label: 'Land & Site',        icon: MapPin,
     match: (k) => /land|plot|area|fsi|loading|saleable|plotSize/i.test(k),
-    accent: 'from-amber-500 to-orange-500',
+    accent: 'bg-stone-900 text-white',
   },
   {
     id: 'construction', label: 'Construction & Soft Cost', icon: Building2,
     match: (k) => /construction|devCost|approval|gst|architect|pmc|contingency|preOpening/i.test(k),
-    accent: 'from-slate-500 to-zinc-500',
+    accent: 'bg-stone-900 text-white',
   },
   {
     id: 'revenue',    label: 'Revenue & Pricing',  icon: TrendingUp,
     match: (k) => /sellingRate|pricingEscalation|marketing|developerMargin|baseRent|rentEscalation|adr|fbRev|otherRev|anchor/i.test(k),
-    accent: 'from-emerald-500 to-teal-500',
+    accent: 'bg-stone-900 text-white',
   },
   {
     id: 'stabilized', label: 'Stabilized Operations', icon: Layers,
     match: (k) => /vacancy|opex|tiPerSqft|lcMonths|gopMargin|ebitdaMargin|stabilizedOcc|adrGrowth/i.test(k),
-    accent: 'from-sky-500 to-cyan-500',
+    accent: 'bg-stone-900 text-white',
   },
   {
     id: 'financing',  label: 'Financing & Debt',   icon: Landmark,
     match: (k) => /debtLTV|debtRate|debtTenor|interestRate|lrd|amortization|financeCost|debtCoverage/i.test(k),
-    accent: 'from-indigo-500 to-blue-600',
+    accent: 'bg-stone-900 text-white',
   },
   {
     id: 'exit',       label: 'Exit & Discount',    icon: Coins,
     match: (k) => /entryCap|exitCap|exitMultiple|perpetuityGrowth|terminalValue|holdPeriod|exitStrategy|discountRate|forwardPurchase/i.test(k),
-    accent: 'from-violet-500 to-purple-500',
+    accent: 'bg-stone-900 text-white',
   },
   {
     id: 'hospitality', label: 'Hospitality Specific', icon: Hotel,
     match: (k) => /keys|stabilizedOcc|preOpening|gopMargin|ebitdaMargin|fbRev|otherRev|adr/i.test(k),
-    accent: 'from-rose-500 to-pink-500',
+    accent: 'bg-stone-900 text-white',
   },
 ];
 
@@ -122,7 +122,7 @@ export default function DefaultsInspector({
   const visibleCategories = useMemo(() => {
     const used = CATEGORIES.filter((c) => grouped[c.id]?.length);
     if (grouped.other?.length) {
-      used.push({ id: 'other', label: 'Other', icon: Info, accent: 'from-gray-400 to-gray-500' });
+      used.push({ id: 'other', label: 'Other', icon: Info, accent: 'bg-stone-600 text-white' });
     }
     return used;
   }, [grouped]);
@@ -290,7 +290,7 @@ function CategoryChip({ active, onClick, icon: Icon, accent, label }) {
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition ${
         active
-          ? `bg-gradient-to-r ${accent} text-white shadow-md`
+          ? `${accent} shadow-sm`
           : 'bg-white/10 text-cyan-100 hover:bg-white/20'
       }`}
     >
@@ -304,7 +304,7 @@ function CategorySection({ category, items }) {
   const Icon = category.icon;
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <header className={`flex items-center gap-2 bg-gradient-to-r ${category.accent} px-4 py-2.5 text-white`}>
+      <header className={`flex items-center gap-2 ${category.accent} px-4 py-2.5`}>
         <Icon size={14} />
         <h3 className="text-sm font-semibold tracking-wide">{category.label}</h3>
         <span className="ml-auto text-[10px] opacity-80">{items.length}</span>

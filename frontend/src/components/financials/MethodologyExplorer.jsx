@@ -7,15 +7,15 @@ import {
 } from 'lucide-react';
 
 const TABS = [
-  { id: 'overview',   label: 'Overview',        icon: Sparkles,    accent: 'from-indigo-500 to-violet-500' },
-  { id: 'dcfflow',    label: 'DCF Flow',        icon: Route,       accent: 'from-blue-500 to-indigo-500' },
-  { id: 'kpis',       label: 'KPIs',            icon: Gauge,       accent: 'from-emerald-500 to-teal-500' },
-  { id: 'cashflow',   label: 'Cash Flow',       icon: Waves,       accent: 'from-sky-500 to-cyan-500' },
-  { id: 'terminal',   label: 'Terminal Value',  icon: Target,      accent: 'from-violet-500 to-purple-500' },
-  { id: 'costs',      label: 'Costs & Stack',   icon: Layers,      accent: 'from-rose-500 to-pink-500' },
-  { id: 'waterfall',  label: 'Waterfall',       icon: GitFork,     accent: 'from-amber-500 to-orange-500' },
-  { id: 'debt',       label: 'Debt',            icon: Landmark,    accent: 'from-slate-500 to-zinc-500' },
-  { id: 'class',      label: 'Asset Class',     icon: Building2,   accent: 'from-fuchsia-500 to-purple-500' },
+  { id: 'overview',   label: 'Overview',        icon: Sparkles,    accent: 'bg-stone-900 text-white' },
+  { id: 'dcfflow',    label: 'DCF Flow',        icon: Route,       accent: 'bg-stone-900 text-white' },
+  { id: 'kpis',       label: 'KPIs',            icon: Gauge,       accent: 'bg-stone-900 text-white' },
+  { id: 'cashflow',   label: 'Cash Flow',       icon: Waves,       accent: 'bg-stone-900 text-white' },
+  { id: 'terminal',   label: 'Terminal Value',  icon: Target,      accent: 'bg-stone-900 text-white' },
+  { id: 'costs',      label: 'Costs & Stack',   icon: Layers,      accent: 'bg-stone-900 text-white' },
+  { id: 'waterfall',  label: 'Waterfall',       icon: GitFork,     accent: 'bg-stone-900 text-white' },
+  { id: 'debt',       label: 'Debt',            icon: Landmark,    accent: 'bg-stone-900 text-white' },
+  { id: 'class',      label: 'Asset Class',     icon: Building2,   accent: 'bg-stone-900 text-white' },
 ];
 
 const ASSET_CLASS_DEEP_DIVE = {
@@ -200,7 +200,7 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
                       onClick={() => setTab(t.id)}
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                         active
-                          ? `bg-gradient-to-r ${t.accent} text-white shadow-md`
+                          ? `${t.accent} shadow-sm`
                           : 'bg-white/10 text-indigo-100 hover:bg-white/20'
                       }`}
                     >
@@ -237,7 +237,7 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
 function SectionTitle({ icon: Icon, gradient, title, subtitle }) {
   return (
     <div className="mb-4 flex items-start gap-3">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white shadow-sm`}>
+      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${gradient} shadow-sm-sm`}>
         <Icon size={18} />
       </div>
       <div>
@@ -411,7 +411,7 @@ function CashflowSection() {
         </p>
         <div className="mt-3 flex items-end gap-1 h-16">
           {[0.05, 0.10, 0.16, 0.19, 0.18, 0.15, 0.10, 0.07].map((h, i) => (
-            <div key={i} className="flex-1 rounded-t bg-gradient-to-t from-sky-500 to-cyan-400" style={{ height: `${h * 400}%` }} />
+            <div key={i} className="flex-1 rounded-t bg-stone-800" style={{ height: `${h * 400}%` }} />
           ))}
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-slate-500">
@@ -681,9 +681,9 @@ const DCF_STAGES = [
     number: '01',
     title: 'Revenue',
     icon: IndianRupee,
-    gradient: 'from-emerald-500 to-teal-500',
-    border: 'border-emerald-200',
-    surface: 'from-emerald-50 to-teal-50',
+    gradient: 'bg-stone-900 text-white',
+    border: 'border-stone-300',
+    surface: 'bg-stone-50',
     text: 'text-emerald-900',
     tagline: 'Top-line ingestion per quarter',
     summary: 'For-sale: bookings × rate, recognized on the sellout curve. Income: leasable × rent × 12 × (1 − vacancy). Hospitality: ADR × occupancy × keys × 365.',
@@ -699,9 +699,9 @@ const DCF_STAGES = [
     number: '02',
     title: 'NOI',
     icon: Activity,
-    gradient: 'from-blue-500 to-indigo-500',
-    border: 'border-blue-200',
-    surface: 'from-blue-50 to-indigo-50',
+    gradient: 'bg-stone-900 text-white',
+    border: 'border-stone-300',
+    surface: 'bg-stone-50',
     text: 'text-blue-900',
     tagline: 'Net operating income after opex',
     summary: 'EGI discounts gross revenue for vacancy. NOI subtracts opex (office ~18%, retail ~22%, industrial ~15%). Hospitality shifts to GOP / EBITDA margin on total revenue.',
@@ -717,9 +717,9 @@ const DCF_STAGES = [
     number: '03',
     title: 'Cash Flow',
     icon: Waves,
-    gradient: 'from-sky-500 to-cyan-500',
-    border: 'border-sky-200',
-    surface: 'from-sky-50 to-cyan-50',
+    gradient: 'bg-stone-900 text-white',
+    border: 'border-stone-300',
+    surface: 'bg-stone-50',
     text: 'text-sky-900',
     tagline: 'Quarterly equity cash flow stream',
     summary: 'Construction draws on S-curve (negative), operating NOI (positive), finance cost accruals, and debt draws / P&I. Output: quarterly equity cash flow feeding IRR and NPV.',
@@ -735,9 +735,9 @@ const DCF_STAGES = [
     number: '04',
     title: 'Terminal Value',
     icon: Target,
-    gradient: 'from-violet-500 to-purple-500',
-    border: 'border-violet-200',
-    surface: 'from-violet-50 to-purple-50',
+    gradient: 'bg-stone-900 text-white',
+    border: 'border-stone-300',
+    surface: 'bg-stone-50',
     text: 'text-violet-900',
     tagline: 'Exit valuation in year N',
     summary: 'Four interchangeable methods: exit cap rate (default), exit multiple, Gordon perpetuity growth, or contractual forward purchase. The chosen TV is added to the final quarter\'s cash flow before IRR/NPV.',
@@ -754,9 +754,9 @@ const DCF_STAGES = [
     number: '05',
     title: 'NPV / IRR',
     icon: Percent,
-    gradient: 'from-amber-500 to-orange-500',
-    border: 'border-amber-200',
-    surface: 'from-amber-50 to-orange-50',
+    gradient: 'bg-stone-900 text-white',
+    border: 'border-stone-300',
+    surface: 'bg-stone-50',
     text: 'text-amber-900',
     tagline: 'Discounted return metrics',
     summary: 'All quarterly equity cash flows (including the discounted TV injected in the terminal quarter) are discounted at WACC for NPV. IRR solves the same series for the rate at which NPV = 0.',
@@ -814,11 +814,11 @@ function DCFFlowSection({ assetClass }) {
                 onClick={() => setExpanded(s.id)}
                 className={`flex-1 flex flex-col items-center gap-1 rounded-xl border p-2.5 transition ${
                   isActive
-                    ? `bg-gradient-to-br ${s.surface} ${s.border} shadow-md scale-[1.02]`
+                    ? `${s.surface} ${s.border} shadow-sm`
                     : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
                 }`}
               >
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${s.gradient} text-white shadow`}>
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full ${s.gradient} shadow-sm`}>
                   <Icon size={14} />
                 </div>
                 <div className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? s.text : 'text-slate-500'}`}>
@@ -843,17 +843,17 @@ function DCFFlowSection({ assetClass }) {
             <div
               key={s.id}
               className={`rounded-xl border overflow-hidden transition-all ${
-                isOpen ? `${s.border} shadow-md` : 'border-slate-200'
+                isOpen ? `${s.border} shadow-md` : 'border-stone-300'
               }`}
             >
               <button
                 type="button"
                 onClick={() => setExpanded(isOpen ? null : s.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
-                  isOpen ? `bg-gradient-to-r ${s.surface}` : 'bg-white hover:bg-slate-50'
+                  isOpen ? `${s.surface}` : 'bg-white hover:bg-slate-50'
                 }`}
               >
-                <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow`}>
+                <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.gradient} shadow-sm`}>
                   <Icon size={16} />
                 </div>
                 <div className="flex-1">
@@ -923,9 +923,9 @@ const TV_METHODS = [
     title: 'Exit Cap Rate',
     tagline: 'Most common for stabilized income assets',
     icon: Gauge,
-    gradient: 'from-emerald-500 to-teal-500',
-    surface: 'from-emerald-50 to-teal-50',
-    border: 'border-emerald-200',
+    gradient: 'bg-stone-900 text-white',
+    surface: 'bg-stone-50',
+    border: 'border-stone-300',
     formula: 'TV = NOI_exit ÷ Exit Cap Rate',
     example: 'NOI_exit = ₹42 Cr, Cap = 7.5% → TV = 42 ÷ 0.075 = ₹560 Cr',
     when: 'Office, retail, industrial — anywhere a liquid cap-rate market exists. Buyers underwrite forward NOI.',
@@ -937,9 +937,9 @@ const TV_METHODS = [
     title: 'Exit Multiple',
     tagline: 'Hospitality / operating assets',
     icon: Layers,
-    gradient: 'from-blue-500 to-indigo-500',
-    surface: 'from-blue-50 to-indigo-50',
-    border: 'border-blue-200',
+    gradient: 'bg-stone-900 text-white',
+    surface: 'bg-stone-50',
+    border: 'border-stone-300',
     formula: 'TV = NOI_stabilized × Exit Multiple',
     example: 'EBITDA = ₹18 Cr, 10× → TV = ₹180 Cr',
     when: 'Hotels, serviced apartments, student housing — wherever EBITDA-multiple comps are the market norm.',
@@ -951,9 +951,9 @@ const TV_METHODS = [
     title: 'Perpetuity Growth (Gordon)',
     tagline: 'Stabilized, long-hold, steady-state',
     icon: TrendingUp,
-    gradient: 'from-violet-500 to-purple-500',
-    surface: 'from-violet-50 to-purple-50',
-    border: 'border-violet-200',
+    gradient: 'bg-stone-900 text-white',
+    surface: 'bg-stone-50',
+    border: 'border-stone-300',
     formula: 'TV = NOI_exit × (1 + g) ÷ (r − g)',
     example: 'NOI = ₹42 Cr, g = 3%, r = 11% → TV = 42 × 1.03 ÷ 0.08 = ₹541 Cr',
     when: 'Core-plus strategies assuming asset lives forever — India REIT underwriting, annuity-style income.',
@@ -965,9 +965,9 @@ const TV_METHODS = [
     title: 'Forward Purchase',
     tagline: 'Contractual pre-committed exit',
     icon: GitFork,
-    gradient: 'from-amber-500 to-orange-500',
-    surface: 'from-amber-50 to-orange-50',
-    border: 'border-amber-200',
+    gradient: 'bg-stone-900 text-white',
+    surface: 'bg-stone-50',
+    border: 'border-stone-300',
     formula: 'TV = Contractual Forward Price (₹ Cr)',
     example: 'Signed forward with institutional buyer at ₹485 Cr → TV = ₹485 Cr',
     when: 'Deal has a signed forward purchase agreement (BlackRock / Blackstone / GIC style pre-commitments).',
@@ -1014,11 +1014,11 @@ function TerminalValueSection() {
               onClick={() => setActiveMethod(m.id)}
               className={`relative rounded-xl border p-3 text-left transition ${
                 isActive
-                  ? `bg-gradient-to-br ${m.surface} ${m.border} shadow-md`
+                  ? `${m.surface} ${m.border} shadow-sm`
                   : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
               }`}
             >
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${m.gradient} text-white shadow-sm`}>
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${m.gradient} shadow-sm-sm`}>
                 <Icon size={14} />
               </div>
               <div className="mt-2 text-xs font-bold text-slate-900">{m.title}</div>
@@ -1029,9 +1029,9 @@ function TerminalValueSection() {
       </div>
 
       {/* Active method detail */}
-      <div className={`rounded-xl border ${active.border} bg-gradient-to-br ${active.surface} p-5`}>
+      <div className={`rounded-sm border ${active.border} ${active.surface} p-5`}>
         <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${active.gradient} text-white shadow`}>
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${active.gradient} shadow-sm`}>
             <ActiveIcon size={18} />
           </div>
           <div>
