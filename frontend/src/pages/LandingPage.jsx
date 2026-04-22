@@ -231,21 +231,23 @@ function Hero() {
             className="inline-block w-1.5 h-1.5 rounded-full"
             style={{ backgroundColor: 'var(--color-data-positive)', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }}
           />
-          Live · Bengaluru / Greater Bengaluru priority
+          Institutional · Private beta
         </div>
         <h1
           className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight max-w-4xl"
           style={{ color: 'var(--color-text-primary)' }}
         >
-          Underwriting is a <em className="italic" style={{ color: 'var(--color-brand-accent)' }}>first-class</em> engineering problem.
+          The deal intelligence platform <em className="italic" style={{ color: 'var(--color-brand-accent)' }}>private capital</em> runs on.
         </h1>
         <p
           className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl"
           style={{ color: 'var(--color-text-secondary)' }}
         >
-          REDIP is the operating system for live real-estate deal work in India —
-          a deterministic financial kernel, provenance-traced diligence, and IC-ready
-          outputs. Built for GPs who will not ship a memo whose math they cannot defend.
+          REDIP unifies sourcing, diligence, underwriting, and investor-grade
+          reporting into one institutional workspace. AI accelerates the work.
+          A deterministic financial kernel makes the math unassailable. Every
+          number traced, every assumption stressed — so the memo your Investment
+          Committee receives is the memo they approve.
         </p>
         <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
           <button
@@ -319,7 +321,7 @@ function Columns() {
       tag: '§ Diligence',
       title: 'Seven layers, each scored by deal impact.',
       body: 'Title, regulatory, seller validity, statutory approvals, financial, project, and physical. Each DD item is classified as Deal-Breaker, Buildability-Blocker, Commercial-Blocker, or Secondary. Evidence links live inside the deal — not in a separate drive.',
-      bullets: ['Kannada-language EC/RTC extraction', 'JDA/JV clause parsing', 'Missing-item detection'],
+      bullets: ['Title-chain reconstruction', 'JDA/JV clause parsing', 'Missing-item detection'],
       tone: 'pos',
     },
     {
@@ -446,7 +448,7 @@ function AssetClasses() {
   );
 }
 
-function IndiaFirst() {
+function Conviction() {
   return (
     <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
@@ -455,13 +457,13 @@ function IndiaFirst() {
             className="text-[11px] uppercase tracking-[0.22em] mb-4"
             style={{ color: 'var(--color-brand-premium)' }}
           >
-            § India, not a port
+            § Conviction, engineered
           </div>
           <h2
             className="font-serif text-3xl md:text-4xl leading-tight tracking-tight"
             style={{ color: 'var(--color-text-primary)' }}
           >
-            A Western model bent onto Indian inputs breaks on contact.
+            Every number traced. Every assumption stressed. Every memo, defensible in the room.
           </h2>
         </Reveal>
         <Reveal className="md:col-span-7" delay={120}>
@@ -470,15 +472,18 @@ function IndiaFirst() {
             style={{ color: 'var(--color-text-secondary)' }}
           >
             <p>
-              Stamp duty and registration as a first-class kernel input. Plot area
-              in sqft, sqyd, or acres — the same field. Money in lakh, crore, or
-              INR. Dates in en-IN. RTC, Pahani, encumbrance certificates, JDA and
-              JV clauses — parsed including Kannada-language records.
+              Other platforms export spreadsheets. REDIP exports conviction. A
+              deterministic financial kernel that records every calculation —
+              not just the final number. A provenance graph that shows exactly
+              which driver moved which IRR. Scenario comparisons, sensitivity
+              tornadoes, and confidence grades attached to every headline KPI.
             </p>
             <p>
-              Bengaluru-first by default: BBMP zoning, BDA khata, BMRDA layout
-              approvals. The rest of the country arrives by configuration, not by
-              rewrite.
+              This is the difference between <em>&ldquo;the model says 14.2%&rdquo;</em> and
+              <em> &ldquo;the model says 14.2%, here is the full chain of reasoning, the
+              downside compression, and the three comparable transactions that
+              anchor every line.&rdquo;</em> Institutional underwriting, engineered the
+              way it should have been all along.
             </p>
           </div>
         </Reveal>
@@ -586,7 +591,7 @@ export default function LandingPage() {
       <LiveTicker />
       <Columns />
       <AssetClasses />
-      <IndiaFirst />
+      <Conviction />
       <Close />
       <Footer />
     </div>
