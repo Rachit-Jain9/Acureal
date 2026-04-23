@@ -50,8 +50,8 @@ function Nav() {
         borderBottom: '1px solid var(--color-border-primary)',
       }}
     >
-      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-        <div className="flex items-baseline gap-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3 sm:gap-6 min-w-0">
           <span
             className="font-serif text-xl font-semibold tracking-tight"
             style={{ color: 'var(--color-text-primary)' }}
@@ -66,7 +66,7 @@ function Nav() {
             Real Estate Deal Intelligence · India
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           <button
             onClick={toggleTheme}
             aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -77,17 +77,19 @@ function Nav() {
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm px-3 py-1.5 rounded-md transition-colors"
+            className="text-sm px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
             style={{ color: 'var(--color-text-secondary)' }}
           >
             Sign in
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm font-medium text-white px-3.5 py-1.5 rounded-md hover:brightness-110"
+            className="text-sm font-medium text-white px-3 sm:px-3.5 py-1.5 rounded-md hover:brightness-110 whitespace-nowrap"
             style={{ backgroundColor: 'var(--color-brand-accent)' }}
           >
-            Request access →
+            <span className="hidden sm:inline">Request access </span>
+            <span className="sm:hidden">Request </span>
+            →
           </button>
         </div>
       </div>

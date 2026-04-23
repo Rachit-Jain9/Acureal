@@ -116,7 +116,7 @@ function confidenceChipStyle(level) {
   };
 }
 
-function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidence }) {
+function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidence, anchorRef }) {
   const drivers = (meta.drivers || [])
     .map((k) => ({ key: k, resolved: resolveDriver(k, inputs, defaults) }))
     .filter((d) => d.resolved != null);
@@ -124,10 +124,36 @@ function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidenc
   const benchmark = meta.benchmark?.[benchmarkKey] || null;
   const effectiveConfidence = confidence || meta.confidence;
 
+  // Viewport-aware positioning — `right-0` anchor works for cards on the right
+  // half of the viewport, but clips off-screen on leftmost cards (the popover
+  // is 320px / w-80 and extends *left* from the anchor). Measure the anchor
+  // on mount and flip the horizontal alignment when there's no room to the
+  // left. Falls back to `right-0` when the ref isn't ready yet.
+  const [align, setAlign] = useState('right');
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const anchor = anchorRef?.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const panelWidth = Math.min(320, vw - 32); // w-80, capped to viewport − 2rem
+    // Preferred: extend left from anchor's right edge (align right). Only
+    // flip to left-anchor when that would overflow the viewport's left edge.
+    const wouldOverflowLeft = rect.right - panelWidth < 8;
+    const wouldOverflowRight = rect.left + panelWidth > vw - 8;
+    if (wouldOverflowLeft && !wouldOverflowRight) setAlign('left');
+    else setAlign('right');
+  }, [anchorRef]);
+
   return (
     <div
-      className="absolute top-full right-0 mt-1 w-80 z-20 rounded-editorial text-left overflow-hidden"
+      ref={panelRef}
+      className={clsx(
+        'absolute top-full mt-1 z-20 rounded-editorial text-left overflow-hidden',
+        align === 'right' ? 'right-0' : 'left-0',
+      )}
       style={{
+        width: 'min(20rem, calc(100vw - 2rem))',
         backgroundColor: 'var(--color-bg-elevated)',
         border: '1px solid var(--color-border-primary)',
         boxShadow: 'var(--shadow-elevated)',
@@ -398,6 +424,7 @@ export default function KPIStatCard({
           benchmarkKey={benchmarkKey}
           onClose={() => setOpen(false)}
           confidence={confidence}
+          anchorRef={containerRef}
         />
       )}
     </div>

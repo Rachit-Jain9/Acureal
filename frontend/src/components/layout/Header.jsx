@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Bell, Search, Moon, Sun } from 'lucide-react';
+import { Bell, Search, Moon, Sun, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import useThemeStore from '../../store/themeStore';
 
-export default function Header() {
+export default function Header({ onMobileMenuOpen }) {
   const { user } = useAuthStore();
   const mode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggle);
@@ -21,14 +21,25 @@ export default function Header() {
 
   return (
     <header
-      className="px-6 py-3 flex items-center justify-between"
+      className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2"
       style={{
         backgroundColor: 'var(--color-bg-elevated)',
         borderBottom: '1px solid var(--color-border-primary)',
       }}
     >
-      <div className="flex items-center gap-4 flex-1">
-        <form onSubmit={handleSearch} className="relative max-w-md flex-1">
+      <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+        {onMobileMenuOpen && (
+          <button
+            type="button"
+            onClick={onMobileMenuOpen}
+            className="p-2 -ml-2 rounded-md hover:bg-surface md:hidden flex-shrink-0"
+            style={{ color: 'var(--color-text-secondary)' }}
+            aria-label="Open menu"
+          >
+            <Menu size={18} />
+          </button>
+        )}
+        <form onSubmit={handleSearch} className="relative max-w-md flex-1 min-w-0">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2"
             size={16}
@@ -38,7 +49,7 @@ export default function Header() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search deals, properties, comps…"
+            placeholder="Search…"
             className="w-full pl-9 pr-4 py-2 rounded-md text-sm focus:outline-none"
             style={{
               backgroundColor: 'var(--color-bg-secondary)',

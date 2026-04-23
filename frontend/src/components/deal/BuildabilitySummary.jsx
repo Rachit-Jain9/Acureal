@@ -22,7 +22,7 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
 
   return (
     <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-gray-100">
+      <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white shadow-sm">
             <Sparkles size={14} />
@@ -39,7 +39,7 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
         ) : null}
       </div>
 
-      <div className={clsx('p-5', compact && 'p-4')}>
+      <div className={clsx('p-4 sm:p-5', compact && 'p-3 sm:p-4')}>
         {!hasEnough ? (
           <div>
             <p className="text-xs text-gray-500 mb-2">
@@ -171,16 +171,16 @@ function Tile({ icon: Icon, tone, label, value, unit, hint }) {
     amber:   'bg-amber-50/70   text-amber-800',
   };
   return (
-    <div className={clsx('rounded-lg p-2.5', tones[tone] || tones.primary)}>
+    <div className={clsx('rounded-lg p-2.5 min-w-0', tones[tone] || tones.primary)}>
       <div className="flex items-center gap-1 mb-0.5">
-        {Icon && <Icon size={11} className="opacity-70" />}
-        <span className="text-[10px] uppercase tracking-[0.1em] font-medium opacity-75">{label}</span>
+        {Icon && <Icon size={11} className="opacity-70 flex-shrink-0" />}
+        <span className="text-[10px] uppercase tracking-[0.1em] font-medium opacity-75 truncate">{label}</span>
       </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-base font-bold leading-none">{value}</span>
-        {unit && <span className="text-[10px] opacity-70">{unit}</span>}
+      <div className="flex items-baseline gap-1 min-w-0">
+        <span className="text-sm sm:text-base font-bold leading-none truncate">{value}</span>
+        {unit && <span className="text-[10px] opacity-70 flex-shrink-0">{unit}</span>}
       </div>
-      {hint && <div className="text-[10px] opacity-70 mt-0.5">{hint}</div>}
+      {hint && <div className="text-[10px] opacity-70 mt-0.5 truncate">{hint}</div>}
     </div>
   );
 }
