@@ -1,0 +1,27 @@
+name: Defaults Staleness Check
+
+# Fails if the financial-kernel asset-class defaults haven't been reviewed
+# against their source in the last 90 days. See scripts/check-defaults-staleness.mjs
+# for the rationale.
+on:
+  pull_request:
+    paths:
+      - 'packages/financial-kernel/src/config/**'
+      - 'scripts/check-defaults-staleness.mjs'
+      - '.github/workflows/defaults-staleness.yml'
+  push:
+    branches: [master]
+  schedule:
+    # Weekly Monday nudge so a no-touch quarter still surfaces staleness.
+    - cron: '0 9 * * 1'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check lastReviewed freshness
+        run: node scripts/check-defaults-staleness.mjs --max-age-days 90

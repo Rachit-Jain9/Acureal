@@ -74,7 +74,7 @@ describe('buildUsaliPnl', () => {
     expect(out[7].year).toBe(8);
   });
 
-  it('each row has the full 47-field shape', () => {
+  it('each row has the full USALI row shape', () => {
     const [row] = buildUsaliPnl(baseInput);
     const expectedKeys = [
       'year',
@@ -82,6 +82,9 @@ describe('buildUsaliPnl', () => {
       'adr',
       'revPAR',
       'trevPAR',
+      'occupiedRooms',
+      'cpor',
+      'flowThroughPct',
       'roomsRevenueCr',
       'ownerRoomsCr',
       'marketRoomsCr',
@@ -123,6 +126,7 @@ describe('buildUsaliPnl', () => {
       'ffeReserveCr',
       'noiCr',
       'noiMarginPct',
+      'labourCostCr',
     ];
     expect(Object.keys(row).sort()).toEqual(expectedKeys.sort());
   });
