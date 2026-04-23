@@ -3,8 +3,11 @@
  *
  * Cost model mirrors the legacy JS engine so parity against
  * `calculateHospitality` holds to within epsilon:
- *   - Per-sqft hard cost (keys × sqftPerKey × ₹/sqft), derivable from
- *     the legacy `constructionCostPerKey` input for backward compat.
+ *   - Per-sqft hard cost (keys × sqftPerKey × ₹/sqft). The frontend form
+ *     collects `constructionCostPerKey` (₹/key) because that's how hotel
+ *     developers actually budget; the kernel converts it to
+ *     `hardCostPerSqft = perKey / sqftPerKey` at input so downstream
+ *     sqft-based math still holds. Explicit `hardCostPerSqft` wins.
  *   - Karnataka stamp + registration at 6.6% (legacy KARNATAKA_STAMP_REG_RATE),
  *     plus 3% betterment charge (Bengaluru default).
  *   - Soft design (architect, PMC, consultants) as % of hard cost.
@@ -66,12 +69,22 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
   const sqftPerKey = num(raw.sqftPerKey, HOSP_DEFAULT_SQFT_PER_KEY);
   const totalBuaSqft = keys * sqftPerKey;
 
-  // Hard cost: per-BUA-sqft model (matches legacy). `constructionCostPerKey` in
-  // legacy is an *output*, not an input — we ignore it for hard-cost sizing
-  // and route callers to `hardCostPerSqft` instead.
+  // Hard cost: per-BUA-sqft model. The frontend collects this as
+  // `constructionCostPerKey` (₹/key, placeholder ₹80L, range ₹50L–1.5Cr) — a
+  // per-key figure is how hotel developers actually budget. We convert it to
+  // per-sqft (`perKey / sqftPerKey`) so the kernel's sqft-based hard-cost math
+  // and the legacy engine's keys-based math agree to within rounding:
+  //   legacy:  constructionCostCr = keys × perKey / CRORE
+  //   kernel:  hardCostCr = (keys × sqftPerKey) × (perKey / sqftPerKey) / CRORE
+  //                       = keys × perKey / CRORE   ✓
+  // An explicit `hardCostPerSqft` wins (power users can override the
+  // per-key→per-sqft translation directly).
+  const ccpk = num(raw.constructionCostPerKey);
   const hardCostPerSqft = num(raw.hardCostPerSqft) > 0
     ? num(raw.hardCostPerSqft)
-    : HOSP_DEFAULT_HARD_COST_PER_SQFT;
+    : ccpk > 0 && sqftPerKey > 0
+      ? ccpk / sqftPerKey
+      : HOSP_DEFAULT_HARD_COST_PER_SQFT;
 
   const landCostCr = num(raw.landCostCr);
   const stampRegPctRaw = num(raw.stampRegPct);
