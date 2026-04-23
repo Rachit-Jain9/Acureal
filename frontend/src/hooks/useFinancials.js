@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financialsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
+import { clientQuickCompute, useClientKernel } from '../utils/clientKernel';
 
 export function useFinancials(dealId) {
   return useQuery({
@@ -66,9 +67,29 @@ export function useDefaultsMeta(assetClass) {
 // Stateless what-if runner. Takes raw assumption set + assetClass and
 // returns the kernel's {kpis, costs, revenue, areas}. No DB write, no
 // toast on success — the caller renders deltas inline next to the slider.
+//
+// Defaults to running the kernel entirely in-browser (see
+// `utils/clientKernel.js`) so slider scrubbing doesn't pay an HTTP
+// round-trip per debounced tick. Same kernel code on both sides — the
+// frontend imports the kernel source via the Vite alias — so results
+// are byte-for-byte identical by construction. Set
+// `VITE_CLIENT_KERNEL=0` at build time to force the server path (the
+// `/financials/quick-compute` endpoint is preserved as a failsafe).
 export function useQuickCompute() {
   return useMutation({
-    mutationFn: (data) => financialsAPI.quickCompute(data).then((r) => r.data.data),
+    mutationFn: async (data) => {
+      if (useClientKernel()) {
+        const resp = clientQuickCompute(data);
+        if (resp.success) return resp.data;
+        // Shape the error like an axios rejection so downstream error
+        // handling stays uniform.
+        const err = new Error(resp.message);
+        err.response = { status: resp.status, data: { message: resp.message } };
+        throw err;
+      }
+      const r = await financialsAPI.quickCompute(data);
+      return r.data.data;
+    },
     // Errors surface via the returned `error` — the what-if panel shows
     // them inline. No global toast so rapid-fire slider changes don't
     // spam the user.
