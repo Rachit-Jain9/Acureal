@@ -781,12 +781,11 @@ const deleteDeal = async (id) =>
     }
 
     const deal = dealResult.rows[0];
-    if (!deal.is_archived && !['dead', 'closed'].includes(deal.stage)) {
-      throw createError(
-        'Archive the deal first, or mark it dead/closed before permanently deleting it.',
-        409
-      );
-    }
+    // Delete is admin-gated at the route layer (requireRole('admin')) and
+    // confirmed client-side by a modal. We previously required callers to
+    // archive-first or move to dead/closed, but Archive was removed from the
+    // UI in favor of Delete as the single destructive action — keep the
+    // authz + confirm as the safeguards.
 
     const documentsResult = await client.query(
       'SELECT id, file_url FROM documents WHERE deal_id = $1',
