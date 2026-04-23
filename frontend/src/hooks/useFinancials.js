@@ -16,7 +16,9 @@ export function useCalculateFinancials() {
     mutationFn: ({ dealId, data }) => financialsAPI.calculate(dealId, data).then((r) => r.data),
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['financials', dealId] });
+      qc.invalidateQueries({ queryKey: ['scenarios', dealId] });
       qc.invalidateQueries({ queryKey: ['deal', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Financials calculated');
     },
     onError: (err) => {

@@ -80,6 +80,10 @@ export const authAPI = {
 export const dealsAPI = {
   list: (params) => api.get('/deals', { params }),
   get: (id) => api.get(`/deals/${id}`),
+  // Unified workspace read-model. Composes deal + financials + scenarios +
+  // graph + DD/risk scores + audit events + documents + activities +
+  // waterfall so the deal page loads from a single round-trip.
+  getWorkspace: (id) => api.get(`/deals/${id}/workspace`),
   create: (data) => api.post('/deals', data),
   update: (id, data) => api.put(`/deals/${id}`, data),
   archive: (id, reason) => api.patch(`/deals/${id}/archive`, { reason }),

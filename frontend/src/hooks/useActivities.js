@@ -33,6 +33,7 @@ export function useCreateActivity() {
       qc.invalidateQueries({ queryKey: ['activities', 'feed'] });
       qc.invalidateQueries({ queryKey: ['activities', 'recent'] });
       qc.invalidateQueries({ queryKey: ['deal', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Activity logged');
     },
@@ -46,6 +47,7 @@ export function useUpdateActivity() {
     mutationFn: ({ activityId, data }) => activitiesAPI.update(activityId, data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['activities'] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Activity updated');
     },
@@ -59,6 +61,7 @@ export function useUpdateActivityStatus() {
     mutationFn: ({ activityId, status }) => activitiesAPI.updateStatus(activityId, status).then((r) => r.data),
     onSuccess: (_, { status }) => {
       qc.invalidateQueries({ queryKey: ['activities'] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success(status === 'completed' ? 'Activity completed' : 'Activity updated');
     },
@@ -72,6 +75,7 @@ export function useDeleteActivity() {
     mutationFn: (activityId) => activitiesAPI.delete(activityId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['activities'] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Activity deleted');
     },

@@ -17,6 +17,27 @@ export function useDeal(id) {
   });
 }
 
+/**
+ * Unified deal workspace query.
+ *
+ * Returns a single grounded payload for the whole deal workspace UI (deal,
+ * financials, scenarios, provenance graph, DD/risk, audit events, documents,
+ * activities, waterfall). Replaces the old pattern where each tab fired its
+ * own query on mount — one round-trip instead of ~7.
+ *
+ * Mutations that change any slice should invalidate both this key and the
+ * legacy `['deal', id]` key so consumers that still use `useDeal` see the
+ * update.
+ */
+export function useDealWorkspace(id) {
+  return useQuery({
+    queryKey: ['deal-workspace', id],
+    queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
 export function usePipeline() {
   return useQuery({
     queryKey: ['pipeline'],
@@ -45,6 +66,7 @@ export function useUpdateDeal() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['deal', id] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property'] });
@@ -62,6 +84,7 @@ export function useTransitionStage() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['deal', id] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['properties'] });
@@ -80,6 +103,7 @@ export function useArchiveDeal() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['deal', id] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['properties'] });
@@ -98,6 +122,7 @@ export function useRestoreDeal() {
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['deal', id] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['properties'] });

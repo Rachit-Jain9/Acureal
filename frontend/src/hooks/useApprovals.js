@@ -16,6 +16,7 @@ export function useCreateApproval() {
     mutationFn: ({ dealId, data }) => approvalsAPI.create(dealId, data).then((r) => r.data),
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['approvals', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Approval item added');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add approval item'),
@@ -28,6 +29,7 @@ export function useUpdateApproval() {
     mutationFn: ({ dealId, id, data }) => approvalsAPI.update(dealId, id, data).then((r) => r.data),
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['approvals', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Approval item updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update approval item'),
@@ -40,6 +42,7 @@ export function useDeleteApproval() {
     mutationFn: ({ dealId, id }) => approvalsAPI.delete(dealId, id),
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['approvals', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Approval item removed');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove approval item'),
@@ -52,6 +55,7 @@ export function useSeedApprovals() {
     mutationFn: ({ dealId }) => approvalsAPI.seed(dealId).then((r) => r.data),
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['approvals', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Approvals checklist seeded');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to seed approvals'),

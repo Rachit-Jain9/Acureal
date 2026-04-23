@@ -25,6 +25,7 @@ export function useCreateRiskFlag() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Risk flag added');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add risk flag'),
@@ -38,6 +39,7 @@ export function useUpdateRiskFlag() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Risk flag updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update risk flag'),
@@ -51,6 +53,7 @@ export function useDeleteRiskFlag() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Risk flag removed');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove risk flag'),

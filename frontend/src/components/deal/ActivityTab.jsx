@@ -22,6 +22,7 @@ import {
 } from '../../hooks/useActivities';
 import Badge from '../common/Badge';
 import LoadingSpinner from '../common/LoadingSpinner';
+import AuditTimelineView from '../financials/AuditTimelineView';
 import {
   formatDate,
   formatRelativeTime,
@@ -126,9 +127,14 @@ export default function ActivityTab({ dealId }) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
-          {activities.length} activit{activities.length !== 1 ? 'ies' : 'y'}
-        </p>
+        <div>
+          <p className="text-sm text-gray-500">
+            {activities.length} activit{activities.length !== 1 ? 'ies' : 'y'}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Manual log of calls, visits, meetings &amp; notes — kernel audit trail below.
+          </p>
+        </div>
         <button
           onClick={() => setShowForm((v) => !v)}
           className="btn btn-primary flex items-center gap-1.5 text-sm"
@@ -336,6 +342,9 @@ export default function ActivityTab({ dealId }) {
           </ul>
         </div>
       )}
+
+      {/* Kernel audit trail — signed deal_events log, reproducible on replay. */}
+      <AuditTimelineView dealId={dealId} />
     </div>
   );
 }

@@ -25,6 +25,7 @@ export function useCreateDDItem() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['dd-items', dealId] });
       qc.invalidateQueries({ queryKey: ['dd-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('DD item added');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add DD item'),
@@ -38,6 +39,7 @@ export function useUpdateDDItem() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['dd-items', dealId] });
       qc.invalidateQueries({ queryKey: ['dd-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('DD item updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update DD item'),
@@ -51,6 +53,7 @@ export function useUpdateDDItemStatus() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['dd-items', dealId] });
       qc.invalidateQueries({ queryKey: ['dd-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update status'),
   });
@@ -63,6 +66,7 @@ export function useDeleteDDItem() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['dd-items', dealId] });
       qc.invalidateQueries({ queryKey: ['dd-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('DD item removed');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove DD item'),
@@ -76,6 +80,7 @@ export function useSeedDDChecklist() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['dd-items', dealId] });
       qc.invalidateQueries({ queryKey: ['dd-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       qc.invalidateQueries({ queryKey: ['deal', dealId] });
       toast.success('DD checklist seeded');
     },

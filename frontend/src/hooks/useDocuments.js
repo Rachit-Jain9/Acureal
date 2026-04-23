@@ -85,6 +85,7 @@ export function useUploadDocument() {
     },
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['documents', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Document uploaded');
     },
     onError: (err) => toast.error(getDocumentErrorMessage(err, 'Upload failed')),
@@ -97,6 +98,7 @@ export function useDeleteDocument() {
     mutationFn: ({ dealId, docId }) => documentsAPI.delete(dealId, docId),
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['documents', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Document deleted');
     },
     onError: (err) => toast.error(getDocumentErrorMessage(err, 'Delete failed')),

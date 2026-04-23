@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
-  useDeal,
+  useDealWorkspace,
   useTransitionStage,
   useDeleteDeal,
   useUpdateDeal,
@@ -114,7 +114,12 @@ export default function DealDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
 
-  const { data: deal, isLoading, isError } = useDeal(id);
+  // Unified workspace read — one round-trip feeds the entire deal page
+  // (overview, parcel, zoning, financial, DD, risk, documents, activity).
+  // Tabs that want pre-fetched slices can still call the workspace hook
+  // directly; the shared query key de-dupes.
+  const { data: workspace, isLoading, isError } = useDealWorkspace(id);
+  const deal = workspace?.deal;
   const transitionStage = useTransitionStage();
   const deleteDeal = useDeleteDeal();
   const updateDeal = useUpdateDeal();
