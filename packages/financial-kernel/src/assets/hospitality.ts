@@ -384,7 +384,7 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
         month,
         amount: monthNOI,
         category: 'revenue',
-        subcategory: `noi_month_${month}`,
+        subcategory: 'operations',
       }),
     );
   }

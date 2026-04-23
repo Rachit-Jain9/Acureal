@@ -155,7 +155,7 @@ export function computeIncomeAsset(
         month,
         amount: monthlyNOI,
         category: 'revenue',
-        subcategory: `noi_month_${month}`,
+        subcategory: 'operations',
       }),
     );
   }

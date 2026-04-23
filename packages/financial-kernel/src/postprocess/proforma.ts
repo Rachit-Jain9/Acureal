@@ -120,6 +120,7 @@ const SUBCATEGORY_LABELS: Readonly<Record<string, string>> = Object.freeze({
   sales: 'Unit sales',
   exit: 'Exit sale',
   land_sale: 'Land sale',
+  operations: 'Stabilised operations (NOI)',
 });
 
 function buildRowLabel(category: string, subcategory: string | null): string {
