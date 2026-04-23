@@ -45,9 +45,19 @@ export type {
   BuildCashFlowsTimeline,
 } from './cashFlows';
 
-export { buildUsaliPnl, hospOccRamp } from './usaliPnl';
+export {
+  buildUsaliPnl,
+  buildUsaliSummary,
+  hospOccRamp,
+  INDIA_HOSPITALITY_PRESETS,
+} from './usaliPnl';
 
-export type { UsaliPnlRow, UsaliPnlInputs } from './usaliPnl';
+export type {
+  UsaliPnlRow,
+  UsaliPnlInputs,
+  UsaliStabilisedSummary,
+  IndianHospitalityPresetKey,
+} from './usaliPnl';
 
 export { buildLegacyShape } from './legacyShape';
 
