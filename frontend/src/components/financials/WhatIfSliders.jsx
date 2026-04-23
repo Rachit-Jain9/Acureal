@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sliders, ArrowUpRight, ArrowDownRight, Minus, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useQuickCompute, useDefaultsMeta } from '../../hooks/useFinancials';
+import { clientQuickCompute, useClientKernel } from '../../utils/clientKernel';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
 import { preflightDealInput } from '../../utils/dealInputPreflight';
 import MissingInputsCard from './MissingInputsCard';
@@ -104,11 +105,13 @@ const fmtSliderValue = (n, decimals) => {
   });
 };
 
-// Debounce hook tuned for sliders — 250ms feels responsive without
-// hammering the kernel. Mutation already dedupes in-flight calls.
+// Debounce hook used only on the HTTP-fallback path (`VITE_CLIENT_KERNEL=0`).
+// When the client kernel is on, every slider tick computes synchronously
+// in ~2 ms, so debouncing only inserts UI latency.
 const useDebounced = (value, delayMs) => {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
+    if (delayMs <= 0) { setDebounced(value); return undefined; }
     const t = setTimeout(() => setDebounced(value), delayMs);
     return () => clearTimeout(t);
   }, [value, delayMs]);
@@ -290,9 +293,11 @@ function SliderRow({ field, currentValue, range, onChange, onReset, isResetDisab
 //  - baseInputs: the saved raw assumption set (from financials.inputs)
 //  - baseKpis:   the saved kpis snapshot — used to render "vs base" deltas
 //
-// The component is self-contained: it picks its own field list, fetches
-// its own defaults meta, and runs the kernel-first `/financials/quick-
-// compute` endpoint with a 250ms debounce.
+// Compute path:
+//  - Default: client kernel runs in-browser per slider tick (~2 ms, zero
+//    network). Sliders feel native — KPIs move while dragging.
+//  - VITE_CLIENT_KERNEL=0: fall back to the HTTP `/financials/quick-compute`
+//    endpoint with a 250 ms debounce + React Query mutation.
 export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEditInputs }) {
   const modelClass = resolveFinancialModelClass(assetClass) || assetClass;
   const { data: defaultsData } = useDefaultsMeta(modelClass);
@@ -331,7 +336,10 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
     setValues(next);
   }, [sliderRows]);
 
-  const debouncedValues = useDebounced(values, 250);
+  const isClient = useClientKernel();
+  // Skip debounce on the client path — synchronous compute makes it pure
+  // overhead. Server path keeps the 250 ms tradeoff.
+  const debouncedValues = useDebounced(values, isClient ? 0 : 250);
   const quickCompute = useQuickCompute();
 
   // Cache of the last computed KPIs. We keep the previous result visible
@@ -339,15 +347,30 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
   // empty between scrubs.
   const lastResultRef = useRef(null);
   const [liveKpis, setLiveKpis] = useState(null);
+  const [liveError, setLiveError] = useState(null);
 
-  // Fire a compute whenever the debounced slider state changes and it
-  // differs from the base (saves one round-trip at mount).
+  // Fire a compute whenever slider state changes. Client path runs the
+  // kernel synchronously; server path goes through the React Query
+  // mutation with cancellation for in-flight races.
   useEffect(() => {
     if (!preflight.ok) return;
     if (sliderRows.length === 0) return;
     if (Object.keys(debouncedValues).length === 0) return;
 
     const raw = { ...(baseInputs || {}), ...debouncedValues };
+
+    if (isClient) {
+      const r = clientQuickCompute({ assetClass, ...raw });
+      if (r.success) {
+        lastResultRef.current = r.data;
+        setLiveKpis(r.data?.kpis || null);
+        setLiveError(null);
+      } else {
+        setLiveError(r.message);
+      }
+      return;
+    }
+
     let cancelled = false;
     quickCompute.mutate(
       { assetClass, ...raw },
@@ -362,7 +385,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
     return () => { cancelled = true; };
     // quickCompute mutation object is stable across renders — safe to skip
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedValues, assetClass, baseInputs, sliderRows.length]);
+  }, [debouncedValues, assetClass, baseInputs, sliderRows.length, isClient]);
 
   if (!preflight.ok) {
     return <MissingInputsCard missing={preflight.missing} panelLabel="What-If Sliders" onEditInputs={onEditInputs} />;
@@ -427,7 +450,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {quickCompute.isPending && (
+          {!isClient && quickCompute.isPending && (
             <span
               className="font-medium animate-pulse"
               style={{ fontSize: '10px', color: 'var(--color-brand-accent)' }}
@@ -489,7 +512,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
         </div>
       </div>
 
-      {quickCompute.error && (
+      {(liveError || quickCompute.error) && (
         <div
           className="px-4 py-2 text-xs"
           style={{
@@ -499,8 +522,9 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
           }}
         >
           Compute failed:{' '}
-          {quickCompute.error.response?.data?.message
-            || quickCompute.error.message
+          {liveError
+            || quickCompute.error?.response?.data?.message
+            || quickCompute.error?.message
             || 'unknown error'}
         </div>
       )}
