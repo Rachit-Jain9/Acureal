@@ -6,7 +6,7 @@ import {
   GitFork, Users, Layers, ChevronRight,
 } from 'lucide-react';
 import { calculateJDAWaterfall, calculateJVWaterfall, buildDebtSchedule } from '../utils/waterfall';
-import ReferenceDock from '../components/financials/ReferenceDock';
+import ReferenceMenu from '../components/financials/ReferenceMenu';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
 import HospitalityProformaSection from '../components/financials/HospitalityProformaSection';
@@ -1784,7 +1784,7 @@ export default function FinancialsPage() {
         description="Multi-asset-class financial modeling"
         actions={
           <div className="flex items-center gap-2">
-            <ReferenceDock assetClass={activeClass} />
+            <ReferenceMenu assetClass={activeClass} />
             <Link to={`/dashboard/deals/${dealId}`} className="btn btn-secondary flex items-center gap-1.5">
               <ArrowLeft size={16} /> Back to Deal
             </Link>

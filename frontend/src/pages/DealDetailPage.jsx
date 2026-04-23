@@ -4,8 +4,6 @@ import {
   ArrowLeft,
   Edit2,
   Trash2,
-  Archive,
-  RotateCcw,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -20,8 +18,6 @@ import {
   useTransitionStage,
   useDeleteDeal,
   useUpdateDeal,
-  useArchiveDeal,
-  useRestoreDeal,
 } from '../hooks/useDeals';
 import useAuthStore from '../store/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -122,15 +118,12 @@ export default function DealDetailPage() {
   const transitionStage = useTransitionStage();
   const deleteDeal = useDeleteDeal();
   const updateDeal = useUpdateDeal();
-  const archiveDeal = useArchiveDeal();
-  const restoreDeal = useRestoreDeal();
 
   const activeTab = searchParams.get('tab') || 'overview';
 
   const [stageNotes, setStageNotes] = useState('');
   const [stageExpanded, setStageExpanded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [exportingPptx, setExportingPptx] = useState(false);
@@ -162,24 +155,6 @@ export default function DealDetailPage() {
       navigate('/dashboard/deals');
     } catch {
       // Mutation hook handles toast
-    }
-  };
-
-  const handleArchive = async () => {
-    try {
-      await archiveDeal.mutateAsync({ id, reason: 'Archived from deal detail page' });
-      setShowArchiveConfirm(false);
-      navigate('/dashboard/deals');
-    } catch {
-      // handled by mutation hook
-    }
-  };
-
-  const handleRestore = async () => {
-    try {
-      await restoreDeal.mutateAsync(id);
-    } catch {
-      // handled by mutation hook
     }
   };
 
@@ -284,27 +259,9 @@ export default function DealDetailPage() {
           {canEdit && (
             <button
               onClick={handleEditOpen}
-              disabled={deal.is_archived}
               className="btn btn-secondary flex items-center gap-1 text-sm"
             >
               <Edit2 size={13} /> Edit
-            </button>
-          )}
-          {canEdit && !deal.is_archived && (
-            <button
-              onClick={() => setShowArchiveConfirm(true)}
-              className="btn btn-secondary flex items-center gap-1 text-sm"
-            >
-              <Archive size={13} /> Archive
-            </button>
-          )}
-          {canEdit && deal.is_archived && (
-            <button
-              onClick={handleRestore}
-              disabled={restoreDeal.isPending}
-              className="btn btn-secondary flex items-center gap-1 text-sm"
-            >
-              <RotateCcw size={13} /> Restore
             </button>
           )}
           {isAdmin && (
@@ -322,16 +279,13 @@ export default function DealDetailPage() {
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <Badge className={stageCfg.color}>{stageCfg.label}</Badge>
         <Badge className={priorityCfg.color}>{priorityCfg.label} Priority</Badge>
-        {deal.is_archived && (
-          <Badge className="bg-slate-200 text-slate-800">Archived</Badge>
-        )}
         {deal.assigned_to_name && (
           <span className="text-sm text-gray-400">Assigned to {deal.assigned_to_name}</span>
         )}
       </div>
 
       {/* Stage Transition Panel (collapsible, always visible above tabs) */}
-      {nextStages.length > 0 && !deal.is_archived && canEdit && (
+      {nextStages.length > 0 && canEdit && (
         <div className="card-editorial mb-5 p-0 overflow-hidden">
           <button
             type="button"
@@ -685,33 +639,6 @@ export default function DealDetailPage() {
         />
       )}
 
-      {/* ── Archive Confirm Modal ────────────────────────────────────────── */}
-      {showArchiveConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Archive Deal</h3>
-            <p className="text-sm text-gray-600 mb-5">
-              Archive <strong>{deal.name}</strong> to remove it from active views. If no other live
-              deal depends on the linked property, its address record will be cleared too.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowArchiveConfirm(false)}
-                className="btn btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleArchive}
-                disabled={archiveDeal.isPending}
-                className="btn btn-primary"
-              >
-                {archiveDeal.isPending ? 'Archiving...' : 'Archive'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -59,8 +59,17 @@ function categorize(key) {
 export default function DefaultsInspector({
   assetClass = 'residential_apartments',
   compactTrigger = false,
+  open: openProp,
+  onClose,
+  hideTrigger = false,
 }) {
-  const [open, setOpen] = useState(false);
+  const isControlled = typeof openProp === 'boolean';
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = isControlled ? openProp : openInternal;
+  const close = () => {
+    if (isControlled) onClose?.();
+    else setOpenInternal(false);
+  };
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -69,7 +78,7 @@ export default function DefaultsInspector({
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const handler = (e) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -129,22 +138,24 @@ export default function DefaultsInspector({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          compactTrigger
-            ? 'inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
-            : 'group inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
-        }
-        aria-label="View underwriting defaults with provenance"
-        title="View all defaults and sources for this asset class"
-      >
-        <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 text-white shadow-sm">
-          <Database size={12} strokeWidth={2.5} />
-        </span>
-        <span className="tracking-wide">Defaults & Sources</span>
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpenInternal(true)}
+          className={
+            compactTrigger
+              ? 'inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
+              : 'group inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
+          }
+          aria-label="View underwriting defaults with provenance"
+          title="View all defaults and sources for this asset class"
+        >
+          <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 text-white shadow-sm">
+            <Database size={12} strokeWidth={2.5} />
+          </span>
+          <span className="tracking-wide">Defaults & Sources</span>
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-[70] flex">
@@ -152,7 +163,7 @@ export default function DefaultsInspector({
             type="button"
             aria-label="Close defaults inspector"
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
             <header className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-900 px-6 py-5 text-white">
@@ -172,7 +183,7 @@ export default function DefaultsInspector({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={close}
                   className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"
                 >
                   <X size={18} />

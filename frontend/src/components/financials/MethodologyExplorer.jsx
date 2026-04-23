@@ -123,13 +123,24 @@ const ASSET_CLASS_DEEP_DIVE = {
   },
 };
 
-export default function MethodologyExplorer({ assetClass = 'residential_apartments' }) {
-  const [open, setOpen] = useState(false);
+export default function MethodologyExplorer({
+  assetClass = 'residential_apartments',
+  open: openProp,
+  onClose,
+  hideTrigger = false,
+}) {
+  const isControlled = typeof openProp === 'boolean';
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = isControlled ? openProp : openInternal;
+  const close = () => {
+    if (isControlled) onClose?.();
+    else setOpenInternal(false);
+  };
   const [tab, setTab] = useState('overview');
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const handler = (e) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -145,19 +156,21 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group relative inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-gradient-to-r from-indigo-50 via-violet-50 to-fuchsia-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:shadow-md hover:border-indigo-300 hover:from-indigo-100 hover:to-fuchsia-100"
-        aria-label="How this model works"
-      >
-        <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-sm">
-          <BookOpen size={12} strokeWidth={2.5} />
-          <span className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition" />
-        </span>
-        <span className="tracking-wide">Methodology</span>
-        <Sparkles size={12} className="text-fuchsia-500" />
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpenInternal(true)}
+          className="group relative inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-gradient-to-r from-indigo-50 via-violet-50 to-fuchsia-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:shadow-md hover:border-indigo-300 hover:from-indigo-100 hover:to-fuchsia-100"
+          aria-label="How this model works"
+        >
+          <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-sm">
+            <BookOpen size={12} strokeWidth={2.5} />
+            <span className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition" />
+          </span>
+          <span className="tracking-wide">Methodology</span>
+          <Sparkles size={12} className="text-fuchsia-500" />
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-[70] flex">
@@ -165,7 +178,7 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
             type="button"
             aria-label="Close methodology"
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
             <header className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 px-6 py-5 text-white">
@@ -184,7 +197,7 @@ export default function MethodologyExplorer({ assetClass = 'residential_apartmen
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={close}
                   className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"
                 >
                   <X size={18} />

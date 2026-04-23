@@ -1,13 +1,21 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, X, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
+  MoreVertical, Presentation, Share2, Trash2, Loader2,
+} from 'lucide-react';
 import { clsx } from 'clsx';
-import { useDeals, useCreateDeal } from '../hooks/useDeals';
+import { useDeals, useCreateDeal, useDeleteDeal } from '../hooks/useDeals';
 import { useProperties } from '../hooks/useProperties';
+import useAuthStore from '../store/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import PageHeader from '../components/common/PageHeader';
+import ShareDealPanel from '../components/deal/ShareDealPanel';
+import { toast } from '../components/common/Toast';
+import { exportsAPI } from '../services/api';
+import { downloadAxiosResponse } from '../utils/download';
 import {
   formatCrores,
   formatPct,
@@ -250,94 +258,9 @@ export default function DealsPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {deals.map((deal) => {
-              const stageCfg = STAGE_CONFIG[deal.stage] || STAGE_CONFIG.screening;
-              const priorityCfg = PRIORITY_CONFIG[deal.priority] || PRIORITY_CONFIG.medium;
-              return (
-                <Link
-                  key={deal.id}
-                  to={`/dashboard/deals/${deal.id}`}
-                  className="card-editorial hover:shadow-md transition-shadow cursor-pointer"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-semibold text-gray-900 truncate pr-2">{deal.name}</h3>
-                    <Badge className={stageCfg.color}>{stageCfg.label}</Badge>
-                  </div>
-
-                  <p className="text-sm text-gray-600 mb-1">{deal.property_name || 'Unlinked property'}</p>
-                  <p className="text-xs text-gray-400 mb-3">{deal.city}{deal.state ? `, ${deal.state}` : ''}</p>
-
-                  <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
-                    <div>
-                      <p className="text-xs text-gray-400">Land Area</p>
-                      <p className="font-medium text-gray-800">
-                        {deal.land_area_acres
-                          ? `${Number(deal.land_area_acres).toFixed(2)} acres`
-                          : deal.land_area_sqft
-                            ? `${Number(deal.land_area_sqft).toLocaleString('en-IN')} sqft`
-                            : 'Pending'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Headline Economics</p>
-                      <p className="font-medium text-gray-800">
-                        {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center flex-wrap gap-2 mb-3">
-                    <Badge className={priorityCfg.color}>{priorityCfg.label}</Badge>
-                    <span className="text-xs text-gray-500">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
-                    {deal.asset_class && (
-                      <span className="text-xs text-gray-500">
-                        {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}
-                      </span>
-                    )}
-                    {deal.deal_structure && (
-                      <span className="text-xs text-gray-500">
-                        {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}
-                      </span>
-                    )}
-                  </div>
-
-                  {Array.isArray(deal.key_risks) && deal.key_risks.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-1.5">
-                      {deal.key_risks.slice(0, 2).map((risk) => (
-                        <span
-                          key={risk}
-                          className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
-                        >
-                          {risk}
-                        </span>
-                      ))}
-                      {deal.open_high_risk_count > 2 && (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                          +{deal.open_high_risk_count - 2} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between text-sm border-t pt-3">
-                    <div>
-                      <span className="text-gray-400 text-xs">IRR</span>
-                      <p className="font-medium">{formatPct(deal.irr_pct)}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-gray-400 text-xs">Revenue</span>
-                      <p className="font-medium">{formatCrores(deal.total_revenue_cr)}</p>
-                    </div>
-                  </div>
-
-                  {(deal.last_activity_date || deal.updated_at) && (
-                    <p className="text-xs text-gray-400 mt-2">
-                      Updated {formatRelativeTime(deal.last_activity_date || deal.updated_at)}
-                    </p>
-                  )}
-                </Link>
-              );
-            })}
+            {deals.map((deal) => (
+              <DealCard key={deal.id} deal={deal} />
+            ))}
           </div>
 
           {/* Pagination */}
@@ -614,5 +537,250 @@ export default function DealsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function DealCard({ deal }) {
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const deleteDeal = useDeleteDeal();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const menuRef = useRef(null);
+
+  const stageCfg = STAGE_CONFIG[deal.stage] || STAGE_CONFIG.screening;
+  const priorityCfg = PRIORITY_CONFIG[deal.priority] || PRIORITY_CONFIG.medium;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onDoc = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const stopAll = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleExport = async (e) => {
+    stopAll(e);
+    setMenuOpen(false);
+    setExporting(true);
+    try {
+      const response = await exportsAPI.dealPptx(deal.id);
+      const safe = (deal.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      downloadAxiosResponse(response, `redip-${safe}.pptx`);
+      toast.success('PPTX deck downloaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'PPTX export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleShare = (e) => {
+    stopAll(e);
+    setMenuOpen(false);
+    setShowShare(true);
+  };
+
+  const handleDelete = (e) => {
+    stopAll(e);
+    setMenuOpen(false);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await deleteDeal.mutateAsync(deal.id);
+      setShowDeleteConfirm(false);
+    } catch {
+      // toast handled by hook
+    }
+  };
+
+  return (
+    <>
+      <Link
+        to={`/dashboard/deals/${deal.id}`}
+        className="card-editorial hover:shadow-md transition-shadow cursor-pointer relative"
+      >
+        <div className="flex items-start justify-between mb-3 gap-2">
+          <h3 className="font-semibold text-gray-900 truncate pr-2">{deal.name}</h3>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Badge className={stageCfg.color}>{stageCfg.label}</Badge>
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={(e) => { stopAll(e); setMenuOpen((v) => !v); }}
+                aria-label="Deal actions"
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                <MoreVertical size={16} />
+              </button>
+              {menuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 w-44 rounded-md border border-gray-200 bg-white shadow-lg z-20"
+                  onClick={stopAll}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={exporting}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {exporting ? <Loader2 size={14} className="animate-spin" /> : <Presentation size={14} />}
+                    Export Deck
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"
+                  >
+                    <Share2 size={14} />
+                    Share
+                  </button>
+                  {isAdmin && (
+                    <>
+                      <div className="border-t border-gray-100" />
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-1">{deal.property_name || 'Unlinked property'}</p>
+        <p className="text-xs text-gray-400 mb-3">{deal.city}{deal.state ? `, ${deal.state}` : ''}</p>
+
+        <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+          <div>
+            <p className="text-xs text-gray-400">Land Area</p>
+            <p className="font-medium text-gray-800">
+              {deal.land_area_acres
+                ? `${Number(deal.land_area_acres).toFixed(2)} acres`
+                : deal.land_area_sqft
+                  ? `${Number(deal.land_area_sqft).toLocaleString('en-IN')} sqft`
+                  : 'Pending'}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-400">Headline Economics</p>
+            <p className="font-medium text-gray-800">
+              {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-2 mb-3">
+          <Badge className={priorityCfg.color}>{priorityCfg.label}</Badge>
+          <span className="text-xs text-gray-500">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
+          {deal.asset_class && (
+            <span className="text-xs text-gray-500">
+              {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}
+            </span>
+          )}
+          {deal.deal_structure && (
+            <span className="text-xs text-gray-500">
+              {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}
+            </span>
+          )}
+        </div>
+
+        {Array.isArray(deal.key_risks) && deal.key_risks.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {deal.key_risks.slice(0, 2).map((risk) => (
+              <span
+                key={risk}
+                className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
+              >
+                {risk}
+              </span>
+            ))}
+            {deal.open_high_risk_count > 2 && (
+              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                +{deal.open_high_risk_count - 2} more
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-sm border-t pt-3">
+          <div>
+            <span className="text-gray-400 text-xs">IRR</span>
+            <p className="font-medium">{formatPct(deal.irr_pct)}</p>
+          </div>
+          <div className="text-right">
+            <span className="text-gray-400 text-xs">Revenue</span>
+            <p className="font-medium">{formatCrores(deal.total_revenue_cr)}</p>
+          </div>
+        </div>
+
+        {(deal.last_activity_date || deal.updated_at) && (
+          <p className="text-xs text-gray-400 mt-2">
+            Updated {formatRelativeTime(deal.last_activity_date || deal.updated_at)}
+          </p>
+        )}
+      </Link>
+
+      {showShare && (
+        <ShareDealPanel
+          dealId={deal.id}
+          dealName={deal.name}
+          isOwner={deal.created_by === user?.id}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Deal</h3>
+            <p className="text-sm text-gray-600 mb-5">
+              Permanently delete <strong>{deal.name}</strong>? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteDeal.isPending}
+                className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
+              >
+                {deleteDeal.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

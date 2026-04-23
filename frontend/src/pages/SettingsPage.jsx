@@ -7,6 +7,7 @@ import { toast } from '../components/common/Toast';
 import { authAPI } from '../services/api';
 import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
+import { emitCurrencyChange } from '../hooks/useCurrencyPref';
 
 const CURRENCY_OPTIONS = [
   { value: 'crores', label: 'Crores (Cr)' },
@@ -206,8 +207,32 @@ export default function SettingsPage() {
   const handleCurrencyCodeChange = (code) => {
     setCurrencyCode(code);
     localStorage.setItem('pref_currencyCode', code);
+    if (code === 'INR') {
+      localStorage.removeItem('pref_fx_rate');
+    } else {
+      const row = liveRates?.find((r) => r.quote_currency === code);
+      if (row?.rate) {
+        localStorage.setItem('pref_fx_rate', String(row.rate));
+      }
+    }
+    emitCurrencyChange();
     toast.success('Currency updated');
   };
+
+  // Keep pref_fx_rate in sync whenever live rates refresh — otherwise a user
+  // who set their currency yesterday would see stale numbers until they
+  // re-picked the same currency today.
+  useEffect(() => {
+    if (!liveRates || currencyCode === 'INR') return;
+    const row = liveRates.find((r) => r.quote_currency === currencyCode);
+    if (!row?.rate) return;
+    const prev = localStorage.getItem('pref_fx_rate');
+    const next = String(row.rate);
+    if (prev !== next) {
+      localStorage.setItem('pref_fx_rate', next);
+      emitCurrencyChange();
+    }
+  }, [liveRates, currencyCode]);
 
   return (
     <div className="space-y-6 max-w-3xl">
