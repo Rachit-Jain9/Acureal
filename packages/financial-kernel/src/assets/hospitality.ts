@@ -364,20 +364,48 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     }),
   ];
 
-  const ramp = [0.4, 0.55, stabilizedOccPct / 100];
+  // Monthly operating NOI line items. Two paths:
+  //
+  //   (a) USALI drivers present — annual NOI per year comes from the detailed
+  //       USALI cascade (`usaliPnl[y].noiCr`). Divided evenly across the 12
+  //       months of that operating year so the proforma's `Stabilised
+  //       operations (NOI)` row reconciles line-for-line with the P&L the
+  //       frontend renders. This is the path Indian 4-star/5-star deals take.
+  //
+  //   (b) Legacy blended-margin mode — simple 3-step occupancy ramp and
+  //       `totalRev × ebitdaMargin` for deals that pre-date the USALI inputs.
+  //       Preserved for parity with historical deals.
+  //
+  // Previously the monthly loop always used path (b), so USALI-priced deals
+  // showed one NOI in the P&L (e.g. Y1 ≈ ₹1.97 Cr) and a *different* NOI in
+  // the quarterly proforma (e.g. Y6 ≈ ₹3.97 Cr) because the cashflow stream
+  // was computed from the blended 22% margin and a coarser ramp, while the
+  // P&L used per-POR expenses and linear ramp. The two now agree.
   const operatingStart = period.constructionEndMonth + 1;
   const operatingEnd = period.totalMonths;
+  const useUsaliCascade = hasUsaliDrivers && usaliPnl.length > 0;
+  const legacyRamp = [0.4, 0.55, stabilizedOccPct / 100];
   for (let month = operatingStart; month <= operatingEnd; month++) {
     const monthsIntoOps = month - operatingStart;
-    const yearIdx = Math.ceil((monthsIntoOps + 1) / 12);
-    const occ = yearIdx <= 1 ? ramp[0] : yearIdx === 2 ? ramp[1] : ramp[2];
-    const adrThis = adr * Math.pow(1 + adrGrowthPct / 100, yearIdx - 1);
-    const revPAR = adrThis * occ;
-    const monthRoomsRev = D((keys * revPAR * (365 / 12)) / CRORE);
-    const monthTotalRev = monthRoomsRev.mulNumber(1 + fbRevPct / 100 + otherRevPct / 100);
-    const monthEBITDA = monthTotalRev.mulNumber(ebitdaMarginPct / 100);
-    const monthFFEReserve = monthTotalRev.mulNumber(ffeReservePct / 100);
-    const monthNOI = monthEBITDA.sub(monthFFEReserve);
+    const yearIdx = Math.ceil((monthsIntoOps + 1) / 12); // 1-indexed operating year
+
+    let monthNOI: Decimal;
+    if (useUsaliCascade) {
+      const yIdx = Math.min(Math.max(0, yearIdx - 1), usaliPnl.length - 1);
+      const annualNOI = usaliPnl[yIdx]?.noiCr ?? 0;
+      monthNOI = D(annualNOI / 12);
+    } else {
+      const occ =
+        yearIdx <= 1 ? legacyRamp[0] : yearIdx === 2 ? legacyRamp[1] : legacyRamp[2];
+      const adrThis = adr * Math.pow(1 + adrGrowthPct / 100, yearIdx - 1);
+      const revPAR = adrThis * occ;
+      const monthRoomsRev = D((keys * revPAR * (365 / 12)) / CRORE);
+      const monthTotalRev = monthRoomsRev.mulNumber(1 + fbRevPct / 100 + otherRevPct / 100);
+      const monthEBITDA = monthTotalRev.mulNumber(ebitdaMarginPct / 100);
+      const monthFFEReserve = monthTotalRev.mulNumber(ffeReservePct / 100);
+      monthNOI = monthEBITDA.sub(monthFFEReserve);
+    }
+
     items.push(
       bulletInflow({
         period,
