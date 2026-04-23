@@ -1,0 +1,149 @@
+// Mock every service the composer depends on. The workspace service is pure
+// orchestration; real behaviour lives in the per-domain unit suites. These
+// tests verify the payload shape and the degrade-to-null contract.
+
+jest.mock('../src/services/deal.service');
+jest.mock('../src/services/financial.service');
+jest.mock('../src/services/document.service');
+jest.mock('../src/services/activity.service');
+jest.mock('../src/services/dd.service');
+jest.mock('../src/services/risk.service');
+jest.mock('../src/services/waterfall.service');
+
+const dealService = require('../src/services/deal.service');
+const financialService = require('../src/services/financial.service');
+const documentService = require('../src/services/document.service');
+const activityService = require('../src/services/activity.service');
+const ddService = require('../src/services/dd.service');
+const riskService = require('../src/services/risk.service');
+const waterfallService = require('../src/services/waterfall.service');
+
+const dealWorkspaceService = require('../src/services/dealWorkspace.service');
+
+const DEAL_ID = 'deal-1';
+
+const mockDeal = () => ({
+  id: DEAL_ID,
+  name: 'Koramangala Premium',
+  stage: 'underwriting',
+  is_archived: false,
+  dd_items: [{ id: 'dd-1', category: 'title', status: 'pending' }],
+  approval_items: [{ id: 'app-1', name: 'Khata', is_required: true }],
+  risk_flags: [{ id: 'r-1', severity: 'high', status: 'open' }],
+  readiness_summary: { score: 72 },
+  next_steps: [{ id: 'n-1', title: 'Verify RERA' }],
+});
+
+const http404 = (message) => {
+  const err = new Error(message);
+  err.statusCode = 404;
+  return err;
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Default: every optional slice resolves to a minimal happy-path value.
+  dealService.getDealById.mockResolvedValue(mockDeal());
+  financialService.getFinancials.mockResolvedValue({ deal_id: DEAL_ID, irr_pct: 18.2 });
+  financialService.getScenarios.mockResolvedValue({ base: {}, bull: {}, bear: {} });
+  financialService.getFinancialGraph.mockResolvedValue({ nodes: [], edges: [] });
+  financialService.listDealEvents.mockResolvedValue([{ id: 'e-1' }]);
+  documentService.getDocuments.mockResolvedValue({ documents: [], grouped: {} });
+  activityService.getActivities.mockResolvedValue([{ id: 'a-1' }]);
+  ddService.getDDScore.mockResolvedValue({ score: 60 });
+  riskService.getRiskScore.mockResolvedValue({ score: 40 });
+  waterfallService.getWaterfall.mockResolvedValue([
+    { kind: 'jda', inputs: {}, result: {} },
+    { kind: 'jv', inputs: {}, result: {} },
+  ]);
+});
+
+describe('dealWorkspace.service', () => {
+  test('composes one payload with all domains', async () => {
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    expect(ws.deal.id).toBe(DEAL_ID);
+    expect(ws.financial.summary.irr_pct).toBe(18.2);
+    expect(ws.financial.scenarios).toEqual({ base: {}, bull: {}, bear: {} });
+    expect(ws.financial.graph).toEqual({ nodes: [], edges: [] });
+    expect(ws.financial.auditEvents).toEqual([{ id: 'e-1' }]);
+    expect(ws.dd.items).toEqual([{ id: 'dd-1', category: 'title', status: 'pending' }]);
+    expect(ws.dd.score).toEqual({ score: 60 });
+    expect(ws.risk.flags).toEqual([{ id: 'r-1', severity: 'high', status: 'open' }]);
+    expect(ws.risk.score).toEqual({ score: 40 });
+    expect(ws.approvals).toEqual([{ id: 'app-1', name: 'Khata', is_required: true }]);
+    expect(ws.documents).toEqual({ documents: [], grouped: {} });
+    expect(ws.activities).toEqual([{ id: 'a-1' }]);
+    expect(ws.waterfall.jda).toEqual({ kind: 'jda', inputs: {}, result: {} });
+    expect(ws.waterfall.jv).toEqual({ kind: 'jv', inputs: {}, result: {} });
+    expect(ws.readiness.summary).toEqual({ score: 72 });
+    expect(ws.readiness.nextSteps).toEqual([{ id: 'n-1', title: 'Verify RERA' }]);
+    expect(typeof ws.generatedAt).toBe('string');
+  });
+
+  test('fires all optional fetches in parallel', async () => {
+    await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    // Deal read runs first (its result gates the composite).
+    expect(dealService.getDealById).toHaveBeenCalledWith(DEAL_ID);
+    // Every optional slice also fires.
+    expect(financialService.getFinancials).toHaveBeenCalledWith(DEAL_ID);
+    expect(financialService.getScenarios).toHaveBeenCalledWith(DEAL_ID);
+    expect(financialService.getFinancialGraph).toHaveBeenCalledWith(DEAL_ID);
+    expect(financialService.listDealEvents).toHaveBeenCalledWith(DEAL_ID, { limit: 25 });
+    expect(documentService.getDocuments).toHaveBeenCalledWith(DEAL_ID);
+    expect(activityService.getActivities).toHaveBeenCalledWith(DEAL_ID, {}, { limit: 50 });
+    expect(ddService.getDDScore).toHaveBeenCalledWith(DEAL_ID);
+    expect(riskService.getRiskScore).toHaveBeenCalledWith(DEAL_ID);
+    expect(waterfallService.getWaterfall).toHaveBeenCalledWith(DEAL_ID);
+  });
+
+  test('degrades gracefully when optional slice returns 404', async () => {
+    financialService.getFinancials.mockRejectedValue(http404('Financials not found.'));
+    financialService.getScenarios.mockRejectedValue(http404('Financials not found.'));
+    financialService.getFinancialGraph.mockRejectedValue(http404('Financials not found.'));
+    financialService.listDealEvents.mockResolvedValue([]);
+    waterfallService.getWaterfall.mockResolvedValue([]);
+
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    expect(ws.deal.id).toBe(DEAL_ID);
+    expect(ws.financial.summary).toBeNull();
+    expect(ws.financial.scenarios).toBeNull();
+    expect(ws.financial.graph).toBeNull();
+    expect(ws.financial.auditEvents).toEqual([]);
+    expect(ws.waterfall).toEqual({ jda: null, jv: null });
+  });
+
+  test('does not swallow core-deal failure', async () => {
+    const err = new Error('Deal not found.');
+    err.statusCode = 404;
+    dealService.getDealById.mockRejectedValue(err);
+
+    await expect(dealWorkspaceService.getDealWorkspace(DEAL_ID)).rejects.toThrow('Deal not found.');
+  });
+
+  test('logs but does not fail when an optional slice throws a 500', async () => {
+    const boom = new Error('boom');
+    boom.statusCode = 500;
+    financialService.getFinancials.mockRejectedValue(boom);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    expect(ws.financial.summary).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[dealWorkspace] financials read failed:'),
+      'boom',
+    );
+    warnSpy.mockRestore();
+  });
+
+  test('waterfallByKind handles unexpected non-array payloads', async () => {
+    waterfallService.getWaterfall.mockResolvedValue(null);
+
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    expect(ws.waterfall).toEqual({ jda: null, jv: null });
+  });
+});

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query: qv, param } = require('express-validator');
 const dealService = require('../services/deal.service');
+const dealWorkspaceService = require('../services/dealWorkspace.service');
 const dealShareService = require('../services/dealShare.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
@@ -221,6 +222,26 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next)
     next(error);
   }
 });
+
+// GET /deals/:id/workspace — unified read-model for the deal workspace UI.
+// Composes deal + financials + scenarios + graph + DD/risk scores + audit
+// events + documents + activities + waterfall into one payload so tabs can
+// share a single React-Query key. RLS is enforced per-slice via the
+// underlying services; no bypass here.
+router.get(
+  '/:id/workspace',
+  authenticate,
+  [param('id').isUUID().withMessage('Deal id must be a UUID.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const workspace = await dealWorkspaceService.getDealWorkspace(req.params.id);
+      res.json({ success: true, data: workspace });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // GET /deals/:id/readiness
 router.get('/:id/readiness', authenticate, async (req, res, next) => {

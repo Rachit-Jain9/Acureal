@@ -1,0 +1,126 @@
+/**
+ * Deal workspace read-model.
+ *
+ * Composes existing per-domain service reads (deal, financial, documents,
+ * activity, audit, waterfall, DD/risk scores) into one grounded payload so
+ * the deal workspace UI can load all four tabs (Overview, Financial, DD/Risk,
+ * Activity/Documents) from a single round-trip instead of ~7 parallel module
+ * queries.
+ *
+ * Design rules (Phase A — read consolidation only):
+ *  • No new math. Everything is a delegate to a service that already owns the
+ *    relevant SQL + RLS check (`buildVisibleDealCondition` / `current_organization_id()`).
+ *  • No write path. Mutations keep going through the per-domain routes so
+ *    existing validators, audit hooks, and role checks still fire.
+ *  • Permissive on optional slices. A deal without financials, waterfall, or
+ *    audit events is still a valid deal — return `null` for those slices
+ *    instead of 404ing the whole workspace.
+ *  • Strict on the core deal. If `getDealById` throws (not found / not visible)
+ *    the whole request fails — there is no workspace without a deal.
+ */
+
+const dealService = require('./deal.service');
+const financialService = require('./financial.service');
+const documentService = require('./document.service');
+const activityService = require('./activity.service');
+const ddService = require('./dd.service');
+const riskService = require('./risk.service');
+const waterfallService = require('./waterfall.service');
+
+const ACTIVITY_LIMIT = 50;
+const AUDIT_EVENT_LIMIT = 25;
+
+/**
+ * Resolve a promise-returning thunk and swallow the error, returning `null`.
+ * Used for optional slices whose absence should not fail the workspace read.
+ */
+async function optional(thunk, sliceName) {
+  try {
+    return await thunk();
+  } catch (err) {
+    // 404s are expected on deals that never had financials / waterfall / etc.
+    if (err && (err.statusCode === 404 || err.status === 404)) return null;
+    // Anything else is logged but still does not fail the composite request —
+    // a degraded workspace is more useful than a hard error.
+    console.warn(`[dealWorkspace] ${sliceName} read failed:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Get the full workspace payload for a deal.
+ *
+ * The shape is intentionally flat at the top level — one slice per tab — so
+ * the frontend can `useQuery(['deal-workspace', dealId], { select })` and
+ * derive tab-specific props without re-shaping.
+ */
+async function getDealWorkspace(dealId) {
+  // Core — must succeed. Any failure (not found, not visible) short-circuits.
+  const deal = await dealService.getDealById(dealId);
+
+  // Parallel fetch of optional slices. Each already enforces RLS via its own
+  // query; we do NOT re-check visibility here — the deal fetch above already
+  // proved the caller has access, and the sub-queries each re-check.
+  const [
+    financials,
+    scenarios,
+    financialGraph,
+    auditEvents,
+    documents,
+    activities,
+    ddScore,
+    riskScore,
+    waterfalls,
+  ] = await Promise.all([
+    optional(() => financialService.getFinancials(dealId), 'financials'),
+    optional(() => financialService.getScenarios(dealId), 'scenarios'),
+    optional(() => financialService.getFinancialGraph(dealId), 'financialGraph'),
+    optional(() => financialService.listDealEvents(dealId, { limit: AUDIT_EVENT_LIMIT }), 'auditEvents'),
+    optional(() => documentService.getDocuments(dealId), 'documents'),
+    optional(() => activityService.getActivities(dealId, {}, { limit: ACTIVITY_LIMIT }), 'activities'),
+    optional(() => ddService.getDDScore(dealId), 'ddScore'),
+    optional(() => riskService.getRiskScore(dealId), 'riskScore'),
+    optional(() => waterfallService.getWaterfall(dealId), 'waterfalls'),
+  ]);
+
+  const waterfallByKind = Array.isArray(waterfalls)
+    ? waterfalls.reduce((acc, row) => {
+        if (row && row.kind) acc[row.kind] = row;
+        return acc;
+      }, {})
+    : {};
+
+  return {
+    deal,
+    financial: {
+      summary: financials,
+      scenarios,
+      graph: financialGraph,
+      auditEvents: auditEvents || [],
+    },
+    dd: {
+      items: deal.dd_items || [],
+      score: ddScore,
+    },
+    risk: {
+      flags: deal.risk_flags || [],
+      score: riskScore,
+    },
+    approvals: deal.approval_items || [],
+    documents: documents || { documents: [], grouped: {} },
+    activities: activities || [],
+    waterfall: {
+      jda: waterfallByKind.jda || null,
+      jv: waterfallByKind.jv || null,
+    },
+    readiness: {
+      summary: deal.readiness_summary || null,
+      nextSteps: deal.next_steps || [],
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+module.exports = {
+  getDealWorkspace,
+};
