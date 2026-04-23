@@ -50,12 +50,20 @@ export default function HospitalityProformaSection({ financials }) {
 
 // ─── Header KPI strip ───────────────────────────────────────────────────────
 function HospitalityHeader({ inputs, kpis }) {
+  // NOI per key — derived from total NOI (cumulative across all keys) ÷ keys.
+  // The kernel emits `kpis.noi` as total ₹Cr; per-key comes from dividing by
+  // `inputs.keys`. Surfaced as lakh because institutional hospitality quotes
+  // per-key NOI in lakh/Cr, not raw rupees.
+  const noiPerKeyLakh = (kpis.noi != null && inputs.keys > 0)
+    ? (Number(kpis.noi) * 100) / Number(inputs.keys)
+    : null;
+
   const stats = [
     { label: 'Keys',            value: fmtNum(inputs.keys, 0),                              unit: '' },
     { label: 'Stabilized ADR',  value: fmtInr(kpis.stabilizedADR),                          unit: '/night' },
     { label: 'Stabilized Occ',  value: kpis.stabilizedOccupancy != null ? `${Number(kpis.stabilizedOccupancy).toFixed(1)}%` : '—', unit: '' },
     { label: 'RevPAR',          value: fmtInr(kpis.revPAR),                                 unit: '/night' },
-    { label: 'GOP Margin',      value: kpis.gopMarginPct != null ? `${kpis.gopMarginPct.toFixed(1)}%` : '—', unit: '' },
+    { label: 'NOI / Key',       value: noiPerKeyLakh != null ? `₹${noiPerKeyLakh.toFixed(1)} L` : '—', unit: '/yr' },
     { label: 'Yield on Cost',   value: kpis.yieldOnCost != null ? `${kpis.yieldOnCost.toFixed(2)}%` : '—', unit: '' },
     { label: 'Levered IRR',     value: kpis.leveredIrr != null ? `${kpis.leveredIrr.toFixed(2)}%` : '—', unit: '' },
     { label: 'Dev / Key',       value: fmtInrLakh(kpis.devCostPerKey),                      unit: '' },

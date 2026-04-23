@@ -439,15 +439,23 @@ function DataRow({ label, subLabel, cells, total, peakIndex, tone, signed }) {
 }
 
 function SubtotalRow({ label, cells, total, peakIndex, tone, signed }) {
-  const toneClass = tone === 'rose'
-    ? 'text-rose-900 bg-rose-50/40'
+  const textClass = tone === 'rose'
+    ? 'text-rose-900'
     : tone === 'emerald'
-      ? 'text-emerald-900 bg-emerald-50/40'
-      : 'text-stone-900 bg-stone-50/40';
+      ? 'text-emerald-900'
+      : 'text-stone-900';
+
+  // Solid backgrounds — the sticky label cell must fully occlude scrolling
+  // numeric cells behind it. Using /40 alpha lets numbers bleed through.
+  const solidBg = tone === 'rose'
+    ? 'bg-rose-50'
+    : tone === 'emerald'
+      ? 'bg-emerald-50'
+      : 'bg-stone-50';
 
   return (
-    <tr className={clsx('border-b border-stone-200 font-semibold', toneClass)}>
-      <td className="sticky left-0 z-10 px-4 py-1.5 border-r border-stone-200 uppercase tracking-[0.1em] text-[10px] bg-inherit">
+    <tr className={clsx('border-b border-stone-200 font-semibold', textClass, solidBg)}>
+      <td className={clsx('sticky left-0 z-20 px-4 py-1.5 border-r border-stone-200 uppercase tracking-[0.1em] text-[10px]', solidBg)}>
         {label}
       </td>
       {cells.map((c, i) => {
@@ -464,7 +472,7 @@ function SubtotalRow({ label, cells, total, peakIndex, tone, signed }) {
           </td>
         );
       })}
-      <td className="px-3 py-1.5 text-right border-l border-stone-200 bg-inherit">
+      <td className={clsx('px-3 py-1.5 text-right border-l border-stone-200', solidBg)}>
         {signed && total < 0 ? `(${fmtCell(Math.abs(total))})` : fmtCell(total)}
       </td>
     </tr>

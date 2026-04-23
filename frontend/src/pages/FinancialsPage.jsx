@@ -662,10 +662,10 @@ function KPICards({ kpis, assetClass, inputs }) {
   if (isHospitality) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPIStatCard kpiKey="revPAR"    {...commonProps} title="RevPAR"     value={kpis.revPAR != null ? formatINR(kpis.revPAR, 0) : '-'} subtitle="₹/key/night (stabilized)" icon={IndianRupee} />
-        <KPIStatCard kpiKey="noi"       {...commonProps} title="EBITDA"     value={formatCrores(kpis.noi)}                                subtitle="Stabilized EBITDA / yr"   icon={TrendingUp} />
-        <KPIStatCard kpiKey="irr"       {...commonProps} title="IRR"        value={formatPct(kpis.irr)}                                  subtitle="Unlevered, through exit"  icon={Percent} />
-        <KPIStatCard kpiKey="exitValue" {...commonProps} title="Exit Value" value={formatCrores(kpis.exitValue)}                         subtitle="EBITDA / exit cap rate"   icon={DollarSign} />
+        <KPIStatCard kpiKey="revPAR"    {...commonProps} title="RevPAR"         value={kpis.revPAR != null ? formatINR(kpis.revPAR, 0) : '-'} subtitle="₹/key/night (stabilized)"    icon={IndianRupee} />
+        <KPIStatCard kpiKey="noi"       {...commonProps} title="Stabilized NOI" value={formatCrores(kpis.noi)}                                subtitle="All keys · ₹ Cr / year"       icon={TrendingUp} />
+        <KPIStatCard kpiKey="irr"       {...commonProps} title="IRR"            value={formatPct(kpis.irr)}                                  subtitle="Unlevered, through exit"      icon={Percent} />
+        <KPIStatCard kpiKey="exitValue" {...commonProps} title="Exit Value"     value={formatCrores(kpis.exitValue)}                         subtitle="NOI / exit cap rate"          icon={DollarSign} />
       </div>
     );
   }
