@@ -49,15 +49,38 @@ export function SectionHeader({ eyebrow, title, sub, action, className }) {
 // ── MetricTile ─────────────────────────────────────────────────────────────
 // A single KPI tile. Label top, big value, optional delta + footnote.
 // `tone` controls the delta colour: 'up' | 'down' | 'neutral'.
-export function MetricTile({ label, value, unit, delta, tone = 'neutral', footnote, className }) {
+// `action` renders in the top-right corner (e.g. provenance Info button).
+// `children` are absolutely-anchored to the tile — use for popovers/tooltips
+// that need to overlay on top of the tile without affecting its layout.
+export function MetricTile({
+  label,
+  value,
+  unit,
+  delta,
+  tone = 'neutral',
+  footnote,
+  action,
+  children,
+  className,
+}) {
   const toneClass = {
     up: 'text-emerald-700',
     down: 'text-rose-700',
     neutral: 'text-stone-500',
   }[tone];
   return (
-    <div className={clsx('border border-stone-200 bg-white rounded-sm p-4', className)}>
-      <div className="text-[11px] uppercase tracking-[0.16em] text-stone-500 mb-2">{label}</div>
+    <div
+      className={clsx(
+        'relative border border-stone-200 bg-white rounded-sm p-4',
+        className,
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] uppercase tracking-[0.16em] text-stone-500 mb-2 min-w-0 truncate">
+          {label}
+        </div>
+        {action && <div className="shrink-0 -mt-1 -mr-1">{action}</div>}
+      </div>
       <div className="flex items-baseline gap-1.5">
         <div className="font-serif text-2xl sm:text-3xl font-semibold text-stone-900 tabular-nums">
           {value}
@@ -68,6 +91,7 @@ export function MetricTile({ label, value, unit, delta, tone = 'neutral', footno
         <div className={clsx('text-xs mt-1.5 tabular-nums', toneClass)}>{delta}</div>
       )}
       {footnote && <div className="text-[11px] text-stone-400 mt-1.5">{footnote}</div>}
+      {children}
     </div>
   );
 }

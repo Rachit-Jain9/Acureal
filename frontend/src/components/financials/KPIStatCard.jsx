@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Info, X } from 'lucide-react';
 import { clsx } from 'clsx';
-import StatCard from '../common/StatCard';
+import { MetricTile } from '../../design-system';
 import { useDefaultsMeta } from '../../hooks/useFinancials';
 import { getKpiMeta } from './kpiProvenanceRegistry';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
@@ -354,7 +354,25 @@ function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidenc
   );
 }
 
+// Map legacy StatCard accent/trend props onto MetricTile's tone + delta so
+// call sites in FinancialsPage don't need to change.
+function deriveDelta(trend) {
+  if (trend == null || !Number.isFinite(Number(trend))) return null;
+  const n = Number(trend);
+  return `${n > 0 ? '+' : ''}${n}% vs last month`;
+}
+
+function deriveTone(accent, trend) {
+  if (accent === 'green') return 'up';
+  if (accent === 'red') return 'down';
+  if (trend != null && Number.isFinite(Number(trend))) {
+    return Number(trend) >= 0 ? 'up' : 'down';
+  }
+  return 'neutral';
+}
+
 export default function KPIStatCard({
+  // eslint-disable-next-line no-unused-vars
   title, value, subtitle, icon, trend, accent, kpiKey,
   assetClass, inputs, confidence,
 }) {
@@ -381,57 +399,51 @@ export default function KPIStatCard({
     };
   }, [open]);
 
+  const delta = deriveDelta(trend);
+  const tone = deriveTone(accent, trend);
+
+  // No provenance metadata → render a plain editorial tile; still receive
+  // trend/accent mappings so the visual is identical to the provenance case.
   if (!meta) {
     return (
-      <StatCard
-        title={title}
+      <MetricTile
+        label={title}
         value={value}
-        subtitle={subtitle}
-        icon={icon}
-        trend={trend}
-        accent={accent}
+        footnote={subtitle}
+        delta={delta}
+        tone={tone}
       />
     );
   }
 
+  const infoButton = (
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      className={clsx(
+        'p-1 rounded-full transition-colors',
+        open
+          ? 'bg-[#fff1ea] text-[#9a3412]'
+          : 'text-stone-400 hover:bg-[#fff1ea] hover:text-[#9a3412]',
+      )}
+      title="See formula, drivers, and source"
+      aria-label="Show KPI provenance"
+      aria-expanded={open}
+    >
+      <Info size={13} />
+    </button>
+  );
+
   return (
     <div ref={containerRef} className="relative">
-      <StatCard
-        title={title}
+      <MetricTile
+        label={title}
         value={value}
-        subtitle={subtitle}
-        icon={icon}
-        trend={trend}
-        accent={accent}
+        footnote={subtitle}
+        delta={delta}
+        tone={tone}
+        action={infoButton}
       />
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={clsx(
-          'absolute top-2 right-2 p-1 rounded-full transition-colors',
-        )}
-        style={{
-          backgroundColor: open ? 'var(--color-brand-accent-soft)' : 'transparent',
-          color: open ? 'var(--color-brand-accent)' : 'var(--color-text-muted)',
-        }}
-        onMouseEnter={(e) => {
-          if (!open) {
-            e.currentTarget.style.backgroundColor = 'var(--color-brand-accent-soft)';
-            e.currentTarget.style.color = 'var(--color-brand-accent)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!open) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = 'var(--color-text-muted)';
-          }
-        }}
-        title="See formula, drivers, and source"
-        aria-label="Show KPI provenance"
-        aria-expanded={open}
-      >
-        <Info size={13} />
-      </button>
 
       {open && (
         <PopoverPanel
