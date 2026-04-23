@@ -479,6 +479,7 @@ function normalizeFinancials(financials) {
       gop: toNumber(revenue.gop),
       ebitda: toNumber(revenue.ebitda),
       usali_pnl: revenue.usali_pnl || null,
+      usali_summary: revenue.usali_summary || null,
     },
     // Preserve extended hospitality payloads
     costsRaw: costs,

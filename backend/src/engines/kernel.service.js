@@ -135,6 +135,15 @@ function flattenAreas(k) {
  * green. Extras are passed through for asset-class-specific fields
  * (`exitValue`, `revPAR`, `gop`, etc.).
  */
+// Non-numeric pass-through keys on revenue.extras. These hold structured
+// payloads (USALI P&L row arrays, stabilised summary objects) rather than
+// Decimals, so they must bypass numeric coercion and be re-keyed to the
+// snake_case shape the frontend reads.
+const REVENUE_PASSTHROUGH_KEYS = {
+  usaliPnl: 'usali_pnl',
+  usaliSummary: 'usali_summary',
+};
+
 function flattenRevenue(k) {
   const extras = k.extras || {};
   const out = {
@@ -146,6 +155,11 @@ function flattenRevenue(k) {
     exitValue:      round4(toNum(k.exitValueCr)),
   };
   for (const [name, val] of Object.entries(extras)) {
+    const snakeKey = REVENUE_PASSTHROUGH_KEYS[name];
+    if (snakeKey) {
+      if (out[snakeKey] === undefined) out[snakeKey] = val ?? null;
+      continue;
+    }
     if (out[name] !== undefined) continue;
     out[name] = round4(toNum(val));
   }

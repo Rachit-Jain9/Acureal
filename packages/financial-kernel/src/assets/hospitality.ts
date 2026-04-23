@@ -41,6 +41,15 @@ import {
   maybeFinancing,
   num,
 } from './common';
+import {
+  INDIA_HOSPITALITY_PRESETS,
+  buildUsaliPnl,
+  buildUsaliSummary,
+  type IndianHospitalityPresetKey,
+  type UsaliPnlInputs,
+  type UsaliPnlRow,
+  type UsaliStabilisedSummary,
+} from '../postprocess/usaliPnl';
 
 const HOSP_DEFAULT_SQFT_PER_KEY = 550;
 const HOSP_DEFAULT_HARD_COST_PER_SQFT = 11_000;
@@ -97,21 +106,31 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
   const constLoanFeesPct = num(raw.constLoanFeesPct, 1.0);
 
   // ── Revenue / operating inputs ────────────────────────────────────────────
-  // Defaults align with a typical USALI mid-scale Indian hotel (matches legacy
-  // USALI-computed output for the canonical parity deal):
-  //   F&B/other revenue as % of rooms: 30% / 9%
-  //   GOP margin: ~30%, EBITDA margin: ~22%, NOI margin: ~18% (EBITDA − 4% FF&E)
-  const adr = num(raw.adr, 6000);
-  const adrGrowthPct = num(raw.adrGrowthPct, 5);
-  const stabilizedOccPct = num(raw.stabilizedOccPct, 65);
-  const holdPeriodYears = num(raw.holdPeriodYears, 8);
-  const fbRevPct = num(raw.fbRevPct, 30);
-  const otherRevPct = num(raw.otherRevPct, 9);
-  const gopMarginPct = num(raw.gopMarginPct, 30);
-  const ebitdaMarginPct = num(raw.ebitdaMarginPct, 22);
-  const exitCapRatePct = num(raw.exitCapRate, 9);
-  const discountRatePct = num(raw.discountRatePct, 15);
-  const constructionMonths = num(raw.projectDurationMonths, 30);
+  // If the caller selects an Indian hotel tier preset (`hotelTierPreset:
+  // 'upscale_4star'` etc.), inject the preset defaults under the raw inputs —
+  // any explicit raw value still wins, preserving user customisation.
+  const tierPreset = typeof raw.hotelTierPreset === 'string'
+    ? (raw.hotelTierPreset as IndianHospitalityPresetKey)
+    : null;
+  const presetDefaults =
+    tierPreset && INDIA_HOSPITALITY_PRESETS[tierPreset]
+      ? (INDIA_HOSPITALITY_PRESETS[tierPreset] as Record<string, number>)
+      : {};
+  const rawWithPreset: Record<string, unknown> = { ...presetDefaults, ...raw };
+
+  const adr = num(rawWithPreset.adr, 6000);
+  const adrGrowthPct = num(rawWithPreset.adrGrowthPct, 5);
+  const stabilizedOccPct = num(rawWithPreset.stabilizedOccPct, 65);
+  const initialOccPct = num(rawWithPreset.initialOccPct, 45);
+  const stabilizationYear = num(rawWithPreset.stabilizationYear, 4);
+  const holdPeriodYears = num(rawWithPreset.holdPeriodYears, 8);
+  const fbRevPct = num(rawWithPreset.fbRevPct, 30);
+  const otherRevPct = num(rawWithPreset.otherRevPct, 9);
+  const gopMarginPct = num(rawWithPreset.gopMarginPct, 30);
+  const ebitdaMarginPct = num(rawWithPreset.ebitdaMarginPct, 22);
+  const exitCapRatePct = num(rawWithPreset.exitCapRate, 9);
+  const discountRatePct = num(rawWithPreset.discountRatePct, 15);
+  const constructionMonths = num(rawWithPreset.projectDurationMonths, 30);
 
   if (adr <= 0 || stabilizedOccPct <= 0 || stabilizedOccPct > 100 || exitCapRatePct <= 0) {
     throw new Error('Hospitality kernel: invalid inputs (adr, occupancy, exitCapRate)');
@@ -182,17 +201,117 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
       constLoanPrincipalEstimate * (constLoanFeesPct / 100),
   );
 
-  // ── Revenue model (simple margin-based, stabilised Y1) ────────────────────
-  const revPARStabilised = adr * (stabilizedOccPct / 100);
-  const roomsRevY1Cr = D((keys * revPARStabilised * 365) / CRORE);
-  const totalRevY1Cr = roomsRevY1Cr.mulNumber(1 + fbRevPct / 100 + otherRevPct / 100);
-  const gopCr = totalRevY1Cr.mulNumber(gopMarginPct / 100);
-  const ebitdaY1Cr = totalRevY1Cr.mulNumber(ebitdaMarginPct / 100);
+  // ── Revenue model ─────────────────────────────────────────────────────────
+  // Default: simple blended-margin stabilised Y1 (matches legacy engine).
+  // Upgrade path: when USALI drivers are present (POR-based opex or fixed
+  // property-tax inputs), the 10-year USALI cascade becomes the authoritative
+  // source for stabilised NOI. This lets Indian 4-star / 5-star deals priced
+  // at a per-occupied-room level produce NOI consistent with the P&L the
+  // frontend renders — no hand drift between the headline number and the
+  // line-by-line table.
+  const ffeReservePct = num(rawWithPreset.ffeReservePct, 4);
 
-  // NOI = EBITDA − FF&E reserve (legacy convention, 4% of revenue default).
-  const ffeReservePct = num(raw.ffeReservePct, 4);
+  const usaliInputs: UsaliPnlInputs = {
+    keys,
+    ownerRateKeys: num(rawWithPreset.ownerRateKeys),
+    ownerRateADR: num(rawWithPreset.ownerRateADR),
+    ownerRateGuaranteedOccPct: num(rawWithPreset.ownerRateGuaranteedOccPct),
+    adr,
+    adrGrowthPct,
+    stabilizedOccPct,
+    initialOccPct,
+    stabilizationYear,
+    holdPeriodYears: Math.max(5, Math.min(15, holdPeriodYears)),
+    fbRestaurantPctOfRooms: num(rawWithPreset.fbRestaurantPctOfRooms),
+    fbBanquetPctOfRooms: num(rawWithPreset.fbBanquetPctOfRooms),
+    otherOperatedPctOfRooms: num(rawWithPreset.otherOperatedPctOfRooms),
+    parkingPctOfRooms: num(rawWithPreset.parkingPctOfRooms),
+    leaseIncomeCrPa: num(rawWithPreset.leaseIncomeCrPa),
+    fbRestaurantPerPOR: num(rawWithPreset.fbRestaurantPerPOR),
+    fbBanquetPerPOR: num(rawWithPreset.fbBanquetPerPOR),
+    otherOperatedPerPOR: num(rawWithPreset.otherOperatedPerPOR),
+    parkingPerPOR: num(rawWithPreset.parkingPerPOR),
+    fbDeliveryPerPOR: num(rawWithPreset.fbDeliveryPerPOR),
+    roomsDeptCostPct: num(rawWithPreset.roomsDeptCostPct),
+    fbDeptCostPct: num(rawWithPreset.fbDeptCostPct),
+    otherDeptCostPct: num(rawWithPreset.otherDeptCostPct),
+    roomsFixedPct: num(rawWithPreset.roomsFixedPct),
+    fbFixedPct: num(rawWithPreset.fbFixedPct),
+    otherOpFixedPct: num(rawWithPreset.otherOpFixedPct),
+    aAndGPct: num(rawWithPreset.aAndGPct),
+    itPct: num(rawWithPreset.itPct),
+    smPct: num(rawWithPreset.smPct),
+    pomPct: num(rawWithPreset.pomPct),
+    utilitiesPct: num(rawWithPreset.utilitiesPct),
+    aAndGPerPOR: num(rawWithPreset.aAndGPerPOR),
+    itPerPOR: num(rawWithPreset.itPerPOR),
+    smPerPOR: num(rawWithPreset.smPerPOR),
+    pomPerPOR: num(rawWithPreset.pomPerPOR),
+    utilitiesPerPOR: num(rawWithPreset.utilitiesPerPOR),
+    expenseInflationPct: num(rawWithPreset.expenseInflationPct),
+    mgmtBasePct: num(rawWithPreset.mgmtBasePct),
+    mgmtIncentivePct: num(rawWithPreset.mgmtIncentivePct),
+    brandRoyaltyPctOfRooms: num(rawWithPreset.brandRoyaltyPctOfRooms),
+    brandMktReservPctOfRooms: num(rawWithPreset.brandMktReservPctOfRooms),
+    propertyTaxPctRev: num(rawWithPreset.propertyTaxPctRev),
+    insurancePctRev: num(rawWithPreset.insurancePctRev),
+    propertyTaxCrPa: num(rawWithPreset.propertyTaxCrPa),
+    insuranceCrPa: num(rawWithPreset.insuranceCrPa),
+    groundLeaseCrPa: num(rawWithPreset.groundLeaseCrPa),
+    ffeReservePct,
+    staffPerKey: num(rawWithPreset.staffPerKey),
+    avgAnnualSalaryInr: num(rawWithPreset.avgAnnualSalaryInr),
+  };
+
+  const hasUsaliDrivers =
+    num(rawWithPreset.aAndGPerPOR) > 0 ||
+    num(rawWithPreset.pomPerPOR) > 0 ||
+    num(rawWithPreset.utilitiesPerPOR) > 0 ||
+    num(rawWithPreset.smPerPOR) > 0 ||
+    num(rawWithPreset.itPerPOR) > 0 ||
+    num(rawWithPreset.roomsFixedPct) > 0 ||
+    num(rawWithPreset.propertyTaxCrPa) > 0;
+
+  const usaliPnl: UsaliPnlRow[] = buildUsaliPnl(usaliInputs);
+  const usaliSummary: UsaliStabilisedSummary | null = buildUsaliSummary(
+    usaliInputs,
+    usaliPnl,
+  );
+
+  const revPARStabilised = adr * (stabilizedOccPct / 100);
+  const roomsRevY1LegacyCr = D((keys * revPARStabilised * 365) / CRORE);
+  const totalRevY1LegacyCr = roomsRevY1LegacyCr.mulNumber(
+    1 + fbRevPct / 100 + otherRevPct / 100,
+  );
+  const gopLegacyCr = totalRevY1LegacyCr.mulNumber(gopMarginPct / 100);
+  const ebitdaY1LegacyCr = totalRevY1LegacyCr.mulNumber(ebitdaMarginPct / 100);
+  const ffeReserveY1LegacyCr = totalRevY1LegacyCr.mulNumber(ffeReservePct / 100);
+  const noiY1LegacyCr = ebitdaY1LegacyCr.sub(ffeReserveY1LegacyCr);
+
+  // When USALI drivers are set, use the stabilised-year USALI row as the
+  // authoritative NOI / EBITDA / GOP source. Otherwise, keep the legacy
+  // blended-margin numbers so existing parity holds.
+  const roomsRevY1Cr =
+    hasUsaliDrivers && usaliSummary
+      ? D(usaliSummary.stabilisedRoomsRevCr)
+      : roomsRevY1LegacyCr;
+  const totalRevY1Cr =
+    hasUsaliDrivers && usaliSummary
+      ? D(usaliSummary.stabilisedTotalRevCr)
+      : totalRevY1LegacyCr;
+  const gopCr =
+    hasUsaliDrivers && usaliSummary
+      ? D(usaliSummary.stabilisedGOPCr)
+      : gopLegacyCr;
+  const ebitdaY1Cr =
+    hasUsaliDrivers && usaliSummary
+      ? D(usaliSummary.stabilisedEBITDACr)
+      : ebitdaY1LegacyCr;
   const ffeReserveY1Cr = totalRevY1Cr.mulNumber(ffeReservePct / 100);
-  const noiY1Cr = ebitdaY1Cr.sub(ffeReserveY1Cr);
+  const noiY1Cr =
+    hasUsaliDrivers && usaliSummary
+      ? D(usaliSummary.stabilisedNOICr)
+      : noiY1LegacyCr;
 
   // Exit value uses NOI (not EBITDA) / exit cap, matching legacy semantics.
   const exitNOICr = noiY1Cr.mulNumber(Math.pow(1 + adrGrowthPct / 100, holdPeriodYears - 1));
@@ -265,7 +384,7 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
         month,
         amount: monthNOI,
         category: 'revenue',
-        subcategory: `noi_month_${month}`,
+        subcategory: 'operations',
       }),
     );
   }
@@ -349,6 +468,18 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     dscr = y1DebtService > 0 ? ebitdaY1Cr.toNumber() / y1DebtService : null;
   }
 
+  // Indian-specific hospitality KPIs derived from the USALI cascade.
+  // `staffPerKey` × keys × avg salary gives an absolute labour cost even when
+  // POR inputs are absent — the user can edit the surfaced number.
+  const staffPerKey = num(rawWithPreset.staffPerKey);
+  const avgAnnualSalaryInr = num(rawWithPreset.avgAnnualSalaryInr);
+  const labourCostCrY1 =
+    staffPerKey > 0 && avgAnnualSalaryInr > 0
+      ? (keys * staffPerKey * avgAnnualSalaryInr) / CRORE
+      : usaliSummary?.stabilisedLabourCostCr ?? null;
+  const labourCostPerKeyInr =
+    labourCostCrY1 != null ? (labourCostCrY1 * CRORE) / keys : null;
+
   const kpiExtras: Record<string, number | null> = {
     noi: noiY1Cr.toNumber(),
     ebitda: ebitdaY1Cr.toNumber(),
@@ -370,6 +501,21 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     idcCr: idcCr.toNumber(),
     ffeCr: ffeCr.toNumber(),
     oseCr: oseCr.toNumber(),
+    // Header KPIs that the frontend reads directly from `kpis.*`
+    stabilizedADR: usaliSummary?.stabilisedADR ?? adr,
+    stabilizedOccupancy: usaliSummary?.stabilisedOccPct ?? stabilizedOccPct,
+    stabilizedNOIMarginPct: usaliSummary?.stabilisedNOIMarginPct ?? null,
+    stabilizedGOPMarginPct: usaliSummary?.stabilisedGOPMarginPct ?? gopMarginPct,
+    stabilizedEBITDAMarginPct:
+      usaliSummary?.stabilisedEBITDAMarginPct ?? ebitdaMarginPct,
+    // India-specific operating KPIs
+    costPerOccupiedRoom: usaliSummary?.stabilisedCPOR ?? null,
+    breakEvenOccPct: usaliSummary?.breakEvenOccPct ?? null,
+    breakEvenRevPAR: usaliSummary?.breakEvenRevPAR ?? null,
+    flowThroughPct: usaliSummary?.avgFlowThroughPct ?? null,
+    staffPerKey: staffPerKey > 0 ? staffPerKey : null,
+    labourCostCr: labourCostCrY1,
+    labourCostPerKey: labourCostPerKeyInr,
   };
 
   return finalizeResult({
@@ -381,6 +527,12 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
       // Match legacy flattener semantics: totalRevenueCr == effective exit value
       // for hold-for-sale income assets. Stabilised Y1 revenue is preserved in
       // `revenue.extras.stabilizedRevenueCr` / `kpis.extras.revenuePerKey`.
+      // `usaliPnl` + `usaliSummary` ride alongside the numeric extras as
+      // opaque pass-through payloads — `kernel.service.js::flattenRevenue`
+      // recognises them by key name and emits them as `usali_pnl` /
+      // `usali_summary` on the backend revenue object. The cast widens the
+      // value type; TypeScript's strict `Decimal | null` on extras is still
+      // enforced for every numeric extra here.
       totalRevenueCr: exitValueCr,
       stabilizedNOICr: noiY1Cr,
       exitValueCr,
@@ -390,6 +542,8 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
         gop: gopCr,
         ebitda: ebitdaY1Cr,
         stabilizedRevenueCr: totalRevY1Cr,
+        usaliPnl: usaliPnl as unknown as Decimal | null,
+        usaliSummary: usaliSummary as unknown as Decimal | null,
       }),
     },
     items,

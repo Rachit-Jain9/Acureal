@@ -16,6 +16,7 @@ export default function HospitalityProformaSection({ financials }) {
   if (!financials || financials.assetClass !== 'hospitality') return null;
 
   const pnl = financials.revenue?.usali_pnl;
+  const summary = financials.revenue?.usali_summary || null;
   const sourcesUses = financials.costs?.sources_uses
     || financials.costsRaw?.sources_uses
     || financials.sourcesUses;
@@ -30,6 +31,7 @@ export default function HospitalityProformaSection({ financials }) {
   return (
     <div className="space-y-4">
       <HospitalityHeader inputs={inputs} kpis={kpis} />
+      <UnitEconomicsStrip summary={summary} kpis={kpis} inputs={inputs} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RevenueMixCard pnl={pnl} />
         <NOIEvolutionCard pnl={pnl} />
@@ -44,6 +46,54 @@ export default function HospitalityProformaSection({ financials }) {
         />
       )}
       {waterfall && <WaterfallCard waterfall={waterfall} />}
+    </div>
+  );
+}
+
+// ─── Unit-economics strip — CPOR, break-even occ/RevPAR, flow-through, labour
+function UnitEconomicsStrip({ summary, kpis, inputs }) {
+  const cpor = kpis.costPerOccupiedRoom ?? summary?.stabilisedCPOR ?? null;
+  const beOcc = kpis.breakEvenOccPct ?? summary?.breakEvenOccPct ?? null;
+  const beRevPAR = kpis.breakEvenRevPAR ?? summary?.breakEvenRevPAR ?? null;
+  const flowThrough = kpis.flowThroughPct ?? summary?.avgFlowThroughPct ?? null;
+  const gopMargin = kpis.stabilizedGOPMarginPct ?? summary?.stabilisedGOPMarginPct ?? null;
+  const ebitdaMargin = kpis.stabilizedEBITDAMarginPct ?? summary?.stabilisedEBITDAMarginPct ?? null;
+  const noiMargin = kpis.stabilizedNOIMarginPct ?? summary?.stabilisedNOIMarginPct ?? null;
+  const labourPerKey = kpis.labourCostPerKey ?? null;
+  const staffPerKey = kpis.staffPerKey ?? inputs.staffPerKey ?? null;
+
+  const hasAny = [cpor, beOcc, beRevPAR, flowThrough, gopMargin, ebitdaMargin, noiMargin, labourPerKey].some((v) => v != null);
+  if (!hasAny) return null;
+
+  const cells = [
+    { label: 'CPOR',          value: cpor != null ? `₹${Math.round(cpor).toLocaleString('en-IN')}` : '—', sub: 'per occupied room' },
+    { label: 'Break-even Occ', value: beOcc != null ? `${Number(beOcc).toFixed(1)}%` : '—', sub: 'cash break-even' },
+    { label: 'Break-even RevPAR', value: beRevPAR != null ? `₹${Math.round(beRevPAR).toLocaleString('en-IN')}` : '—', sub: 'per available room' },
+    { label: 'Flow-through',  value: flowThrough != null ? `${Number(flowThrough).toFixed(0)}%` : '—', sub: 'ΔGOP / ΔRev' },
+    { label: 'GOP margin',    value: gopMargin != null ? `${Number(gopMargin).toFixed(1)}%` : '—', sub: 'stabilized' },
+    { label: 'EBITDA margin', value: ebitdaMargin != null ? `${Number(ebitdaMargin).toFixed(1)}%` : '—', sub: 'stabilized' },
+    { label: 'NOI margin',    value: noiMargin != null ? `${Number(noiMargin).toFixed(1)}%` : '—', sub: 'after FF&E' },
+    { label: 'Labour / key',  value: labourPerKey != null
+        ? `₹${(Number(labourPerKey) / 1e5).toFixed(1)} L`
+        : (staffPerKey != null ? `${Number(staffPerKey).toFixed(2)} staff` : '—'),
+      sub: 'annualised' },
+  ];
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-stone-900">Unit economics <span className="text-stone-400">·</span> Indian hospitality benchmarks</div>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-stone-400">USALI 11e · $/POR methodology</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-stone-100">
+        {cells.map((c, i) => (
+          <div key={i} className="bg-white px-3 py-2.5">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-stone-500">{c.label}</div>
+            <div className="mt-1 font-serif text-base font-semibold text-stone-900 tabular-nums">{c.value}</div>
+            <div className="text-[10px] text-stone-400 mt-0.5">{c.sub}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
