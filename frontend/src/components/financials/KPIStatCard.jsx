@@ -35,10 +35,13 @@ function resolveDriver(driverKey, inputs, defaults) {
   }
   const def = defaults?.[driverKey] || defaults?.[`${driverKey}Pct`] || null;
   if (def && Number.isFinite(Number(def.value))) {
+    // `def.source` is a verbose citation ("JLL APAC ... snapshot average."),
+    // not a canonical kind — show a short kind chip and keep the citation as
+    // a separate detail line so long sources never blow out the popover.
     return {
       value: Number(def.value),
-      sourceKind: def.source || 'asset_default',
-      sourceDetail: def.lastReviewed || null,
+      sourceKind: 'asset_default',
+      sourceDetail: def.source || null,
     };
   }
   return null;
@@ -253,36 +256,50 @@ function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidenc
               {drivers.map((d) => (
                 <li
                   key={d.key}
-                  className="flex items-start justify-between gap-2 pb-1 last:pb-0"
+                  className="pb-1 last:pb-0"
                   style={{
                     fontSize: '11px',
                     borderBottom: '1px solid var(--color-border-secondary)',
                   }}
                 >
-                  <span
-                    className="min-w-0 truncate"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                  >
-                    {prettyDriverName(d.key)}
-                  </span>
-                  <span className="text-right shrink-0">
+                  <div className="flex items-baseline justify-between gap-2">
                     <span
-                      className="font-medium tabular-nums"
-                      style={{ color: 'var(--color-text-primary)' }}
+                      className="min-w-0 truncate"
+                      style={{ color: 'var(--color-text-secondary)' }}
                     >
-                      {formatDriverValue(d.resolved.value, d.key)}
+                      {prettyDriverName(d.key)}
                     </span>
-                    <span
-                      className="ml-1 px-1 py-0.5 rounded uppercase tracking-wide"
+                    <span className="flex items-baseline gap-1 shrink-0">
+                      <span
+                        className="font-medium tabular-nums"
+                        style={{ color: 'var(--color-text-primary)' }}
+                      >
+                        {formatDriverValue(d.resolved.value, d.key)}
+                      </span>
+                      <span
+                        className="px-1 py-0.5 rounded uppercase tracking-wide"
+                        style={{
+                          fontSize: '9px',
+                          letterSpacing: '0.08em',
+                          ...sourceChipStyle(d.resolved.sourceKind),
+                        }}
+                      >
+                        {SOURCE_LABEL[d.resolved.sourceKind] || 'Default'}
+                      </span>
+                    </span>
+                  </div>
+                  {d.resolved.sourceDetail && (
+                    <div
+                      className="truncate mt-0.5"
                       style={{
-                        fontSize: '9px',
-                        letterSpacing: '0.08em',
-                        ...sourceChipStyle(d.resolved.sourceKind),
+                        fontSize: '10px',
+                        color: 'var(--color-text-muted)',
                       }}
+                      title={d.resolved.sourceDetail}
                     >
-                      {SOURCE_LABEL[d.resolved.sourceKind] || d.resolved.sourceKind}
-                    </span>
-                  </span>
+                      {d.resolved.sourceDetail}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
