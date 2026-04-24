@@ -272,19 +272,19 @@ export default function MapPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-4 dark:border-blue-900/60 dark:bg-blue-950/45">
               <p className="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">Visible Properties</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-blue-50">{filteredProperties.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-content-primary">{filteredProperties.length}</p>
             </div>
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/45">
               <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Visible Deals</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-emerald-50">{visibleDeals.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-content-primary">{visibleDeals.length}</p>
             </div>
             <div className="rounded-xl border border-purple-100 bg-purple-50 px-3 py-4 dark:border-purple-900/60 dark:bg-purple-950/45">
               <p className="text-xs font-medium uppercase tracking-wide text-purple-700 dark:text-purple-300">Cities</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-purple-50">{Object.keys(cityCounts).length}</p>
+              <p className="mt-2 text-2xl font-semibold text-content-primary">{Object.keys(cityCounts).length}</p>
             </div>
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-4 dark:border-amber-900/60 dark:bg-amber-950/45">
               <p className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">Pin Review</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-amber-50">{reviewQueueProperties.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-content-primary">{reviewQueueProperties.length}</p>
             </div>
           </div>
 
