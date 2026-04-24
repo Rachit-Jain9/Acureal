@@ -110,9 +110,9 @@ export default function FinancialsPage() {
       <AssetClassInsightBanner assetClass={activeClass} />
 
       {/* Asset Class Selector */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <div className="flex items-center gap-2 text-sm font-medium text-content-secondary">
             <Building2 size={16} className="text-primary-600" />
             Asset Class
           </div>
@@ -120,15 +120,15 @@ export default function FinancialsPage() {
             <select
               value={activeClass}
               onChange={(e) => handleClassChange(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              className="appearance-none pl-3 pr-8 py-2 border border-hairline-strong rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
             >
               {ASSET_CLASSES.map((ac) => (
                 <option key={ac.value} value={ac.value}>{ac.label}</option>
               ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-content-muted pointer-events-none" />
           </div>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-content-secondary">
             Underwriting model: {activeFinancialModelLabel}
           </span>
           {hasResults && normalizedFinancials.assetClass !== activeClass && (
@@ -201,7 +201,7 @@ export default function FinancialsPage() {
           <AuditTimelineView dealId={dealId} />
 
           <div className="border-t pt-6" ref={inputsRef}>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Recalculate</h3>
+            <h3 className="text-sm font-semibold text-content-primary mb-3">Recalculate</h3>
             <InputForm
               initialValues={financials}
               assetClass={activeClass}

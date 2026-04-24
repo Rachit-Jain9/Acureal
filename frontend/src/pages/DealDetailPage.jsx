@@ -220,7 +220,7 @@ export default function DealDetailPage() {
       {/* Back nav */}
       <button
         onClick={() => navigate('/dashboard/deals')}
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4"
+        className="flex items-center gap-1 text-sm text-content-secondary hover:text-content-secondary mb-4"
       >
         <ArrowLeft size={15} /> Back to Deals
       </button>
@@ -228,8 +228,8 @@ export default function DealDetailPage() {
       {/* Deal header */}
       <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 truncate">{deal.name}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-content-primary truncate">{deal.name}</h1>
+          <p className="text-sm text-content-secondary mt-0.5">
             {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || ''}
             {deal.asset_class && (
               <> · {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}</>
@@ -285,7 +285,7 @@ export default function DealDetailPage() {
         <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
         <Badge tone={priorityCfg.tone}>{priorityCfg.label} Priority</Badge>
         {deal.assigned_to_name && (
-          <span className="text-sm text-gray-400">Assigned to {deal.assigned_to_name}</span>
+          <span className="text-sm text-content-muted">Assigned to {deal.assigned_to_name}</span>
         )}
       </div>
 
@@ -295,23 +295,23 @@ export default function DealDetailPage() {
           <button
             type="button"
             onClick={() => setStageExpanded((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-bg-secondary transition-colors"
           >
             <div className="flex items-center gap-2">
-              <ArrowRight size={15} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">Stage Transition</span>
-              <span className="text-xs text-gray-400">
+              <ArrowRight size={15} className="text-content-muted" />
+              <span className="text-sm font-medium text-content-secondary">Stage Transition</span>
+              <span className="text-xs text-content-muted">
                 Currently: <strong className="font-semibold text-content-primary">{stageCfg.label}</strong>
               </span>
             </div>
             {stageExpanded ? (
-              <ChevronUp size={15} className="text-gray-400" />
+              <ChevronUp size={15} className="text-content-muted" />
             ) : (
-              <ChevronDown size={15} className="text-gray-400" />
+              <ChevronDown size={15} className="text-content-muted" />
             )}
           </button>
           {stageExpanded && (
-            <div className="border-t border-gray-100 px-4 py-4 space-y-3">
+            <div className="border-t border-hairline px-4 py-4 space-y-3">
               <textarea
                 value={stageNotes}
                 onChange={(e) => setStageNotes(e.target.value)}
@@ -408,10 +408,10 @@ export default function DealDetailPage() {
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 p-6 my-auto">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-gray-900">Edit Deal</h3>
+              <h3 className="text-lg font-bold text-content-primary">Edit Deal</h3>
               <button
                 onClick={() => setShowEditModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
+                className="text-content-muted hover:text-content-secondary p-1"
               >
                 <X size={18} />
               </button>
@@ -420,7 +420,7 @@ export default function DealDetailPage() {
             <form onSubmit={handleEditSubmit} className="space-y-4">
               {/* Deal Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Deal Name
                 </label>
                 <input
@@ -435,7 +435,7 @@ export default function DealDetailPage() {
               {/* Type, Structure, Asset Class */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Deal Type
                   </label>
                   <select
@@ -449,7 +449,7 @@ export default function DealDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Deal Structure
                   </label>
                   <select
@@ -464,7 +464,7 @@ export default function DealDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Asset Class
                   </label>
                   <select
@@ -483,7 +483,7 @@ export default function DealDetailPage() {
               {/* Priority */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Priority</label>
                   <select
                     value={editForm.priority}
                     onChange={(e) => setEditForm((f) => ({ ...f, priority: e.target.value }))}
@@ -495,7 +495,7 @@ export default function DealDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     RERA Number
                   </label>
                   <input
@@ -511,7 +511,7 @@ export default function DealDetailPage() {
               {/* Pricing */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Land Ask Price (₹ Cr)
                   </label>
                   <input
@@ -527,7 +527,7 @@ export default function DealDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Negotiated Price (₹ Cr)
                   </label>
                   <input
@@ -547,7 +547,7 @@ export default function DealDetailPage() {
               {/* Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Target Launch Date
                   </label>
                   <input
@@ -560,7 +560,7 @@ export default function DealDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Expected Close Date
                   </label>
                   <input
@@ -576,7 +576,7 @@ export default function DealDetailPage() {
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Notes</label>
                 <textarea
                   rows={4}
                   value={editForm.notes}
@@ -611,8 +611,8 @@ export default function DealDetailPage() {
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Deal</h3>
-            <p className="text-sm text-gray-600 mb-5">
+            <h3 className="text-lg font-bold text-content-primary mb-2">Delete Deal</h3>
+            <p className="text-sm text-content-secondary mb-5">
               This action will permanently delete this deal and its associated data. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">

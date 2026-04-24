@@ -36,10 +36,10 @@ import useAuthStore from '../store/authStore';
 
 function SectionCard({ icon: Icon, title, children, className = '' }) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50">
-        <Icon size={16} className="text-gray-500" />
-        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+    <div className={`bg-white rounded-xl border border-hairline-strong shadow-sm overflow-hidden ${className}`}>
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-hairline bg-bg-secondary">
+        <Icon size={16} className="text-content-secondary" />
+        <h3 className="text-sm font-semibold text-content-primary">{title}</h3>
       </div>
       <div className="px-5 py-4">{children}</div>
     </div>
@@ -129,15 +129,15 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
     <div className="space-y-3">
       <ul className="space-y-2">
         {items.map((item, idx) => (
-          <li key={idx} className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-800">
+          <li key={idx} className="flex items-start gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-sm text-content-primary">
             <span className="flex-1">{item}</span>
-            <button type="button" onClick={() => remove(idx)} className="text-gray-400 hover:text-red-500 flex-shrink-0 mt-0.5">
+            <button type="button" onClick={() => remove(idx)} className="text-content-muted hover:text-red-500 flex-shrink-0 mt-0.5">
               <Trash2 size={13} />
             </button>
           </li>
         ))}
         {items.length === 0 && (
-          <li className="text-xs text-gray-400 italic">No items yet. Add your first observation below.</li>
+          <li className="text-xs text-content-muted italic">No items yet. Add your first observation below.</li>
         )}
       </ul>
       <div className="flex gap-2">
@@ -147,13 +147,13 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
           placeholder={SECTION_META[section]?.placeholder}
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          className="flex-1 rounded-lg border border-hairline-strong px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
         />
         <button
           type="button"
           onClick={add}
           disabled={!newItem.trim()}
-          className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-lg bg-bg-secondary px-3 py-2 text-sm font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
         >
           <PlusCircle size={14} />
           Add
@@ -163,7 +163,7 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
         type="button"
         onClick={() => onSave(items)}
         disabled={saving}
-        className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-bg-primary disabled:opacity-50"
       >
         {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
         Save section
@@ -184,7 +184,7 @@ function AdminNotesPanel() {
     finally { setSavingSection(null); }
   };
 
-  if (isLoading) return <p className="text-sm text-gray-500">Loading notes...</p>;
+  if (isLoading) return <p className="text-sm text-content-secondary">Loading notes...</p>;
 
   return (
     <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
@@ -202,10 +202,10 @@ function AdminNotesPanel() {
             <button
               type="button"
               onClick={() => setOpenSection(openSection === sectionKey ? null : sectionKey)}
-              className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-gray-800 hover:bg-gray-50 rounded-lg"
+              className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-content-primary hover:bg-bg-secondary rounded-lg"
             >
               {meta.label}
-              <ChevronDown size={14} className={`text-gray-400 transition-transform ${openSection === sectionKey ? 'rotate-180' : ''}`} />
+              <ChevronDown size={14} className={`text-content-muted transition-transform ${openSection === sectionKey ? 'rotate-180' : ''}`} />
             </button>
             {openSection === sectionKey && (
               <div className="px-4 pb-4">
@@ -235,42 +235,42 @@ function TransactionTable({ rows }) {
       <div className="overflow-x-auto -mx-5">
         <table className="w-full text-xs border-collapse min-w-[800px]">
           <thead>
-            <tr className="border-b-2 border-gray-200 bg-gray-50">
-              <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">FY / Q</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">Type</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600">Buyer / Borrower</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600">Seller / Lender</th>
-              <th className="text-right py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">Quantum</th>
-              <th className="text-right py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">Land / Size</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600">Locality</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600 max-w-[200px]">Notes</th>
+            <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">FY / Q</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Type</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Buyer / Borrower</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Seller / Lender</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Quantum</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Land / Size</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Locality</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary max-w-[200px]">Notes</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((row, i) => (
-              <tr key={row.id || i} className="border-b border-gray-50 hover:bg-slate-50 transition-colors">
-                <td className="py-2 px-3 font-mono text-gray-700 whitespace-nowrap">
+              <tr key={row.id || i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                <td className="py-2 px-3 font-mono text-content-secondary whitespace-nowrap">
                   {row.fiscal_year} {row.quarter}
                 </td>
                 <td className="py-2 px-3 whitespace-nowrap">
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DEAL_TYPE_BADGE[row.deal_type] || 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DEAL_TYPE_BADGE[row.deal_type] || 'bg-bg-secondary text-content-secondary'}`}>
                     {row.deal_type}
                   </span>
                 </td>
-                <td className="py-2 px-3 text-gray-800 max-w-[180px]">
+                <td className="py-2 px-3 text-content-primary max-w-[180px]">
                   <span className="line-clamp-2">{row.buyer || '—'}</span>
                 </td>
-                <td className="py-2 px-3 text-gray-600 max-w-[160px]">
+                <td className="py-2 px-3 text-content-secondary max-w-[160px]">
                   <span className="line-clamp-2">{row.investor_lender || row.seller || '—'}</span>
                 </td>
-                <td className="py-2 px-3 text-right font-semibold text-gray-900 whitespace-nowrap">
+                <td className="py-2 px-3 text-right font-semibold text-content-primary whitespace-nowrap">
                   {formatQuantum(row.quantum_inr_mn)}
                 </td>
-                <td className="py-2 px-3 text-right text-gray-600 whitespace-nowrap">
+                <td className="py-2 px-3 text-right text-content-secondary whitespace-nowrap">
                   {formatLandSize(row.land_size_acres, row.project_size_note)}
                 </td>
-                <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{row.locality || '—'}</td>
-                <td className="py-2 px-3 text-gray-500 max-w-[200px]">
+                <td className="py-2 px-3 text-content-secondary whitespace-nowrap">{row.locality || '—'}</td>
+                <td className="py-2 px-3 text-content-secondary max-w-[200px]">
                   <span className="line-clamp-2">{row.notes || '—'}</span>
                 </td>
               </tr>
@@ -290,7 +290,7 @@ function TransactionTable({ rows }) {
         </button>
       )}
 
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-3 text-xs text-content-muted">
         Source: Economic Times, Business Standard, Hindustan Times, Moneycontrol, company press releases.
         All transactions verified from public disclosures. Quantum in ₹ Cr.
       </p>
@@ -308,12 +308,12 @@ function BenchmarksTable({ rows }) {
       <div className="overflow-x-auto -mx-5">
         <table className="w-full text-xs border-collapse min-w-[600px]">
           <thead>
-            <tr className="border-b-2 border-gray-200 bg-gray-50">
-              <th className="text-left py-2 px-3 font-semibold text-gray-600">Micro-Market</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">Price Range (₹/sqft)</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">YoY Growth</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600">Anchor Hub</th>
-              <th className="text-left py-2 px-3 font-semibold text-gray-600 w-36">Price Band</th>
+            <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Micro-Market</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Price Range (₹/sqft)</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY Growth</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Anchor Hub</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary w-36">Price Band</th>
             </tr>
           </thead>
           <tbody>
@@ -327,16 +327,16 @@ function BenchmarksTable({ rows }) {
                 ? 'text-emerald-600 font-semibold'
                 : row.yoy_growth_max_pct >= 7
                   ? 'text-blue-600 font-medium'
-                  : 'text-gray-700';
+                  : 'text-content-secondary';
 
               return (
-                <tr key={row.id || i} className="border-b border-gray-50 hover:bg-slate-50 transition-colors">
-                  <td className="py-2.5 px-3 font-medium text-gray-900">{row.micro_market}</td>
-                  <td className="py-2.5 px-3 font-mono text-gray-800 whitespace-nowrap">{priceLabel}</td>
+                <tr key={row.id || i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                  <td className="py-2.5 px-3 font-medium text-content-primary">{row.micro_market}</td>
+                  <td className="py-2.5 px-3 font-mono text-content-primary whitespace-nowrap">{priceLabel}</td>
                   <td className={`py-2.5 px-3 whitespace-nowrap ${growthColor}`}>{growthLabel}</td>
-                  <td className="py-2.5 px-3 text-gray-500">{row.anchor_hub || '—'}</td>
+                  <td className="py-2.5 px-3 text-content-secondary">{row.anchor_hub || '—'}</td>
                   <td className="py-2.5 px-3">
-                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className="w-full bg-bg-secondary rounded-full h-1.5">
                       <div
                         className="bg-primary-500 h-1.5 rounded-full"
                         style={{ width: `${barPct}%` }}
@@ -349,7 +349,7 @@ function BenchmarksTable({ rows }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-3 text-xs text-content-muted">
         Period: {rows[0]?.data_period || '2025–2026'} · Source: verified residential benchmark data, Bengaluru.
       </p>
     </div>
@@ -422,7 +422,7 @@ export default function IntelligencePage() {
           {brief?.dealOfDay ? (
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">
-                <h4 className="font-semibold text-gray-900">{brief.dealOfDay.headline}</h4>
+                <h4 className="font-semibold text-content-primary">{brief.dealOfDay.headline}</h4>
                 {brief.dealOfDay.stage && (
                   <Badge tone={STAGE_CONFIG[brief.dealOfDay.stage]?.tone}>
                     {STAGE_CONFIG[brief.dealOfDay.stage]?.label || brief.dealOfDay.stage}
@@ -431,38 +431,38 @@ export default function IntelligencePage() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {brief.dealOfDay.city && (
-                  <div className="flex items-center gap-1 text-sm text-gray-500">
+                  <div className="flex items-center gap-1 text-sm text-content-secondary">
                     <MapPin size={13} /><span>{brief.dealOfDay.city}</span>
                   </div>
                 )}
                 {brief.dealOfDay.assetClass && (
-                  <span className="text-xs rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 capitalize">
+                  <span className="text-xs rounded-full bg-bg-secondary px-2 py-0.5 text-content-secondary capitalize">
                     {brief.dealOfDay.assetClass.replace(/_/g, ' ')}
                   </span>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {brief.dealOfDay.irrPct != null && (
-                  <div className="rounded-lg bg-slate-50 px-3 py-2">
-                    <p className="text-xs text-gray-500">Modeled IRR</p>
-                    <p className="text-base font-bold text-slate-900">{formatPct(brief.dealOfDay.irrPct)}</p>
+                  <div className="rounded-lg bg-bg-secondary px-3 py-2">
+                    <p className="text-xs text-content-secondary">Modeled IRR</p>
+                    <p className="text-base font-bold text-content-primary">{formatPct(brief.dealOfDay.irrPct)}</p>
                   </div>
                 )}
                 {brief.dealOfDay.totalRevenueCr != null && (
-                  <div className="rounded-lg bg-slate-50 px-3 py-2">
-                    <p className="text-xs text-gray-500">Total Revenue</p>
-                    <p className="text-base font-bold text-slate-900">{formatCrores(brief.dealOfDay.totalRevenueCr)}</p>
+                  <div className="rounded-lg bg-bg-secondary px-3 py-2">
+                    <p className="text-xs text-content-secondary">Total Revenue</p>
+                    <p className="text-base font-bold text-content-primary">{formatCrores(brief.dealOfDay.totalRevenueCr)}</p>
                   </div>
                 )}
               </div>
               {brief.dealOfDay.whyItMatters && (
-                <p className="text-xs text-gray-600 italic border-l-2 border-primary-300 pl-3">
+                <p className="text-xs text-content-secondary italic border-l-2 border-primary-300 pl-3">
                   {brief.dealOfDay.whyItMatters}
                 </p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No deals in pipeline yet. Add a deal to see it surface here.</p>
+            <p className="text-sm text-content-secondary">No deals in pipeline yet. Add a deal to see it surface here.</p>
           )}
         </SectionCard>
 
@@ -470,18 +470,18 @@ export default function IntelligencePage() {
           {brief?.keyDevelopments?.length > 0 ? (
             <ul className="space-y-3">
               {brief.keyDevelopments.map((dev, i) => (
-                <li key={i} className="border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                <li key={i} className="border-b border-hairline last:border-0 pb-2 last:pb-0">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-gray-800">{dev.headline}</span>
-                    {dev.city && <span className="text-xs text-gray-400 flex-shrink-0">{dev.city}</span>}
+                    <span className="text-sm font-medium text-content-primary">{dev.headline}</span>
+                    {dev.city && <span className="text-xs text-content-muted flex-shrink-0">{dev.city}</span>}
                   </div>
-                  {dev.whyItMatters && <p className="text-xs text-gray-500 mt-1">{dev.whyItMatters}</p>}
-                  {dev.date && <p className="text-xs text-gray-400 mt-0.5">{formatDate(dev.date)}</p>}
+                  {dev.whyItMatters && <p className="text-xs text-content-secondary mt-1">{dev.whyItMatters}</p>}
+                  {dev.date && <p className="text-xs text-content-muted mt-0.5">{formatDate(dev.date)}</p>}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No pipeline activity recorded yet.</p>
+            <p className="text-sm text-content-secondary">No pipeline activity recorded yet.</p>
           )}
         </SectionCard>
       </div>
@@ -498,7 +498,7 @@ export default function IntelligencePage() {
                   </p>
                   <ul className="space-y-1">
                     {brief.marketSignals.bullish.map((s, i) => (
-                      <li key={i} className="text-xs text-gray-700 flex gap-2">
+                      <li key={i} className="text-xs text-content-secondary flex gap-2">
                         <CheckCircle size={11} className="text-emerald-500 flex-shrink-0 mt-0.5" />
                         {s}
                       </li>
@@ -513,7 +513,7 @@ export default function IntelligencePage() {
                   </p>
                   <ul className="space-y-1">
                     {brief.marketSignals.risk.map((s, i) => (
-                      <li key={i} className="text-xs text-gray-700 flex gap-2">
+                      <li key={i} className="text-xs text-content-secondary flex gap-2">
                         <TrendingDown size={11} className="text-red-400 flex-shrink-0 mt-0.5" />
                         {s}
                       </li>
@@ -522,11 +522,11 @@ export default function IntelligencePage() {
                 </div>
               )}
               {brief.marketSignals.sourceType === 'internal_pipeline_only' && (
-                <p className="text-xs text-gray-400 italic mt-2">Source: internal pipeline data only</p>
+                <p className="text-xs text-content-muted italic mt-2">Source: internal pipeline data only</p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No market signals available.</p>
+            <p className="text-sm text-content-secondary">No market signals available.</p>
           )}
         </SectionCard>
 
@@ -534,11 +534,11 @@ export default function IntelligencePage() {
           {brief?.bengaluruMicroMarketIntelligence?.length > 0 ? (
             <ul className="space-y-2">
               {brief.bengaluruMicroMarketIntelligence.map((item, i) => (
-                <li key={i} className="text-xs text-gray-700 border-l-2 border-primary-200 pl-3">{item}</li>
+                <li key={i} className="text-xs text-content-secondary border-l-2 border-primary-200 pl-3">{item}</li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-content-secondary">
               Micro-market intelligence will appear here once admin notes are entered or verified external data sources are configured.
             </p>
           )}
@@ -548,14 +548,14 @@ export default function IntelligencePage() {
       {/* Section 5: Micro-Market Benchmark Summary */}
       <SectionCard icon={DollarSign} title="5. Micro-Market Benchmark Summary — Bengaluru (2025–2026)">
         {bmLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+          <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
             <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
           </div>
         ) : benchmarks?.length > 0 ? (
           <BenchmarksTable rows={benchmarks} />
         ) : (
-          <p className="text-sm text-gray-500">
-            Run the migration <code className="text-xs bg-gray-100 px-1 rounded">20260404_market_data.sql</code> in Supabase to load benchmark data.
+          <p className="text-sm text-content-secondary">
+            Run the migration <code className="text-xs bg-bg-secondary px-1 rounded">20260404_market_data.sql</code> in Supabase to load benchmark data.
           </p>
         )}
       </SectionCard>
@@ -563,14 +563,14 @@ export default function IntelligencePage() {
       {/* Section 6: Market Transaction Flow */}
       <SectionCard icon={ArrowUpRight} title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)">
         {txLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+          <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
             <RefreshCw size={14} className="animate-spin" /> Loading transactions…
           </div>
         ) : transactions?.length > 0 ? (
           <TransactionTable rows={transactions} />
         ) : (
-          <p className="text-sm text-gray-500">
-            Run the migration <code className="text-xs bg-gray-100 px-1 rounded">20260404_market_data.sql</code> in Supabase to load transaction data.
+          <p className="text-sm text-content-secondary">
+            Run the migration <code className="text-xs bg-bg-secondary px-1 rounded">20260404_market_data.sql</code> in Supabase to load transaction data.
           </p>
         )}
       </SectionCard>
@@ -581,13 +581,13 @@ export default function IntelligencePage() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-xs border-collapse min-w-[700px]">
               <thead>
-                <tr className="border-b-2 border-gray-200 bg-gray-50">
-                  <th className="text-left py-2 px-3 font-semibold text-gray-600">Micro-Market</th>
-                  <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">Avg Price (₹/sqft)</th>
-                  <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">YoY Growth</th>
-                  <th className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap">Demand Signal</th>
-                  <th className="text-left py-2 px-3 font-semibold text-gray-600">Anchor Hub</th>
-                  <th className="text-left py-2 px-3 font-semibold text-gray-600 max-w-[220px]">Insight</th>
+                <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Micro-Market</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Avg Price (₹/sqft)</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY Growth</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Demand Signal</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Anchor Hub</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary max-w-[220px]">Insight</th>
                 </tr>
               </thead>
               <tbody>
@@ -597,14 +597,14 @@ export default function IntelligencePage() {
                     row.demandSignal === 'Moderate-High'   ? 'bg-blue-100 text-blue-700' :
                     row.demandSignal === 'Moderate'        ? 'bg-amber-100 text-amber-700' :
                     row.demandSignal === 'Soft'            ? 'bg-red-100 text-red-700' :
-                                                             'bg-gray-100 text-gray-500';
+                                                             'bg-bg-secondary text-content-secondary';
                   const trendColor = row.pricingTrend && row.pricingTrend !== 'Not available'
-                    ? 'text-emerald-600 font-medium' : 'text-gray-400';
+                    ? 'text-emerald-600 font-medium' : 'text-content-muted';
                   return (
-                    <tr key={i} className="border-b border-gray-50 hover:bg-slate-50 transition-colors">
-                      <td className="py-2.5 px-3 font-medium text-gray-900">{row.microMarket}</td>
-                      <td className="py-2.5 px-3 font-mono text-gray-800 whitespace-nowrap">
-                        {row.avgPriceRange || <span className="text-gray-400">—</span>}
+                    <tr key={i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                      <td className="py-2.5 px-3 font-medium text-content-primary">{row.microMarket}</td>
+                      <td className="py-2.5 px-3 font-mono text-content-primary whitespace-nowrap">
+                        {row.avgPriceRange || <span className="text-content-muted">—</span>}
                       </td>
                       <td className={`py-2.5 px-3 whitespace-nowrap ${trendColor}`}>
                         {row.pricingTrend || '—'}
@@ -614,8 +614,8 @@ export default function IntelligencePage() {
                           {row.demandSignal}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-gray-500">{row.anchorHub || '—'}</td>
-                      <td className="py-2.5 px-3 text-gray-500 max-w-[220px]">
+                      <td className="py-2.5 px-3 text-content-secondary">{row.anchorHub || '—'}</td>
+                      <td className="py-2.5 px-3 text-content-secondary max-w-[220px]">
                         <span className="line-clamp-2">{row.insight}</span>
                       </td>
                     </tr>
@@ -624,7 +624,7 @@ export default function IntelligencePage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-gray-400">
+          <p className="mt-3 text-xs text-content-muted">
             Pricing data from verified internal benchmarks (2025–2026). Absorption &amp; inventory data awaiting verified external feed.
           </p>
         </SectionCard>
@@ -636,14 +636,14 @@ export default function IntelligencePage() {
           {brief?.demandSlowdownIndicators?.length > 0 ? (
             <ul className="space-y-2">
               {brief.demandSlowdownIndicators.map((item, i) => (
-                <li key={i} className="text-xs text-gray-700 flex gap-2">
+                <li key={i} className="text-xs text-content-secondary flex gap-2">
                   <AlertTriangle size={11} className="text-amber-400 flex-shrink-0 mt-0.5" />
                   {item}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No slowdown indicators.</p>
+            <p className="text-sm text-content-secondary">No slowdown indicators.</p>
           )}
         </SectionCard>
 
@@ -651,25 +651,25 @@ export default function IntelligencePage() {
           {brief?.strategicTakeaways?.length > 0 ? (
             <ul className="space-y-2">
               {brief.strategicTakeaways.map((item, i) => (
-                <li key={i} className="text-xs text-gray-700 flex gap-2">
+                <li key={i} className="text-xs text-content-secondary flex gap-2">
                   <CheckCircle size={11} className="text-primary-500 flex-shrink-0 mt-0.5" />
                   {item}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No strategic takeaways.</p>
+            <p className="text-sm text-content-secondary">No strategic takeaways.</p>
           )}
         </SectionCard>
       </div>
 
       {/* Section 10: Bottom Line */}
       {brief?.bottomLine && (
-        <div className="rounded-xl border border-slate-200 bg-slate-900 px-6 py-4">
+        <div className="rounded-xl border border-hairline-strong bg-bg-primary px-6 py-4">
           <div className="flex items-start gap-3">
             <Brain size={18} className="text-primary-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">10. Bottom Line</p>
+              <p className="text-xs font-semibold text-content-muted uppercase tracking-wide mb-1">10. Bottom Line</p>
               <p className="text-sm text-white">{brief.bottomLine}</p>
             </div>
           </div>
@@ -683,7 +683,7 @@ export default function IntelligencePage() {
         </div>
       )}
 
-      <p className="text-xs text-gray-400 text-center pb-4">
+      <p className="text-xs text-content-muted text-center pb-4">
         Brief generated {today} · Internal pipeline data
         {transactions?.length > 0 ? ` · ${transactions.length} verified market transactions` : ''}
         {benchmarks?.length > 0 ? ` · ${benchmarks.length} micro-market benchmarks` : ''}

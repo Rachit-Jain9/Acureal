@@ -140,24 +140,24 @@ export default function DealComparePage() {
         description="Pick up to four deals and review land, pricing, and underwriting side by side."
       />
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[1.2fr_minmax(0,1fr)]">
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">How to use this</h3>
-            <p className="mt-2 text-sm text-gray-700">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-content-secondary">How to use this</h3>
+            <p className="mt-2 text-sm text-content-secondary">
               Start with land entry and pricing, then compare underwriting quality, stage position, and notes. The highlighted values mark the strongest metric in each numeric row.
             </p>
           </div>
 
-          <div className="rounded-xl bg-slate-50 p-4">
-            <h4 className="text-sm font-semibold text-slate-900">Selection</h4>
+          <div className="rounded-xl bg-bg-secondary p-4">
+            <h4 className="text-sm font-semibold text-content-primary">Selection</h4>
             <div className="mt-3 flex flex-wrap gap-2">
               {selectedIds.map((id) => {
                 const deal = deals.find((item) => item.id === id);
                 return (
-                  <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white">
+                  <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-bg-primary px-3 py-1.5 text-xs font-medium text-white">
                     {deal?.name || 'Loading...'}
-                    <button onClick={() => removeDeal(id)} className="text-slate-300 hover:text-white">
+                    <button onClick={() => removeDeal(id)} className="text-content-muted hover:text-white">
                       <X size={12} />
                     </button>
                   </span>
@@ -170,7 +170,7 @@ export default function DealComparePage() {
         {selectedIds.length < 4 && (
           <div className="relative mt-5">
             <div className="relative max-w-xl">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
               <input
                 type="text"
                 value={searchTerm}
@@ -185,21 +185,21 @@ export default function DealComparePage() {
             </div>
 
             {showDropdown && selectableDeals.length > 0 && (
-              <div className="absolute z-20 mt-2 max-h-72 w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-xl">
+              <div className="absolute z-20 mt-2 max-h-72 w-full max-w-2xl overflow-y-auto rounded-2xl border border-hairline-strong bg-white shadow-xl">
                 {selectableDeals.slice(0, 20).map((deal) => (
                   <button
                     key={deal.id}
                     onClick={() => addDeal(deal.id)}
-                    className="flex w-full items-center justify-between gap-4 border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 last:border-b-0"
+                    className="flex w-full items-center justify-between gap-4 border-b border-hairline px-4 py-3 text-left transition hover:bg-bg-secondary last:border-b-0"
                   >
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{deal.name}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-medium text-content-primary">{deal.name}</p>
+                      <p className="text-xs text-content-secondary">
                         {deal.property_name || 'Unlinked property'}
                         {deal.city ? ` · ${deal.city}` : ''}
                       </p>
                     </div>
-                    <Plus size={14} className="text-gray-400" />
+                    <Plus size={14} className="text-content-muted" />
                   </button>
                 ))}
               </div>
@@ -223,32 +223,32 @@ export default function DealComparePage() {
       ) : (
         <div className="space-y-6">
           {SECTIONS.map((section) => (
-            <div key={section.title} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-4">
-                <h3 className="text-base font-semibold text-gray-900">{section.title}</h3>
+            <div key={section.title} className="rounded-2xl border border-hairline-strong bg-white shadow-sm">
+              <div className="border-b border-hairline px-6 py-4">
+                <h3 className="text-base font-semibold text-content-primary">{section.title}</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Metric</th>
+                    <tr className="border-b border-hairline bg-bg-secondary">
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Metric</th>
                       {selectedDeals.map((deal) => (
-                        <th key={deal.id} className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                        <th key={deal.id} className="px-6 py-3 text-left text-sm font-semibold text-content-primary">
                           <div>
                             <p>{deal.name}</p>
-                            <p className="text-xs font-normal text-gray-500">{deal.city || 'Unknown city'}</p>
+                            <p className="text-xs font-normal text-content-secondary">{deal.city || 'Unknown city'}</p>
                           </div>
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-hairline">
                     {section.fields.map((field) => {
                       const bestIndices = getBestIndices(field);
 
                       return (
                         <tr key={field.key} className="align-top">
-                          <td className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                          <td className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-content-secondary">
                             {field.label}
                           </td>
                           {selectedDeals.map((deal, index) => {
@@ -261,7 +261,7 @@ export default function DealComparePage() {
                                 className={`px-6 py-3 text-sm ${
                                   bestIndices.includes(index)
                                     ? 'bg-emerald-50 font-semibold text-emerald-700'
-                                    : 'text-gray-900'
+                                    : 'text-content-primary'
                                 }`}
                               >
                                 {formattedValue || '-'}

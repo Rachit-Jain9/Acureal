@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MapPin, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
 import { compsAPI } from '../../services/api';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { SectionHeader } from '../../design-system';
 
 function formatRate(value) {
   if (value == null) return '-';
@@ -11,7 +12,7 @@ function formatRate(value) {
 function NearbyCompsTable({ comps }) {
   if (!comps || comps.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400 text-sm">
+      <div className="text-center py-8 text-content-muted text-sm">
         No comparable transactions found within 5 km.
       </div>
     );
@@ -20,40 +21,40 @@ function NearbyCompsTable({ comps }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b border-gray-100">
+        <thead className="bg-bg-secondary border-b border-hairline">
           <tr>
-            <th className="text-left text-xs font-semibold text-gray-500 px-4 py-2.5">Project</th>
-            <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Locality</th>
-            <th className="text-right text-xs font-semibold text-gray-500 px-3 py-2.5">Rate</th>
-            <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Config</th>
-            <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Launch</th>
-            <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Possession</th>
-            <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Source</th>
-            <th className="text-center text-xs font-semibold text-gray-500 px-3 py-2.5">Verified</th>
+            <th className="text-left text-xs font-semibold text-content-secondary px-4 py-2.5">Project</th>
+            <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Locality</th>
+            <th className="text-right text-xs font-semibold text-content-secondary px-3 py-2.5">Rate</th>
+            <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Config</th>
+            <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Launch</th>
+            <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Possession</th>
+            <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Source</th>
+            <th className="text-center text-xs font-semibold text-content-secondary px-3 py-2.5">Verified</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-hairline">
           {comps.map((comp) => (
-            <tr key={comp.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3 font-medium text-gray-900">
+            <tr key={comp.id} className="hover:bg-bg-secondary">
+              <td className="px-4 py-3 font-medium text-content-primary">
                 {comp.project_name || '-'}
               </td>
-              <td className="px-3 py-3 text-gray-600">
+              <td className="px-3 py-3 text-content-secondary">
                 {comp.locality || '-'}
               </td>
-              <td className="px-3 py-3 text-right font-medium text-gray-900">
+              <td className="px-3 py-3 text-right font-medium text-content-primary">
                 {formatRate(comp.rate_per_sqft)}
               </td>
-              <td className="px-3 py-3 text-gray-600">
+              <td className="px-3 py-3 text-content-secondary">
                 {comp.bhk_config || '-'}
               </td>
-              <td className="px-3 py-3 text-gray-600">
+              <td className="px-3 py-3 text-content-secondary">
                 {comp.launch_year || '-'}
               </td>
-              <td className="px-3 py-3 text-gray-600">
+              <td className="px-3 py-3 text-content-secondary">
                 {comp.possession_year || '-'}
               </td>
-              <td className="px-3 py-3 text-gray-500 text-xs">
+              <td className="px-3 py-3 text-content-secondary text-xs">
                 {comp.source || '-'}
               </td>
               <td className="px-3 py-3 text-center">
@@ -77,11 +78,13 @@ function BenchmarkCard({ benchmark, city }) {
   if (benchmark.found === false) {
     return (
       <div className="card-editorial">
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingUp size={16} className="text-gray-400" />
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Market Benchmark — {city || 'Location'}</h3>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <SectionHeader
+          size="sm"
+          icon={TrendingUp}
+          title={`Market Benchmark — ${city || 'Location'}`}
+          className="mb-2"
+        />
+        <p className="text-sm text-content-secondary">
           {benchmark.message || 'No verified comparable transactions found in this radius. Add project comps to populate pricing benchmarks.'}
         </p>
       </div>
@@ -100,20 +103,22 @@ function BenchmarkCard({ benchmark, city }) {
 
   return (
     <div className="card-editorial">
-      <div className="flex items-center gap-2 mb-4">
-        <TrendingUp size={16} className="text-primary-600" />
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-          Market Benchmark — {city || 'Location'}
-        </h3>
-        <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded ml-auto">
-          {benchmark.count} comps · {benchmark.radius_km} km
-        </span>
-      </div>
+      <SectionHeader
+        size="sm"
+        icon={TrendingUp}
+        title={`Market Benchmark — ${city || 'Location'}`}
+        action={
+          <span className="text-xs text-content-muted bg-bg-secondary px-1.5 py-0.5 rounded">
+            {benchmark.count} comps · {benchmark.radius_km} km
+          </span>
+        }
+        className="mb-4"
+      />
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {metrics.map(({ label, value }) => (
-          <div key={label} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{label}</p>
-            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{value}</p>
+          <div key={label} className="bg-bg-secondary rounded-lg p-3">
+            <p className="text-xs text-content-muted mb-1">{label}</p>
+            <p className="text-sm font-bold text-content-primary">{value}</p>
           </div>
         ))}
       </div>
@@ -187,16 +192,18 @@ export default function CompsTab({ deal }) {
       {/* Nearby Comps */}
       {hasLatLng && (
         <div className="card-editorial p-0 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <MapPin size={16} className="text-gray-400" />
-              Nearby Comparables
-              <span className="text-xs font-normal text-gray-400">(5 km radius)</span>
-            </h3>
-            {nearbyComps.length > 0 && (
-              <span className="text-sm text-gray-500">{nearbyComps.length} found</span>
-            )}
-          </div>
+          <SectionHeader
+            size="sm"
+            icon={MapPin}
+            title="Nearby Comparables"
+            sub="Within a 5 km radius of the site"
+            action={
+              nearbyComps.length > 0 ? (
+                <span className="text-sm text-content-secondary">{nearbyComps.length} found</span>
+              ) : null
+            }
+            className="px-5 py-4 border-b border-hairline mb-0"
+          />
           {nearbyLoading ? (
             <LoadingSpinner className="py-10" />
           ) : nearbyError ? (

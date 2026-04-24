@@ -27,16 +27,16 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
 
   return (
     <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 via-white to-primary-50 border-b border-gray-100 flex items-start justify-between gap-3 flex-wrap">
+      <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 via-white to-primary-50 border-b border-hairline flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-primary-500 text-white flex items-center justify-center shadow-sm">
             <GitCompareArrows size={15} />
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-gray-500">
+            <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-content-secondary">
               Premium FAR decision
             </div>
-            <div className="text-sm font-semibold text-gray-800">Base FSI vs With Premium FAR</div>
+            <div className="text-sm font-semibold text-content-primary">Base FSI vs With Premium FAR</div>
           </div>
         </div>
         <Verdict verdict={verdict} />
@@ -104,18 +104,18 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
             />
           </div>
           {additionalBuildCost != null && (
-            <div className="mt-3 text-[11px] text-gray-500 flex items-start gap-1.5">
+            <div className="mt-3 text-[11px] text-content-secondary flex items-start gap-1.5">
               <Info size={11} className="mt-0.5 flex-shrink-0" />
               <span>
                 Additional construction cost to realize the extra BUA:
-                <span className="ml-1 font-semibold text-gray-700">{fmtInr(additionalBuildCost)}</span>.
+                <span className="ml-1 font-semibold text-content-secondary">{fmtInr(additionalBuildCost)}</span>.
                 Subtract from net uplift for a full economic view.
               </span>
             </div>
           )}
         </div>
 
-        <div className="mt-3 text-[11px] text-gray-500 italic">
+        <div className="mt-3 text-[11px] text-content-secondary italic">
           Premium FAR fee is a planning-grade estimate at 40% of circle rate per sqft on the
           additional BUA — actual charge depends on RMP 2031 road-width tier and current
           BDA / BBMP rate schedule. Use your authority reference rates for the final number.
@@ -129,7 +129,7 @@ export default function ScenarioComparisonCard({ zone, property, assetClass }) {
 
 function ScenarioCol({ title, subtitle, buildability, programme, tone, highlight }) {
   const tones = {
-    gray:   'border-gray-200 bg-gradient-to-br from-gray-50/80 to-white',
+    gray:   'border-hairline-strong bg-gradient-to-br from-gray-50/80 to-white',
     indigo: 'border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-white to-primary-50/40 shadow-sm',
   };
   return (
@@ -141,8 +141,8 @@ function ScenarioCol({ title, subtitle, buildability, programme, tone, highlight
       )}
       <div className="flex items-baseline justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-gray-800">{title}</div>
-          <div className="text-[11px] text-gray-500">{subtitle}</div>
+          <div className="text-sm font-semibold text-content-primary">{title}</div>
+          <div className="text-[11px] text-content-secondary">{subtitle}</div>
         </div>
       </div>
 
@@ -162,15 +162,15 @@ function ScenarioCol({ title, subtitle, buildability, programme, tone, highlight
       </div>
 
       {programme?.gross_revenue_inr != null && (
-        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-          <span className="text-gray-500">{programme.group === 'commercial' || programme.group === 'industrial' ? 'Stabilised rent (pa)' : 'Gross revenue'}</span>
-          <span className="font-semibold text-gray-800">{fmtInr(programme.gross_revenue_inr)}</span>
+        <div className="mt-3 pt-3 border-t border-hairline flex items-center justify-between text-xs">
+          <span className="text-content-secondary">{programme.group === 'commercial' || programme.group === 'industrial' ? 'Stabilised rent (pa)' : 'Gross revenue'}</span>
+          <span className="font-semibold text-content-primary">{fmtInr(programme.gross_revenue_inr)}</span>
         </div>
       )}
       {programme?.stabilised_value_inr != null && (
         <div className="mt-1 flex items-center justify-between text-xs">
-          <span className="text-gray-500">Stabilised value</span>
-          <span className="font-semibold text-gray-800">{fmtInr(programme.stabilised_value_inr)}</span>
+          <span className="text-content-secondary">Stabilised value</span>
+          <span className="font-semibold text-content-primary">{fmtInr(programme.stabilised_value_inr)}</span>
         </div>
       )}
     </div>
@@ -180,10 +180,10 @@ function ScenarioCol({ title, subtitle, buildability, programme, tone, highlight
 function ScenStat({ label, value, unit }) {
   return (
     <div className="rounded-lg bg-white/60 border border-white px-2.5 py-1.5">
-      <div className="text-[10px] uppercase tracking-[0.08em] text-gray-500 font-medium">{label}</div>
+      <div className="text-[10px] uppercase tracking-[0.08em] text-content-secondary font-medium">{label}</div>
       <div className="flex items-baseline gap-1">
-        <span className="text-base font-bold text-gray-800 leading-tight">{value}</span>
-        {unit && <span className="text-[10px] text-gray-500">{unit}</span>}
+        <span className="text-base font-bold text-content-primary leading-tight">{value}</span>
+        {unit && <span className="text-[10px] text-content-secondary">{unit}</span>}
       </div>
     </div>
   );
@@ -218,7 +218,7 @@ function Verdict({ verdict }) {
   const tones = {
     go:      'bg-emerald-100 text-emerald-800 border border-emerald-200',
     noGo:    'bg-rose-100 text-rose-800 border border-rose-200',
-    unknown: 'bg-gray-100 text-gray-700 border border-gray-200',
+    unknown: 'bg-bg-secondary text-content-secondary border border-hairline-strong',
   };
   return (
     <span className={clsx('inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full font-semibold', tones[verdict.key])}>

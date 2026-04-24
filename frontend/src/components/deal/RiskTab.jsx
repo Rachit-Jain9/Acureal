@@ -10,6 +10,7 @@ import {
 } from '../../hooks/useRiskFlags';
 import Badge from '../common/Badge';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { SectionHeader } from '../../design-system';
 
 const RISK_CATEGORIES = [
   { value: 'title', label: 'Title' },
@@ -59,8 +60,8 @@ function RiskScoreCard({ score, flagCount }) {
   return (
     <div className="card-editorial">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-          <ShieldAlert size={16} className={label?.color || 'text-gray-400'} />
+        <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
+          <ShieldAlert size={16} className={label?.color || 'text-content-muted'} />
           Risk Score
         </h3>
         {label && (
@@ -70,14 +71,14 @@ function RiskScoreCard({ score, flagCount }) {
         )}
       </div>
       {score != null && (
-        <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-2.5 bg-bg-secondary rounded-full overflow-hidden">
           <div
             className={clsx('h-full rounded-full transition-all', label?.bg)}
             style={{ width: `${Math.min(100, score)}%` }}
           />
         </div>
       )}
-      <p className="text-xs text-gray-400 mt-2">
+      <p className="text-xs text-content-muted mt-2">
         {flagCount} risk flag{flagCount !== 1 ? 's' : ''} registered
       </p>
     </div>
@@ -116,7 +117,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
               <select
                 value={editData.category}
                 onChange={(e) => setEditData((d) => ({ ...d, category: e.target.value }))}
@@ -128,7 +129,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Severity</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
               <select
                 value={editData.severity}
                 onChange={(e) => setEditData((d) => ({ ...d, severity: e.target.value }))}
@@ -140,7 +141,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
               <select
                 value={editData.status}
                 onChange={(e) => setEditData((d) => ({ ...d, status: e.target.value }))}
@@ -153,7 +154,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Title</label>
             <input
               type="text"
               value={editData.title}
@@ -162,7 +163,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
             <textarea
               value={editData.description}
               onChange={(e) => setEditData((d) => ({ ...d, description: e.target.value }))}
@@ -171,7 +172,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Mitigation</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Mitigation</label>
             <textarea
               value={editData.mitigation}
               onChange={(e) => setEditData((d) => ({ ...d, mitigation: e.target.value }))}
@@ -201,7 +202,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={clsx('w-2 h-2 rounded-full flex-shrink-0 mt-1', severityCfg.dot)} />
-              <h4 className="text-sm font-semibold text-gray-900">{flag.title}</h4>
+              <h4 className="text-sm font-semibold text-content-primary">{flag.title}</h4>
               <Badge tone={severityCfg.tone}>{severityCfg.label}</Badge>
               <Badge tone={statusCfg.tone}>{statusCfg.label}</Badge>
               <Badge>
@@ -211,14 +212,14 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={startEdit}
-                className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                 title="Edit"
               >
                 <Edit2 size={13} />
               </button>
               <button
                 onClick={() => onDelete(flag.id)}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="Delete"
               >
                 <Trash2 size={13} />
@@ -226,7 +227,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             </div>
           </div>
           {flag.description && (
-            <p className="text-sm text-gray-600 mb-2">{flag.description}</p>
+            <p className="text-sm text-content-secondary mb-2">{flag.description}</p>
           )}
           {flag.mitigation && (
             <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2">
@@ -299,24 +300,27 @@ export default function RiskTab({ dealId }) {
       <RiskScoreCard score={score} flagCount={flags.length} />
 
       {/* Add Flag */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-900">Risk Flags</h3>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="btn btn-primary text-sm flex items-center gap-1.5"
-        >
-          <Plus size={14} />
-          Add Risk Flag
-        </button>
-      </div>
+      <SectionHeader
+        size="sm"
+        title="Risk Flags"
+        action={
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="btn btn-primary text-sm flex items-center gap-1.5"
+          >
+            <Plus size={14} />
+            Add Risk Flag
+          </button>
+        }
+      />
 
       {showForm && (
         <div className="card-editorial border-red-100 bg-red-50/20">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">New Risk Flag</h4>
+          <h4 className="text-sm font-semibold text-content-primary mb-3">New Risk Flag</h4>
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
@@ -328,7 +332,7 @@ export default function RiskTab({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Severity</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
                 <select
                   value={form.severity}
                   onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
@@ -340,7 +344,7 @@ export default function RiskTab({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
                 <select
                   value={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
@@ -353,7 +357,7 @@ export default function RiskTab({ dealId }) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Title</label>
               <input
                 type="text"
                 value={form.title}
@@ -364,7 +368,7 @@ export default function RiskTab({ dealId }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -374,7 +378,7 @@ export default function RiskTab({ dealId }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Mitigation</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Mitigation</label>
               <textarea
                 value={form.mitigation}
                 onChange={(e) => setForm((f) => ({ ...f, mitigation: e.target.value }))}
@@ -407,9 +411,9 @@ export default function RiskTab({ dealId }) {
       {/* Flags List */}
       {flags.length === 0 ? (
         <div className="card-editorial text-center py-16">
-          <ShieldAlert size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-600 mb-1">No risk flags registered</p>
-          <p className="text-xs text-gray-400">
+          <ShieldAlert size={32} className="text-content-muted mx-auto mb-3" />
+          <p className="text-sm font-medium text-content-secondary mb-1">No risk flags registered</p>
+          <p className="text-xs text-content-muted">
             Flag title risks, zoning issues, financial exposures, and mitigation plans.
           </p>
         </div>
@@ -417,7 +421,7 @@ export default function RiskTab({ dealId }) {
         <div className="space-y-6">
           {Object.entries(grouped).map(([catKey, catFlags]) => (
             <div key={catKey}>
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+              <h4 className="text-xs font-semibold text-content-secondary uppercase tracking-wider mb-3">
                 {RISK_CATEGORIES.find((item) => item.value === catKey)?.label || catKey}
               </h4>
               <div className="space-y-3">

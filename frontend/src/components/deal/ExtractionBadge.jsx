@@ -14,7 +14,7 @@ export default function ExtractionBadge({ source, align = 'start', compact = fal
     ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
     : tier === 'mid'
     ? 'bg-amber-50 text-amber-800 border-amber-100'
-    : 'bg-gray-50 text-gray-600 border-gray-100';
+    : 'bg-bg-secondary text-content-secondary border-hairline';
 
   const Icon = from_corrections ? UserCheck2 : FileScan;
   const label = from_corrections

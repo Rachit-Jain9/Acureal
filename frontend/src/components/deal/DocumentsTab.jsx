@@ -13,6 +13,7 @@ import { useDocuments, useUploadDocument, useDeleteDocument } from '../../hooks/
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { SectionHeader } from '../../design-system';
 import { formatDate } from '../../utils/format';
 import { downloadAxiosResponse } from '../../utils/download';
 
@@ -22,7 +23,7 @@ const CATEGORIES = [
   { value: 'legal', label: 'Legal', color: 'bg-amber-100 text-amber-700' },
   { value: 'technical', label: 'Technical', color: 'bg-cyan-100 text-cyan-700' },
   { value: 'approvals', label: 'Approvals', color: 'bg-purple-100 text-purple-700' },
-  { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-700' },
+  { value: 'other', label: 'Other', color: 'bg-bg-secondary text-content-secondary' },
 ];
 
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.value, c]));
@@ -155,7 +156,7 @@ export default function DocumentsTab({ dealId }) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-content-secondary">
           {docs.length} document{docs.length !== 1 ? 's' : ''} uploaded
         </p>
         <button
@@ -170,14 +171,11 @@ export default function DocumentsTab({ dealId }) {
       {/* Upload Form */}
       {showUploadForm && (
         <div className="card-editorial border-accent-200 bg-accent-50/40">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Upload size={15} className="text-primary-600" />
-            Upload New Document
-          </h3>
+          <SectionHeader size="sm" icon={Upload} title="Upload New Document" />
           <form onSubmit={handleUpload} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -191,7 +189,7 @@ export default function DocumentsTab({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-content-secondary mb-1">
                   Description (optional)
                 </label>
                 <input
@@ -204,19 +202,19 @@ export default function DocumentsTab({ dealId }) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                File <span className="text-gray-400">(PDF, DOC, DOCX, XLS, XLSX, PNG, JPG · max 50 MB)</span>
+              <label className="block text-xs font-medium text-content-secondary mb-1">
+                File <span className="text-content-muted">(PDF, DOC, DOCX, XLS, XLSX, PNG, JPG · max 50 MB)</span>
               </label>
               <input
                 ref={fileRef}
                 type="file"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                 onChange={handleFileChange}
-                className="block w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
+                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
               />
               {fileError && <p className="text-xs text-red-600 mt-1">{fileError}</p>}
               {file && !fileError && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-content-secondary mt-1">
                   {file.name} · {formatBytes(file.size)}
                 </p>
               )}
@@ -253,9 +251,9 @@ export default function DocumentsTab({ dealId }) {
       {/* Documents List */}
       {docs.length === 0 ? (
         <div className="card-editorial text-center py-16">
-          <FileText size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-600 mb-1">No documents uploaded yet</p>
-          <p className="text-xs text-gray-400">
+          <FileText size={32} className="text-content-muted mx-auto mb-3" />
+          <p className="text-sm font-medium text-content-secondary mb-1">No documents uploaded yet</p>
+          <p className="text-xs text-content-muted">
             Upload title documents, financial models, site photos, and legal documents for this
             deal.
           </p>
@@ -266,23 +264,23 @@ export default function DocumentsTab({ dealId }) {
             const catConfig = CATEGORY_MAP[catKey] || CATEGORY_MAP.other;
             return (
               <div key={catKey} className="card-editorial p-0 overflow-hidden">
-                <div className={clsx('px-4 py-2.5 border-b border-gray-100', catConfig.color)}>
+                <div className={clsx('px-4 py-2.5 border-b border-hairline', catConfig.color)}>
                   <span className="text-xs font-semibold uppercase tracking-wider">
                     {catConfig.label}
                   </span>
                 </div>
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-hairline">
                   {items.map((doc) => (
                     <li
                       key={doc.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-bg-secondary"
                     >
-                      <FileText size={18} className="text-gray-300 flex-shrink-0" />
+                      <FileText size={18} className="text-content-muted flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-content-primary truncate">
                           {doc.original_name || doc.file_name || 'Untitled'}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-content-muted">
                           {formatBytes(doc.file_size)} ·{' '}
                           {formatDate(doc.uploaded_at || doc.created_at)}
                           {doc.description && ` · ${doc.description}`}
@@ -292,7 +290,7 @@ export default function DocumentsTab({ dealId }) {
                         <button
                           onClick={() => handleDownload(doc)}
                           disabled={downloading === doc.id}
-                          className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                          className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                           title="Download"
                         >
                           {downloading === doc.id ? (
@@ -304,7 +302,7 @@ export default function DocumentsTab({ dealId }) {
                         <button
                           onClick={() => handleDelete(doc.id)}
                           disabled={deleteDoc.isPending}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete"
                         >
                           <Trash2 size={15} />

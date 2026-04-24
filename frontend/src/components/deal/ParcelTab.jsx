@@ -6,13 +6,14 @@ import { SQFT_PER_ACRE } from '../../config/india';
 import { useProperties, useCreateProperty } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
 import SiteWeatherCard from './SiteWeatherCard';
+import { SectionHeader } from '../../design-system';
 
 function FieldRow({ label, value, span = false }) {
   if (!value && value !== 0) return null;
   return (
     <div className={span ? 'col-span-2 sm:col-span-3' : ''}>
-      <dt className="text-xs text-gray-400 mb-0.5">{label}</dt>
-      <dd className="text-sm font-medium text-gray-900">{value}</dd>
+      <dt className="text-xs text-content-muted mb-0.5">{label}</dt>
+      <dd className="text-sm font-medium text-content-primary">{value}</dd>
     </div>
   );
 }
@@ -77,11 +78,11 @@ function PropertyPickerModal({ dealId, onClose }) {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+          <h3 className="text-base font-bold text-content-primary flex items-center gap-2">
             <Link2 size={16} className="text-primary-600" /> Link Property to Deal
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+          <button onClick={onClose} className="text-content-muted hover:text-content-secondary p-1">
             <X size={18} />
           </button>
         </div>
@@ -93,7 +94,7 @@ function PropertyPickerModal({ dealId, onClose }) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               mode === 'search'
                 ? 'bg-primary-50 text-primary-700'
-                : 'text-gray-500 hover:text-gray-700'
+                : 'text-content-secondary hover:text-content-secondary'
             }`}
           >
             Search existing
@@ -103,7 +104,7 @@ function PropertyPickerModal({ dealId, onClose }) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
               mode === 'create'
                 ? 'bg-primary-50 text-primary-700'
-                : 'text-gray-500 hover:text-gray-700'
+                : 'text-content-secondary hover:text-content-secondary'
             }`}
           >
             <Plus size={13} /> Create new
@@ -114,7 +115,7 @@ function PropertyPickerModal({ dealId, onClose }) {
           <div className="px-5 py-4 space-y-3">
             {/* Search input */}
             <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
               <input
                 ref={searchRef}
                 type="text"
@@ -126,7 +127,7 @@ function PropertyPickerModal({ dealId, onClose }) {
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-secondary"
                 >
                   <X size={13} />
                 </button>
@@ -134,11 +135,11 @@ function PropertyPickerModal({ dealId, onClose }) {
             </div>
 
             {/* Results list */}
-            <div className="max-h-64 overflow-y-auto divide-y divide-gray-50 border border-gray-100 rounded-lg">
+            <div className="max-h-64 overflow-y-auto divide-y divide-hairline border border-hairline rounded-lg">
               {isLoading ? (
-                <div className="py-8 text-center text-sm text-gray-400">Loading...</div>
+                <div className="py-8 text-center text-sm text-content-muted">Loading...</div>
               ) : properties.length === 0 ? (
-                <div className="py-8 text-center text-sm text-gray-400">
+                <div className="py-8 text-center text-sm text-content-muted">
                   {debouncedSearch.length >= 2
                     ? 'No properties match your search'
                     : 'Type to search properties'}
@@ -148,16 +149,16 @@ function PropertyPickerModal({ dealId, onClose }) {
                   <button
                     key={p.id}
                     onClick={() => setSelected(selected?.id === p.id ? null : p)}
-                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                    className={`w-full text-left px-4 py-3 hover:bg-bg-secondary transition-colors ${
                       selected?.id === p.id ? 'bg-primary-50' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-content-primary truncate">
                           {displayName(p)}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-content-muted mt-0.5">
                           {[p.city, p.state].filter(Boolean).join(', ')}
                           {p.land_area_sqft
                             ? ` · ${Number(p.land_area_sqft).toLocaleString('en-IN')} sqft`
@@ -197,13 +198,13 @@ function PropertyPickerModal({ dealId, onClose }) {
           </div>
         ) : (
           <form onSubmit={handleCreateAndLink} className="px-5 py-4 space-y-3">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-content-secondary">
               Create a new property record and link it to this deal in one step.
             </p>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-content-secondary mb-1">
                   Property Name (optional)
                 </label>
                 <input
@@ -215,7 +216,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-content-secondary mb-1">
                   Street Address (optional)
                 </label>
                 <input
@@ -227,7 +228,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">City</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">City</label>
                 <input
                   type="text"
                   value={createForm.city}
@@ -236,7 +237,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">State</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">State</label>
                 <input
                   type="text"
                   value={createForm.state}
@@ -245,7 +246,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Pincode</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Pincode</label>
                 <input
                   type="text"
                   value={createForm.pincode}
@@ -255,7 +256,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Zoning</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Zoning</label>
                 <select
                   value={createForm.zoning}
                   onChange={(e) => setCreateForm((f) => ({ ...f, zoning: e.target.value }))}
@@ -352,7 +353,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
 
       {/* Site Details Grid */}
       <div className="card-editorial">
-        <h3 className="text-base font-semibold text-gray-900 mb-4">Site Information</h3>
+        <SectionHeader size="sm" icon={MapPin} title="Site Information" />
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
           <FieldRow label="Property Name" value={deal.property_name} />
           <FieldRow label="City" value={deal.city} />
@@ -392,13 +393,10 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
 
       {/* Map Section */}
       <div className="card-editorial">
-        <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <MapPin size={16} className="text-gray-400" />
-          Location Map
-        </h3>
+        <SectionHeader size="sm" icon={MapPin} title="Location Map" />
         {hasLatLng ? (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-content-secondary">
               <span>
                 Lat: <strong className="font-mono">{Number(deal.lat).toFixed(6)}</strong>
               </span>
@@ -422,7 +420,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
                 Satellite view <ExternalLink size={12} />
               </a>
             </div>
-            <div className="h-72 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+            <div className="h-72 rounded-lg overflow-hidden border border-hairline-strong bg-bg-secondary">
               <iframe
                 title="property-map"
                 width="100%"
@@ -433,16 +431,16 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
                 src={`https://maps.google.com/maps?q=${deal.lat},${deal.lng}&z=17&t=k&output=embed&iwloc=near`}
               />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-content-secondary">
               Pin at exact lat/lng. If the location looks off, re-geocode the property or enter manual coordinates on the Property Record.
             </p>
           </div>
         ) : (
-          <div className="h-40 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 text-gray-400">
+          <div className="h-40 rounded-lg border-2 border-dashed border-hairline-strong flex flex-col items-center justify-center gap-2 text-content-muted">
             <MapPin size={28} />
             <p className="text-sm">Geocode pending</p>
             {hasProperty && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-content-muted">
                 Trigger geocoding from the Property record to show the map here.
               </p>
             )}
@@ -466,7 +464,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
       {/* Additional Technical Details */}
       {(deal.rera_number || deal.target_launch_date || deal.expected_close_date) && (
         <div className="card-editorial">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Project Details</h3>
+          <SectionHeader size="sm" title="Project Details" />
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             <FieldRow label="RERA Number" value={deal.rera_number} />
             <FieldRow

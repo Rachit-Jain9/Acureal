@@ -123,7 +123,7 @@ export default function LoginPage() {
                   Full Name
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
                   <input
                     id="name"
                     name="name"
@@ -146,7 +146,7 @@ export default function LoginPage() {
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
                 <input
                   id="email"
                   name="email"
@@ -168,7 +168,7 @@ export default function LoginPage() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
                 <input
                   id="password"
                   name="password"
@@ -195,10 +195,10 @@ export default function LoginPage() {
             {isRegister && (
               <div>
                 <label htmlFor="phone" className="block text-[11px] uppercase tracking-[0.14em] text-stone-600 mb-1">
-                  Phone <span className="text-gray-400 font-normal">(optional)</span>
+                  Phone <span className="text-content-muted font-normal">(optional)</span>
                 </label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
                   <input
                     id="phone"
                     name="phone"
@@ -215,7 +215,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+            <div className="rounded-lg border border-hairline-strong bg-bg-secondary px-3 py-3">
               <div className="flex items-center gap-2">
                 <input
                   id="rememberMe"

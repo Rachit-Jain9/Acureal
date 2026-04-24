@@ -12,7 +12,7 @@ const KIND_STYLES = {
   computation: {
     fill: '#f9fafb',
     stroke: '#9ca3af',
-    label: 'text-gray-700',
+    label: 'text-content-secondary',
   },
   output: {
     fill: '#ecfdf5',
@@ -163,8 +163,8 @@ export default function ProvenanceGraphView({
         className="flex items-center justify-between w-full text-left group"
       >
         <div className="flex items-center gap-2">
-          <GitBranch size={16} className="text-gray-500" />
-          <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+          <GitBranch size={16} className="text-content-secondary" />
+          <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider">
             How this deal is computed
           </h4>
           {source === 'live' && remoteMeta?.engineVersion && (
@@ -174,12 +174,12 @@ export default function ProvenanceGraphView({
             </span>
           )}
           {source === 'preview' && (
-            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
+            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-bg-secondary text-content-secondary border border-hairline-strong">
               preview
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-content-muted">
           {remoteStatus === 'loading' && (
             <RefreshCw size={12} className="animate-spin" />
           )}
@@ -202,7 +202,7 @@ export default function ProvenanceGraphView({
               </span>
             </div>
           )}
-          <p className="text-xs text-gray-500 max-w-2xl">
+          <p className="text-xs text-content-secondary max-w-2xl">
             Each node is a step in the deterministic kernel pipeline. Inputs (indigo) flow into
             computations (grey) and finally into outputs (green). Click any node to highlight its
             full upstream provenance chain; hover to see its value.
@@ -300,7 +300,7 @@ export default function ProvenanceGraphView({
             </svg>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+          <div className="flex flex-wrap items-center gap-4 text-xs text-content-secondary">
             <span className="flex items-center gap-1.5">
               <span
                 className="inline-block w-3 h-3 rounded"
@@ -323,7 +323,7 @@ export default function ProvenanceGraphView({
               Output
             </span>
             {remoteMeta?.generatedAt && (
-              <span className="text-gray-400">
+              <span className="text-content-muted">
                 Computed {new Date(remoteMeta.generatedAt).toLocaleString('en-IN', {
                   day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
                 })}
@@ -333,7 +333,7 @@ export default function ProvenanceGraphView({
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="ml-auto text-xs text-gray-500 underline hover:text-gray-900"
+                className="ml-auto text-xs text-content-secondary underline hover:text-content-primary"
               >
                 Clear selection
               </button>
@@ -341,13 +341,13 @@ export default function ProvenanceGraphView({
           </div>
 
           {hoveredNode && (
-            <div className="p-3 rounded-md border border-gray-200 bg-gray-50 text-xs text-gray-700">
-              <div className="font-semibold text-gray-900">{hoveredNode.label}</div>
-              <div className="mt-1 text-gray-500 font-mono text-[11px]">{hoveredNode.id}</div>
+            <div className="p-3 rounded-md border border-hairline-strong bg-bg-secondary text-xs text-content-secondary">
+              <div className="font-semibold text-content-primary">{hoveredNode.label}</div>
+              <div className="mt-1 text-content-secondary font-mono text-[11px]">{hoveredNode.id}</div>
               {formatNodeValue(hoveredNode.value, hoveredNode.unit) && (
                 <div className="mt-1">
                   Value:{' '}
-                  <span className="font-mono text-gray-900">
+                  <span className="font-mono text-content-primary">
                     {formatNodeValue(hoveredNode.value, hoveredNode.unit)}
                   </span>
                 </div>
@@ -355,7 +355,7 @@ export default function ProvenanceGraphView({
               {hoveredNode.dependsOn?.length > 0 && (
                 <div className="mt-1">
                   Depends on:{' '}
-                  <span className="font-mono text-gray-600">
+                  <span className="font-mono text-content-secondary">
                     {hoveredNode.dependsOn.join(', ')}
                   </span>
                 </div>

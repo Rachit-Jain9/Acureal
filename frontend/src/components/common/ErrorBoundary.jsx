@@ -28,13 +28,13 @@ export class ErrorBoundary extends Component {
             <AlertTriangle size={28} className="text-red-500" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Something went wrong on this page</h2>
-            <p className="mt-1 text-sm text-gray-500 max-w-sm">{message}</p>
+            <h2 className="text-base font-semibold text-content-primary">Something went wrong on this page</h2>
+            <p className="mt-1 text-sm text-content-secondary max-w-sm">{message}</p>
           </div>
           <button
             type="button"
             onClick={this.handleReset}
-            className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+            className="inline-flex items-center gap-2 rounded-lg bg-bg-secondary px-4 py-2 text-sm font-medium text-content-secondary hover:bg-bg-secondary"
           >
             <RefreshCw size={14} />
             Try again

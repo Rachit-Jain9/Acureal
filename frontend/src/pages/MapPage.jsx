@@ -32,16 +32,16 @@ import { formatArea, formatCrores, formatINR } from '../utils/format';
 
 function ToggleRow({ checked, label, description, onChange }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 dark:border-gray-700 dark:bg-slate-900/80">
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-hairline-strong bg-white px-3 py-3/80">
       <div>
-        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{label}</p>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{description}</p>
+        <p className="text-sm font-medium text-content-primary">{label}</p>
+        <p className="mt-0.5 text-xs text-content-secondary">{description}</p>
       </div>
       <input
         type="checkbox"
         checked={checked}
         onChange={onChange}
-        className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+        className="mt-1 h-4 w-4 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
       />
     </label>
   );
@@ -314,8 +314,8 @@ export default function MapPage() {
                     className="flex items-center justify-between rounded-xl border border-amber-200 bg-white px-3 py-3 transition hover:border-amber-300 hover:bg-amber-100/40"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{property.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-slate-600">
+                      <p className="truncate text-sm font-semibold text-content-primary">{property.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-content-secondary">
                         {[property.city, property.state].filter(Boolean).join(', ') || 'Location incomplete'}
                       </p>
                     </div>
@@ -328,9 +328,9 @@ export default function MapPage() {
             </div>
           )}
 
-          <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div className="mt-5 rounded-2xl border border-hairline-strong bg-bg-secondary p-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -392,33 +392,33 @@ export default function MapPage() {
 
             <div className="mt-4 grid grid-cols-1 gap-3 text-sm">
               <div className="rounded-xl bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Visible Land Bank</p>
-                <p className="mt-1 font-semibold text-gray-900">{formatArea(totalLandArea)}</p>
+                <p className="text-xs uppercase tracking-wide text-content-muted">Visible Land Bank</p>
+                <p className="mt-1 font-semibold text-content-primary">{formatArea(totalLandArea)}</p>
               </div>
               <div className="rounded-xl bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Visible Deal Value</p>
-                <p className="mt-1 font-semibold text-gray-900">{formatCrores(visibleDealValueCr)}</p>
+                <p className="text-xs uppercase tracking-wide text-content-muted">Visible Deal Value</p>
+                <p className="mt-1 font-semibold text-content-primary">{formatCrores(visibleDealValueCr)}</p>
               </div>
               <div className="rounded-xl bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Average Circle Rate</p>
-                <p className="mt-1 font-semibold text-gray-900">
+                <p className="text-xs uppercase tracking-wide text-content-muted">Average Circle Rate</p>
+                <p className="mt-1 font-semibold text-content-primary">
                   {averageCircleRate ? `${formatINR(averageCircleRate, 0)}/sqft` : '-'}
                 </p>
               </div>
               <div className="rounded-xl bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Dominant City</p>
-                <p className="mt-1 font-semibold text-gray-900">
+                <p className="text-xs uppercase tracking-wide text-content-muted">Dominant City</p>
+                <p className="mt-1 font-semibold text-content-primary">
                   {dominantCity ? `${dominantCity[0]} (${dominantCity[1]})` : '-'}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div className="mt-5 rounded-2xl border border-hairline-strong bg-bg-secondary p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-gray-900">Smart Layers</h2>
-                <p className="text-sm text-gray-500">Turn overlays on and off depending on the story you want to see.</p>
+                <h2 className="text-base font-semibold text-content-primary">Smart Layers</h2>
+                <p className="text-sm text-content-secondary">Turn overlays on and off depending on the story you want to see.</p>
               </div>
               <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
                 <Layers3 size={18} />
@@ -447,8 +447,8 @@ export default function MapPage() {
             </div>
 
             <div className="mt-4 rounded-xl bg-white px-3 py-3">
-              <p className="text-xs uppercase tracking-wide text-gray-400">Nearby Comp Radius</p>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="text-xs uppercase tracking-wide text-content-muted">Nearby Comp Radius</p>
+              <p className="mt-1 text-sm text-content-secondary">
                 {selectedProperty ? 'Adjust the search area for the selected property.' : 'Select a property to activate nearby comps.'}
               </p>
 
@@ -461,7 +461,7 @@ export default function MapPage() {
                     className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
                       nearbyRadiusKm === radius
                         ? 'bg-primary-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-bg-secondary text-content-secondary hover:bg-bg-secondary'
                     }`}
                   >
                     {radius} km
@@ -471,7 +471,7 @@ export default function MapPage() {
             </div>
 
             <div className="mt-4 rounded-xl bg-white px-3 py-3">
-              <p className="text-xs uppercase tracking-wide text-gray-400">Stage Heat Filters</p>
+              <p className="text-xs uppercase tracking-wide text-content-muted">Stage Heat Filters</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {Object.entries(STAGE_HEAT_META).map(([stage, meta]) => (
                   <button
@@ -480,8 +480,8 @@ export default function MapPage() {
                     onClick={() => setVisibleStages((current) => ({ ...current, [stage]: !current[stage] }))}
                     className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
                       visibleStages[stage]
-                        ? 'border-transparent bg-slate-900 text-white'
-                        : 'border-gray-200 bg-white text-gray-500'
+                        ? 'border-transparent bg-bg-primary text-white'
+                        : 'border-hairline-strong bg-white text-content-secondary'
                     }`}
                   >
                     <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
@@ -492,11 +492,11 @@ export default function MapPage() {
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div className="mt-5 rounded-2xl border border-hairline-strong bg-bg-secondary p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-gray-900">Selected Property</h2>
-                <p className="text-sm text-gray-500">Focus one property to unlock nearby comps and pricing context.</p>
+                <h2 className="text-base font-semibold text-content-primary">Selected Property</h2>
+                <p className="text-sm text-content-secondary">Focus one property to unlock nearby comps and pricing context.</p>
               </div>
               <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
                 <MapPin size={18} />
@@ -508,8 +508,8 @@ export default function MapPage() {
                 <div className="rounded-xl bg-white px-3 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-gray-900">{selectedProperty.name}</p>
-                      <p className="mt-1 text-sm text-gray-500">{selectedProperty.city}, {selectedProperty.state}</p>
+                      <p className="font-semibold text-content-primary">{selectedProperty.name}</p>
+                      <p className="mt-1 text-sm text-content-secondary">{selectedProperty.city}, {selectedProperty.state}</p>
                     </div>
                     <Badge className={(ZONING_META[selectedProperty.zoning] || ZONING_META.residential).badgeClass}>
                       {(ZONING_META[selectedProperty.zoning] || ZONING_META.residential).label}
@@ -518,12 +518,12 @@ export default function MapPage() {
 
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Area</p>
-                      <p className="mt-1 font-medium text-gray-900">{formatArea(selectedProperty.landAreaSqft)}</p>
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Area</p>
+                      <p className="mt-1 font-medium text-content-primary">{formatArea(selectedProperty.landAreaSqft)}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Circle Rate</p>
-                      <p className="mt-1 font-medium text-gray-900">
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Circle Rate</p>
+                      <p className="mt-1 font-medium text-content-primary">
                         {selectedProperty.circleRatePerSqft ? `${formatINR(selectedProperty.circleRatePerSqft, 0)}/sqft` : '-'}
                       </p>
                     </div>
@@ -538,61 +538,61 @@ export default function MapPage() {
                 </div>
 
                 <div className="rounded-xl bg-white px-3 py-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Nearby Comp Benchmarks</p>
+                  <p className="text-xs uppercase tracking-wide text-content-muted">Nearby Comp Benchmarks</p>
                   {showNearbyComps ? (
                     nearbyBenchmarksLoading ? (
-                      <p className="mt-2 text-sm text-gray-500">Loading comp benchmarks...</p>
+                      <p className="mt-2 text-sm text-content-secondary">Loading comp benchmarks...</p>
                     ) : nearbyBenchmarks?.found ? (
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-gray-400">Median Rate</p>
-                          <p className="mt-1 font-medium text-gray-900">
+                          <p className="text-xs uppercase tracking-wide text-content-muted">Median Rate</p>
+                          <p className="mt-1 font-medium text-content-primary">
                             {formatINR(nearbyBenchmarks.median_rate_per_sqft, 0)}/sqft
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-gray-400">Comp Count</p>
-                          <p className="mt-1 font-medium text-gray-900">{nearbyBenchmarksResponse.count || nearbyComps.length}</p>
+                          <p className="text-xs uppercase tracking-wide text-content-muted">Comp Count</p>
+                          <p className="mt-1 font-medium text-content-primary">{nearbyBenchmarksResponse.count || nearbyComps.length}</p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-gray-400">P25-P75 Band</p>
-                          <p className="mt-1 font-medium text-gray-900">
+                          <p className="text-xs uppercase tracking-wide text-content-muted">P25-P75 Band</p>
+                          <p className="mt-1 font-medium text-content-primary">
                             {formatINR(nearbyBenchmarks.p25_rate_per_sqft, 0)} - {formatINR(nearbyBenchmarks.p75_rate_per_sqft, 0)}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-gray-400">Search Radius</p>
-                          <p className="mt-1 font-medium text-gray-900">{nearbyBenchmarksResponse.radius_km || nearbyRadiusKm} km</p>
+                          <p className="text-xs uppercase tracking-wide text-content-muted">Search Radius</p>
+                          <p className="mt-1 font-medium text-content-primary">{nearbyBenchmarksResponse.radius_km || nearbyRadiusKm} km</p>
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-gray-500">No comparable projects found near this property yet.</p>
+                      <p className="mt-2 text-sm text-content-secondary">No comparable projects found near this property yet.</p>
                     )
                   ) : (
-                    <p className="mt-2 text-sm text-gray-500">Enable the nearby comp overlay to see pricing benchmarks.</p>
+                    <p className="mt-2 text-sm text-content-secondary">Enable the nearby comp overlay to see pricing benchmarks.</p>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="mt-4 rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center">
-                <p className="text-sm font-medium text-gray-700">Select a property from the list or the map.</p>
-                <p className="mt-1 text-sm text-gray-500">That will focus the map, draw the land coverage ring, and unlock nearby comps.</p>
+              <div className="mt-4 rounded-xl border border-dashed border-hairline-strong px-4 py-8 text-center">
+                <p className="text-sm font-medium text-content-secondary">Select a property from the list or the map.</p>
+                <p className="mt-1 text-sm text-content-secondary">That will focus the map, draw the land coverage ring, and unlock nearby comps.</p>
               </div>
             )}
           </div>
 
           <div className="mt-5 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Mapped Properties</h2>
-              <p className="text-sm text-gray-500">Click a card to focus it on the map and activate overlays.</p>
+              <h2 className="text-base font-semibold text-content-primary">Mapped Properties</h2>
+              <p className="text-sm text-content-secondary">Click a card to focus it on the map and activate overlays.</p>
             </div>
           </div>
 
           <div className="mt-4 flex-1 overflow-y-auto pr-1">
             {filteredProperties.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-10 text-center">
-                <p className="text-sm font-medium text-gray-700">No properties match these filters.</p>
-                <p className="mt-1 text-sm text-gray-500">Try clearing search or widening your city and zoning filters.</p>
+              <div className="rounded-2xl border border-dashed border-hairline-strong px-4 py-10 text-center">
+                <p className="text-sm font-medium text-content-secondary">No properties match these filters.</p>
+                <p className="mt-1 text-sm text-content-secondary">Try clearing search or widening your city and zoning filters.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -606,7 +606,7 @@ export default function MapPage() {
                       className={`rounded-2xl border px-4 py-4 transition ${
                         isSelected
                           ? 'border-primary-500 bg-primary-50 shadow-sm'
-                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                          : 'border-hairline-strong bg-white hover:border-hairline-strong hover:shadow-sm'
                       }`}
                     >
                       <button
@@ -616,20 +616,20 @@ export default function MapPage() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-gray-900">{property.name}</p>
-                            <p className="mt-1 text-sm text-gray-500">{property.city}, {property.state}</p>
+                            <p className="font-semibold text-content-primary">{property.name}</p>
+                            <p className="mt-1 text-sm text-content-secondary">{property.city}, {property.state}</p>
                           </div>
                           <Badge className={zoningMeta.badgeClass}>{zoningMeta.label}</Badge>
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                           <div>
-                            <p className="text-xs uppercase tracking-wide text-gray-400">Area</p>
-                            <p className="mt-1 font-medium text-gray-900">{formatArea(property.landAreaSqft)}</p>
+                            <p className="text-xs uppercase tracking-wide text-content-muted">Area</p>
+                            <p className="mt-1 font-medium text-content-primary">{formatArea(property.landAreaSqft)}</p>
                           </div>
                           <div>
-                            <p className="text-xs uppercase tracking-wide text-gray-400">Circle Rate</p>
-                            <p className="mt-1 font-medium text-gray-900">
+                            <p className="text-xs uppercase tracking-wide text-content-muted">Circle Rate</p>
+                            <p className="mt-1 font-medium text-content-primary">
                               {property.circleRatePerSqft ? formatINR(property.circleRatePerSqft, 0) : '-'}
                             </p>
                           </div>
@@ -640,7 +640,7 @@ export default function MapPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedPropertyId(property.id)}
-                          className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-700"
+                          className="inline-flex items-center gap-1 text-content-secondary hover:text-content-secondary"
                         >
                           <MapPin size={14} />
                           Focus on map

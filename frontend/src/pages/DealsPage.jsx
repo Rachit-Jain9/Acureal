@@ -191,7 +191,7 @@ export default function DealsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
           <input
             type="text"
             placeholder="Search deals, properties, cities..."
@@ -235,7 +235,7 @@ export default function DealsPage() {
         </select>
 
         {hasFilters && (
-          <button onClick={handleFilterReset} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+          <button onClick={handleFilterReset} className="text-sm text-content-secondary hover:text-content-secondary flex items-center gap-1">
             <X size={14} /> Clear
           </button>
         )}
@@ -266,7 +266,7 @@ export default function DealsPage() {
           {/* Pagination */}
           {pagination.totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-content-secondary">
                 Showing {(pagination.page - 1) * (params.limit || 12) + 1}
                 &ndash;
                 {Math.min(pagination.page * (params.limit || 12), pagination.total)} of {pagination.total}
@@ -279,7 +279,7 @@ export default function DealsPage() {
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-content-secondary">
                   Page {pagination.page} of {pagination.totalPages}
                 </span>
                 <button
@@ -299,9 +299,9 @@ export default function DealsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-              <h2 className="text-lg font-bold text-gray-900">New Deal</h2>
-              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-hairline flex-shrink-0">
+              <h2 className="text-lg font-bold text-content-primary">New Deal</h2>
+              <button onClick={handleCloseModal} className="text-content-muted hover:text-content-secondary">
                 <X size={20} />
               </button>
             </div>
@@ -309,7 +309,7 @@ export default function DealsPage() {
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Property</label>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Property</label>
                 <select
                   name="propertyId"
                   value={form.propertyId}
@@ -324,11 +324,11 @@ export default function DealsPage() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-content-secondary">
                   You can create the deal now and link a property later if sourcing data is still incomplete.
                 </p>
                 {selectedProperty && (
-                  <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <div className="mt-2 rounded-lg bg-bg-secondary px-3 py-2 text-xs text-content-secondary">
                     {PROPERTY_TYPE_LABELS[selectedProperty.property_type] || selectedProperty.property_type || 'Property'} in {selectedProperty.city || 'unknown city'}
                     {selectedProperty.land_area_sqft ? ` · ${Number(selectedProperty.land_area_sqft).toLocaleString('en-IN')} sqft` : ''}
                   </div>
@@ -336,7 +336,7 @@ export default function DealsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deal Name *</label>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Deal Name *</label>
                 <input
                   type="text"
                   name="name"
@@ -350,7 +350,7 @@ export default function DealsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Type</label>
                   <select name="dealType" value={form.dealType} onChange={handleFormChange} className="input w-full">
                     {Object.entries(DEAL_TYPE_LABELS).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
@@ -358,7 +358,7 @@ export default function DealsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Stage</label>
                   <select name="stage" value={form.stage} onChange={handleFormChange} className="input w-full">
                     {Object.entries(STAGE_CONFIG).map(([key, cfg]) => (
                       <option key={key} value={key}>{cfg.label}</option>
@@ -366,7 +366,7 @@ export default function DealsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Priority</label>
                   <select name="priority" value={form.priority} onChange={handleFormChange} className="input w-full">
                     {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => (
                       <option key={key} value={key}>{cfg.label}</option>
@@ -374,7 +374,7 @@ export default function DealsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Asset Class</label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Asset Class</label>
                   <select name="assetClass" value={form.assetClass} onChange={handleFormChange} className="input w-full">
                     <option value="residential_apartments">Residential Apartments</option>
                     <option value="plotted_development">Plotted Development</option>
@@ -389,7 +389,7 @@ export default function DealsPage() {
                   </select>
                 </div>
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Deal Structure</label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Deal Structure</label>
                   <select name="dealStructure" value={form.dealStructure} onChange={handleFormChange} className="input w-full">
                     <option value="outright">Outright Purchase</option>
                     <option value="jv">JV (Joint Venture)</option>
@@ -403,17 +403,17 @@ export default function DealsPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-slate-50 p-4">
+              <div className="rounded-xl border border-hairline-strong bg-bg-secondary p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-semibold text-slate-900">Land Pricing</h4>
-                    <p className="text-xs text-slate-500">Quote land cost in crore, per acre, or per sqft. REDIP will normalize the total.</p>
+                    <h4 className="text-sm font-semibold text-content-primary">Land Pricing</h4>
+                    <p className="text-xs text-content-secondary">Quote land cost in crore, per acre, or per sqft. REDIP will normalize the total.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Basis</label>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Pricing Basis</label>
                     <select
                       name="landPricingBasis"
                       value={form.landPricingBasis}
@@ -428,7 +428,7 @@ export default function DealsPage() {
 
                   {form.landPricingBasis === 'total_cr' ? (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Land Price (Cr)</label>
+                      <label className="block text-sm font-medium text-content-secondary mb-1">Total Land Price (Cr)</label>
                       <input
                         type="number"
                         name="landAskPriceCr"
@@ -442,7 +442,7 @@ export default function DealsPage() {
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-content-secondary mb-1">
                         {form.landPricingBasis === 'per_acre' ? 'Land Rate (INR / acre)' : 'Land Rate (INR / sqft)'}
                       </label>
                       <input
@@ -459,7 +459,7 @@ export default function DealsPage() {
                   )}
 
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Land Extent for Pricing</label>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Land Extent for Pricing</label>
                     <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                       <input
                         type="number"
@@ -481,7 +481,7 @@ export default function DealsPage() {
                         <option value="acre">acre</option>
                       </select>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">
+                    <p className="mt-2 text-xs text-content-secondary">
                       {selectedProperty?.land_area_sqft
                         ? `Linked property fallback area: ${Number(selectedProperty.land_area_sqft).toLocaleString('en-IN')} sqft`
                         : 'If no linked property exists yet, enter the sourcing extent here so total pricing can still be calculated.'}
@@ -491,19 +491,19 @@ export default function DealsPage() {
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="rounded-lg bg-white px-3 py-2">
-                    <p className="text-xs text-gray-500">Normalized area</p>
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-xs text-content-secondary">Normalized area</p>
+                    <p className="text-sm font-semibold text-content-primary">
                       {landPricingPreview.areaSqft ? `${landPricingPreview.areaSqft.toLocaleString('en-IN')} sqft` : '-'}
                     </p>
                   </div>
                   <div className="rounded-lg bg-white px-3 py-2">
-                    <p className="text-xs text-gray-500">Equivalent acres</p>
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-xs text-content-secondary">Equivalent acres</p>
+                    <p className="text-sm font-semibold text-content-primary">
                       {landPricingPreview.areaAcres ? landPricingPreview.areaAcres.toFixed(4) : '-'}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-900 px-3 py-2 text-white">
-                    <p className="text-xs text-slate-300">Computed total land price</p>
+                  <div className="rounded-lg bg-bg-primary px-3 py-2 text-white">
+                    <p className="text-xs text-content-muted">Computed total land price</p>
                     <p className="text-sm font-semibold">
                       {landPricingPreview.totalPriceCr != null ? `${landPricingPreview.totalPriceCr.toFixed(2)} Cr` : '-'}
                     </p>
@@ -512,7 +512,7 @@ export default function DealsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Notes</label>
                 <textarea
                   name="notes"
                   value={form.notes}
@@ -524,7 +524,7 @@ export default function DealsPage() {
               </div>
 
               </div>
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0 rounded-b-xl">
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-hairline flex-shrink-0 rounded-b-xl">
                 <button type="button" onClick={handleCloseModal} className="btn btn-secondary">
                   Cancel
                 </button>
@@ -617,7 +617,7 @@ function DealCard({ deal }) {
         className="card-editorial hover:shadow-md transition-shadow cursor-pointer relative"
       >
         <div className="flex items-start justify-between mb-3 gap-2">
-          <h3 className="font-semibold text-gray-900 truncate pr-2">{deal.name}</h3>
+          <h3 className="font-semibold text-content-primary truncate pr-2">{deal.name}</h3>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
             <div className="relative" ref={menuRef}>
@@ -625,13 +625,13 @@ function DealCard({ deal }) {
                 type="button"
                 onClick={(e) => { stopAll(e); setMenuOpen((v) => !v); }}
                 aria-label="Deal actions"
-                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                className="p-1 rounded hover:bg-bg-secondary text-content-secondary hover:text-content-primary focus:outline-none focus:ring-2 focus:ring-gray-300"
               >
                 <MoreVertical size={16} />
               </button>
               {menuOpen && (
                 <div
-                  className="absolute right-0 top-full mt-1 w-44 rounded-md border border-gray-200 bg-white shadow-lg z-20"
+                  className="absolute right-0 top-full mt-1 w-44 rounded-md border border-hairline-strong bg-white shadow-lg z-20"
                   onClick={stopAll}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
@@ -639,7 +639,7 @@ function DealCard({ deal }) {
                     type="button"
                     onClick={handleExport}
                     disabled={exporting}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
                   >
                     {exporting ? <Loader2 size={14} className="animate-spin" /> : <Presentation size={14} />}
                     Export Deck
@@ -647,14 +647,14 @@ function DealCard({ deal }) {
                   <button
                     type="button"
                     onClick={handleShare}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary"
                   >
                     <Share2 size={14} />
                     Share
                   </button>
                   {isAdmin && (
                     <>
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-hairline" />
                       <button
                         type="button"
                         onClick={handleDelete}
@@ -671,13 +671,13 @@ function DealCard({ deal }) {
           </div>
         </div>
 
-        <p className="text-sm text-gray-600 mb-1">{deal.property_name || 'Unlinked property'}</p>
-        <p className="text-xs text-gray-400 mb-3">{deal.city}{deal.state ? `, ${deal.state}` : ''}</p>
+        <p className="text-sm text-content-secondary mb-1">{deal.property_name || 'Unlinked property'}</p>
+        <p className="text-xs text-content-muted mb-3">{deal.city}{deal.state ? `, ${deal.state}` : ''}</p>
 
         <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
           <div>
-            <p className="text-xs text-gray-400">Land Area</p>
-            <p className="font-medium text-gray-800">
+            <p className="text-xs text-content-muted">Land Area</p>
+            <p className="font-medium text-content-primary">
               {deal.land_area_acres
                 ? `${Number(deal.land_area_acres).toFixed(2)} acres`
                 : deal.land_area_sqft
@@ -686,8 +686,8 @@ function DealCard({ deal }) {
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400">Headline Economics</p>
-            <p className="font-medium text-gray-800">
+            <p className="text-xs text-content-muted">Headline Economics</p>
+            <p className="font-medium text-content-primary">
               {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
             </p>
           </div>
@@ -695,14 +695,14 @@ function DealCard({ deal }) {
 
         <div className="flex items-center flex-wrap gap-2 mb-3">
           <Badge tone={priorityCfg.tone}>{priorityCfg.label}</Badge>
-          <span className="text-xs text-gray-500">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
+          <span className="text-xs text-content-secondary">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
           {deal.asset_class && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-content-secondary">
               {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}
             </span>
           )}
           {deal.deal_structure && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-content-secondary">
               {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}
             </span>
           )}
@@ -728,17 +728,17 @@ function DealCard({ deal }) {
 
         <div className="flex items-center justify-between text-sm border-t pt-3">
           <div>
-            <span className="text-gray-400 text-xs">IRR</span>
+            <span className="text-content-muted text-xs">IRR</span>
             <p className="font-medium">{formatPct(deal.irr_pct)}</p>
           </div>
           <div className="text-right">
-            <span className="text-gray-400 text-xs">Revenue</span>
+            <span className="text-content-muted text-xs">Revenue</span>
             <p className="font-medium">{formatCrores(deal.total_revenue_cr)}</p>
           </div>
         </div>
 
         {(deal.last_activity_date || deal.updated_at) && (
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-content-muted mt-2">
             Updated {formatRelativeTime(deal.last_activity_date || deal.updated_at)}
           </p>
         )}
@@ -762,8 +762,8 @@ function DealCard({ deal }) {
             className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Deal</h3>
-            <p className="text-sm text-gray-600 mb-5">
+            <h3 className="text-lg font-bold text-content-primary mb-2">Delete Deal</h3>
+            <p className="text-sm text-content-secondary mb-5">
               Permanently delete <strong>{deal.name}</strong>? This cannot be undone.
             </p>
             <div className="flex justify-end gap-3">

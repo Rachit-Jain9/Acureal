@@ -60,7 +60,7 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
         <Tooltip direction="top" offset={[0, -8]} opacity={1}>
           <div className="space-y-0.5">
             <p className="text-sm font-semibold">{property.name}</p>
-            <p className="text-xs text-gray-500">{property.city}, {property.state}</p>
+            <p className="text-xs text-content-secondary">{property.city}, {property.state}</p>
             {property.geocode_status === 'approximate' && (
               <p className="text-xs text-amber-600">⚠ Approximate location</p>
             )}
@@ -70,8 +70,8 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
         <Popup minWidth={280}>
           <div className="space-y-3">
             <div>
-              <p className="text-base font-semibold text-gray-900">{property.name}</p>
-              <p className="text-sm text-gray-500">{property.address}</p>
+              <p className="text-base font-semibold text-content-primary">{property.name}</p>
+              <p className="text-sm text-content-secondary">{property.address}</p>
             </div>
             {property.geocode_status === 'approximate' && (
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
@@ -82,17 +82,17 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
 
             <div className="flex items-center gap-2">
               <Badge className={zoningMeta.badgeClass}>{zoningMeta.label}</Badge>
-              {property.city && <span className="text-xs font-medium text-gray-500">{property.city}</span>}
+              {property.city && <span className="text-xs font-medium text-content-secondary">{property.city}</span>}
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Area</p>
-                <p className="mt-1 font-medium text-gray-900">{formatArea(property.landAreaSqft)}</p>
+                <p className="text-xs uppercase tracking-wide text-content-muted">Area</p>
+                <p className="mt-1 font-medium text-content-primary">{formatArea(property.landAreaSqft)}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Circle Rate</p>
-                <p className="mt-1 font-medium text-gray-900">
+                <p className="text-xs uppercase tracking-wide text-content-muted">Circle Rate</p>
+                <p className="mt-1 font-medium text-content-primary">
                   {property.circleRatePerSqft ? `${formatINR(property.circleRatePerSqft, 0)}/sqft` : '-'}
                 </p>
               </div>
@@ -226,15 +226,15 @@ function PropertyClusterLayer({ properties, selectedProperty, showClusters, onSe
         <Tooltip direction="top" offset={[0, -8]} opacity={1}>
           <div className="space-y-0.5 text-center">
             <p className="text-sm font-semibold">{item.count} properties</p>
-            <p className="text-xs text-gray-500">Click to expand cluster</p>
+            <p className="text-xs text-content-secondary">Click to expand cluster</p>
           </div>
         </Tooltip>
 
         <Popup minWidth={280}>
           <div className="space-y-3">
             <div>
-              <p className="text-base font-semibold text-gray-900">{item.count} clustered properties</p>
-              <p className="text-sm text-gray-500">Dominant zoning: {clusterMeta.label}</p>
+              <p className="text-base font-semibold text-content-primary">{item.count} clustered properties</p>
+              <p className="text-sm text-content-secondary">Dominant zoning: {clusterMeta.label}</p>
             </div>
 
             <div className="max-h-40 space-y-2 overflow-y-auto">
@@ -243,11 +243,11 @@ function PropertyClusterLayer({ properties, selectedProperty, showClusters, onSe
                   key={property.id}
                   type="button"
                   onClick={() => onSelectProperty(property.id)}
-                  className="flex w-full items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-left hover:bg-gray-100"
+                  className="flex w-full items-center justify-between rounded-lg bg-bg-secondary px-3 py-2 text-left hover:bg-bg-secondary"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{property.name}</p>
-                    <p className="text-xs text-gray-500">{property.city}</p>
+                    <p className="text-sm font-medium text-content-primary">{property.name}</p>
+                    <p className="text-xs text-content-secondary">{property.city}</p>
                   </div>
                   <span className="text-xs font-medium text-primary-600">Focus</span>
                 </button>
@@ -318,10 +318,10 @@ export default function MapCanvas({
   return (
     <div className="relative h-[calc(100vh-180px)] min-h-[720px]">
       {mapIsLoading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70 dark:bg-slate-950/80">
+        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70/80">
           <div className="flex flex-col items-center gap-3">
             <LoadingSpinner />
-            <span className="text-sm text-gray-500 dark:text-slate-300">Loading map intelligence...</span>
+            <span className="text-sm text-content-secondary">Loading map intelligence...</span>
           </div>
         </div>
       )}
@@ -364,26 +364,26 @@ export default function MapCanvas({
               <Popup minWidth={260}>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-base font-semibold text-gray-900">{stageMeta.label} heat zone</p>
-                    <p className="text-sm text-gray-500">{layer.propertyName || 'Mapped property'}</p>
+                    <p className="text-base font-semibold text-content-primary">{stageMeta.label} heat zone</p>
+                    <p className="text-sm text-content-secondary">{layer.propertyName || 'Mapped property'}</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Deals</p>
-                      <p className="mt-1 font-medium text-gray-900">{layer.count}</p>
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Deals</p>
+                      <p className="mt-1 font-medium text-content-primary">{layer.count}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Value</p>
-                      <p className="mt-1 font-medium text-gray-900">{formatCrores(layer.totalRevenueCr)}</p>
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Value</p>
+                      <p className="mt-1 font-medium text-content-primary">{formatCrores(layer.totalRevenueCr)}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Average IRR</p>
-                      <p className="mt-1 font-medium text-gray-900">{formatPct(layer.avgIrrPct)}</p>
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Average IRR</p>
+                      <p className="mt-1 font-medium text-content-primary">{formatPct(layer.avgIrrPct)}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Location</p>
-                      <p className="mt-1 font-medium text-gray-900">{layer.city || '-'}</p>
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Location</p>
+                      <p className="mt-1 font-medium text-content-primary">{layer.city || '-'}</p>
                     </div>
                   </div>
                 </div>
@@ -424,7 +424,7 @@ export default function MapCanvas({
               <Tooltip direction="top" offset={[0, -6]} opacity={1}>
                 <div className="space-y-0.5">
                   <p className="text-sm font-semibold">{comp.project_name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-content-secondary">
                     {comp.distanceKm ? `${comp.distanceKm.toFixed(2)} km away` : comp.city}
                   </p>
                 </div>
@@ -433,29 +433,29 @@ export default function MapCanvas({
               <Popup minWidth={260}>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-base font-semibold text-gray-900">{comp.project_name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-base font-semibold text-content-primary">{comp.project_name}</p>
+                    <p className="text-sm text-content-secondary">
                       {[comp.locality, comp.city].filter(Boolean).join(', ') || 'Comparable project'}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <Badge className={compMeta.badgeClass}>{compMeta.label}</Badge>
-                    <span className="text-xs font-medium text-gray-500">
+                    <span className="text-xs font-medium text-content-secondary">
                       {comp.distanceKm ? `${comp.distanceKm.toFixed(2)} km away` : 'Distance unavailable'}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Rate</p>
-                      <p className="mt-1 font-medium text-gray-900">
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Rate</p>
+                      <p className="mt-1 font-medium text-content-primary">
                         {comp.ratePerSqft ? `${formatINR(comp.ratePerSqft, 0)}/sqft` : '-'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Launch</p>
-                      <p className="mt-1 font-medium text-gray-900">{comp.launch_year || '-'}</p>
+                      <p className="text-xs uppercase tracking-wide text-content-muted">Launch</p>
+                      <p className="mt-1 font-medium text-content-primary">{comp.launch_year || '-'}</p>
                     </div>
                   </div>
                 </div>
@@ -472,25 +472,25 @@ export default function MapCanvas({
         />
       </MapContainer>
 
-      <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5 dark:bg-slate-900/95 dark:ring-white/10">
+      <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5/95 dark:ring-white/10">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
             <Layers3 size={18} />
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Spatial Control Room</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-content-muted">Spatial Control Room</p>
             {selectedProperty ? (
               <>
-                <p className="mt-1 font-semibold text-gray-900 dark:text-slate-100">{selectedProperty.name}</p>
-                <p className="text-sm text-gray-500 dark:text-slate-400">{selectedProperty.city}, {selectedProperty.state}</p>
-                <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
+                <p className="mt-1 font-semibold text-content-primary">{selectedProperty.name}</p>
+                <p className="text-sm text-content-secondary">{selectedProperty.city}, {selectedProperty.state}</p>
+                <p className="mt-2 text-sm text-content-secondary">
                   Property focus, nearby comps, and stage heat layers are now centered on the same land parcel.
                 </p>
               </>
             ) : (
               <>
-                <p className="mt-1 font-semibold text-gray-900 dark:text-slate-100">Use the map like an intelligence layer</p>
-                <p className="text-sm text-gray-600 dark:text-slate-300">
+                <p className="mt-1 font-semibold text-content-primary">Use the map like an intelligence layer</p>
+                <p className="text-sm text-content-secondary">
                   Precision mode only plots verified or manual coordinates. Filter by city or zoning, then focus a property to unlock comparable and pipeline context around it.
                 </p>
               </>
@@ -499,7 +499,7 @@ export default function MapCanvas({
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 z-[1000] flex flex-wrap items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-lg">
+      <div className="absolute bottom-4 left-4 z-[1000] flex flex-wrap items-center gap-3 rounded-2xl bg-bg-primary px-4 py-3 text-sm text-white shadow-lg">
         <span className="inline-flex items-center gap-2">
           <Building2 size={15} />
           {properties.length} properties
@@ -514,15 +514,15 @@ export default function MapCanvas({
         </span>
       </div>
 
-      <div className="absolute bottom-16 right-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5 dark:bg-slate-900/95 dark:ring-white/10">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Heat Layer Legend</p>
+      <div className="absolute bottom-16 right-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5/95 dark:ring-white/10">
+        <p className="text-xs font-medium uppercase tracking-wide text-content-muted">Heat Layer Legend</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {Object.entries(STAGE_HEAT_META)
             .filter(([stage]) => visibleStages[stage])
             .map(([stage, meta]) => (
               <span
                 key={stage}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-200"
+                className="inline-flex items-center gap-2 rounded-full bg-bg-secondary px-3 py-1.5 text-xs font-medium text-content-secondary"
               >
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
                 {meta.label}
@@ -532,16 +532,16 @@ export default function MapCanvas({
       </div>
 
       {selectedProperty && showNearbyComps && (
-        <div className="absolute right-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5 dark:bg-slate-900/95 dark:ring-white/10">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Nearby Comp Snapshot</p>
+        <div className="absolute right-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5/95 dark:ring-white/10">
+          <p className="text-xs font-medium uppercase tracking-wide text-content-muted">Nearby Comp Snapshot</p>
           {nearbyCompsLoading ? (
-            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Loading nearby comps...</p>
+            <p className="mt-2 text-sm text-content-secondary">Loading nearby comps...</p>
           ) : nearbyComps.length > 0 ? (
             <div className="mt-2 space-y-2">
               {nearbyComps.slice(0, 3).map((comp) => (
-                <div key={comp.id} className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-slate-800">
-                  <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{comp.project_name}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                <div key={comp.id} className="rounded-xl bg-bg-secondary px-3 py-2">
+                  <p className="text-sm font-medium text-content-primary">{comp.project_name}</p>
+                  <p className="text-xs text-content-secondary">
                     {comp.distanceKm ? `${comp.distanceKm.toFixed(2)} km` : comp.city}
                     {comp.ratePerSqft ? ` • ${formatINR(comp.ratePerSqft, 0)}/sqft` : ''}
                   </p>
@@ -549,7 +549,7 @@ export default function MapCanvas({
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">No nearby comps available within {nearbyRadiusKm} km.</p>
+            <p className="mt-2 text-sm text-content-secondary">No nearby comps available within {nearbyRadiusKm} km.</p>
           )}
         </div>
       )}

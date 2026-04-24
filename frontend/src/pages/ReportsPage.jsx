@@ -19,7 +19,7 @@ const TABS = [
 ];
 
 const EmptyTableState = ({ message }) => (
-  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-slate-900/70 dark:text-slate-300">
+  <div className="rounded-xl border border-dashed border-hairline-strong bg-bg-secondary px-4 py-10 text-center text-sm text-content-secondary">
     {message}
   </div>
 );
@@ -228,7 +228,7 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-hairline-strong">
         <nav className="flex gap-6 overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -237,7 +237,7 @@ export default function ReportsPage() {
               className={`border-b-2 pb-3 text-sm font-medium transition whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  : 'border-transparent text-content-secondary hover:text-content-secondary dark:hover:text-content-muted'
               }`}
             >
               {tab.label}
@@ -247,7 +247,7 @@ export default function ReportsPage() {
       </div>
 
       {activeTab === 'pipeline' && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
           {deals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No deals yet. Add verified opportunities to generate pipeline reports." />
@@ -255,28 +255,28 @@ export default function ReportsPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Stage</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Count</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Total Value</th>
+                <tr className="border-b border-hairline-strong bg-bg-secondary">
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-content-secondary">Stage</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Count</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Total Value</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              <tbody className="divide-y divide-hairline">
                 {pipelineData.map((row) => (
-                  <tr key={row.stage} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <tr key={row.stage} className="hover:bg-bg-secondary">
                     <td className="px-6 py-3">
                       <Badge tone={row.tone}>{row.label}</Badge>
                     </td>
-                    <td className="px-6 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{row.count}</td>
-                    <td className="px-6 py-3 text-right text-gray-900">{formatCrores(row.totalValue)}</td>
+                    <td className="px-6 py-3 text-right font-medium text-content-primary">{row.count}</td>
+                    <td className="px-6 py-3 text-right text-content-primary">{formatCrores(row.totalValue)}</td>
                   </tr>
                 ))}
-                <tr className="bg-gray-50 dark:bg-gray-700/60 font-semibold">
-                  <td className="px-6 py-3 text-gray-900">Total</td>
-                  <td className="px-6 py-3 text-right text-gray-900">
+                <tr className="bg-bg-secondary font-semibold">
+                  <td className="px-6 py-3 text-content-primary">Total</td>
+                  <td className="px-6 py-3 text-right text-content-primary">
                     {pipelineData.reduce((sum, row) => sum + row.count, 0)}
                   </td>
-                  <td className="px-6 py-3 text-right text-gray-900">
+                  <td className="px-6 py-3 text-right text-content-primary">
                     {formatCrores(pipelineData.reduce((sum, row) => sum + row.totalValue, 0))}
                   </td>
                 </tr>
@@ -287,7 +287,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'financial' && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
           {deals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No deals yet. Create deals and financial models to populate this report." />
@@ -296,28 +296,28 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Deal</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">City</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Revenue</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cost</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Profit</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">IRR</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">NPV</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Eq. Multiple</th>
+                  <tr className="border-b border-hairline-strong bg-bg-secondary">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-content-secondary">Deal</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-content-secondary">City</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Revenue</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Cost</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Profit</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">IRR</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">NPV</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Eq. Multiple</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody className="divide-y divide-hairline">
                   {deals.map((deal) => (
-                    <tr key={deal.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                      <td className="px-4 py-3 font-medium text-gray-900">{deal.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{deal.city || '-'}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'total_revenue_cr'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'total_cost_cr'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'gross_profit_cr'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{formatPct(getFinancialValue(deal, 'irr_pct'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'npv_cr'))}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">
+                    <tr key={deal.id} className="hover:bg-bg-secondary">
+                      <td className="px-4 py-3 font-medium text-content-primary">{deal.name}</td>
+                      <td className="px-4 py-3 text-content-secondary">{deal.city || '-'}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">{formatCrores(getFinancialValue(deal, 'total_revenue_cr'))}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">{formatCrores(getFinancialValue(deal, 'total_cost_cr'))}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">{formatCrores(getFinancialValue(deal, 'gross_profit_cr'))}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">{formatPct(getFinancialValue(deal, 'irr_pct'))}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">{formatCrores(getFinancialValue(deal, 'npv_cr'))}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">
                         {getFinancialValue(deal, 'equity_multiple')
                           ? `${Number(getFinancialValue(deal, 'equity_multiple')).toFixed(2)}x`
                           : '-'}
@@ -332,7 +332,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'citywise' && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
           {cityData.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No city-level portfolio data yet. Add linked properties and deals to compare city exposure." />
@@ -340,18 +340,18 @@ export default function ReportsPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">City</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Deal Count</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Avg IRR</th>
+                <tr className="border-b border-hairline-strong bg-bg-secondary">
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-content-secondary">City</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Deal Count</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase text-content-secondary">Avg IRR</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              <tbody className="divide-y divide-hairline">
                 {cityData.map((row) => (
-                  <tr key={row.city} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                    <td className="px-6 py-3 font-medium text-gray-900 dark:text-gray-100">{row.city}</td>
-                    <td className="px-6 py-3 text-right text-gray-900">{row.count}</td>
-                    <td className="px-6 py-3 text-right text-gray-900">
+                  <tr key={row.city} className="hover:bg-bg-secondary">
+                    <td className="px-6 py-3 font-medium text-content-primary">{row.city}</td>
+                    <td className="px-6 py-3 text-right text-content-primary">{row.count}</td>
+                    <td className="px-6 py-3 text-right text-content-primary">
                       {row.avgIRR !== null ? formatPct(row.avgIRR) : '-'}
                     </td>
                   </tr>
@@ -363,7 +363,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'performance' && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
           {performanceData.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No performance ranking yet. As financial models are added, REDIP will rank live opportunities by return profile." />
@@ -372,29 +372,29 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Deal</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">City</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Stage</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">IRR</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">NPV</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">Exports</th>
+                  <tr className="border-b border-hairline-strong bg-bg-secondary">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-content-secondary">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-content-secondary">Deal</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-content-secondary">City</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-content-secondary">Stage</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">IRR</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-content-secondary">NPV</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-content-secondary">Exports</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody className="divide-y divide-hairline">
                   {performanceData.map((deal, idx) => (
-                    <tr key={deal.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                      <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{deal.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{deal.city || '-'}</td>
+                    <tr key={deal.id} className="hover:bg-bg-secondary">
+                      <td className="px-4 py-3 text-content-secondary">{idx + 1}</td>
+                      <td className="px-4 py-3 font-medium text-content-primary">{deal.name}</td>
+                      <td className="px-4 py-3 text-content-secondary">{deal.city || '-'}</td>
                       <td className="px-4 py-3">
                         <Badge tone={STAGE_CONFIG[deal.stage]?.tone}>
                           {STAGE_CONFIG[deal.stage]?.label || deal.stage}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900">{formatPct(deal._irr)}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">{formatCrores(getFinancialValue(deal, 'npv_cr'))}</td>
+                      <td className="px-4 py-3 text-right font-medium text-content-primary">{formatPct(deal._irr)}</td>
+                      <td className="px-4 py-3 text-right text-content-primary">{formatCrores(getFinancialValue(deal, 'npv_cr'))}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -449,21 +449,21 @@ export default function ReportsPage() {
 
       {activeTab === 'intelligence' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
+          <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">
                   Verified-data intelligence
                 </p>
-                <h3 className="mt-2 text-xl font-semibold text-gray-900">
+                <h3 className="mt-2 text-xl font-semibold text-content-primary">
                   {dailyBrief?.title || 'Daily Real Estate Intelligence Brief'}
                 </h3>
-                <p className="mt-2 max-w-3xl text-sm text-gray-600">
+                <p className="mt-2 max-w-3xl text-sm text-content-secondary">
                   {dailyBrief?.notes || 'REDIP only publishes verified intelligence. Connect trusted external feeds to activate market-facing Bengaluru and India brief generation.'}
                 </p>
               </div>
               {dailyBrief?.mode && (
-                <Badge className="bg-slate-100 text-slate-700">{dailyBrief.mode}</Badge>
+                <Badge className="bg-bg-secondary text-content-secondary">{dailyBrief.mode}</Badge>
               )}
             </div>
           </div>
@@ -477,8 +477,8 @@ export default function ReportsPage() {
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {(dailyBrief?.verifiedSourceRequirements || []).map((source) => (
                   <div key={source.key} className="rounded-xl border border-amber-200 bg-white p-4">
-                    <p className="text-sm font-semibold text-slate-900">{source.label}</p>
-                    <p className="mt-2 text-sm text-slate-600">{source.purpose}</p>
+                    <p className="text-sm font-semibold text-content-primary">{source.label}</p>
+                    <p className="mt-2 text-sm text-content-secondary">{source.purpose}</p>
                   </div>
                 ))}
               </div>
@@ -486,51 +486,51 @@ export default function ReportsPage() {
           )}
 
           {dailyBrief?.dealOfDay && (
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-              <h4 className="text-base font-semibold text-gray-900">1. Deal of the Day</h4>
+            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+              <h4 className="text-base font-semibold text-content-primary">1. Deal of the Day</h4>
               <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
                 <div>
-                  <p className="text-lg font-semibold text-gray-900">{dailyBrief.dealOfDay.headline}</p>
-                  <p className="mt-2 text-sm text-gray-600">{dailyBrief.dealOfDay.whyItMatters}</p>
+                  <p className="text-lg font-semibold text-content-primary">{dailyBrief.dealOfDay.headline}</p>
+                  <p className="mt-2 text-sm text-content-secondary">{dailyBrief.dealOfDay.whyItMatters}</p>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-4 text-sm">
-                  <p className="text-gray-500">City</p>
-                  <p className="font-medium text-gray-900">{dailyBrief.dealOfDay.city}</p>
-                  <p className="mt-3 text-gray-500">Stage</p>
-                  <p className="font-medium text-gray-900">
+                <div className="rounded-xl bg-bg-secondary p-4 text-sm">
+                  <p className="text-content-secondary">City</p>
+                  <p className="font-medium text-content-primary">{dailyBrief.dealOfDay.city}</p>
+                  <p className="mt-3 text-content-secondary">Stage</p>
+                  <p className="font-medium text-content-primary">
                     {STAGE_CONFIG[dailyBrief.dealOfDay.stage]?.label || dailyBrief.dealOfDay.stage}
                   </p>
-                  <p className="mt-3 text-gray-500">IRR</p>
-                  <p className="font-medium text-gray-900">{formatPct(dailyBrief.dealOfDay.irrPct)}</p>
+                  <p className="mt-3 text-content-secondary">IRR</p>
+                  <p className="font-medium text-content-primary">{formatPct(dailyBrief.dealOfDay.irrPct)}</p>
                 </div>
               </div>
             </div>
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-              <h4 className="text-base font-semibold text-gray-900">2. Key Developments</h4>
+            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+              <h4 className="text-base font-semibold text-content-primary">2. Key Developments</h4>
               {(dailyBrief?.keyDevelopments || []).length > 0 ? (
                 <div className="mt-4 space-y-4">
                   {(dailyBrief?.keyDevelopments || []).map((item, index) => (
-                    <div key={`${item.headline}-${index}`} className="rounded-xl bg-gray-50 p-4">
-                      <p className="text-sm font-semibold text-gray-900">{item.headline}</p>
-                      <p className="mt-1 text-xs text-gray-500">
+                    <div key={`${item.headline}-${index}`} className="rounded-xl bg-bg-secondary p-4">
+                      <p className="text-sm font-semibold text-content-primary">{item.headline}</p>
+                      <p className="mt-1 text-xs text-content-secondary">
                         {item.city} · {item.date ? new Date(item.date).toLocaleDateString('en-IN') : ''}
                       </p>
-                      <p className="mt-2 text-sm text-gray-600">{item.whyItMatters}</p>
+                      <p className="mt-2 text-sm text-content-secondary">{item.whyItMatters}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                <div className="mt-4 rounded-xl border border-dashed border-hairline-strong bg-bg-secondary p-4 text-sm text-content-secondary">
                   No verified developments are available yet. Once real activities and verified external feeds are connected, they will appear here.
                 </div>
               )}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-              <h4 className="text-base font-semibold text-gray-900">3. Market Signals</h4>
+            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+              <h4 className="text-base font-semibold text-content-primary">3. Market Signals</h4>
               <div className="mt-4 grid gap-4">
                 <div className="rounded-xl bg-emerald-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Bullish</p>
@@ -552,29 +552,29 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-            <h4 className="text-base font-semibold text-gray-900">4. Bengaluru Demand Heatmap</h4>
+          <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+            <h4 className="text-base font-semibold text-content-primary">4. Bengaluru Demand Heatmap</h4>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Micro-market</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Absorption</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Pricing Trend</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Inventory</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Demand Signal</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Insight</th>
+                  <tr className="border-b border-hairline bg-bg-secondary">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Micro-market</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Absorption</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Pricing Trend</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Inventory</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Demand Signal</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary">Insight</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody className="divide-y divide-hairline">
                   {(dailyBrief?.bengaluruDemandHeatmap || []).map((row) => (
                     <tr key={row.microMarket}>
-                      <td className="px-4 py-3 font-medium text-gray-900">{row.microMarket}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.absorption}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.pricingTrend}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.inventory}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.demandSignal}</td>
-                      <td className="px-4 py-3 text-gray-600">{row.insight}</td>
+                      <td className="px-4 py-3 font-medium text-content-primary">{row.microMarket}</td>
+                      <td className="px-4 py-3 text-content-secondary">{row.absorption}</td>
+                      <td className="px-4 py-3 text-content-secondary">{row.pricingTrend}</td>
+                      <td className="px-4 py-3 text-content-secondary">{row.inventory}</td>
+                      <td className="px-4 py-3 text-content-secondary">{row.demandSignal}</td>
+                      <td className="px-4 py-3 text-content-secondary">{row.insight}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -583,24 +583,24 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-              <h4 className="text-base font-semibold text-gray-900">5. Demand Slowdown Indicators</h4>
-              <ul className="mt-4 space-y-3 text-sm text-gray-700">
+            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+              <h4 className="text-base font-semibold text-content-primary">5. Demand Slowdown Indicators</h4>
+              <ul className="mt-4 space-y-3 text-sm text-content-secondary">
                 {(dailyBrief?.demandSlowdownIndicators || []).map((item, index) => (
                   <li key={`slowdown-${index}`}>{item}</li>
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-              <h4 className="text-base font-semibold text-gray-900">6. Strategic Takeaways</h4>
-              <ul className="mt-4 space-y-3 text-sm text-gray-700">
+            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+              <h4 className="text-base font-semibold text-content-primary">6. Strategic Takeaways</h4>
+              <ul className="mt-4 space-y-3 text-sm text-content-secondary">
                 {(dailyBrief?.strategicTakeaways || []).map((item, index) => (
                   <li key={`takeaway-${index}`}>{item}</li>
                 ))}
               </ul>
               {dailyBrief?.bottomLine && (
-                <div className="mt-4 rounded-xl bg-slate-900 p-4 text-sm text-white">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Bottom line</p>
+                <div className="mt-4 rounded-xl bg-bg-primary p-4 text-sm text-white">
+                  <p className="text-xs uppercase tracking-wide text-content-muted">Bottom line</p>
                   <p className="mt-2">{dailyBrief.bottomLine}</p>
                 </div>
               )}

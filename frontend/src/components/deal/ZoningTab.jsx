@@ -24,7 +24,7 @@ const OVERLAY_CHECKS = [
 ];
 
 const STATUS_CONFIG = {
-  not_checked: { label: 'Not checked', color: 'bg-gray-100 text-gray-500',  icon: null },
+  not_checked: { label: 'Not checked', color: 'bg-bg-secondary text-content-secondary',  icon: null },
   clear:       { label: 'Clear',       color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
   flag:        { label: 'Flag',        color: 'bg-red-100 text-red-700',     icon: AlertTriangle },
 };
@@ -35,7 +35,7 @@ function SectionCard({ icon: Icon, title, kicker, children, className }) {
       <div className="flex items-start justify-between mb-4 gap-3">
         <div className="flex items-center gap-2">
           {Icon && <Icon size={16} className="text-primary-600 flex-shrink-0" />}
-          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+          <h3 className="text-sm font-semibold text-content-primary">{title}</h3>
         </div>
         {kicker}
       </div>
@@ -46,7 +46,7 @@ function SectionCard({ icon: Icon, title, kicker, children, className }) {
 
 function BigStat({ label, value, unit, tone = 'default', hint }) {
   const tones = {
-    default: 'bg-gray-50 text-gray-800',
+    default: 'bg-bg-secondary text-content-primary',
     primary: 'bg-gradient-to-br from-primary-50 to-primary-100/60 text-primary-800 border border-primary-100',
     emerald: 'bg-gradient-to-br from-emerald-50 to-emerald-100/60 text-emerald-800 border border-emerald-100',
     indigo:  'bg-gradient-to-br from-indigo-50 to-indigo-100/60 text-indigo-800 border border-indigo-100',
@@ -66,10 +66,10 @@ function BigStat({ label, value, unit, tone = 'default', hint }) {
 
 function KeyValue({ label, value, muted, extraction }) {
   return (
-    <div className="flex items-start justify-between py-1.5 border-b border-gray-50 last:border-0 gap-2">
-      <span className="text-xs text-gray-500 flex-shrink-0">{label}</span>
+    <div className="flex items-start justify-between py-1.5 border-b border-hairline last:border-0 gap-2">
+      <span className="text-xs text-content-secondary flex-shrink-0">{label}</span>
       <span className="flex items-center gap-1.5 flex-wrap justify-end">
-        <span className={clsx('text-xs font-medium text-right', muted ? 'text-gray-400 italic' : 'text-gray-800')}>
+        <span className={clsx('text-xs font-medium text-right', muted ? 'text-content-muted italic' : 'text-content-primary')}>
           {value}
         </span>
         {extraction && <ExtractionBadge source={extraction} compact />}
@@ -101,7 +101,7 @@ function SetbackDiagram({ setbacks }) {
       </div>
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[10px] uppercase tracking-wide text-gray-500">Buildable envelope</div>
+          <div className="text-[10px] uppercase tracking-wide text-content-secondary">Buildable envelope</div>
           <Building2 size={22} className="mx-auto mt-1 text-primary-500" />
         </div>
       </div>
@@ -128,12 +128,12 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
             <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-primary-700/70">
               Floor area ratio stack
             </div>
-            <div className="text-2xl font-bold text-gray-900 leading-tight">
+            <div className="text-2xl font-bold text-content-primary leading-tight">
               {fmtNum(effective, 2)}
               <span className="ml-2 text-xs font-medium text-primary-600">effective FSI</span>
             </div>
             {tier?.rule && (
-              <div className="text-[11px] text-gray-500 mt-0.5">
+              <div className="text-[11px] text-content-secondary mt-0.5">
                 Tier: road {'\u2265'} {tier.rule.road_width_m} m
               </div>
             )}
@@ -141,12 +141,12 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
         </div>
 
         {hasPremium && (
-          <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+          <label className="inline-flex items-center gap-2 text-xs text-content-secondary cursor-pointer select-none">
             <input
               type="checkbox"
               checked={usePremium}
               onChange={(e) => setUsePremium(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              className="h-3.5 w-3.5 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
             />
             Use premium FAR ({fmtNum(premiumAvail, 2)} available)
           </label>
@@ -156,7 +156,7 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
       {/* Stacked bar */}
       {(base != null || premiumAvail != null) && (
         <div className="mt-3">
-          <div className="h-3 rounded-full overflow-hidden bg-gray-100 flex">
+          <div className="h-3 rounded-full overflow-hidden bg-bg-secondary flex">
             {base != null && (
               <div
                 className="bg-gradient-to-r from-primary-500 to-primary-400"
@@ -181,30 +181,30 @@ function FsiStack({ buildability, usePremium, setUsePremium }) {
             {base != null && (
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-primary-500" />
-                <span className="text-gray-600">Base</span>
+                <span className="text-content-secondary">Base</span>
                 <span className="font-semibold text-primary-700">{fmtNum(base, 2)}</span>
               </span>
             )}
             {hasPremium && (
               <span className="inline-flex items-center gap-1.5">
                 <span className={clsx('h-2 w-2 rounded-full', usePremium ? 'bg-indigo-500' : 'bg-indigo-200')} />
-                <span className="text-gray-600">Premium</span>
-                <span className={clsx('font-semibold', usePremium ? 'text-indigo-700' : 'text-gray-400 line-through')}>
+                <span className="text-content-secondary">Premium</span>
+                <span className={clsx('font-semibold', usePremium ? 'text-indigo-700' : 'text-content-muted line-through')}>
                   +{fmtNum(premiumAvail, 2)}
                 </span>
-                <span className="text-[10px] text-gray-400">(paid to BDA)</span>
+                <span className="text-[10px] text-content-muted">(paid to BDA)</span>
               </span>
             )}
             {buildability.manual_fsi != null && (
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <span className="text-gray-600">Manual override</span>
+                <span className="text-content-secondary">Manual override</span>
                 <span className="font-semibold text-amber-700">{fmtNum(buildability.manual_fsi, 2)}</span>
               </span>
             )}
           </div>
           {hasPremium && !usePremium && (
-            <div className="mt-1.5 text-[11px] text-gray-500 italic">
+            <div className="mt-1.5 text-[11px] text-content-secondary italic">
               Premium FAR excluded from envelope. Toggle above to include (fee payable to BDA).
             </div>
           )}
@@ -218,16 +218,16 @@ function ParkingPanel({ parking }) {
   if (!parking) return null;
   const totalBays = (parking.cars || 0) + (parking.visitor_cars || 0);
   return (
-    <div className="mt-4 rounded-xl border border-gray-100 bg-gradient-to-br from-gray-50/80 to-white p-4">
+    <div className="mt-4 rounded-xl border border-hairline bg-gradient-to-br from-gray-50/80 to-white p-4">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
           <Car size={13} />
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500">
+          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-secondary">
             Parking programme
           </div>
-          <div className="text-sm font-semibold text-gray-800">Estimated car bays</div>
+          <div className="text-sm font-semibold text-content-primary">Estimated car bays</div>
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -236,7 +236,7 @@ function ParkingPanel({ parking }) {
         <ParkTile label="EV charging" value={fmtNum(parking.ev_bays, 0)} tone="emerald" />
         <ParkTile label="Total" value={fmtNum(totalBays, 0)} tone="indigo" />
       </div>
-      <div className="mt-2 text-[11px] text-gray-500">{parking.basis}</div>
+      <div className="mt-2 text-[11px] text-content-secondary">{parking.basis}</div>
     </div>
   );
 }
@@ -246,7 +246,7 @@ function ParkTile({ label, value, tone }) {
     primary: 'bg-primary-50 text-primary-800',
     emerald: 'bg-emerald-50 text-emerald-800',
     indigo:  'bg-indigo-50 text-indigo-800',
-    gray:    'bg-gray-50 text-gray-700',
+    gray:    'bg-bg-secondary text-content-secondary',
   };
   return (
     <div className={clsx('rounded-lg px-3 py-2', tones[tone] || tones.gray)}>
@@ -346,10 +346,10 @@ export default function ZoningTab({ deal, dealId, setTab }) {
       >
         {buildability.effective_fsi == null && buildability.land_sqft == null ? (
           <div className="py-6 text-center">
-            <p className="text-sm text-gray-600 mb-3">
+            <p className="text-sm text-content-secondary mb-3">
               Assign a master plan zone and add parcel area to see the regulated envelope.
             </p>
-            <ul className="text-xs text-gray-500 space-y-1 inline-block text-left">
+            <ul className="text-xs text-content-secondary space-y-1 inline-block text-left">
               {buildability.missing_inputs.map((m) => (
                 <li key={m}>{'\u2022'} {m}</li>
               ))}
@@ -405,14 +405,14 @@ export default function ZoningTab({ deal, dealId, setTab }) {
               <div>
                 <SetbackDiagram setbacks={buildability.setbacks} />
                 {!buildability.has_setbacks && (
-                  <p className="mt-2 text-[11px] text-gray-400 italic text-center">
+                  <p className="mt-2 text-[11px] text-content-muted italic text-center">
                     Setbacks not captured on this zone.
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Derived figures</h4>
+                <h4 className="text-xs font-semibold text-content-secondary uppercase tracking-wide">Derived figures</h4>
                 <KeyValue
                   label="Parcel area"
                   value={buildability.land_sqft != null
@@ -478,7 +478,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
               </div>
             )}
 
-            <div className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500 flex items-start gap-2">
+            <div className="mt-4 rounded-lg bg-bg-secondary px-3 py-2 text-[11px] text-content-secondary flex items-start gap-2">
               <Info size={12} className="mt-0.5 flex-shrink-0" />
               <div>
                 Deterministic rule-engine output. Floors are whole numbers, capped by the
@@ -543,7 +543,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
             <KeyValue label="Circle rate"           value={circleRate ? `₹${fmtNum(circleRate)}/sqft` : 'Not set'} muted={!circleRate} extraction={fieldMap.circle_rate_per_sqft} />
           </div>
         ) : (
-          <p className="text-sm text-gray-400 italic">
+          <p className="text-sm text-content-muted italic">
             Parcel data not yet captured. Open the Parcel / Site tab to fill in area, road width, and commercial fields.
           </p>
         )}
@@ -553,9 +553,9 @@ export default function ZoningTab({ deal, dealId, setTab }) {
       <SectionCard
         icon={Shield}
         title="Overlay & buffer checks"
-        kicker={<span className="text-[11px] text-gray-500">Click a status to cycle</span>}
+        kicker={<span className="text-[11px] text-content-secondary">Click a status to cycle</span>}
       >
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-content-secondary mb-3">
           Manual entry until the GIS layer is wired in. BBMP / BDA datasets required — see TODO_DATA.md.
         </p>
         <div className="overflow-x-auto">
@@ -566,8 +566,8 @@ export default function ZoningTab({ deal, dealId, setTab }) {
                 const cfg    = STATUS_CONFIG[status];
                 const Icon   = cfg.icon;
                 return (
-                  <tr key={overlay.key} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2.5 text-xs text-gray-700">{overlay.label}</td>
+                  <tr key={overlay.key} className="border-b border-hairline last:border-0">
+                    <td className="py-2.5 text-xs text-content-secondary">{overlay.label}</td>
                     <td className="py-2.5 text-right">
                       <button
                         onClick={() => cycleOverlay(overlay.key)}
@@ -590,11 +590,11 @@ export default function ZoningTab({ deal, dealId, setTab }) {
 
       {/* Rule sets */}
       <SectionCard icon={FileText} title="Applicable rule sets">
-        <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center">
-          <p className="text-sm text-gray-500 mb-2">
+        <div className="rounded-lg border border-dashed border-hairline-strong p-4 text-center">
+          <p className="text-sm text-content-secondary mb-2">
             No additional rule packs loaded for this deal's jurisdiction.
           </p>
-          <p className="text-xs text-gray-400 max-w-lg mx-auto">
+          <p className="text-xs text-content-muted max-w-lg mx-auto">
             Upload master plan PDFs, gazette notifications, or BBMP / BDA rule extracts in the
             Documents tab to queue them for extraction.
           </p>
@@ -612,7 +612,7 @@ export default function ZoningTab({ deal, dealId, setTab }) {
 
       {/* Manual notes */}
       <SectionCard icon={AlertTriangle} title="Analyst notes (manual)">
-        <p className="text-xs text-gray-400 mb-2">
+        <p className="text-xs text-content-muted mb-2">
           For observations, authority feedback, or pending clarifications. Not used in calculations.
         </p>
         <textarea

@@ -162,11 +162,11 @@ export default function DefaultsInspector({
           <button
             type="button"
             aria-label="Close defaults inspector"
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
-            <header className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-900 px-6 py-5 text-white">
+            <header className="relative overflow-hidden border-b border-hairline-strong bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-900 px-6 py-5 text-white">
               <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-400/30 to-sky-400/10 blur-2xl" />
               <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-teal-400/20 blur-2xl" />
               <div className="relative flex items-start justify-between">
@@ -234,7 +234,7 @@ export default function DefaultsInspector({
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-slate-50">
+            <div className="flex-1 overflow-y-auto bg-bg-secondary">
               {loading && (
                 <div className="flex h-full items-center justify-center p-12">
                   <LoadingSpinner size="lg" />
@@ -255,8 +255,8 @@ export default function DefaultsInspector({
               )}
 
               {!loading && !error && data && totalCount === 0 && (
-                <div className="m-6 rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-                  No defaults match <span className="font-mono text-slate-700">{search}</span>.
+                <div className="m-6 rounded-lg border border-hairline-strong bg-white px-4 py-8 text-center text-sm text-content-secondary">
+                  No defaults match <span className="font-mono text-content-secondary">{search}</span>.
                 </div>
               )}
 
@@ -275,13 +275,13 @@ export default function DefaultsInspector({
               )}
             </div>
 
-            <footer className="border-t border-slate-200 bg-white px-6 py-3 text-[11px] text-slate-500">
+            <footer className="border-t border-hairline-strong bg-white px-6 py-3 text-[11px] text-content-secondary">
               <div className="flex items-center justify-between gap-3">
                 <span>
                   Bengaluru-shaped baseline · India-first · Values are institutional guidelines, not prescriptions.
                 </span>
                 {data?.assetClass && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-bg-secondary px-2 py-0.5 font-mono text-[10px] text-content-secondary">
                     {data.assetClass}
                   </span>
                 )}
@@ -314,13 +314,13 @@ function CategoryChip({ active, onClick, icon: Icon, accent, label }) {
 function CategorySection({ category, items }) {
   const Icon = category.icon;
   return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <section className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
       <header className={`flex items-center gap-2 bg-gradient-to-r ${category.accent} px-4 py-2.5 text-white`}>
         <Icon size={14} />
         <h3 className="text-sm font-semibold tracking-wide">{category.label}</h3>
         <span className="ml-auto text-[10px] opacity-80">{items.length}</span>
       </header>
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-hairline">
         {items.map(([key, meta]) => (
           <DefaultRow key={key} fieldKey={key} meta={meta} />
         ))}
@@ -332,7 +332,7 @@ function CategorySection({ category, items }) {
 function DefaultRow({ fieldKey, meta }) {
   if (!meta || typeof meta !== 'object') {
     return (
-      <li className="px-4 py-2 text-xs text-slate-400">{fieldKey} — no metadata</li>
+      <li className="px-4 py-2 text-xs text-content-muted">{fieldKey} — no metadata</li>
     );
   }
   const { value, unit, range, source, lastReviewed, description } = meta;
@@ -342,44 +342,44 @@ function DefaultRow({ fieldKey, meta }) {
     : null;
 
   return (
-    <li className="px-4 py-3 hover:bg-slate-50">
+    <li className="px-4 py-3 hover:bg-bg-secondary">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <code className="text-[11px] font-semibold text-slate-900">{fieldKey}</code>
+            <code className="text-[11px] font-semibold text-content-primary">{fieldKey}</code>
             {unit && (
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">
+              <span className="rounded bg-bg-secondary px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-content-secondary">
                 {unit}
               </span>
             )}
           </div>
           {description && (
-            <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{description}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-content-secondary">{description}</p>
           )}
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-[10px] text-content-secondary">
             {rangeText && (
               <span>
-                <span className="font-semibold text-slate-600">Range:</span> {rangeText}
+                <span className="font-semibold text-content-secondary">Range:</span> {rangeText}
               </span>
             )}
             {source && (
               <span className="truncate">
-                <span className="font-semibold text-slate-600">Source:</span> {source}
+                <span className="font-semibold text-content-secondary">Source:</span> {source}
               </span>
             )}
             {lastReviewed && (
               <span>
-                <span className="font-semibold text-slate-600">Reviewed:</span> {lastReviewed}
+                <span className="font-semibold text-content-secondary">Reviewed:</span> {lastReviewed}
               </span>
             )}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="font-mono text-sm font-semibold text-slate-900 tabular-nums">
+          <div className="font-mono text-sm font-semibold text-content-primary tabular-nums">
             {fmtNum(value)}
           </div>
           {unitSuffix && (
-            <div className="text-[9px] text-slate-400">{unitSuffix.trim()}</div>
+            <div className="text-[9px] text-content-muted">{unitSuffix.trim()}</div>
           )}
         </div>
       </div>

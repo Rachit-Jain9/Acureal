@@ -177,11 +177,11 @@ export default function MethodologyExplorer({
           <button
             type="button"
             aria-label="Close methodology"
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
-            <header className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 px-6 py-5 text-white">
+            <header className="relative overflow-hidden border-b border-hairline-strong bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 px-6 py-5 text-white">
               <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-400/30 to-indigo-400/10 blur-2xl" />
               <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl" />
               <div className="relative flex items-start justify-between">
@@ -225,7 +225,7 @@ export default function MethodologyExplorer({
               </nav>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-slate-50">
+            <div className="flex-1 overflow-y-auto bg-bg-secondary">
               <div className="mx-auto max-w-2xl px-6 py-6">
                 {tab === 'overview'  && <OverviewSection />}
                 {tab === 'dcfflow'   && <DCFFlowSection assetClass={assetClass} />}
@@ -254,8 +254,8 @@ function SectionTitle({ icon: Icon, gradient, title, subtitle }) {
         <Icon size={18} />
       </div>
       <div>
-        <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-        {subtitle && <p className="text-xs text-slate-600">{subtitle}</p>}
+        <h3 className="text-lg font-bold text-content-primary">{title}</h3>
+        {subtitle && <p className="text-xs text-content-secondary">{subtitle}</p>}
       </div>
     </div>
   );
@@ -263,10 +263,10 @@ function SectionTitle({ icon: Icon, gradient, title, subtitle }) {
 
 function Formula({ label, expr, note }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <code className="mt-1 block rounded bg-slate-50 px-2 py-1.5 text-[13px] font-mono text-slate-800">{expr}</code>
-      {note && <p className="mt-1.5 text-xs text-slate-600">{note}</p>}
+    <div className="rounded-lg border border-hairline-strong bg-white p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-content-secondary">{label}</div>
+      <code className="mt-1 block rounded bg-bg-secondary px-2 py-1.5 text-[13px] font-mono text-content-primary">{expr}</code>
+      {note && <p className="mt-1.5 text-xs text-content-secondary">{note}</p>}
     </div>
   );
 }
@@ -296,8 +296,8 @@ function StepRow({ idx, title, body, tone = 'indigo' }) {
     <div className="flex gap-3">
       <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${tones[tone]} text-[11px] font-bold text-white shadow`}>{idx}</div>
       <div className="flex-1">
-        <div className="text-sm font-semibold text-slate-900">{title}</div>
-        <div className="mt-0.5 text-xs leading-relaxed text-slate-600">{body}</div>
+        <div className="text-sm font-semibold text-content-primary">{title}</div>
+        <div className="mt-0.5 text-xs leading-relaxed text-content-secondary">{body}</div>
       </div>
     </div>
   );
@@ -315,7 +315,7 @@ function OverviewSection() {
         subtitle="LLMs never touch the math. Every rupee is a formula."
       />
       <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-4">
-        <p className="text-sm leading-relaxed text-slate-700">
+        <p className="text-sm leading-relaxed text-content-secondary">
           REDIP's Financial Engine is built on the same principles you'd find in an institutional IC memo:
           <span className="font-semibold text-indigo-900"> transparency over cleverness</span>. Every KPI card,
           cash-flow row, and waterfall tranche traces back to a published formula. There are no AI-generated numbers,
@@ -417,7 +417,7 @@ function CashflowSection() {
 
       <div className="rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50 to-cyan-50 p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">S-Curve Construction Draws</div>
-        <p className="mt-1 text-sm leading-relaxed text-slate-700">
+        <p className="mt-1 text-sm leading-relaxed text-content-secondary">
           Construction doesn't draw linearly — it ramps. REDIP builds a <span className="font-semibold">Beta(2, 2) S-curve</span>
           across the construction window, with mass concentrated in the middle quarters. This is the institutional standard
           for cost-to-complete modeling.
@@ -427,7 +427,7 @@ function CashflowSection() {
             <div key={i} className="flex-1 rounded-t bg-gradient-to-t from-sky-500 to-cyan-400" style={{ height: `${h * 400}%` }} />
           ))}
         </div>
-        <div className="mt-1 flex justify-between text-[10px] text-slate-500">
+        <div className="mt-1 flex justify-between text-[10px] text-content-secondary">
           <span>Q1</span><span>Q2</span><span>Q3</span><span>Q4</span><span>Q5</span><span>Q6</span><span>Q7</span><span>Q8</span>
         </div>
       </div>
@@ -453,15 +453,15 @@ function CashflowSection() {
         note="Exit NOI is forward-looking by one period — buyer underwrites the next year's NOI, not the trailing one."
       />
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Quarterly Cash Flow Waterfall</div>
+      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Quarterly Cash Flow Waterfall</div>
         <div className="space-y-1.5 text-xs">
           <div className="flex justify-between rounded bg-emerald-50 px-2 py-1"><span>+ Revenue / NOI</span><span className="font-mono">inflows</span></div>
           <div className="flex justify-between rounded bg-rose-50 px-2 py-1"><span>− Hard & Soft Costs</span><span className="font-mono">outflows</span></div>
           <div className="flex justify-between rounded bg-amber-50 px-2 py-1"><span>− Finance Cost (accrued)</span><span className="font-mono">outflows</span></div>
           <div className="flex justify-between rounded bg-sky-50 px-2 py-1"><span>+ Debt Draw  /  − P&amp;I</span><span className="font-mono">capital stack</span></div>
           <div className="flex justify-between rounded bg-violet-50 px-2 py-1"><span>+ Exit Proceeds (terminal)</span><span className="font-mono">inflows</span></div>
-          <div className="flex justify-between rounded bg-slate-900 px-2 py-1 font-semibold text-white"><span>= Equity Cash Flow</span><span className="font-mono">to IRR/NPV</span></div>
+          <div className="flex justify-between rounded bg-bg-primary px-2 py-1 font-semibold text-white"><span>= Equity Cash Flow</span><span className="font-mono">to IRR/NPV</span></div>
         </div>
       </div>
     </div>
@@ -476,7 +476,7 @@ function CostsSection() {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-rose-800">Hard Costs</div>
-          <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Construction: GFA × ₹/sqft</li>
             <li>• Site works</li>
             <li>• Contingency: 5–8%</li>
@@ -485,7 +485,7 @@ function CostsSection() {
         </div>
         <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">Soft Costs</div>
-          <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Approvals (BBMP/BMRDA)</li>
             <li>• Architect: 1.5–3%</li>
             <li>• PMC: 1–2%</li>
@@ -494,7 +494,7 @@ function CostsSection() {
         </div>
         <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-indigo-800">Land & Acquisition</div>
-          <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Land cost (Cr)</li>
             <li>• Stamp duty: 5–6.5%</li>
             <li>• Registration: 1%</li>
@@ -503,7 +503,7 @@ function CostsSection() {
         </div>
         <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">Finance</div>
-          <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Construction debt: 12–16% pa</li>
             <li>• LRD refinance: 8.5–10% pa</li>
             <li>• Fees: 1–2% upfront</li>
@@ -512,15 +512,15 @@ function CostsSection() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Capital Stack Seniority</div>
+      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-content-secondary">Capital Stack Seniority</div>
         <div className="flex items-center gap-1.5 text-xs">
-          <div className="flex-1 rounded-l-md bg-slate-800 px-3 py-2 font-semibold text-white">Senior Debt (1st lien)</div>
+          <div className="flex-1 rounded-l-md bg-bg-primary px-3 py-2 font-semibold text-white">Senior Debt (1st lien)</div>
           <div className="flex-1 bg-slate-600 px-3 py-2 font-semibold text-white">Mezzanine</div>
           <div className="flex-1 bg-emerald-600 px-3 py-2 font-semibold text-white">Pref Equity</div>
           <div className="flex-1 rounded-r-md bg-indigo-600 px-3 py-2 font-semibold text-white">Common Equity</div>
         </div>
-        <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
+        <div className="mt-1.5 flex justify-between text-[10px] text-content-secondary">
           <span>Lowest risk • Lowest return</span>
           <span>Highest risk • Highest return</span>
         </div>
@@ -546,10 +546,10 @@ function WaterfallSection() {
             <div key={i} className="rounded-lg border border-white bg-white/70 p-2.5 backdrop-blur-sm">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white">{t.tier}</span>
-                <span className="text-sm font-semibold text-slate-900">{t.name}</span>
-                <span className="ml-auto text-[11px] font-medium text-slate-600">→ {t.who}</span>
+                <span className="text-sm font-semibold text-content-primary">{t.name}</span>
+                <span className="ml-auto text-[11px] font-medium text-content-secondary">→ {t.who}</span>
               </div>
-              <p className="mt-1 pl-8 text-xs text-slate-600">{t.detail}</p>
+              <p className="mt-1 pl-8 text-xs text-content-secondary">{t.detail}</p>
             </div>
           ))}
         </div>
@@ -586,7 +586,7 @@ function DebtSection() {
 
       <div className="rounded-xl border border-sky-100 bg-sky-50 p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-sky-900">Construction Phase (S-Curve Draws)</div>
-        <p className="mt-1 text-sm text-slate-700">
+        <p className="mt-1 text-sm text-content-secondary">
           Debt draws track construction S-curve. Interest-only during construction — accrued per-quarter on the
           outstanding balance. No principal amortization while the asset isn't yet generating NOI.
         </p>
@@ -613,8 +613,8 @@ function DebtSection() {
         note="At stabilization (typically year 2–3), the construction loan is refinanced with a lower-cost LRD. Proceeds in excess of construction debt distribute to equity — cash-on-cash lift for LPs."
       />
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Debt Cost Hierarchy (typical, India, 2026)</div>
+      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Debt Cost Hierarchy (typical, India, 2026)</div>
         <div className="space-y-1.5">
           {[
             { type: 'Construction Finance',   rate: '13–15%', tone: 'bg-rose-500' },
@@ -624,8 +624,8 @@ function DebtSection() {
           ].map((r, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className={`h-2 flex-1 rounded-full ${r.tone}`} />
-              <span className="w-40 text-xs font-medium text-slate-700">{r.type}</span>
-              <span className="w-16 text-right text-xs font-mono text-slate-900">{r.rate}</span>
+              <span className="w-40 text-xs font-medium text-content-secondary">{r.type}</span>
+              <span className="w-16 text-right text-xs font-mono text-content-primary">{r.rate}</span>
             </div>
           ))}
         </div>
@@ -654,30 +654,30 @@ function ClassDeepDive({ data, assetClass }) {
 
       <div className="rounded-xl border border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 to-purple-50 p-4">
         <div className="text-sm font-bold text-fuchsia-900">{data.headline}</div>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{data.thesis}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-content-secondary">{data.thesis}</p>
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Unit Economics Chain</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Unit Economics Chain</div>
         <div className="space-y-2">
           {data.unitEconomics.map((u, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5">
+            <div key={i} className="flex items-center gap-3 rounded-lg border border-hairline-strong bg-white p-2.5">
               <ChevronRight size={14} className="shrink-0 text-fuchsia-500" />
-              <div className="min-w-[130px] text-xs font-semibold text-slate-700">{u.label}</div>
-              <code className="flex-1 rounded bg-slate-50 px-2 py-1 text-[12px] font-mono text-slate-800">{u.formula}</code>
+              <div className="min-w-[130px] text-xs font-semibold text-content-secondary">{u.label}</div>
+              <code className="flex-1 rounded bg-bg-secondary px-2 py-1 text-[12px] font-mono text-content-primary">{u.formula}</code>
             </div>
           ))}
         </div>
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Market Benchmarks (Bengaluru, 2026)</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Market Benchmarks (Bengaluru, 2026)</div>
         <div className="grid grid-cols-2 gap-2">
           {data.benchmarks.map((b, i) => (
             <div key={i} className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">{b.k}</div>
-              <div className="mt-0.5 font-mono text-sm font-bold text-slate-900">{b.v}</div>
-              <div className="text-[10px] text-slate-500">{b.ctx}</div>
+              <div className="mt-0.5 font-mono text-sm font-bold text-content-primary">{b.v}</div>
+              <div className="text-[10px] text-content-secondary">{b.ctx}</div>
             </div>
           ))}
         </div>
@@ -828,19 +828,19 @@ function DCFFlowSection({ assetClass }) {
                 className={`flex-1 flex flex-col items-center gap-1 rounded-xl border p-2.5 transition ${
                   isActive
                     ? `bg-gradient-to-br ${s.surface} ${s.border} shadow-md scale-[1.02]`
-                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                    : 'bg-white border-hairline-strong hover:border-hairline-strong hover:shadow-sm'
                 }`}
               >
                 <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${s.gradient} text-white shadow`}>
                   <Icon size={14} />
                 </div>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? s.text : 'text-slate-500'}`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? s.text : 'text-content-secondary'}`}>
                   {s.number}
                 </div>
-                <div className={`text-xs font-bold ${isActive ? s.text : 'text-slate-800'}`}>{s.title}</div>
+                <div className={`text-xs font-bold ${isActive ? s.text : 'text-content-primary'}`}>{s.title}</div>
               </button>
               {i < DCF_STAGES.length - 1 && (
-                <ArrowRight size={14} className="mx-1 shrink-0 text-slate-400" />
+                <ArrowRight size={14} className="mx-1 shrink-0 text-content-muted" />
               )}
             </div>
           );
@@ -856,14 +856,14 @@ function DCFFlowSection({ assetClass }) {
             <div
               key={s.id}
               className={`rounded-xl border overflow-hidden transition-all ${
-                isOpen ? `${s.border} shadow-md` : 'border-slate-200'
+                isOpen ? `${s.border} shadow-md` : 'border-hairline-strong'
               }`}
             >
               <button
                 type="button"
                 onClick={() => setExpanded(isOpen ? null : s.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
-                  isOpen ? `bg-gradient-to-r ${s.surface}` : 'bg-white hover:bg-slate-50'
+                  isOpen ? `bg-gradient-to-r ${s.surface}` : 'bg-white hover:bg-bg-secondary'
                 }`}
               >
                 <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow`}>
@@ -871,38 +871,38 @@ function DCFFlowSection({ assetClass }) {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isOpen ? s.text : 'text-slate-400'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isOpen ? s.text : 'text-content-muted'}`}>
                       Stage {s.number}
                     </span>
                   </div>
-                  <div className={`text-sm font-bold ${isOpen ? s.text : 'text-slate-900'}`}>{s.title}</div>
-                  <div className="text-xs text-slate-600">{s.tagline}</div>
+                  <div className={`text-sm font-bold ${isOpen ? s.text : 'text-content-primary'}`}>{s.title}</div>
+                  <div className="text-xs text-content-secondary">{s.tagline}</div>
                 </div>
                 <ChevronDown
                   size={16}
-                  className={`shrink-0 transition-transform ${isOpen ? 'rotate-180 text-slate-700' : 'text-slate-400'}`}
+                  className={`shrink-0 transition-transform ${isOpen ? 'rotate-180 text-content-secondary' : 'text-content-muted'}`}
                 />
               </button>
 
               {isOpen && (
                 <div className="border-t border-white/50 bg-white/60 backdrop-blur-sm px-4 py-4 space-y-3">
-                  <p className="text-sm leading-relaxed text-slate-700">{s.summary}</p>
+                  <p className="text-sm leading-relaxed text-content-secondary">{s.summary}</p>
 
                   <div className="space-y-2">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Formulas</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary">Formulas</div>
                     {s.formulas.map((row, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-hairline-strong bg-white p-2">
                         <span className={`text-[11px] font-semibold min-w-[90px] ${s.text}`}>{row.k}</span>
-                        <code className="flex-1 rounded bg-slate-50 px-2 py-1 text-[12px] font-mono text-slate-800">{row.f}</code>
+                        <code className="flex-1 rounded bg-bg-secondary px-2 py-1 text-[12px] font-mono text-content-primary">{row.f}</code>
                       </div>
                     ))}
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">Driving Inputs</div>
+                  <div className="rounded-lg border border-hairline-strong bg-white p-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary mb-1.5">Driving Inputs</div>
                     <div className="flex flex-wrap gap-1.5">
                       {s.inputs.map((inp, i) => (
-                        <span key={i} className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                        <span key={i} className="inline-flex items-center rounded-full border border-hairline-strong bg-bg-secondary px-2 py-0.5 text-[11px] font-medium text-content-secondary">
                           {inp}
                         </span>
                       ))}
@@ -922,7 +922,7 @@ function DCFFlowSection({ assetClass }) {
             {ASSET_CLASS_DEEP_DIVE[assetClass]?.headline?.split('—')[0]?.trim() || 'Asset-Class Note'}
           </span>
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-slate-700">{assetNote}</p>
+        <p className="mt-1 text-xs leading-relaxed text-content-secondary">{assetNote}</p>
       </div>
     </div>
   );
@@ -1008,7 +1008,7 @@ function TerminalValueSection() {
           <Sparkles size={14} />
           <span className="text-sm font-bold">Terminal value is ≥50% of NPV for most income assets</span>
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-slate-700">
+        <p className="mt-1 text-xs leading-relaxed text-content-secondary">
           On a 5–7 year hold, the discounted terminal value typically accounts for 45–65% of total NPV.
           Getting the exit assumption right matters more than squeezing an extra 10 bps of rent escalation.
           REDIP supports four methods — pick the one that matches your market and thesis.
@@ -1028,14 +1028,14 @@ function TerminalValueSection() {
               className={`relative rounded-xl border p-3 text-left transition ${
                 isActive
                   ? `bg-gradient-to-br ${m.surface} ${m.border} shadow-md`
-                  : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                  : 'bg-white border-hairline-strong hover:border-hairline-strong hover:shadow-sm'
               }`}
             >
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${m.gradient} text-white shadow-sm`}>
                 <Icon size={14} />
               </div>
-              <div className="mt-2 text-xs font-bold text-slate-900">{m.title}</div>
-              <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{m.tagline}</div>
+              <div className="mt-2 text-xs font-bold text-content-primary">{m.title}</div>
+              <div className="text-[10px] text-content-secondary leading-tight mt-0.5">{m.tagline}</div>
             </button>
           );
         })}
@@ -1048,38 +1048,38 @@ function TerminalValueSection() {
             <ActiveIcon size={18} />
           </div>
           <div>
-            <div className="text-lg font-bold text-slate-900">{active.title}</div>
-            <div className="text-xs text-slate-600">{active.tagline}</div>
+            <div className="text-lg font-bold text-content-primary">{active.title}</div>
+            <div className="text-xs text-content-secondary">{active.tagline}</div>
           </div>
         </div>
 
         <div className="mt-4 rounded-lg bg-white border border-white shadow-sm p-3">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Formula</div>
-          <code className="block rounded bg-slate-50 px-3 py-2 text-sm font-mono text-slate-900">{active.formula}</code>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary mb-1">Formula</div>
+          <code className="block rounded bg-bg-secondary px-3 py-2 text-sm font-mono text-content-primary">{active.formula}</code>
           <div className="mt-2 flex items-start gap-2 text-xs">
-            <span className="mt-0.5 inline-block rounded bg-slate-900 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">example</span>
-            <span className="font-mono text-slate-700">{active.example}</span>
+            <span className="mt-0.5 inline-block rounded bg-bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">example</span>
+            <span className="font-mono text-content-secondary">{active.example}</span>
           </div>
         </div>
 
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
             <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 mb-1.5">Pros</div>
-            <ul className="space-y-1 text-xs text-slate-700">
+            <ul className="space-y-1 text-xs text-content-secondary">
               {active.pros.map((p, i) => <li key={i}>• {p}</li>)}
             </ul>
           </div>
           <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3">
             <div className="text-[10px] font-bold uppercase tracking-widest text-rose-800 mb-1.5">Cons</div>
-            <ul className="space-y-1 text-xs text-slate-700">
+            <ul className="space-y-1 text-xs text-content-secondary">
               {active.cons.map((c, i) => <li key={i}>• {c}</li>)}
             </ul>
           </div>
         </div>
 
-        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">When to use</div>
-          <p className="text-xs text-slate-700">{active.when}</p>
+        <div className="mt-3 rounded-lg border border-hairline-strong bg-white p-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary mb-1">When to use</div>
+          <p className="text-xs text-content-secondary">{active.when}</p>
         </div>
       </div>
 

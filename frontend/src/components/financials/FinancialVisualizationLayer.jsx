@@ -162,39 +162,39 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
       <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg border border-violet-100 p-4">
           <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">Terminal Value</div>
-          <div className="mt-1 text-2xl font-bold text-gray-900">{formatCrores(tv)}</div>
-          <div className="mt-1 text-[11px] text-gray-500">At end of hold (Y{Math.round(hold)})</div>
+          <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tv)}</div>
+          <div className="mt-1 text-[11px] text-content-secondary">At end of hold (Y{Math.round(hold)})</div>
         </div>
 
         <div className="bg-white rounded-lg border border-violet-100 p-4">
           <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">PV of Terminal Value</div>
-          <div className="mt-1 text-2xl font-bold text-gray-900">{formatCrores(tvPv)}</div>
-          <div className="mt-1 text-[11px] text-gray-500">Discounted at {discountPct.toFixed(1)}% to t=0</div>
+          <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tvPv)}</div>
+          <div className="mt-1 text-[11px] text-content-secondary">Discounted at {discountPct.toFixed(1)}% to t=0</div>
         </div>
 
         <div className="bg-white rounded-lg border border-violet-100 p-4">
           <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">% of NPV from TV</div>
-          <div className="mt-1 text-2xl font-bold text-gray-900">
+          <div className="mt-1 text-2xl font-bold text-content-primary">
             {kpis?.npv && tvPv ? `${((tvPv / (Number(kpis.npv) + tvPv)) * 100).toFixed(1)}%` : '-'}
           </div>
-          <div className="mt-1 text-[11px] text-gray-500">Dependency on exit assumption</div>
+          <div className="mt-1 text-[11px] text-content-secondary">Dependency on exit assumption</div>
         </div>
       </div>
 
       <div className="px-5 pb-3">
         <div className="rounded-lg bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 p-3">
           <div className="text-[10px] font-bold uppercase tracking-wider text-violet-800 mb-1">Formula in use</div>
-          <div className="font-mono text-[13px] text-gray-900">{formulaMap[method] || '—'}</div>
+          <div className="font-mono text-[13px] text-content-primary">{formulaMap[method] || '—'}</div>
         </div>
       </div>
 
       {comparison.length > 1 && (
         <div className="px-5 pb-5">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-700">Method Comparison</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-content-secondary">Method Comparison</div>
             {capBenchmark > 0 && (
-              <div className="text-[11px] text-gray-500">
-                Cap-rate benchmark: <span className="font-semibold text-gray-800">{formatCrores(capBenchmark)}</span>
+              <div className="text-[11px] text-content-secondary">
+                Cap-rate benchmark: <span className="font-semibold text-content-primary">{formatCrores(capBenchmark)}</span>
               </div>
             )}
           </div>
@@ -245,7 +245,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-3 flex items-center gap-2">
         <Activity className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">NOI Progression</h3>
@@ -325,7 +325,7 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
   const currentValue = noiAtExit / (currentCap / 100);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-3 flex items-center gap-2">
         <Gauge className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Terminal Value Sensitivity</h3>
@@ -411,7 +411,7 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-slate-800 to-gray-900 px-5 py-3 flex items-center gap-2">
         <Layers className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cash Flow Composition</h3>
@@ -460,7 +460,7 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
   const breakEvenIdx = data.findIndex((d) => d.cumulative >= 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cumulative Return Trajectory</h3>
@@ -531,11 +531,11 @@ export function KPIDashboard({ kpis, assetClass, revenue, costs }) {
     good:    'from-emerald-50 to-teal-50 border-emerald-200 text-emerald-900',
     bad:     'from-rose-50 to-red-50 border-rose-200 text-rose-900',
     warn:    'from-amber-50 to-orange-50 border-amber-200 text-amber-900',
-    neutral: 'from-slate-50 to-gray-50 border-slate-200 text-slate-900',
+    neutral: 'from-slate-50 to-gray-50 border-hairline-strong text-content-primary',
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 flex items-center gap-2">
         <BarChart3 className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Investor KPI Dashboard</h3>
@@ -581,7 +581,7 @@ export function CostCompositionChart({ costs }) {
   const total = items.reduce((s, x) => s + x.value, 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-3 flex items-center gap-2">
         <Layers className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cost Composition</h3>
@@ -628,7 +628,7 @@ export default function FinancialVisualizationLayer({ financials, inputs }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 bg-bg-secondary rounded-lg p-1 w-fit">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -636,7 +636,7 @@ export default function FinancialVisualizationLayer({ financials, inputs }) {
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               tab === t.id
                 ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                : 'text-content-secondary hover:text-content-primary'
             }`}
           >
             {t.label}
