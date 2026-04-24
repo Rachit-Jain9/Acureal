@@ -178,9 +178,9 @@ function RevenueMixCard({ pnl }) {
           {data.map((d, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: d.color }} />
-              <span className="flex-1 text-gray-700">{d.name}</span>
-              <span className="font-semibold text-gray-900">₹{d.value.toFixed(2)} Cr</span>
-              <span className="text-gray-400 w-10 text-right">{((d.value / total) * 100).toFixed(1)}%</span>
+              <span className="flex-1 text-content-secondary">{d.name}</span>
+              <span className="font-semibold text-content-primary">₹{d.value.toFixed(2)} Cr</span>
+              <span className="text-content-muted w-10 text-right">{((d.value / total) * 100).toFixed(1)}%</span>
             </div>
           ))}
         </div>
@@ -280,9 +280,9 @@ function USALIProfitLossTable({ pnl }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-gray-50 text-[10px] uppercase tracking-[0.08em] text-gray-500">
+          <thead className="bg-bg-secondary text-[10px] uppercase tracking-[0.08em] text-content-secondary">
             <tr>
-              <th className="text-left px-4 py-2 font-medium sticky left-0 bg-gray-50 z-10">Line item</th>
+              <th className="text-left px-4 py-2 font-medium sticky left-0 bg-bg-secondary z-10">Line item</th>
               {years.map((y) => (
                 <th key={y} className="text-right px-2.5 py-2 font-medium">Y{y}</th>
               ))}
@@ -290,19 +290,19 @@ function USALIProfitLossTable({ pnl }) {
           </thead>
           <tbody>
             {rows.map((r, idx) => {
-              if (r === null) return <tr key={`sep-${idx}`}><td colSpan={years.length + 1} className="border-b border-gray-100 h-1" /></tr>;
+              if (r === null) return <tr key={`sep-${idx}`}><td colSpan={years.length + 1} className="border-b border-hairline h-1" /></tr>;
               const highlight = r.highlight === 'emerald' ? 'bg-emerald-50/60' : r.highlight === 'indigo' ? 'bg-indigo-50/60' : '';
               return (
-                <tr key={r.key} className={clsx('border-b border-gray-50', highlight)}>
+                <tr key={r.key} className={clsx('border-b border-hairline', highlight)}>
                   <td className={clsx(
                     'px-4 py-1.5 sticky left-0 z-10',
                     highlight || 'bg-white',
-                    r.bold ? 'font-bold text-gray-900' : 'text-gray-700',
+                    r.bold ? 'font-bold text-content-primary' : 'text-content-secondary',
                   )} style={r.indent ? { paddingLeft: 24 + r.indent * 12 } : {}}>
                     {r.key}
                   </td>
                   {pnl.map((y) => (
-                    <td key={y.year} className={clsx('px-2.5 py-1.5 text-right tabular-nums', r.bold ? 'font-semibold text-gray-900' : 'text-gray-700')}>
+                    <td key={y.year} className={clsx('px-2.5 py-1.5 text-right tabular-nums', r.bold ? 'font-semibold text-content-primary' : 'text-content-secondary')}>
                       {r.fmt(y[r.field])}
                     </td>
                   ))}
@@ -333,26 +333,26 @@ function SourcesUsesCard({ sourcesUses }) {
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Uses breakdown */}
         <div className="lg:col-span-2">
-          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-gray-500 mb-2">Uses of funds</div>
+          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-content-secondary mb-2">Uses of funds</div>
           <div className="space-y-2">
             {uses.map((u, i) => (
-              <div key={u.category} className="rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
+              <div key={u.category} className="rounded-lg border border-hairline bg-bg-secondary/60 p-2.5">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
-                    <span className="text-xs font-semibold text-gray-800">{u.category}</span>
+                    <span className="text-xs font-semibold text-content-primary">{u.category}</span>
                   </div>
-                  <div className="text-xs font-bold text-gray-900">
+                  <div className="text-xs font-bold text-content-primary">
                     ₹{u.subtotalCr?.toFixed(2)} Cr
-                    <span className="ml-2 text-[10px] font-medium text-gray-400">
+                    <span className="ml-2 text-[10px] font-medium text-content-muted">
                       {usesTotalCr > 0 ? ((u.subtotalCr / usesTotalCr) * 100).toFixed(1) : '0'}%
                     </span>
                   </div>
                 </div>
                 {u.items?.map((it, j) => (
                   <div key={j} className="flex items-center justify-between text-[11px] pl-4">
-                    <span className="text-gray-600">{it.label}</span>
-                    <span className="text-gray-700 tabular-nums">₹{it.valueCr?.toFixed(2)} Cr</span>
+                    <span className="text-content-secondary">{it.label}</span>
+                    <span className="text-content-secondary tabular-nums">₹{it.valueCr?.toFixed(2)} Cr</span>
                   </div>
                 ))}
               </div>
@@ -362,19 +362,19 @@ function SourcesUsesCard({ sourcesUses }) {
 
         {/* Sources + refi */}
         <div>
-          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-gray-500 mb-2">Sources of funds</div>
+          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-content-secondary mb-2">Sources of funds</div>
           <div className="space-y-2">
             {sources.map((s, i) => (
               <div key={i} className={clsx(
                 'rounded-lg border p-3',
                 s.category === 'debt'   ? 'bg-rose-50/60 border-rose-100' : 'bg-emerald-50/60 border-emerald-100',
               )}>
-                <div className="text-[11px] text-gray-600">{s.label}</div>
+                <div className="text-[11px] text-content-secondary">{s.label}</div>
                 <div className="mt-0.5 flex items-baseline justify-between">
                   <span className={clsx('text-lg font-bold', s.category === 'debt' ? 'text-rose-900' : 'text-emerald-900')}>
                     ₹{s.valueCr?.toFixed(2)} Cr
                   </span>
-                  <span className="text-[10px] text-gray-500">
+                  <span className="text-[10px] text-content-secondary">
                     {sourcesTotalCr > 0 ? ((s.valueCr / sourcesTotalCr) * 100).toFixed(1) : '0'}%
                   </span>
                 </div>
@@ -408,8 +408,8 @@ function SourcesUsesCard({ sourcesUses }) {
 function RefiRow({ label, value }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-semibold text-gray-800 tabular-nums">{value}</span>
+      <span className="text-content-secondary">{label}</span>
+      <span className="font-semibold text-content-primary tabular-nums">{value}</span>
     </div>
   );
 }
@@ -465,13 +465,13 @@ function StackColumn({ title, subtitle, tone, rows }) {
   };
   return (
     <div className={clsx('rounded-xl border p-4', tones[tone] || tones.rose)}>
-      <div className="text-sm font-semibold text-gray-800">{title}</div>
-      <div className="text-[11px] text-gray-500 mb-2">{subtitle}</div>
+      <div className="text-sm font-semibold text-content-primary">{title}</div>
+      <div className="text-[11px] text-content-secondary mb-2">{subtitle}</div>
       <div className="space-y-1">
         {rows.map((r, i) => (
-          <div key={i} className="flex items-center justify-between text-xs border-b border-gray-100 last:border-0 py-1">
-            <span className="text-gray-500">{r.label}</span>
-            <span className="font-semibold text-gray-800 tabular-nums">{r.value}</span>
+          <div key={i} className="flex items-center justify-between text-xs border-b border-hairline last:border-0 py-1">
+            <span className="text-content-secondary">{r.label}</span>
+            <span className="font-semibold text-content-primary tabular-nums">{r.value}</span>
           </div>
         ))}
       </div>
@@ -507,7 +507,7 @@ function WaterfallCard({ waterfall }) {
           </ResponsiveContainer>
 
           <table className="w-full text-xs mt-3">
-            <thead className="bg-gray-50 text-[10px] uppercase tracking-[0.08em] text-gray-500">
+            <thead className="bg-bg-secondary text-[10px] uppercase tracking-[0.08em] text-content-secondary">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Tier</th>
                 <th className="text-right px-3 py-2 font-medium">Hurdle</th>
@@ -519,11 +519,11 @@ function WaterfallCard({ waterfall }) {
             </thead>
             <tbody>
               {tiers.map((t, i) => (
-                <tr key={i} className="border-b border-gray-50">
-                  <td className="px-3 py-1.5 text-gray-800 font-medium">{t.name}</td>
-                  <td className="px-3 py-1.5 text-right text-gray-600">{t.hurdlePct ? `${t.hurdlePct}% IRR` : '—'}</td>
-                  <td className="px-3 py-1.5 text-right text-gray-600">{t.lpSharePct}%</td>
-                  <td className="px-3 py-1.5 text-right text-gray-600">{t.gpSharePct}%</td>
+                <tr key={i} className="border-b border-hairline">
+                  <td className="px-3 py-1.5 text-content-primary font-medium">{t.name}</td>
+                  <td className="px-3 py-1.5 text-right text-content-secondary">{t.hurdlePct ? `${t.hurdlePct}% IRR` : '—'}</td>
+                  <td className="px-3 py-1.5 text-right text-content-secondary">{t.lpSharePct}%</td>
+                  <td className="px-3 py-1.5 text-right text-content-secondary">{t.gpSharePct}%</td>
                   <td className="px-3 py-1.5 text-right font-semibold text-indigo-700 tabular-nums">₹{t.lpCr?.toFixed(2)}</td>
                   <td className="px-3 py-1.5 text-right font-semibold text-rose-700 tabular-nums">₹{t.gpCr?.toFixed(2)}</td>
                 </tr>

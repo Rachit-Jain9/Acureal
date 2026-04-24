@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Cloud, Droplets, Thermometer, Wind, AlertCircle } from 'lucide-react';
+import { SectionHeader } from '../../design-system';
 
 // Open-Meteo is a free, key-free weather API. Forecast-only — no historical
 // backfill. Good for construction-planning context: temperature, precipitation,
@@ -20,15 +21,15 @@ function fetchWeather({ lat, lng }) {
   });
 }
 
-function Stat({ icon: Icon, label, value, hint, accent = 'text-gray-700' }) {
+function Stat({ icon: Icon, label, value, hint, accent = 'text-content-secondary' }) {
   return (
-    <div className="rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-3">
+    <div className="rounded-lg bg-white border border-hairline p-3">
       <div className="flex items-center gap-1.5 mb-1">
-        <Icon size={13} className="text-gray-400" />
-        <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+        <Icon size={13} className="text-content-muted" />
+        <span className="text-xs text-content-secondary">{label}</span>
       </div>
-      <p className={`text-lg font-bold ${accent} dark:text-gray-100`}>{value}</p>
-      {hint && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{hint}</p>}
+      <p className={`text-lg font-bold ${accent}`}>{value}</p>
+      {hint && <p className="text-xs text-content-muted mt-0.5">{hint}</p>}
     </div>
   );
 }
@@ -46,16 +47,16 @@ export default function SiteWeatherCard({ lat, lng, city }) {
 
   return (
     <div className="card-editorial">
-      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
-        <Cloud size={16} className="text-sky-500" />
-        Site Weather & Climate Context
-      </h3>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        7-day forecast for the site location. Helps plan construction windows, monsoon risk, and site-dewatering needs.
-      </p>
+      <SectionHeader
+        size="sm"
+        icon={Cloud}
+        title="Site Weather & Climate Context"
+        sub="7-day forecast for the site location. Helps plan construction windows, monsoon risk, and site-dewatering needs."
+        className="mb-4"
+      />
 
       {isLoading && (
-        <div className="text-sm text-gray-400 dark:text-gray-500 py-6 text-center">Loading forecast…</div>
+        <div className="text-sm text-content-muted py-6 text-center">Loading forecast…</div>
       )}
 
       {isError && (
@@ -111,36 +112,36 @@ export default function SiteWeatherCard({ lat, lng, city }) {
                 label="Location"
                 value={city || 'Site'}
                 hint={`${Number(lat).toFixed(3)}, ${Number(lng).toFixed(3)}`}
-                accent="text-gray-700"
+                accent="text-content-secondary"
               />
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
+                <thead className="bg-bg-secondary border-b border-hairline">
                   <tr>
-                    <th className="text-left font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">Date</th>
-                    <th className="text-right font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">High / Low</th>
-                    <th className="text-right font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">Rain</th>
-                    <th className="text-right font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">Wind</th>
+                    <th className="text-left font-semibold text-content-secondary px-3 py-2">Date</th>
+                    <th className="text-right font-semibold text-content-secondary px-3 py-2">High / Low</th>
+                    <th className="text-right font-semibold text-content-secondary px-3 py-2">Rain</th>
+                    <th className="text-right font-semibold text-content-secondary px-3 py-2">Wind</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody className="divide-y divide-hairline">
                   {days.map((day, i) => {
                     const rainMm = precip[i] || 0;
                     const isHeavy = rainMm > 10;
                     return (
-                      <tr key={day} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                      <tr key={day} className="hover:bg-bg-secondary">
+                        <td className="px-3 py-2 text-content-secondary">
                           {new Date(day).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
                         </td>
-                        <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300 tabular-nums">
+                        <td className="px-3 py-2 text-right text-content-secondary tabular-nums">
                           {tMax[i]?.toFixed(0)}° / {tMin[i]?.toFixed(0)}°
                         </td>
-                        <td className={`px-3 py-2 text-right tabular-nums ${isHeavy ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
+                        <td className={`px-3 py-2 text-right tabular-nums ${isHeavy ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-content-secondary'}`}>
                           {rainMm.toFixed(1)} mm
                         </td>
-                        <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300 tabular-nums">
+                        <td className="px-3 py-2 text-right text-content-secondary tabular-nums">
                           {wind[i]?.toFixed(0)} km/h
                         </td>
                       </tr>
@@ -150,7 +151,7 @@ export default function SiteWeatherCard({ lat, lng, city }) {
               </table>
             </div>
 
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+            <p className="text-xs text-content-muted mt-3">
               Source: open-meteo.com — free, open-data weather feed. Use for construction planning only, not as a legal flood / climate hazard assessment.
             </p>
           </>

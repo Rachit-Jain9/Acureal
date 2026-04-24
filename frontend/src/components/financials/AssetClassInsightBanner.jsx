@@ -134,14 +134,14 @@ export default function AssetClassInsightBanner({ assetClass }) {
           </div>
         </div>
 
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-700">
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-content-secondary">
           {insight.thesis}
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {insight.kpis.map((k, i) => (
             <div key={i} className="rounded-xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{k.label}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-content-secondary">{k.label}</div>
               <div className={`font-mono text-base font-bold ${k.color}`}>{k.value}</div>
             </div>
           ))}
@@ -151,8 +151,8 @@ export default function AssetClassInsightBanner({ assetClass }) {
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white">
             <ArrowUpRight size={12} strokeWidth={2.5} />
           </div>
-          <p className="text-xs font-medium italic text-slate-700">
-            <span className="font-semibold not-italic text-slate-900">IC insight:</span> {insight.persuasion}
+          <p className="text-xs font-medium italic text-content-secondary">
+            <span className="font-semibold not-italic text-content-primary">IC insight:</span> {insight.persuasion}
           </p>
         </div>
       </div>

@@ -4,23 +4,24 @@ import { clsx } from 'clsx';
 import { formatCrores, formatPct, formatArea } from '../../utils/format';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
 import AuditTimelineView from '../financials/AuditTimelineView';
+import { SectionHeader } from '../../design-system';
 
 function MetricCard({ label, value, sub, highlight }) {
   return (
-    <div className="bg-gray-50 rounded-lg p-4">
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
+    <div className="bg-bg-secondary rounded-lg p-4">
+      <p className="text-xs text-content-muted mb-1">{label}</p>
       <p
         className={clsx(
           'text-lg font-bold',
           highlight === 'green' && 'text-green-600',
           highlight === 'amber' && 'text-amber-600',
           highlight === 'red' && 'text-red-600',
-          !highlight && 'text-gray-900'
+          !highlight && 'text-content-primary'
         )}
       >
         {value}
       </p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-content-muted mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -64,9 +65,9 @@ export default function FinancialTab({ deal }) {
   if (!financials) {
     return (
       <div className="card-editorial text-center py-20">
-        <BarChart3 size={40} className="text-gray-300 mx-auto mb-4" />
-        <p className="text-base font-semibold text-gray-700 mb-1">No financial model yet</p>
-        <p className="text-sm text-gray-400 mb-6">
+        <BarChart3 size={40} className="text-content-muted mx-auto mb-4" />
+        <p className="text-base font-semibold text-content-secondary mb-1">No financial model yet</p>
+        <p className="text-sm text-content-muted mb-6">
           Build a full financial model to track IRR, NPV, equity multiple, costs, and revenue
           projections for this deal.
         </p>
@@ -86,23 +87,24 @@ export default function FinancialTab({ deal }) {
 
   return (
     <div className="space-y-6">
-      {/* Summary Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={18} className="text-primary-600" />
-          <h3 className="text-base font-semibold text-gray-900">Financial Model Summary</h3>
-        </div>
-        <Link
-          to={`/dashboard/financials/${dealId}`}
-          className="btn btn-primary flex items-center gap-1.5 text-sm"
-        >
-          Open Full Model <ArrowRight size={14} />
-        </Link>
-      </div>
+      <SectionHeader
+        size="sm"
+        icon={TrendingUp}
+        title="Financial Model Summary"
+        action={
+          <Link
+            to={`/dashboard/financials/${dealId}`}
+            className="btn btn-primary flex items-center gap-1.5 text-sm"
+          >
+            Open Full Model <ArrowRight size={14} />
+          </Link>
+        }
+        className="mb-0"
+      />
 
       {/* Returns */}
       <div className="card-editorial">
-        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider mb-3">
           Returns
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -128,7 +130,7 @@ export default function FinancialTab({ deal }) {
 
       {/* Revenue & Profit */}
       <div className="card-editorial">
-        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider mb-3">
           {isIncome ? 'Income & Valuation' : isHospitality ? 'Revenue & EBITDA' : 'Revenue & Profit'}
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -160,7 +162,7 @@ export default function FinancialTab({ deal }) {
       {/* Per-unit KPIs */}
       {(kpis.costPerSqft || kpis.revenuePerPlot || kpis.devCostPerSqft || kpis.devCostPerKey) && (
         <div className="card-editorial">
-          <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider mb-3">
             Unit Economics
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -187,7 +189,7 @@ export default function FinancialTab({ deal }) {
 
       {/* Costs */}
       <div className="card-editorial">
-        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider mb-3">
           Costs
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -200,7 +202,7 @@ export default function FinancialTab({ deal }) {
 
       {/* Areas */}
       <div className="card-editorial">
-        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider mb-3">
           Area Breakdown
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -239,7 +241,7 @@ export default function FinancialTab({ deal }) {
 
       {/* Last updated */}
       {f.updated_at && (
-        <p className="text-xs text-gray-400 text-right">
+        <p className="text-xs text-content-muted text-right">
           Model last updated:{' '}
           {new Date(f.updated_at).toLocaleString('en-IN', {
             day: 'numeric',

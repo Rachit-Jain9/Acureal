@@ -45,7 +45,7 @@ function StatusBadge({ status }) {
     approved: { color: 'bg-green-100 text-green-700', icon: CheckCircle2, label: 'Approved' },
     pending:  { color: 'bg-amber-100 text-amber-700', icon: Clock, label: 'Pending review' },
     rejected: { color: 'bg-red-100 text-red-700', icon: XCircle, label: 'Rejected' },
-  }[status] || { color: 'bg-gray-100 text-gray-600', icon: Clock, label: status || '—' };
+  }[status] || { color: 'bg-bg-secondary text-content-secondary', icon: Clock, label: status || '—' };
   const Icon = cfg.icon;
   return (
     <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.color)}>
@@ -153,10 +153,10 @@ function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-content-primary">
             {zone ? `Edit Zone — ${zone.zone_code}` : 'Add Zone'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-bg-secondary text-content-muted hover:text-content-secondary">
             <X size={20} />
           </button>
         </div>
@@ -164,23 +164,23 @@ function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Zone Code *</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Zone Code *</label>
               <input className="input" required value={form.zone_code} onChange={(e) => set('zone_code', e.target.value)} placeholder="R1" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Zone Name *</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Zone Name *</label>
               <input className="input" required value={form.zone_name} onChange={(e) => set('zone_name', e.target.value)} placeholder="Residential (Main)" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Plan Version</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Plan Version</label>
               <input className="input" value={form.plan_version} onChange={(e) => set('plan_version', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">City</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">City</label>
               <input className="input" value={form.city} onChange={(e) => set('city', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Review Status</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Review Status</label>
               <select className="input" value={form.review_status} onChange={(e) => set('review_status', e.target.value)}>
                 <option value="pending">Pending</option>
                 <option value="approved">Approved</option>
@@ -191,43 +191,43 @@ function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">FSI Base</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">FSI Base</label>
               <input type="number" step="0.01" className="input" value={form.permissible_fsi_base} onChange={(e) => set('permissible_fsi_base', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">FSI Max</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">FSI Max</label>
               <input type="number" step="0.01" className="input" value={form.permissible_fsi_max} onChange={(e) => set('permissible_fsi_max', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Ground Cov %</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Ground Cov %</label>
               <input type="number" step="0.01" className="input" value={form.ground_coverage_pct} onChange={(e) => set('ground_coverage_pct', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Height Max (m)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Height Max (m)</label>
               <input type="number" step="0.01" className="input" value={form.building_height_max_m} onChange={(e) => set('building_height_max_m', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Road Min (m)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Road Min (m)</label>
               <input type="number" step="0.01" className="input" value={form.road_width_min_m} onChange={(e) => set('road_width_min_m', e.target.value)} />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-gray-700">FSI Road-Width Tiers</label>
+              <label className="text-xs font-medium text-content-secondary">FSI Road-Width Tiers</label>
               <button type="button" onClick={addTier} className="text-xs text-primary-600 hover:underline inline-flex items-center gap-1">
                 <Plus size={12} /> Add tier
               </button>
             </div>
             {form.fsi_road_width_rules.length === 0 ? (
-              <p className="text-xs text-gray-400 italic">No tiers — FSI will fall back to base value.</p>
+              <p className="text-xs text-content-muted italic">No tiers — FSI will fall back to base value.</p>
             ) : (
               <div className="space-y-2">
                 {form.fsi_road_width_rules.map((r, i) => (
                   <div key={i} className="grid grid-cols-[1fr,1fr,auto] gap-2 items-center">
                     <input type="number" step="0.01" placeholder="road width ≥ (m)" className="input" value={r.road_width_m} onChange={(e) => updateTier(i, 'road_width_m', e.target.value)} />
                     <input type="number" step="0.01" placeholder="FSI" className="input" value={r.fsi} onChange={(e) => updateTier(i, 'fsi', e.target.value)} />
-                    <button type="button" onClick={() => removeTier(i)} className="text-gray-400 hover:text-red-500 p-1">
+                    <button type="button" onClick={() => removeTier(i)} className="text-content-muted hover:text-red-500 p-1">
                       <X size={14} />
                     </button>
                   </div>
@@ -238,32 +238,32 @@ function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Setback Front (m)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Setback Front (m)</label>
               <input type="number" step="0.01" className="input" value={form.setback_rules.front_m ?? ''} onChange={(e) => setSetback('front_m', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Setback Rear (m)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Setback Rear (m)</label>
               <input type="number" step="0.01" className="input" value={form.setback_rules.rear_m ?? ''} onChange={(e) => setSetback('rear_m', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Setback Side (m)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Setback Side (m)</label>
               <input type="number" step="0.01" className="input" value={form.setback_rules.side_m ?? ''} onChange={(e) => setSetback('side_m', e.target.value)} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Permissible Uses (comma-separated)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Permissible Uses (comma-separated)</label>
               <input className="input" value={form.permissible_uses} onChange={(e) => set('permissible_uses', e.target.value)} placeholder="Residential, Retail, Parks" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Prohibited Uses (comma-separated)</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Prohibited Uses (comma-separated)</label>
               <input className="input" value={form.prohibited_uses} onChange={(e) => set('prohibited_uses', e.target.value)} placeholder="Industrial, Slaughterhouse" />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Notes (verbatim clause text)</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Notes (verbatim clause text)</label>
             <textarea
               rows={4}
               className="input text-sm w-full"
@@ -275,25 +275,25 @@ function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Source Page</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Source Page</label>
               <input type="number" className="input" value={form.source_page} onChange={(e) => set('source_page', e.target.value)} />
             </div>
             <div className="sm:col-span-3">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Source Section</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Source Section</label>
               <input className="input" value={form.source_section} onChange={(e) => set('source_section', e.target.value)} placeholder="Part II - Zoning Regulations" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Effective From</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Effective From</label>
               <input type="date" className="input" value={form.effective_from} onChange={(e) => set('effective_from', e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Effective To</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Effective To</label>
               <input type="date" className="input" value={form.effective_to} onChange={(e) => set('effective_to', e.target.value)} />
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-            <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-hairline">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-lg text-sm text-content-secondary hover:bg-bg-secondary">
               Cancel
             </button>
             <button type="submit" disabled={submitting} className="px-3 py-1.5 rounded-lg text-sm bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60">
@@ -343,7 +343,7 @@ function ZoneLibrary({ canEdit }) {
     <div>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
           <input
             className="input pl-8"
             placeholder="Search zone code or name…"
@@ -380,7 +380,7 @@ function ZoneLibrary({ canEdit }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
+              <tr className="border-b border-hairline-strong text-left text-xs text-content-secondary uppercase">
                 <th className="py-2 pr-3">Code</th>
                 <th className="py-2 pr-3">Name</th>
                 <th className="py-2 pr-3">Plan</th>
@@ -392,26 +392,26 @@ function ZoneLibrary({ canEdit }) {
             </thead>
             <tbody>
               {zones.map((z) => (
-                <tr key={z.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-2 pr-3 font-semibold text-gray-800">{z.zone_code}</td>
-                  <td className="py-2 pr-3 text-gray-700">{z.zone_name}</td>
-                  <td className="py-2 pr-3 text-gray-500 text-xs">{z.plan_version || '—'}</td>
+                <tr key={z.id} className="border-b border-hairline hover:bg-bg-secondary">
+                  <td className="py-2 pr-3 font-semibold text-content-primary">{z.zone_code}</td>
+                  <td className="py-2 pr-3 text-content-secondary">{z.zone_name}</td>
+                  <td className="py-2 pr-3 text-content-secondary text-xs">{z.plan_version || '—'}</td>
                   <td className="py-2 pr-3 text-xs">
                     {z.permissible_fsi_base != null ? `${z.permissible_fsi_base}` : '—'}
                     {z.permissible_fsi_max != null ? ` – ${z.permissible_fsi_max}` : ''}
                     {Array.isArray(z.fsi_road_width_rules) && z.fsi_road_width_rules.length > 0 && (
-                      <span className="ml-1 text-gray-400">({z.fsi_road_width_rules.length} tier{z.fsi_road_width_rules.length === 1 ? '' : 's'})</span>
+                      <span className="ml-1 text-content-muted">({z.fsi_road_width_rules.length} tier{z.fsi_road_width_rules.length === 1 ? '' : 's'})</span>
                     )}
                   </td>
                   <td className="py-2 pr-3"><StatusBadge status={z.review_status} /></td>
-                  <td className="py-2 pr-3 text-xs text-gray-500">
+                  <td className="py-2 pr-3 text-xs text-content-secondary">
                     {z.effective_from ? String(z.effective_from).slice(0, 10) : '—'}
                     {z.effective_to ? ` → ${String(z.effective_to).slice(0, 10)}` : ''}
                   </td>
                   <td className="py-2">
                     {canEdit && (
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEdit(z)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Edit zone">
+                        <button onClick={() => openEdit(z)} className="p-1.5 rounded hover:bg-bg-secondary text-content-secondary" title="Edit zone">
                           <Edit3 size={14} />
                         </button>
                         {z.review_status !== 'approved' && (
@@ -468,8 +468,8 @@ function DocumentsPanel() {
       {docs.map((d) => (
         <div key={d.id} className="card-editorial flex items-center justify-between">
           <div>
-            <div className="font-semibold text-gray-800">{d.plan_name}</div>
-            <div className="text-xs text-gray-500">
+            <div className="font-semibold text-content-primary">{d.plan_name}</div>
+            <div className="text-xs text-content-secondary">
               {d.city} • {d.plan_version || '—'} • {d.extraction_status}
               {d.zones_extracted ? ` • ${d.zones_extracted} zones extracted` : ''}
             </div>
@@ -508,7 +508,7 @@ export default function MasterPlanAdminPage() {
         </div>
       )}
 
-      <div className="flex gap-1 border-b border-gray-200 mb-4">
+      <div className="flex gap-1 border-b border-hairline-strong mb-4">
         {[
           { key: 'zones', label: 'Zone Library' },
           { key: 'documents', label: 'Source Documents' },
@@ -518,7 +518,7 @@ export default function MasterPlanAdminPage() {
             onClick={() => setTab(t.key)}
             className={clsx(
               'px-3 py-2 text-sm font-medium border-b-2 -mb-px',
-              tab === t.key ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700',
+              tab === t.key ? 'border-primary-600 text-primary-700' : 'border-transparent text-content-secondary hover:text-content-secondary',
             )}
           >
             {t.label}

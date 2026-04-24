@@ -22,6 +22,7 @@ import {
 } from '../../hooks/useActivities';
 import Badge from '../common/Badge';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { SectionHeader } from '../../design-system';
 import AuditTimelineView from '../financials/AuditTimelineView';
 import {
   formatDate,
@@ -147,7 +148,7 @@ export default function ActivityTab({ dealId }) {
       {/* Add Activity Form */}
       {showForm && (
         <div className="card-editorial border-accent-200 bg-accent-50/40">
-          <h3 className="text-sm font-semibold text-content-primary mb-3">Log Activity</h3>
+          <SectionHeader size="sm" title="Log Activity" />
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -261,7 +262,7 @@ export default function ActivityTab({ dealId }) {
         </div>
       ) : (
         <div className="card-editorial p-0 overflow-hidden">
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-hairline">
             {sorted.map((activity) => {
               const actType = activity.activity_type || activity.type || 'note';
               const statusCfg =

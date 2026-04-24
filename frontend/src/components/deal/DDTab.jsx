@@ -29,6 +29,7 @@ import {
 } from '../../hooks/useApprovals';
 import Badge from '../common/Badge';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { SectionHeader } from '../../design-system';
 import { formatDate } from '../../utils/format';
 
 // DD Item configs
@@ -173,44 +174,39 @@ function DDSection({ dealId }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <ClipboardList size={16} className="text-gray-400" />
-            Due Diligence Checklist
-          </h3>
-          {total > 0 && (
-            <span className="text-xs text-gray-400">
-              {completed}/{total} completed
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {items.length === 0 && (
+      <SectionHeader
+        size="sm"
+        icon={ClipboardList}
+        title="Due Diligence Checklist"
+        sub={total > 0 ? `${completed}/${total} completed` : undefined}
+        action={
+          <div className="flex items-center gap-2">
+            {items.length === 0 && (
+              <button
+                onClick={() => seedChecklist.mutate({ dealId })}
+                disabled={seedChecklist.isPending}
+                className="btn btn-secondary text-sm flex items-center gap-1.5"
+              >
+                {seedChecklist.isPending && <Loader2 size={13} className="animate-spin" />}
+                Seed Checklist
+              </button>
+            )}
             <button
-              onClick={() => seedChecklist.mutate({ dealId })}
-              disabled={seedChecklist.isPending}
-              className="btn btn-secondary text-sm flex items-center gap-1.5"
+              onClick={() => setShowForm((v) => !v)}
+              className="btn btn-primary text-sm flex items-center gap-1.5"
             >
-              {seedChecklist.isPending && <Loader2 size={13} className="animate-spin" />}
-              Seed Checklist
+              <Plus size={14} />
+              Add Item
             </button>
-          )}
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="btn btn-primary text-sm flex items-center gap-1.5"
-          >
-            <Plus size={14} />
-            Add Item
-          </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* DD Score */}
       {score != null && (
-        <div className="bg-gray-50 rounded-xl p-4">
+        <div className="bg-bg-secondary rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">DD Completion Score</span>
+            <span className="text-sm font-medium text-content-secondary">DD Completion Score</span>
             <span
               className={clsx(
                 'text-sm font-bold',
@@ -220,7 +216,7 @@ function DDSection({ dealId }) {
               {Number(score).toFixed(0)}%
             </span>
           </div>
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-2 bg-bg-secondary rounded-full overflow-hidden">
             <div
               className={clsx(
                 'h-full rounded-full transition-all',
@@ -235,11 +231,11 @@ function DDSection({ dealId }) {
       {/* Add Item Form */}
       {showForm && (
         <div className="card-editorial border-accent-200 bg-accent-50/40">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">New DD Item</h4>
+          <h4 className="text-sm font-semibold text-content-primary mb-3">New DD Item</h4>
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
@@ -251,7 +247,7 @@ function DDSection({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Severity</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
                 <select
                   value={form.severity}
                   onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
@@ -264,7 +260,7 @@ function DDSection({ dealId }) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Item Name</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Item Name</label>
               <input
                 type="text"
                 value={form.item_name}
@@ -275,7 +271,7 @@ function DDSection({ dealId }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -307,7 +303,7 @@ function DDSection({ dealId }) {
 
       {/* Grouped Items */}
       {items.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">
+        <div className="text-center py-10 text-content-muted text-sm">
           No DD items yet. Seed the standard checklist or add items manually.
         </div>
       ) : (
@@ -320,16 +316,16 @@ function DDSection({ dealId }) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(catKey)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-bg-secondary hover:bg-bg-secondary transition-colors text-left"
                 >
-                  <span className="text-sm font-semibold text-gray-800">{catLabel}</span>
+                  <span className="text-sm font-semibold text-content-primary">{catLabel}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">{catItems.length} items</span>
-                    {isOpen ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                    <span className="text-xs text-content-muted">{catItems.length} items</span>
+                    {isOpen ? <ChevronDown size={14} className="text-content-muted" /> : <ChevronRight size={14} className="text-content-muted" />}
                   </div>
                 </button>
                 {isOpen && (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-hairline">
                     {catItems.map((item) => {
                       const severityCfg = SEVERITY_CONFIG[item.severity] || SEVERITY_CONFIG.secondary;
                       const statusCfg = DD_STATUS_CONFIG[item.status] || DD_STATUS_CONFIG.pending;
@@ -338,7 +334,7 @@ function DDSection({ dealId }) {
                           <div className="flex items-start gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <span className="text-sm font-medium text-gray-900">{item.item_name}</span>
+                                <span className="text-sm font-medium text-content-primary">{item.item_name}</span>
                                 <Badge tone={severityCfg.tone}>{severityCfg.label}</Badge>
                               </div>
                               {item.description && (
@@ -355,13 +351,13 @@ function DDSection({ dealId }) {
                                   ))}
                                 </select>
                                 {item.notes && (
-                                  <span className="text-xs text-gray-400 italic">{item.notes}</span>
+                                  <span className="text-xs text-content-muted italic">{item.notes}</span>
                                 )}
                               </div>
                             </div>
                             <button
                               onClick={() => handleDelete(item.id)}
-                              className="p-1.5 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                              className="p-1.5 text-content-muted hover:text-red-500 transition-colors flex-shrink-0"
                               title="Remove item"
                             >
                               <Trash2 size={14} />
@@ -453,40 +449,41 @@ function ApprovalsSection({ dealId }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-          <Stamp size={16} className="text-gray-400" />
-          Approvals Tracker
-        </h3>
-        <div className="flex items-center gap-2">
-          {approvals.length === 0 && (
+      <SectionHeader
+        size="sm"
+        icon={Stamp}
+        title="Approvals Tracker"
+        action={
+          <div className="flex items-center gap-2">
+            {approvals.length === 0 && (
+              <button
+                onClick={() => seedApprovals.mutate({ dealId })}
+                disabled={seedApprovals.isPending}
+                className="btn btn-secondary text-sm flex items-center gap-1.5"
+              >
+                {seedApprovals.isPending && <Loader2 size={13} className="animate-spin" />}
+                Seed Approval Checklist
+              </button>
+            )}
             <button
-              onClick={() => seedApprovals.mutate({ dealId })}
-              disabled={seedApprovals.isPending}
-              className="btn btn-secondary text-sm flex items-center gap-1.5"
+              onClick={() => setShowForm((v) => !v)}
+              className="btn btn-primary text-sm flex items-center gap-1.5"
             >
-              {seedApprovals.isPending && <Loader2 size={13} className="animate-spin" />}
-              Seed Approval Checklist
+              <Plus size={14} />
+              Add Item
             </button>
-          )}
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="btn btn-primary text-sm flex items-center gap-1.5"
-          >
-            <Plus size={14} />
-            Add Item
-          </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Add Form */}
       {showForm && (
         <div className="card-editorial border-accent-200 bg-accent-50/40">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">New Approval Item</h4>
+          <h4 className="text-sm font-semibold text-content-primary mb-3">New Approval Item</h4>
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Name</label>
                 <input
                   type="text"
                   value={form.name}
@@ -497,7 +494,7 @@ function ApprovalsSection({ dealId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Type</label>
                 <select
                   value={form.approval_type}
                   onChange={(e) => setForm((f) => ({ ...f, approval_type: e.target.value }))}
@@ -509,7 +506,7 @@ function ApprovalsSection({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
                 <select
                   value={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
@@ -521,7 +518,7 @@ function ApprovalsSection({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Reference Number</label>
                 <input
                   type="text"
                   value={form.referenceNumber}
@@ -531,7 +528,7 @@ function ApprovalsSection({ dealId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Issued Date</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Issued Date</label>
                 <input
                   type="date"
                   value={form.issuedDate}
@@ -540,7 +537,7 @@ function ApprovalsSection({ dealId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Expiry Date</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Expiry Date</label>
                 <input
                   type="date"
                   value={form.expiryDate}
@@ -550,7 +547,7 @@ function ApprovalsSection({ dealId }) {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_required}
@@ -559,7 +556,7 @@ function ApprovalsSection({ dealId }) {
                 />
                 Required
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_available}
@@ -568,7 +565,7 @@ function ApprovalsSection({ dealId }) {
                 />
                 Available
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_uploaded}
@@ -577,7 +574,7 @@ function ApprovalsSection({ dealId }) {
                 />
                 Uploaded
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_validated}
@@ -588,7 +585,7 @@ function ApprovalsSection({ dealId }) {
               </label>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Notes</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -619,44 +616,44 @@ function ApprovalsSection({ dealId }) {
 
       {/* Approvals List */}
       {approvals.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">
+        <div className="text-center py-10 text-content-muted text-sm">
           No approval items yet. Seed the standard checklist or add items manually.
         </div>
       ) : (
         <div className="card-editorial p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-bg-secondary border-b border-hairline">
                 <tr>
-                  <th className="text-left text-xs font-semibold text-gray-500 px-4 py-2.5">Name</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Type</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Status</th>
-                  <th className="text-center text-xs font-semibold text-gray-500 px-3 py-2.5">Req.</th>
-                  <th className="text-center text-xs font-semibold text-gray-500 px-3 py-2.5">Avail.</th>
-                  <th className="text-center text-xs font-semibold text-gray-500 px-3 py-2.5">Uploaded</th>
-                  <th className="text-center text-xs font-semibold text-gray-500 px-3 py-2.5">Validated</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Issued</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5">Expiry</th>
+                  <th className="text-left text-xs font-semibold text-content-secondary px-4 py-2.5">Name</th>
+                  <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Type</th>
+                  <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Status</th>
+                  <th className="text-center text-xs font-semibold text-content-secondary px-3 py-2.5">Req.</th>
+                  <th className="text-center text-xs font-semibold text-content-secondary px-3 py-2.5">Avail.</th>
+                  <th className="text-center text-xs font-semibold text-content-secondary px-3 py-2.5">Uploaded</th>
+                  <th className="text-center text-xs font-semibold text-content-secondary px-3 py-2.5">Validated</th>
+                  <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Issued</th>
+                  <th className="text-left text-xs font-semibold text-content-secondary px-3 py-2.5">Expiry</th>
                   <th className="px-3 py-2.5" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-hairline">
                 {approvals.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                  <tr key={item.id} className="hover:bg-bg-secondary">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="font-medium text-content-primary">{item.name}</p>
                       {item.reference_number && (
-                        <p className="text-xs text-gray-400">{item.reference_number}</p>
+                        <p className="text-xs text-content-muted">{item.reference_number}</p>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-gray-600 capitalize text-xs">
+                    <td className="px-3 py-3 text-content-secondary capitalize text-xs">
                       {(item.approval_type || item.approvalType || '').replace(/_/g, ' ')}
                     </td>
                     <td className="px-3 py-3">
                       <select
                         value={item.status}
                         onChange={(e) => handleFieldUpdate(item, 'status', e.target.value)}
-                        className="text-xs bg-transparent border-0 focus:ring-0 cursor-pointer text-gray-700 p-0"
+                        className="text-xs bg-transparent border-0 focus:ring-0 cursor-pointer text-content-secondary p-0"
                       >
                         {APPROVAL_STATUS_OPTIONS.map((s) => (
                           <option key={s.value} value={s.value}>{s.label}</option>
@@ -667,7 +664,7 @@ function ApprovalsSection({ dealId }) {
                       {item.is_required ? (
                         <CheckCircle2 size={14} className="text-green-500 mx-auto" />
                       ) : (
-                        <span className="text-gray-300">–</span>
+                        <span className="text-content-muted">–</span>
                       )}
                     </td>
                     <td className="px-3 py-3 text-center">
@@ -694,16 +691,16 @@ function ApprovalsSection({ dealId }) {
                         className="rounded text-primary-600 cursor-pointer"
                       />
                     </td>
-                    <td className="px-3 py-3 text-xs text-gray-500">
+                    <td className="px-3 py-3 text-xs text-content-secondary">
                       {formatDate(item.issued_date)}
                     </td>
-                    <td className="px-3 py-3 text-xs text-gray-500">
+                    <td className="px-3 py-3 text-xs text-content-secondary">
                       {formatDate(item.expiry_date)}
                     </td>
                     <td className="px-3 py-3">
                       <button
                         onClick={() => handleDelete(item.id)}
-                        className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                        className="p-1 text-content-muted hover:text-red-500 transition-colors"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -725,7 +722,7 @@ export default function DDTab({ dealId, assetClass, dealStructure }) {
   return (
     <div className="space-y-10">
       <DDSection dealId={dealId} />
-      <div className="border-t border-gray-200 pt-8">
+      <div className="border-t border-hairline-strong pt-8">
         <ApprovalsSection dealId={dealId} />
       </div>
     </div>

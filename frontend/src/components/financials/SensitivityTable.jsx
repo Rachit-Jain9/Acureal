@@ -4,7 +4,7 @@ import { INCOME_CLASSES, HOSPITALITY_CLASSES, getModelAssetClass } from './field
 import { formatINR } from '../../utils/format';
 
 function getIRRColor(irr) {
-  if (irr == null) return 'bg-gray-50 text-gray-400';
+  if (irr == null) return 'bg-bg-secondary text-content-muted';
   if (irr >= 25)  return 'bg-emerald-100 text-emerald-800';
   if (irr >= 18)  return 'bg-green-50 text-green-700';
   if (irr >= 12)  return 'bg-yellow-50 text-yellow-700';

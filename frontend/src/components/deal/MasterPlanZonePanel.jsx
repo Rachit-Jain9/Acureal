@@ -8,6 +8,7 @@ import useAuthStore from '../../store/authStore';
 import { useZones, useZone } from '../../hooks/useMasterPlan';
 import { useUpdateProperty } from '../../hooks/useProperties';
 import { calculateEffectiveFSI, matchedTier, fmtNum } from '../../utils/buildability';
+import { SectionHeader } from '../../design-system';
 
 const EDITOR_ROLES = ['admin', 'owner', 'editor', 'analyst'];
 
@@ -60,11 +61,8 @@ export default function MasterPlanZonePanel({ property }) {
   if (!property?.id) {
     return (
       <div className="card-editorial">
-        <div className="flex items-center gap-2 mb-2">
-          <Shield size={16} className="text-primary-600" />
-          <h3 className="text-sm font-semibold text-gray-800">Master Plan Zone</h3>
-        </div>
-        <p className="text-xs text-gray-400 italic">
+        <SectionHeader size="sm" icon={Shield} title="Master Plan Zone" className="mb-2" />
+        <p className="text-xs text-content-muted italic">
           Link a property to this deal to assign a master plan zone.
         </p>
       </div>
@@ -78,7 +76,7 @@ export default function MasterPlanZonePanel({ property }) {
         'relative px-5 py-4 flex items-start justify-between gap-3',
         zone
           ? 'bg-gradient-to-r from-primary-600 via-primary-500 to-indigo-500 text-white'
-          : 'bg-gradient-to-r from-gray-50 to-white border-b border-gray-100',
+          : 'bg-gradient-to-r from-gray-50 to-white border-b border-hairline',
       )}>
         <div className="flex items-start gap-3">
           <div className={clsx(
@@ -90,7 +88,7 @@ export default function MasterPlanZonePanel({ property }) {
           <div>
             <div className={clsx(
               'text-[10px] font-semibold uppercase tracking-[0.14em]',
-              zone ? 'text-white/80' : 'text-gray-500',
+              zone ? 'text-white/80' : 'text-content-secondary',
             )}>
               Master Plan Zone
             </div>
@@ -107,8 +105,8 @@ export default function MasterPlanZonePanel({ property }) {
               </>
             ) : (
               <>
-                <div className="text-base font-semibold mt-0.5 text-gray-800">Not assigned</div>
-                <div className="text-[11px] mt-0.5 text-gray-500">
+                <div className="text-base font-semibold mt-0.5 text-content-primary">Not assigned</div>
+                <div className="text-[11px] mt-0.5 text-content-secondary">
                   Link a regulated zone to drive FSI, setbacks, and buildability downstream.
                 </div>
               </>
@@ -145,9 +143,9 @@ export default function MasterPlanZonePanel({ property }) {
 
       {/* Picker */}
       {showPicker && canEdit && (
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+        <div className="px-5 py-3 border-b border-hairline bg-bg-secondary">
           <div className="relative mb-2">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted" />
             <input
               autoFocus
               value={search}
@@ -157,9 +155,9 @@ export default function MasterPlanZonePanel({ property }) {
             />
           </div>
           {searching ? (
-            <p className="text-xs text-gray-400">Searching…</p>
+            <p className="text-xs text-content-muted">Searching…</p>
           ) : searchResults.length === 0 ? (
-            <div className="text-xs text-gray-400 italic">
+            <div className="text-xs text-content-muted italic">
               No approved zones yet.{' '}
               <Link to="/dashboard/settings/master-plan" className="text-primary-600 hover:underline">
                 Open the zone library
@@ -167,7 +165,7 @@ export default function MasterPlanZonePanel({ property }) {
               .
             </div>
           ) : (
-            <ul className="max-h-56 overflow-y-auto divide-y divide-gray-100 rounded-lg bg-white border border-gray-100">
+            <ul className="max-h-56 overflow-y-auto divide-y divide-hairline rounded-lg bg-white border border-hairline">
               {searchResults.map((z) => (
                 <li key={z.id}>
                   <button
@@ -175,10 +173,10 @@ export default function MasterPlanZonePanel({ property }) {
                     className="w-full text-left px-3 py-2 hover:bg-primary-50/40 flex items-start justify-between gap-2"
                   >
                     <div>
-                      <div className="text-sm font-medium text-gray-800">
-                        {z.zone_code} <span className="text-gray-400">—</span> {z.zone_name}
+                      <div className="text-sm font-medium text-content-primary">
+                        {z.zone_code} <span className="text-content-muted">—</span> {z.zone_name}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-content-secondary">
                         {z.plan_version || '—'}
                         {z.permissible_fsi_base != null ? ` · FSI base ${z.permissible_fsi_base}` : ''}
                       </div>
@@ -195,13 +193,13 @@ export default function MasterPlanZonePanel({ property }) {
       {/* Body */}
       <div className="p-5">
         {!property.zone_id ? (
-          <p className="text-sm text-gray-500 italic">
+          <p className="text-sm text-content-secondary italic">
             {canEdit
               ? 'Use “Assign” above to search and link a zone.'
               : 'Ask an analyst to assign a zone to pull regulatory data.'}
           </p>
         ) : zoneLoading ? (
-          <p className="text-xs text-gray-400">Loading zone…</p>
+          <p className="text-xs text-content-muted">Loading zone…</p>
         ) : !zone ? (
           <p className="text-xs text-red-500">Assigned zone not found — it may have been removed.</p>
         ) : (
@@ -216,8 +214,8 @@ export default function MasterPlanZonePanel({ property }) {
 
             {/* Tiers */}
             {Array.isArray(zone.fsi_road_width_rules) && zone.fsi_road_width_rules.length > 0 && (
-              <div className="rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-100 p-3">
-                <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-[0.1em] mb-2">
+              <div className="rounded-xl bg-gradient-to-br from-gray-50 to-white border border-hairline p-3">
+                <div className="text-[11px] font-semibold text-content-secondary uppercase tracking-[0.1em] mb-2">
                   Road-width FSI tiers
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -232,7 +230,7 @@ export default function MasterPlanZonePanel({ property }) {
                             'text-xs px-2.5 py-1 rounded-full border transition-all',
                             isActive
                               ? 'bg-primary-600 text-white border-primary-600 shadow-sm scale-105 font-semibold'
-                              : 'bg-white text-gray-600 border-gray-200',
+                              : 'bg-white text-content-secondary border-hairline-strong',
                           )}
                         >
                           <span className="opacity-70">≥</span> {r.road_width_m}m → <span className="font-semibold">FSI {r.fsi}</span>
@@ -240,9 +238,9 @@ export default function MasterPlanZonePanel({ property }) {
                       );
                     })}
                 </div>
-                <div className="mt-2 text-[11px] text-gray-500 flex items-center gap-1">
+                <div className="mt-2 text-[11px] text-content-secondary flex items-center gap-1">
                   <Info size={10} />
-                  Road width on file: {roadWidthM != null ? <span className="font-medium text-gray-700 ml-1">{roadWidthM} m</span> : 'not set'}
+                  Road width on file: {roadWidthM != null ? <span className="font-medium text-content-secondary ml-1">{roadWidthM} m</span> : 'not set'}
                   {activeTier ? <span className="text-primary-600 ml-2">• matched tier applied</span> : null}
                 </div>
               </div>
@@ -252,16 +250,16 @@ export default function MasterPlanZonePanel({ property }) {
             {(zone.setback_rules?.front_m != null
               || zone.setback_rules?.rear_m != null
               || zone.setback_rules?.side_m != null) && (
-              <div className="text-xs text-gray-600 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-medium text-gray-700">Setbacks</span>
+              <div className="text-xs text-content-secondary flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-medium text-content-secondary">Setbacks</span>
                 <span>front {fmtNum(zone.setback_rules?.front_m, 1)} m</span>
-                <span className="text-gray-300">•</span>
+                <span className="text-content-muted">•</span>
                 <span>rear {fmtNum(zone.setback_rules?.rear_m, 1)} m</span>
-                <span className="text-gray-300">•</span>
+                <span className="text-content-muted">•</span>
                 <span>side {fmtNum(zone.setback_rules?.side_m, 1)} m</span>
                 {zone.building_height_max_m != null && (
                   <>
-                    <span className="text-gray-300">•</span>
+                    <span className="text-content-muted">•</span>
                     <span>height cap {zone.building_height_max_m} m</span>
                   </>
                 )}
@@ -270,13 +268,13 @@ export default function MasterPlanZonePanel({ property }) {
 
             {/* Uses */}
             {(Array.isArray(zone.permissible_uses) && zone.permissible_uses.length > 0) && (
-              <div className="text-xs text-gray-600">
-                <span className="font-medium text-gray-700">Permissible:</span> {zone.permissible_uses.join(', ')}
+              <div className="text-xs text-content-secondary">
+                <span className="font-medium text-content-secondary">Permissible:</span> {zone.permissible_uses.join(', ')}
               </div>
             )}
             {(Array.isArray(zone.prohibited_uses) && zone.prohibited_uses.length > 0) && (
-              <div className="text-xs text-gray-600">
-                <span className="font-medium text-gray-700">Prohibited:</span> {zone.prohibited_uses.join(', ')}
+              <div className="text-xs text-content-secondary">
+                <span className="font-medium text-content-secondary">Prohibited:</span> {zone.prohibited_uses.join(', ')}
               </div>
             )}
 
@@ -306,7 +304,7 @@ export default function MasterPlanZonePanel({ property }) {
 
             {/* Site notes */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Site-specific zone notes</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Site-specific zone notes</label>
               <textarea
                 rows={2}
                 value={zoneNotesDraft}
@@ -325,7 +323,7 @@ export default function MasterPlanZonePanel({ property }) {
             </div>
 
             {/* Footer disclaimer */}
-            <div className="flex items-start gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-3">
+            <div className="flex items-start gap-2 text-[11px] text-content-secondary border-t border-hairline pt-3">
               <Info size={11} className="mt-0.5 flex-shrink-0" />
               <div>
                 Regulatory data sourced from {zone.plan_version || 'Bengaluru Master Plan'}.
@@ -353,14 +351,14 @@ export default function MasterPlanZonePanel({ property }) {
 function HeadlineStat({ label, value, accent, icon: Icon }) {
   const cls = accent === 'primary'
     ? 'bg-gradient-to-br from-primary-50 to-indigo-50 border border-primary-100'
-    : 'bg-gray-50 border border-gray-100';
-  const textCls = accent === 'primary' ? 'text-primary-700' : 'text-gray-800';
+    : 'bg-bg-secondary border border-hairline';
+  const textCls = accent === 'primary' ? 'text-primary-700' : 'text-content-primary';
   return (
     <div className={clsx('rounded-xl p-3 relative overflow-hidden', cls)}>
       {Icon && accent === 'primary' && (
         <Icon size={32} className="absolute -right-1 -bottom-1 text-primary-200/60" />
       )}
-      <div className="text-[10px] uppercase tracking-[0.1em] font-medium text-gray-500">{label}</div>
+      <div className="text-[10px] uppercase tracking-[0.1em] font-medium text-content-secondary">{label}</div>
       <div className={clsx('mt-1 text-lg font-bold leading-none', textCls)}>{value}</div>
     </div>
   );

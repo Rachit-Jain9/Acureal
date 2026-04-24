@@ -53,8 +53,8 @@ const GEOCODE_STATUS_META = {
   manual: { label: 'Manual', cls: 'bg-blue-100 text-blue-700' },
   approximate: { label: 'Approximate (city)', cls: 'bg-amber-100 text-amber-700' },
   failed: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
-  pending: { label: 'Pending', cls: 'bg-gray-100 text-gray-600' },
-  insufficient_data: { label: 'Insufficient data', cls: 'bg-gray-100 text-gray-600' },
+  pending: { label: 'Pending', cls: 'bg-bg-secondary text-content-secondary' },
+  insufficient_data: { label: 'Insufficient data', cls: 'bg-bg-secondary text-content-secondary' },
 };
 
 const buildEditForm = (property) => ({
@@ -103,8 +103,8 @@ const buildEditPayload = (form) => ({
 
 const DetailField = ({ label, value }) => (
   <div>
-    <span className="text-gray-400">{label}</span>
-    <p className="mt-1 font-medium text-gray-900">{value || '-'}</p>
+    <span className="text-content-muted">{label}</span>
+    <p className="mt-1 font-medium text-content-primary">{value || '-'}</p>
   </div>
 );
 
@@ -189,14 +189,14 @@ export default function PropertyDetailPage() {
 
   const geocodeMeta = GEOCODE_STATUS_META[property.geocode_status || 'pending'] || {
     label: property.geocode_status || 'Pending',
-    cls: 'bg-gray-100 text-gray-600',
+    cls: 'bg-bg-secondary text-content-secondary',
   };
 
   return (
     <div className="space-y-6">
       <button
         onClick={() => navigate('/dashboard/deals')}
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
+        className="flex items-center gap-1 text-sm text-content-secondary hover:text-content-secondary dark:hover:text-content-muted"
       >
         <ArrowLeft size={16} /> Back to Properties
       </button>
@@ -231,7 +231,7 @@ export default function PropertyDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="card-editorial lg:col-span-2">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Property Overview</h2>
+          <h2 className="mb-4 text-lg font-semibold text-content-primary">Property Overview</h2>
           <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             <DetailField
               label="Property Type"
@@ -255,34 +255,34 @@ export default function PropertyDetailPage() {
 
           {property.notes && (
             <div className="mt-6 border-t pt-4">
-              <span className="text-sm text-gray-400">Notes</span>
-              <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{property.notes}</p>
+              <span className="text-sm text-content-muted">Notes</span>
+              <p className="mt-1 whitespace-pre-line text-sm text-content-secondary">{property.notes}</p>
             </div>
           )}
         </section>
 
         <section className="card-editorial space-y-5">
           <div>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">At a Glance</h2>
+            <h2 className="mb-4 text-lg font-semibold text-content-primary">At a Glance</h2>
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <div className="shrink-0 rounded-lg bg-primary-50 p-2 text-primary-600">
                   <MapPin size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-500">Geocode status</p>
+                  <p className="text-xs text-content-secondary">Geocode status</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${geocodeMeta.cls}`}>
                       {geocodeMeta.label}
                     </span>
                     {hasCoordinates && (
-                      <span className="truncate font-mono text-xs text-gray-400">
+                      <span className="truncate font-mono text-xs text-content-muted">
                         {Number(property.lat).toFixed(5)}, {Number(property.lng).toFixed(5)}
                       </span>
                     )}
                   </div>
                   {property.geocode_message && (
-                    <p className="mt-1 text-xs text-gray-400">{property.geocode_message}</p>
+                    <p className="mt-1 text-xs text-content-muted">{property.geocode_message}</p>
                   )}
                   <button
                     type="button"
@@ -301,8 +301,8 @@ export default function PropertyDetailPage() {
                   <Ruler size={18} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Land Area</p>
-                  <p className="text-sm font-medium text-gray-900">{formatArea(property.land_area_sqft)}</p>
+                  <p className="text-xs text-content-secondary">Land Area</p>
+                  <p className="text-sm font-medium text-content-primary">{formatArea(property.land_area_sqft)}</p>
                 </div>
               </div>
 
@@ -311,8 +311,8 @@ export default function PropertyDetailPage() {
                   <IndianRupee size={18} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Circle Rate</p>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-xs text-content-secondary">Circle Rate</p>
+                  <p className="text-sm font-medium text-content-primary">
                     {property.circle_rate_per_sqft ? `${formatINR(property.circle_rate_per_sqft)}/sqft` : '-'}
                   </p>
                 </div>
@@ -323,25 +323,25 @@ export default function PropertyDetailPage() {
                   <Building2 size={18} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Deals Linked</p>
-                  <p className="text-sm font-medium text-gray-900">{property.deal_count || 0}</p>
+                  <p className="text-xs text-content-secondary">Deals Linked</p>
+                  <p className="text-sm font-medium text-content-primary">{property.deal_count || 0}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-slate-900/80">
+          <div className="rounded-2xl border border-hairline-strong bg-bg-secondary p-4/80">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Location Confidence</p>
-                <h3 className="mt-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+                <h3 className="mt-2 text-base font-semibold text-content-primary">
                   {property.geocode_status === 'manual'
                     ? 'Manual coordinates override geocoding'
                     : property.geocode_status === 'approximate'
                       ? 'This pin is approximate'
                       : 'Map-ready location'}
                 </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+                <p className="mt-1 text-sm text-content-secondary">
                   {property.geocode_status === 'approximate'
                     ? 'This property is excluded from precision map overlays until you tighten the address or save exact coordinates.'
                     : 'Verified and manual coordinates are trusted for nearby comps, land coverage, and deal heat layers.'}
@@ -353,9 +353,9 @@ export default function PropertyDetailPage() {
             </div>
 
             {hasCoordinates ? (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-slate-900">
-                  <div className="text-gray-600 dark:text-slate-300">
+              <div className="mt-4 overflow-hidden rounded-2xl border border-hairline-strong">
+                <div className="flex items-center justify-between border-b border-hairline-strong bg-white px-4 py-3 text-sm">
+                  <div className="text-content-secondary">
                     Lat {Number(property.lat).toFixed(6)} | Lng {Number(property.lng).toFixed(6)}
                   </div>
                   {googleMapsUrl && (
@@ -370,7 +370,7 @@ export default function PropertyDetailPage() {
                     </a>
                   )}
                 </div>
-                <div className="h-72 bg-gray-100 dark:bg-slate-950">
+                <div className="h-72 bg-bg-secondary">
                   <iframe
                     title="property-location-preview"
                     width="100%"
@@ -383,7 +383,7 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="mt-4 rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-slate-400">
+              <div className="mt-4 rounded-2xl border border-dashed border-hairline-strong px-4 py-8 text-center text-sm text-content-secondary">
                 No coordinates yet. Save a more precise address or enter manual lat/lng below to make this property map-ready.
               </div>
             )}
@@ -396,7 +396,7 @@ export default function PropertyDetailPage() {
       <BuildabilitySummary property={property} />
 
       <section className="card-editorial">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Related Deals</h2>
+        <h2 className="mb-4 text-lg font-semibold text-content-primary">Related Deals</h2>
 
         {relatedDeals.length === 0 ? (
           <EmptyState
@@ -412,12 +412,12 @@ export default function PropertyDetailPage() {
                 <Link
                   key={deal.id}
                   to={`/dashboard/deals/${deal.id}`}
-                  className="rounded-xl border border-gray-200 p-4 transition hover:shadow-sm"
+                  className="rounded-xl border border-hairline-strong p-4 transition hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-gray-900">{deal.name}</p>
-                      <p className="mt-1 text-sm text-gray-500">{deal.deal_type}</p>
+                      <p className="font-semibold text-content-primary">{deal.name}</p>
+                      <p className="mt-1 text-sm text-content-secondary">{deal.deal_type}</p>
                     </div>
                     <Badge tone={stageConfig.tone}>{stageConfig.label}</Badge>
                   </div>
@@ -430,18 +430,18 @@ export default function PropertyDetailPage() {
 
       {showEditModal && editForm && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 py-8">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-950">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-hairline-strong px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Edit Property</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                <h3 className="text-lg font-semibold text-content-primary">Edit Property</h3>
+                <p className="mt-1 text-sm text-content-secondary">
                   Update address intelligence, commercial fields, and manual coordinates from one place.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                className="rounded-lg p-2 text-content-muted transition hover:bg-bg-secondary hover:text-content-secondary dark:hover:bg-bg-primary dark:hover:text-content-muted"
               >
                 <X size={18} />
               </button>
@@ -451,7 +451,7 @@ export default function PropertyDetailPage() {
               <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Property Name</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Property Name</label>
                     <input
                       type="text"
                       value={editForm.name}
@@ -462,7 +462,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Address</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Address</label>
                     <input
                       type="text"
                       value={editForm.address}
@@ -473,7 +473,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">City</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">City</label>
                     <input
                       type="text"
                       value={editForm.city}
@@ -484,7 +484,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">State</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">State</label>
                     <input
                       type="text"
                       value={editForm.state}
@@ -495,7 +495,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Pincode</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Pincode</label>
                     <input
                       type="text"
                       value={editForm.pincode}
@@ -506,7 +506,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Property Type</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Property Type</label>
                     <select
                       value={editForm.propertyType}
                       onChange={(event) => setEditForm((current) => ({ ...current, propertyType: event.target.value }))}
@@ -519,7 +519,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Zoning</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Zoning</label>
                     <select
                       value={editForm.zoning}
                       onChange={(event) => setEditForm((current) => ({ ...current, zoning: event.target.value }))}
@@ -532,7 +532,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Land Extent</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Land Extent</label>
                     <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                       <input
                         type="number"
@@ -552,7 +552,7 @@ export default function PropertyDetailPage() {
                         <option value="acre">acre</option>
                       </select>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                    <p className="mt-2 text-xs text-content-secondary">
                       {editAreaSqft
                         ? `Normalized area: ${formatArea(editAreaSqft)}`
                         : 'Enter whichever land unit you have. REDIP will normalize it for calculations and map coverage.'}
@@ -560,7 +560,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Circle Rate (INR / sqft)</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Circle Rate (INR / sqft)</label>
                     <input
                       type="number"
                       min="0"
@@ -572,7 +572,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Permissible FSI</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Permissible FSI</label>
                     <input
                       type="number"
                       min="0"
@@ -584,7 +584,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Road Width (m)</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Road Width (m)</label>
                     <input
                       type="number"
                       min="0"
@@ -596,7 +596,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Survey Number</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Survey Number</label>
                     <input
                       type="text"
                       value={editForm.surveyNumber}
@@ -606,7 +606,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Owner Name</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Owner Name</label>
                     <input
                       type="text"
                       value={editForm.ownerName}
@@ -616,7 +616,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Ownership Type</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Ownership Type</label>
                     <input
                       type="text"
                       value={editForm.ownershipType}
@@ -627,7 +627,7 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Encumbrance Status</label>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Encumbrance Status</label>
                     <input
                       type="text"
                       value={editForm.encumbranceStatus}
@@ -638,14 +638,14 @@ export default function PropertyDetailPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-slate-900/80">
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Map Precision Controls</h4>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+                <div className="rounded-2xl border border-hairline-strong bg-bg-secondary p-4/80">
+                  <h4 className="text-sm font-semibold text-content-primary">Map Precision Controls</h4>
+                  <p className="mt-1 text-sm text-content-secondary">
                     Leave coordinates blank to geocode from the address. Enter both lat and lng only if you want to set an exact manual pin.
                   </p>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Latitude</label>
+                      <label className="mb-1 block text-sm font-medium text-content-secondary">Latitude</label>
                       <input
                         type="number"
                         min="-90"
@@ -658,7 +658,7 @@ export default function PropertyDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Longitude</label>
+                      <label className="mb-1 block text-sm font-medium text-content-secondary">Longitude</label>
                       <input
                         type="number"
                         min="-180"
@@ -674,7 +674,7 @@ export default function PropertyDetailPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Notes</label>
+                  <label className="mb-1 block text-sm font-medium text-content-secondary">Notes</label>
                   <textarea
                     rows={4}
                     value={editForm.notes}
@@ -685,7 +685,7 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-800">
+              <div className="flex items-center justify-end gap-3 border-t border-hairline-strong px-6 py-4">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}

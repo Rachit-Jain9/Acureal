@@ -38,7 +38,7 @@ export default function DefaultFieldBadge({
     ? 'bg-rose-50 text-rose-700 border-rose-200'
     : isDefault
     ? 'bg-sky-50 text-sky-700 border-sky-200'
-    : 'bg-gray-50 text-gray-600 border-gray-200';
+    : 'bg-bg-secondary text-content-secondary border-hairline-strong';
 
   const Icon = outOfRange ? AlertTriangle : BookOpen;
 

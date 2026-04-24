@@ -38,7 +38,7 @@ const EVENT_COLORS = {
   sensitivity_run: 'bg-amber-50 text-amber-700 border-amber-200',
   manual_replay: 'bg-violet-50 text-violet-700 border-violet-200',
   graph_snapshot: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  export_snapshot: 'bg-gray-50 text-gray-700 border-gray-200',
+  export_snapshot: 'bg-bg-secondary text-content-secondary border-hairline-strong',
 };
 
 const REPLAY_ROLES = new Set(['admin', 'analyst']);
@@ -75,7 +75,7 @@ function CheckRow({ label, ok, detail }) {
         <span className={ok ? 'text-emerald-700' : 'text-red-700'}>
           {label}
         </span>
-        {detail && <div className="text-gray-500 font-mono mt-0.5">{detail}</div>}
+        {detail && <div className="text-content-secondary font-mono mt-0.5">{detail}</div>}
       </div>
     </div>
   );
@@ -191,8 +191,8 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
         className="flex items-center justify-between w-full text-left group"
       >
         <div className="flex items-center gap-2">
-          <ShieldCheck size={16} className="text-gray-500" />
-          <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+          <ShieldCheck size={16} className="text-content-secondary" />
+          <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider">
             Signed audit trail
           </h4>
           <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -200,7 +200,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
             HMAC-SHA256
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-content-muted">
           {status === 'loading' && <RefreshCw size={12} className="animate-spin" />}
           {status === 'ok' && (
             <span className="hidden sm:inline">
@@ -213,7 +213,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
 
       {open && (
         <div className="mt-4 space-y-3">
-          <p className="text-xs text-gray-500 max-w-2xl">
+          <p className="text-xs text-content-secondary max-w-2xl">
             Every calculation persisted by the kernel is logged to an append-only table with an
             HMAC signature over <code className="font-mono text-[11px]">inputs_hash | outputs_hash
             | engine_version</code>. Verify re-hashes the stored JSON; replay additionally re-runs
@@ -229,13 +229,13 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
           )}
 
           {status === 'ok' && events.length === 0 && (
-            <div className="text-xs text-gray-500 italic py-3">
+            <div className="text-xs text-content-secondary italic py-3">
               No signed events yet. Run a calculation to produce the first audit row.
             </div>
           )}
 
           {status === 'ok' && events.length > 0 && (
-            <div className="border rounded-lg bg-white divide-y divide-gray-100">
+            <div className="border rounded-lg bg-white divide-y divide-hairline">
               {events.map((event) => {
                 const label = EVENT_LABELS[event.event_type] || event.event_type;
                 const badge = EVENT_COLORS[event.event_type] || EVENT_COLORS.export_snapshot;
@@ -250,27 +250,27 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                     <button
                       type="button"
                       onClick={() => toggleRow(event.id)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left transition-colors"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-bg-secondary text-left transition-colors"
                     >
-                      <Clock size={14} className="text-gray-400 flex-shrink-0" />
+                      <Clock size={14} className="text-content-muted flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-gray-900 font-medium">{label}</span>
+                          <span className="text-content-primary font-medium">{label}</span>
                           <span
                             className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${badge}`}
                           >
                             {event.event_type}
                           </span>
                           {event.engine_version && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-700 border border-gray-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-bg-secondary text-content-secondary border border-hairline-strong">
                               {event.engine_version}
                             </span>
                           )}
                           {event.asset_class && (
-                            <span className="text-[10px] text-gray-500">{event.asset_class}</span>
+                            <span className="text-[10px] text-content-secondary">{event.asset_class}</span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-3">
+                        <div className="text-xs text-content-secondary mt-0.5 flex items-center gap-3">
                           <span>{formatEventTime(event.created_at)}</span>
                           <span className="font-mono flex items-center gap-1">
                             <Fingerprint size={11} />
@@ -279,36 +279,36 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                         </div>
                       </div>
                       {isExpanded ? (
-                        <ChevronDown size={14} className="text-gray-400" />
+                        <ChevronDown size={14} className="text-content-muted" />
                       ) : (
-                        <ChevronRight size={14} className="text-gray-400" />
+                        <ChevronRight size={14} className="text-content-muted" />
                       )}
                     </button>
 
                     {isExpanded && (
-                      <div className="px-3 pb-3 pt-1 bg-gray-50/60 border-t border-gray-100 space-y-3">
+                      <div className="px-3 pb-3 pt-1 bg-bg-secondary/60 border-t border-hairline space-y-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                           <div>
-                            <div className="text-gray-400 uppercase tracking-wider text-[10px]">
+                            <div className="text-content-muted uppercase tracking-wider text-[10px]">
                               Inputs hash
                             </div>
-                            <div className="font-mono break-all text-gray-700">
+                            <div className="font-mono break-all text-content-secondary">
                               {event.inputs_hash}
                             </div>
                           </div>
                           <div>
-                            <div className="text-gray-400 uppercase tracking-wider text-[10px]">
+                            <div className="text-content-muted uppercase tracking-wider text-[10px]">
                               Outputs hash
                             </div>
-                            <div className="font-mono break-all text-gray-700">
+                            <div className="font-mono break-all text-content-secondary">
                               {event.outputs_hash}
                             </div>
                           </div>
                           <div className="sm:col-span-2">
-                            <div className="text-gray-400 uppercase tracking-wider text-[10px]">
+                            <div className="text-content-muted uppercase tracking-wider text-[10px]">
                               Signature (HMAC-SHA256)
                             </div>
-                            <div className="font-mono break-all text-gray-700">
+                            <div className="font-mono break-all text-content-secondary">
                               {event.signature}
                             </div>
                           </div>
@@ -319,7 +319,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                             type="button"
                             onClick={() => runVerify(event)}
                             disabled={busy}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-hairline-strong bg-white text-xs font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             {busy && !verify ? (
                               <RefreshCw size={12} className="animate-spin" />
@@ -338,7 +338,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                                 ? 'Re-run the kernel against the stored inputs and compare the output hash.'
                                 : 'Replay requires admin or analyst role.'
                             }
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-hairline-strong bg-white text-xs font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             {busy && !replay ? (
                               <RefreshCw size={12} className="animate-spin" />
@@ -441,14 +441,14 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                                 ) : (
                                   <>
                                     <div className="flex gap-2">
-                                      <span className="text-gray-500 w-28">Original hash</span>
-                                      <span className="font-mono text-gray-700 break-all">
+                                      <span className="text-content-secondary w-28">Original hash</span>
+                                      <span className="font-mono text-content-secondary break-all">
                                         {replay.replay.originalOutputsHash}
                                       </span>
                                     </div>
                                     <div className="flex gap-2">
-                                      <span className="text-gray-500 w-28">Replay hash</span>
-                                      <span className="font-mono text-gray-700 break-all">
+                                      <span className="text-content-secondary w-28">Replay hash</span>
+                                      <span className="font-mono text-content-secondary break-all">
                                         {replay.replay.replayOutputsHash}
                                       </span>
                                     </div>

@@ -72,10 +72,10 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Add Comparable</h2>
+          <h2 className="text-lg font-semibold text-content-primary">Add Comparable</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
+            className="p-1.5 rounded-lg hover:bg-bg-secondary text-content-muted hover:text-content-secondary transition"
           >
             <X size={20} />
           </button>
@@ -84,7 +84,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Project Name *</label>
               <input
                 name="projectName"
                 required
@@ -95,7 +95,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Developer</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Developer</label>
               <input
                 name="developer"
                 value={form.developer}
@@ -105,7 +105,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">City *</label>
               <input
                 name="city"
                 required
@@ -116,7 +116,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Locality</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Locality</label>
               <input
                 name="locality"
                 value={form.locality}
@@ -126,7 +126,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Type</label>
               <select
                 name="projectType"
                 value={form.projectType}
@@ -141,7 +141,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">BHK Config</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">BHK Config</label>
               <input
                 name="bhkConfig"
                 value={form.bhkConfig}
@@ -151,7 +151,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Carpet Area (sqft)</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Carpet Area (sqft)</label>
               <input
                 name="carpetAreaSqft"
                 type="number"
@@ -162,7 +162,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Super Built-Up (sqft)</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Super Built-Up (sqft)</label>
               <input
                 name="superBuiltupAreaSqft"
                 type="number"
@@ -173,7 +173,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate per sqft *</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Rate per sqft *</label>
               <input
                 name="ratePerSqft"
                 type="number"
@@ -185,7 +185,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Total Units</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Total Units</label>
               <input
                 name="totalUnits"
                 type="number"
@@ -196,7 +196,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Launch Year</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Launch Year</label>
               <input
                 name="launchYear"
                 type="number"
@@ -207,7 +207,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Possession Year</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Possession Year</label>
               <input
                 name="possessionYear"
                 type="number"
@@ -218,7 +218,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">RERA Number</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">RERA Number</label>
               <input
                 name="reraNumber"
                 value={form.reraNumber}
@@ -228,7 +228,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Source</label>
               <input
                 name="source"
                 value={form.source}
@@ -333,12 +333,12 @@ export default function CompsPage() {
         }
       />
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Search</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Search</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
               <input
                 type="text"
                 value={search}
@@ -353,7 +353,7 @@ export default function CompsPage() {
           </div>
 
           <div className="w-40">
-            <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">City</label>
             <input
               name="city"
               value={filters.city}
@@ -364,7 +364,7 @@ export default function CompsPage() {
           </div>
 
           <div className="w-40">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Project Type</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Project Type</label>
             <select
               name="projectType"
               value={filters.projectType}
@@ -381,7 +381,7 @@ export default function CompsPage() {
           </div>
 
           <div className="w-32">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Min Rate</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Min Rate</label>
             <input
               name="minRate"
               type="number"
@@ -393,7 +393,7 @@ export default function CompsPage() {
           </div>
 
           <div className="w-32">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Max Rate</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Max Rate</label>
             <input
               name="maxRate"
               type="number"
@@ -407,7 +407,7 @@ export default function CompsPage() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              className="flex items-center gap-1 px-3 py-2 text-sm text-content-secondary hover:text-content-secondary hover:bg-bg-secondary rounded-lg transition"
             >
               <X size={14} />
               Clear
@@ -439,50 +439,50 @@ export default function CompsPage() {
           }
         />
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Project</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Developer</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">City</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Locality</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Type</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Rate/sqft</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Units</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500">Launch</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">RERA</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500">Actions</th>
+                <tr className="bg-bg-secondary border-b border-hairline-strong">
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Project</th>
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Developer</th>
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">City</th>
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Locality</th>
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Type</th>
+                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Rate/sqft</th>
+                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Units</th>
+                  <th className="px-4 py-3 text-center font-medium text-content-secondary">Launch</th>
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">RERA</th>
+                  <th className="px-4 py-3 text-center font-medium text-content-secondary">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-hairline">
                 {comps.map((comp) => (
-                  <tr key={comp.id} className="hover:bg-gray-50 transition">
-                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                  <tr key={comp.id} className="hover:bg-bg-secondary transition">
+                    <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
                       {comp.project_name}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{comp.developer || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{comp.city}</td>
-                    <td className="px-4 py-3 text-gray-500">{comp.locality || '-'}</td>
+                    <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{comp.developer || '-'}</td>
+                    <td className="px-4 py-3 text-content-secondary">{comp.city}</td>
+                    <td className="px-4 py-3 text-content-secondary">{comp.locality || '-'}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
                         {comp.project_type?.replace(/_/g, ' ') || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900">
+                    <td className="px-4 py-3 text-right font-medium text-content-primary">
                       {comp.rate_per_sqft ? formatINR(comp.rate_per_sqft, 0) : '-'}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
+                    <td className="px-4 py-3 text-right text-content-secondary">
                       {comp.total_units?.toLocaleString('en-IN') || '-'}
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-600">{comp.launch_year || '-'}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{comp.rera_number || '-'}</td>
+                    <td className="px-4 py-3 text-center text-content-secondary">{comp.launch_year || '-'}</td>
+                    <td className="px-4 py-3 text-content-secondary text-xs">{comp.rera_number || '-'}</td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleDelete(comp.id)}
                         disabled={deleteMutation.isPending}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                        className="p-1.5 rounded-lg text-content-muted hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
                         title="Delete comparable"
                       >
                         <Trash2 size={16} />
@@ -495,22 +495,22 @@ export default function CompsPage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-              <p className="text-sm text-gray-500">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-hairline-strong bg-bg-secondary">
+              <p className="text-sm text-content-secondary">
                 Page {page} of {totalPages} ({totalCount} total)
               </p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
                   disabled={page === 1}
-                  className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
                 >
                   <ChevronLeft size={16} />
                 </button>
                 <button
                   onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
                   disabled={page === totalPages}
-                  className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
                 >
                   <ChevronRight size={16} />
                 </button>

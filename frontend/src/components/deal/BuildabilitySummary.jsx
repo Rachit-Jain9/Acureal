@@ -22,14 +22,14 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
 
   return (
     <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-gray-100">
+      <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-hairline">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white shadow-sm">
             <Sparkles size={14} />
           </div>
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">Zoning output</div>
-            <div className="text-sm font-semibold text-gray-800">{title}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-secondary">Zoning output</div>
+            <div className="text-sm font-semibold text-content-primary">{title}</div>
           </div>
         </div>
         {result.zone ? (
@@ -42,13 +42,13 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
       <div className={clsx('p-4 sm:p-5', compact && 'p-3 sm:p-4')}>
         {!hasEnough ? (
           <div>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-content-secondary mb-2">
               {result.has_zone
                 ? 'Add parcel area to see the regulated envelope.'
                 : 'Assign a master plan zone and parcel area to see the envelope.'}
             </p>
             {result.missing_inputs.length > 0 && (
-              <ul className="text-[11px] text-gray-400 space-y-0.5">
+              <ul className="text-[11px] text-content-muted space-y-0.5">
                 {result.missing_inputs.map((m) => <li key={m}>{'\u2022'} {m}</li>)}
               </ul>
             )}
@@ -58,18 +58,18 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
             {/* FSI chip with breakdown */}
             <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <div>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">Effective FSI</span>
-                <span className="ml-2 text-2xl font-bold text-gray-900">{fmtNum(result.effective_fsi, 2)}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-secondary">Effective FSI</span>
+                <span className="ml-2 text-2xl font-bold text-content-primary">{fmtNum(result.effective_fsi, 2)}</span>
               </div>
               {hasPremium && result.base_fsi != null && (
-                <span className="text-[11px] text-gray-500">
+                <span className="text-[11px] text-content-secondary">
                   = {fmtNum(result.base_fsi, 2)} base
                   <span className="mx-1">+</span>
                   <span className="text-indigo-600 font-semibold">{fmtNum(result.premium_fsi_available, 2)} premium</span>
                 </span>
               )}
               {result.matched_tier?.rule && (
-                <span className="text-[10px] text-gray-400 ml-auto">
+                <span className="text-[10px] text-content-muted ml-auto">
                   road {'\u2265'} {result.matched_tier.rule.road_width_m} m
                 </span>
               )}
@@ -118,17 +118,17 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
             </div>
 
             {result.parking && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-600">
-                <Car size={12} className="text-gray-500" />
-                <span className="font-semibold text-gray-700">{fmtNum(result.parking.cars, 0)}</span>
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[11px] text-content-secondary">
+                <Car size={12} className="text-content-secondary" />
+                <span className="font-semibold text-content-secondary">{fmtNum(result.parking.cars, 0)}</span>
                 <span>car bays</span>
                 {result.parking.visitor_cars > 0 && (
                   <>
-                    <span className="text-gray-300">·</span>
+                    <span className="text-content-muted">·</span>
                     <span>{fmtNum(result.parking.visitor_cars, 0)} visitor</span>
                   </>
                 )}
-                <span className="text-gray-300">·</span>
+                <span className="text-content-muted">·</span>
                 <span>{fmtNum(result.parking.ev_bays, 0)} EV</span>
               </div>
             )}

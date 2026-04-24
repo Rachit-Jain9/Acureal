@@ -244,53 +244,53 @@ export default function SettingsPage() {
       {/* Admin areas */}
       <Link
         to="/dashboard/settings/master-plan"
-        className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:border-primary-300 transition-colors"
+        className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-hairline-strong p-4 hover:border-primary-300 transition-colors"
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary-50 text-primary-600">
             <Shield size={18} />
           </div>
           <div>
-            <div className="text-sm font-semibold text-gray-900">Master Plan — Regulatory Data</div>
-            <div className="text-xs text-gray-500">Zoning library (FSI tiers, setbacks, uses). Bengaluru RMP 2031 Draft.</div>
+            <div className="text-sm font-semibold text-content-primary">Master Plan — Regulatory Data</div>
+            <div className="text-xs text-content-secondary">Zoning library (FSI tiers, setbacks, uses). Bengaluru RMP 2031 Draft.</div>
           </div>
         </div>
-        <ChevronRight size={16} className="text-gray-400" />
+        <ChevronRight size={16} className="text-content-muted" />
       </Link>
 
       {/* Profile Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+        <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
           <User size={18} />
           Profile
         </h3>
         <form onSubmit={handleProfileSave} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Full Name</label>
             <input
               type="text"
               value={profile.name}
               onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Email</label>
             <input
               type="email"
               value={profile.email}
               readOnly
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm bg-bg-secondary text-content-secondary cursor-not-allowed"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Phone</label>
             <input
               type="tel"
               value={profile.phone}
               onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
               placeholder="9876543210"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <button
@@ -305,14 +305,14 @@ export default function SettingsPage() {
       </div>
 
       {/* Security Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+        <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
           <Lock size={18} />
           Security
         </h3>
-        <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-          <p className="text-sm font-medium text-gray-800">Current session behavior</p>
-          <p className="mt-1 text-xs text-gray-500">
+        <div className="mb-4 rounded-lg border border-hairline-strong bg-bg-secondary px-4 py-3">
+          <p className="text-sm font-medium text-content-primary">Current session behavior</p>
+          <p className="mt-1 text-xs text-content-secondary">
             {sessionPersistence === 'persistent'
               ? 'Remember me is enabled for this browser. REDIP will keep this session across browser restarts until you sign out.'
               : 'This is a browser-session login. REDIP will sign you out when the browser closes unless you choose Remember me at sign-in.'}
@@ -320,31 +320,31 @@ export default function SettingsPage() {
         </div>
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Current Password</label>
             <input
               type="password"
               value={security.currentPassword}
               onChange={(e) => setSecurity((s) => ({ ...s, currentPassword: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">New Password</label>
             <input
               type="password"
               value={security.newPassword}
               onChange={(e) => setSecurity((s) => ({ ...s, newPassword: e.target.value }))}
               placeholder="At least 8 chars with uppercase, lowercase, and a number"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Confirm New Password</label>
             <input
               type="password"
               value={security.confirmPassword}
               onChange={(e) => setSecurity((s) => ({ ...s, confirmPassword: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <button
@@ -359,18 +359,18 @@ export default function SettingsPage() {
       </div>
 
       {/* Preferences Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+        <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
           <Palette size={18} />
           Preferences
         </h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Number Format</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Number Format</label>
             <select
               value={preferences.currency}
               onChange={(e) => handlePreferenceChange('currency', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {CURRENCY_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -378,11 +378,11 @@ export default function SettingsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Area Unit</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Area Unit</label>
             <select
               value={preferences.areaUnit}
               onChange={(e) => handlePreferenceChange('areaUnit', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {AREA_UNIT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -390,11 +390,11 @@ export default function SettingsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Date Format</label>
             <select
               value={preferences.dateFormat}
               onChange={(e) => handlePreferenceChange('dateFormat', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {DATE_FORMAT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -405,12 +405,12 @@ export default function SettingsPage() {
       </div>
 
       {(user?.role === 'owner' || user?.role === 'admin') && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+        <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+          <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
             <Brain size={18} />
             Market Intelligence Notes
           </h3>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className="text-xs text-content-secondary mb-4">
             Enter your own verified market observations — sourced from broker calls, reports, or site visits.
             Each line becomes one bullet in the Intelligence brief. These are labelled as admin-entered and never
             fabricated by REDIP.
@@ -422,16 +422,16 @@ export default function SettingsPage() {
             { key: 'strategic', label: 'Strategic Takeaways', placeholder: 'e.g. Focus underwriting on micro-markets with sub-18 month absorption cycles\ne.g. Avoid land deals in oversupplied peripheral zones until Q3 correction clears' },
           ].map(({ key, label, placeholder }) => (
             <div key={key} className="mb-5 last:mb-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">{label}</label>
               <textarea
                 rows={4}
                 value={notesDraft[key]}
                 onChange={(e) => setNotesDraft((d) => ({ ...d, [key]: e.target.value }))}
                 placeholder={placeholder}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
               />
               <div className="flex items-center justify-between mt-1">
-                <p className="text-xs text-gray-400">One observation per line.</p>
+                <p className="text-xs text-content-muted">One observation per line.</p>
                 <button
                   onClick={() => handleNotesSave(key)}
                   disabled={saveMarketNotes.isPending}
@@ -447,9 +447,9 @@ export default function SettingsPage() {
       )}
 
       {/* Currency Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
         <div className="flex items-start justify-between mb-1">
-          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+          <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
             <DollarSign size={18} />
             Display Currency
           </h3>
@@ -462,16 +462,16 @@ export default function SettingsPage() {
             Refresh Rates
           </button>
         </div>
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-xs text-content-secondary mb-4">
           All deal values are stored in INR Crores. Rates are auto-updated daily. Select a display currency and the app will use the latest available rate.
         </p>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Display Currency</label>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Display Currency</label>
             <select
               value={currencyCode}
               onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {CURRENCY_CODE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -481,9 +481,9 @@ export default function SettingsPage() {
 
           {/* Live rate display */}
           {currencyCode !== 'INR' && (
-            <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+            <div className="rounded-lg border border-hairline bg-bg-secondary p-4">
               {ratesLoading ? (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-content-secondary">
                   <Loader2 size={14} className="animate-spin" />
                   Loading rates…
                 </div>
@@ -507,11 +507,11 @@ export default function SettingsPage() {
                         ? <AlertTriangle size={14} className="text-amber-500 flex-shrink-0" />
                         : <CheckCircle size={14} className="text-emerald-500 flex-shrink-0" />
                       }
-                      <span className="text-sm font-semibold text-gray-900">
+                      <span className="text-sm font-semibold text-content-primary">
                         1 INR = {currencyCode} {Number(activeRate.rate).toFixed(6)}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500 space-y-0.5">
+                    <div className="text-xs text-content-secondary space-y-0.5">
                       <p>Effective date: {activeRate.effective_date}</p>
                       <p>Source: {activeRate.source}</p>
                       <p>Status: <span className={isStale ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'}>{activeRate.freshness_status}</span></p>
@@ -526,23 +526,23 @@ export default function SettingsPage() {
           {/* All rates table */}
           {liveRates && liveRates.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">All Available Rates (1 INR =)</p>
-              <div className="rounded-lg border border-gray-100 overflow-hidden">
+              <p className="text-xs font-medium text-content-secondary uppercase tracking-wider mb-2">All Available Rates (1 INR =)</p>
+              <div className="rounded-lg border border-hairline overflow-hidden">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-bg-secondary">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500">Currency</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-500">Rate</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-500">Date</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-500">Status</th>
+                      <th className="px-3 py-2 text-left font-medium text-content-secondary">Currency</th>
+                      <th className="px-3 py-2 text-right font-medium text-content-secondary">Rate</th>
+                      <th className="px-3 py-2 text-right font-medium text-content-secondary">Date</th>
+                      <th className="px-3 py-2 text-right font-medium text-content-secondary">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-hairline">
                     {liveRates.map((r) => (
                       <tr key={r.quote_currency} className={r.quote_currency === currencyCode ? 'bg-primary-50' : 'bg-white'}>
-                        <td className="px-3 py-2 font-medium text-gray-900">{r.quote_currency}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{Number(r.rate).toFixed(6)}</td>
-                        <td className="px-3 py-2 text-right text-gray-500">{r.effective_date}</td>
+                        <td className="px-3 py-2 font-medium text-content-primary">{r.quote_currency}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-content-secondary">{Number(r.rate).toFixed(6)}</td>
+                        <td className="px-3 py-2 text-right text-content-secondary">{r.effective_date}</td>
                         <td className="px-3 py-2 text-right">
                           <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${r.freshness_status === 'fresh' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                             {r.freshness_status}
@@ -553,7 +553,7 @@ export default function SettingsPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-1.5 text-xs text-gray-400">Rates are stored in INR base. Display only — stored deal values are never modified.</p>
+              <p className="mt-1.5 text-xs text-content-muted">Rates are stored in INR base. Display only — stored deal values are never modified.</p>
             </div>
           )}
         </div>

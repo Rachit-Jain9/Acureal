@@ -195,8 +195,8 @@ export default function InputForm({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+      <h2 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
         <Calculator size={18} className="text-primary-600" />
         Model Inputs
       </h2>
@@ -225,7 +225,7 @@ export default function InputForm({
         {fields.map((field) => (
           <div key={field.name}>
             <div className="flex items-center justify-between mb-1 gap-1">
-              <label htmlFor={field.name} className="text-sm font-medium text-gray-700 flex items-center gap-1.5 min-w-0">
+              <label htmlFor={field.name} className="text-sm font-medium text-content-secondary flex items-center gap-1.5 min-w-0">
                 <span className="truncate">{field.label}</span>
                 {defaultsMeta?.[field.name] && (
                   <DefaultFieldBadge
@@ -239,7 +239,7 @@ export default function InputForm({
                 <button
                   type="button"
                   onClick={() => setHintOpen(hintOpen === field.name ? null : field.name)}
-                  className="text-xs text-gray-400 hover:text-primary-600 shrink-0"
+                  className="text-xs text-content-muted hover:text-primary-600 shrink-0"
                 >
                   ?
                 </button>
