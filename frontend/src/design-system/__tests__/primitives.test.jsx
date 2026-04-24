@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { IndianRupee } from 'lucide-react';
 import { Card, SectionHeader, MetricTile, ErrorState } from '../index';
+import Badge from '../../components/common/Badge';
 
 describe('Card', () => {
   it('renders children and applies base surface classes', () => {
@@ -44,6 +46,29 @@ describe('SectionHeader', () => {
     expect(screen.getByText('Bare')).toBeInTheDocument();
     expect(screen.queryByText('CTX')).toBeNull();
   });
+
+  it('renders an icon when passed via the `icon` prop', () => {
+    const { container } = render(
+      <SectionHeader icon={IndianRupee} title="Financial Summary" />,
+    );
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByText('Financial Summary')).toBeInTheDocument();
+  });
+
+  it('renders as h3 with tighter spacing when size="sm"', () => {
+    const { container } = render(
+      <SectionHeader size="sm" title="Sub-section" />,
+    );
+    expect(container.querySelector('h3')).not.toBeNull();
+    expect(container.querySelector('h2')).toBeNull();
+  });
+
+  it('defaults to h2 when size is omitted', () => {
+    const { container } = render(<SectionHeader title="Top" />);
+    expect(container.querySelector('h2')).not.toBeNull();
+  });
 });
 
 describe('MetricTile', () => {
@@ -83,6 +108,39 @@ describe('MetricTile', () => {
     const { container } = render(<MetricTile label="X" value="1" />);
     expect(container.querySelector('.text-data-positive')).toBeNull();
     expect(container.querySelector('.text-data-negative')).toBeNull();
+  });
+});
+
+describe('Badge', () => {
+  it('renders children and applies the neutral tone class by default', () => {
+    const { container } = render(<Badge>Draft</Badge>);
+    const span = container.querySelector('span.badge');
+    expect(span).not.toBeNull();
+    expect(span?.className).toMatch(/badge-neutral/);
+    expect(span).toHaveTextContent('Draft');
+  });
+
+  it('applies tone-specific classes for each tone', () => {
+    const tones = ['success', 'warn', 'danger', 'info', 'premium'];
+    tones.forEach((tone) => {
+      const { container, unmount } = render(<Badge tone={tone}>{tone}</Badge>);
+      expect(container.querySelector('span.badge')?.className).toMatch(
+        new RegExp(`badge-${tone}`),
+      );
+      unmount();
+    });
+  });
+
+  it('falls back to neutral when an unknown tone is passed', () => {
+    const { container } = render(<Badge tone="bogus">x</Badge>);
+    expect(container.querySelector('span.badge')?.className).toMatch(/badge-neutral/);
+  });
+
+  it('preserves consumer className alongside the tone class', () => {
+    const { container } = render(<Badge tone="success" className="uppercase">ok</Badge>);
+    const cls = container.querySelector('span.badge')?.className ?? '';
+    expect(cls).toMatch(/badge-success/);
+    expect(cls).toMatch(/uppercase/);
   });
 });
 
