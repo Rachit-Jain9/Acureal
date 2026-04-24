@@ -276,9 +276,13 @@ html[data-theme='light'] {
     letter-spacing: 0.06em;
     line-height: 1.6;
   }
-  .badge-positive { background: rgba(34,197,94,0.14); color: var(--color-data-positive); }
-  .badge-negative { background: rgba(239,68,68,0.14); color: var(--color-data-negative); }
-  .badge-neutral  { background: var(--color-brand-accent-soft); color: var(--color-brand-accent); }
+  /* Semantic tone classes — consumed by <Badge tone="…">.
+     All use CSS variables so the same class works in dark + light themes. */
+  .badge-neutral  { background: rgba(148,163,184,0.14); color: var(--color-text-muted); }
+  .badge-success  { background: rgba(34,197,94,0.14);  color: var(--color-data-positive); }
+  .badge-warn     { background: var(--color-brand-premium-soft); color: var(--color-brand-premium); }
+  .badge-danger   { background: rgba(239,68,68,0.14);  color: var(--color-data-negative); }
+  .badge-info     { background: var(--color-brand-accent-soft);  color: var(--color-brand-accent); }
   .badge-premium  { background: var(--color-brand-premium-soft); color: var(--color-brand-premium); }
 
   .divider {

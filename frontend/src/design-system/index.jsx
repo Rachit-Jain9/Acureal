@@ -26,18 +26,32 @@ export function Card({ as: As = 'div', elevated = false, className, children, ..
 
 // ── SectionHeader ──────────────────────────────────────────────────────────
 // Editorial section title: small uppercase eyebrow + display headline + optional sub.
-export function SectionHeader({ eyebrow, title, sub, action, className }) {
+// `icon` is an optional Lucide component rendered left of the title (muted).
+// `size` controls the headline scale: 'md' (default, h2) | 'sm' (h3, for sub-sections within a Card).
+export function SectionHeader({ icon: Icon, eyebrow, title, sub, action, size = 'md', className }) {
+  const H = size === 'sm' ? 'h3' : 'h2';
+  const headlineClass =
+    size === 'sm'
+      ? 'font-display text-base font-semibold text-content-primary leading-tight tracking-tight flex items-center gap-2 min-w-0'
+      : 'font-display text-lg sm:text-xl font-semibold text-content-primary leading-tight tracking-tight flex items-center gap-2 min-w-0';
   return (
-    <header className={clsx('flex items-end justify-between gap-6 mb-5', className)}>
+    <header
+      className={clsx(
+        'flex items-end justify-between gap-6',
+        size === 'sm' ? 'mb-3' : 'mb-5',
+        className,
+      )}
+    >
       <div className="min-w-0">
         {eyebrow && (
           <div className="text-eyebrow text-content-muted mb-1.5 font-medium">
             {eyebrow}
           </div>
         )}
-        <h2 className="font-display text-lg sm:text-xl font-semibold text-content-primary leading-tight tracking-tight">
-          {title}
-        </h2>
+        <H className={headlineClass}>
+          {Icon && <Icon size={16} className="text-content-muted shrink-0" aria-hidden="true" />}
+          <span className="truncate">{title}</span>
+        </H>
         {sub && <p className="text-sm text-content-secondary mt-1.5 max-w-2xl">{sub}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
