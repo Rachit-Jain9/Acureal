@@ -61,7 +61,7 @@ function NearbyCompsTable({ comps }) {
                 {comp.is_verified ? (
                   <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Verified" />
                 ) : (
-                  <span className="inline-block w-2 h-2 rounded-full bg-gray-300" title="Unverified" />
+                  <span className="inline-block w-2 h-2 rounded-full bg-hairline-strong" title="Unverified" />
                 )}
               </td>
             </tr>
