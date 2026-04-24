@@ -4,6 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts';
+import { Card } from '../../design-system';
 import { INCOME_CLASSES, getModelAssetClass } from './fieldDefs';
 import { formatCrores } from '../../utils/format';
 
@@ -17,24 +18,24 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
   const data          = view === 'yearly' ? yearlyData : quarterlyData;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <Card elevated className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <BarChart3 size={16} className="text-primary-600" />
+        <h3 className="text-sm font-semibold text-content-primary flex items-center gap-2">
+          <BarChart3 size={16} className="text-accent" />
           Cash Flows
         </h3>
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
+        <div className="flex rounded-lg border border-hairline overflow-hidden text-xs font-medium">
           <button
             type="button"
             onClick={() => setView('quarterly')}
-            className={`px-3 py-1.5 transition-colors ${view === 'quarterly' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 transition-colors ${view === 'quarterly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
           >
             Quarterly
           </button>
           <button
             type="button"
             onClick={() => setView('yearly')}
-            className={`px-3 py-1.5 transition-colors border-l border-gray-200 ${view === 'yearly' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 transition-colors border-l border-hairline ${view === 'yearly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
           >
             Yearly
           </button>
@@ -55,14 +56,14 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
         </ResponsiveContainer>
       </div>
       {view === 'yearly' && yearlyData.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 border-t pt-3">
+        <div className="mt-3 flex flex-wrap gap-3 text-xs text-content-muted border-t border-hairline pt-3">
           {yearlyData.map((y) => (
-            <span key={y.name} className={`font-medium ${y.value >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            <span key={y.name} className={`font-medium ${y.value >= 0 ? 'text-data-positive' : 'text-data-negative'}`}>
               {y.name}: {formatCrores(y.value)}
             </span>
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

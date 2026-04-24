@@ -3,6 +3,7 @@
 
 import { TrendingUp, DollarSign, IndianRupee, Percent } from 'lucide-react';
 import KPIStatCard from './KPIStatCard';
+import { Card } from '../../design-system';
 import { INCOME_CLASSES, HOSPITALITY_CLASSES, getModelAssetClass } from './fieldDefs';
 import { formatCrores, formatPct, formatINR, formatArea } from '../../utils/format';
 
@@ -75,17 +76,17 @@ export function AreaBreakdown({ areas, assetClass }) {
     }
   }
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">Area Breakdown</h3>
+    <Card elevated className="p-5">
+      <h3 className="text-sm font-semibold text-content-primary mb-3">Area Breakdown</h3>
       <div className="space-y-2">
         {rows.filter((r) => r.value && r.value !== '-').map((row) => (
           <div key={row.label} className="flex justify-between text-sm">
-            <span className="text-gray-500">{row.label}</span>
-            <span className="font-medium text-gray-900">{row.value}</span>
+            <span className="text-content-muted">{row.label}</span>
+            <span className="font-medium text-content-primary">{row.value}</span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -108,21 +109,21 @@ export function CostBreakdown({ costs, assetClass }) {
   ].filter((r) => r.value != null && r.value > 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">Cost Breakdown</h3>
+    <Card elevated className="p-5">
+      <h3 className="text-sm font-semibold text-content-primary mb-3">Cost Breakdown</h3>
       <div className="space-y-2">
         {rows.map((row) => (
           <div key={row.label} className="flex justify-between text-sm">
-            <span className="text-gray-500">{row.label}</span>
-            <span className="font-medium text-gray-900">{formatCrores(row.value)}</span>
+            <span className="text-content-muted">{row.label}</span>
+            <span className="font-medium text-content-primary">{formatCrores(row.value)}</span>
           </div>
         ))}
-        <div className="border-t pt-2 flex justify-between text-sm font-semibold">
-          <span className="text-gray-700">Total Cost</span>
-          <span className="text-gray-900">{formatCrores(costs.total)}</span>
+        <div className="border-t border-hairline pt-2 flex justify-between text-sm font-semibold">
+          <span className="text-content-secondary">Total Cost</span>
+          <span className="text-content-primary">{formatCrores(costs.total)}</span>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -161,18 +162,18 @@ export function RevenuePanel({ revenue, kpis, assetClass }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+    <Card elevated className="p-5">
+      <h3 className="text-sm font-semibold text-content-primary mb-3">
         {panelTitle}
       </h3>
       <div className="space-y-2">
         {rows.filter((r) => r.value && r.value !== '-').map((row) => (
           <div key={row.label} className="flex justify-between text-sm">
-            <span className="text-gray-500">{row.label}</span>
-            <span className="font-medium text-gray-900">{row.value}</span>
+            <span className="text-content-muted">{row.label}</span>
+            <span className="font-medium text-content-primary">{row.value}</span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
