@@ -15,19 +15,16 @@ import {
 import {
   Briefcase,
   TrendingUp,
-  IndianRupee,
-  Activity,
   ArrowRight,
   AlertTriangle,
-  CheckCircle2,
   Clock,
 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
-import StatCard from '../components/common/StatCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import { Card, SectionHeader, MetricTile } from '../design-system';
 import useThemeStore from '../store/themeStore';
 import {
   formatCrores,
@@ -67,46 +64,15 @@ function useTooltipStyle() {
 
 function SectionCard({ title, children, action, eyebrow }) {
   return (
-    <div
-      className="rounded-editorial p-5"
-      style={{
-        backgroundColor: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-primary)',
-        boxShadow: 'var(--shadow-card)',
-      }}
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          {eyebrow && (
-            <p
-              className="mb-0.5"
-              style={{
-                fontSize: '0.6875rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.14em',
-                color: 'var(--color-text-muted)',
-                fontWeight: 500,
-              }}
-            >
-              {eyebrow}
-            </p>
-          )}
-          <h3
-            className="font-display tracking-tight"
-            style={{
-              fontSize: '0.95rem',
-              fontWeight: 600,
-              color: 'var(--color-text-primary)',
-              letterSpacing: '-0.01em',
-            }}
-          >
-            {title}
-          </h3>
-        </div>
-        {action && action}
-      </div>
+    <Card elevated className="p-5">
+      <SectionHeader
+        eyebrow={eyebrow}
+        title={title}
+        action={action}
+        className="mb-4 items-center"
+      />
       {children}
-    </div>
+    </Card>
   );
 }
 
@@ -159,14 +125,11 @@ export default function DashboardPage() {
     cities_distribution = [],
   } = data || {};
 
-  const totalDeals      = stats.total_deals         || 0;
   const activeDeals     = stats.active_deals_count   || 0;
   const pipelineValue   = stats.total_pipeline_value_cr || 0;
   const avgIrr          = stats.avg_irr_pct          || 0;
   const icReadyDeals    = stats.ic_ready_count        || 0;
   const dealsWithRisk   = stats.deals_with_open_risks || 0;
-  const docsUploaded    = stats.total_documents       || 0;
-  const closedValue     = stats.closed_value_cr       || 0;
 
   // Pipeline bar chart data — filter out stages with 0 deals
   const pipelineChartData = stage_distribution
@@ -202,63 +165,33 @@ export default function DashboardPage() {
         }
       />
 
-      {/* ── KPI row ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Deals"
-          value={totalDeals}
-          icon={Briefcase}
-          subtitle="All in pipeline"
-        />
-        <StatCard
-          title="Active Deals"
-          value={activeDeals}
-          icon={Activity}
-          subtitle="In progress"
-          accent={activeDeals > 0 ? 'green' : undefined}
-        />
-        <StatCard
-          title="Pipeline Value"
+      {/* ── Primary KPI row — institutional scan: pipeline size, flow, return, readiness ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricTile
+          label="Pipeline Value"
           value={formatCrores(pipelineValue)}
-          icon={IndianRupee}
-          subtitle="Cumulative ask price"
+          footnote="Cumulative ask · active deals"
         />
-        <StatCard
-          title="Avg IRR"
+        <MetricTile
+          label="Active Deals"
+          value={activeDeals}
+          footnote="Live in pipeline"
+          delta={dealsWithRisk > 0 ? `${dealsWithRisk} with open risk` : null}
+          tone={dealsWithRisk > 0 ? 'down' : 'neutral'}
+        />
+        <MetricTile
+          label="Avg IRR"
           value={formatPct(avgIrr)}
-          icon={TrendingUp}
-          subtitle="Modelled deals"
-          accent={avgIrr >= 20 ? 'green' : avgIrr >= 12 ? 'amber' : undefined}
+          footnote="Across modelled deals"
+          delta={avgIrr >= 20 ? 'Above 20% bench' : avgIrr >= 12 ? null : 'Below bench'}
+          tone={avgIrr >= 20 ? 'up' : avgIrr >= 12 ? 'neutral' : 'down'}
         />
-      </div>
-
-      {/* ── Secondary KPI row ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard
-          title="Investor-grade"
+        <MetricTile
+          label="Investor-Grade"
           value={icReadyDeals}
-          icon={CheckCircle2}
-          subtitle="IC-ready deals"
-          accent={icReadyDeals > 0 ? 'green' : undefined}
-        />
-        <StatCard
-          title="Open risks"
-          value={dealsWithRisk}
-          icon={AlertTriangle}
-          subtitle="Deals with flags"
-          accent={dealsWithRisk > 0 ? 'red' : undefined}
-        />
-        <StatCard
-          title="Documents"
-          value={docsUploaded}
-          icon={Briefcase}
-          subtitle="Uploaded across deals"
-        />
-        <StatCard
-          title="Closed value"
-          value={closedValue > 0 ? formatCrores(closedValue) : '—'}
-          icon={IndianRupee}
-          subtitle="Deals marked closed"
+          footnote="IC-ready · fully vetted"
+          delta={icReadyDeals > 0 ? 'Ready to deploy' : null}
+          tone={icReadyDeals > 0 ? 'up' : 'neutral'}
         />
       </div>
 
