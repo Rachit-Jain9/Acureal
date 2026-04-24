@@ -124,20 +124,20 @@ export const formatRelativeTime = (value) => {
 };
 
 /**
- * Stage display config
+ * Stage display config. `tone` maps to <Badge tone="…"> in the design system.
  */
 export const STAGE_CONFIG = {
-  sourced: { label: 'Sourced', color: 'bg-slate-100 text-slate-700' },
-  screening: { label: 'Screening', color: 'bg-gray-100 text-gray-800' },
-  site_visit: { label: 'Site Visit', color: 'bg-blue-100 text-blue-800' },
-  loi: { label: 'LOI', color: 'bg-yellow-100 text-yellow-800' },
-  due_diligence: { label: 'Due Diligence', color: 'bg-orange-100 text-orange-800' },
-  underwriting: { label: 'Underwriting', color: 'bg-purple-100 text-purple-800' },
-  ic_review: { label: 'Investor-Grade Review', color: 'bg-indigo-100 text-indigo-800' },
-  negotiation: { label: 'Negotiation', color: 'bg-cyan-100 text-cyan-800' },
-  active: { label: 'Active', color: 'bg-green-100 text-green-800' },
-  closed: { label: 'Closed', color: 'bg-emerald-100 text-emerald-800' },
-  dead: { label: 'Dead', color: 'bg-red-100 text-red-800' },
+  sourced:       { label: 'Sourced',                tone: 'neutral' },
+  screening:     { label: 'Screening',              tone: 'neutral' },
+  site_visit:    { label: 'Site Visit',             tone: 'info' },
+  loi:           { label: 'LOI',                    tone: 'warn' },
+  due_diligence: { label: 'Due Diligence',          tone: 'warn' },
+  underwriting:  { label: 'Underwriting',           tone: 'info' },
+  ic_review:     { label: 'Investor-Grade Review',  tone: 'premium' },
+  negotiation:   { label: 'Negotiation',            tone: 'info' },
+  active:        { label: 'Active',                 tone: 'success' },
+  closed:        { label: 'Closed',                 tone: 'success' },
+  dead:          { label: 'Dead',                   tone: 'danger' },
 };
 
 export const STAGE_TRANSITIONS = {
@@ -155,10 +155,10 @@ export const STAGE_TRANSITIONS = {
 };
 
 export const PRIORITY_CONFIG = {
-  low: { label: 'Low', color: 'bg-gray-100 text-gray-700' },
-  medium: { label: 'Medium', color: 'bg-blue-100 text-blue-700' },
-  high: { label: 'High', color: 'bg-orange-100 text-orange-700' },
-  critical: { label: 'Critical', color: 'bg-red-100 text-red-700' },
+  low:      { label: 'Low',      tone: 'neutral' },
+  medium:   { label: 'Medium',   tone: 'info' },
+  high:     { label: 'High',     tone: 'warn' },
+  critical: { label: 'Critical', tone: 'danger' },
 };
 
 export const DEAL_TYPE_LABELS = {
@@ -180,13 +180,13 @@ export const PROPERTY_TYPE_LABELS = {
 };
 
 export const ACTIVITY_STATUS_CONFIG = {
-  open: { label: 'Open', color: 'bg-amber-100 text-amber-800' },
-  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800' },
-  cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-700' },
+  open:      { label: 'Open',      tone: 'warn' },
+  completed: { label: 'Completed', tone: 'success' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
 };
 
 export const ACTIVITY_PRIORITY_CONFIG = {
-  low: { label: 'Low', color: 'bg-gray-100 text-gray-700' },
-  medium: { label: 'Medium', color: 'bg-blue-100 text-blue-700' },
-  high: { label: 'High', color: 'bg-red-100 text-red-700' },
+  low:    { label: 'Low',    tone: 'neutral' },
+  medium: { label: 'Medium', tone: 'info' },
+  high:   { label: 'High',   tone: 'danger' },
 };

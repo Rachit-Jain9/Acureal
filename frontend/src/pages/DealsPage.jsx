@@ -619,7 +619,7 @@ function DealCard({ deal }) {
         <div className="flex items-start justify-between mb-3 gap-2">
           <h3 className="font-semibold text-gray-900 truncate pr-2">{deal.name}</h3>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Badge className={stageCfg.color}>{stageCfg.label}</Badge>
+            <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
@@ -694,7 +694,7 @@ function DealCard({ deal }) {
         </div>
 
         <div className="flex items-center flex-wrap gap-2 mb-3">
-          <Badge className={priorityCfg.color}>{priorityCfg.label}</Badge>
+          <Badge tone={priorityCfg.tone}>{priorityCfg.label}</Badge>
           <span className="text-xs text-gray-500">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
           {deal.asset_class && (
             <span className="text-xs text-gray-500">

@@ -282,8 +282,8 @@ export default function DealDetailPage() {
 
       {/* Badge row */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
-        <Badge className={stageCfg.color}>{stageCfg.label}</Badge>
-        <Badge className={priorityCfg.color}>{priorityCfg.label} Priority</Badge>
+        <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
+        <Badge tone={priorityCfg.tone}>{priorityCfg.label} Priority</Badge>
         {deal.assigned_to_name && (
           <span className="text-sm text-gray-400">Assigned to {deal.assigned_to_name}</span>
         )}
@@ -301,7 +301,7 @@ export default function DealDetailPage() {
               <ArrowRight size={15} className="text-gray-400" />
               <span className="text-sm font-medium text-gray-700">Stage Transition</span>
               <span className="text-xs text-gray-400">
-                Currently: <strong className={clsx('font-semibold', stageCfg.color.split(' ')[1])}>{stageCfg.label}</strong>
+                Currently: <strong className="font-semibold text-content-primary">{stageCfg.label}</strong>
               </span>
             </div>
             {stageExpanded ? (

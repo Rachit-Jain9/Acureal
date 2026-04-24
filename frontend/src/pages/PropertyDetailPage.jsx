@@ -419,7 +419,7 @@ export default function PropertyDetailPage() {
                       <p className="font-semibold text-gray-900">{deal.name}</p>
                       <p className="mt-1 text-sm text-gray-500">{deal.deal_type}</p>
                     </div>
-                    <Badge className={stageConfig.color}>{stageConfig.label}</Badge>
+                    <Badge tone={stageConfig.tone}>{stageConfig.label}</Badge>
                   </div>
                 </Link>
               );
