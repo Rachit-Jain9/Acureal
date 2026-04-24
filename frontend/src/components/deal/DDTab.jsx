@@ -43,18 +43,18 @@ const DD_CATEGORIES = [
 ];
 
 const SEVERITY_CONFIG = {
-  deal_breaker:        { label: 'Deal Breaker', color: 'bg-red-100 text-red-700' },
-  buildability_blocker:{ label: 'Buildability Blocker', color: 'bg-orange-100 text-orange-700' },
-  commercial_blocker:  { label: 'Commercial Blocker', color: 'bg-yellow-100 text-yellow-800' },
-  secondary:           { label: 'Secondary', color: 'bg-gray-100 text-gray-700' },
+  deal_breaker:         { label: 'Deal Breaker',         tone: 'danger' },
+  buildability_blocker: { label: 'Buildability Blocker', tone: 'warn' },
+  commercial_blocker:   { label: 'Commercial Blocker',   tone: 'warn' },
+  secondary:            { label: 'Secondary',            tone: 'neutral' },
 };
 
 const DD_STATUS_CONFIG = {
-  pending:        { label: 'Pending', color: 'bg-gray-100 text-gray-700' },
-  in_progress:    { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
-  completed:      { label: 'Completed', color: 'bg-green-100 text-green-700' },
-  flagged:        { label: 'Flagged', color: 'bg-red-100 text-red-700' },
-  not_applicable: { label: 'N/A', color: 'bg-slate-100 text-slate-600' },
+  pending:        { label: 'Pending',     tone: 'neutral' },
+  in_progress:    { label: 'In Progress', tone: 'info' },
+  completed:      { label: 'Completed',   tone: 'success' },
+  flagged:        { label: 'Flagged',     tone: 'danger' },
+  not_applicable: { label: 'N/A',         tone: 'neutral' },
 };
 
 // Approvals configs
@@ -339,21 +339,16 @@ function DDSection({ dealId }) {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-sm font-medium text-gray-900">{item.item_name}</span>
-                                <Badge className={clsx('text-xs', severityCfg.color)}>
-                                  {severityCfg.label}
-                                </Badge>
+                                <Badge tone={severityCfg.tone}>{severityCfg.label}</Badge>
                               </div>
                               {item.description && (
-                                <p className="text-xs text-gray-500 mb-2">{item.description}</p>
+                                <p className="text-xs text-content-secondary mb-2">{item.description}</p>
                               )}
                               <div className="flex items-center gap-3 flex-wrap">
                                 <select
                                   value={item.status}
                                   onChange={(e) => handleStatusChange(item, e.target.value)}
-                                  className={clsx(
-                                    'text-xs rounded-full px-2 py-0.5 border-0 font-medium cursor-pointer focus:ring-1 focus:ring-primary-500',
-                                    statusCfg.color
-                                  )}
+                                  className="text-xs rounded-full px-2 py-0.5 border border-hairline bg-bg-elevated text-content-secondary font-medium cursor-pointer focus:ring-1 focus:ring-accent"
                                 >
                                   {Object.entries(DD_STATUS_CONFIG).map(([v, cfg]) => (
                                     <option key={v} value={v}>{cfg.label}</option>

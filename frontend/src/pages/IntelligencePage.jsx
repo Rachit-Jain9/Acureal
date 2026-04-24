@@ -424,7 +424,7 @@ export default function IntelligencePage() {
               <div className="flex items-start justify-between gap-2">
                 <h4 className="font-semibold text-gray-900">{brief.dealOfDay.headline}</h4>
                 {brief.dealOfDay.stage && (
-                  <Badge className={STAGE_CONFIG[brief.dealOfDay.stage]?.color || 'bg-gray-100 text-gray-700'}>
+                  <Badge tone={STAGE_CONFIG[brief.dealOfDay.stage]?.tone}>
                     {STAGE_CONFIG[brief.dealOfDay.stage]?.label || brief.dealOfDay.stage}
                   </Badge>
                 )}

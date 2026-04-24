@@ -15,6 +15,7 @@ import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
 import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
+import { SectionHeader } from '../../design-system';
 import BuildabilitySummary from './BuildabilitySummary';
 import {
   formatCrores,
@@ -146,14 +147,14 @@ export default function OverviewTab({ deal, id }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
-            <IndianRupee size={14} className="text-gray-400" />
-            <span className="text-xs text-gray-500 uppercase tracking-wide">Ask Price</span>
+            <IndianRupee size={14} className="text-content-muted" />
+            <span className="text-xs text-content-secondary uppercase tracking-wide">Ask Price</span>
           </div>
-          <p className="text-xl font-bold text-gray-900">
+          <p className="text-xl font-bold text-content-primary">
             {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : '-'}
           </p>
           {deal.negotiated_price_cr && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-content-muted mt-1">
               Negotiated: {formatCrores(deal.negotiated_price_cr)}
             </p>
           )}
@@ -161,14 +162,14 @@ export default function OverviewTab({ deal, id }) {
 
         <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
-            <MapPin size={14} className="text-gray-400" />
-            <span className="text-xs text-gray-500 uppercase tracking-wide">Land Area</span>
+            <MapPin size={14} className="text-content-muted" />
+            <span className="text-xs text-content-secondary uppercase tracking-wide">Land Area</span>
           </div>
-          <p className="text-xl font-bold text-gray-900">
+          <p className="text-xl font-bold text-content-primary">
             {deal.land_area_sqft ? formatArea(deal.land_area_sqft) : '-'}
           </p>
           {deal.land_area_sqft && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-content-muted mt-1">
               {(deal.land_area_sqft / SQFT_PER_ACRE).toFixed(3)} acres
             </p>
           )}
@@ -176,14 +177,14 @@ export default function OverviewTab({ deal, id }) {
 
         <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
-            <Layers size={14} className="text-gray-400" />
-            <span className="text-xs text-gray-500 uppercase tracking-wide">Asset Class</span>
+            <Layers size={14} className="text-content-muted" />
+            <span className="text-xs text-content-secondary uppercase tracking-wide">Asset Class</span>
           </div>
-          <p className="text-lg font-bold text-gray-900 capitalize">
+          <p className="text-lg font-bold text-content-primary capitalize">
             {deal.asset_class ? deal.asset_class.replace(/_/g, ' ') : '-'}
           </p>
           {deal.deal_structure && (
-            <p className="text-xs text-gray-400 mt-1 capitalize">
+            <p className="text-xs text-content-muted mt-1 capitalize">
               {deal.deal_structure.replace(/_/g, ' ')}
             </p>
           )}
@@ -191,14 +192,14 @@ export default function OverviewTab({ deal, id }) {
 
         <div className="card-editorial p-4">
           <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={14} className="text-gray-400" />
-            <span className="text-xs text-gray-500 uppercase tracking-wide">Deal Type</span>
+            <TrendingUp size={14} className="text-content-muted" />
+            <span className="text-xs text-content-secondary uppercase tracking-wide">Deal Type</span>
           </div>
-          <p className="text-lg font-bold text-gray-900">
+          <p className="text-lg font-bold text-content-primary">
             {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || '-'}
           </p>
           {deal.assigned_to_name && (
-            <p className="text-xs text-gray-400 mt-1">By {deal.assigned_to_name}</p>
+            <p className="text-xs text-content-muted mt-1">By {deal.assigned_to_name}</p>
           )}
         </div>
       </div>
@@ -213,30 +214,28 @@ export default function OverviewTab({ deal, id }) {
 
       {readiness && (
         <div className="card-editorial">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h3 className="text-base font-semibold text-gray-900">Deal Readiness</h3>
-              <p className="text-sm text-gray-500">
-                Deterministic readiness based on DD completion, approvals, document coverage, and open risks.
-              </p>
-            </div>
-            <Badge
-              className={clsx(
-                'text-xs',
-                readiness.status === 'ic_ready'
-                  ? 'bg-green-100 text-green-700'
+          <SectionHeader
+            size="sm"
+            title="Deal Readiness"
+            sub="Deterministic readiness based on DD completion, approvals, document coverage, and open risks."
+            action={
+              <Badge
+                tone={
+                  readiness.status === 'ic_ready'
+                    ? 'success'
+                    : readiness.status === 'work_in_progress'
+                      ? 'warn'
+                      : 'danger'
+                }
+              >
+                {readiness.status === 'ic_ready'
+                  ? 'Investor-Grade'
                   : readiness.status === 'work_in_progress'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-red-100 text-red-700'
-              )}
-            >
-              {readiness.status === 'ic_ready'
-                ? 'Investor-Grade'
-                : readiness.status === 'work_in_progress'
-                  ? 'In Progress'
-                  : 'Not Ready'}
-            </Badge>
-          </div>
+                    ? 'In Progress'
+                    : 'Not Ready'}
+              </Badge>
+            }
+          />
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
@@ -246,9 +245,9 @@ export default function OverviewTab({ deal, id }) {
               { label: 'Open Risk Score', value: `${readiness.risk_score || 0}` },
               { label: 'Documents', value: `${readiness.document_count || 0}` },
             ].map((item) => (
-              <div key={item.label} className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">{item.label}</p>
-                <p className="text-base font-bold text-gray-900">{item.value}</p>
+              <div key={item.label} className="bg-bg-secondary rounded-lg p-3">
+                <p className="text-xs text-content-muted mb-1">{item.label}</p>
+                <p className="text-base font-bold text-content-primary">{item.value}</p>
               </div>
             ))}
           </div>
@@ -256,7 +255,7 @@ export default function OverviewTab({ deal, id }) {
           {(keyRisks.length > 0 || readiness.pending_deal_breakers > 0) && (
             <div className="mt-4 space-y-2">
               {readiness.pending_deal_breakers > 0 && (
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-data-negative">
                   {readiness.pending_deal_breakers} deal-breaker DD item
                   {readiness.pending_deal_breakers === 1 ? '' : 's'} remain unresolved.
                 </p>
@@ -264,12 +263,7 @@ export default function OverviewTab({ deal, id }) {
               {keyRisks.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {keyRisks.map((risk) => (
-                    <span
-                      key={risk}
-                      className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700"
-                    >
-                      {risk}
-                    </span>
+                    <Badge key={risk} tone="danger">{risk}</Badge>
                   ))}
                 </div>
               )}
@@ -281,18 +275,19 @@ export default function OverviewTab({ deal, id }) {
       {/* Financial Summary */}
       {financials && (
         <div className="card-editorial">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <IndianRupee size={16} className="text-gray-400" />
-              Financial Summary
-            </h3>
-            <Link
-              to={`/dashboard/financials/${id}`}
-              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
-            >
-              Full Model <ArrowRight size={14} />
-            </Link>
-          </div>
+          <SectionHeader
+            size="sm"
+            icon={IndianRupee}
+            title="Financial Summary"
+            action={
+              <Link
+                to={`/dashboard/financials/${id}`}
+                className="text-sm text-accent hover:opacity-80 flex items-center gap-1"
+              >
+                Full Model <ArrowRight size={14} />
+              </Link>
+            }
+          />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Total Cost', value: formatCrores(financials.total_cost_cr) },
@@ -318,12 +313,12 @@ export default function OverviewTab({ deal, id }) {
               },
               { label: 'Developer Profit', value: formatCrores(financials.developer_profit_cr) },
             ].map(({ label, value, highlight }) => (
-              <div key={label} className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">{label}</p>
+              <div key={label} className="bg-bg-secondary rounded-lg p-3">
+                <p className="text-xs text-content-muted mb-1">{label}</p>
                 <p
                   className={clsx(
                     'text-base font-bold',
-                    highlight ? 'text-green-600' : 'text-gray-900'
+                    highlight ? 'text-data-positive' : 'text-content-primary'
                   )}
                 >
                   {value}
@@ -336,34 +331,37 @@ export default function OverviewTab({ deal, id }) {
 
       {/* AI Deal Analysis */}
       <div className="card-editorial">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <Brain size={16} className="text-primary-600" />
-            AI Deal Analysis
-            <span className="text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-              Claude
-            </span>
-          </h3>
-          <button
-            onClick={handleAiAnalysis}
-            disabled={aiLoading}
-            className="btn btn-primary flex items-center gap-1.5 text-sm"
-          >
-            {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
-            {aiLoading ? 'Analysing...' : aiAnalysis ? 'Refresh' : 'Generate Analysis'}
-          </button>
-        </div>
+        <SectionHeader
+          size="sm"
+          icon={Brain}
+          title={
+            <>
+              AI Deal Analysis
+              <Badge className="ml-2">Claude</Badge>
+            </>
+          }
+          action={
+            <button
+              onClick={handleAiAnalysis}
+              disabled={aiLoading}
+              className="btn btn-primary flex items-center gap-1.5 text-sm"
+            >
+              {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
+              {aiLoading ? 'Analysing...' : aiAnalysis ? 'Refresh' : 'Generate Analysis'}
+            </button>
+          }
+        />
         {aiError && (
-          <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+          <p className="mt-3 text-sm text-data-negative bg-bg-secondary border border-hairline rounded px-3 py-2">
             {aiError}
           </p>
         )}
         {aiAnalysis?.analysis ? (
           <div className="mt-4 space-y-2">
-            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+            <p className="text-sm text-content-primary leading-relaxed whitespace-pre-line">
               {aiAnalysis.analysis}
             </p>
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs text-content-muted mt-2">
               Generated{' '}
               {aiAnalysis.generatedAt
                 ? new Date(aiAnalysis.generatedAt).toLocaleString('en-IN')
@@ -373,7 +371,7 @@ export default function OverviewTab({ deal, id }) {
           </div>
         ) : (
           !aiLoading && !aiError && (
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-content-secondary">
               Generate a Claude-powered Investor-Grade memo cross-referencing this deal's financials against
               Bengaluru micro-market benchmarks and verified comps.
             </p>
@@ -385,12 +383,9 @@ export default function OverviewTab({ deal, id }) {
         {/* Stage History */}
         {stageHistory.length > 0 && (
           <div className="card-editorial">
-            <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Clock size={16} className="text-gray-400" />
-              Stage History
-            </h3>
+            <SectionHeader size="sm" icon={Clock} title="Stage History" />
             <div className="relative">
-              <div className="absolute left-3 top-2 bottom-2 w-px bg-gray-200" />
+              <div className="absolute left-3 top-2 bottom-2 w-px bg-hairline" />
               <ul className="space-y-4">
                 {stageHistory.map((entry, index) => {
                   const toConfig = STAGE_CONFIG[entry.to_stage] || STAGE_CONFIG.screening;
@@ -398,8 +393,8 @@ export default function OverviewTab({ deal, id }) {
                     <li key={entry.id || index} className="relative pl-8">
                       <div
                         className={clsx(
-                          'absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-white',
-                          index === stageHistory.length - 1 ? 'bg-primary-600' : 'bg-gray-300'
+                          'absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-bg-elevated',
+                          index === stageHistory.length - 1 ? 'bg-accent' : 'bg-hairline-strong'
                         )}
                       />
                       <div>
@@ -407,25 +402,20 @@ export default function OverviewTab({ deal, id }) {
                           {entry.from_stage && (
                             <>
                               <Badge
-                                className={clsx(
-                                  'text-xs',
-                                  (STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).color
-                                )}
+                                tone={(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).tone}
                               >
                                 {(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).label}
                               </Badge>
-                              <ArrowRight size={12} className="text-gray-400" />
+                              <ArrowRight size={12} className="text-content-muted" />
                             </>
                           )}
-                          <Badge className={clsx('text-xs', toConfig.color)}>
-                            {toConfig.label}
-                          </Badge>
+                          <Badge tone={toConfig.tone}>{toConfig.label}</Badge>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-content-secondary mt-1">
                           {entry.changed_by_name} · {formatDate(entry.changed_at)}
                         </p>
                         {entry.notes && (
-                          <p className="text-xs text-gray-400 mt-0.5 italic">{entry.notes}</p>
+                          <p className="text-xs text-content-muted mt-0.5 italic">{entry.notes}</p>
                         )}
                       </div>
                     </li>
@@ -439,20 +429,17 @@ export default function OverviewTab({ deal, id }) {
         {/* Next Steps */}
         {nextStepGroups.length > 0 && (
           <div className="card-editorial">
-            <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-primary-600" />
-              Next Steps
-            </h3>
+            <SectionHeader size="sm" icon={CheckCircle2} title="Next Steps" />
             <div className="space-y-4">
               {nextStepGroups.map((group) => (
                 <div key={group.group}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary mb-2">
                     {group.group}
                   </p>
                   <ul className="space-y-2">
                     {group.items.map((step, index) => (
-                      <li key={`${group.group}-${index}`} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="mt-0.5 w-5 h-5 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
+                      <li key={`${group.group}-${index}`} className="flex items-start gap-2 text-sm text-content-secondary">
+                        <span className="mt-0.5 w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center text-xs font-medium flex-shrink-0">
                           {index + 1}
                         </span>
                         {step}
@@ -469,8 +456,8 @@ export default function OverviewTab({ deal, id }) {
       {/* Recent Activities */}
       {recentActivities.length > 0 && (
         <div className="card-editorial">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Recent Activities</h3>
-          <ul className="divide-y divide-gray-100">
+          <SectionHeader size="sm" title="Recent Activities" />
+          <ul className="divide-y divide-hairline-soft">
             {recentActivities.slice(0, 5).map((activity) => {
               const statusCfg =
                 ACTIVITY_STATUS_CONFIG[activity.status] || ACTIVITY_STATUS_CONFIG.open;
@@ -479,20 +466,18 @@ export default function OverviewTab({ deal, id }) {
               return (
                 <li key={activity.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <Badge className="bg-gray-100 text-gray-600 text-xs capitalize">
+                    <Badge className="capitalize">
                       {(activity.activity_type || activity.type || '').replace(/_/g, ' ')}
                     </Badge>
-                    <Badge className={clsx('text-xs', statusCfg.color)}>{statusCfg.label}</Badge>
-                    <Badge className={clsx('text-xs', priorityCfg.color)}>
-                      {priorityCfg.label}
-                    </Badge>
-                    <span className="text-xs text-gray-400 ml-auto">
+                    <Badge tone={statusCfg.tone}>{statusCfg.label}</Badge>
+                    <Badge tone={priorityCfg.tone}>{priorityCfg.label}</Badge>
+                    <span className="text-xs text-content-muted ml-auto">
                       {formatRelativeTime(activity.activity_date)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-800">{activity.description}</p>
+                  <p className="text-sm text-content-primary">{activity.description}</p>
                   {activity.performed_by_name && (
-                    <p className="text-xs text-gray-400 mt-0.5">by {activity.performed_by_name}</p>
+                    <p className="text-xs text-content-muted mt-0.5">by {activity.performed_by_name}</p>
                   )}
                 </li>
               );
@@ -504,10 +489,8 @@ export default function OverviewTab({ deal, id }) {
       {/* Deal Notes */}
       {deal.notes && (
         <div className="card-editorial">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">
-            Notes
-          </h3>
-          <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{deal.notes}</p>
+          <SectionHeader size="sm" title="Notes" />
+          <p className="text-sm text-content-secondary whitespace-pre-line leading-relaxed">{deal.notes}</p>
         </div>
       )}
     </div>

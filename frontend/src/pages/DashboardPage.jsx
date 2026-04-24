@@ -548,7 +548,7 @@ export default function DashboardPage() {
                           </Link>
                         </td>
                         <td className="py-2.5 pr-3">
-                          <Badge className={stageConf.color}>
+                          <Badge tone={stageConf.tone}>
                             {stageConf.label || deal.stage}
                           </Badge>
                         </td>

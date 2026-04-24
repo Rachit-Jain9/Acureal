@@ -22,17 +22,17 @@ const RISK_CATEGORIES = [
 ];
 
 const SEVERITY_CONFIG = {
-  critical: { label: 'Critical', color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  high:     { label: 'High',     color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
-  medium:   { label: 'Medium',   color: 'bg-yellow-100 text-yellow-800', dot: 'bg-yellow-500' },
-  low:      { label: 'Low',      color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
+  critical: { label: 'Critical', tone: 'danger',  dot: 'bg-data-negative' },
+  high:     { label: 'High',     tone: 'warn',    dot: 'bg-premium' },
+  medium:   { label: 'Medium',   tone: 'warn',    dot: 'bg-premium' },
+  low:      { label: 'Low',      tone: 'neutral', dot: 'bg-content-muted' },
 };
 
 const STATUS_CONFIG = {
-  open:     { label: 'Open', color: 'bg-red-50 text-red-700' },
-  flagged:  { label: 'Flagged', color: 'bg-orange-100 text-orange-700' },
-  mitigated:{ label: 'Mitigated', color: 'bg-green-100 text-green-700' },
-  resolved: { label: 'Resolved', color: 'bg-gray-100 text-gray-600' },
+  open:     { label: 'Open',      tone: 'danger' },
+  flagged:  { label: 'Flagged',   tone: 'warn' },
+  mitigated:{ label: 'Mitigated', tone: 'success' },
+  resolved: { label: 'Resolved',  tone: 'neutral' },
 };
 
 const buildForm = () => ({
@@ -202,11 +202,11 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className={clsx('w-2 h-2 rounded-full flex-shrink-0 mt-1', severityCfg.dot)} />
               <h4 className="text-sm font-semibold text-gray-900">{flag.title}</h4>
-              <Badge className={clsx('text-xs', severityCfg.color)}>{severityCfg.label}</Badge>
-              <Badge className={clsx('text-xs', statusCfg.color)}>{statusCfg.label}</Badge>
-              <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+              <Badge tone={severityCfg.tone}>{severityCfg.label}</Badge>
+              <Badge tone={statusCfg.tone}>{statusCfg.label}</Badge>
+              <Badge>
                 {RISK_CATEGORIES.find((item) => item.value === flag.category)?.label || flag.category}
-              </span>
+              </Badge>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button

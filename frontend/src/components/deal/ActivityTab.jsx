@@ -53,9 +53,9 @@ const buildForm = () => ({
 
 function ActivityIcon({ type }) {
   const match = TYPE_MAP[type];
-  if (!match) return <StickyNote size={15} className="text-gray-400" />;
+  if (!match) return <StickyNote size={15} className="text-content-muted" />;
   const { Icon } = match;
-  return <Icon size={15} className="text-gray-400" />;
+  return <Icon size={15} className="text-content-muted" />;
 }
 
 export default function ActivityTab({ dealId }) {
@@ -128,10 +128,10 @@ export default function ActivityTab({ dealId }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-content-secondary">
             {activities.length} activit{activities.length !== 1 ? 'ies' : 'y'}
           </p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-content-muted mt-0.5">
             Manual log of calls, visits, meetings &amp; notes — kernel audit trail below.
           </p>
         </div>
@@ -147,11 +147,11 @@ export default function ActivityTab({ dealId }) {
       {/* Add Activity Form */}
       {showForm && (
         <div className="card-editorial border-accent-200 bg-accent-50/40">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Log Activity</h3>
+          <h3 className="text-sm font-semibold text-content-primary mb-3">Log Activity</h3>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Type</label>
                 <select
                   value={form.type}
                   onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
@@ -165,7 +165,7 @@ export default function ActivityTab({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
                 <input
                   type="date"
                   value={form.activityDate}
@@ -177,7 +177,7 @@ export default function ActivityTab({ dealId }) {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -190,7 +190,7 @@ export default function ActivityTab({ dealId }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Priority</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Priority</label>
                 <select
                   value={form.priority}
                   onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
@@ -202,7 +202,7 @@ export default function ActivityTab({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
                 <select
                   value={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
@@ -214,8 +214,8 @@ export default function ActivityTab({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Next Follow-Up <span className="text-gray-400">(optional)</span>
+                <label className="block text-xs font-medium text-content-secondary mb-1">
+                  Next Follow-Up <span className="text-content-muted">(optional)</span>
                 </label>
                 <input
                   type="date"
@@ -253,9 +253,9 @@ export default function ActivityTab({ dealId }) {
       {/* Activity List */}
       {sorted.length === 0 ? (
         <div className="card-editorial text-center py-16">
-          <StickyNote size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-600 mb-1">No activities logged yet</p>
-          <p className="text-xs text-gray-400">
+          <StickyNote size={32} className="text-content-muted mx-auto mb-3" />
+          <p className="text-sm font-medium text-content-secondary mb-1">No activities logged yet</p>
+          <p className="text-xs text-content-muted">
             Track calls, site visits, meetings, and notes for this deal.
           </p>
         </div>
@@ -271,41 +271,37 @@ export default function ActivityTab({ dealId }) {
               const isCompleted = activity.status === 'completed';
 
               return (
-                <li key={activity.id} className="px-4 py-4 hover:bg-gray-50">
+                <li key={activity.id} className="px-4 py-4 hover:bg-bg-secondary">
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <div className="mt-0.5 w-7 h-7 rounded-full bg-bg-secondary flex items-center justify-center flex-shrink-0">
                       <ActivityIcon type={actType} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="text-xs font-medium text-gray-700 capitalize">
+                        <span className="text-xs font-medium text-content-secondary capitalize">
                           {(TYPE_MAP[actType]?.label || actType).replace(/_/g, ' ')}
                         </span>
-                        <Badge className={clsx('text-xs', statusCfg.color)}>
-                          {statusCfg.label}
-                        </Badge>
-                        <Badge className={clsx('text-xs', priorityCfg.color)}>
-                          {priorityCfg.label}
-                        </Badge>
-                        <span className="text-xs text-gray-400 ml-auto">
+                        <Badge tone={statusCfg.tone}>{statusCfg.label}</Badge>
+                        <Badge tone={priorityCfg.tone}>{priorityCfg.label}</Badge>
+                        <span className="text-xs text-content-muted ml-auto">
                           {formatRelativeTime(activity.activity_date || activity.created_at)}
                         </span>
                       </div>
                       <p
                         className={clsx(
                           'text-sm',
-                          isCompleted ? 'text-gray-500 line-through' : 'text-gray-800'
+                          isCompleted ? 'text-content-secondary line-through' : 'text-content-primary'
                         )}
                       >
                         {activity.description}
                       </p>
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         {activity.performed_by_name && (
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-content-muted">
                             by {activity.performed_by_name}
                           </span>
                         )}
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-content-muted">
                           {formatDate(activity.activity_date)}
                         </span>
                         {activity.next_follow_up && (

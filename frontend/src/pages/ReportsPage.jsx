@@ -74,7 +74,7 @@ export default function ReportsPage() {
       .map(([key, config]) => ({
         stage: key,
         label: config.label,
-        color: config.color,
+        tone: config.tone,
         count: stages[key]?.count || 0,
         totalValue: stages[key]?.totalValue || 0,
       }));
@@ -265,7 +265,7 @@ export default function ReportsPage() {
                 {pipelineData.map((row) => (
                   <tr key={row.stage} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-6 py-3">
-                      <Badge className={row.color}>{row.label}</Badge>
+                      <Badge tone={row.tone}>{row.label}</Badge>
                     </td>
                     <td className="px-6 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{row.count}</td>
                     <td className="px-6 py-3 text-right text-gray-900">{formatCrores(row.totalValue)}</td>
@@ -389,7 +389,7 @@ export default function ReportsPage() {
                       <td className="px-4 py-3 font-medium text-gray-900">{deal.name}</td>
                       <td className="px-4 py-3 text-gray-600">{deal.city || '-'}</td>
                       <td className="px-4 py-3">
-                        <Badge className={STAGE_CONFIG[deal.stage]?.color || 'bg-gray-100 text-gray-700'}>
+                        <Badge tone={STAGE_CONFIG[deal.stage]?.tone}>
                           {STAGE_CONFIG[deal.stage]?.label || deal.stage}
                         </Badge>
                       </td>
