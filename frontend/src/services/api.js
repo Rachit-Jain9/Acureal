@@ -108,6 +108,8 @@ export const propertiesAPI = {
   delete: (id) => api.delete(`/properties/${id}`),
   geocode: (id) => api.post(`/properties/${id}/geocode`),
   bulkGeocode: () => api.post('/properties/bulk-geocode'),
+  parcelIntelligence: (id) => api.get(`/properties/${id}/parcel-intelligence`),
+  refreshParcelIntelligence: (id) => api.post(`/properties/${id}/parcel-intelligence/refresh`),
 };
 
 // Financials
@@ -254,6 +256,13 @@ export const masterPlanAPI = {
   updateZone:   (id, data)            => api.put(`/master-plan/zones/${id}`, data),
   reviewZone:   (id, data)            => api.put(`/master-plan/zones/${id}/review`, data),
   listDocs:     (params)              => api.get('/master-plan/documents', { params }),
+};
+
+// Parcel Intelligence admin / evidence operations
+export const parcelIntelligenceAdminAPI = {
+  status:      ()                    => api.get('/parcel-intelligence/status'),
+  reviewQueue: (params)              => api.get('/parcel-intelligence/review-queue', { params }),
+  reviewItem:  (type, id, data)      => api.put(`/parcel-intelligence/review-queue/${type}/${id}`, data),
 };
 
 // Document Extraction

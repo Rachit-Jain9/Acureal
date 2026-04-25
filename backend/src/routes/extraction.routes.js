@@ -43,6 +43,7 @@ router.post('/documents/:documentId/extract', authenticate, requireAdminOrAnalys
       doc.file_name,
       doc.mime_type,
       doc.deal_id || null,
+      req.user.id,
     );
 
     return res.status(201).json({ success: true, data: extraction });

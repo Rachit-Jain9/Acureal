@@ -5,6 +5,13 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS postgis;
+EXCEPTION
+  WHEN insufficient_privilege OR undefined_file THEN
+    RAISE NOTICE 'PostGIS extension unavailable in this database; spatial geometry columns will be skipped.';
+END $$;
 
 CREATE OR REPLACE FUNCTION current_organization_id()
 RETURNS UUID AS $$
@@ -103,6 +110,10 @@ CREATE TABLE properties (
     lng DECIMAL(10, 7),
     property_type VARCHAR(50) NOT NULL DEFAULT 'land',
     survey_number VARCHAR(100),
+    pid VARCHAR(120),
+    khata_no VARCHAR(120),
+    bhoomi_id VARCHAR(120),
+    rera_registration_number VARCHAR(120),
     owner_name VARCHAR(255),
     land_area_sqft DECIMAL(15, 2),
     land_area_acres DECIMAL(10, 4) GENERATED ALWAYS AS (land_area_sqft / 43560.0) STORED,
@@ -113,6 +124,8 @@ CREATE TABLE properties (
     existing_fsi DECIMAL(5, 2) DEFAULT 1.0,
     permissible_fsi DECIMAL(5, 2),
     road_width_mtrs DECIMAL(5, 2),
+    frontage_mtrs DECIMAL(8, 2),
+    depth_mtrs DECIMAL(8, 2),
     setback_details TEXT,
     ownership_type VARCHAR(100),
     encumbrance_status VARCHAR(100),
@@ -794,6 +807,324 @@ CREATE POLICY deal_stage_history_shared_read ON deal_stage_history
   FOR SELECT USING (
     deal_id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id())
   );
+
+-- Regulatory data and Parcel Intelligence
+CREATE SCHEMA IF NOT EXISTS regulatory_data;
+
+CREATE TABLE regulatory_data.master_plan_documents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  city TEXT NOT NULL DEFAULT 'Bengaluru',
+  plan_name TEXT NOT NULL,
+  plan_version TEXT,
+  file_url TEXT,
+  storage_path TEXT,
+  deleted_at TIMESTAMPTZ,
+  extraction_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (extraction_status IN ('pending','in_progress','completed','failed')),
+  zones_extracted INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE regulatory_data.planning_districts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  pd_code TEXT UNIQUE NOT NULL,
+  pd_name TEXT,
+  city TEXT NOT NULL DEFAULT 'Bengaluru'
+);
+
+CREATE TABLE regulatory_data.master_plan_zones (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id UUID REFERENCES regulatory_data.master_plan_documents(id) ON DELETE SET NULL,
+  planning_district_id UUID REFERENCES regulatory_data.planning_districts(id) ON DELETE SET NULL,
+  city TEXT NOT NULL DEFAULT 'Bengaluru',
+  plan_version TEXT,
+  zone_code TEXT NOT NULL,
+  zone_name TEXT NOT NULL,
+  permissible_fsi_base DECIMAL(5,2),
+  permissible_fsi_max DECIMAL(5,2),
+  fsi_road_width_rules JSONB,
+  ground_coverage_pct DECIMAL(5,2),
+  building_height_max_m DECIMAL(6,2),
+  road_width_min_m DECIMAL(5,2),
+  setback_rules JSONB,
+  permissible_uses TEXT[],
+  prohibited_uses TEXT[],
+  notes TEXT DEFAULT 'Manual entry',
+  source_page INT,
+  source_section TEXT,
+  confidence_score DECIMAL(3,2),
+  review_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (review_status IN ('pending','approved','rejected')),
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  effective_from DATE,
+  effective_to DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (zone_code, plan_version, planning_district_id)
+);
+
+CREATE TABLE regulatory_data.zone_versions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  zone_id UUID NOT NULL REFERENCES regulatory_data.master_plan_zones(id) ON DELETE CASCADE,
+  changed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  previous_values JSONB NOT NULL,
+  change_reason TEXT
+);
+
+CREATE OR REPLACE FUNCTION regulatory_data.effective_fsi(
+  fsi_base DECIMAL,
+  road_width_rules JSONB,
+  road_width_m DECIMAL
+) RETURNS DECIMAL AS $$
+DECLARE
+  rule JSONB;
+BEGIN
+  IF road_width_rules IS NULL
+     OR jsonb_typeof(road_width_rules) <> 'array'
+     OR jsonb_array_length(road_width_rules) = 0
+     OR road_width_m IS NULL THEN
+    RETURN fsi_base;
+  END IF;
+
+  SELECT r INTO rule
+  FROM jsonb_array_elements(road_width_rules) r
+  WHERE (r->>'road_width_m')::DECIMAL <= road_width_m
+  ORDER BY (r->>'road_width_m')::DECIMAL DESC
+  LIMIT 1;
+
+  RETURN COALESCE((rule->>'fsi')::DECIMAL, fsi_base);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+ALTER TABLE properties
+  ADD COLUMN zone_id UUID REFERENCES regulatory_data.master_plan_zones(id) ON DELETE SET NULL,
+  ADD COLUMN zone_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  ADD COLUMN zone_assigned_at TIMESTAMPTZ,
+  ADD COLUMN zone_notes TEXT;
+
+CREATE TABLE regulatory_data.evidence_sources (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+  source_kind VARCHAR(40) NOT NULL CHECK (source_kind IN ('official_pdf', 'vendor', 'user_upload', 'manual_entry', 'kgis', 'system')),
+  authority_name VARCHAR(255),
+  vendor_name VARCHAR(255),
+  source_title VARCHAR(500) NOT NULL,
+  source_url TEXT,
+  file_url TEXT,
+  storage_path TEXT,
+  checksum_sha256 VARCHAR(64),
+  city VARCHAR(120) DEFAULT 'Bengaluru',
+  plan_version VARCHAR(120),
+  effective_from DATE,
+  effective_to DATE,
+  extraction_status VARCHAR(40) DEFAULT 'pending' CHECK (extraction_status IN ('pending', 'in_progress', 'completed', 'failed', 'not_required')),
+  review_status VARCHAR(40) DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
+  confidence_score NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  approved_facts JSONB DEFAULT '{}'::jsonb,
+  notes TEXT,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE regulatory_data.evidence_facts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_id UUID NOT NULL REFERENCES regulatory_data.evidence_sources(id) ON DELETE CASCADE,
+  org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  fact_type VARCHAR(80) NOT NULL,
+  fact_key VARCHAR(160) NOT NULL,
+  fact_value JSONB NOT NULL,
+  page_number INTEGER CHECK (page_number IS NULL OR page_number > 0),
+  source_section VARCHAR(255),
+  confidence_score NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  review_status VARCHAR(40) DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE regulatory_data.far_rules (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  evidence_source_id UUID REFERENCES regulatory_data.evidence_sources(id) ON DELETE SET NULL,
+  zone_id UUID REFERENCES regulatory_data.master_plan_zones(id) ON DELETE SET NULL,
+  city VARCHAR(120) DEFAULT 'Bengaluru',
+  plan_version VARCHAR(120) DEFAULT 'RMP 2031 Draft',
+  plan_status VARCHAR(60) DEFAULT 'draft_reference',
+  zone_code VARCHAR(80),
+  planning_zone VARCHAR(20),
+  land_use_family VARCHAR(80) NOT NULL,
+  plot_area_min_sqm NUMERIC(12,2) DEFAULT 0,
+  plot_area_max_sqm NUMERIC(12,2),
+  road_width_min_m NUMERIC(8,2) DEFAULT 0,
+  road_width_max_m NUMERIC(8,2),
+  base_far NUMERIC(6,3) NOT NULL,
+  additional_far NUMERIC(6,3) DEFAULT 0,
+  max_far NUMERIC(6,3) NOT NULL,
+  ground_coverage_pct NUMERIC(6,2),
+  front_setback_m NUMERIC(6,2),
+  rear_setback_m NUMERIC(6,2),
+  side_setback_m NUMERIC(6,2),
+  tdr_eligible BOOLEAN,
+  premium_far_cap NUMERIC(6,3),
+  tdr_road_threshold_m NUMERIC(8,2),
+  source_page INTEGER,
+  source_section VARCHAR(255),
+  rule_notes TEXT,
+  confidence_score NUMERIC(4,3) DEFAULT 1 CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  review_status VARCHAR(40) DEFAULT 'approved' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
+  effective_from DATE,
+  effective_to DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE regulatory_data.guidance_values (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  evidence_source_id UUID REFERENCES regulatory_data.evidence_sources(id) ON DELETE SET NULL,
+  city VARCHAR(120) DEFAULT 'Bengaluru',
+  sro_name VARCHAR(255),
+  locality VARCHAR(500) NOT NULL,
+  road_name VARCHAR(500),
+  land_use_type VARCHAR(120) DEFAULT 'residential',
+  value_inr_per_sqft NUMERIC(14,2),
+  value_inr_per_acre NUMERIC(18,2),
+  unit_type VARCHAR(40) DEFAULT 'sqft',
+  effective_from DATE,
+  effective_to DATE,
+  source_page INTEGER,
+  source_section VARCHAR(255),
+  review_status VARCHAR(40) DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
+  confidence_score NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE regulatory_data.kgis_cache (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  property_id UUID REFERENCES properties(id) ON DELETE CASCADE,
+  cache_key TEXT NOT NULL,
+  provider_status VARCHAR(60) NOT NULL DEFAULT 'not_requested',
+  request_payload JSONB DEFAULT '{}'::jsonb,
+  response_payload JSONB DEFAULT '{}'::jsonb,
+  hierarchy JSONB DEFAULT '{}'::jsonb,
+  survey_numbers JSONB DEFAULT '[]'::jsonb,
+  geometry_geojson JSONB,
+  confidence_score NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE regulatory_data.parcel_intelligence_snapshots (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  inputs_hash VARCHAR(64) NOT NULL,
+  output_json JSONB NOT NULL,
+  source_versions JSONB DEFAULT '{}'::jsonb,
+  generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  generated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_mpz_code_city ON regulatory_data.master_plan_zones(zone_code, city);
+CREATE INDEX idx_properties_zone ON properties(zone_id) WHERE zone_id IS NOT NULL;
+CREATE INDEX idx_properties_survey_city ON properties(organization_id, city, survey_number) WHERE survey_number IS NOT NULL;
+CREATE INDEX idx_properties_pid ON properties(organization_id, pid) WHERE pid IS NOT NULL;
+CREATE INDEX idx_properties_khata_no ON properties(organization_id, khata_no) WHERE khata_no IS NOT NULL;
+CREATE INDEX idx_properties_rera_registration ON properties(organization_id, rera_registration_number) WHERE rera_registration_number IS NOT NULL;
+CREATE INDEX idx_far_rules_lookup ON regulatory_data.far_rules(org_id, city, zone_code, planning_zone, land_use_family, review_status);
+CREATE INDEX idx_far_rules_source_review
+  ON regulatory_data.far_rules(evidence_source_id, review_status, created_at DESC)
+  WHERE evidence_source_id IS NOT NULL;
+CREATE INDEX idx_guidance_locality_trgm ON regulatory_data.guidance_values USING gin(locality gin_trgm_ops);
+CREATE INDEX idx_guidance_road_trgm ON regulatory_data.guidance_values USING gin(road_name gin_trgm_ops);
+CREATE INDEX idx_guidance_values_source_review
+  ON regulatory_data.guidance_values(evidence_source_id, review_status, created_at DESC)
+  WHERE evidence_source_id IS NOT NULL;
+CREATE INDEX idx_evidence_sources_org_document
+  ON regulatory_data.evidence_sources(org_id, document_id, created_at DESC)
+  WHERE document_id IS NOT NULL;
+CREATE INDEX idx_evidence_facts_source_review
+  ON regulatory_data.evidence_facts(source_id, review_status, created_at DESC);
+CREATE UNIQUE INDEX idx_kgis_cache_cache_key_org
+  ON regulatory_data.kgis_cache(COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), cache_key);
+CREATE INDEX idx_parcel_snapshots_property
+  ON regulatory_data.parcel_intelligence_snapshots(org_id, property_id, generated_at DESC);
+
+DO $$
+DECLARE
+  postgis_schema TEXT;
+BEGIN
+  SELECT n.nspname
+    INTO postgis_schema
+  FROM pg_type t
+  JOIN pg_namespace n ON n.oid = t.typnamespace
+  WHERE t.typname = 'geometry'
+  LIMIT 1;
+
+  IF postgis_schema IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE properties ADD COLUMN IF NOT EXISTS geom %I.geometry(Point, 4326)', postgis_schema);
+    EXECUTE format('ALTER TABLE regulatory_data.master_plan_zones ADD COLUMN IF NOT EXISTS geom %I.geometry(MultiPolygon, 4326)', postgis_schema);
+
+    EXECUTE format($sql$
+      CREATE OR REPLACE FUNCTION sync_property_geom()
+      RETURNS TRIGGER AS $fn$
+      BEGIN
+        IF NEW.lat IS NOT NULL AND NEW.lng IS NOT NULL THEN
+          NEW.geom := %I.ST_SetSRID(%I.ST_MakePoint(NEW.lng::double precision, NEW.lat::double precision), 4326);
+        ELSE
+          NEW.geom := NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql
+    $sql$, postgis_schema, postgis_schema);
+
+    DROP TRIGGER IF EXISTS trg_properties_sync_geom ON properties;
+    CREATE TRIGGER trg_properties_sync_geom
+      BEFORE INSERT OR UPDATE OF lat, lng ON properties
+      FOR EACH ROW EXECUTE FUNCTION sync_property_geom();
+
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_properties_geom ON properties USING gist(geom) WHERE geom IS NOT NULL';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_master_plan_zones_geom ON regulatory_data.master_plan_zones USING gist(geom) WHERE geom IS NOT NULL';
+  END IF;
+END $$;
+
+ALTER TABLE regulatory_data.evidence_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.evidence_facts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.far_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.guidance_values ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.kgis_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.parcel_intelligence_snapshots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY evidence_sources_org_or_global ON regulatory_data.evidence_sources
+  USING (org_id IS NULL OR org_id = current_organization_id())
+  WITH CHECK (org_id IS NULL OR org_id = current_organization_id());
+CREATE POLICY evidence_facts_org_or_global ON regulatory_data.evidence_facts
+  USING (org_id IS NULL OR org_id = current_organization_id())
+  WITH CHECK (org_id IS NULL OR org_id = current_organization_id());
+CREATE POLICY far_rules_org_or_global ON regulatory_data.far_rules
+  USING (org_id IS NULL OR org_id = current_organization_id())
+  WITH CHECK (org_id IS NULL OR org_id = current_organization_id());
+CREATE POLICY guidance_values_org_or_global ON regulatory_data.guidance_values
+  USING (org_id IS NULL OR org_id = current_organization_id())
+  WITH CHECK (org_id IS NULL OR org_id = current_organization_id());
+CREATE POLICY kgis_cache_org_only ON regulatory_data.kgis_cache
+  USING (org_id = current_organization_id())
+  WITH CHECK (org_id = current_organization_id());
+CREATE POLICY parcel_snapshots_org_only ON regulatory_data.parcel_intelligence_snapshots
+  USING (org_id = current_organization_id())
+  WITH CHECK (org_id = current_organization_id());
 
 -- View: deal_summary
 CREATE VIEW deal_summary AS

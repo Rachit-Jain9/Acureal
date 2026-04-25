@@ -7,6 +7,7 @@ import { useProperties, useCreateProperty } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
 import SiteWeatherCard from './SiteWeatherCard';
 import { SectionHeader } from '../../design-system';
+import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 
 function FieldRow({ label, value, span = false }) {
   if (!value && value !== 0) return null;
@@ -360,6 +361,10 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
           <FieldRow label="State" value={deal.state} />
           <FieldRow label="Pincode" value={deal.pincode} />
           <FieldRow label="Survey Number" value={deal.survey_number} />
+          <FieldRow label="PID" value={deal.pid} />
+          <FieldRow label="Khata No." value={deal.khata_no} />
+          <FieldRow label="Bhoomi ID" value={deal.bhoomi_id} />
+          <FieldRow label="Property RERA" value={deal.rera_registration_number} />
           <FieldRow label="Zoning" value={deal.zoning} />
           <FieldRow
             label="Land Area (sqft)"
@@ -371,6 +376,14 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
           />
           <FieldRow label="Land Area (acres)" value={landAreaAcres} />
           <FieldRow label="Road Width (mtrs)" value={deal.road_width_mtrs} />
+          <FieldRow
+            label="Plot Dimensions"
+            value={
+              deal.frontage_mtrs || deal.depth_mtrs
+                ? `${deal.frontage_mtrs || '-'} m frontage x ${deal.depth_mtrs || '-'} m depth`
+                : null
+            }
+          />
           <FieldRow label="Owner Name" value={deal.owner_name} />
           <FieldRow label="Ownership Type" value={deal.ownership_type} />
           <FieldRow label="Encumbrance Status" value={deal.encumbrance_status} />
@@ -420,17 +433,7 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
                 Satellite view <ExternalLink size={12} />
               </a>
             </div>
-            <div className="h-72 rounded-lg overflow-hidden border border-hairline-strong bg-bg-secondary">
-              <iframe
-                title="property-map"
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://maps.google.com/maps?q=${deal.lat},${deal.lng}&z=17&t=k&output=embed&iwloc=near`}
-              />
-            </div>
+            <ReadOnlyPropertyMap lat={deal.lat} lng={deal.lng} title="Linked property reference point" />
             <p className="text-xs text-content-secondary">
               Pin at exact lat/lng. If the location looks off, re-geocode the property or enter manual coordinates on the Property Record.
             </p>

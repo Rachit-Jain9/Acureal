@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query: qv } = require('express-validator');
 const propertyService = require('../services/property.service');
+const parcelIntelligenceService = require('../services/parcelIntelligence.service');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -68,6 +69,12 @@ router.post(
     body('landAreaUnit').optional().customSanitizer(normalizeAreaUnit).isIn(AREA_UNITS).withMessage('Invalid land area unit'),
     body('circleRatePerSqft').optional().isFloat({ min: 0 }),
     body('permissibleFsi').optional().isFloat({ min: 0, max: 20 }),
+    body('pid').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('khataNo').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('bhoomiId').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('reraRegistrationNumber').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('frontageMtrs').optional().isFloat({ min: 0 }),
+    body('depthMtrs').optional().isFloat({ min: 0 }),
     body('lat').optional().isFloat({ min: -90, max: 90 }),
     body('lng').optional().isFloat({ min: -180, max: 180 }),
     body('zoneId').optional({ nullable: true }).custom((v) => v === null || typeof v === 'string'),
@@ -94,6 +101,26 @@ router.get('/:id', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /properties/:id/parcel-intelligence
+router.get('/:id/parcel-intelligence', authenticate, async (req, res, next) => {
+  try {
+    const intelligence = await parcelIntelligenceService.getParcelIntelligence(req.params.id, req.user.id);
+    res.json({ success: true, data: intelligence });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /properties/:id/parcel-intelligence/refresh
+router.post('/:id/parcel-intelligence/refresh', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const intelligence = await parcelIntelligenceService.refreshParcelIntelligence(req.params.id, req.user.id);
+    res.json({ success: true, message: 'Parcel intelligence refreshed.', data: intelligence });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // PUT /properties/:id
 router.put(
   '/:id',
@@ -111,6 +138,12 @@ router.put(
     body('landAreaUnit').optional().customSanitizer(normalizeAreaUnit).isIn(AREA_UNITS),
     body('circleRatePerSqft').optional().isFloat({ min: 0 }),
     body('permissibleFsi').optional().isFloat({ min: 0, max: 20 }),
+    body('pid').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('khataNo').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('bhoomiId').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('reraRegistrationNumber').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    body('frontageMtrs').optional().isFloat({ min: 0 }),
+    body('depthMtrs').optional().isFloat({ min: 0 }),
     body('lat').optional().isFloat({ min: -90, max: 90 }),
     body('lng').optional().isFloat({ min: -180, max: 180 }),
     body('zoneId').optional({ nullable: true }).custom((v) => v === null || typeof v === 'string'),

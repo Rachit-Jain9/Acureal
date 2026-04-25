@@ -8,6 +8,7 @@ const {
   runGeminiInline,
   runClaudeReasoning,
 } = require('./ai/providerRegistry');
+const evidenceIngestionService = require('./evidenceIngestion.service');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Gemini client (lazy init so tests don't crash without API key)
@@ -302,6 +303,115 @@ Return a JSON object with:
 }
 Return ONLY the JSON. No commentary.`,
 
+  guidance_value_report: `You are a regulatory document extraction assistant for Karnataka real estate guidance values.
+Extract only explicit official/vendor guidance-value facts. Do not infer missing values.
+Return a JSON object with:
+{
+  "state": "Karnataka",
+  "district": "",
+  "sro_name": "",
+  "locality": "",
+  "road_name": "",
+  "land_use_type": "",
+  "guidance_value_per_sqft": null,
+  "guidance_value_per_acre": null,
+  "unit": "",
+  "effective_from": "YYYY-MM-DD or null",
+  "effective_to": "YYYY-MM-DD or null",
+  "source_page": null,
+  "source_section": "",
+  "verification_notes": [],
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
+  zoning_certificate: `You are a regulatory document extraction assistant for Indian real estate zoning.
+Extract only stated zoning/buildability facts from the certificate. Do not calculate or infer FAR.
+Return a JSON object with:
+{
+  "issuing_authority": "",
+  "certificate_number": "",
+  "certificate_date": "YYYY-MM-DD or null",
+  "property_address": "",
+  "survey_numbers": [],
+  "zone_code": "",
+  "zoning_classification": "",
+  "planning_zone": "",
+  "land_use_category": "",
+  "road_width_m": null,
+  "permissible_fsi": null,
+  "conditions": [],
+  "source_page": null,
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
+  e_khata: `You are a municipal property document extraction assistant for Karnataka e-Khata / e-Aasthi documents.
+Extract only stated municipal property facts.
+Return a JSON object with:
+{
+  "khata_number": "",
+  "pid_number": "",
+  "property_address": "",
+  "owner_name": "",
+  "municipal_body": "",
+  "ward_number": "",
+  "site_area_sqft": null,
+  "built_up_area_sqft": null,
+  "property_type": "",
+  "assessment_year": "",
+  "issue_date": "YYYY-MM-DD or null",
+  "source_page": null,
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
+  rmp_table: `You are a planning-regulation table extraction assistant for Bengaluru RMP documents.
+Extract table values exactly as printed. Do not fill blanks and do not invent formulas.
+Return a JSON object with:
+{
+  "plan_version": "",
+  "table_number": "",
+  "source_page": null,
+  "source_section": "",
+  "rules": [
+    {
+      "zone_code": "",
+      "planning_zone": "",
+      "land_use_family": "",
+      "plot_area_min_sqm": null,
+      "plot_area_max_sqm": null,
+      "road_width_min_m": null,
+      "road_width_max_m": null,
+      "base_far": null,
+      "additional_far": null,
+      "max_far": null,
+      "ground_coverage_pct": null,
+      "front_setback_m": null
+    }
+  ],
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
+  kgis_extract: `You are a GIS reference extraction assistant.
+Extract only the K-GIS administrative/survey facts visible in the document or JSON extract.
+Return a JSON object with:
+{
+  "district": "",
+  "taluk": "",
+  "hobli": "",
+  "village": "",
+  "village_code": "",
+  "survey_numbers": [],
+  "geometry_reference": "",
+  "coordinate_system": "",
+  "source_page": null,
+  "reference_only": true,
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
   other: `You are a document extraction assistant specialised in Indian real estate.
 Extract all key information from this document.
 Identify the document type, parties involved, property details, dates, financial figures, and any significant clauses.
@@ -325,7 +435,8 @@ Return ONLY the JSON. No commentary.`,
 const CLASSIFY_PROMPT = `You are a legal document classifier specialised in Indian real estate documents.
 Classify the document into exactly ONE of these types:
 title_deed, mother_deed, sale_deed, ec, rtc_pahani, mutation, conversion_certificate,
-khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, other
+khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, guidance_value_report,
+zoning_certificate, e_khata, rmp_table, kgis_extract, other
 
 Return ONLY a JSON object: { "doc_type": "<type>", "confidence": <0-1>, "reason": "<brief reason>" }
 No other text.`;
@@ -482,7 +593,7 @@ async function classifyDocument(fileUrl, fileName, mimeType) {
   return classifyDocumentContent(base64, effectiveMime);
 }
 
-async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId = null) {
+async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId = null, userId = null) {
   const providerLabel = getProviderAvailability().claude ? 'gemini_claude' : 'gemini';
   // Create extraction record in 'processing' state
   const insertResult = await query(
@@ -575,7 +686,21 @@ async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId =
       // column may not exist yet — non-fatal
     }
 
-    return updateResult.rows[0];
+    const updatedExtraction = updateResult.rows[0];
+    try {
+      updatedExtraction.evidence_ingestion = await evidenceIngestionService.ingestExtraction(
+        updatedExtraction.id,
+        userId,
+      );
+    } catch (ingestionError) {
+      updatedExtraction.evidence_ingestion = {
+        skipped: true,
+        reason: 'ingestion_failed',
+        message: ingestionError.message,
+      };
+    }
+
+    return updatedExtraction;
   } catch (err) {
     // Mark extraction as failed
     const failResult = await query(
@@ -701,10 +826,24 @@ const FIELD_MAP_RULES = {
   circle_rate_per_sqft: [
     ['circle_rate_per_sqft', 1.0],
     ['guidance_value_per_sqft', 0.95],
+    ['value_inr_per_sqft', 0.95],
   ],
   zone_code: [
     ['zone_code', 1.0],
     ['zoning_classification', 0.95],
+  ],
+  planning_zone: [
+    ['planning_zone', 1.0],
+  ],
+  guidance_locality: [
+    ['locality', 1.0],
+  ],
+  guidance_road_name: [
+    ['road_name', 1.0],
+  ],
+  sro_name: [
+    ['sro_name', 1.0],
+    ['sub_registrar_office', 0.9],
   ],
   fsi: [
     ['permissible_fsi', 1.0],
@@ -775,7 +914,25 @@ async function applyCorrections(extractionId, corrections, userId) {
     ],
   );
 
-  return result.rows[0] || null;
+  const updated = result.rows[0] || null;
+  if (!updated) {
+    return null;
+  }
+
+  try {
+    updated.evidence_ingestion = await evidenceIngestionService.ingestExtraction(
+      extractionId,
+      userId,
+    );
+  } catch (ingestionError) {
+    updated.evidence_ingestion = {
+      skipped: true,
+      reason: 'ingestion_failed',
+      message: ingestionError.message,
+    };
+  }
+
+  return updated;
 }
 
 module.exports = {

@@ -83,3 +83,24 @@ export function useBulkGeocodeProperties() {
     onError: (err) => toast.error(err.response?.data?.message || 'Bulk geocode failed'),
   });
 }
+
+export function useParcelIntelligence(propertyId) {
+  return useQuery({
+    queryKey: ['property', propertyId, 'parcel-intelligence'],
+    queryFn: () => propertiesAPI.parcelIntelligence(propertyId).then((r) => r.data.data),
+    enabled: !!propertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRefreshParcelIntelligence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (propertyId) => propertiesAPI.refreshParcelIntelligence(propertyId).then((r) => r.data.data),
+    onSuccess: (_, propertyId) => {
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-intelligence'] });
+      toast.success('Parcel intelligence refreshed');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Parcel intelligence refresh failed'),
+  });
+}
