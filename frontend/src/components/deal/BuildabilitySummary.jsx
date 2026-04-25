@@ -1,78 +1,102 @@
-import { useMemo } from 'react';
-import { Sparkles, Building2, Layers, AlertTriangle, Info, Home, Car, Ruler } from 'lucide-react';
-import { clsx } from 'clsx';
-import { useZone } from '../../hooks/useMasterPlan';
-import { computeBuildability, fmtNum } from '../../utils/buildability';
-import { SQFT_PER_ACRE } from '../../config/india';
+import { AlertTriangle, Building2, CheckCircle2, FileText, Layers, Ruler } from 'lucide-react';
+import clsx from 'clsx';
+import { useParcelIntelligence } from '../../hooks/useProperties';
 
-// Compact buildability readout. Drop on property detail pages, deal overview
-// cards, and anywhere else a one-glance envelope figure is useful.
-export default function BuildabilitySummary({ property, assetClass, title = 'Buildable envelope', compact = false }) {
-  const { data: zone } = useZone(property?.zone_id);
+const fmtNum = (value, digits = 0) => {
+  if (value === null || value === undefined || value === '') return '-';
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '-';
+  return numeric.toLocaleString('en-IN', { maximumFractionDigits: digits });
+};
 
-  const result = useMemo(
-    () => computeBuildability({ zone, property, assetClass }),
-    [zone, property, assetClass],
+function SourceChip({ citation }) {
+  if (!citation) return null;
+  return (
+    <span
+      title={[citation.label, citation.source_title, citation.authority].filter(Boolean).join(' - ')}
+      className="inline-flex items-center gap-1 rounded-full bg-bg-secondary px-2 py-0.5 text-[10px] font-medium text-content-secondary"
+    >
+      <FileText size={11} />
+      {citation.page ? `p. ${citation.page}` : citation.status || 'source'}
+    </span>
   );
+}
 
-  if (!property?.id) return null;
+export default function BuildabilitySummary({ property, title = 'Buildable envelope', compact = false }) {
+  const propertyId = property?.id;
+  const { data, isLoading, isError } = useParcelIntelligence(propertyId);
 
-  const hasEnough = result.effective_fsi != null && result.land_sqft != null;
-  const hasPremium = result.premium_fsi_available != null && result.premium_fsi_available > 0.01;
+  if (!propertyId) return null;
+
+  const values = data?.buildability?.values || {};
+  const citation = data?.buildability?.citations?.[0];
+  const hasBuildability = Boolean(values.max_far && values.max_buildable_area_sqft);
+  const isReferenceMatch = data?.buildability?.status === 'reference_match';
 
   return (
     <div className="card-editorial p-0 overflow-hidden">
-      <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 via-white to-primary-50 border-b border-hairline">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white shadow-sm">
-            <Sparkles size={14} />
+      <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 bg-bg-elevated border-b border-hairline">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center text-white shadow-sm">
+            <Building2 size={14} />
           </div>
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-secondary">Zoning output</div>
-            <div className="text-sm font-semibold text-content-primary">{title}</div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-secondary">Parcel intelligence</div>
+            <div className="text-sm font-semibold text-content-primary truncate">{title}</div>
           </div>
         </div>
-        {result.zone ? (
-          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-medium">
-            {result.zone.code}
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2 shrink-0">
+          {data?.zoning?.zone_code && (
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-medium">
+              {data.zoning.zone_code}
+            </span>
+          )}
+          <SourceChip citation={citation} />
+        </div>
       </div>
 
       <div className={clsx('p-4 sm:p-5', compact && 'p-3 sm:p-4')}>
-        {!hasEnough ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            <div className="h-5 w-40 rounded bg-bg-secondary animate-pulse" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[1, 2, 3, 4].map((item) => (
+                <div key={item} className="h-16 rounded-lg bg-bg-secondary animate-pulse" />
+              ))}
+            </div>
+          </div>
+        ) : isError || !hasBuildability ? (
           <div>
-            <p className="text-xs text-content-secondary mb-2">
-              {result.has_zone
-                ? 'Add parcel area to see the regulated envelope.'
-                : 'Assign a master plan zone and parcel area to see the envelope.'}
-            </p>
-            {result.missing_inputs.length > 0 && (
-              <ul className="text-[11px] text-content-muted space-y-0.5">
-                {result.missing_inputs.map((m) => <li key={m}>{'\u2022'} {m}</li>)}
-              </ul>
-            )}
+            <div className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <div className="font-semibold">Buildability needs verification</div>
+                <div className="mt-0.5">
+                  {data?.buildability?.message || 'Assign a reviewed zone, land area, and road width to calculate the backend FAR matrix.'}
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <>
-            {/* FSI chip with breakdown */}
-            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <div>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-secondary">Effective FSI</span>
-                <span className="ml-2 text-2xl font-bold text-content-primary">{fmtNum(result.effective_fsi, 2)}</span>
-              </div>
-              {hasPremium && result.base_fsi != null && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-secondary">Max FAR</span>
+                <span className="text-2xl font-bold text-content-primary">{fmtNum(values.max_far, 2)}</span>
                 <span className="text-[11px] text-content-secondary">
-                  = {fmtNum(result.base_fsi, 2)} base
-                  <span className="mx-1">+</span>
-                  <span className="text-indigo-600 font-semibold">{fmtNum(result.premium_fsi_available, 2)} premium</span>
+                  {fmtNum(values.base_far, 2)} base
+                  {values.additional_far > 0 ? ` + ${fmtNum(values.additional_far, 2)} additional/TDR` : ''}
                 </span>
-              )}
-              {result.matched_tier?.rule && (
-                <span className="text-[10px] text-content-muted ml-auto">
-                  road {'\u2265'} {result.matched_tier.rule.road_width_m} m
-                </span>
-              )}
+              </div>
+              <span
+                className={clsx(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                  isReferenceMatch ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800',
+                )}
+              >
+                {isReferenceMatch ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                {data.buildability.status.replace(/_/g, ' ')}
+              </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -80,80 +104,35 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
                 icon={Building2}
                 tone="emerald"
                 label="Max built-up"
-                value={fmtNum(result.realized_built_up_sqft)}
+                value={fmtNum(values.max_buildable_area_sqft)}
                 unit="sqft"
-                hint={result.realized_built_up_sqft != null
-                  ? `${fmtNum(result.realized_built_up_sqft / SQFT_PER_ACRE, 2)} ac`
-                  : null}
               />
               <Tile
                 icon={Layers}
-                tone="amber"
-                label="Floors"
-                value={result.max_floors != null ? fmtNum(result.max_floors, 0) : '\u2014'}
-                hint={result.max_height_m ? `\u2264${result.max_height_m} m` : null}
-              />
-              <Tile
-                icon={Home}
-                tone="indigo"
-                label="Footprint"
-                value={result.typical_footprint_sqft != null
-                  ? fmtNum(result.typical_footprint_sqft)
-                  : '\u2014'}
+                tone="primary"
+                label="Base built-up"
+                value={fmtNum(values.base_buildable_area_sqft)}
                 unit="sqft"
-                hint={result.typical_footprint_sqft != null && result.land_sqft
-                  ? `${fmtNum((result.typical_footprint_sqft / result.land_sqft) * 100, 1)}%/floor`
-                  : null}
               />
               <Tile
                 icon={Ruler}
-                tone="primary"
+                tone="indigo"
                 label="Ground cov."
-                value={result.max_ground_coverage_sqft != null
-                  ? fmtNum(result.max_ground_coverage_sqft)
-                  : '\u2014'}
-                unit="sqft"
-                hint={`${fmtNum(result.ground_coverage_pct, 0)}%${result.ground_coverage_source === 'default' ? ' (default)' : ''}`}
+                value={fmtNum(values.ground_coverage_pct, 1)}
+                unit="%"
+              />
+              <Tile
+                icon={Ruler}
+                tone="amber"
+                label="Front setback"
+                value={fmtNum(values.front_setback_m, 2)}
+                unit="m"
               />
             </div>
 
-            {result.parking && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[11px] text-content-secondary">
-                <Car size={12} className="text-content-secondary" />
-                <span className="font-semibold text-content-secondary">{fmtNum(result.parking.cars, 0)}</span>
-                <span>car bays</span>
-                {result.parking.visitor_cars > 0 && (
-                  <>
-                    <span className="text-content-muted">·</span>
-                    <span>{fmtNum(result.parking.visitor_cars, 0)} visitor</span>
-                  </>
-                )}
-                <span className="text-content-muted">·</span>
-                <span>{fmtNum(result.parking.ev_bays, 0)} EV</span>
-              </div>
-            )}
-
-            {result.flags.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                {result.flags.slice(0, 2).map((f, i) => (
-                  <div
-                    key={i}
-                    className={clsx(
-                      'flex items-start gap-2 rounded-md px-2.5 py-1.5 text-[11px]',
-                      f.level === 'warning'
-                        ? 'bg-amber-50 text-amber-800 border border-amber-100'
-                        : 'bg-blue-50 text-blue-800 border border-blue-100',
-                    )}
-                  >
-                    {f.level === 'warning'
-                      ? <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
-                      : <Info size={12} className="flex-shrink-0 mt-0.5" />}
-                    <div>
-                      <span className="font-medium">{f.title}.</span>{' '}
-                      <span className="opacity-80">{f.detail}</span>
-                    </div>
-                  </div>
-                ))}
+            {data?.buildability?.message && (
+              <div className="mt-3 text-[11px] leading-relaxed text-content-secondary">
+                {data.buildability.message}
               </div>
             )}
           </>
@@ -163,12 +142,12 @@ export default function BuildabilitySummary({ property, assetClass, title = 'Bui
   );
 }
 
-function Tile({ icon: Icon, tone, label, value, unit, hint }) {
+function Tile({ icon: Icon, tone, label, value, unit }) {
   const tones = {
     primary: 'bg-primary-50/70 text-primary-800',
     emerald: 'bg-emerald-50/70 text-emerald-800',
-    indigo:  'bg-indigo-50/70  text-indigo-800',
-    amber:   'bg-amber-50/70   text-amber-800',
+    indigo: 'bg-indigo-50/70 text-indigo-800',
+    amber: 'bg-amber-50/70 text-amber-800',
   };
   return (
     <div className={clsx('rounded-lg p-2.5 min-w-0', tones[tone] || tones.primary)}>
@@ -178,9 +157,8 @@ function Tile({ icon: Icon, tone, label, value, unit, hint }) {
       </div>
       <div className="flex items-baseline gap-1 min-w-0">
         <span className="text-sm sm:text-base font-bold leading-none truncate">{value}</span>
-        {unit && <span className="text-[10px] opacity-70 flex-shrink-0">{unit}</span>}
+        {unit && value !== '-' && <span className="text-[10px] opacity-70 flex-shrink-0">{unit}</span>}
       </div>
-      {hint && <div className="text-[10px] opacity-70 mt-0.5 truncate">{hint}</div>}
     </div>
   );
 }

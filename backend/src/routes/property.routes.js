@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query: qv } = require('express-validator');
 const propertyService = require('../services/property.service');
+const parcelIntelligenceService = require('../services/parcelIntelligence.service');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -89,6 +90,26 @@ router.get('/:id', authenticate, async (req, res, next) => {
   try {
     const property = await propertyService.getPropertyById(req.params.id);
     res.json({ success: true, data: property });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /properties/:id/parcel-intelligence
+router.get('/:id/parcel-intelligence', authenticate, async (req, res, next) => {
+  try {
+    const intelligence = await parcelIntelligenceService.getParcelIntelligence(req.params.id, req.user.id);
+    res.json({ success: true, data: intelligence });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /properties/:id/parcel-intelligence/refresh
+router.post('/:id/parcel-intelligence/refresh', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const intelligence = await parcelIntelligenceService.refreshParcelIntelligence(req.params.id, req.user.id);
+    res.json({ success: true, message: 'Parcel intelligence refreshed.', data: intelligence });
   } catch (error) {
     next(error);
   }
