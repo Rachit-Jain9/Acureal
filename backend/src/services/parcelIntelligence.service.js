@@ -26,7 +26,7 @@ const toNumber = (value) => {
 
 const normalizeLandUseFamily = (property = {}, zone = null) => {
   const raw = `${zone?.zone_category || ''} ${zone?.land_use_category || ''} ${zone?.zone_code || ''} ${property.zoning || ''} ${property.property_type || ''}`.toLowerCase();
-  if (raw.includes('commercial') || raw.includes('office') || raw.includes('retail') || raw.startsWith('c-')) return 'commercial';
+  if (raw.includes('commercial') || raw.includes('office') || raw.includes('retail') || /\bc[-\d]/.test(raw)) return 'commercial';
   if (raw.includes('industrial')) return 'industrial';
   return 'residential';
 };
