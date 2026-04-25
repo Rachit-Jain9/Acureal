@@ -6,8 +6,13 @@ jest.mock('../src/services/adapters/landeed.adapter', () => ({
   getStatus: jest.fn(),
 }));
 
+jest.mock('../src/services/ai/providerRegistry', () => ({
+  getProviderAvailability: jest.fn(),
+}));
+
 const { query } = require('../src/config/database');
 const landeedAdapter = require('../src/services/adapters/landeed.adapter');
+const { getProviderAvailability } = require('../src/services/ai/providerRegistry');
 const service = require('../src/services/parcelIntelligenceAdmin.service');
 
 describe('parcelIntelligenceAdmin.service', () => {
@@ -18,6 +23,7 @@ describe('parcelIntelligenceAdmin.service', () => {
       status: 'not_configured',
       message: 'No credentials.',
     });
+    getProviderAvailability.mockReturnValue({ gemini: true, claude: false, gpt_compatible: false });
   });
 
   test('builds operational status without fabricating provider readiness', async () => {

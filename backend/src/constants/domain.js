@@ -135,6 +135,11 @@ const DOC_TYPES = [
   'sanctioned_plan',
   'jda_jv',
   'broker_quote',
+  'guidance_value_report',
+  'zoning_certificate',
+  'e_khata',
+  'rmp_table',
+  'kgis_extract',
   'other',
 ];
 

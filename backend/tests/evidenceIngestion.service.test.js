@@ -67,6 +67,35 @@ describe('evidenceIngestion.service', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_facts'))).toBe(true);
   });
 
+  test('turns Khata uploads into pending evidence facts for analyst review', async () => {
+    mockQueryForExtraction({
+      id: 'extraction-khata',
+      document_id: 'document-khata',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'Khata.pdf',
+      document_file_url: 'https://example.com/khata.pdf',
+      doc_type: 'khata',
+      extraction_status: 'completed',
+      structured_fields: {
+        khata_number: '844/267',
+        owner_name: 'Meru Parvat Structure Pvt Ltd',
+        site_area_sqft: 12023.38,
+        source_page: 1,
+        needs_human_review: true,
+      },
+      confidence_scores: { _overall: 0.8, khata_number: 1 },
+    });
+
+    const result = await service.ingestExtraction('extraction-khata', 'user-1');
+
+    expect(result.skipped).toBe(false);
+    expect(result.evidence_facts_created).toBeGreaterThan(0);
+    expect(result.guidance_values_created).toBe(0);
+    expect(result.far_rules_created).toBe(0);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_facts'))).toBe(true);
+  });
+
   test('turns an RMP table extraction into pending FAR rule candidates only when complete', async () => {
     mockQueryForExtraction({
       id: 'extraction-2',
@@ -116,14 +145,14 @@ describe('evidenceIngestion.service', () => {
     query.mockResolvedValueOnce({
       rows: [{
         id: 'extraction-3',
-        doc_type: 'sale_deed',
+        doc_type: 'other',
         structured_fields: { survey_number: '12/1' },
       }],
     });
 
     const result = await service.ingestExtraction('extraction-3', 'user-1');
 
-    expect(result).toEqual({ skipped: true, reason: 'unsupported_doc_type', doc_type: 'sale_deed' });
+    expect(result).toEqual({ skipped: true, reason: 'unsupported_doc_type', doc_type: 'other' });
     expect(query).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,9 +3,17 @@
 const { query } = require('../config/database');
 
 const REGULATORY_DOC_TYPES = new Set([
+  'sale_deed',
+  'ec',
+  'rtc_pahani',
+  'mutation',
+  'conversion_certificate',
+  'khata',
   'guidance_value_report',
   'zoning_certificate',
   'e_khata',
+  'layout_approval',
+  'sanctioned_plan',
   'rmp_table',
   'kgis_extract',
 ]);

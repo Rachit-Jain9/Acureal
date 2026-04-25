@@ -441,6 +441,8 @@ zoning_certificate, e_khata, rmp_table, kgis_extract, other
 Return ONLY a JSON object: { "doc_type": "<type>", "confidence": <0-1>, "reason": "<brief reason>" }
 No other text.`;
 
+const KNOWN_DOC_TYPES = new Set(Object.keys(GEMINI_EXTRACTION_PROMPTS));
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -484,6 +486,56 @@ function inferMimeType(fileName, providedMimeType) {
     webp: 'image/webp',
   };
   return map[ext] || 'application/pdf';
+}
+
+function cleanContextValue(value) {
+  if (value === null || value === undefined) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+}
+
+function compactContext(context = {}) {
+  const entries = Object.entries(context)
+    .map(([key, value]) => [key, cleanContextValue(value)])
+    .filter(([, value]) => value);
+  return Object.fromEntries(entries);
+}
+
+function buildContextBlock({ fileName, context } = {}) {
+  const lines = [];
+  const cleanFileName = cleanContextValue(fileName);
+  const compacted = compactContext(context);
+
+  if (cleanFileName) {
+    lines.push(`File name: ${cleanFileName}`);
+  }
+
+  if (Object.keys(compacted).length > 0) {
+    lines.push(`Deal/property context: ${JSON.stringify(compacted)}`);
+  }
+
+  if (!lines.length) return '';
+
+  return `
+
+Context for matching only:
+${lines.join('\n')}
+
+Use the context only to choose between facts explicitly present in the document, such as the matching village, survey number, deal name, address, khata number, or locality. Do not fill any field from context unless the same fact is visible in the document. If the document has multiple rows and none explicitly matches the context, return null or empty values and add a verification note.`;
+}
+
+function buildClassifyPrompt(options = {}) {
+  return `${CLASSIFY_PROMPT}${buildContextBlock(options)}`;
+}
+
+function buildExtractionPrompt(docType, options = {}) {
+  const basePrompt = GEMINI_EXTRACTION_PROMPTS[docType] || GEMINI_EXTRACTION_PROMPTS.other;
+  return `${basePrompt}${buildContextBlock(options)}`;
+}
+
+function normalizeRequestedDocType(docType) {
+  const normalized = cleanContextValue(docType);
+  return normalized && KNOWN_DOC_TYPES.has(normalized) ? normalized : null;
 }
 
 async function callGemini(prompt, base64Data, mimeType) {
@@ -581,19 +633,27 @@ STRICT RULES:
 // Core functions
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function classifyDocumentContent(base64Data, mimeType) {
-  const responseText = await callGemini(CLASSIFY_PROMPT, base64Data, mimeType);
+async function classifyDocumentContent(base64Data, mimeType, options = {}) {
+  const responseText = await callGemini(buildClassifyPrompt(options), base64Data, mimeType);
   const parsed = parseJsonResponse(responseText);
   return parsed.doc_type || 'other';
 }
 
-async function classifyDocument(fileUrl, fileName, mimeType) {
+async function classifyDocument(fileUrl, fileName, mimeType, options = {}) {
   const effectiveMime = inferMimeType(fileName, mimeType);
   const { base64 } = await fetchFileAsBase64(fileUrl);
-  return classifyDocumentContent(base64, effectiveMime);
+  return classifyDocumentContent(base64, effectiveMime, { ...options, fileName });
 }
 
-async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId = null, userId = null) {
+async function extractDocument(
+  documentId,
+  fileUrl,
+  fileName,
+  mimeType,
+  dealId = null,
+  userId = null,
+  options = {}
+) {
   const providerLabel = getProviderAvailability().claude ? 'gemini_claude' : 'gemini';
   // Create extraction record in 'processing' state
   const insertResult = await query(
@@ -611,15 +671,24 @@ async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId =
     const { base64 } = await fetchFileAsBase64(fileUrl);
 
     // Step 1: classify
-    let docType;
+    let docType = normalizeRequestedDocType(options.docType || options.requestedDocType);
     try {
-      docType = await classifyDocumentContent(base64, effectiveMime);
+      if (!docType) {
+        docType = await classifyDocumentContent(base64, effectiveMime, {
+          fileName,
+          context: options.context,
+        });
+      }
     } catch {
       docType = 'other';
     }
+    docType = normalizeRequestedDocType(docType) || 'other';
 
     // Step 2: extract using typed prompt
-    const prompt = GEMINI_EXTRACTION_PROMPTS[docType] || GEMINI_EXTRACTION_PROMPTS.other;
+    const prompt = buildExtractionPrompt(docType, {
+      fileName,
+      context: options.context,
+    });
     const rawText = await callGemini(prompt, base64, effectiveMime);
 
     // Step 3: parse structured output
@@ -749,7 +818,7 @@ async function getDealExtractions(dealId) {
        FROM document_extractions de
        JOIN documents d ON d.id = de.document_id
       WHERE de.deal_id = $1
-        AND de.extraction_status IN ('completed','reviewed')
+        AND de.extraction_status IN ('completed','partial','reviewed')
       ORDER BY de.document_id, de.created_at DESC`,
     [dealId],
   );

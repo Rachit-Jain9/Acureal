@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const landeedAdapter = require('./adapters/landeed.adapter');
+const { getProviderAvailability } = require('./ai/providerRegistry');
 
 const REVIEW_STATUSES = new Set(['pending', 'approved', 'rejected', 'needs_review']);
 const REVIEW_TYPES = new Set(['evidence_source', 'evidence_fact', 'guidance_value', 'far_rule']);
@@ -38,6 +39,7 @@ const countScalar = async (sql, params = []) => {
 };
 
 const getStatus = async () => {
+  const providerAvailability = getProviderAvailability();
   const [
     evidenceSources,
     evidenceFacts,
@@ -93,8 +95,10 @@ const getStatus = async () => {
       landeed: landeedAdapter.getStatus(),
       igr_pdf: {
         provider: 'igr_pdf',
-        status: 'parser_available',
-        message: 'IGR PDF text parsing can propose guidance rows, but human approval is required before use.',
+        status: providerAvailability.gemini ? 'parser_available' : 'not_configured',
+        message: providerAvailability.gemini
+          ? 'IGR PDF text parsing can propose guidance rows, but human approval is required before use.'
+          : 'Set GEMINI_API_KEY to enable PDF extraction into the review queue.',
       },
       kgis: {
         provider: 'kgis',

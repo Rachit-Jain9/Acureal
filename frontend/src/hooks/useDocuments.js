@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { documentsAPI } from '../services/api';
+import { documentsAPI, extractionAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 
 const getDocumentErrorMessage = (err, fallback) => {
@@ -89,6 +89,29 @@ export function useUploadDocument() {
       toast.success('Document uploaded');
     },
     onError: (err) => toast.error(getDocumentErrorMessage(err, 'Upload failed')),
+  });
+}
+
+export function useExtractDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId }) =>
+      extractionAPI.extract(documentId).then((response) => response.data.data),
+    onSuccess: (extraction, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ['extractions', dealId] });
+      qc.invalidateQueries({ queryKey: ['documents', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      qc.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
+      qc.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+
+      const ingestion = extraction?.evidence_ingestion;
+      if (ingestion && ingestion.skipped === false) {
+        toast.success('Evidence queued for review');
+      } else {
+        toast.success('Document extracted');
+      }
+    },
+    onError: (err) => toast.error(getDocumentErrorMessage(err, 'Extraction failed')),
   });
 }
 
