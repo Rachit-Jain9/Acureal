@@ -29,6 +29,7 @@ const riskRoutes = require('./routes/risk.routes');
 const extractionRoutes = require('./routes/extraction.routes');
 const fxRoutes = require('./routes/fx.routes');
 const masterPlanRoutes = require('./routes/masterplan.routes');
+const parcelIntelligenceRoutes = require('./routes/parcelIntelligence.routes');
 
 const app = express();
 
@@ -147,6 +148,7 @@ app.use('/api', riskRoutes);
 app.use('/api', extractionRoutes);
 app.use('/api/fx', fxRoutes);
 app.use('/api/master-plan', masterPlanRoutes);
+app.use('/api/parcel-intelligence', parcelIntelligenceRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
