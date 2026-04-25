@@ -14,6 +14,7 @@ import {
 import { useProperty, useGeocodeProperty, useUpdateProperty } from '../hooks/useProperties';
 import MasterPlanZonePanel from '../components/deal/MasterPlanZonePanel';
 import ParcelIntelligencePanel from '../components/deal/ParcelIntelligencePanel';
+import ReadOnlyPropertyMap from '../components/maps/ReadOnlyPropertyMap';
 import { useDeals } from '../hooks/useDeals';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
@@ -70,8 +71,14 @@ const buildEditForm = (property) => ({
   circleRatePerSqft: property.circle_rate_per_sqft ?? '',
   permissibleFsi: property.permissible_fsi ?? '',
   surveyNumber: property.survey_number || '',
+  pid: property.pid || '',
+  khataNo: property.khata_no || '',
+  bhoomiId: property.bhoomi_id || '',
+  reraRegistrationNumber: property.rera_registration_number || '',
   ownerName: property.owner_name || '',
   roadWidthMtrs: property.road_width_mtrs ?? '',
+  frontageMtrs: property.frontage_mtrs ?? '',
+  depthMtrs: property.depth_mtrs ?? '',
   ownershipType: property.ownership_type || '',
   encumbranceStatus: property.encumbrance_status || '',
   notes: property.notes || '',
@@ -92,8 +99,14 @@ const buildEditPayload = (form) => ({
   circleRatePerSqft: form.circleRatePerSqft === '' ? undefined : Number(form.circleRatePerSqft),
   permissibleFsi: form.permissibleFsi === '' ? undefined : Number(form.permissibleFsi),
   surveyNumber: form.surveyNumber || undefined,
+  pid: form.pid || undefined,
+  khataNo: form.khataNo || undefined,
+  bhoomiId: form.bhoomiId || undefined,
+  reraRegistrationNumber: form.reraRegistrationNumber || undefined,
   ownerName: form.ownerName || undefined,
   roadWidthMtrs: form.roadWidthMtrs === '' ? undefined : Number(form.roadWidthMtrs),
+  frontageMtrs: form.frontageMtrs === '' ? undefined : Number(form.frontageMtrs),
+  depthMtrs: form.depthMtrs === '' ? undefined : Number(form.depthMtrs),
   ownershipType: form.ownershipType || undefined,
   encumbranceStatus: form.encumbranceStatus || undefined,
   notes: form.notes || undefined,
@@ -246,8 +259,20 @@ export default function PropertyDetailPage() {
             />
             <DetailField label="Permissible FSI" value={property.permissible_fsi ?? property.existing_fsi ?? '-'} />
             <DetailField label="Survey Number" value={property.survey_number || '-'} />
+            <DetailField label="PID" value={property.pid || '-'} />
+            <DetailField label="Khata No." value={property.khata_no || '-'} />
+            <DetailField label="Bhoomi ID" value={property.bhoomi_id || '-'} />
+            <DetailField label="RERA Registration" value={property.rera_registration_number || '-'} />
             <DetailField label="Owner" value={property.owner_name || '-'} />
             <DetailField label="Road Width" value={property.road_width_mtrs ? `${property.road_width_mtrs} m` : '-'} />
+            <DetailField
+              label="Plot Dimensions"
+              value={
+                property.frontage_mtrs || property.depth_mtrs
+                  ? `${property.frontage_mtrs || '-'} m frontage x ${property.depth_mtrs || '-'} m depth`
+                  : '-'
+              }
+            />
             <DetailField label="Ownership Type" value={property.ownership_type || '-'} />
             <DetailField label="Encumbrance Status" value={property.encumbrance_status || '-'} />
             <DetailField label="Created" value={formatDate(property.created_at)} />
@@ -370,17 +395,12 @@ export default function PropertyDetailPage() {
                     </a>
                   )}
                 </div>
-                <div className="h-72 bg-bg-secondary">
-                  <iframe
-                    title="property-location-preview"
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    src={`https://maps.google.com/maps?q=${property.lat},${property.lng}&z=17&t=k&output=embed&iwloc=near`}
-                  />
-                </div>
+                <ReadOnlyPropertyMap
+                  lat={property.lat}
+                  lng={property.lng}
+                  title="Property reference point"
+                  heightClassName="h-72"
+                />
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-hairline-strong px-4 py-8 text-center text-sm text-content-secondary">
@@ -596,11 +616,75 @@ export default function PropertyDetailPage() {
                   </div>
 
                   <div>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Frontage (m)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.frontageMtrs}
+                      onChange={(event) => setEditForm((current) => ({ ...current, frontageMtrs: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Depth (m)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.depthMtrs}
+                      onChange={(event) => setEditForm((current) => ({ ...current, depthMtrs: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
                     <label className="mb-1 block text-sm font-medium text-content-secondary">Survey Number</label>
                     <input
                       type="text"
                       value={editForm.surveyNumber}
                       onChange={(event) => setEditForm((current) => ({ ...current, surveyNumber: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">PID</label>
+                    <input
+                      type="text"
+                      value={editForm.pid}
+                      onChange={(event) => setEditForm((current) => ({ ...current, pid: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Khata No.</label>
+                    <input
+                      type="text"
+                      value={editForm.khataNo}
+                      onChange={(event) => setEditForm((current) => ({ ...current, khataNo: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">Bhoomi ID</label>
+                    <input
+                      type="text"
+                      value={editForm.bhoomiId}
+                      onChange={(event) => setEditForm((current) => ({ ...current, bhoomiId: event.target.value }))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-content-secondary">RERA Registration No.</label>
+                    <input
+                      type="text"
+                      value={editForm.reraRegistrationNumber}
+                      onChange={(event) => setEditForm((current) => ({ ...current, reraRegistrationNumber: event.target.value }))}
                       className="input"
                     />
                   </div>

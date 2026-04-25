@@ -150,7 +150,9 @@ describe('parcelIntelligence.service', () => {
 
     expect(result.zoning.zone_code).toBe('R-PZ-A');
     expect(result.buildability.values.max_far).toBe(2.4);
-    expect(result.buildability.values.max_buildable_area_sqft).toBeCloseTo(25833, 0);
+    expect(result.buildability.values.gross_max_buildable_area_sqft).toBeCloseTo(25833, 0);
+    expect(result.buildability.values.max_buildable_area_sqft).toBeLessThan(result.buildability.values.gross_max_buildable_area_sqft);
+    expect(result.verdict.label).toBe('Proceed With Caution');
     expect(result.guidance_value.selected.value_inr_per_sqft).toBe(12000);
     expect(result.kgis.status).toBe('matched');
     expect(result.buckets.verified.some((item) => item.label === 'Reviewed FAR matrix rule')).toBe(true);

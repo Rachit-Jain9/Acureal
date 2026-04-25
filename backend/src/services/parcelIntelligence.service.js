@@ -297,6 +297,14 @@ const buildRedFlags = ({ property, zone, buildability, guidance, kgis, landeed }
     });
   }
 
+  if (buildability?.values?.setback_input_status === 'partial') {
+    flags.push({
+      severity: 'medium',
+      label: 'Setback inputs are partial',
+      detail: 'The screening buildable area applies available setback rules, but plot frontage/depth and full side/rear setback rules should be verified.',
+    });
+  }
+
   if (!['matched', 'low_confidence'].includes(guidance?.status)) {
     flags.push({
       severity: 'medium',
@@ -336,6 +344,62 @@ const buildRedFlags = ({ property, zone, buildability, guidance, kgis, landeed }
   }
 
   return flags;
+};
+
+const buildVerdict = ({ status, confidence, redFlags, buckets, verificationLinks }) => {
+  const high = redFlags.filter((flag) => flag.severity === 'high').length;
+  const medium = redFlags.filter((flag) => flag.severity === 'medium').length;
+  const low = redFlags.filter((flag) => flag.severity === 'low').length;
+  const confidencePct = Math.round(Number(confidence?.overall || 0) * 100);
+  const needsVerification = buckets?.needs_verification || [];
+
+  let label = 'Screening Ready';
+  let tone = 'success';
+  if (high > 0) {
+    label = 'Do Not Rely Yet';
+    tone = 'danger';
+  } else if (medium > 0 || confidencePct < 70 || status !== 'reference_ready') {
+    label = 'Proceed With Caution';
+    tone = 'warning';
+  } else if (confidencePct < 80 || low > 0) {
+    label = 'Reference Ready';
+    tone = 'info';
+  }
+
+  const flagSummary = [
+    high ? `${high} high` : null,
+    medium ? `${medium} medium` : null,
+    low ? `${low} low` : null,
+  ].filter(Boolean).join(', ');
+
+  const summary = flagSummary
+    ? `${flagSummary} flag${high + medium + low === 1 ? '' : 's'}; ${needsVerification.length} item${needsVerification.length === 1 ? '' : 's'} still need verification.`
+    : 'No configured high-priority flags; continue with normal authority checks before reliance.';
+
+  const actions = needsVerification.slice(0, 4).map((item) => {
+    const label = String(item.label || '').toLowerCase();
+    let href = null;
+    if (label.includes('guidance')) href = verificationLinks.igr_guidance;
+    if (label.includes('kaveri') || label.includes('encumbrance')) href = verificationLinks.kaveri;
+    if (label.includes('khata') || label.includes('e-aasthi')) href = verificationLinks.bbmp_eaasthi;
+
+    return {
+      label: item.label,
+      detail: item.detail,
+      href,
+      action_type: href ? 'authority_link' : 'internal_review',
+    };
+  });
+
+  return {
+    label,
+    tone,
+    confidence_pct: confidencePct,
+    status,
+    summary,
+    counts: { high, medium, low, needs_verification: needsVerification.length },
+    next_actions: actions,
+  };
 };
 
 const buildConfidence = ({ zone, buildability, guidance, kgis }) => {
@@ -386,8 +450,8 @@ const buildBuckets = ({ property, zone, buildability, guidance, kgis, landeed })
   const inferred = [];
   if (buildability?.values?.max_buildable_area_sqft) {
     inferred.push({
-      label: 'Maximum buildable area',
-      detail: `${Math.round(buildability.values.max_buildable_area_sqft).toLocaleString('en-IN')} sqft from land area x max FAR.`,
+      label: 'Screening buildable area',
+      detail: `${Math.round(buildability.values.max_buildable_area_sqft).toLocaleString('en-IN')} sqft from effective plot area x max FAR. Gross FAR area is retained separately for audit.`,
       source: 'calculation',
       citations: buildability.citations,
     });
@@ -457,13 +521,22 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   ];
   const redFlags = buildRedFlags({ property, zone, buildability, guidance, kgis, landeed });
   const confidence = buildConfidence({ zone, buildability, guidance, kgis });
+  const buckets = buildBuckets({ property, zone, buildability, guidance, kgis, landeed });
+  const verdict = buildVerdict({
+    status: redFlags.some((flag) => flag.severity === 'high') ? 'needs_verification' : 'reference_ready',
+    confidence,
+    redFlags,
+    buckets,
+    verificationLinks: VERIFICATION_LINKS,
+  });
 
   const output = {
     property_id: property.id,
     generated_at: new Date().toISOString(),
     mode: 'screening_decision_support',
     legal_disclaimer: 'Parcel Intelligence is verified decision support for screening, underwriting, and IC prep. It is not legal clearance or authority approval.',
-    status: redFlags.some((flag) => flag.severity === 'high') ? 'needs_verification' : 'reference_ready',
+    status: verdict.status,
+    verdict,
     confidence,
     inputs: {
       name: property.display_name || property.name || null,
@@ -498,7 +571,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     kgis,
     red_flags: redFlags,
     citations,
-    buckets: buildBuckets({ property, zone, buildability, guidance, kgis, landeed }),
+    buckets,
     verification_links: VERIFICATION_LINKS,
     source_versions: {
       rmp: buildability.rule?.plan_version || 'RMP 2031 Draft',

@@ -17,6 +17,12 @@ const buildDisplayNameSql = () =>
     )
   )`;
 
+const cleanString = (value) => {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+};
+
 const hydrateGeocodeMetadata = async ({ address, city, state, pincode, lat, lng }) => {
   if (lat !== undefined && lng !== undefined && lat !== null && lng !== null) {
     return {
@@ -82,8 +88,12 @@ const buildPropertyPayload = async (data = {}) => {
     state: data.state?.trim() || null,
     pincode: data.pincode?.trim() || null,
     propertyType: normalizePropertyType(data.propertyType || data.property_type || 'land'),
-    surveyNumber: data.surveyNumber?.trim() || null,
-    ownerName: data.ownerName?.trim() || null,
+    surveyNumber: cleanString(data.surveyNumber ?? data.survey_number),
+    pid: cleanString(data.pid ?? data.pidNumber),
+    khataNo: cleanString(data.khataNo ?? data.khata_no),
+    bhoomiId: cleanString(data.bhoomiId ?? data.bhoomi_id),
+    reraRegistrationNumber: cleanString(data.reraRegistrationNumber ?? data.rera_registration_number),
+    ownerName: cleanString(data.ownerName ?? data.owner_name),
     landAreaSqft: normalizedLandAreaSqft || null,
     landAreaInputValue:
       landAreaInputValue === undefined || landAreaInputValue === null || landAreaInputValue === ''
@@ -92,19 +102,32 @@ const buildPropertyPayload = async (data = {}) => {
     landAreaInputUnit,
     zoning: data.zoning || 'residential',
     circleRatePerSqft:
-      data.circleRatePerSqft === undefined || data.circleRatePerSqft === ''
+      (data.circleRatePerSqft ?? data.circle_rate_per_sqft) === undefined
+        || (data.circleRatePerSqft ?? data.circle_rate_per_sqft) === ''
         ? null
-        : Number(data.circleRatePerSqft),
+        : Number(data.circleRatePerSqft ?? data.circle_rate_per_sqft),
     permissibleFsi:
-      data.permissibleFsi === undefined || data.permissibleFsi === ''
+      (data.permissibleFsi ?? data.permissible_fsi) === undefined
+        || (data.permissibleFsi ?? data.permissible_fsi) === ''
         ? null
-        : Number(data.permissibleFsi),
+        : Number(data.permissibleFsi ?? data.permissible_fsi),
     roadWidthMtrs:
-      data.roadWidthMtrs === undefined || data.roadWidthMtrs === ''
+      (data.roadWidthMtrs ?? data.road_width_mtrs) === undefined
+        || (data.roadWidthMtrs ?? data.road_width_mtrs) === ''
         ? null
-        : Number(data.roadWidthMtrs),
-    ownershipType: data.ownershipType?.trim() || null,
-    encumbranceStatus: data.encumbranceStatus?.trim() || null,
+        : Number(data.roadWidthMtrs ?? data.road_width_mtrs),
+    frontageMtrs:
+      (data.frontageMtrs ?? data.frontage_mtrs) === undefined
+        || (data.frontageMtrs ?? data.frontage_mtrs) === ''
+        ? null
+        : Number(data.frontageMtrs ?? data.frontage_mtrs),
+    depthMtrs:
+      (data.depthMtrs ?? data.depth_mtrs) === undefined
+        || (data.depthMtrs ?? data.depth_mtrs) === ''
+        ? null
+        : Number(data.depthMtrs ?? data.depth_mtrs),
+    ownershipType: cleanString(data.ownershipType ?? data.ownership_type),
+    encumbranceStatus: cleanString(data.encumbranceStatus ?? data.encumbrance_status),
     notes: data.notes?.trim() || null,
     zoneId:
       data.zoneId === undefined && data.zone_id === undefined
@@ -129,8 +152,10 @@ const createProperty = async (data, userId) => {
   const result = await query(
     `INSERT INTO properties (
       name, address, city, state, pincode, lat, lng, property_type,
-      survey_number, owner_name, land_area_sqft, land_area_input_value, land_area_input_unit,
+      survey_number, pid, khata_no, bhoomi_id, rera_registration_number,
+      owner_name, land_area_sqft, land_area_input_value, land_area_input_unit,
       zoning, circle_rate_per_sqft, permissible_fsi, road_width_mtrs,
+      frontage_mtrs, depth_mtrs,
       ownership_type, encumbrance_status, geocode_status, geocode_confidence,
       geocode_message, geocode_last_attempt_at, notes, created_by,
       zone_id, zone_assigned_by, zone_assigned_at, zone_notes
@@ -139,8 +164,10 @@ const createProperty = async (data, userId) => {
       $9,$10,$11,$12,$13,
       $14,$15,$16,$17,
       $18,$19,$20,$21,
-      $22,$23,$24,$25,
-      $26,$27,$28,$29
+      $22,$23,
+      $24,$25,$26,$27,
+      $28,$29,$30,$31,
+      $32,$33,$34,$35
     )
     RETURNING *`,
     [
@@ -153,6 +180,10 @@ const createProperty = async (data, userId) => {
       payload.lng,
       payload.propertyType,
       payload.surveyNumber,
+      payload.pid,
+      payload.khataNo,
+      payload.bhoomiId,
+      payload.reraRegistrationNumber,
       payload.ownerName,
       payload.landAreaSqft,
       payload.landAreaInputValue,
@@ -161,6 +192,8 @@ const createProperty = async (data, userId) => {
       payload.circleRatePerSqft,
       payload.permissibleFsi,
       payload.roadWidthMtrs,
+      payload.frontageMtrs,
+      payload.depthMtrs,
       payload.ownershipType,
       payload.encumbranceStatus,
       payload.geocodeStatus,
@@ -336,35 +369,41 @@ const updateProperty = async (id, data, userId = null) => {
       lng = $7,
       property_type = $8,
       survey_number = $9,
-      owner_name = $10,
-      land_area_sqft = $11,
-      land_area_input_value = $12,
-      land_area_input_unit = $13,
-      zoning = $14,
-      circle_rate_per_sqft = $15,
-      permissible_fsi = $16,
-      road_width_mtrs = $17,
-      ownership_type = $18,
-      encumbrance_status = $19,
-      geocode_status = $20,
-      geocode_confidence = $21,
-      geocode_message = $22,
-      geocode_last_attempt_at = $23,
-      notes = $24,
-      zone_id = $25,
+      pid = $10,
+      khata_no = $11,
+      bhoomi_id = $12,
+      rera_registration_number = $13,
+      owner_name = $14,
+      land_area_sqft = $15,
+      land_area_input_value = $16,
+      land_area_input_unit = $17,
+      zoning = $18,
+      circle_rate_per_sqft = $19,
+      permissible_fsi = $20,
+      road_width_mtrs = $21,
+      frontage_mtrs = $22,
+      depth_mtrs = $23,
+      ownership_type = $24,
+      encumbrance_status = $25,
+      geocode_status = $26,
+      geocode_confidence = $27,
+      geocode_message = $28,
+      geocode_last_attempt_at = $29,
+      notes = $30,
+      zone_id = $31,
       zone_assigned_by = CASE
-        WHEN $26::boolean AND $25::uuid IS NOT NULL THEN $27::uuid
-        WHEN $26::boolean AND $25::uuid IS NULL THEN NULL
+        WHEN $32::boolean AND $31::uuid IS NOT NULL THEN $33::uuid
+        WHEN $32::boolean AND $31::uuid IS NULL THEN NULL
         ELSE zone_assigned_by
       END,
       zone_assigned_at = CASE
-        WHEN $26::boolean AND $25::uuid IS NOT NULL THEN NOW()
-        WHEN $26::boolean AND $25::uuid IS NULL THEN NULL
+        WHEN $32::boolean AND $31::uuid IS NOT NULL THEN NOW()
+        WHEN $32::boolean AND $31::uuid IS NULL THEN NULL
         ELSE zone_assigned_at
       END,
-      zone_notes = CASE WHEN $28::boolean THEN $29 ELSE zone_notes END,
+      zone_notes = CASE WHEN $34::boolean THEN $35 ELSE zone_notes END,
       updated_at = NOW()
-     WHERE id = $30
+     WHERE id = $36
      RETURNING *`,
     [
       payload.name,
@@ -376,6 +415,10 @@ const updateProperty = async (id, data, userId = null) => {
       payload.lng,
       payload.propertyType,
       payload.surveyNumber,
+      payload.pid,
+      payload.khataNo,
+      payload.bhoomiId,
+      payload.reraRegistrationNumber,
       payload.ownerName,
       payload.landAreaSqft,
       payload.landAreaInputValue,
@@ -384,6 +427,8 @@ const updateProperty = async (id, data, userId = null) => {
       payload.circleRatePerSqft,
       payload.permissibleFsi,
       payload.roadWidthMtrs,
+      payload.frontageMtrs,
+      payload.depthMtrs,
       payload.ownershipType,
       payload.encumbranceStatus,
       payload.geocodeStatus,

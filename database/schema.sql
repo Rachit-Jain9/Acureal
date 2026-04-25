@@ -5,6 +5,13 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS postgis;
+EXCEPTION
+  WHEN insufficient_privilege OR undefined_file THEN
+    RAISE NOTICE 'PostGIS extension unavailable in this database; spatial geometry columns will be skipped.';
+END $$;
 
 CREATE OR REPLACE FUNCTION current_organization_id()
 RETURNS UUID AS $$
@@ -103,6 +110,10 @@ CREATE TABLE properties (
     lng DECIMAL(10, 7),
     property_type VARCHAR(50) NOT NULL DEFAULT 'land',
     survey_number VARCHAR(100),
+    pid VARCHAR(120),
+    khata_no VARCHAR(120),
+    bhoomi_id VARCHAR(120),
+    rera_registration_number VARCHAR(120),
     owner_name VARCHAR(255),
     land_area_sqft DECIMAL(15, 2),
     land_area_acres DECIMAL(10, 4) GENERATED ALWAYS AS (land_area_sqft / 43560.0) STORED,
@@ -113,6 +124,8 @@ CREATE TABLE properties (
     existing_fsi DECIMAL(5, 2) DEFAULT 1.0,
     permissible_fsi DECIMAL(5, 2),
     road_width_mtrs DECIMAL(5, 2),
+    frontage_mtrs DECIMAL(8, 2),
+    depth_mtrs DECIMAL(8, 2),
     setback_details TEXT,
     ownership_type VARCHAR(100),
     encumbrance_status VARCHAR(100),
@@ -958,6 +971,9 @@ CREATE TABLE regulatory_data.far_rules (
   front_setback_m NUMERIC(6,2),
   rear_setback_m NUMERIC(6,2),
   side_setback_m NUMERIC(6,2),
+  tdr_eligible BOOLEAN,
+  premium_far_cap NUMERIC(6,3),
+  tdr_road_threshold_m NUMERIC(8,2),
   source_page INTEGER,
   source_section VARCHAR(255),
   rule_notes TEXT,
@@ -1022,6 +1038,10 @@ CREATE TABLE regulatory_data.parcel_intelligence_snapshots (
 
 CREATE INDEX idx_mpz_code_city ON regulatory_data.master_plan_zones(zone_code, city);
 CREATE INDEX idx_properties_zone ON properties(zone_id) WHERE zone_id IS NOT NULL;
+CREATE INDEX idx_properties_survey_city ON properties(organization_id, city, survey_number) WHERE survey_number IS NOT NULL;
+CREATE INDEX idx_properties_pid ON properties(organization_id, pid) WHERE pid IS NOT NULL;
+CREATE INDEX idx_properties_khata_no ON properties(organization_id, khata_no) WHERE khata_no IS NOT NULL;
+CREATE INDEX idx_properties_rera_registration ON properties(organization_id, rera_registration_number) WHERE rera_registration_number IS NOT NULL;
 CREATE INDEX idx_far_rules_lookup ON regulatory_data.far_rules(org_id, city, zone_code, planning_zone, land_use_family, review_status);
 CREATE INDEX idx_guidance_locality_trgm ON regulatory_data.guidance_values USING gin(locality gin_trgm_ops);
 CREATE INDEX idx_guidance_road_trgm ON regulatory_data.guidance_values USING gin(road_name gin_trgm_ops);
@@ -1029,6 +1049,45 @@ CREATE UNIQUE INDEX idx_kgis_cache_cache_key_org
   ON regulatory_data.kgis_cache(COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), cache_key);
 CREATE INDEX idx_parcel_snapshots_property
   ON regulatory_data.parcel_intelligence_snapshots(org_id, property_id, generated_at DESC);
+
+DO $$
+DECLARE
+  postgis_schema TEXT;
+BEGIN
+  SELECT n.nspname
+    INTO postgis_schema
+  FROM pg_type t
+  JOIN pg_namespace n ON n.oid = t.typnamespace
+  WHERE t.typname = 'geometry'
+  LIMIT 1;
+
+  IF postgis_schema IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE properties ADD COLUMN IF NOT EXISTS geom %I.geometry(Point, 4326)', postgis_schema);
+    EXECUTE format('ALTER TABLE regulatory_data.master_plan_zones ADD COLUMN IF NOT EXISTS geom %I.geometry(MultiPolygon, 4326)', postgis_schema);
+
+    EXECUTE format($sql$
+      CREATE OR REPLACE FUNCTION sync_property_geom()
+      RETURNS TRIGGER AS $fn$
+      BEGIN
+        IF NEW.lat IS NOT NULL AND NEW.lng IS NOT NULL THEN
+          NEW.geom := %I.ST_SetSRID(%I.ST_MakePoint(NEW.lng::double precision, NEW.lat::double precision), 4326);
+        ELSE
+          NEW.geom := NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql
+    $sql$, postgis_schema, postgis_schema);
+
+    DROP TRIGGER IF EXISTS trg_properties_sync_geom ON properties;
+    CREATE TRIGGER trg_properties_sync_geom
+      BEFORE INSERT OR UPDATE OF lat, lng ON properties
+      FOR EACH ROW EXECUTE FUNCTION sync_property_geom();
+
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_properties_geom ON properties USING gist(geom) WHERE geom IS NOT NULL';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_master_plan_zones_geom ON regulatory_data.master_plan_zones USING gist(geom) WHERE geom IS NOT NULL';
+  END IF;
+END $$;
 
 ALTER TABLE regulatory_data.evidence_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE regulatory_data.evidence_facts ENABLE ROW LEVEL SECURITY;

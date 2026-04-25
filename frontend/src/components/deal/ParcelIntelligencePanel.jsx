@@ -12,10 +12,10 @@ import {
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 import { Card, ErrorState, SectionHeader } from '../../design-system';
 import { useParcelIntelligence, useRefreshParcelIntelligence } from '../../hooks/useProperties';
+import { useParcelVerdict } from '../../hooks/useParcelVerdict';
+import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 
 const TABS = [
   { key: 'verified', label: 'Verified' },
@@ -74,6 +74,75 @@ function StatusPill({ status }) {
       {good ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
       {normalized || 'needs verification'}
     </span>
+  );
+}
+
+function VerdictBanner({ verdict }) {
+  if (!verdict) return null;
+
+  const tone = {
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    info: 'border-blue-200 bg-blue-50 text-blue-900',
+    warning: 'border-amber-200 bg-amber-50 text-amber-950',
+    danger: 'border-rose-200 bg-rose-50 text-rose-950',
+  }[verdict.tone || 'info'];
+  const iconClass = {
+    success: 'text-emerald-600',
+    info: 'text-blue-600',
+    warning: 'text-amber-600',
+    danger: 'text-rose-600',
+  }[verdict.tone || 'info'];
+  const Icon = verdict.tone === 'success' ? CheckCircle2 : AlertTriangle;
+
+  return (
+    <div className={clsx('rounded-editorial border p-4', tone)}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <Icon size={22} className={clsx('mt-0.5 shrink-0', iconClass)} />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold">{verdict.label}</h3>
+              <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold">
+                {verdict.confidence_pct}% confidence
+              </span>
+            </div>
+            <p className="mt-1 text-sm opacity-85">{verdict.summary}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-2 text-center text-xs lg:min-w-[280px]">
+          {[
+            ['High', verdict.counts?.high || 0],
+            ['Medium', verdict.counts?.medium || 0],
+            ['Low', verdict.counts?.low || 0],
+            ['Open', verdict.counts?.needs_verification || 0],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded bg-white/70 px-2 py-1.5">
+              <div className="font-semibold tabular-nums">{value}</div>
+              <div className="opacity-70">{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {!!verdict.next_actions?.length && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {verdict.next_actions.slice(0, 3).map((action) => {
+            const content = (
+              <span className="inline-flex items-center gap-1.5 rounded-editorial bg-white/80 px-3 py-1.5 text-xs font-semibold">
+                {action.label}
+                {action.href && <ExternalLink size={12} />}
+              </span>
+            );
+            return action.href ? (
+              <a key={action.label} href={action.href} target="_blank" rel="noreferrer">
+                {content}
+              </a>
+            ) : (
+              <span key={action.label}>{content}</span>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -197,17 +266,14 @@ function KgisPreview({ intelligence }) {
   return (
     <div className="rounded-editorial border border-hairline bg-bg-elevated overflow-hidden">
       {lat && lng ? (
-        <div className="h-64">
-          <MapContainer center={[lat, lng]} zoom={15} scrollWheelZoom={false} className="h-full w-full">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <CircleMarker center={[lat, lng]} radius={8} pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.45 }}>
-              <Popup>Parcel reference point</Popup>
-            </CircleMarker>
-          </MapContainer>
-        </div>
+        <ReadOnlyPropertyMap
+          lat={lat}
+          lng={lng}
+          geometryGeojson={kgis?.geometry_geojson}
+          title="Parcel reference point"
+          heightClassName="h-64"
+          zoom={15}
+        />
       ) : (
         <div className="h-40 flex items-center justify-center bg-bg-secondary text-sm text-content-secondary">
           Add coordinates to enable K-GIS preview.
@@ -287,6 +353,7 @@ export default function ParcelIntelligencePanel({ property, onUploadClick }) {
   const guidance = intelligence?.guidance_value?.official;
   const guidanceCitation = guidance?.citations?.[0];
   const selectedGuidance = guidance?.selected;
+  const verdict = useParcelVerdict(intelligence);
 
   const bucket = useMemo(
     () => intelligence?.buckets?.[activeTab] || [],
@@ -324,6 +391,8 @@ export default function ParcelIntelligencePanel({ property, onUploadClick }) {
 
   return (
     <div className="space-y-5">
+      <VerdictBanner verdict={verdict} />
+
       <Card className="p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <SectionHeader
@@ -370,7 +439,7 @@ export default function ParcelIntelligencePanel({ property, onUploadClick }) {
               citation={farCitation}
             />
             <MetricTile
-              label="Buildable area"
+              label="Screening buildable"
               value={formatNumber(values.max_buildable_area_sqft)}
               unit="sqft"
               citation={farCitation}
@@ -387,15 +456,21 @@ export default function ParcelIntelligencePanel({ property, onUploadClick }) {
               tone={selectedGuidance?.value_inr_per_sqft ? 'green' : 'amber'}
             />
             <MetricTile
+              label="Gross FAR area"
+              value={formatNumber(values.gross_max_buildable_area_sqft)}
+              unit="sqft"
+              citation={farCitation}
+            />
+            <MetricTile
               label="Ground coverage"
               value={formatNumber(values.ground_coverage_pct, 1)}
               unit={values.ground_coverage_pct ? '%' : null}
               citation={farCitation}
             />
             <MetricTile
-              label="Front setback"
-              value={formatNumber(values.front_setback_m, 2)}
-              unit={values.front_setback_m ? 'm' : null}
+              label="Setback deduction"
+              value={formatNumber(values.setback_deduction_pct, 1)}
+              unit={values.setback_deduction_pct !== null && values.setback_deduction_pct !== undefined ? '%' : null}
               citation={farCitation}
             />
           </div>

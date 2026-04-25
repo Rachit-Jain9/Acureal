@@ -18,6 +18,11 @@ const sqftToSqm = (sqft) => {
   return numeric === null ? null : numeric / SQFT_PER_SQM;
 };
 
+const sqmToSqft = (sqm) => {
+  const numeric = toNumber(sqm);
+  return numeric === null ? null : numeric * SQFT_PER_SQM;
+};
+
 const inLowerInclusiveUpperExclusiveBand = (value, min, max) => {
   const numeric = toNumber(value);
   const minValue = toNumber(min) ?? 0;
@@ -70,6 +75,87 @@ const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs, landUseFamily 
   return { rule: matches[0] || null, reason: matches[0] ? null : 'no_matching_far_rule' };
 };
 
+const estimatePlotDimensionsM = ({ landAreaSqft, frontageMtrs, depthMtrs } = {}) => {
+  const areaSqm = sqftToSqm(landAreaSqft);
+  const frontage = toNumber(frontageMtrs);
+  const depth = toNumber(depthMtrs);
+
+  if (!areaSqm) {
+    return { frontage_m: null, depth_m: null, method: 'missing_area' };
+  }
+
+  if (frontage && depth) {
+    return { frontage_m: frontage, depth_m: depth, method: 'user_dimensions' };
+  }
+
+  if (frontage) {
+    return { frontage_m: frontage, depth_m: areaSqm / frontage, method: 'frontage_derived_depth' };
+  }
+
+  if (depth) {
+    return { frontage_m: areaSqm / depth, depth_m: depth, method: 'depth_derived_frontage' };
+  }
+
+  const side = Math.sqrt(areaSqm);
+  return { frontage_m: side, depth_m: side, method: 'square_plot_estimate' };
+};
+
+const estimateSetbackImpact = ({ property = {}, rule = {} } = {}) => {
+  const landAreaSqft = toNumber(property.land_area_sqft);
+  const areaSqm = sqftToSqm(landAreaSqft);
+
+  if (!areaSqm) {
+    return {
+      effective_area_sqft: null,
+      setback_deduction_sqft: null,
+      setback_deduction_pct: null,
+      setback_input_status: 'missing_area',
+      method: 'not_applied',
+    };
+  }
+
+  const front = toNumber(rule.front_setback_m);
+  const rear = toNumber(rule.rear_setback_m);
+  const side = toNumber(rule.side_setback_m);
+  const setbackValues = [front, rear, side].filter((value) => value !== null);
+
+  if (!setbackValues.length) {
+    return {
+      effective_area_sqft: round(landAreaSqft, 0),
+      setback_deduction_sqft: 0,
+      setback_deduction_pct: 0,
+      setback_input_status: 'not_configured',
+      method: 'gross_area_no_setback_rule',
+    };
+  }
+
+  const dimensions = estimatePlotDimensionsM({
+    landAreaSqft,
+    frontageMtrs: property.frontage_mtrs,
+    depthMtrs: property.depth_mtrs,
+  });
+
+  const frontage = dimensions.frontage_m;
+  const depth = dimensions.depth_m;
+  const frontDeductionSqm = front ? front * frontage : 0;
+  const rearDeductionSqm = rear ? rear * frontage : 0;
+  const residualDepth = Math.max(0, depth - (front || 0) - (rear || 0));
+  const sideDeductionSqm = side ? side * 2 * residualDepth : 0;
+  const totalDeductionSqm = Math.min(areaSqm, frontDeductionSqm + rearDeductionSqm + sideDeductionSqm);
+  const effectiveAreaSqm = Math.max(0, areaSqm - totalDeductionSqm);
+  const configuredCount = setbackValues.length;
+
+  return {
+    effective_area_sqft: round(sqmToSqft(effectiveAreaSqm), 0),
+    setback_deduction_sqft: round(sqmToSqft(totalDeductionSqm), 0),
+    setback_deduction_pct: round((totalDeductionSqm / areaSqm) * 100, 2),
+    setback_input_status: configuredCount === 3 ? 'complete' : 'partial',
+    method: dimensions.method,
+    estimated_frontage_m: round(frontage, 2),
+    estimated_depth_m: round(depth, 2),
+  };
+};
+
 const computeBuildabilityFromRule = ({ property = {}, zone = null, rule = null } = {}) => {
   const landAreaSqft = toNumber(property.land_area_sqft);
   const roadWidthMtrs = toNumber(property.road_width_mtrs);
@@ -107,14 +193,27 @@ const computeBuildabilityFromRule = ({ property = {}, zone = null, rule = null }
   const maxFar = toNumber(rule.max_far);
   const groundCoveragePct = toNumber(rule.ground_coverage_pct);
   const citation = citeFarRule(rule);
+  const setbackImpact = estimateSetbackImpact({ property, rule });
+  const effectiveAreaSqft = toNumber(setbackImpact.effective_area_sqft);
+  const calculationAreaSqft = effectiveAreaSqft === null ? landAreaSqft : effectiveAreaSqft;
+  const grossBaseBuildable = baseFar ? landAreaSqft * baseFar : null;
+  const grossAdditionalBuildable = additionalFar ? landAreaSqft * additionalFar : 0;
+  const grossMaxBuildable = maxFar ? landAreaSqft * maxFar : null;
+  const screeningBaseBuildable = baseFar ? calculationAreaSqft * baseFar : null;
+  const screeningAdditionalBuildable = additionalFar ? calculationAreaSqft * additionalFar : 0;
+  const screeningMaxBuildable = maxFar ? calculationAreaSqft * maxFar : null;
+  const coverageFootprintSqft = groundCoveragePct ? (landAreaSqft * groundCoveragePct) / 100 : null;
+  const screeningFootprintSqft = [coverageFootprintSqft, effectiveAreaSqft]
+    .filter((value) => value !== null && value !== undefined)
+    .reduce((min, value) => Math.min(min, value), Number.POSITIVE_INFINITY);
 
   return {
     status: additionalFar > 0 ? 'needs_verification' : 'reference_match',
     source: rule.org_id ? 'org_override' : 'global_reference',
     message:
       additionalFar > 0
-        ? 'Base FAR is reference-matched. Additional/TDR FAR remains pending authority and project-specific verification.'
-        : 'FAR is matched to an approved reference rule.',
+        ? 'Base FAR is reference-matched. Additional/TDR FAR remains pending authority and project-specific verification. Buildable area is a screening estimate after available setback deductions.'
+        : 'FAR is matched to an approved reference rule. Buildable area is a screening estimate after available setback deductions.',
     zone_code: rule.zone_code || zone?.zone_code || null,
     planning_zone: rule.planning_zone || zone?.planning_zone || null,
     land_use_family: rule.land_use_family || null,
@@ -126,11 +225,23 @@ const computeBuildabilityFromRule = ({ property = {}, zone = null, rule = null }
       base_far: round(baseFar, 3),
       additional_far: round(additionalFar, 3),
       max_far: round(maxFar, 3),
-      base_buildable_area_sqft: baseFar ? round(landAreaSqft * baseFar, 0) : null,
-      additional_buildable_area_sqft: additionalFar ? round(landAreaSqft * additionalFar, 0) : 0,
-      max_buildable_area_sqft: maxFar ? round(landAreaSqft * maxFar, 0) : null,
+      gross_base_buildable_area_sqft: grossBaseBuildable !== null ? round(grossBaseBuildable, 0) : null,
+      gross_additional_buildable_area_sqft: round(grossAdditionalBuildable, 0),
+      gross_max_buildable_area_sqft: grossMaxBuildable !== null ? round(grossMaxBuildable, 0) : null,
+      base_buildable_area_sqft: screeningBaseBuildable !== null ? round(screeningBaseBuildable, 0) : null,
+      additional_buildable_area_sqft: round(screeningAdditionalBuildable, 0),
+      max_buildable_area_sqft: screeningMaxBuildable !== null ? round(screeningMaxBuildable, 0) : null,
       ground_coverage_pct: round(groundCoveragePct, 2),
       max_ground_coverage_sqft: groundCoveragePct ? round((landAreaSqft * groundCoveragePct) / 100, 0) : null,
+      screening_footprint_limit_sqft:
+        Number.isFinite(screeningFootprintSqft) ? round(screeningFootprintSqft, 0) : null,
+      effective_plot_area_sqft: round(calculationAreaSqft, 0),
+      setback_deduction_sqft: setbackImpact.setback_deduction_sqft,
+      setback_deduction_pct: setbackImpact.setback_deduction_pct,
+      setback_input_status: setbackImpact.setback_input_status,
+      setback_method: setbackImpact.method,
+      estimated_frontage_m: setbackImpact.estimated_frontage_m || null,
+      estimated_depth_m: setbackImpact.estimated_depth_m || null,
       front_setback_m: round(rule.front_setback_m, 2),
       rear_setback_m: round(rule.rear_setback_m, 2),
       side_setback_m: round(rule.side_setback_m, 2),
@@ -152,7 +263,9 @@ module.exports = {
   toNumber,
   round,
   sqftToSqm,
+  sqmToSqft,
   selectFarRule,
   computeBuildabilityFromRule,
   citeFarRule,
+  estimateSetbackImpact,
 };

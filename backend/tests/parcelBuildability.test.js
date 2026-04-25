@@ -1,5 +1,6 @@
 const {
   computeBuildabilityFromRule,
+  estimateSetbackImpact,
   selectFarRule,
   sqftToSqm,
 } = require('../src/utils/parcelBuildability');
@@ -77,7 +78,10 @@ describe('parcel buildability FAR matrix utilities', () => {
     expect(result.values.base_far).toBe(1.8);
     expect(result.values.additional_far).toBe(0.45);
     expect(result.values.max_far).toBe(2.25);
-    expect(result.values.max_buildable_area_sqft).toBeCloseTo(property.land_area_sqft * 2.25, 0);
+    expect(result.values.gross_max_buildable_area_sqft).toBeCloseTo(property.land_area_sqft * 2.25, 0);
+    expect(result.values.max_buildable_area_sqft).toBeLessThan(result.values.gross_max_buildable_area_sqft);
+    expect(result.values.setback_deduction_pct).toBeGreaterThan(0);
+    expect(result.values.setback_input_status).toBe('partial');
     expect(result.values.max_ground_coverage_sqft).toBeCloseTo(property.land_area_sqft * 0.65, 0);
     expect(result.citations[0].page).toBe(63);
   });
@@ -110,5 +114,25 @@ describe('parcel buildability FAR matrix utilities', () => {
     expect(reason).toBe('no_matching_far_rule');
     expect(result.status).toBe('needs_verification');
     expect(result.source).toBe('user_provided_fsi');
+  });
+
+  test('uses supplied frontage and depth when estimating setback impact', () => {
+    const impact = estimateSetbackImpact({
+      property: {
+        land_area_sqft: 1000 * 10.76391041671,
+        frontage_mtrs: 25,
+        depth_mtrs: 40,
+      },
+      rule: {
+        front_setback_m: 3,
+        rear_setback_m: 2,
+        side_setback_m: 1,
+      },
+    });
+
+    expect(impact.method).toBe('user_dimensions');
+    expect(impact.setback_input_status).toBe('complete');
+    expect(impact.setback_deduction_pct).toBeGreaterThan(10);
+    expect(impact.effective_area_sqft).toBeLessThan(1000 * 10.76391041671);
   });
 });
