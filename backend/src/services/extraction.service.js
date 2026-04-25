@@ -8,6 +8,7 @@ const {
   runGeminiInline,
   runClaudeReasoning,
 } = require('./ai/providerRegistry');
+const evidenceIngestionService = require('./evidenceIngestion.service');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Gemini client (lazy init so tests don't crash without API key)
@@ -592,7 +593,7 @@ async function classifyDocument(fileUrl, fileName, mimeType) {
   return classifyDocumentContent(base64, effectiveMime);
 }
 
-async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId = null) {
+async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId = null, userId = null) {
   const providerLabel = getProviderAvailability().claude ? 'gemini_claude' : 'gemini';
   // Create extraction record in 'processing' state
   const insertResult = await query(
@@ -685,7 +686,21 @@ async function extractDocument(documentId, fileUrl, fileName, mimeType, dealId =
       // column may not exist yet — non-fatal
     }
 
-    return updateResult.rows[0];
+    const updatedExtraction = updateResult.rows[0];
+    try {
+      updatedExtraction.evidence_ingestion = await evidenceIngestionService.ingestExtraction(
+        updatedExtraction.id,
+        userId,
+      );
+    } catch (ingestionError) {
+      updatedExtraction.evidence_ingestion = {
+        skipped: true,
+        reason: 'ingestion_failed',
+        message: ingestionError.message,
+      };
+    }
+
+    return updatedExtraction;
   } catch (err) {
     // Mark extraction as failed
     const failResult = await query(
@@ -899,7 +914,25 @@ async function applyCorrections(extractionId, corrections, userId) {
     ],
   );
 
-  return result.rows[0] || null;
+  const updated = result.rows[0] || null;
+  if (!updated) {
+    return null;
+  }
+
+  try {
+    updated.evidence_ingestion = await evidenceIngestionService.ingestExtraction(
+      extractionId,
+      userId,
+    );
+  } catch (ingestionError) {
+    updated.evidence_ingestion = {
+      skipped: true,
+      reason: 'ingestion_failed',
+      message: ingestionError.message,
+    };
+  }
+
+  return updated;
 }
 
 module.exports = {

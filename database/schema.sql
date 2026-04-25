@@ -1043,8 +1043,19 @@ CREATE INDEX idx_properties_pid ON properties(organization_id, pid) WHERE pid IS
 CREATE INDEX idx_properties_khata_no ON properties(organization_id, khata_no) WHERE khata_no IS NOT NULL;
 CREATE INDEX idx_properties_rera_registration ON properties(organization_id, rera_registration_number) WHERE rera_registration_number IS NOT NULL;
 CREATE INDEX idx_far_rules_lookup ON regulatory_data.far_rules(org_id, city, zone_code, planning_zone, land_use_family, review_status);
+CREATE INDEX idx_far_rules_source_review
+  ON regulatory_data.far_rules(evidence_source_id, review_status, created_at DESC)
+  WHERE evidence_source_id IS NOT NULL;
 CREATE INDEX idx_guidance_locality_trgm ON regulatory_data.guidance_values USING gin(locality gin_trgm_ops);
 CREATE INDEX idx_guidance_road_trgm ON regulatory_data.guidance_values USING gin(road_name gin_trgm_ops);
+CREATE INDEX idx_guidance_values_source_review
+  ON regulatory_data.guidance_values(evidence_source_id, review_status, created_at DESC)
+  WHERE evidence_source_id IS NOT NULL;
+CREATE INDEX idx_evidence_sources_org_document
+  ON regulatory_data.evidence_sources(org_id, document_id, created_at DESC)
+  WHERE document_id IS NOT NULL;
+CREATE INDEX idx_evidence_facts_source_review
+  ON regulatory_data.evidence_facts(source_id, review_status, created_at DESC);
 CREATE UNIQUE INDEX idx_kgis_cache_cache_key_org
   ON regulatory_data.kgis_cache(COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), cache_key);
 CREATE INDEX idx_parcel_snapshots_property
