@@ -118,6 +118,11 @@ const buildPromotionUpdate = (factKey, factValue) => {
 
 const getCurrentPropertyValue = (currentValues = {}, field) => currentValues?.[field] ?? null;
 
+const normalizePromotionValue = (value) => {
+  if (typeof value === 'number') return String(round(value, 3));
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+};
+
 const buildPromotionMetadata = (row) => {
   if (row.type !== 'evidence_fact') return null;
 
@@ -499,41 +504,60 @@ const reviewItem = async ({ type, id, status, userId, notes }) => {
   return { type, ...result.rows[0] };
 };
 
+const promotionFactSelect = `
+  SELECT
+     ef.id,
+     ef.fact_key,
+     ef.fact_value,
+     ef.review_status,
+     ef.confidence_score,
+     ef.page_number,
+     ef.source_section,
+     ef.created_at,
+     es.source_title,
+     es.document_id,
+     doc.name AS document_name,
+     d.id AS deal_id,
+     d.name AS deal_name,
+     p.id AS property_id,
+     p.name AS property_name,
+     p.address AS property_address,
+     p.survey_number,
+     p.pid,
+     p.khata_no,
+     p.owner_name,
+     p.land_area_sqft,
+     p.road_width_mtrs
+   FROM regulatory_data.evidence_facts ef
+   LEFT JOIN regulatory_data.evidence_sources es ON es.id = ef.source_id
+   LEFT JOIN documents doc ON doc.id = es.document_id
+   LEFT JOIN deals d ON d.id = doc.deal_id
+   LEFT JOIN properties p ON p.id = d.property_id
+`;
+
 const loadEvidenceFactForPromotion = async (factId) => {
   const result = await query(
-    `SELECT
-       ef.id,
-       ef.fact_key,
-       ef.fact_value,
-       ef.review_status,
-       ef.confidence_score,
-       ef.page_number,
-       ef.source_section,
-       es.source_title,
-       es.document_id,
-       doc.name AS document_name,
-       d.id AS deal_id,
-       d.name AS deal_name,
-       p.id AS property_id,
-       p.name AS property_name,
-       p.address AS property_address,
-       p.survey_number,
-       p.pid,
-       p.khata_no,
-       p.owner_name,
-       p.land_area_sqft,
-       p.road_width_mtrs
-     FROM regulatory_data.evidence_facts ef
-     LEFT JOIN regulatory_data.evidence_sources es ON es.id = ef.source_id
-     LEFT JOIN documents doc ON doc.id = es.document_id
-     LEFT JOIN deals d ON d.id = doc.deal_id
-     LEFT JOIN properties p ON p.id = d.property_id
-     WHERE ef.id = $1
+    `${promotionFactSelect}
+     WHERE ef.id = $1::uuid
        AND ef.org_id = current_organization_id()`,
     [factId]
   );
 
   return result.rows[0] || null;
+};
+
+const loadEvidenceFactsForPromotion = async (factIds = []) => {
+  if (!factIds.length) return [];
+
+  const result = await query(
+    `${promotionFactSelect}
+     WHERE ef.id = ANY($1::uuid[])
+       AND ef.org_id = current_organization_id()
+     ORDER BY ef.created_at DESC`,
+    [factIds]
+  );
+
+  return result.rows;
 };
 
 const promoteEvidenceFactToProperty = async ({ factId, userId, overwrite = false }) => {
@@ -655,12 +679,153 @@ const promoteEvidenceFactToProperty = async ({ factId, userId, overwrite = false
   };
 };
 
+const chooseBatchPromotionCandidate = (facts) => {
+  if (facts.length === 1) return facts[0];
+
+  const normalizedValues = new Set(facts.map((fact) => normalizePromotionValue(fact.promotion.value)));
+  if (normalizedValues.size > 1) return null;
+
+  return [...facts].sort((a, b) => {
+    const confidenceDelta = Number(b.confidence_score || 0) - Number(a.confidence_score || 0);
+    if (confidenceDelta !== 0) return confidenceDelta;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  })[0];
+};
+
+const buildBatchPromotionPlan = (facts = [], requestedIds = [], overwrite = false) => {
+  const byId = new Map(facts.map((fact) => [fact.id, fact]));
+  const skipped = [];
+  const grouped = new Map();
+
+  requestedIds.forEach((factId) => {
+    const fact = byId.get(factId);
+    if (!fact) {
+      skipped.push({ fact_id: factId, reason: 'not_found' });
+      return;
+    }
+
+    if (fact.review_status !== 'approved') {
+      skipped.push({ fact_id: fact.id, reason: 'not_approved', status: fact.review_status });
+      return;
+    }
+
+    if (!fact.property_id) {
+      skipped.push({ fact_id: fact.id, reason: 'no_linked_property' });
+      return;
+    }
+
+    const promotion = buildPromotionUpdate(fact.fact_key, fact.fact_value);
+    if (!promotion) {
+      skipped.push({ fact_id: fact.id, reason: 'unsupported_fact', fact_key: fact.fact_key });
+      return;
+    }
+
+    const currentValues = {
+      survey_number: fact.survey_number,
+      pid: fact.pid,
+      khata_no: fact.khata_no,
+      owner_name: fact.owner_name,
+      land_area_sqft: fact.land_area_sqft,
+      road_width_mtrs: fact.road_width_mtrs,
+    };
+    const currentValue = getCurrentPropertyValue(currentValues, promotion.field);
+    if (hasValue(currentValue) && !overwrite) {
+      skipped.push({
+        fact_id: fact.id,
+        reason: 'already_populated',
+        field: promotion.field,
+        current_value: currentValue,
+      });
+      return;
+    }
+
+    const groupKey = `${fact.property_id}:${promotion.field}`;
+    grouped.set(groupKey, [...(grouped.get(groupKey) || []), { ...fact, promotion }]);
+  });
+
+  const promotable = [];
+  grouped.forEach((groupFacts) => {
+    const selected = chooseBatchPromotionCandidate(groupFacts);
+    if (!selected) {
+      groupFacts.forEach((fact) => {
+        skipped.push({
+          fact_id: fact.id,
+          reason: 'conflicting_approved_values',
+          field: fact.promotion.field,
+          value: fact.promotion.value,
+        });
+      });
+      return;
+    }
+
+    promotable.push(selected);
+    groupFacts
+      .filter((fact) => fact.id !== selected.id)
+      .forEach((fact) => {
+        skipped.push({
+          fact_id: fact.id,
+          reason: 'duplicate_same_value',
+          field: fact.promotion.field,
+          selected_fact_id: selected.id,
+        });
+      });
+  });
+
+  return { promotable, skipped };
+};
+
+const promoteEvidenceFactsToProperty = async ({ factIds = [], userId, overwrite = false }) => {
+  const uniqueFactIds = [...new Set(factIds.filter(Boolean))];
+  if (!uniqueFactIds.length) {
+    throw createError('Select at least one approved evidence fact to promote.', 400);
+  }
+  if (uniqueFactIds.length > 80) {
+    throw createError('Promote at most 80 evidence facts at a time.', 400);
+  }
+
+  const facts = await loadEvidenceFactsForPromotion(uniqueFactIds);
+  const plan = buildBatchPromotionPlan(facts, uniqueFactIds, overwrite);
+  const promoted = [];
+  const failed = [];
+
+  for (const fact of plan.promotable) {
+    try {
+      const result = await promoteEvidenceFactToProperty({
+        factId: fact.id,
+        userId,
+        overwrite,
+      });
+      promoted.push(result);
+    } catch (error) {
+      failed.push({
+        fact_id: fact.id,
+        reason: error.message || 'promotion_failed',
+        statusCode: error.statusCode || 500,
+      });
+    }
+  }
+
+  return {
+    promoted,
+    skipped: plan.skipped,
+    failed,
+    summary: {
+      requested: uniqueFactIds.length,
+      promoted: promoted.length,
+      skipped: plan.skipped.length,
+      failed: failed.length,
+    },
+  };
+};
+
 module.exports = {
   getStatus,
   listReviewQueue,
   reviewItem,
   promoteEvidenceFactToProperty,
+  promoteEvidenceFactsToProperty,
   buildPromotionUpdate,
+  buildBatchPromotionPlan,
   REVIEW_TYPES,
   REVIEW_STATUSES,
 };

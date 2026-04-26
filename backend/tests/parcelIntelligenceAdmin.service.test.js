@@ -163,4 +163,88 @@ describe('parcelIntelligenceAdmin.service', () => {
 
     expect(transaction).not.toHaveBeenCalled();
   });
+
+  test('batch promotion skips conflicting approved values for the same property field', () => {
+    const plan = service.buildBatchPromotionPlan([
+      {
+        id: 'fact-1',
+        fact_key: 'pid_number',
+        fact_value: 'PID-1',
+        review_status: 'approved',
+        property_id: 'property-1',
+        pid: null,
+      },
+      {
+        id: 'fact-2',
+        fact_key: 'pid_number',
+        fact_value: 'PID-2',
+        review_status: 'approved',
+        property_id: 'property-1',
+        pid: null,
+      },
+    ], ['fact-1', 'fact-2']);
+
+    expect(plan.promotable).toHaveLength(0);
+    expect(plan.skipped).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_id: 'fact-1', reason: 'conflicting_approved_values' }),
+      expect.objectContaining({ fact_id: 'fact-2', reason: 'conflicting_approved_values' }),
+    ]));
+  });
+
+  test('batch promotion promotes eligible approved facts and reports skipped rows', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            fact_key: 'pid_number',
+            fact_value: '151900802100321399',
+            review_status: 'approved',
+            document_name: '14 Khata For Sy No.267.pdf',
+            deal_id: 'deal-1',
+            property_id: 'property-1',
+            pid: null,
+          },
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            fact_key: 'khata_number',
+            fact_value: '844/267',
+            review_status: 'needs_review',
+            deal_id: 'deal-1',
+            property_id: 'property-1',
+            khata_no: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '11111111-1111-1111-1111-111111111111',
+          fact_key: 'pid_number',
+          fact_value: '151900802100321399',
+          review_status: 'approved',
+          document_name: '14 Khata For Sy No.267.pdf',
+          deal_id: 'deal-1',
+          property_id: 'property-1',
+          pid: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'property-1', pid: '151900802100321399' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'activity-1' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.promoteEvidenceFactsToProperty({
+      factIds: [
+        '11111111-1111-1111-1111-111111111111',
+        '22222222-2222-2222-2222-222222222222',
+      ],
+      userId: '33333333-3333-3333-3333-333333333333',
+    });
+
+    expect(result.summary).toMatchObject({ requested: 2, promoted: 1, skipped: 1, failed: 0 });
+    expect(result.promoted[0]).toMatchObject({ field: 'pid', activity_id: 'activity-1' });
+    expect(result.skipped[0]).toMatchObject({
+      fact_id: '22222222-2222-2222-2222-222222222222',
+      reason: 'not_approved',
+    });
+  });
 });

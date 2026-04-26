@@ -63,6 +63,30 @@ router.put(
 );
 
 router.post(
+  '/review-queue/evidence_fact/promote-property/batch',
+  authenticate,
+  requireAdminOrAnalyst,
+  [
+    body('fact_ids').isArray({ min: 1, max: 80 }),
+    body('fact_ids.*').isUUID(),
+    body('overwrite').optional().isBoolean(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await parcelIntelligenceAdminService.promoteEvidenceFactsToProperty({
+        factIds: req.body.fact_ids,
+        userId: req.user.id,
+        overwrite: req.body.overwrite === true,
+      });
+      res.json({ success: true, message: 'Approved evidence facts promoted to property inputs.', data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
   '/review-queue/evidence_fact/:id/promote-property',
   authenticate,
   requireAdminOrAnalyst,

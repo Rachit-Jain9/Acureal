@@ -8,6 +8,7 @@ import {
   useParcelIntelligenceReviewQueue,
   useParcelIntelligenceStatus,
   usePromoteEvidenceFactToProperty,
+  usePromoteEvidenceFactsToProperty,
   useReviewParcelIntelligenceItem,
 } from '../hooks/useParcelIntelligenceAdmin';
 
@@ -194,10 +195,18 @@ export default function ParcelIntelligenceAdminPage() {
   const { data: queue = [], isLoading: queueLoading, refetch } = useParcelIntelligenceReviewQueue(params);
   const reviewMutation = useReviewParcelIntelligenceItem();
   const promoteMutation = usePromoteEvidenceFactToProperty();
+  const promoteBatchMutation = usePromoteEvidenceFactsToProperty();
 
   const pendingCount = ops?.review_queue?.pending_or_needs_review ?? '-';
   const guidanceApproved = ops?.review_queue?.guidance_values?.approved || 0;
   const farApproved = ops?.review_queue?.far_rules?.approved || 0;
+  const eligiblePromotionIds = useMemo(
+    () => queue
+      .filter((item) => item.type === 'evidence_fact' && item.review_status === 'approved' && item.promotion?.promotable)
+      .map((item) => item.id),
+    [queue]
+  );
+  const isDecisionPending = reviewMutation.isPending || promoteMutation.isPending || promoteBatchMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -248,6 +257,19 @@ export default function ParcelIntelligenceAdminPage() {
               <RefreshCw size={14} />
               Refresh
             </button>
+            <button
+              type="button"
+              disabled={eligiblePromotionIds.length === 0 || isDecisionPending}
+              onClick={() => promoteBatchMutation.mutate({ ids: eligiblePromotionIds })}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-45"
+              title={eligiblePromotionIds.length ? 'Promote approved visible facts into blank linked property inputs' : 'No eligible approved facts in this view'}
+            >
+              <ArrowRight size={14} />
+              Promote Eligible
+              {eligiblePromotionIds.length > 0 && (
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-xs tabular-nums">{eligiblePromotionIds.length}</span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -278,8 +300,8 @@ export default function ParcelIntelligenceAdminPage() {
                   <ReviewQueueRow
                     key={`${item.type}-${item.id}`}
                     item={item}
-                    pending={reviewMutation.isPending}
-                    promotePending={promoteMutation.isPending}
+                    pending={isDecisionPending}
+                    promotePending={isDecisionPending}
                     onReview={reviewMutation.mutate}
                     onPromote={promoteMutation.mutate}
                   />

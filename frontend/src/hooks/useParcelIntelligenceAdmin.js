@@ -52,3 +52,30 @@ export function usePromoteEvidenceFactToProperty() {
     },
   });
 }
+
+export function usePromoteEvidenceFactsToProperty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, overwrite = false }) =>
+      parcelIntelligenceAdminAPI
+        .promoteEvidenceFacts({ fact_ids: ids, overwrite })
+        .then((response) => response.data.data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-workspace'] });
+      (result?.promoted || []).forEach((item) => {
+        queryClient.invalidateQueries({ queryKey: ['property', item?.property_id] });
+        queryClient.invalidateQueries({ queryKey: ['property', item?.property_id, 'parcel-intelligence'] });
+      });
+      const promoted = result?.summary?.promoted || 0;
+      const skipped = result?.summary?.skipped || 0;
+      const failed = result?.summary?.failed || 0;
+      toast.success(`Promoted ${promoted} input${promoted === 1 ? '' : 's'}${skipped || failed ? `; ${skipped + failed} skipped` : ''}`);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Batch promotion failed');
+    },
+  });
+}
