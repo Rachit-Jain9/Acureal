@@ -264,6 +264,7 @@ export const parcelIntelligenceAdminAPI = {
   reviewQueue: (params)              => api.get('/parcel-intelligence/review-queue', { params }),
   reviewItem:  (type, id, data)      => api.put(`/parcel-intelligence/review-queue/${type}/${id}`, data),
   reviewItems: (data)                => api.put('/parcel-intelligence/review-queue/batch', data),
+  createAuthorityInput: (data)        => api.post('/parcel-intelligence/authority-inputs', data),
   promoteEvidenceFact: (id, data)    => api.post(`/parcel-intelligence/review-queue/evidence_fact/${id}/promote-property`, data),
   promoteEvidenceFacts: (data)       => api.post('/parcel-intelligence/review-queue/evidence_fact/promote-property/batch', data),
 };

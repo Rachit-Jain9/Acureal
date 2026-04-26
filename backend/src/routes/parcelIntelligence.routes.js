@@ -92,6 +92,38 @@ router.put(
 );
 
 router.post(
+  '/authority-inputs',
+  authenticate,
+  requireAdminOrAnalyst,
+  [
+    body('deal_id').isUUID(),
+    body('kind').isIn(['property_fact', 'guidance_value', 'far_rule']),
+    body('source_title').trim().isLength({ min: 2, max: 500 }),
+    body('authority_name').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
+    body('source_url').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
+    body('review_status').optional().isIn(['pending', 'needs_review', 'approved', 'rejected']),
+    body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 4000 }),
+    body('confidence_score').optional().isFloat({ min: 0, max: 1 }),
+    body('auto_promote').optional().isBoolean(),
+    body('overwrite').optional().isBoolean(),
+    body('payload').isObject(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await parcelIntelligenceAdminService.createAuthorityInput({
+        ...req.body,
+        dealId: req.body.deal_id,
+        userId: req.user.id,
+      });
+      res.status(201).json({ success: true, message: 'Authority input created.', data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
   '/review-queue/evidence_fact/promote-property/batch',
   authenticate,
   requireAdminOrAnalyst,

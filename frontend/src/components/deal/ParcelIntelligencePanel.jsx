@@ -363,6 +363,13 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
     if (reviewSearch) params.set('search', reviewSearch);
     return `/dashboard/settings/parcel-intelligence?${params.toString()}`;
   }, [deal?.name, intelligence?.inputs?.name, linkedDealId, property?.address, property?.name]);
+  const authorityInputUrl = useMemo(() => {
+    const params = new URLSearchParams({ status: 'all', action: 'authority_input' });
+    if (linkedDealId) params.set('deal_id', linkedDealId);
+    const reviewSearch = deal?.name || intelligence?.inputs?.name || property?.name || property?.address;
+    if (reviewSearch) params.set('search', reviewSearch);
+    return `/dashboard/settings/parcel-intelligence?${params.toString()}`;
+  }, [deal?.name, intelligence?.inputs?.name, linkedDealId, property?.address, property?.name]);
 
   const bucket = useMemo(
     () => intelligence?.buckets?.[activeTab] || [],
@@ -419,6 +426,13 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-primary-300"
             >
               Review Evidence
+              <ExternalLink size={13} />
+            </Link>
+            <Link
+              to={authorityInputUrl}
+              className="inline-flex items-center gap-1.5 rounded-editorial border border-primary-100 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+            >
+              Add Authority Input
               <ExternalLink size={13} />
             </Link>
             <button

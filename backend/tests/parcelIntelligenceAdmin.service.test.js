@@ -296,4 +296,100 @@ describe('parcelIntelligenceAdmin.service', () => {
       reason: 'not_approved',
     });
   });
+
+  test('creates an approved authority property fact and promotes it to the linked property', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          deal_id: '11111111-1111-1111-1111-111111111111',
+          deal_name: 'Chirping Ridge',
+          property_id: '22222222-2222-2222-2222-222222222222',
+          property_city: 'Malur',
+          road_width_mtrs: null,
+          document_id: '33333333-3333-3333-3333-333333333333',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '44444444-4444-4444-4444-444444444444',
+          source_title: 'Authority road-width note',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '55555555-5555-5555-5555-555555555555',
+          fact_key: 'road_width_mtrs',
+          review_status: 'approved',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: '22222222-2222-2222-2222-222222222222', road_width_mtrs: 18 }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'activity-1' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.createAuthorityInput({
+      dealId: '11111111-1111-1111-1111-111111111111',
+      kind: 'property_fact',
+      source_title: 'Authority road-width note',
+      review_status: 'approved',
+      auto_promote: true,
+      payload: { fact_key: 'road_width_mtrs', value: '18' },
+      userId: '66666666-6666-6666-6666-666666666666',
+    });
+
+    expect(result.kind).toBe('property_fact');
+    expect(result.promoted).toMatchObject({ field: 'road_width_mtrs', value: 18 });
+    expect(query.mock.calls[1][0]).toContain('INSERT INTO regulatory_data.evidence_sources');
+    expect(query.mock.calls[2][0]).toContain('INSERT INTO regulatory_data.evidence_facts');
+    expect(query.mock.calls[3][0]).toContain('UPDATE properties');
+    expect(query.mock.calls[4][0]).toContain('INSERT INTO activities');
+  });
+
+  test('creates an approved manual guidance row from authority input', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          deal_id: '11111111-1111-1111-1111-111111111111',
+          deal_name: 'Chirping Ridge',
+          property_id: '22222222-2222-2222-2222-222222222222',
+          property_city: 'Malur',
+          document_id: null,
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '44444444-4444-4444-4444-444444444444',
+          source_title: 'Chirping Ridge - IGR Sampangere guidance extract',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '77777777-7777-7777-7777-777777777777',
+          locality: 'Sampangere',
+          review_status: 'approved',
+          value_inr_per_sqft: 1200,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'activity-1' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.createAuthorityInput({
+      dealId: '11111111-1111-1111-1111-111111111111',
+      kind: 'guidance_value',
+      source_title: 'IGR Sampangere guidance extract',
+      review_status: 'approved',
+      payload: {
+        locality: 'Sampangere',
+        land_use_type: 'residential',
+        value_inr_per_sqft: '1200',
+      },
+      userId: '66666666-6666-6666-6666-666666666666',
+    });
+
+    expect(result.kind).toBe('guidance_value');
+    expect(result.row).toMatchObject({ locality: 'Sampangere', review_status: 'approved' });
+    expect(query.mock.calls[2][0]).toContain('INSERT INTO regulatory_data.guidance_values');
+    expect(query.mock.calls[2][1]).toEqual(expect.arrayContaining(['Sampangere', 1200]));
+  });
 });

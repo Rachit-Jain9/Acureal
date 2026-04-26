@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, RefreshCw, Search, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, PlusCircle, RefreshCw, Search, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -8,6 +8,7 @@ import EmptyState from '../components/common/EmptyState';
 import {
   useParcelIntelligenceReviewQueue,
   useParcelIntelligenceStatus,
+  useCreateAuthorityInput,
   usePromoteEvidenceFactToProperty,
   usePromoteEvidenceFactsToProperty,
   useReviewParcelIntelligenceItem,
@@ -126,6 +127,273 @@ function promotionReason(promotion) {
 
 const rowKey = (item) => `${item.type}:${item.id}`;
 
+const PROPERTY_FACT_OPTIONS = [
+  ['road_width_mtrs', 'Road width (m)'],
+  ['land_area_sqft', 'Land area (sqft)'],
+  ['land_area_acres', 'Land area (acres)'],
+  ['survey_number', 'Survey number'],
+  ['pid', 'PID'],
+  ['khata_no', 'Khata no.'],
+  ['owner_name', 'Owner name'],
+];
+
+const REVIEW_INPUT_OPTIONS = [
+  ['approved', 'Approved'],
+  ['needs_review', 'Needs Review'],
+  ['pending', 'Pending'],
+];
+
+function compactPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => value !== '' && value !== null && value !== undefined)
+  );
+}
+
+function AuthorityInputPanel({ dealId, onClose }) {
+  const mutation = useCreateAuthorityInput();
+  const [kind, setKind] = useState('property_fact');
+  const [sourceTitle, setSourceTitle] = useState('');
+  const [authorityName, setAuthorityName] = useState('');
+  const [reviewStatus, setReviewStatus] = useState('approved');
+  const [notes, setNotes] = useState('');
+  const [autoPromote, setAutoPromote] = useState(true);
+  const [overwrite, setOverwrite] = useState(false);
+  const [propertyFact, setPropertyFact] = useState({ fact_key: 'road_width_mtrs', value: '' });
+  const [guidance, setGuidance] = useState({
+    locality: '',
+    road_name: '',
+    sro_name: '',
+    land_use_type: 'residential',
+    value_inr_per_sqft: '',
+    source_section: '',
+    source_page: '',
+  });
+  const [farRule, setFarRule] = useState({
+    zone_code: '',
+    planning_zone: '',
+    land_use_family: 'residential',
+    plot_area_min_sqm: '0',
+    plot_area_max_sqm: '',
+    road_width_min_m: '0',
+    road_width_max_m: '',
+    base_far: '',
+    additional_far: '',
+    max_far: '',
+    ground_coverage_pct: '',
+    front_setback_m: '',
+    source_section: '',
+    source_page: '',
+  });
+
+  const updateObject = (setter, key, value) => setter((current) => ({ ...current, [key]: value }));
+
+  const payload = () => {
+    if (kind === 'property_fact') return compactPayload(propertyFact);
+    if (kind === 'guidance_value') return compactPayload(guidance);
+    return compactPayload(farRule);
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!dealId) return;
+    mutation.mutate(
+      {
+        deal_id: dealId,
+        kind,
+        source_title: sourceTitle,
+        authority_name: authorityName || undefined,
+        review_status: reviewStatus,
+        notes: notes || undefined,
+        auto_promote: kind === 'property_fact' ? autoPromote : undefined,
+        overwrite: kind === 'property_fact' ? overwrite : undefined,
+        payload: payload(),
+      },
+      {
+        onSuccess: () => {
+          setSourceTitle('');
+          setNotes('');
+          if (kind === 'property_fact') setPropertyFact((current) => ({ ...current, value: '' }));
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-content-primary">Authority Input</h3>
+          <p className="mt-1 text-xs text-content-secondary">Create a reviewed source row for the scoped deal.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1 self-start rounded-lg border border-hairline-strong bg-white px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-bg-secondary"
+        >
+          <XCircle size={13} />
+          Close
+        </button>
+      </div>
+
+      {!dealId ? (
+        <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+          Open this page from a deal's Parcel Intelligence panel before adding authority inputs.
+        </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+            <label className="text-xs font-medium text-content-secondary">
+              Input type
+              <select className="input mt-1" value={kind} onChange={(event) => setKind(event.target.value)}>
+                <option value="property_fact">Property input</option>
+                <option value="guidance_value">Guidance value</option>
+                <option value="far_rule">FAR rule</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-content-secondary lg:col-span-2">
+              Source title
+              <input
+                className="input mt-1"
+                value={sourceTitle}
+                onChange={(event) => setSourceTitle(event.target.value)}
+                placeholder="e.g. IGR guidance extract, Kaveri note"
+                required
+              />
+            </label>
+            <label className="text-xs font-medium text-content-secondary">
+              Review status
+              <select className="input mt-1" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
+                {REVIEW_INPUT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <label className="text-xs font-medium text-content-secondary">
+              Authority
+              <input
+                className="input mt-1"
+                value={authorityName}
+                onChange={(event) => setAuthorityName(event.target.value)}
+                placeholder="Karnataka IGR, Kaveri, BBMP..."
+              />
+            </label>
+            <label className="text-xs font-medium text-content-secondary lg:col-span-2">
+              Notes
+              <input
+                className="input mt-1"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Source page, analyst note, or approval context"
+              />
+            </label>
+          </div>
+
+          {kind === 'property_fact' && (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+              <label className="text-xs font-medium text-content-secondary">
+                Field
+                <select
+                  className="input mt-1"
+                  value={propertyFact.fact_key}
+                  onChange={(event) => updateObject(setPropertyFact, 'fact_key', event.target.value)}
+                >
+                  {PROPERTY_FACT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-content-secondary lg:col-span-2">
+                Value
+                <input
+                  className="input mt-1"
+                  value={propertyFact.value}
+                  onChange={(event) => updateObject(setPropertyFact, 'value', event.target.value)}
+                  required
+                />
+              </label>
+              <div className="flex flex-col justify-end gap-2 text-xs text-content-secondary">
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" checked={autoPromote} onChange={(event) => setAutoPromote(event.target.checked)} />
+                  Promote to property
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} />
+                  Overwrite existing
+                </label>
+              </div>
+            </div>
+          )}
+
+          {kind === 'guidance_value' && (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+              {[
+                ['locality', 'Locality', true],
+                ['road_name', 'Road name', false],
+                ['sro_name', 'SRO', false],
+                ['land_use_type', 'Land use', false],
+                ['value_inr_per_sqft', 'INR / sqft', true],
+                ['source_section', 'Source section', false],
+                ['source_page', 'Page', false],
+              ].map(([key, label, required]) => (
+                <label key={key} className="text-xs font-medium text-content-secondary">
+                  {label}
+                  <input
+                    className="input mt-1"
+                    value={guidance[key]}
+                    onChange={(event) => updateObject(setGuidance, key, event.target.value)}
+                    required={required}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+
+          {kind === 'far_rule' && (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+              {[
+                ['zone_code', 'Zone code', true],
+                ['planning_zone', 'PZ', false],
+                ['land_use_family', 'Land use', true],
+                ['plot_area_min_sqm', 'Plot min sqm', false],
+                ['plot_area_max_sqm', 'Plot max sqm', false],
+                ['road_width_min_m', 'Road min m', false],
+                ['road_width_max_m', 'Road max m', false],
+                ['base_far', 'Base FAR', true],
+                ['additional_far', 'Addl FAR', false],
+                ['max_far', 'Max FAR', true],
+                ['ground_coverage_pct', 'Coverage %', false],
+                ['front_setback_m', 'Front setback', false],
+                ['source_section', 'Source section', false],
+                ['source_page', 'Page', false],
+              ].map(([key, label, required]) => (
+                <label key={key} className="text-xs font-medium text-content-secondary">
+                  {label}
+                  <input
+                    className="input mt-1"
+                    value={farRule[key]}
+                    onChange={(event) => updateObject(setFarRule, key, event.target.value)}
+                    required={required}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60"
+            >
+              <PlusCircle size={14} />
+              {mutation.isPending ? 'Saving...' : 'Save Authority Input'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, selected, onSelect }) {
   const summary = payloadSummary(item.payload);
   const factValue = item.payload?.fact_value;
@@ -215,6 +483,7 @@ export default function ParcelIntelligenceAdminPage() {
   const [status, setStatus] = useState(() => initialOption(searchParams, 'status', 'pending', STATUS_VALUES));
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [dealId, setDealId] = useState(() => searchParams.get('deal_id') || '');
+  const [showAuthorityInput, setShowAuthorityInput] = useState(() => searchParams.get('action') === 'authority_input');
   const [selectedKeys, setSelectedKeys] = useState([]);
   const trimmedSearch = search.trim();
   const params = useMemo(
@@ -271,8 +540,9 @@ export default function ParcelIntelligenceAdminPage() {
     if (status !== 'pending') next.set('status', status);
     if (trimmedSearch) next.set('search', trimmedSearch);
     if (dealId) next.set('deal_id', dealId);
+    if (showAuthorityInput) next.set('action', 'authority_input');
     setSearchParams(next, { replace: true });
-  }, [type, status, trimmedSearch, dealId, setSearchParams]);
+  }, [type, status, trimmedSearch, dealId, showAuthorityInput, setSearchParams]);
 
   const toggleRowSelection = (item) => {
     const key = rowKey(item);
@@ -377,6 +647,14 @@ export default function ParcelIntelligenceAdminPage() {
             </button>
             <button
               type="button"
+              onClick={() => setShowAuthorityInput((value) => !value)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+            >
+              <PlusCircle size={14} />
+              Authority Input
+            </button>
+            <button
+              type="button"
               disabled={eligiblePromotionIds.length === 0 || isDecisionPending}
               onClick={() => promoteBatchMutation.mutate({ ids: eligiblePromotionIds })}
               className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-45"
@@ -429,6 +707,12 @@ export default function ParcelIntelligenceAdminPage() {
             </button>
           </div>
         </div>
+
+        {showAuthorityInput && (
+          <div className="border-b border-hairline-strong p-4">
+            <AuthorityInputPanel dealId={dealId} onClose={() => setShowAuthorityInput(false)} />
+          </div>
+        )}
 
         {queueLoading ? (
           <div className="flex justify-center py-12"><LoadingSpinner /></div>

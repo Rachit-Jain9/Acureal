@@ -37,8 +37,10 @@ export function useUpdateProperty() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property', id] });
+      qc.invalidateQueries({ queryKey: ['property', id, 'parcel-intelligence'] });
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['deal'] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Property updated');
     },

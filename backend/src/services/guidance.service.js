@@ -12,6 +12,21 @@ const buildSearchText = (property = {}) =>
     .join(' ')
     .trim();
 
+const buildGuidanceSearchTerms = (property = {}) => {
+  const terms = [
+    property.address,
+    property.locality,
+    property.village,
+    property.city,
+    property.state,
+    property.pincode,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return terms.replace(/\s+/g, ' ').trim();
+};
+
 const normalizeLandUse = (property = {}) => {
   const zoning = String(property.zoning || property.property_type || '').toLowerCase();
   if (zoning.includes('commercial') || zoning.includes('office') || zoning.includes('retail')) return 'commercial';
@@ -51,9 +66,21 @@ const findGuidanceMatches = async (property = {}) => {
           es.source_title,
           es.source_url,
           es.authority_name,
-          GREATEST(
-            similarity(LOWER(COALESCE(gv.locality, '')), LOWER($1)),
-            similarity(LOWER(CONCAT_WS(' ', gv.locality, gv.road_name)), LOWER($1))
+          LEAST(
+            1,
+            GREATEST(
+              similarity(LOWER(COALESCE(gv.locality, '')), LOWER($1)),
+              similarity(LOWER(CONCAT_WS(' ', gv.locality, gv.road_name)), LOWER($1))
+            )
+            + CASE
+                WHEN $4 ILIKE '%' || LOWER(COALESCE(gv.locality, '')) || '%' THEN 0.35
+                ELSE 0
+              END
+            + CASE
+                WHEN gv.road_name IS NOT NULL
+                 AND $4 ILIKE '%' || LOWER(gv.road_name) || '%' THEN 0.15
+                ELSE 0
+              END
           ) AS match_score
        FROM regulatory_data.guidance_values gv
        LEFT JOIN regulatory_data.evidence_sources es ON es.id = gv.evidence_source_id
@@ -68,7 +95,7 @@ const findGuidanceMatches = async (property = {}) => {
          match_score DESC,
          gv.effective_from DESC NULLS LAST
        LIMIT 5`,
-      [searchText, property.city || 'Bengaluru', normalizeLandUse(property)]
+      [searchText, property.city || 'Bengaluru', normalizeLandUse(property), buildGuidanceSearchTerms(property)]
     );
 
     const matches = result.rows.map((row) => ({
@@ -121,5 +148,6 @@ const findGuidanceMatches = async (property = {}) => {
 module.exports = {
   findGuidanceMatches,
   buildSearchText,
+  buildGuidanceSearchTerms,
   normalizeLandUse,
 };

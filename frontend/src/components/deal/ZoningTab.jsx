@@ -1,5 +1,7 @@
 import ParcelIntelligencePanel from './ParcelIntelligencePanel';
+import MasterPlanZonePanel from './MasterPlanZonePanel';
 import { ErrorState } from '../../design-system';
+import { useProperty } from '../../hooks/useProperties';
 
 const resolveLinkedProperty = (deal) => {
   if (deal?.property?.id) return deal.property;
@@ -16,7 +18,9 @@ const resolveLinkedProperty = (deal) => {
 };
 
 export default function ZoningTab({ deal, dealId, setTab }) {
-  const property = resolveLinkedProperty(deal);
+  const propertyStub = resolveLinkedProperty(deal);
+  const { data: hydratedProperty } = useProperty(propertyStub?.id);
+  const property = hydratedProperty ? { ...propertyStub, ...hydratedProperty } : propertyStub;
 
   if (!property?.id) {
     return (
@@ -41,11 +45,14 @@ export default function ZoningTab({ deal, dealId, setTab }) {
   }
 
   return (
-    <ParcelIntelligencePanel
-      property={property}
-      deal={deal}
-      dealId={dealId}
-      onUploadClick={setTab ? () => setTab('documents') : undefined}
-    />
+    <div className="space-y-5">
+      <MasterPlanZonePanel property={property} />
+      <ParcelIntelligencePanel
+        property={property}
+        deal={deal}
+        dealId={dealId}
+        onUploadClick={setTab ? () => setTab('documents') : undefined}
+      />
+    </div>
   );
 }

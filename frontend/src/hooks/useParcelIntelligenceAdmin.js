@@ -2,6 +2,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { parcelIntelligenceAdminAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 
+const getApiErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  if (Array.isArray(data?.errors) && data.errors.length) {
+    const details = data.errors
+      .slice(0, 3)
+      .map((item) => [item.field, item.message].filter(Boolean).join(': '))
+      .filter(Boolean)
+      .join('; ');
+    return details ? `${data.message || fallback}: ${details}` : data.message || fallback;
+  }
+  return data?.message || error?.message || fallback;
+};
+
 export function useParcelIntelligenceStatus() {
   return useQuery({
     queryKey: ['parcel-intelligence-admin-status'],
@@ -31,7 +44,7 @@ export function useReviewParcelIntelligenceItem() {
       toast.success(`Review item marked ${variables.status.replace(/_/g, ' ')}`);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || 'Review update failed');
+      toast.error(getApiErrorMessage(error, 'Review update failed'));
     },
   });
 }
@@ -52,7 +65,27 @@ export function useReviewParcelIntelligenceItems() {
       toast.success(`Marked ${updated} item${updated === 1 ? '' : 's'} ${variables.status.replace(/_/g, ' ')}${failed ? `; ${failed} failed` : ''}`);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || 'Batch review update failed');
+      toast.error(getApiErrorMessage(error, 'Batch review update failed'));
+    },
+  });
+}
+
+export function useCreateAuthorityInput() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data) =>
+      parcelIntelligenceAdminAPI.createAuthorityInput(data).then((response) => response.data.data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['property', result?.property_id] });
+      queryClient.invalidateQueries({ queryKey: ['deal-workspace'] });
+      queryClient.invalidateQueries({ queryKey: ['property', result?.property_id, 'parcel-intelligence'] });
+      toast.success('Authority input created');
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Authority input creation failed'));
     },
   });
 }
@@ -72,7 +105,7 @@ export function usePromoteEvidenceFactToProperty() {
       toast.success(`${result?.label || 'Evidence'} promoted to property inputs`);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || 'Promotion failed');
+      toast.error(getApiErrorMessage(error, 'Promotion failed'));
     },
   });
 }
@@ -99,7 +132,7 @@ export function usePromoteEvidenceFactsToProperty() {
       toast.success(`Promoted ${promoted} input${promoted === 1 ? '' : 's'}${skipped || failed ? `; ${skipped + failed} skipped` : ''}`);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || 'Batch promotion failed');
+      toast.error(getApiErrorMessage(error, 'Batch promotion failed'));
     },
   });
 }
