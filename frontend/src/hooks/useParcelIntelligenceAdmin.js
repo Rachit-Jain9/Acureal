@@ -25,6 +25,9 @@ export function useReviewParcelIntelligenceItem() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
       queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['property'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-workspace'] });
       toast.success(`Review item marked ${variables.status.replace(/_/g, ' ')}`);
     },
     onError: (error) => {
@@ -41,6 +44,9 @@ export function useReviewParcelIntelligenceItems() {
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
       queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['property'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-workspace'] });
       const updated = result?.summary?.updated || 0;
       const failed = result?.summary?.failed || 0;
       toast.success(`Marked ${updated} item${updated === 1 ? '' : 's'} ${variables.status.replace(/_/g, ' ')}${failed ? `; ${failed} failed` : ''}`);

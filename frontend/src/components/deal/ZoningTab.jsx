@@ -15,7 +15,7 @@ const resolveLinkedProperty = (deal) => {
   return null;
 };
 
-export default function ZoningTab({ deal, setTab }) {
+export default function ZoningTab({ deal, dealId, setTab }) {
   const property = resolveLinkedProperty(deal);
 
   if (!property?.id) {
@@ -43,6 +43,8 @@ export default function ZoningTab({ deal, setTab }) {
   return (
     <ParcelIntelligencePanel
       property={property}
+      deal={deal}
+      dealId={dealId}
       onUploadClick={setTab ? () => setTab('documents') : undefined}
     />
   );

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   AlertTriangle,
@@ -341,11 +342,12 @@ function VerificationLinks({ links = {}, onUploadClick }) {
   );
 }
 
-export default function ParcelIntelligencePanel({ property, onUploadClick }) {
+export default function ParcelIntelligencePanel({ property, deal, dealId, onUploadClick }) {
   const [activeTab, setActiveTab] = useState('verified');
   const propertyId = property?.id;
   const { data: intelligence, isLoading, isError, error } = useParcelIntelligence(propertyId);
   const refreshMutation = useRefreshParcelIntelligence();
+  const linkedDealId = dealId || deal?.id || null;
 
   const buildability = intelligence?.buildability;
   const values = buildability?.values || {};
@@ -354,6 +356,13 @@ export default function ParcelIntelligencePanel({ property, onUploadClick }) {
   const guidanceCitation = guidance?.citations?.[0];
   const selectedGuidance = guidance?.selected;
   const verdict = useParcelVerdict(intelligence);
+  const reviewQueueUrl = useMemo(() => {
+    const params = new URLSearchParams({ status: 'pending' });
+    if (linkedDealId) params.set('deal_id', linkedDealId);
+    const reviewSearch = deal?.name || intelligence?.inputs?.name || property?.name || property?.address;
+    if (reviewSearch) params.set('search', reviewSearch);
+    return `/dashboard/settings/parcel-intelligence?${params.toString()}`;
+  }, [deal?.name, intelligence?.inputs?.name, linkedDealId, property?.address, property?.name]);
 
   const bucket = useMemo(
     () => intelligence?.buckets?.[activeTab] || [],
@@ -405,6 +414,13 @@ export default function ParcelIntelligencePanel({ property, onUploadClick }) {
           />
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill status={intelligence?.status} />
+            <Link
+              to={reviewQueueUrl}
+              className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-primary-300"
+            >
+              Review Evidence
+              <ExternalLink size={13} />
+            </Link>
             <button
               type="button"
               onClick={() => refreshMutation.mutate(propertyId)}

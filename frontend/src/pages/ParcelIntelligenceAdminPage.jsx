@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, RefreshCw, Search, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
@@ -28,6 +29,14 @@ const STATUS_OPTIONS = [
   { value: 'rejected', label: 'Rejected' },
   { value: 'all', label: 'All Statuses' },
 ];
+
+const TYPE_VALUES = new Set(TYPE_OPTIONS.map((option) => option.value));
+const STATUS_VALUES = new Set(STATUS_OPTIONS.map((option) => option.value));
+
+function initialOption(searchParams, key, fallback, allowedValues) {
+  const value = searchParams.get(key);
+  return allowedValues.has(value) ? value : fallback;
+}
 
 function statusTone(status) {
   if (status === 'approved' || status === 'configured' || status === 'parser_available') return 'text-emerald-700 bg-emerald-50';
@@ -201,9 +210,11 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, se
 }
 
 export default function ParcelIntelligenceAdminPage() {
-  const [type, setType] = useState('all');
-  const [status, setStatus] = useState('pending');
-  const [search, setSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [type, setType] = useState(() => initialOption(searchParams, 'type', 'all', TYPE_VALUES));
+  const [status, setStatus] = useState(() => initialOption(searchParams, 'status', 'pending', STATUS_VALUES));
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
+  const [dealId, setDealId] = useState(() => searchParams.get('deal_id') || '');
   const [selectedKeys, setSelectedKeys] = useState([]);
   const trimmedSearch = search.trim();
   const params = useMemo(
@@ -212,8 +223,9 @@ export default function ParcelIntelligenceAdminPage() {
       status,
       limit: 80,
       ...(trimmedSearch ? { search: trimmedSearch } : {}),
+      ...(dealId ? { deal_id: dealId } : {}),
     }),
-    [type, status, trimmedSearch]
+    [type, status, trimmedSearch, dealId]
   );
   const { data: ops, isLoading: statusLoading } = useParcelIntelligenceStatus();
   const { data: queue = [], isLoading: queueLoading, refetch } = useParcelIntelligenceReviewQueue(params);
@@ -251,7 +263,16 @@ export default function ParcelIntelligenceAdminPage() {
 
   useEffect(() => {
     setSelectedKeys([]);
-  }, [type, status, trimmedSearch]);
+  }, [type, status, trimmedSearch, dealId]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (type !== 'all') next.set('type', type);
+    if (status !== 'pending') next.set('status', status);
+    if (trimmedSearch) next.set('search', trimmedSearch);
+    if (dealId) next.set('deal_id', dealId);
+    setSearchParams(next, { replace: true });
+  }, [type, status, trimmedSearch, dealId, setSearchParams]);
 
   const toggleRowSelection = (item) => {
     const key = rowKey(item);
@@ -329,6 +350,17 @@ export default function ParcelIntelligenceAdminPage() {
                 placeholder="Search deal, source, fact"
               />
             </div>
+            {dealId && (
+              <button
+                type="button"
+                onClick={() => setDealId('')}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-secondary px-3 py-2 text-sm font-medium text-content-secondary hover:bg-white"
+                title="Clear deal scope"
+              >
+                Deal scoped
+                <XCircle size={14} />
+              </button>
+            )}
             <select className="input max-w-[180px]" value={type} onChange={(event) => setType(event.target.value)}>
               {TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
