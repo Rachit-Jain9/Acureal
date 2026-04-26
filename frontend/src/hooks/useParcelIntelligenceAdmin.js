@@ -32,3 +32,23 @@ export function useReviewParcelIntelligenceItem() {
     },
   });
 }
+
+export function usePromoteEvidenceFactToProperty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, overwrite = false }) =>
+      parcelIntelligenceAdminAPI.promoteEvidenceFact(id, { overwrite }).then((response) => response.data.data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['property', result?.property_id] });
+      queryClient.invalidateQueries({ queryKey: ['deal-workspace'] });
+      queryClient.invalidateQueries({ queryKey: ['property', result?.property_id, 'parcel-intelligence'] });
+      toast.success(`${result?.label || 'Evidence'} promoted to property inputs`);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Promotion failed');
+    },
+  });
+}

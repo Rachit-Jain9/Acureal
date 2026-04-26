@@ -1,5 +1,6 @@
 jest.mock('../src/config/database', () => ({
   query: jest.fn(),
+  transaction: jest.fn(),
 }));
 
 jest.mock('../src/services/adapters/landeed.adapter', () => ({
@@ -10,7 +11,7 @@ jest.mock('../src/services/ai/providerRegistry', () => ({
   getProviderAvailability: jest.fn(),
 }));
 
-const { query } = require('../src/config/database');
+const { query, transaction } = require('../src/config/database');
 const landeedAdapter = require('../src/services/adapters/landeed.adapter');
 const { getProviderAvailability } = require('../src/services/ai/providerRegistry');
 const service = require('../src/services/parcelIntelligenceAdmin.service');
@@ -18,6 +19,7 @@ const service = require('../src/services/parcelIntelligenceAdmin.service');
 describe('parcelIntelligenceAdmin.service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    transaction.mockImplementation(async (callback) => callback({ query }));
     landeedAdapter.getStatus.mockReturnValue({
       provider: 'landeed',
       status: 'not_configured',
@@ -74,5 +76,73 @@ describe('parcelIntelligenceAdmin.service', () => {
     expect(result.type).toBe('guidance_value');
     expect(result.review_status).toBe('approved');
     expect(query.mock.calls[0][0]).toContain('UPDATE regulatory_data.guidance_values');
+  });
+
+  test('maps reviewed evidence facts to property promotion updates', () => {
+    expect(service.buildPromotionUpdate('survey_numbers', [267, '99/P12'])).toMatchObject({
+      field: 'survey_number',
+      value: '267, 99/P12',
+    });
+    expect(service.buildPromotionUpdate('area_acres', 2.975)).toMatchObject({
+      field: 'land_area_sqft',
+      value: 129591,
+      updates: {
+        land_area_input_value: 2.975,
+        land_area_input_unit: 'acre',
+      },
+    });
+    expect(service.buildPromotionUpdate('consideration_inr', 119000000)).toBeNull();
+  });
+
+  test('promotes an approved evidence fact to an empty linked property field with activity trace', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'fact-1',
+          fact_key: 'pid_number',
+          fact_value: '151900802100321399',
+          review_status: 'approved',
+          document_name: '14 Khata For Sy No.267.pdf',
+          deal_id: 'deal-1',
+          property_id: 'property-1',
+          pid: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'property-1', pid: '151900802100321399' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'activity-1' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.promoteEvidenceFactToProperty({
+      factId: 'fact-1',
+      userId: 'user-1',
+    });
+
+    expect(result.promoted).toBe(true);
+    expect(result.field).toBe('pid');
+    expect(result.activity_id).toBe('activity-1');
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[1][0]).toContain('UPDATE properties');
+    expect(query.mock.calls[2][0]).toContain('INSERT INTO activities');
+  });
+
+  test('does not promote into an already populated property field by default', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'fact-2',
+        fact_key: 'khata_number',
+        fact_value: '844/267',
+        review_status: 'approved',
+        deal_id: 'deal-1',
+        property_id: 'property-1',
+        khata_no: 'existing-khata',
+      }],
+    });
+
+    await expect(service.promoteEvidenceFactToProperty({
+      factId: 'fact-2',
+      userId: 'user-1',
+    })).rejects.toMatchObject({ statusCode: 409 });
+
+    expect(transaction).not.toHaveBeenCalled();
   });
 });

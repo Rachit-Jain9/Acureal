@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Database, FileSearch, RefreshCw, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, RefreshCw, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -7,6 +7,7 @@ import EmptyState from '../components/common/EmptyState';
 import {
   useParcelIntelligenceReviewQueue,
   useParcelIntelligenceStatus,
+  usePromoteEvidenceFactToProperty,
   useReviewParcelIntelligenceItem,
 } from '../hooks/useParcelIntelligenceAdmin';
 
@@ -96,8 +97,27 @@ function payloadSummary(payload = {}) {
     .join(' | ');
 }
 
-function ReviewQueueRow({ item, onReview, pending }) {
+function formatFactValue(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  if (Array.isArray(value)) return value.map((item) => formatFactValue(item)).join(', ');
+  if (typeof value === 'number') return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function promotionReason(promotion) {
+  if (!promotion?.supported) return null;
+  if (promotion.reason === 'approval_required') return 'Approve before promoting';
+  if (promotion.reason === 'already_populated') return `Already set: ${formatFactValue(promotion.current_value)}`;
+  if (promotion.reason === 'no_linked_property') return 'No linked property';
+  return null;
+}
+
+function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending }) {
   const summary = payloadSummary(item.payload);
+  const factValue = item.payload?.fact_value;
+  const promotion = item.promotion;
+  const reason = promotionReason(promotion);
 
   return (
     <tr className="border-b border-hairline align-top hover:bg-bg-secondary/70">
@@ -107,7 +127,19 @@ function ReviewQueueRow({ item, onReview, pending }) {
       </td>
       <td className="px-3 py-3 text-xs text-content-secondary">
         <div>{item.category || '-'}</div>
+        {factValue !== undefined && (
+          <div className="mt-1 max-w-md font-medium text-content-primary">
+            {formatFactValue(factValue)}
+          </div>
+        )}
         {summary && <div className="mt-1 max-w-md leading-relaxed">{summary}</div>}
+        {promotion?.supported && (
+          <div className="mt-2 max-w-md rounded bg-bg-secondary px-2 py-1 text-[11px] text-content-secondary">
+            Property target: {promotion.label} = {formatFactValue(promotion.value)}
+            {promotion.property_name ? ` on ${promotion.property_name}` : ''}
+            {reason ? ` (${reason})` : ''}
+          </div>
+        )}
       </td>
       <td className="px-3 py-3">
         <StatusBadge status={item.review_status} />
@@ -136,6 +168,18 @@ function ReviewQueueRow({ item, onReview, pending }) {
               {label}
             </button>
           ))}
+          {promotion?.supported && item.review_status === 'approved' && (
+            <button
+              type="button"
+              disabled={pending || promotePending || !promotion.promotable}
+              onClick={() => onPromote({ id: item.id })}
+              className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-45"
+              title={reason || 'Promote reviewed fact to linked property'}
+            >
+              <ArrowRight size={12} />
+              Promote
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -149,6 +193,7 @@ export default function ParcelIntelligenceAdminPage() {
   const { data: ops, isLoading: statusLoading } = useParcelIntelligenceStatus();
   const { data: queue = [], isLoading: queueLoading, refetch } = useParcelIntelligenceReviewQueue(params);
   const reviewMutation = useReviewParcelIntelligenceItem();
+  const promoteMutation = usePromoteEvidenceFactToProperty();
 
   const pendingCount = ops?.review_queue?.pending_or_needs_review ?? '-';
   const guidanceApproved = ops?.review_queue?.guidance_values?.approved || 0;
@@ -234,7 +279,9 @@ export default function ParcelIntelligenceAdminPage() {
                     key={`${item.type}-${item.id}`}
                     item={item}
                     pending={reviewMutation.isPending}
+                    promotePending={promoteMutation.isPending}
                     onReview={reviewMutation.mutate}
+                    onPromote={promoteMutation.mutate}
                   />
                 ))}
               </tbody>

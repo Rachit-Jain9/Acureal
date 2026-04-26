@@ -263,6 +263,7 @@ export const parcelIntelligenceAdminAPI = {
   status:      ()                    => api.get('/parcel-intelligence/status'),
   reviewQueue: (params)              => api.get('/parcel-intelligence/review-queue', { params }),
   reviewItem:  (type, id, data)      => api.put(`/parcel-intelligence/review-queue/${type}/${id}`, data),
+  promoteEvidenceFact: (id, data)    => api.post(`/parcel-intelligence/review-queue/evidence_fact/${id}/promote-property`, data),
 };
 
 // Document Extraction
