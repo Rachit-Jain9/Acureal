@@ -269,6 +269,20 @@ export const parcelIntelligenceAdminAPI = {
   promoteEvidenceFacts: (data)       => api.post('/parcel-intelligence/review-queue/evidence_fact/promote-property/batch', data),
 };
 
+// Polymorphic evidence-link primitive
+// Mirrors backend/src/routes/evidenceLinks.routes.js
+export const evidenceLinksAPI = {
+  list:   (ownerKind, ownerId)     => api.get(`/evidence-links/${ownerKind}/${ownerId}`),
+  attach: (ownerKind, ownerId, body) => api.post(`/evidence-links/${ownerKind}/${ownerId}`, body),
+  detach: (linkId)                 => api.delete(`/evidence-links/${linkId}`),
+};
+
+// Comp similarity scoring (subject deal vs comp)
+export const compSimilarityAPI = {
+  ranked: (dealId, params) => api.get(`/comps/ranked/${dealId}`, { params }),
+  score:  (dealId, compId) => api.get(`/comps/score/${dealId}/${compId}`),
+};
+
 // Document Extraction
 export const extractionAPI = {
   extract:          (documentId, data)                            => api.post(`/documents/${documentId}/extract`, data),

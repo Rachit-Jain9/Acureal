@@ -2,6 +2,7 @@ const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { uploadFile, createUploadUrl, getDownloadUrl, fetchStoredFile, deleteStorageFile } = require('../config/storage');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+const { EVENTS, publish } = require('../lib/eventBus');
 const path = require('path');
 
 const getDocumentDealOptions = async () => {
@@ -87,6 +88,14 @@ const uploadDocument = async (dealId, file, category, userId, description = '', 
   // Get uploader name
   const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
   doc.uploaded_by_name = userResult.rows[0]?.name || 'Unknown';
+
+  publish(EVENTS.DOCUMENT_UPLOADED, {
+    dealId,
+    documentId: doc.id,
+    documentName: doc.name,
+    documentCategory: doc.doc_category,
+    userId,
+  });
 
   return doc;
 };
@@ -182,6 +191,14 @@ const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, 
   const doc = result.rows[0];
   const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
   doc.uploaded_by_name = userResult.rows[0]?.name || 'Unknown';
+
+  publish(EVENTS.DOCUMENT_UPLOADED, {
+    dealId,
+    documentId: doc.id,
+    documentName: doc.name,
+    documentCategory: doc.doc_category,
+    userId,
+  });
 
   return doc;
 };

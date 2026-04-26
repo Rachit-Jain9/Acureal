@@ -1,7 +1,9 @@
 'use strict';
 
 const { query } = require('../config/database');
-const { getProviderAvailability, runClaudeReasoning } = require('./ai/providerRegistry');
+const { getProviderAvailability } = require('./ai/providerRegistry');
+const { runClaudeReasoning } = require('./ai/aiRouter');
+const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
 const HEATMAP_MARKETS = [
@@ -143,12 +145,14 @@ Rules:
 
   try {
     return await runClaudeReasoning({
+      task: 'market_synthesis',
       systemPrompt,
       payload,
       maxTokens: 700,
+      metadata: { stage: 'daily_brief' },
     });
   } catch (err) {
-    console.error('[Intelligence] Claude brief generation failed:', err.message);
+    log.error('claude_brief_failed', err);
     return null;
   }
 };
@@ -426,15 +430,18 @@ Rules:
   try {
     return {
       analysis: await runClaudeReasoning({
+        task: 'reasoning',
         systemPrompt,
         payload,
         maxTokens: 600,
+        attach: { dealId },
+        metadata: { stage: 'deal_analysis' },
       }),
       generatedAt: new Date().toISOString(),
       dealName: deal.name,
     };
   } catch (err) {
-    console.error('[Intelligence] Deal analysis failed:', err.message);
+    log.error('deal_analysis_failed', err, { deal_id: dealId });
     return { analysis: null, reason: err.message };
   }
 };
@@ -455,7 +462,7 @@ const getDailyBrief = async (userId, date = new Date().toISOString().slice(0, 10
   } catch (err) {
     // If the unique constraint is missing the ON CONFLICT will fail — log and continue,
     // the brief is still generated and returned from buildBrief().
-    console.warn('[Intelligence] Brief cache write failed (safe to ignore):', err.message);
+    log.warn('brief_cache_write_failed', { error: err.message });
   }
 
   return brief;

@@ -10,6 +10,7 @@ const {
 const guidanceService = require('./guidance.service');
 const landeedAdapter = require('./adapters/landeed.adapter');
 const kgisAdapter = require('./adapters/kgis.adapter');
+const { EVENTS, publish } = require('../lib/eventBus');
 
 const VERIFICATION_LINKS = {
   kaveri: 'https://kaveri.karnataka.gov.in/landing-page',
@@ -590,8 +591,28 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
 const getParcelIntelligence = (propertyId, userId = null) =>
   composeParcelIntelligence({ propertyId, userId, refresh: false });
 
-const refreshParcelIntelligence = (propertyId, userId = null) =>
-  composeParcelIntelligence({ propertyId, userId, refresh: true });
+const refreshParcelIntelligence = async (propertyId, userId = null) => {
+  const output = await composeParcelIntelligence({ propertyId, userId, refresh: true });
+
+  // The verdict label is short and investor-grade — perfect for a timeline
+  // line. The fan-out from property → deal(s) happens inside the event sink.
+  const summary = output?.verdict?.label
+    || (output?.confidence?.overall != null
+      ? `${Math.round(Number(output.confidence.overall) * 100)}% confidence`
+      : null);
+
+  try {
+    publish(EVENTS.PARCEL_INTELLIGENCE_REFRESHED, {
+      propertyId,
+      userId,
+      summary,
+    });
+  } catch {
+    // never block the refresh response on telemetry
+  }
+
+  return output;
+};
 
 module.exports = {
   getParcelIntelligence,

@@ -1,5 +1,6 @@
 const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
+const { EVENTS, publish } = require('../lib/eventBus');
 const {
   DEAL_STAGES,
   STAGE_TRANSITIONS,
@@ -260,6 +261,14 @@ const createDeal = async (data, userId) =>
        VALUES ($1, NULL, $2, $3, $4)`,
       [deal.id, deal.stage, userId, 'Deal created']
     );
+
+    publish(EVENTS.DEAL_CREATED, {
+      dealId: deal.id,
+      dealName: deal.name,
+      stage: deal.stage,
+      assetClass: deal.asset_class,
+      userId,
+    });
 
     return deal;
   });
@@ -621,6 +630,18 @@ const transitionStage = async (dealId, newStage, userId, notes = '') => {
         dealId
       );
     }
+
+    // Fire after the txn writes succeed but before we return the row. The
+    // activity insert runs outside the transaction (separate connection in
+    // the sink) — that's deliberate, the auto-activity is best-effort and a
+    // failure in it must never roll back the stage transition itself.
+    publish(EVENTS.DEAL_STAGE_CHANGED, {
+      dealId,
+      fromStage: currentDeal.stage,
+      toStage: newStage,
+      userId,
+      notes,
+    });
 
     return {
       ...dealUpdateResult.rows[0],

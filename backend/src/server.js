@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { runWithRequestContext } = require('./lib/requestContext');
+const { requestIdMiddleware, requestLoggingMiddleware } = require('./middleware/requestId');
+const log = require('./lib/logger').child({ module: 'server' });
 
 // Route imports
 const authRoutes = require('./routes/auth.routes');
@@ -30,12 +32,19 @@ const extractionRoutes = require('./routes/extraction.routes');
 const fxRoutes = require('./routes/fx.routes');
 const masterPlanRoutes = require('./routes/masterplan.routes');
 const parcelIntelligenceRoutes = require('./routes/parcelIntelligence.routes');
+const evidenceLinksRoutes = require('./routes/evidenceLinks.routes');
+
+// Wire the deal-event sink early — it's pure subscription, no side effects
+// until events fire, but registering at module load keeps test isolation
+// simple (tests can call dealEventsService.unregister()).
+require('./services/dealEvents.service').register();
 
 const app = express();
 
 app.use((req, res, next) => {
   runWithRequestContext({}, next);
 });
+app.use(requestIdMiddleware);
 
 // Vercel and other reverse proxies forward client IPs via X-Forwarded-* headers.
 // Trust the first proxy hop so express-rate-limit and auth middleware read them correctly.
@@ -123,9 +132,14 @@ app.use('/api', generalLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging
+// Logging — structured JSON in prod/Vercel; morgan kept for human-friendly dev tail.
 if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    app.use(requestLoggingMiddleware);
+  } else {
+    app.use(morgan('dev'));
+    app.use(requestLoggingMiddleware);
+  }
 }
 
 // Routes
@@ -149,6 +163,7 @@ app.use('/api', extractionRoutes);
 app.use('/api/fx', fxRoutes);
 app.use('/api/master-plan', masterPlanRoutes);
 app.use('/api/parcel-intelligence', parcelIntelligenceRoutes);
+app.use('/api', evidenceLinksRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
@@ -161,9 +176,11 @@ const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   app.listen(PORT, () => {
-    console.log(`REDIP API server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Health check: http://localhost:${PORT}/api/health`);
+    log.info('server_started', {
+      port: PORT,
+      environment: process.env.NODE_ENV || 'development',
+      health_check: `http://localhost:${PORT}/api/health`,
+    });
   });
 }
 

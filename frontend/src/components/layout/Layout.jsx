@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import useCurrencyPref from '../../hooks/useCurrencyPref';
+import CommandPalette from '../common/CommandPalette';
 
 export default function Layout() {
   // Subscribe once so a currency change anywhere in the app re-renders the
@@ -36,6 +37,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      {/* Cmd+K palette is mounted once and overlays everything when toggled. */}
+      <CommandPalette />
     </div>
   );
 }

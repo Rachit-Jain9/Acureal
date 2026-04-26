@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/database');
+const { EVENTS, publish } = require('../lib/eventBus');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -229,17 +230,222 @@ const COMMERCIAL_OFFICE_CHECKLIST = [
   },
 ];
 
+// Retail-specific items: ECS parking minimums, anchor-tenant clauses, and
+// trade-mix discipline drive valuation more than vanilla commercial.
+const RETAIL_CHECKLIST = [
+  ...COMMERCIAL_OFFICE_CHECKLIST,
+  {
+    category: 'project_specific',
+    item_name: 'ECS parking compliance (retail)',
+    description: 'Verify ECS / equivalent car space ratios for retail use under BBMP zonal regulations. Mall and high-street retail have different ECS multipliers.',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Anchor tenant LOI / lease terms',
+    description: 'Letters of intent / executed leases with anchor tenants. Verify lock-in, rental escalations, fitout periods, exit clauses.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Trade mix and category exclusivity review',
+    description: 'Confirm trade-mix plan (F&B / fashion / electronics / cinema split). Check category exclusivity clauses promised to anchors.',
+    severity: 'secondary',
+    is_required: true,
+  },
+  {
+    category: 'physical_technical',
+    item_name: 'Footfall study / catchment analysis',
+    description: 'Independent footfall projection and catchment population analysis (3km / 5km rings).',
+    severity: 'secondary',
+    is_required: false,
+  },
+  {
+    category: 'statutory',
+    item_name: 'Cinema / multiplex licensing (if applicable)',
+    description: 'Karnataka Cinemas (Regulation) Act licence and fire/seating compliance.',
+    severity: 'commercial_blocker',
+    is_required: false,
+  },
+];
+
+// Hospitality-specific items: hotels and resorts touch tourism, food safety,
+// liquor, and gaming regulations the office checklist doesn't cover.
+const HOSPITALITY_CHECKLIST = [
+  ...COMMERCIAL_OFFICE_CHECKLIST,
+  {
+    category: 'statutory',
+    item_name: 'Tourism Department classification (star rating)',
+    description: 'Karnataka / India Tourism star classification (1–5 star, heritage). Affects FSI bonuses, GST treatment, and brand affiliation eligibility.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+  {
+    category: 'statutory',
+    item_name: 'FSSAI food licence and kitchen approval',
+    description: 'Food Safety and Standards Authority of India licence for all F&B outlets within the property.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+  {
+    category: 'statutory',
+    item_name: 'Excise / liquor licence (CL-7 / CL-9)',
+    description: 'Karnataka State Beverages Corporation excise licence for in-house liquor service.',
+    severity: 'commercial_blocker',
+    is_required: false,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Hotel management / brand operating agreement',
+    description: 'HMA / franchise / lease with the hotel operator. Verify term, fees, performance tests, owner termination rights.',
+    severity: 'deal_breaker',
+    is_required: true,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Key count, ARR, RevPAR underwriting basis',
+    description: 'Confirm the keys, ADR, occupancy, and RevPAR ramp underwritten in the financial model match operator-supplied projections.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+  {
+    category: 'physical_technical',
+    item_name: 'Back-of-house and parking ratio verification',
+    description: 'Hotels need substantial BoH (laundry, kitchen, plant) and 1 ECS per key minimum. Verify against approved plans.',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+];
+
+// Industrial / warehousing: heavy on land conversion, environmental, power,
+// access. Less on RERA / building plan glamour, more on site fundamentals.
+const INDUSTRIAL_WAREHOUSING_CHECKLIST = [
+  ...BASE_CHECKLIST,
+  {
+    category: 'statutory',
+    item_name: 'KIADB allotment / industrial land conversion',
+    description: 'For KIADB-allotted plots: allotment letter, possession certificate, and lease-cum-sale deed. For private land: Section 109 KLR Act conversion to industrial use.',
+    severity: 'deal_breaker',
+    is_required: true,
+  },
+  {
+    category: 'statutory',
+    item_name: 'Karnataka State Pollution Control Board (KSPCB) consent',
+    description: 'Consent to Establish (CFE) and Consent to Operate (CFO) under Air & Water Acts. Category red/orange/green dictates conditions.',
+    severity: 'deal_breaker',
+    is_required: true,
+  },
+  {
+    category: 'statutory',
+    item_name: 'Environment clearance (EIA, if applicable)',
+    description: 'EC from SEIAA / MoEF for category-A and category-B1 industrial activities.',
+    severity: 'commercial_blocker',
+    is_required: false,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'BESCOM / KPTCL HT power feasibility',
+    description: 'High-tension power feasibility certificate, sanctioned load, dedicated feeder availability.',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+  {
+    category: 'physical_technical',
+    item_name: 'Heavy-vehicle access and turning radius',
+    description: 'Confirm motorable access for 40-ft trailers, internal turning radii, dock-to-dock distances.',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+  {
+    category: 'physical_technical',
+    item_name: 'Soil bearing capacity for racking / heavy floor loading',
+    description: 'Geotechnical report supporting the floor-loading spec required by warehousing / industrial use (typ. 5–8 t/sqm).',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+  {
+    category: 'physical_technical',
+    item_name: 'Flood / drainage / nala-buffer compliance',
+    description: 'Confirm site is outside 30m raja kaluve buffer and has positive drainage. Industrial sites sit in low-lying areas more often than residential.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+];
+
+// Mixed-use overlays the residential checklist with retail + commercial
+// items, plus the unit-share apportionment that drives sales modeling.
+const MIXED_USE_CHECKLIST = [
+  ...RESIDENTIAL_CHECKLIST,
+  {
+    category: 'project_specific',
+    item_name: 'Mixed-use FSI split (residential / commercial)',
+    description: 'Confirm the residential vs commercial FSI/FAR split is permitted under the zone code. RMP draft restricts mixed-use ratios.',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Common-area apportionment between use blocks',
+    description: 'How are lobby, lifts, parking, MEP, and amenities apportioned between residential and commercial purchasers? Critical for stamp duty and saleable area.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+  {
+    category: 'statutory',
+    item_name: 'Separate fire NOCs per use block (if required)',
+    description: 'Some BBMP precedents require separate NOCs for residential vs commercial occupancies in mixed-use towers.',
+    severity: 'commercial_blocker',
+    is_required: false,
+  },
+];
+
+// Redevelopment overlays residential with society / tenant-rehab obligations
+// — the value driver and the risk driver of any redev deal.
+const REDEVELOPMENT_CHECKLIST = [
+  ...RESIDENTIAL_CHECKLIST,
+  {
+    category: 'seller_validity',
+    item_name: 'Society / association consent (≥ majority threshold)',
+    description: 'Registered society / RWA resolution authorising redevelopment with the agreed majority (usually 75% per Karnataka practice).',
+    severity: 'deal_breaker',
+    is_required: true,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Existing-tenant rehab area schedule',
+    description: 'Per-tenant existing carpet, agreed rehab carpet, hardship rent / corpus, alternate accommodation terms.',
+    severity: 'deal_breaker',
+    is_required: true,
+  },
+  {
+    category: 'project_specific',
+    item_name: 'Saleable area derivation post rehab and FAR loading',
+    description: 'Reconcile total proposed FAR, rehab obligations, and saleable area used in the financial model.',
+    severity: 'commercial_blocker',
+    is_required: true,
+  },
+  {
+    category: 'physical_technical',
+    item_name: 'Demolition feasibility and structural survey',
+    description: 'Independent structural survey of the existing building, demolition methodology, and adjacent-building safety plan.',
+    severity: 'buildability_blocker',
+    is_required: true,
+  },
+];
+
 const ASSET_CLASS_CHECKLISTS = {
   residential_apartments: RESIDENTIAL_CHECKLIST,
   plotted_development: PLOTTED_DEVELOPMENT_CHECKLIST,
   villas: RESIDENTIAL_CHECKLIST,
   commercial_office: COMMERCIAL_OFFICE_CHECKLIST,
-  retail: COMMERCIAL_OFFICE_CHECKLIST,
-  industrial_warehousing: BASE_CHECKLIST,
-  hospitality: COMMERCIAL_OFFICE_CHECKLIST,
-  mixed_use: RESIDENTIAL_CHECKLIST,
+  retail: RETAIL_CHECKLIST,
+  industrial_warehousing: INDUSTRIAL_WAREHOUSING_CHECKLIST,
+  hospitality: HOSPITALITY_CHECKLIST,
+  mixed_use: MIXED_USE_CHECKLIST,
   raw_land: BASE_CHECKLIST,
-  redevelopment: RESIDENTIAL_CHECKLIST,
+  redevelopment: REDEVELOPMENT_CHECKLIST,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -369,7 +575,18 @@ async function updateStatus(id, status, userId) {
       id,
     ],
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row) {
+    publish(EVENTS.DD_ITEM_STATUS_CHANGED, {
+      dealId: row.deal_id,
+      itemId: row.id,
+      itemName: row.item_name,
+      status: row.status,
+      severity: row.severity,
+      userId,
+    });
+  }
+  return row;
 }
 
 async function deleteDDItem(id) {

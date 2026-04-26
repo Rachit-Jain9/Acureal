@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/database');
+const { EVENTS, publish } = require('../lib/eventBus');
 
 const normalizeRiskStatus = (value) => {
   const status = String(value || 'open').trim().toLowerCase();
@@ -72,7 +73,18 @@ async function create(dealId, data, userId) {
      RETURNING *`,
     [dealId, category, severity, title, description, mitigation, status, source, userId || null],
   );
-  return result.rows[0];
+  const row = result.rows[0];
+  // A new risk surfaces is a state change too — fire the same event so the
+  // timeline records the appearance, not just transitions.
+  publish(EVENTS.RISK_FLAG_STATUS_CHANGED, {
+    dealId,
+    riskId: row.id,
+    title: row.title,
+    severity: row.severity,
+    status: row.status,
+    userId,
+  });
+  return row;
 }
 
 async function update(id, data) {
@@ -104,7 +116,17 @@ async function update(id, data) {
      RETURNING *`,
     values,
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row && Object.prototype.hasOwnProperty.call(normalizedData, 'status')) {
+    publish(EVENTS.RISK_FLAG_STATUS_CHANGED, {
+      dealId: row.deal_id,
+      riskId: row.id,
+      title: row.title,
+      severity: row.severity,
+      status: row.status,
+    });
+  }
+  return row;
 }
 
 async function deleteRiskFlag(id) {
