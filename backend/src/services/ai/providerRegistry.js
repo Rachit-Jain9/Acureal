@@ -5,6 +5,8 @@ const hasConfiguredValue = (value) => !!value && !/your[_-]/i.test(value) && !St
 let geminiClient = null;
 let anthropicClient = null;
 
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+
 const getProviderAvailability = () => ({
   gemini: hasConfiguredValue(process.env.GEMINI_API_KEY),
   claude: hasConfiguredValue(process.env.ANTHROPIC_API_KEY),
@@ -49,7 +51,7 @@ const runGeminiInline = async ({
   prompt,
   base64Data,
   mimeType,
-  model = process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+  model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
 }) => {
   const client = getGeminiClient();
   const geminiModel = client.getGenerativeModel({ model });
