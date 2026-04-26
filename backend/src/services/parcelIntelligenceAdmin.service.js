@@ -451,42 +451,42 @@ const reviewItem = async ({ type, id, status, userId, notes }) => {
   if (type === 'evidence_source') {
     result = await query(
       `UPDATE regulatory_data.evidence_sources
-       SET review_status = $1,
-           reviewed_by = $2,
-           reviewed_at = CASE WHEN $1 IN ('approved', 'rejected') THEN NOW() ELSE reviewed_at END,
-           notes = COALESCE($3, notes),
+       SET review_status = $1::varchar,
+           reviewed_by = $2::uuid,
+           reviewed_at = CASE WHEN $1::varchar IN ('approved', 'rejected') THEN NOW() ELSE reviewed_at END,
+           notes = COALESCE($3::text, notes),
            updated_at = NOW()
-       WHERE id = $4
+       WHERE id = $4::uuid
        RETURNING id, review_status`,
       [status, userId || null, notes || null, id]
     );
   } else if (type === 'evidence_fact') {
     result = await query(
       `UPDATE regulatory_data.evidence_facts
-       SET review_status = $1,
-           reviewed_by = $2,
-           reviewed_at = CASE WHEN $1 IN ('approved', 'rejected') THEN NOW() ELSE reviewed_at END
-       WHERE id = $3
+       SET review_status = $1::varchar,
+           reviewed_by = $2::uuid,
+           reviewed_at = CASE WHEN $1::varchar IN ('approved', 'rejected') THEN NOW() ELSE reviewed_at END
+       WHERE id = $3::uuid
        RETURNING id, review_status`,
       [status, userId || null, id]
     );
   } else if (type === 'guidance_value') {
     result = await query(
       `UPDATE regulatory_data.guidance_values
-       SET review_status = $1,
-           notes = COALESCE($2, notes),
+       SET review_status = $1::varchar,
+           notes = COALESCE($2::text, notes),
            updated_at = NOW()
-       WHERE id = $3
+       WHERE id = $3::uuid
        RETURNING id, review_status`,
       [status, notes || null, id]
     );
   } else {
     result = await query(
       `UPDATE regulatory_data.far_rules
-       SET review_status = $1,
-           rule_notes = COALESCE($2, rule_notes),
+       SET review_status = $1::varchar,
+           rule_notes = COALESCE($2::text, rule_notes),
            updated_at = NOW()
-       WHERE id = $3
+       WHERE id = $3::uuid
        RETURNING id, review_status`,
       [status, notes || null, id]
     );

@@ -385,10 +385,10 @@ async function reviewZone(id, { status, userId, changeReason }) {
 
   const result = await query(
     `UPDATE regulatory_data.master_plan_zones
-     SET review_status = $1,
-         reviewed_by = $2,
-         reviewed_at = CASE WHEN $1 IN ('approved','rejected') THEN now() ELSE NULL END
-     WHERE id = $3
+     SET review_status = $1::text,
+         reviewed_by = $2::uuid,
+         reviewed_at = CASE WHEN $1::text IN ('approved','rejected') THEN now() ELSE NULL END
+     WHERE id = $3::uuid
      RETURNING *`,
     [status, userId || null, id],
   );

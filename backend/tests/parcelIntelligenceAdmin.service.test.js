@@ -76,6 +76,24 @@ describe('parcelIntelligenceAdmin.service', () => {
     expect(result.type).toBe('guidance_value');
     expect(result.review_status).toBe('approved');
     expect(query.mock.calls[0][0]).toContain('UPDATE regulatory_data.guidance_values');
+    expect(query.mock.calls[0][0]).toContain('review_status = $1::varchar');
+  });
+
+  test('casts parcel review status parameters to avoid PostgreSQL type inference failures', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: '22222222-2222-2222-2222-222222222222', review_status: 'approved' }] });
+
+    await service.reviewItem({
+      type: 'evidence_fact',
+      id: '22222222-2222-2222-2222-222222222222',
+      status: 'approved',
+      userId: '33333333-3333-3333-3333-333333333333',
+    });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('review_status = $1::varchar');
+    expect(sql).toContain('reviewed_by = $2::uuid');
+    expect(sql).toContain("CASE WHEN $1::varchar IN ('approved', 'rejected')");
+    expect(sql).toContain('WHERE id = $3::uuid');
   });
 
   test('maps reviewed evidence facts to property promotion updates', () => {
