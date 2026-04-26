@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, query: qv } = require('express-validator');
+const { body, param, query: qv } = require('express-validator');
 const compsService = require('../services/comps.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
@@ -119,6 +119,45 @@ router.post(
     try {
       const comp = await compsService.addComp(req.body, req.user.id);
       res.status(201).json({ success: true, message: 'Comparable added.', data: comp });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /comps/ranked/:dealId — top comps for a deal, scored by similarity
+router.get(
+  '/ranked/:dealId',
+  authenticate,
+  [
+    param('dealId').isUUID(),
+    qv('radiusKm').optional().isFloat({ min: 0.5, max: 50 }),
+    qv('limit').optional().isInt({ min: 1, max: 100 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await compsService.getRankedCompsForDeal(req.params.dealId, {
+        radiusKm: req.query.radiusKm ? parseFloat(req.query.radiusKm) : 8,
+        limit: req.query.limit ? parseInt(req.query.limit, 10) : 25,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /comps/score/:dealId/:compId — single subject-vs-comp delta + factors
+router.get(
+  '/score/:dealId/:compId',
+  authenticate,
+  [param('dealId').isUUID(), param('compId').isUUID()],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await compsService.scoreSubjectAgainstComp(req.params.dealId, req.params.compId);
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

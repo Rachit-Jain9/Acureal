@@ -3,11 +3,10 @@
 const axios = require('axios');
 const { query } = require('../config/database');
 const { getDownloadUrl } = require('../config/storage');
-const {
-  getProviderAvailability,
-  runGeminiInline,
-  runClaudeReasoning,
-} = require('./ai/providerRegistry');
+const { getProviderAvailability } = require('./ai/providerRegistry');
+// Use the telemetry-instrumented router rather than calling the SDK directly so
+// every extraction lands in ai_call_logs with cost / latency / lineage.
+const { runGeminiInline, runClaudeReasoning } = require('./ai/aiRouter');
 const evidenceIngestionService = require('./evidenceIngestion.service');
 const {
   toPlainObject,
@@ -543,8 +542,10 @@ function normalizeRequestedDocType(docType) {
   return normalized && KNOWN_DOC_TYPES.has(normalized) ? normalized : null;
 }
 
-async function callGemini(prompt, base64Data, mimeType) {
+async function callGemini(prompt, base64Data, mimeType, attach = {}) {
   return runGeminiInline({
+    task: 'document_extraction',
+    attach,
     prompt,
     base64Data,
     mimeType,
@@ -619,6 +620,7 @@ STRICT RULES:
 
   const normalized = await withTimeout(
     runClaudeReasoning({
+      task: 'document_extraction',
       systemPrompt,
       payload: {
         doc_type: docType,
@@ -626,6 +628,7 @@ STRICT RULES:
         raw_extraction_text: rawText,
       },
       maxTokens: 1600,
+      metadata: { stage: 'extraction_normalization', doc_type: docType },
     }),
     CLAUDE_NORMALIZATION_TIMEOUT_MS,
     'Claude extraction normalization'
@@ -639,7 +642,13 @@ STRICT RULES:
 // ──────────────────────────────────────────────────────────────────────────────
 
 async function classifyDocumentContent(base64Data, mimeType, options = {}) {
-  const responseText = await callGemini(buildClassifyPrompt(options), base64Data, mimeType);
+  const responseText = await runGeminiInline({
+    task: 'document_classification',
+    attach: options.attach,
+    prompt: buildClassifyPrompt(options),
+    base64Data,
+    mimeType,
+  });
   const parsed = parseJsonResponse(responseText);
   return parsed.doc_type || 'other';
 }
@@ -706,12 +715,19 @@ async function extractDocument(
     const { base64 } = await fetchFileAsBase64(fileUrl);
 
     // Step 1: classify
+    const aiAttach = {
+      documentId,
+      dealId: dealId || null,
+      userId: userId || null,
+    };
+
     let docType = normalizeRequestedDocType(options.docType || options.requestedDocType);
     try {
       if (!docType) {
         docType = await classifyDocumentContent(base64, effectiveMime, {
           fileName,
           context: options.context,
+          attach: aiAttach,
         });
       }
     } catch {
@@ -724,7 +740,11 @@ async function extractDocument(
       fileName,
       context: options.context,
     });
-    const rawText = await callGemini(prompt, base64, effectiveMime);
+    const rawText = await callGemini(prompt, base64, effectiveMime, {
+      ...aiAttach,
+      // metadata gets surfaced in ai_call_logs.metadata for downstream cost
+      // attribution and lineage queries.
+    });
 
     // Step 3: parse structured output
     let structuredFields = null;

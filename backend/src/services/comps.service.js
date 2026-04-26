@@ -1,5 +1,7 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
+const { rankComps, scoreComp } = require('../utils/compSimilarity');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
 // Haversine formula to calculate distance between two lat/lng points in km
 const haversineDistance = (lat1, lng1, lat2, lng2) => {
@@ -231,10 +233,132 @@ const deleteComp = async (id) => {
   return { deleted: true, id };
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Subject ↔ comp similarity
+// ──────────────────────────────────────────────────────────────────────────
+
+const loadSubjectForDeal = async (dealId) => {
+  const result = await query(
+    `SELECT
+       d.id                   AS deal_id,
+       d.name                 AS deal_name,
+       d.asset_class,
+       p.id                   AS property_id,
+       p.lat,
+       p.lng,
+       p.city,
+       p.land_area_sqft,
+       p.land_area_acres,
+       p.zoning,
+       f.asset_class          AS financial_asset_class,
+       -- The financial model stores the assumed selling rate at sqft level —
+       -- that's the right benchmark for delta-vs-comp ("are nearby comps
+       -- pricier or cheaper than what we're underwriting").
+       f.selling_rate_per_sqft AS target_rate_per_sqft,
+       f.total_revenue_cr
+     FROM deals d
+     LEFT JOIN properties p ON p.id = d.property_id
+     LEFT JOIN financials f ON f.deal_id = d.id
+     WHERE d.id = $1
+       AND ${buildVisibleDealCondition('d')}
+     LIMIT 1`,
+    [dealId]
+  );
+  return result.rows[0] || null;
+};
+
+const buildSubjectFromDealRow = (row) => ({
+  deal_id: row.deal_id,
+  deal_name: row.deal_name,
+  property_id: row.property_id,
+  lat: row.lat,
+  lng: row.lng,
+  city: row.city,
+  asset_class: row.asset_class || row.financial_asset_class || null,
+  // BHK config / launch_year / total_units / amenities are usually not on a
+  // deal in REDIP — keep them null and rely on the comp's BHK side; the
+  // similarity scorer drops factors that lack subject data.
+  bhk_config: null,
+  launch_year: null,
+  total_units: null,
+  amenities: null,
+  target_rate_per_sqft: row.target_rate_per_sqft != null ? Number(row.target_rate_per_sqft) : null,
+});
+
+/**
+ * Get the top-N comps ranked by similarity to a given deal.
+ * `radiusKm` constrains the candidate set; default 8km matches the
+ * residential distance saturation in compSimilarity.
+ */
+const getRankedCompsForDeal = async (dealId, { radiusKm = 8, limit = 25 } = {}) => {
+  const subjectRow = await loadSubjectForDeal(dealId);
+  if (!subjectRow) {
+    throw createError('Deal not found.', 404);
+  }
+  if (subjectRow.lat == null || subjectRow.lng == null) {
+    return {
+      subject: buildSubjectFromDealRow(subjectRow),
+      ranked: [],
+      message: 'Deal property has no coordinates yet — add lat/lng to enable comp ranking.',
+    };
+  }
+
+  // Pull candidate comps within a generous radius. The similarity scorer
+  // re-weights by exact distance, so over-pulling is fine; under-pulling is
+  // not. We cap the candidate set at 200 to keep the scorer cheap.
+  const candidates = await getCompsNearLocation(
+    Number(subjectRow.lat),
+    Number(subjectRow.lng),
+    radiusKm
+  );
+
+  const subject = buildSubjectFromDealRow(subjectRow);
+  const ranked = rankComps(subject, candidates).slice(0, limit);
+
+  return {
+    subject,
+    radius_km: radiusKm,
+    candidate_count: candidates.length,
+    ranked: ranked.map(({ comp, similarity }) => ({
+      ...comp,
+      similarity,
+    })),
+  };
+};
+
+/**
+ * Score a single subject ↔ single comp pair. Used by the deltas drawer in
+ * the UI when an analyst pins a specific comp.
+ */
+const scoreSubjectAgainstComp = async (dealId, compId) => {
+  const subjectRow = await loadSubjectForDeal(dealId);
+  if (!subjectRow) throw createError('Deal not found.', 404);
+
+  const compResult = await query(
+    `SELECT *
+     FROM comps
+     WHERE id = $1
+       AND organization_id = current_organization_id()
+     LIMIT 1`,
+    [compId]
+  );
+  const comp = compResult.rows[0];
+  if (!comp) throw createError('Comparable not found.', 404);
+
+  const subject = buildSubjectFromDealRow(subjectRow);
+  return {
+    subject,
+    comp,
+    similarity: scoreComp(subject, comp),
+  };
+};
+
 module.exports = {
   addComp,
   getComps,
   getCompsNearLocation,
   getPricingBenchmarks,
   deleteComp,
+  getRankedCompsForDeal,
+  scoreSubjectAgainstComp,
 };

@@ -3,6 +3,7 @@ const { getJwtSecret } = require('../services/auth.service');
 const { hydrateUserAuthContext } = require('../services/organization.service');
 const { roleSatisfies } = require('../constants/roles');
 const { setRequestContext } = require('../lib/requestContext');
+const log = require('../lib/logger').child({ module: 'auth' });
 
 const authenticate = async (req, res, next) => {
   try {
@@ -52,7 +53,7 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    console.error('Authentication middleware error:', error);
+    log.error('auth_middleware_failed', error);
     return res.status(500).json({
       success: false,
       message: 'Authentication service error.',

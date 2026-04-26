@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/database');
+const { EVENTS, publish } = require('../lib/eventBus');
 
 const normalizeApprovalStatus = (value) => {
   const status = String(value || 'pending').trim().toLowerCase();
@@ -297,7 +298,16 @@ async function update(id, data) {
      RETURNING *`,
     values,
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row && Object.prototype.hasOwnProperty.call(normalizedData, 'status')) {
+    publish(EVENTS.APPROVAL_STATUS_CHANGED, {
+      dealId: row.deal_id,
+      approvalId: row.id,
+      approvalName: row.name,
+      status: row.status,
+    });
+  }
+  return row;
 }
 
 async function deleteApprovalItem(id) {

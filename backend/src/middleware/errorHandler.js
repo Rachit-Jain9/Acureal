@@ -1,11 +1,16 @@
+const log = require('../lib/logger').child({ module: 'http.error' });
+
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    url: req.url,
+  // Body is intentionally omitted from logs — request bodies on REDIP routes
+  // routinely contain financial assumptions, RERA numbers, and ownership PII.
+  // The request id + path + method + status are enough to trace; the body lives
+  // on the client and the snapshot tables.
+  log.error('request_failed', err, {
     method: req.method,
-    body: req.body,
-    user: req.user ? req.user.id : 'unauthenticated',
+    path: req.originalUrl || req.url,
+    user_id: req.user?.id || null,
+    pg_code: err.code || null,
+    status_code: err.statusCode || err.status || 500,
   });
 
   // PostgreSQL errors
