@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, RefreshCw, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, RefreshCw, Search, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -10,6 +10,7 @@ import {
   usePromoteEvidenceFactToProperty,
   usePromoteEvidenceFactsToProperty,
   useReviewParcelIntelligenceItem,
+  useReviewParcelIntelligenceItems,
 } from '../hooks/useParcelIntelligenceAdmin';
 
 const TYPE_OPTIONS = [
@@ -114,7 +115,9 @@ function promotionReason(promotion) {
   return null;
 }
 
-function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending }) {
+const rowKey = (item) => `${item.type}:${item.id}`;
+
+function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, selected, onSelect }) {
   const summary = payloadSummary(item.payload);
   const factValue = item.payload?.fact_value;
   const promotion = item.promotion;
@@ -122,6 +125,16 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending }) 
 
   return (
     <tr className="border-b border-hairline align-top hover:bg-bg-secondary/70">
+      <td className="px-3 py-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          disabled={pending}
+          onChange={() => onSelect(item)}
+          className="h-4 w-4 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
+          aria-label={`Select ${item.title || item.category || item.type}`}
+        />
+      </td>
       <td className="px-3 py-3">
         <div className="font-medium text-content-primary">{item.title || item.category || item.type}</div>
         <div className="mt-1 text-xs text-content-muted">{item.type.replace(/_/g, ' ')}</div>
@@ -190,23 +203,87 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending }) 
 export default function ParcelIntelligenceAdminPage() {
   const [type, setType] = useState('all');
   const [status, setStatus] = useState('pending');
-  const params = useMemo(() => ({ type, status, limit: 80 }), [type, status]);
+  const [search, setSearch] = useState('');
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const trimmedSearch = search.trim();
+  const params = useMemo(
+    () => ({
+      type,
+      status,
+      limit: 80,
+      ...(trimmedSearch ? { search: trimmedSearch } : {}),
+    }),
+    [type, status, trimmedSearch]
+  );
   const { data: ops, isLoading: statusLoading } = useParcelIntelligenceStatus();
   const { data: queue = [], isLoading: queueLoading, refetch } = useParcelIntelligenceReviewQueue(params);
   const reviewMutation = useReviewParcelIntelligenceItem();
+  const reviewBatchMutation = useReviewParcelIntelligenceItems();
   const promoteMutation = usePromoteEvidenceFactToProperty();
   const promoteBatchMutation = usePromoteEvidenceFactsToProperty();
 
   const pendingCount = ops?.review_queue?.pending_or_needs_review ?? '-';
   const guidanceApproved = ops?.review_queue?.guidance_values?.approved || 0;
   const farApproved = ops?.review_queue?.far_rules?.approved || 0;
+  const visibleKeys = useMemo(() => queue.map(rowKey), [queue]);
+  const selectedQueueItems = useMemo(
+    () => queue.filter((item) => selectedKeys.includes(rowKey(item))),
+    [queue, selectedKeys]
+  );
+  const selectedReviewItems = useMemo(
+    () => selectedQueueItems.map((item) => ({ type: item.type, id: item.id })),
+    [selectedQueueItems]
+  );
   const eligiblePromotionIds = useMemo(
     () => queue
       .filter((item) => item.type === 'evidence_fact' && item.review_status === 'approved' && item.promotion?.promotable)
       .map((item) => item.id),
     [queue]
   );
-  const isDecisionPending = reviewMutation.isPending || promoteMutation.isPending || promoteBatchMutation.isPending;
+  const selectedEligiblePromotionIds = useMemo(
+    () => selectedQueueItems
+      .filter((item) => item.type === 'evidence_fact' && item.review_status === 'approved' && item.promotion?.promotable)
+      .map((item) => item.id),
+    [selectedQueueItems]
+  );
+  const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedKeys.includes(key));
+  const isDecisionPending = reviewMutation.isPending || reviewBatchMutation.isPending || promoteMutation.isPending || promoteBatchMutation.isPending;
+
+  useEffect(() => {
+    setSelectedKeys([]);
+  }, [type, status, trimmedSearch]);
+
+  const toggleRowSelection = (item) => {
+    const key = rowKey(item);
+    setSelectedKeys((current) => (
+      current.includes(key) ? current.filter((selectedKey) => selectedKey !== key) : [...current, key]
+    ));
+  };
+
+  const toggleVisibleSelection = () => {
+    setSelectedKeys((current) => {
+      if (allVisibleSelected) {
+        return current.filter((key) => !visibleKeys.includes(key));
+      }
+      return [...new Set([...current, ...visibleKeys])];
+    });
+  };
+
+  const reviewSelected = (nextStatus) => {
+    if (!selectedReviewItems.length) return;
+    reviewBatchMutation.mutate(
+      { items: selectedReviewItems, status: nextStatus },
+      { onSuccess: () => setSelectedKeys([]) }
+    );
+  };
+
+  const promoteSelected = () => {
+    if (!selectedEligiblePromotionIds.length) return;
+    promoteBatchMutation.mutate(
+      { ids: selectedEligiblePromotionIds },
+      { onSuccess: () => setSelectedKeys([]) }
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -243,6 +320,15 @@ export default function ParcelIntelligenceAdminPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={14} />
+              <input
+                className="input min-w-[240px] pl-8"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search deal, source, fact"
+              />
+            </div>
             <select className="input max-w-[180px]" value={type} onChange={(event) => setType(event.target.value)}>
               {TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
@@ -270,6 +356,45 @@ export default function ParcelIntelligenceAdminPage() {
                 <span className="rounded bg-white/80 px-1.5 py-0.5 text-xs tabular-nums">{eligiblePromotionIds.length}</span>
               )}
             </button>
+            <button
+              type="button"
+              disabled={selectedReviewItems.length === 0 || isDecisionPending}
+              onClick={() => reviewSelected('approved')}
+              className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Approve Selected
+              {selectedReviewItems.length > 0 && (
+                <span className="ml-1 rounded bg-white/80 px-1.5 py-0.5 text-xs tabular-nums">{selectedReviewItems.length}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={selectedReviewItems.length === 0 || isDecisionPending}
+              onClick={() => reviewSelected('needs_review')}
+              className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Needs Review
+            </button>
+            <button
+              type="button"
+              disabled={selectedReviewItems.length === 0 || isDecisionPending}
+              onClick={() => reviewSelected('rejected')}
+              className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Reject Selected
+            </button>
+            <button
+              type="button"
+              disabled={selectedEligiblePromotionIds.length === 0 || isDecisionPending}
+              onClick={promoteSelected}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <ArrowRight size={14} />
+              Promote Selected
+              {selectedEligiblePromotionIds.length > 0 && (
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-xs tabular-nums">{selectedEligiblePromotionIds.length}</span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -288,6 +413,16 @@ export default function ParcelIntelligenceAdminPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-hairline-strong bg-bg-secondary text-xs uppercase tracking-[0.08em] text-content-muted">
+                  <th className="px-3 py-2 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      disabled={queue.length === 0 || isDecisionPending}
+                      onChange={toggleVisibleSelection}
+                      className="h-4 w-4 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
+                      aria-label="Select visible review items"
+                    />
+                  </th>
                   <th className="px-3 py-2 font-semibold">Item</th>
                   <th className="px-3 py-2 font-semibold">Extract</th>
                   <th className="px-3 py-2 font-semibold">Status</th>
@@ -300,6 +435,8 @@ export default function ParcelIntelligenceAdminPage() {
                   <ReviewQueueRow
                     key={`${item.type}-${item.id}`}
                     item={item}
+                    selected={selectedKeys.includes(rowKey(item))}
+                    onSelect={toggleRowSelection}
                     pending={isDecisionPending}
                     promotePending={isDecisionPending}
                     onReview={reviewMutation.mutate}

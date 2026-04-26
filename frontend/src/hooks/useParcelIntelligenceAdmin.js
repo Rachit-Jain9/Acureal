@@ -33,6 +33,24 @@ export function useReviewParcelIntelligenceItem() {
   });
 }
 
+export function useReviewParcelIntelligenceItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ items, status, notes }) =>
+      parcelIntelligenceAdminAPI.reviewItems({ items, status, notes }).then((response) => response.data.data),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
+      queryClient.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      const updated = result?.summary?.updated || 0;
+      const failed = result?.summary?.failed || 0;
+      toast.success(`Marked ${updated} item${updated === 1 ? '' : 's'} ${variables.status.replace(/_/g, ' ')}${failed ? `; ${failed} failed` : ''}`);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Batch review update failed');
+    },
+  });
+}
+
 export function usePromoteEvidenceFactToProperty() {
   const queryClient = useQueryClient();
   return useMutation({

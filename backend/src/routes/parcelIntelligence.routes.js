@@ -23,6 +23,8 @@ router.get(
     qv('type').optional().isIn(['all', 'evidence_source', 'evidence_fact', 'guidance_value', 'far_rule']),
     qv('status').optional().isIn(['all', 'pending', 'needs_review', 'approved', 'rejected']),
     qv('limit').optional().isInt({ min: 1, max: 200 }),
+    qv('search').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+    qv('deal_id').optional({ values: 'falsy' }).isUUID(),
   ],
   handleValidation,
   async (req, res, next) => {
@@ -56,6 +58,33 @@ router.put(
         userId: req.user.id,
       });
       res.json({ success: true, message: 'Review item updated.', data: item });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.put(
+  '/review-queue/batch',
+  authenticate,
+  requireAdminOrAnalyst,
+  [
+    body('items').isArray({ min: 1, max: 80 }),
+    body('items.*.type').isIn(['evidence_source', 'evidence_fact', 'guidance_value', 'far_rule']),
+    body('items.*.id').isUUID(),
+    body('status').isIn(['pending', 'needs_review', 'approved', 'rejected']),
+    body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 4000 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await parcelIntelligenceAdminService.reviewItems({
+        items: req.body.items,
+        status: req.body.status,
+        notes: req.body.notes,
+        userId: req.user.id,
+      });
+      res.json({ success: true, message: 'Review items updated.', data: result });
     } catch (error) {
       next(error);
     }

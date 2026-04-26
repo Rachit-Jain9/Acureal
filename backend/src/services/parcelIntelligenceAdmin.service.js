@@ -180,6 +180,11 @@ const normalizeStatus = (status = 'pending') => {
 
 const normalizeType = (type = 'all') => (REVIEW_TYPES.has(type) ? type : 'all');
 
+const normalizeSearch = (value) => {
+  const text = textOrNull(value);
+  return text ? text.slice(0, 120) : null;
+};
+
 const countByStatus = async (tableName) => {
   const result = await query(
     `SELECT review_status, COUNT(*)::int AS count
@@ -276,37 +281,55 @@ const getStatus = async () => {
 };
 
 const queueQueries = {
-  evidence_source: ({ status, limit }) => query(
+  evidence_source: ({ status, limit, search, dealId }) => query(
     `SELECT
        'evidence_source' AS type,
-       id,
-       source_kind AS category,
-       source_title AS title,
-       authority_name,
-       vendor_name,
-       source_url,
-       review_status,
-       extraction_status,
-       confidence_score,
-       created_at,
-       updated_at,
+       es.id,
+       es.source_kind AS category,
+       es.source_title AS title,
+       es.authority_name,
+       es.vendor_name,
+       es.source_url,
+       es.review_status,
+       es.extraction_status,
+       es.confidence_score,
+       es.created_at,
+       es.updated_at,
        NULL::int AS source_page,
        NULL::text AS source_section,
        jsonb_build_object(
-         'city', city,
-         'plan_version', plan_version,
-         'effective_from', effective_from,
-         'effective_to', effective_to,
-         'checksum_sha256', checksum_sha256,
-         'notes', notes
+         'city', es.city,
+         'plan_version', es.plan_version,
+         'effective_from', es.effective_from,
+         'effective_to', es.effective_to,
+         'checksum_sha256', es.checksum_sha256,
+         'notes', es.notes,
+         'document_id', es.document_id,
+         'deal_id', d.id,
+         'deal_name', d.name,
+         'property_id', p.id,
+         'property_name', COALESCE(NULLIF(p.name, ''), NULLIF(p.address, ''))
        ) AS payload
-     FROM regulatory_data.evidence_sources
-     WHERE ($1 = 'all' OR review_status = $1)
-     ORDER BY created_at DESC
+     FROM regulatory_data.evidence_sources es
+     LEFT JOIN documents doc ON doc.id = es.document_id
+     LEFT JOIN deals d ON d.id = doc.deal_id
+     LEFT JOIN properties p ON p.id = d.property_id
+     WHERE ($1::varchar = 'all' OR es.review_status = $1::varchar)
+       AND ($3::uuid IS NULL OR d.id = $3::uuid)
+       AND (
+         $4::text IS NULL
+         OR es.source_title ILIKE '%' || $4::text || '%'
+         OR es.source_kind ILIKE '%' || $4::text || '%'
+         OR es.authority_name ILIKE '%' || $4::text || '%'
+         OR d.name ILIKE '%' || $4::text || '%'
+         OR p.name ILIKE '%' || $4::text || '%'
+         OR p.address ILIKE '%' || $4::text || '%'
+       )
+     ORDER BY es.created_at DESC
      LIMIT $2`,
-    [status, limit]
+    [status, limit, dealId || null, search || null]
   ),
-  evidence_fact: ({ status, limit }) => query(
+  evidence_fact: ({ status, limit, search, dealId }) => query(
     `SELECT
        'evidence_fact' AS type,
        ef.id,
@@ -344,12 +367,24 @@ const queueQueries = {
      LEFT JOIN documents doc ON doc.id = es.document_id
      LEFT JOIN deals d ON d.id = doc.deal_id
      LEFT JOIN properties p ON p.id = d.property_id
-     WHERE ($1 = 'all' OR ef.review_status = $1)
+     WHERE ($1::varchar = 'all' OR ef.review_status = $1::varchar)
+       AND ($3::uuid IS NULL OR d.id = $3::uuid)
+       AND (
+         $4::text IS NULL
+         OR ef.fact_key ILIKE '%' || $4::text || '%'
+         OR ef.fact_type ILIKE '%' || $4::text || '%'
+         OR ef.fact_value::text ILIKE '%' || $4::text || '%'
+         OR es.source_title ILIKE '%' || $4::text || '%'
+         OR d.name ILIKE '%' || $4::text || '%'
+         OR p.name ILIKE '%' || $4::text || '%'
+         OR p.address ILIKE '%' || $4::text || '%'
+         OR p.survey_number ILIKE '%' || $4::text || '%'
+       )
      ORDER BY ef.created_at DESC
      LIMIT $2`,
-    [status, limit]
+    [status, limit, dealId || null, search || null]
   ),
-  guidance_value: ({ status, limit }) => query(
+  guidance_value: ({ status, limit, search, dealId }) => query(
     `SELECT
        'guidance_value' AS type,
        gv.id,
@@ -375,16 +410,35 @@ const queueQueries = {
          'unit_type', gv.unit_type,
          'effective_from', gv.effective_from,
          'effective_to', gv.effective_to,
-         'notes', gv.notes
+         'notes', gv.notes,
+         'deal_id', d.id,
+         'deal_name', d.name,
+         'property_id', p.id,
+         'property_name', COALESCE(NULLIF(p.name, ''), NULLIF(p.address, ''))
        ) AS payload
      FROM regulatory_data.guidance_values gv
      LEFT JOIN regulatory_data.evidence_sources es ON es.id = gv.evidence_source_id
-     WHERE ($1 = 'all' OR gv.review_status = $1)
+     LEFT JOIN documents doc ON doc.id = es.document_id
+     LEFT JOIN deals d ON d.id = doc.deal_id
+     LEFT JOIN properties p ON p.id = d.property_id
+     WHERE ($1::varchar = 'all' OR gv.review_status = $1::varchar)
+       AND ($3::uuid IS NULL OR d.id = $3::uuid)
+       AND (
+         $4::text IS NULL
+         OR gv.locality ILIKE '%' || $4::text || '%'
+         OR gv.road_name ILIKE '%' || $4::text || '%'
+         OR gv.sro_name ILIKE '%' || $4::text || '%'
+         OR gv.land_use_type ILIKE '%' || $4::text || '%'
+         OR es.source_title ILIKE '%' || $4::text || '%'
+         OR d.name ILIKE '%' || $4::text || '%'
+         OR p.name ILIKE '%' || $4::text || '%'
+         OR p.address ILIKE '%' || $4::text || '%'
+       )
      ORDER BY gv.created_at DESC
      LIMIT $2`,
-    [status, limit]
+    [status, limit, dealId || null, search || null]
   ),
-  far_rule: ({ status, limit }) => query(
+  far_rule: ({ status, limit, search, dealId }) => query(
     `SELECT
        'far_rule' AS type,
        fr.id,
@@ -417,24 +471,49 @@ const queueQueries = {
          'front_setback_m', fr.front_setback_m,
          'rear_setback_m', fr.rear_setback_m,
          'side_setback_m', fr.side_setback_m,
-         'rule_notes', fr.rule_notes
+         'rule_notes', fr.rule_notes,
+         'deal_id', d.id,
+         'deal_name', d.name,
+         'property_id', p.id,
+         'property_name', COALESCE(NULLIF(p.name, ''), NULLIF(p.address, ''))
        ) AS payload
      FROM regulatory_data.far_rules fr
      LEFT JOIN regulatory_data.evidence_sources es ON es.id = fr.evidence_source_id
-     WHERE ($1 = 'all' OR fr.review_status = $1)
+     LEFT JOIN documents doc ON doc.id = es.document_id
+     LEFT JOIN deals d ON d.id = doc.deal_id
+     LEFT JOIN properties p ON p.id = d.property_id
+     WHERE ($1::varchar = 'all' OR fr.review_status = $1::varchar)
+       AND ($3::uuid IS NULL OR d.id = $3::uuid)
+       AND (
+         $4::text IS NULL
+         OR fr.zone_code ILIKE '%' || $4::text || '%'
+         OR fr.planning_zone ILIKE '%' || $4::text || '%'
+         OR fr.land_use_family ILIKE '%' || $4::text || '%'
+         OR fr.source_section ILIKE '%' || $4::text || '%'
+         OR es.source_title ILIKE '%' || $4::text || '%'
+         OR d.name ILIKE '%' || $4::text || '%'
+         OR p.name ILIKE '%' || $4::text || '%'
+         OR p.address ILIKE '%' || $4::text || '%'
+       )
      ORDER BY fr.created_at DESC
      LIMIT $2`,
-    [status, limit]
+    [status, limit, dealId || null, search || null]
   ),
 };
 
-const listReviewQueue = async ({ type = 'all', status = 'pending', limit = 50 } = {}) => {
+const listReviewQueue = async ({ type = 'all', status = 'pending', limit = 50, search, deal_id: dealId } = {}) => {
   const normalizedType = normalizeType(type);
   const normalizedStatus = normalizeStatus(status);
+  const normalizedSearch = normalizeSearch(search);
   const safeLimit = clampLimit(limit);
   const types = normalizedType === 'all' ? [...REVIEW_TYPES] : [normalizedType];
   const results = await Promise.all(
-    types.map((queueType) => queueQueries[queueType]({ status: normalizedStatus, limit: safeLimit }))
+    types.map((queueType) => queueQueries[queueType]({
+      status: normalizedStatus,
+      limit: safeLimit,
+      search: normalizedSearch,
+      dealId: dealId || null,
+    }))
   );
 
   return results
@@ -502,6 +581,59 @@ const reviewItem = async ({ type, id, status, userId, notes }) => {
   }
 
   return { type, ...result.rows[0] };
+};
+
+const reviewItems = async ({ items = [], status, userId, notes }) => {
+  if (!REVIEW_STATUSES.has(status)) {
+    throw createError('Invalid review status.', 400);
+  }
+
+  const uniqueItems = [];
+  const seen = new Set();
+  items.forEach((item) => {
+    const key = `${item?.type}:${item?.id}`;
+    if (!REVIEW_TYPES.has(item?.type) || !item?.id || seen.has(key)) return;
+    seen.add(key);
+    uniqueItems.push({ type: item.type, id: item.id });
+  });
+
+  if (!uniqueItems.length) {
+    throw createError('Select at least one review item.', 400);
+  }
+  if (uniqueItems.length > 80) {
+    throw createError('Review at most 80 items at a time.', 400);
+  }
+
+  const updated = [];
+  const failed = [];
+
+  for (const item of uniqueItems) {
+    try {
+      updated.push(await reviewItem({
+        type: item.type,
+        id: item.id,
+        status,
+        userId,
+        notes,
+      }));
+    } catch (error) {
+      failed.push({
+        ...item,
+        reason: error.message || 'review_update_failed',
+        statusCode: error.statusCode || 500,
+      });
+    }
+  }
+
+  return {
+    updated,
+    failed,
+    summary: {
+      requested: uniqueItems.length,
+      updated: updated.length,
+      failed: failed.length,
+    },
+  };
 };
 
 const promotionFactSelect = `
@@ -822,6 +954,7 @@ module.exports = {
   getStatus,
   listReviewQueue,
   reviewItem,
+  reviewItems,
   promoteEvidenceFactToProperty,
   promoteEvidenceFactsToProperty,
   buildPromotionUpdate,

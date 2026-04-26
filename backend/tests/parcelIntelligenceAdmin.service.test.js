@@ -62,6 +62,36 @@ describe('parcelIntelligenceAdmin.service', () => {
     expect(query).toHaveBeenCalledTimes(4);
   });
 
+  test('scopes review queue by search text and deal id', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        type: 'evidence_fact',
+        id: 'fact-1',
+        created_at: '2026-04-25T11:00:00.000Z',
+        payload: { fact_value: '267' },
+      }],
+    });
+
+    const rows = await service.listReviewQueue({
+      type: 'evidence_fact',
+      status: 'approved',
+      limit: 10,
+      search: 'Chirping Ridge',
+      deal_id: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain('d.id = $3::uuid');
+    expect(query.mock.calls[0][0]).toContain('ef.fact_value::text ILIKE');
+    expect(query.mock.calls[0][1]).toEqual([
+      'approved',
+      10,
+      '11111111-1111-1111-1111-111111111111',
+      'Chirping Ridge',
+    ]);
+  });
+
   test('updates guidance review status through the correct table', async () => {
     query.mockResolvedValueOnce({ rows: [{ id: '11111111-1111-1111-1111-111111111111', review_status: 'approved' }] });
 
@@ -94,6 +124,25 @@ describe('parcelIntelligenceAdmin.service', () => {
     expect(sql).toContain('reviewed_by = $2::uuid');
     expect(sql).toContain("CASE WHEN $1::varchar IN ('approved', 'rejected')");
     expect(sql).toContain('WHERE id = $3::uuid');
+  });
+
+  test('batch updates selected review items and reports failures', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: '11111111-1111-1111-1111-111111111111', review_status: 'approved' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.reviewItems({
+      items: [
+        { type: 'evidence_fact', id: '11111111-1111-1111-1111-111111111111' },
+        { type: 'guidance_value', id: '22222222-2222-2222-2222-222222222222' },
+      ],
+      status: 'approved',
+      userId: '33333333-3333-3333-3333-333333333333',
+    });
+
+    expect(result.summary).toMatchObject({ requested: 2, updated: 1, failed: 1 });
+    expect(result.updated[0]).toMatchObject({ type: 'evidence_fact', review_status: 'approved' });
+    expect(result.failed[0]).toMatchObject({ type: 'guidance_value', id: '22222222-2222-2222-2222-222222222222' });
   });
 
   test('maps reviewed evidence facts to property promotion updates', () => {
