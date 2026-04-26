@@ -96,6 +96,38 @@ describe('evidenceIngestion.service', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_facts'))).toBe(true);
   });
 
+  test('unwraps nested extracted_json payloads before writing evidence facts', async () => {
+    mockQueryForExtraction({
+      id: 'extraction-e-khata',
+      document_id: 'document-e-khata',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'E-Khata.pdf',
+      document_file_url: 'https://example.com/e-khata.pdf',
+      doc_type: 'e_khata',
+      extraction_status: 'completed',
+      structured_fields: {
+        doc_type: 'e_khata',
+        extracted_json: {
+          khata_number: '151900802100321399',
+          pid_number: '151900802100321399',
+          site_area_sqft: 129417.81,
+          source_page: 1,
+        },
+      },
+      confidence_scores: { _overall: 1, extracted_json: 1 },
+    });
+
+    const result = await service.ingestExtraction('extraction-e-khata', 'user-1');
+    const insertedFacts = query.mock.calls
+      .filter(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_facts'))
+      .map(([, params]) => params[3]);
+
+    expect(result.skipped).toBe(false);
+    expect(insertedFacts).toEqual(expect.arrayContaining(['khata_number', 'pid_number', 'site_area_sqft']));
+    expect(insertedFacts).not.toContain('extracted_json');
+  });
+
   test('turns an RMP table extraction into pending FAR rule candidates only when complete', async () => {
     mockQueryForExtraction({
       id: 'extraction-2',

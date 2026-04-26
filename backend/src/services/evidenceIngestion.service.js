@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/database');
+const { mergeStructuredFields } = require('../utils/extractionFields');
 
 const REGULATORY_DOC_TYPES = new Set([
   'sale_deed',
@@ -574,7 +575,7 @@ async function ingestExtraction(extractionId, userId = null) {
 
   const baseFields = parseJsonField(row.structured_fields);
   const corrections = parseJsonField(row.human_corrections);
-  const fields = { ...baseFields, ...corrections };
+  const fields = mergeStructuredFields(baseFields, corrections);
   if (!hasValue(fields)) {
     return { skipped: true, reason: 'no_structured_fields', doc_type: docType };
   }

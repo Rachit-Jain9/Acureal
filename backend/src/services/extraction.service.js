@@ -9,6 +9,10 @@ const {
   runClaudeReasoning,
 } = require('./ai/providerRegistry');
 const evidenceIngestionService = require('./evidenceIngestion.service');
+const {
+  toPlainObject,
+  mergeStructuredFields,
+} = require('../utils/extractionFields');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Gemini client (lazy init so tests don't crash without API key)
@@ -24,6 +28,7 @@ const MAX_EXTRACTION_FILE_SIZE_MB = Math.max(
 );
 const MAX_FILE_BYTES = MAX_EXTRACTION_FILE_SIZE_MB * 1024 * 1024;
 const CLAUDE_NORMALIZATION_TIMEOUT_MS = 12000;
+let documentsDocTypeColumnAvailable = null;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Extraction prompts keyed by doc_type
@@ -645,6 +650,36 @@ async function classifyDocument(fileUrl, fileName, mimeType, options = {}) {
   return classifyDocumentContent(base64, effectiveMime, { ...options, fileName });
 }
 
+async function canStoreDocumentDocType() {
+  if (documentsDocTypeColumnAvailable !== null) {
+    return documentsDocTypeColumnAvailable;
+  }
+
+  const result = await query(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'documents'
+         AND column_name = 'doc_type'
+     ) AS exists`
+  );
+
+  documentsDocTypeColumnAvailable = Boolean(result.rows[0]?.exists);
+  return documentsDocTypeColumnAvailable;
+}
+
+async function updateDocumentDocType(documentId, docType) {
+  if (!(await canStoreDocumentDocType())) {
+    return;
+  }
+
+  await query(
+    `UPDATE documents SET doc_type = $1, updated_at = NOW() WHERE id = $2`,
+    [docType, documentId],
+  );
+}
+
 async function extractDocument(
   documentId,
   fileUrl,
@@ -695,7 +730,7 @@ async function extractDocument(
     let structuredFields = null;
     let parseError = null;
     try {
-      structuredFields = parseJsonResponse(rawText);
+      structuredFields = toPlainObject(parseJsonResponse(rawText));
     } catch (e) {
       parseError = `JSON parse failed: ${e.message}`;
     }
@@ -704,11 +739,11 @@ async function extractDocument(
       try {
         structuredFields = pickBestStructuredFields(
           structuredFields,
-          await normalizeStructuredFieldsWithClaude({
+          toPlainObject(await normalizeStructuredFieldsWithClaude({
             docType,
             rawText,
             structuredFields,
-          })
+          }))
         );
       } catch (normalizationError) {
         parseError = parseError
@@ -746,14 +781,7 @@ async function extractDocument(
     );
 
     // Also update document table with doc_type if column exists
-    try {
-      await query(
-        `UPDATE documents SET doc_type = $1, updated_at = NOW() WHERE id = $2`,
-        [docType, documentId],
-      );
-    } catch {
-      // column may not exist yet — non-fatal
-    }
+    await updateDocumentDocType(documentId, docType);
 
     const updatedExtraction = updateResult.rows[0];
     try {
@@ -824,8 +852,8 @@ async function getDealExtractions(dealId) {
   );
 
   const extractions = result.rows.map((row) => {
-    const corrections = row.human_corrections || {};
-    const fields = { ...(row.structured_fields || {}), ...corrections };
+    const corrections = toPlainObject(row.human_corrections || {});
+    const fields = mergeStructuredFields(row.structured_fields || {}, corrections);
     return {
       id: row.id,
       document_id: row.document_id,
@@ -861,11 +889,17 @@ async function getDealExtractions(dealId) {
 const FIELD_MAP_RULES = {
   land_area_sqft: [
     ['land_area_sqft', 1.0],
+    ['area_sqft', 0.98],
+    ['total_area_sqft', 0.98],
+    ['total_land_area_sqft', 0.98],
     ['plot_area_sqft', 0.98],
     ['site_area_sqft', 0.95],
   ],
   land_area_acres: [
     ['land_area_acres', 1.0],
+    ['area_acres', 0.98],
+    ['total_area_acres', 0.98],
+    ['total_land_area_acres', 0.98],
     ['plot_area_acres', 0.98],
   ],
   road_width_m: [
@@ -875,8 +909,13 @@ const FIELD_MAP_RULES = {
   ],
   survey_number: [
     ['survey_number', 1.0],
+    ['survey_numbers', 0.95],
     ['survey_no', 1.0],
     ['sy_no', 0.95],
+  ],
+  pid: [
+    ['pid_number', 1.0],
+    ['pid', 1.0],
   ],
   khata_number: [
     ['khata_number', 1.0],
