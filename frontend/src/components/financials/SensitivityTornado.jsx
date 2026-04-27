@@ -95,14 +95,25 @@ const metaFor = (defaults, key) => {
 // defaults-registry declared range when one exists. This keeps every
 // variable on equal footing (same relative swing) so the tornado reads
 // as impact-per-unit-uncertainty, not impact-per-crazy-stretch.
+//
+// If the base value is integer-typed (e.g. projectDurationMonths,
+// holdPeriodYears, keys) the perturbed bounds are rounded to the nearest
+// int — the backend validator declares those fields `isInt` and would
+// otherwise reject the fan-out request with a 400.
 const pickBounds = (current, meta) => {
-  const low  = current * (1 - PERTURBATION_PCT);
-  const high = current * (1 + PERTURBATION_PCT);
+  const isIntTyped = Number.isInteger(current);
+  let low  = current * (1 - PERTURBATION_PCT);
+  let high = current * (1 + PERTURBATION_PCT);
   if (Array.isArray(meta?.range) && meta.range.length === 2) {
     const [rlo, rhi] = meta.range.map(Number);
     if (Number.isFinite(rlo) && Number.isFinite(rhi) && rhi > rlo) {
-      return [Math.max(rlo, low), Math.min(rhi, high)];
+      low  = Math.max(rlo, low);
+      high = Math.min(rhi, high);
     }
+  }
+  if (isIntTyped) {
+    low  = Math.round(low);
+    high = Math.round(high);
   }
   return [low, high];
 };
