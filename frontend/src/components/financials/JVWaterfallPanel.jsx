@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Users, ChevronRight } from 'lucide-react';
 import { calculateJVWaterfall } from '../../utils/waterfall';
+import Badge from '../common/Badge';
+import { StatTile } from '../../design-system';
 
 export default function JVWaterfallPanel({ financials, deal }) {
   const mp = financials;
@@ -67,9 +69,7 @@ export default function JVWaterfallPanel({ financials, deal }) {
           <Users size={16} className="text-primary-600" />
           <span className="text-sm font-semibold text-content-primary">Joint Venture Profit Waterfall</span>
           {deal?.deal_structure && ['jv', 'profit_share'].includes(deal.deal_structure) && (
-            <span className="text-xs bg-primary-50 text-primary-700 border border-primary-200 rounded px-2 py-0.5">
-              Active structure
-            </span>
+            <Badge tone="info">Active structure</Badge>
           )}
         </div>
         <ChevronRight
@@ -181,21 +181,9 @@ export default function JVWaterfallPanel({ financials, deal }) {
                 <span className="ml-auto text-content-secondary">
                   Total equity: ₹{result.totalEquityCr?.toFixed(2)} Cr
                 </span>
-                {result.promoteTriggered && (
-                  <span className="text-amber-700 bg-amber-50 border border-amber-200 text-xs px-2 py-0.5 rounded">
-                    Promote triggered
-                  </span>
-                )}
-                {result.catchUpTriggered && (
-                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-xs px-2 py-0.5 rounded">
-                    GP catch-up
-                  </span>
-                )}
-                {result.preferredReturnType && (
-                  <span className="text-content-secondary bg-white border border-hairline-strong text-xs px-2 py-0.5 rounded">
-                    Pref: {result.preferredReturnType}
-                  </span>
-                )}
+                {result.promoteTriggered && <Badge tone="warn">Promote triggered</Badge>}
+                {result.catchUpTriggered && <Badge tone="success">GP catch-up</Badge>}
+                {result.preferredReturnType && <Badge>Pref: {result.preferredReturnType}</Badge>}
               </div>
 
               <div>
@@ -238,30 +226,26 @@ export default function JVWaterfallPanel({ financials, deal }) {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <p className="text-xs text-blue-500 mb-0.5">Landowner Profit</p>
-                  <p className="text-base font-bold text-blue-800">{fmtCr(result.summary.landownerProfit)}</p>
-                  <p className="text-xs text-blue-400 mt-0.5">After capital return</p>
-                </div>
-                <div className="bg-indigo-50 rounded-lg p-3">
-                  <p className="text-xs text-indigo-500 mb-0.5">Developer Profit</p>
-                  <p className="text-base font-bold text-indigo-800">{fmtCr(result.summary.developerProfit)}</p>
-                  <p className="text-xs text-indigo-400 mt-0.5">Incl. promote</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <p className="text-xs text-blue-500 mb-0.5">Landowner Multiple</p>
-                  <p className="text-base font-bold text-blue-800">
-                    {result.summary.landownerMultiple != null ? `${result.summary.landownerMultiple.toFixed(2)}x` : '—'}
-                  </p>
-                  <p className="text-xs text-blue-400 mt-0.5">On land contribution</p>
-                </div>
-                <div className="bg-indigo-50 rounded-lg p-3">
-                  <p className="text-xs text-indigo-500 mb-0.5">Developer Multiple</p>
-                  <p className="text-base font-bold text-indigo-800">
-                    {result.summary.developerMultiple != null ? `${result.summary.developerMultiple.toFixed(2)}x` : '—'}
-                  </p>
-                  <p className="text-xs text-indigo-400 mt-0.5">On cash contribution</p>
-                </div>
+                <StatTile
+                  label="Landowner Profit"
+                  value={fmtCr(result.summary.landownerProfit)}
+                  footnote="After capital return"
+                />
+                <StatTile
+                  label="Developer Profit"
+                  value={fmtCr(result.summary.developerProfit)}
+                  footnote="Incl. promote"
+                />
+                <StatTile
+                  label="Landowner Multiple"
+                  value={result.summary.landownerMultiple != null ? `${result.summary.landownerMultiple.toFixed(2)}x` : '—'}
+                  footnote="On land contribution"
+                />
+                <StatTile
+                  label="Developer Multiple"
+                  value={result.summary.developerMultiple != null ? `${result.summary.developerMultiple.toFixed(2)}x` : '—'}
+                  footnote="On cash contribution"
+                />
               </div>
 
               <p className="text-xs text-content-muted">

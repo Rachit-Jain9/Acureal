@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GitFork, ChevronRight } from 'lucide-react';
 import { calculateJDAWaterfall } from '../../utils/waterfall';
+import Badge from '../common/Badge';
+import { StatTile } from '../../design-system';
 
 const JDA_STRUCTURE_LABELS = {
   area_share: 'Area Share',
@@ -74,9 +76,7 @@ export default function JDAWaterfallPanel({ financials, deal }) {
           <GitFork size={16} className="text-primary-600" />
           <span className="text-sm font-semibold text-content-primary">JDA / Development Agreement Waterfall</span>
           {deal?.deal_structure && ['jda', 'area_share', 'revenue_share'].includes(deal.deal_structure) && (
-            <span className="text-xs bg-primary-50 text-primary-700 border border-primary-200 rounded px-2 py-0.5">
-              Active structure
-            </span>
+            <Badge tone="info">Active structure</Badge>
           )}
         </div>
         <ChevronRight
@@ -220,28 +220,27 @@ export default function JDAWaterfallPanel({ financials, deal }) {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <p className="text-xs text-blue-500 mb-0.5">Landowner Net ({result.landownerSharePct}%)</p>
-                  <p className="text-base font-bold text-blue-800">{fmtCr(result.summary.landownerNetCr)}</p>
-                  <p className="text-xs text-blue-400 mt-0.5">Implicit land value</p>
-                </div>
-                <div className="bg-indigo-50 rounded-lg p-3">
-                  <p className="text-xs text-indigo-500 mb-0.5">Developer Net ({result.developerSharePct}%)</p>
-                  <p className={`text-base font-bold ${result.summary.developerNetCr != null && result.summary.developerNetCr >= 0 ? 'text-indigo-800' : 'text-red-700'}`}>
-                    {fmtCr(result.summary.developerNetCr)}
-                  </p>
-                  <p className="text-xs text-indigo-400 mt-0.5">After all costs</p>
-                </div>
-                <div className="bg-emerald-50 rounded-lg p-3">
-                  <p className="text-xs text-emerald-500 mb-0.5">Developer Margin</p>
-                  <p className="text-base font-bold text-emerald-800">{fmtPct(result.summary.developerMarginPct)}</p>
-                  <p className="text-xs text-emerald-400 mt-0.5">On developer revenue</p>
-                </div>
-                <div className="bg-bg-secondary rounded-lg p-3">
-                  <p className="text-xs text-content-muted mb-0.5">Project Margin</p>
-                  <p className="text-base font-bold text-content-primary">{fmtPct(result.summary.projectMarginPct)}</p>
-                  <p className="text-xs text-content-muted mt-0.5">On total revenue</p>
-                </div>
+                <StatTile
+                  label={`Landowner Net (${result.landownerSharePct}%)`}
+                  value={fmtCr(result.summary.landownerNetCr)}
+                  footnote="Implicit land value"
+                />
+                <StatTile
+                  label={`Developer Net (${result.developerSharePct}%)`}
+                  value={fmtCr(result.summary.developerNetCr)}
+                  footnote="After all costs"
+                  negative={result.summary.developerNetCr != null && result.summary.developerNetCr < 0}
+                />
+                <StatTile
+                  label="Developer Margin"
+                  value={fmtPct(result.summary.developerMarginPct)}
+                  footnote="On developer revenue"
+                />
+                <StatTile
+                  label="Project Margin"
+                  value={fmtPct(result.summary.projectMarginPct)}
+                  footnote="On total revenue"
+                />
               </div>
 
               <p className="text-xs text-content-muted">

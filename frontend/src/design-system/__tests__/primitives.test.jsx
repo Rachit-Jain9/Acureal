@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { IndianRupee } from 'lucide-react';
-import { Card, SectionHeader, MetricTile, ErrorState } from '../index';
+import { Card, SectionHeader, MetricTile, StatTile, ErrorState } from '../index';
 import Badge from '../../components/common/Badge';
 
 describe('Card', () => {
@@ -108,6 +108,28 @@ describe('MetricTile', () => {
     const { container } = render(<MetricTile label="X" value="1" />);
     expect(container.querySelector('.text-data-positive')).toBeNull();
     expect(container.querySelector('.text-data-negative')).toBeNull();
+  });
+});
+
+describe('StatTile', () => {
+  it('renders label, value, footnote with neutral chrome', () => {
+    const { container } = render(
+      <StatTile label="Landowner Net" value="₹40 Cr" footnote="Implicit land value" />,
+    );
+    expect(screen.getByText('Landowner Net')).toBeInTheDocument();
+    expect(screen.getByText('₹40 Cr')).toBeInTheDocument();
+    expect(screen.getByText('Implicit land value')).toBeInTheDocument();
+    expect(container.firstChild.className).toMatch(/bg-bg-secondary/);
+  });
+
+  it('omits the footnote element when not passed', () => {
+    const { container } = render(<StatTile label="x" value="1" />);
+    expect(container.querySelectorAll('p')).toHaveLength(2);
+  });
+
+  it('flips value colour to data-negative when negative=true', () => {
+    const { container } = render(<StatTile label="Loss" value="−₹5 Cr" negative />);
+    expect(container.querySelector('.text-data-negative')).not.toBeNull();
   });
 });
 
