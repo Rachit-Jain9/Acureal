@@ -17,6 +17,7 @@
 
 const evidenceLinks = require('./evidenceLinks.service');
 const { getLatestSnapshotId, NEEDS_VERIFICATION_KEYS } = require('./parcelIntelligence.service');
+const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 
 const ITEM_PREFIX = 'item:';
@@ -69,7 +70,15 @@ const listVerifications = async (propertyId) => {
   if (!snapshotId) {
     return { snapshot_id: null, verifications: [] };
   }
-  const links = await evidenceLinks.listForOwner('parcel_intelligence', snapshotId);
+  let links;
+  try {
+    links = await evidenceLinks.listForOwner('parcel_intelligence', snapshotId);
+  } catch (error) {
+    if (error.statusCode === 404) {
+      return { snapshot_id: null, verifications: [] };
+    }
+    throw error;
+  }
   const verifications = links
     .filter((link) => typeof link.source_section === 'string' && link.source_section.startsWith(ITEM_PREFIX))
     .map((link) => ({
@@ -79,7 +88,33 @@ const listVerifications = async (propertyId) => {
   return { snapshot_id: snapshotId, verifications };
 };
 
-const removeVerification = async (linkId) => evidenceLinks.detachLink(linkId);
+const removeVerification = async ({ propertyId, linkId }) => {
+  const snapshotId = await getLatestSnapshotId(propertyId);
+  if (!snapshotId) {
+    throw createError(
+      'No parcel intelligence snapshot exists for this property yet. Refresh parcel intelligence first.',
+      409
+    );
+  }
+
+  const result = await query(
+    `SELECT 1
+     FROM evidence_links
+     WHERE id = $1
+       AND owner_kind = 'parcel_intelligence'
+       AND owner_id = $2
+       AND organization_id = current_organization_id()
+       AND source_section LIKE $3
+     LIMIT 1`,
+    [linkId, snapshotId, `${ITEM_PREFIX}%`]
+  );
+
+  if (result.rows.length === 0) {
+    throw createError('Verification link not found for this parcel snapshot.', 404);
+  }
+
+  return evidenceLinks.detachLink(linkId);
+};
 
 module.exports = {
   verifyItem,

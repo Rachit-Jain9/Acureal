@@ -173,7 +173,10 @@ router.delete(
   requireAdminOrAnalyst,
   async (req, res, next) => {
     try {
-      const result = await parcelVerifyService.removeVerification(req.params.linkId);
+      const result = await parcelVerifyService.removeVerification({
+        propertyId: req.params.id,
+        linkId: req.params.linkId,
+      });
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);

@@ -15,8 +15,13 @@ jest.mock('../src/services/evidenceLinks.service', () => ({
   detachLink: jest.fn(),
 }));
 
+jest.mock('../src/config/database', () => ({
+  query: jest.fn(),
+}));
+
 const parcelService = require('../src/services/parcelIntelligence.service');
 const evidenceLinks = require('../src/services/evidenceLinks.service');
+const { query } = require('../src/config/database');
 const verifyService = require('../src/services/parcelIntelligenceVerify.service');
 
 beforeEach(() => {
@@ -111,5 +116,50 @@ describe('parcelIntelligenceVerify.listVerifications', () => {
       'guidance_value',
       'zoning_assignment',
     ]);
+  });
+
+  test('treats a stale snapshot owner as an empty verification list', async () => {
+    parcelService.getLatestSnapshotId.mockResolvedValue('snap-stale');
+    evidenceLinks.listForOwner.mockRejectedValue(Object.assign(new Error('not found'), { statusCode: 404 }));
+
+    const result = await verifyService.listVerifications('p1');
+
+    expect(result).toEqual({ snapshot_id: null, verifications: [] });
+  });
+});
+
+describe('parcelIntelligenceVerify.removeVerification', () => {
+  test('requires a current snapshot before unlinking', async () => {
+    parcelService.getLatestSnapshotId.mockResolvedValue(null);
+
+    await expect(
+      verifyService.removeVerification({ propertyId: 'p1', linkId: 'link-1' })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(evidenceLinks.detachLink).not.toHaveBeenCalled();
+  });
+
+  test('rejects links that do not belong to the parcel snapshot', async () => {
+    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    query.mockResolvedValue({ rows: [] });
+
+    await expect(
+      verifyService.removeVerification({ propertyId: 'p1', linkId: 'link-1' })
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(evidenceLinks.detachLink).not.toHaveBeenCalled();
+  });
+
+  test('detaches only item-keyed links for the latest parcel snapshot', async () => {
+    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    evidenceLinks.detachLink.mockResolvedValue({ deleted: true, id: 'link-1' });
+
+    const result = await verifyService.removeVerification({ propertyId: 'p1', linkId: 'link-1' });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("owner_kind = 'parcel_intelligence'"),
+      ['link-1', 'snap-1', 'item:%']
+    );
+    expect(evidenceLinks.detachLink).toHaveBeenCalledWith('link-1');
+    expect(result).toEqual({ deleted: true, id: 'link-1' });
   });
 });
