@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Info, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MetricTile } from '../../design-system';
+import Badge from '../common/Badge';
 import { useDefaultsMeta } from '../../hooks/useFinancials';
 import { getKpiMeta } from './kpiProvenanceRegistry';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
@@ -68,56 +69,19 @@ function formatDriverValue(val, key) {
   return val.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
-function sourceChipStyle(kind) {
-  if (kind === 'user_input') {
-    return {
-      backgroundColor: 'var(--color-brand-accent-soft)',
-      color: 'var(--color-brand-accent)',
-      border: '1px solid var(--color-border-primary)',
-    };
-  }
-  if (kind === 'market_benchmark' || kind === 'verified_transaction') {
-    return {
-      backgroundColor: 'rgba(20,184,166,0.14)',
-      color: 'var(--color-data-highlight)',
-      border: '1px solid var(--color-border-primary)',
-    };
-  }
-  return {
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-secondary)',
-    border: '1px solid var(--color-border-primary)',
-  };
-}
+// Map source kinds and confidence levels onto Badge tones — a single
+// design-system primitive replaces two hand-rolled chip-palette helpers.
+const SOURCE_TONE = {
+  user_input:           'info',
+  market_benchmark:     'info',
+  verified_transaction: 'info',
+};
 
-function confidenceChipStyle(level) {
-  if (level === 'High') {
-    return {
-      backgroundColor: 'rgba(34,197,94,0.14)',
-      color: 'var(--color-data-positive)',
-      border: '1px solid rgba(34,197,94,0.3)',
-    };
-  }
-  if (level === 'Medium') {
-    return {
-      backgroundColor: 'var(--color-brand-premium-soft)',
-      color: 'var(--color-brand-premium)',
-      border: '1px solid rgba(245,184,0,0.3)',
-    };
-  }
-  if (level === 'Low') {
-    return {
-      backgroundColor: 'rgba(239,68,68,0.14)',
-      color: 'var(--color-data-negative)',
-      border: '1px solid rgba(239,68,68,0.3)',
-    };
-  }
-  return {
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-secondary)',
-    border: '1px solid var(--color-border-primary)',
-  };
-}
+const CONFIDENCE_TONE = {
+  High:   'success',
+  Medium: 'premium',
+  Low:    'danger',
+};
 
 function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidence, anchorRef }) {
   const drivers = (meta.drivers || [])
@@ -148,48 +112,32 @@ function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidenc
     else setAlign('right');
   }, [anchorRef]);
 
+  // Reusable section eyebrow class — appears 4× in this popover.
+  const eyebrow = 'text-[10px] uppercase tracking-[0.08em] font-medium text-content-muted mb-0.5';
+
   return (
     <div
       ref={panelRef}
       className={clsx(
         'absolute top-full mt-1 z-20 rounded-editorial text-left overflow-hidden',
+        'bg-bg-elevated border border-hairline shadow-elevated',
         align === 'right' ? 'right-0' : 'left-0',
       )}
-      style={{
-        width: 'min(20rem, calc(100vw - 2rem))',
-        backgroundColor: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-primary)',
-        boxShadow: 'var(--shadow-elevated)',
-      }}
+      style={{ width: 'min(20rem, calc(100vw - 2rem))' }}
     >
-      <div
-        className="px-3 py-2 flex items-start justify-between gap-2"
-        style={{ borderBottom: '1px solid var(--color-border-secondary)' }}
-      >
+      <div className="px-3 py-2 flex items-start justify-between gap-2 border-b border-hairline-soft">
         <div className="min-w-0">
-          <div
-            className="font-semibold"
-            style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              color: 'var(--color-text-muted)',
-            }}
-          >
+          <div className="font-semibold text-[10px] uppercase tracking-[0.1em] text-content-muted">
             KPI Provenance
           </div>
-          <div
-            className="text-sm font-semibold truncate"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
+          <div className="text-sm font-semibold truncate text-content-primary">
             {meta.name}
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 mt-0.5"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="shrink-0 mt-0.5 text-content-muted hover:text-content-primary"
           aria-label="Close"
         >
           <X size={14} />
@@ -198,103 +146,42 @@ function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidenc
 
       <div className="px-3 py-2 space-y-2.5 text-xs">
         <div>
-          <div
-            className="font-medium mb-0.5"
-            style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            Formula
-          </div>
-          <code
-            className="inline-block font-mono px-1.5 py-0.5 rounded"
-            style={{
-              fontSize: '11px',
-              color: 'var(--color-text-primary)',
-              backgroundColor: 'var(--color-surface)',
-              border: '1px solid var(--color-border-secondary)',
-            }}
-          >
+          <div className={eyebrow}>Formula</div>
+          <code className="inline-block font-mono px-1.5 py-0.5 rounded text-[11px] text-content-primary bg-surface border border-hairline-soft">
             {meta.formula}
           </code>
         </div>
 
         <div>
-          <div
-            className="font-medium mb-0.5"
-            style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            Definition
-          </div>
-          <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-            {meta.definition}
-          </p>
+          <div className={eyebrow}>Definition</div>
+          <p className="text-content-secondary leading-snug">{meta.definition}</p>
         </div>
 
         {drivers.length > 0 && (
           <div>
-            <div
-              className="font-medium mb-0.5"
-              style={{
-                fontSize: '10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--color-text-muted)',
-              }}
-            >
-              Drivers (current)
-            </div>
+            <div className={eyebrow}>Drivers (current)</div>
             <ul className="space-y-1">
               {drivers.map((d) => (
                 <li
                   key={d.key}
-                  className="pb-1 last:pb-0"
-                  style={{
-                    fontSize: '11px',
-                    borderBottom: '1px solid var(--color-border-secondary)',
-                  }}
+                  className="pb-1 last:pb-0 text-[11px] border-b border-hairline-soft last:border-b-0"
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <span
-                      className="min-w-0 truncate"
-                      style={{ color: 'var(--color-text-secondary)' }}
-                    >
+                    <span className="min-w-0 truncate text-content-secondary">
                       {prettyDriverName(d.key)}
                     </span>
                     <span className="flex items-baseline gap-1 shrink-0">
-                      <span
-                        className="font-medium tabular-nums"
-                        style={{ color: 'var(--color-text-primary)' }}
-                      >
+                      <span className="font-medium tabular-nums text-content-primary">
                         {formatDriverValue(d.resolved.value, d.key)}
                       </span>
-                      <span
-                        className="px-1 py-0.5 rounded uppercase tracking-wide"
-                        style={{
-                          fontSize: '9px',
-                          letterSpacing: '0.08em',
-                          ...sourceChipStyle(d.resolved.sourceKind),
-                        }}
-                      >
+                      <Badge tone={SOURCE_TONE[d.resolved.sourceKind]}>
                         {SOURCE_LABEL[d.resolved.sourceKind] || 'Default'}
-                      </span>
+                      </Badge>
                     </span>
                   </div>
                   {d.resolved.sourceDetail && (
                     <div
-                      className="truncate mt-0.5"
-                      style={{
-                        fontSize: '10px',
-                        color: 'var(--color-text-muted)',
-                      }}
+                      className="truncate mt-0.5 text-[10px] text-content-muted"
                       title={d.resolved.sourceDetail}
                     >
                       {d.resolved.sourceDetail}
@@ -307,47 +194,18 @@ function PopoverPanel({ meta, inputs, defaults, benchmarkKey, onClose, confidenc
         )}
 
         {benchmark && (
-          <div
-            className="rounded px-2 py-1.5"
-            style={{
-              backgroundColor: 'var(--color-brand-accent-soft)',
-              border: '1px solid var(--color-border-primary)',
-            }}
-          >
-            <div
-              className="font-medium mb-0.5"
-              style={{
-                fontSize: '10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--color-brand-accent)',
-              }}
-            >
+          <div className="rounded px-2 py-1.5 bg-accent-soft border border-hairline">
+            <div className="font-medium mb-0.5 text-[10px] uppercase tracking-[0.08em] text-accent">
               Benchmark band
             </div>
-            <p
-              style={{
-                fontSize: '11px',
-                color: 'var(--color-text-primary)',
-                lineHeight: 1.4,
-              }}
-            >
-              {benchmark}
-            </p>
+            <p className="text-[11px] text-content-primary leading-snug">{benchmark}</p>
           </div>
         )}
 
         <div className="flex items-center justify-between pt-1">
-          <span
-            className="uppercase font-semibold rounded px-1.5 py-0.5"
-            style={{
-              fontSize: '9.5px',
-              letterSpacing: '0.08em',
-              ...confidenceChipStyle(effectiveConfidence),
-            }}
-          >
+          <Badge tone={CONFIDENCE_TONE[effectiveConfidence]}>
             Confidence: {effectiveConfidence}
-          </span>
+          </Badge>
         </div>
       </div>
     </div>
