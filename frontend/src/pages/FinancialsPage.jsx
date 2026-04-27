@@ -12,11 +12,9 @@ import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
 import AuditTimelineView from '../components/financials/AuditTimelineView';
-import {
-  JDAWaterfallPanel,
-  JVWaterfallPanel,
-  DebtSchedulePanel,
-} from '../components/financials/CapitalStructurePanels';
+import JDAWaterfallPanel from '../components/financials/JDAWaterfallPanel';
+import JVWaterfallPanel from '../components/financials/JVWaterfallPanel';
+import DebtSchedulePanel from '../components/financials/DebtSchedulePanel';
 import { KPICards, AreaBreakdown, CostBreakdown, RevenuePanel } from '../components/financials/ResultPanels';
 import CashFlowChart from '../components/financials/CashFlowChart';
 import SensitivityTable from '../components/financials/SensitivityTable';
@@ -193,7 +191,7 @@ export default function FinancialsPage() {
           {/* Structure waterfall panels */}
           <JDAWaterfallPanel financials={normalizedFinancials} deal={deal} />
           <JVWaterfallPanel financials={normalizedFinancials} deal={deal} />
-          <DebtSchedulePanel financials={financials} normalizedFinancials={normalizedFinancials} />
+          <DebtSchedulePanel financials={financials} />
 
           {/* Signed audit trail — HMAC-SHA256 log of every kernel run with
               verify + kernel-replay primitives. Proves reproducibility of
