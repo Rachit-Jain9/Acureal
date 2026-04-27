@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, PlusCircle, RefreshCw, Search, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, PlusCircle, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -40,14 +40,14 @@ function initialOption(searchParams, key, fallback, allowedValues) {
 }
 
 function statusTone(status) {
-  if (status === 'approved' || status === 'configured' || status === 'parser_available') return 'text-emerald-700 bg-emerald-50';
-  if (status === 'rejected' || status === 'error') return 'text-rose-700 bg-rose-50';
-  if (status === 'not_configured') return 'text-amber-800 bg-amber-50';
+  if (status === 'approved' || status === 'configured' || status === 'parser_available' || status === 'ready') return 'text-emerald-700 bg-emerald-50';
+  if (status === 'rejected' || status === 'error' || status === 'action_required' || status === 'unknown') return 'text-rose-700 bg-rose-50';
+  if (status === 'not_configured' || status === 'review') return 'text-amber-800 bg-amber-50';
   return 'text-content-secondary bg-bg-secondary';
 }
 
 function StatusBadge({ status }) {
-  const Icon = status === 'approved' || status === 'configured' ? CheckCircle2 : status === 'rejected' ? XCircle : Clock;
+  const Icon = status === 'approved' || status === 'configured' || status === 'ready' ? CheckCircle2 : status === 'rejected' || status === 'action_required' ? XCircle : Clock;
   return (
     <span className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(status))}>
       <Icon size={11} />
@@ -83,6 +83,59 @@ function ProviderCard({ label, provider }) {
         </div>
         <StatusBadge status={provider?.status} />
       </div>
+    </div>
+  );
+}
+
+function SchemaReadinessCard({ schema }) {
+  const missing = schema?.missing || [];
+  const summary = schema?.summary || {};
+  const status = schema?.status || 'unknown';
+  const missingCount = Number(summary.missing_critical || 0) + Number(summary.missing_warning || 0);
+
+  return (
+    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="mt-0.5 rounded-lg bg-primary-50 p-2 text-primary-600">
+            <ShieldCheck size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-content-primary">Database Schema Readiness</div>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-content-secondary">
+              {schema?.message || 'Schema readiness has not been checked yet.'}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-content-secondary">
+              <span className="rounded-md bg-bg-secondary px-2 py-1">
+                {summary.required_relations ?? 0} objects checked
+              </span>
+              <span className="rounded-md bg-bg-secondary px-2 py-1">
+                {summary.required_columns ?? 0} columns checked
+              </span>
+              <span className={clsx('rounded-md px-2 py-1', missingCount ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700')}>
+                {missingCount} missing
+              </span>
+            </div>
+          </div>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+
+      {missing.length > 0 && (
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+          {missing.slice(0, 4).map((item) => (
+            <div key={`${item.type}-${item.name}`} className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+              <div className="font-semibold">{item.label}</div>
+              <div className="mt-0.5 truncate opacity-80">{item.name}</div>
+            </div>
+          ))}
+          {missing.length > 4 && (
+            <div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800">
+              +{missing.length - 4} more missing schema item{missing.length - 4 === 1 ? '' : 's'}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -599,6 +652,8 @@ export default function ParcelIntelligenceAdminPage() {
             <ProviderCard label="IGR PDF Parser" provider={ops?.providers?.igr_pdf} />
             <ProviderCard label="K-GIS" provider={ops?.providers?.kgis} />
           </div>
+
+          <SchemaReadinessCard schema={ops?.schema} />
         </>
       )}
 
@@ -711,6 +766,12 @@ export default function ParcelIntelligenceAdminPage() {
         {showAuthorityInput && (
           <div className="border-b border-hairline-strong p-4">
             <AuthorityInputPanel dealId={dealId} onClose={() => setShowAuthorityInput(false)} />
+          </div>
+        )}
+
+        {ops?.degraded && (
+          <div className="border-b border-hairline-strong bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            Parcel intelligence review is paused because required database schema objects are missing or could not be verified.
           </div>
         )}
 

@@ -30,6 +30,8 @@ describe('parcelIntelligenceAdmin.service', () => {
 
   test('builds operational status without fabricating provider readiness', async () => {
     query
+      .mockResolvedValueOnce({ rows: [{ name: 'regulatory_data.evidence_sources', label: 'Evidence sources', severity: 'critical', present: true }] })
+      .mockResolvedValueOnce({ rows: [{ name: 'regulatory_data.evidence_facts.review_status', label: 'Review status', severity: 'critical', present: true }] })
       .mockResolvedValueOnce({ rows: [{ review_status: 'approved', count: 3 }, { review_status: 'pending', count: 2 }] })
       .mockResolvedValueOnce({ rows: [{ review_status: 'pending', count: 5 }] })
       .mockResolvedValueOnce({ rows: [{ review_status: 'approved', count: 8 }] })
@@ -42,11 +44,34 @@ describe('parcelIntelligenceAdmin.service', () => {
 
     const result = await service.getStatus();
 
+    expect(result.degraded).toBe(false);
+    expect(result.schema.status).toBe('ready');
     expect(result.review_queue.pending_or_needs_review).toBe(8);
     expect(result.review_queue.evidence_sources.pending).toBe(2);
     expect(result.providers.landeed.status).toBe('not_configured');
     expect(result.providers.igr_pdf.status).toBe('parser_available');
     expect(result.cache.kgis_rows).toBe(4);
+  });
+
+  test('returns degraded status instead of counting missing parcel intelligence schema', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          name: 'regulatory_data.evidence_facts',
+          label: 'Evidence facts',
+          severity: 'critical',
+          present: false,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.getStatus();
+
+    expect(result.degraded).toBe(true);
+    expect(result.schema.status).toBe('action_required');
+    expect(result.review_queue.pending_or_needs_review).toBe(0);
+    expect(result.cache.kgis_rows).toBe(0);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   test('lists normalized review queue rows across evidence types', async () => {
