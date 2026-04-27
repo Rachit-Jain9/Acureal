@@ -101,8 +101,44 @@ export function useRefreshParcelIntelligence() {
     mutationFn: (propertyId) => propertiesAPI.refreshParcelIntelligence(propertyId).then((r) => r.data.data),
     onSuccess: (_, propertyId) => {
       qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-intelligence'] });
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-verifications'] });
       toast.success('Parcel intelligence refreshed');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Parcel intelligence refresh failed'),
+  });
+}
+
+export function useParcelVerifications(propertyId) {
+  return useQuery({
+    queryKey: ['property', propertyId, 'parcel-verifications'],
+    queryFn: () => propertiesAPI.parcelVerifications(propertyId).then((r) => r.data.data),
+    enabled: !!propertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useVerifyParcelItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ propertyId, ...payload }) =>
+      propertiesAPI.verifyParcelItem(propertyId, payload).then((r) => r.data.data),
+    onSuccess: (_, { propertyId }) => {
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-verifications'] });
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-intelligence'] });
+      toast.success('Item verified — citation logged');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Verification failed'),
+  });
+}
+
+export function useUnverifyParcelItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ propertyId, linkId }) =>
+      propertiesAPI.unverifyParcelItem(propertyId, linkId).then((r) => r.data.data),
+    onSuccess: (_, { propertyId }) => {
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-verifications'] });
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not remove verification'),
   });
 }

@@ -2,6 +2,7 @@ const express = require('express');
 const { body, query: qv } = require('express-validator');
 const propertyService = require('../services/property.service');
 const parcelIntelligenceService = require('../services/parcelIntelligence.service');
+const parcelVerifyService = require('../services/parcelIntelligenceVerify.service');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -120,6 +121,65 @@ router.post('/:id/parcel-intelligence/refresh', authenticate, requireAdminOrAnal
     next(error);
   }
 });
+
+// GET /properties/:id/parcel-intelligence/verifications
+// Lists manual verifications attached to the latest snapshot.
+router.get('/:id/parcel-intelligence/verifications', authenticate, async (req, res, next) => {
+  try {
+    const result = await parcelVerifyService.listVerifications(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /properties/:id/parcel-intelligence/verify-item
+// One-click verify for a Needs-Verification item.
+router.post(
+  '/:id/parcel-intelligence/verify-item',
+  authenticate,
+  requireAdminOrAnalyst,
+  [
+    body('itemKey').isString().trim().notEmpty(),
+    body('documentId').optional({ nullable: true }).isUUID(),
+    body('externalUrl')
+      .optional({ nullable: true, values: 'falsy' })
+      .isURL({ require_protocol: true })
+      .isLength({ max: 2000 }),
+    body('notes').optional({ nullable: true }).isString().isLength({ max: 2000 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const link = await parcelVerifyService.verifyItem({
+        propertyId: req.params.id,
+        itemKey: req.body.itemKey,
+        documentId: req.body.documentId || null,
+        externalUrl: req.body.externalUrl || null,
+        notes: req.body.notes || null,
+        userId: req.user.id,
+      });
+      res.status(201).json({ success: true, message: 'Item verified.', data: link });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// DELETE /properties/:id/parcel-intelligence/verifications/:linkId
+router.delete(
+  '/:id/parcel-intelligence/verifications/:linkId',
+  authenticate,
+  requireAdminOrAnalyst,
+  async (req, res, next) => {
+    try {
+      const result = await parcelVerifyService.removeVerification(req.params.linkId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // PUT /properties/:id
 router.put(

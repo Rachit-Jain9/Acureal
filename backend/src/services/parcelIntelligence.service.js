@@ -249,13 +249,14 @@ const formatKgis = (cacheRow, liveResult = null) => {
 
 const saveSnapshot = async ({ propertyId, output, userId }) => {
   try {
-    await query(
+    const result = await query(
       `INSERT INTO regulatory_data.parcel_intelligence_snapshots (
          org_id, property_id, inputs_hash, output_json, source_versions, generated_by
        )
        VALUES (
          current_organization_id(), $1, $2, $3::jsonb, $4::jsonb, $5
-       )`,
+       )
+       RETURNING id`,
       [
         propertyId,
         hashInputs(output.inputs || {}),
@@ -264,10 +265,29 @@ const saveSnapshot = async ({ propertyId, output, userId }) => {
         userId || null,
       ]
     );
+    return result.rows[0]?.id || null;
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.warn('Parcel intelligence snapshot skipped:', error.message);
     }
+    return null;
+  }
+};
+
+const getLatestSnapshotId = async (propertyId) => {
+  try {
+    const result = await query(
+      `SELECT id
+       FROM regulatory_data.parcel_intelligence_snapshots
+       WHERE property_id = $1
+         AND org_id = current_organization_id()
+       ORDER BY generated_at DESC
+       LIMIT 1`,
+      [propertyId]
+    );
+    return result.rows[0]?.id || null;
+  } catch {
+    return null;
   }
 };
 
@@ -466,15 +486,26 @@ const buildBuckets = ({ property, zone, buildability, guidance, kgis, landeed })
     });
   }
 
+  // Stable item keys let the manual-verification flow attach an
+  // evidence_links row keyed to a known item (zone, far, guidance, ...) and
+  // let the panel render a "verified manually" badge against the same row.
   const needsVerification = [];
-  if (!zone?.zone_code) needsVerification.push({ label: 'Assign reviewed RMP zone', detail: 'No zoning rule can be authoritative without reviewed zone assignment.' });
-  if (buildability?.status === 'needs_verification') needsVerification.push({ label: 'Confirm FAR/additional FAR', detail: buildability.message });
-  if (!guidance?.selected || guidance.status !== 'matched') needsVerification.push({ label: 'Confirm guidance value', detail: guidance?.message });
-  if (landeed?.status === 'not_configured') needsVerification.push({ label: 'Landeed vendor API', detail: landeed.message });
-  if (property.lat == null || property.lng == null) needsVerification.push({ label: 'Coordinates missing', detail: 'K-GIS hierarchy/survey lookup needs a map pin.' });
+  if (!zone?.zone_code) needsVerification.push({ key: 'zoning_assignment', label: 'Assign reviewed RMP zone', detail: 'No zoning rule can be authoritative without reviewed zone assignment.' });
+  if (buildability?.status === 'needs_verification') needsVerification.push({ key: 'far_assignment', label: 'Confirm FAR/additional FAR', detail: buildability.message });
+  if (!guidance?.selected || guidance.status !== 'matched') needsVerification.push({ key: 'guidance_value', label: 'Confirm guidance value', detail: guidance?.message });
+  if (landeed?.status === 'not_configured') needsVerification.push({ key: 'landeed_api', label: 'Landeed vendor API', detail: landeed.message });
+  if (property.lat == null || property.lng == null) needsVerification.push({ key: 'coordinates', label: 'Coordinates missing', detail: 'K-GIS hierarchy/survey lookup needs a map pin.' });
 
   return { verified, inferred, needs_verification: needsVerification };
 };
+
+const NEEDS_VERIFICATION_KEYS = new Set([
+  'zoning_assignment',
+  'far_assignment',
+  'guidance_value',
+  'landeed_api',
+  'coordinates',
+]);
 
 const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = false }) => {
   const property = await loadPropertyWithZone(propertyId);
@@ -582,8 +613,14 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     },
   };
 
+  // Always expose a snapshot_id so the frontend can attach manual evidence
+  // links via the polymorphic evidence-links endpoint. On refresh we use the
+  // newly-saved row; on read we fall back to the most recent prior snapshot.
   if (refresh) {
-    await saveSnapshot({ propertyId, output, userId });
+    const newId = await saveSnapshot({ propertyId, output, userId });
+    output.snapshot_id = newId || (await getLatestSnapshotId(propertyId));
+  } else {
+    output.snapshot_id = await getLatestSnapshotId(propertyId);
   }
   return output;
 };
@@ -618,5 +655,7 @@ module.exports = {
   getParcelIntelligence,
   refreshParcelIntelligence,
   normalizeLandUseFamily,
+  getLatestSnapshotId,
+  NEEDS_VERIFICATION_KEYS,
   VERIFICATION_LINKS,
 };
