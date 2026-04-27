@@ -20,42 +20,26 @@ export default function Header({ onMobileMenuOpen }) {
   };
 
   return (
-    <header
-      className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2"
-      style={{
-        backgroundColor: 'var(--color-bg-elevated)',
-        borderBottom: '1px solid var(--color-border-primary)',
-      }}
-    >
+    <header className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2 bg-bg-elevated border-b border-hairline">
       <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
         {onMobileMenuOpen && (
           <button
             type="button"
             onClick={onMobileMenuOpen}
-            className="p-2 -ml-2 rounded-md hover:bg-surface md:hidden flex-shrink-0"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="p-2 -ml-2 rounded-md hover:bg-surface md:hidden flex-shrink-0 text-content-secondary"
             aria-label="Open menu"
           >
             <Menu size={18} />
           </button>
         )}
         <form onSubmit={handleSearch} className="relative max-w-md flex-1 min-w-0">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            size={16}
-            style={{ color: 'var(--color-text-muted)' }}
-          />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search…"
-            className="w-full pl-9 pr-4 py-2 rounded-md text-sm focus:outline-none"
-            style={{
-              backgroundColor: 'var(--color-bg-secondary)',
-              color: 'var(--color-text-primary)',
-              border: '1px solid var(--color-border-primary)',
-            }}
+            className="w-full pl-9 pr-4 py-2 rounded-md text-sm focus:outline-none bg-bg-secondary text-content-primary border border-hairline"
           />
         </form>
       </div>
@@ -65,31 +49,23 @@ export default function Header({ onMobileMenuOpen }) {
           onClick={toggleTheme}
           aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={mode === 'dark' ? 'Switch to light (report) mode' : 'Switch to dark (work) mode'}
-          className="p-2 rounded-md hover:bg-surface"
-          style={{ color: 'var(--color-text-secondary)' }}
+          className="p-2 rounded-md hover:bg-surface text-content-secondary"
         >
           {mode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
 
         <button
-          className="p-2 rounded-md hover:bg-surface"
-          style={{ color: 'var(--color-text-secondary)' }}
+          className="p-2 rounded-md hover:bg-surface text-content-secondary"
           aria-label="Notifications"
         >
           <Bell size={17} />
         </button>
 
         <div className="flex items-center gap-2 pl-2">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold select-none"
-            style={{
-              backgroundColor: 'var(--color-brand-accent)',
-              color: 'white',
-            }}
-          >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold select-none bg-accent text-white">
             {user?.name?.[0]?.toUpperCase() || 'U'}
           </div>
-          <span className="text-sm hidden sm:block" style={{ color: 'var(--color-text-secondary)' }}>
+          <span className="text-sm hidden sm:block text-content-secondary">
             {user?.name}
           </span>
         </div>
