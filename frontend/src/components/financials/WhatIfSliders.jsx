@@ -151,72 +151,33 @@ function KPIDelta({ baseValue, currentValue, decimals, suffix, label, good }) {
 
   const Icon = isFlat ? Minus : isBetter ? ArrowUpRight : ArrowDownRight;
 
-  const toneBg = isFlat
-    ? 'var(--color-surface)'
+  // Editorial: neutral chrome carries the value; the directional delta line
+  // (icon + colored text) carries the up/down signal. Avoids the saturated
+  // whole-tile tint that competes with the page's other KPI surfaces.
+  const deltaToneClass = isFlat
+    ? 'text-content-muted'
     : isBetter
-      ? 'rgba(34,197,94,0.10)'
-      : 'rgba(239,68,68,0.10)';
-  const toneBorder = isFlat
-    ? 'var(--color-border-primary)'
-    : isBetter
-      ? 'rgba(34,197,94,0.35)'
-      : 'rgba(239,68,68,0.35)';
-  const toneText = isFlat
-    ? 'var(--color-text-muted)'
-    : isBetter
-      ? 'var(--color-data-positive)'
-      : 'var(--color-data-negative)';
+      ? 'text-data-positive'
+      : 'text-data-negative';
 
   return (
-    <div
-      className="rounded-editorial px-3 py-2.5"
-      style={{
-        backgroundColor: toneBg,
-        border: `1px solid ${toneBorder}`,
-      }}
-    >
-      <div
-        style={{
-          fontSize: '10px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          fontWeight: 500,
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        {label}
-      </div>
+    <div className="rounded-editorial bg-bg-secondary border border-hairline px-3 py-2.5">
+      <div className="text-eyebrow uppercase text-content-muted font-medium">{label}</div>
       <div className="flex items-baseline gap-1.5 mt-0.5">
-        <span
-          className="text-lg font-semibold tabular-nums"
-          style={{ color: 'var(--color-text-primary)' }}
-        >
+        <span className="text-lg font-semibold tabular-nums text-content-primary">
           {fmtNumber(curr, decimals)}
         </span>
-        <span
-          className="text-xs"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          {suffix}
-        </span>
+        <span className="text-xs text-content-muted">{suffix}</span>
       </div>
       {delta != null && (
-        <div
-          className="flex items-center gap-0.5 font-medium mt-1"
-          style={{ color: toneText, fontSize: '11px' }}
-        >
+        <div className={clsx('flex items-center gap-0.5 font-medium mt-1 text-[11px]', deltaToneClass)}>
           <Icon size={12} />
           <span className="tabular-nums">
             {isFlat
               ? 'unchanged'
               : `${delta > 0 ? '+' : ''}${fmtNumber(delta, decimals)}${suffix.trim()}`}
           </span>
-          <span
-            className="font-normal"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            vs base
-          </span>
+          <span className="font-normal text-content-muted">vs base</span>
         </div>
       )}
     </div>
@@ -231,30 +192,20 @@ function SliderRow({ field, currentValue, range, onChange, onReset, isResetDisab
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span
-          className="font-medium"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          {field.label}
-        </span>
+        <span className="font-medium text-content-secondary">{field.label}</span>
         <div className="flex items-center gap-2">
-          <span
-            className="font-semibold tabular-nums"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
+          <span className="font-semibold tabular-nums text-content-primary">
             {fmtSliderValue(currentValue, field.decimals)}
           </span>
-          <span style={{ color: 'var(--color-text-muted)' }}>{field.unit}</span>
+          <span className="text-content-muted">{field.unit}</span>
           <button
             type="button"
             onClick={onReset}
             disabled={isResetDisabled}
-            className="transition-colors"
-            style={{
-              color: 'var(--color-text-muted)',
-              opacity: isResetDisabled ? 0.4 : 1,
-              cursor: isResetDisabled ? 'not-allowed' : 'pointer',
-            }}
+            className={clsx(
+              'transition-colors text-content-muted',
+              isResetDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:text-content-primary',
+            )}
             title="Reset to base"
           >
             <RotateCcw size={11} />
@@ -268,16 +219,10 @@ function SliderRow({ field, currentValue, range, onChange, onReset, isResetDisab
         step={step}
         value={currentValue}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-        style={{
-          backgroundColor: 'var(--color-surface-2)',
-          accentColor: 'var(--color-brand-accent)',
-        }}
+        className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-surface-2"
+        style={{ accentColor: 'var(--color-brand-accent)' }}
       />
-      <div
-        className="flex items-center justify-between tabular-nums"
-        style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}
-      >
+      <div className="flex items-center justify-between tabular-nums text-[10px] text-content-muted">
         <span>{fmtSliderValue(lo, field.decimals)}</span>
         <span>{fmtSliderValue(hi, field.decimals)}</span>
       </div>
@@ -409,52 +354,22 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
   };
 
   return (
-    <div
-      className="rounded-editorial overflow-hidden"
-      style={{
-        backgroundColor: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-primary)',
-        boxShadow: 'var(--shadow-card)',
-      }}
-    >
-      <div
-        className="px-4 py-3 flex items-center justify-between"
-        style={{
-          borderBottom: '1px solid var(--color-border-primary)',
-          backgroundColor: 'var(--color-bg-secondary)',
-        }}
-      >
+    <div className="rounded-editorial overflow-hidden bg-bg-elevated border border-hairline shadow-editorial">
+      <div className="px-4 py-3 flex items-center justify-between border-b border-hairline bg-bg-secondary">
         <div className="flex items-center gap-2">
-          <div
-            className="w-7 h-7 rounded-md flex items-center justify-center"
-            style={{
-              backgroundColor: 'var(--color-brand-accent)',
-              color: 'white',
-            }}
-          >
+          <div className="w-7 h-7 rounded-md flex items-center justify-center bg-accent text-white">
             <Sliders size={14} />
           </div>
           <div>
-            <h3
-              className="text-sm font-semibold"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
-              What-If Sliders
-            </h3>
-            <p
-              className="leading-tight"
-              style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}
-            >
+            <h3 className="text-sm font-semibold text-content-primary">What-If Sliders</h3>
+            <p className="leading-tight text-[11px] text-content-muted">
               Live kernel re-compute — scrub inputs, watch KPIs move vs. base.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {!isClient && quickCompute.isPending && (
-            <span
-              className="font-medium animate-pulse"
-              style={{ fontSize: '10px', color: 'var(--color-brand-accent)' }}
-            >
+            <span className="font-medium animate-pulse text-[10px] text-accent">
               Computing…
             </span>
           )}
@@ -462,14 +377,12 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
             type="button"
             onClick={resetAll}
             disabled={!isDirty}
-            className="font-medium px-2 py-1 rounded transition-colors"
-            style={{
-              fontSize: '11px',
-              color: isDirty ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-              backgroundColor: 'transparent',
-              border: `1px solid ${isDirty ? 'var(--color-border-primary)' : 'var(--color-border-secondary)'}`,
-              cursor: isDirty ? 'pointer' : 'not-allowed',
-            }}
+            className={clsx(
+              'font-medium px-2 py-1 rounded transition-colors text-[11px] border bg-transparent',
+              isDirty
+                ? 'text-content-primary border-hairline cursor-pointer hover:bg-bg-secondary'
+                : 'text-content-muted border-hairline-soft cursor-not-allowed',
+            )}
           >
             Reset all
           </button>
@@ -513,14 +426,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
       </div>
 
       {(liveError || quickCompute.error) && (
-        <div
-          className="px-4 py-2 text-xs"
-          style={{
-            backgroundColor: 'rgba(239,68,68,0.08)',
-            borderTop: '1px solid rgba(239,68,68,0.25)',
-            color: 'var(--color-data-negative)',
-          }}
-        >
+        <div className="px-4 py-2 text-xs text-data-negative bg-rose-50 border-t border-rose-200">
           Compute failed:{' '}
           {liveError
             || quickCompute.error?.response?.data?.message

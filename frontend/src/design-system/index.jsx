@@ -44,7 +44,7 @@ export function SectionHeader({ icon: Icon, eyebrow, title, sub, action, size = 
     >
       <div className="min-w-0">
         {eyebrow && (
-          <div className="text-eyebrow text-content-muted mb-1.5 font-medium">
+          <div className="text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
             {eyebrow}
           </div>
         )}
@@ -90,7 +90,7 @@ export function MetricTile({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-eyebrow text-content-muted mb-2 min-w-0 truncate font-medium">
+        <div className="text-eyebrow uppercase text-content-muted mb-2 min-w-0 truncate font-medium">
           {label}
         </div>
         {action && <div className="shrink-0 -mt-1 -mr-1">{action}</div>}
