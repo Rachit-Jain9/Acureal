@@ -44,6 +44,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
       <aside
         className={clsx(
           'flex flex-col transition-transform duration-200 md:transition-all',
+          'bg-bg-secondary text-content-secondary border-r border-hairline',
           // Mobile: fixed drawer, slides in from the left.
           'fixed inset-y-0 left-0 z-40 w-60',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
@@ -51,36 +52,21 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
           'md:static md:translate-x-0 md:min-h-screen',
           desktopWidth,
         )}
-        style={{
-          backgroundColor: 'var(--color-bg-secondary)',
-          color: 'var(--color-text-secondary)',
-          borderRight: '1px solid var(--color-border-primary)',
-        }}
       >
         {/* Logo / header */}
-        <div
-          className="flex items-center justify-between p-4"
-          style={{ borderBottom: '1px solid var(--color-border-primary)' }}
-        >
+        <div className="flex items-center justify-between p-4 border-b border-hairline">
           {!collapsed && (
             <div className="flex items-baseline gap-1.5">
-              <span
-                className="font-serif text-lg font-semibold tracking-tight"
-                style={{ color: 'var(--color-text-primary)' }}
-              >
+              <span className="font-serif text-lg font-semibold tracking-tight text-content-primary">
                 REDIP
               </span>
-              <span
-                className="w-1.5 h-1.5 rounded-sm inline-block"
-                style={{ backgroundColor: 'var(--color-brand-premium)' }}
-              />
+              <span className="w-1.5 h-1.5 rounded-sm inline-block bg-premium" />
             </div>
           )}
           {/* Mobile close */}
           <button
             onClick={onMobileClose}
-            className="p-1 rounded transition-colors hover:bg-surface md:hidden"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="p-1 rounded transition-colors hover:bg-surface md:hidden text-content-secondary"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -88,8 +74,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
           {/* Desktop collapse */}
           <button
             onClick={() => setCollapsed((c) => !c)}
-            className="p-1 rounded transition-colors hover:bg-surface hidden md:inline-flex"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="p-1 rounded transition-colors hover:bg-surface hidden md:inline-flex text-content-secondary"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -104,23 +89,19 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
               to={to}
               end={to === '/dashboard'}
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative ${
-                  isActive ? 'font-medium' : ''
-                }`
+                clsx(
+                  'group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative',
+                  isActive
+                    ? 'bg-accent-soft text-accent font-medium'
+                    : 'text-content-secondary hover:bg-surface',
+                )
               }
-              style={({ isActive }) => ({
-                backgroundColor: isActive ? 'var(--color-brand-accent-soft)' : 'transparent',
-                color: isActive ? 'var(--color-brand-accent)' : 'var(--color-text-secondary)',
-              })}
               title={collapsed ? label : undefined}
             >
               {({ isActive }) => (
                 <>
                   {isActive && (
-                    <span
-                      className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm"
-                      style={{ backgroundColor: 'var(--color-brand-accent)' }}
-                    />
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm bg-accent" />
                   )}
                   <Icon size={17} className="flex-shrink-0" />
                   {!collapsed && <span>{label}</span>}
@@ -131,32 +112,17 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
         </nav>
 
         {/* User / logout */}
-        <div
-          className="p-4"
-          style={{ borderTop: '1px solid var(--color-border-primary)' }}
-        >
+        <div className="p-4 border-t border-hairline">
           {!collapsed && user && (
             <div className="mb-3 text-xs">
-              <div
-                className="font-medium truncate"
-                style={{ color: 'var(--color-text-primary)' }}
-              >
-                {user.name}
-              </div>
-              <div className="truncate" style={{ color: 'var(--color-text-muted)' }}>
-                {user.email}
-              </div>
-              <div className="capitalize" style={{ color: 'var(--color-text-muted)' }}>
-                {user.role}
-              </div>
+              <div className="font-medium truncate text-content-primary">{user.name}</div>
+              <div className="truncate text-content-muted">{user.email}</div>
+              <div className="capitalize text-content-muted">{user.role}</div>
             </div>
           )}
           <button
             onClick={logout}
-            className="flex items-center gap-2 text-sm transition-colors w-full"
-            style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-data-negative)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+            className="flex items-center gap-2 text-sm transition-colors w-full text-content-muted hover:text-data-negative"
             title={collapsed ? 'Logout' : undefined}
           >
             <LogOut size={15} />
