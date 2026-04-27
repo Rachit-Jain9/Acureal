@@ -262,71 +262,32 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
   if (varList.length === 0) return null;
 
   return (
-    <div
-      className="rounded-editorial overflow-hidden"
-      style={{
-        backgroundColor: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-primary)',
-        boxShadow: 'var(--shadow-card)',
-      }}
-    >
-      <div
-        className="px-4 py-3 flex items-center justify-between gap-3"
-        style={{
-          borderBottom: '1px solid var(--color-border-primary)',
-          backgroundColor: 'var(--color-bg-secondary)',
-        }}
-      >
+    <div className="rounded-editorial overflow-hidden bg-bg-elevated border border-hairline shadow-editorial">
+      <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-hairline bg-bg-secondary">
         <div className="flex items-center gap-2 min-w-0">
-          <div
-            className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-            style={{
-              backgroundColor: 'var(--color-data-highlight)',
-              color: 'white',
-            }}
-          >
+          <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-data-highlight text-white">
             <BarChart3 size={14} />
           </div>
           <div className="min-w-0">
-            <h3
-              className="text-sm font-semibold"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
-              Sensitivity Tornado
-            </h3>
-            <p
-              className="leading-tight truncate"
-              style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}
-            >
+            <h3 className="text-sm font-semibold text-content-primary">Sensitivity Tornado</h3>
+            <p className="leading-tight truncate text-[11px] text-content-muted">
               Each bar: {kpi.label} change when the input swings ±15% around base. Ranked by impact.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isComputing && (
-            <span
-              className="flex items-center gap-1 font-medium"
-              style={{ fontSize: '10px', color: 'var(--color-data-highlight)' }}
-            >
+            <span className="flex items-center gap-1 font-medium text-[10px] text-data-highlight">
               <Loader2 size={12} className="animate-spin" />
               Running {varList.length * 2} scenarios…
             </span>
           )}
-          <label
-            className="font-medium"
-            style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}
-          >
+          <label className="font-medium text-[11px] text-content-secondary">
             KPI:
             <select
               value={kpiKey}
               onChange={(e) => setKpiKey(e.target.value)}
-              className="ml-1.5 font-medium px-2 py-1 rounded cursor-pointer focus:outline-none"
-              style={{
-                fontSize: '11px',
-                border: '1px solid var(--color-border-primary)',
-                backgroundColor: 'var(--color-bg-elevated)',
-                color: 'var(--color-text-primary)',
-              }}
+              className="ml-1.5 font-medium px-2 py-1 rounded cursor-pointer focus:outline-none text-[11px] border border-hairline bg-bg-elevated text-content-primary"
             >
               {KPI_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>{o.label}</option>
@@ -337,34 +298,17 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
       </div>
 
       {error ? (
-        <div
-          className="px-4 py-3 text-xs"
-          style={{
-            color: 'var(--color-data-negative)',
-            backgroundColor: 'rgba(239,68,68,0.08)',
-            borderTop: '1px solid rgba(239,68,68,0.25)',
-          }}
-        >
+        <div className="px-4 py-3 text-xs text-data-negative bg-rose-50 border-t border-rose-200">
           {error}
         </div>
       ) : bars.length === 0 && !isComputing ? (
-        <div
-          className="px-4 py-6 text-center text-xs"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <div className="px-4 py-6 text-center text-xs text-content-muted">
           No variable in this model moves {kpi.label} by a measurable amount.
         </div>
       ) : (
         <div className="p-4">
           <TornadoChart bars={bars} maxMagnitude={maxMagnitude} kpi={kpi} />
-          <div
-            className="mt-4 pt-3 flex items-start gap-2"
-            style={{
-              fontSize: '10px',
-              color: 'var(--color-text-muted)',
-              borderTop: '1px solid var(--color-border-secondary)',
-            }}
-          >
+          <div className="mt-4 pt-3 flex items-start gap-2 text-[10px] text-content-muted border-t border-hairline-soft">
             <Info size={11} className="mt-[1px] shrink-0" />
             <span>
               Left bar = KPI at 15% below base value. Right bar = KPI at 15% above. Color
