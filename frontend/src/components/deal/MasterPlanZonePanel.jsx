@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
 import { useZones, useZone } from '../../hooks/useMasterPlan';
 import { useUpdateProperty } from '../../hooks/useProperties';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, ErrorState } from '../../design-system';
 
 const EDITOR_ROLES = ['admin', 'owner', 'editor', 'analyst'];
 
@@ -180,9 +180,9 @@ export default function MasterPlanZonePanel({ property }) {
             <ZoneFact label="Review status" value={zone.review_status || 'pending'} />
           </div>
         ) : (
-          <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+          <ErrorState tone="warn">
             No reviewed zone is assigned. Parcel Intelligence will keep FAR and buildability in needs-verification state.
-          </div>
+          </ErrorState>
         )}
 
         {zone?.notes && (
