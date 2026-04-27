@@ -136,6 +136,7 @@ const DOC_TYPES = [
   'jda_jv',
   'broker_quote',
   'guidance_value_report',
+  'igr_guidance_pdf',
   'zoning_certificate',
   'e_khata',
   'rmp_table',

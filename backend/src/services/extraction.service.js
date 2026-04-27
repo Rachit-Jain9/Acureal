@@ -329,6 +329,38 @@ Return a JSON object with:
 }
 Return ONLY the JSON. No commentary.`,
 
+  igr_guidance_pdf: `You are a regulatory document extraction assistant for Karnataka IGR guidance-value PDFs.
+These PDFs contain a header (district, SRO, effective dates) and a table listing many localities/roads with per-sqft or per-acre guidance values.
+Extract every visible row faithfully. Never invent missing rows or values. If a value is shown only as a range, return both ends in raw_text and skip the structured row.
+Return a JSON object with:
+{
+  "issuing_authority": "Inspector General of Registration, Karnataka",
+  "state": "Karnataka",
+  "district": "",
+  "sro_name": "",
+  "land_use_type": "",
+  "effective_from": "YYYY-MM-DD or null",
+  "effective_to": "YYYY-MM-DD or null",
+  "source_page": null,
+  "source_section": "",
+  "rows": [
+    {
+      "locality": "",
+      "road_name": "",
+      "land_use_type": "",
+      "value": null,
+      "unit_type": "sqft|acre|gunta",
+      "source_page": null,
+      "source_section": "",
+      "confidence": 0.0
+    }
+  ],
+  "raw_text": "<paste full extracted text from each table page; the parser uses this as a fallback for rows you missed>",
+  "verification_notes": [],
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
   zoning_certificate: `You are a regulatory document extraction assistant for Indian real estate zoning.
 Extract only stated zoning/buildability facts from the certificate. Do not calculate or infer FAR.
 Return a JSON object with:
@@ -440,7 +472,11 @@ const CLASSIFY_PROMPT = `You are a legal document classifier specialised in Indi
 Classify the document into exactly ONE of these types:
 title_deed, mother_deed, sale_deed, ec, rtc_pahani, mutation, conversion_certificate,
 khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, guidance_value_report,
-zoning_certificate, e_khata, rmp_table, kgis_extract, other
+igr_guidance_pdf, zoning_certificate, e_khata, rmp_table, kgis_extract, other
+
+Pick "igr_guidance_pdf" only when the document is an Inspector General of Registration tabular PDF
+listing many localities with per-sqft or per-acre guidance values. Use "guidance_value_report" for
+single-property valuation reports.
 
 Return ONLY a JSON object: { "doc_type": "<type>", "confidence": <0-1>, "reason": "<brief reason>" }
 No other text.`;
