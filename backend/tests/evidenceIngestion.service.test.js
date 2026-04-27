@@ -173,6 +173,111 @@ describe('evidenceIngestion.service', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.far_rules'))).toBe(true);
   });
 
+  test('deduplicates RMP FAR candidates by source, zone, plot, road, and rule values', async () => {
+    const row = {
+      id: 'extraction-2b',
+      document_id: 'document-2b',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'Volume-6 Zoning Regulations.pdf',
+      document_file_url: 'https://example.com/rmp.pdf',
+      doc_type: 'rmp_table',
+      extraction_status: 'completed',
+      structured_fields: {
+        plan_version: 'RMP 2031 Draft',
+        source_page: 42,
+        rules: [{
+          zone_code: 'RES',
+          planning_zone: 'PZ-A',
+          land_use_family: 'residential',
+          plot_area_min_sqm: 0,
+          road_width_min_m: 9,
+          base_far: 1.5,
+          max_far: 1.75,
+        }],
+      },
+      confidence_scores: { _overall: 0.83, rules: 0.8 },
+    };
+
+    query.mockImplementation((sql) => {
+      if (sql.includes('FROM document_extractions de')) return Promise.resolve({ rows: [row] });
+      if (sql.includes('FROM regulatory_data.evidence_sources')) return Promise.resolve({ rows: [] });
+      if (sql.includes('INSERT INTO regulatory_data.evidence_sources')) return Promise.resolve({ rows: [{ id: 'source-rmp' }] });
+      if (sql.includes('FROM regulatory_data.far_rules')) return Promise.resolve({ rows: [{ id: 'existing-rule' }] });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await service.ingestExtraction('extraction-2b', 'user-1');
+
+    expect(result.skipped).toBe(false);
+    expect(result.far_rules_created).toBe(0);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.far_rules'))).toBe(false);
+  });
+
+  test('creates pending master plan zone candidates only from explicit zone names', async () => {
+    mockQueryForExtraction({
+      id: 'extraction-rmp-zones',
+      document_id: 'document-rmp-zones',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'RMP-Provisional.pdf',
+      document_file_url: 'https://example.com/rmp-provisional.pdf',
+      doc_type: 'rmp_table',
+      extraction_status: 'completed',
+      structured_fields: {
+        city: 'Bengaluru',
+        plan_version: 'RMP 2031 Draft',
+        source_page: 12,
+        planning_districts: [{ pd_code: 'PZ-1', pd_name: 'Planning District 1' }],
+        zones: [
+          { zone_code: 'R1', zone_name: 'Residential Main', planning_district_code: 'PZ-1', source_page: 12 },
+          { zone_code: 'C1', planning_district_code: 'PZ-1', source_page: 13 },
+        ],
+      },
+      confidence_scores: { _overall: 0.82, zones: 0.8 },
+    });
+
+    query.mockImplementation((sql) => {
+      if (sql.includes('FROM document_extractions de')) {
+        return Promise.resolve({ rows: [{
+          id: 'extraction-rmp-zones',
+          document_id: 'document-rmp-zones',
+          organization_id: '11111111-1111-1111-1111-111111111111',
+          document_organization_id: '11111111-1111-1111-1111-111111111111',
+          document_name: 'RMP-Provisional.pdf',
+          document_file_url: 'https://example.com/rmp-provisional.pdf',
+          doc_type: 'rmp_table',
+          extraction_status: 'completed',
+          structured_fields: {
+            city: 'Bengaluru',
+            plan_version: 'RMP 2031 Draft',
+            source_page: 12,
+            planning_districts: [{ pd_code: 'PZ-1', pd_name: 'Planning District 1' }],
+            zones: [
+              { zone_code: 'R1', zone_name: 'Residential Main', planning_district_code: 'PZ-1', source_page: 12 },
+              { zone_code: 'C1', planning_district_code: 'PZ-1', source_page: 13 },
+            ],
+          },
+          confidence_scores: { _overall: 0.82, zones: 0.8 },
+        }] });
+      }
+      if (sql.includes('FROM regulatory_data.evidence_sources')) return Promise.resolve({ rows: [] });
+      if (sql.includes('INSERT INTO regulatory_data.evidence_sources')) return Promise.resolve({ rows: [{ id: 'source-zones' }] });
+      if (sql.includes('INSERT INTO regulatory_data.planning_districts')) return Promise.resolve({ rows: [{ id: 'district-1' }] });
+      if (sql.includes('FROM regulatory_data.master_plan_zones')) return Promise.resolve({ rows: [] });
+      if (sql.includes('INSERT INTO regulatory_data.master_plan_zones')) return Promise.resolve({ rows: [{ id: 'zone-1' }] });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await service.ingestExtraction('extraction-rmp-zones', 'user-1');
+
+    expect(result.skipped).toBe(false);
+    expect(result.zones_created).toBe(1);
+    const zoneInserts = query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO regulatory_data.master_plan_zones'));
+    expect(zoneInserts).toHaveLength(1);
+    expect(zoneInserts[0][0]).toContain("'pending'");
+  });
+
   test('igr_guidance_pdf with structured rows creates one candidate per row', async () => {
     mockQueryForExtraction({
       id: 'extraction-igr-1',

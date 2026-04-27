@@ -33,6 +33,78 @@ export function useMasterPlanDocuments(params = {}) {
   });
 }
 
+export function useUploadMasterPlanDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, city, planName, planVersion, docType }) => {
+      const urlRes = await masterPlanAPI.getDocUploadUrl(file.name, file.size);
+      const { signedUrl, storagePath } = urlRes.data.data;
+
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text().catch(() => '');
+        throw new Error(`Direct upload failed (${uploadRes.status}): ${errText || uploadRes.statusText}`);
+      }
+
+      const confirmRes = await masterPlanAPI.confirmDocUpload({
+        storagePath,
+        originalName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        city,
+        planName,
+        planVersion,
+        docType,
+      });
+
+      return confirmRes.data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['master-plan-docs'] });
+      toast.success('Source document uploaded');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || err.message || 'Upload failed'),
+  });
+}
+
+export function useExtractMasterPlanDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, docType }) =>
+      masterPlanAPI.extractDoc(id, { docType }).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['master-plan-docs'] });
+      qc.invalidateQueries({ queryKey: ['master-plan-zones'] });
+      qc.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
+      qc.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
+      const queued =
+        (data?.document?.evidence_facts_extracted || 0)
+        + (data?.document?.far_rules_extracted || 0)
+        + (data?.document?.guidance_rows_extracted || 0)
+        + (data?.document?.zones_extracted || 0);
+      toast.success(queued > 0 ? `${queued} item${queued === 1 ? '' : 's'} queued for review` : 'Extraction completed');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Extraction failed'),
+  });
+}
+
+export function useOpenMasterPlanDocument() {
+  return useMutation({
+    mutationFn: (id) => masterPlanAPI.downloadDoc(id).then((r) => r.data.data),
+    onSuccess: (data) => {
+      if (data?.url) {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      }
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not open source'),
+  });
+}
+
 export function useCreateZone() {
   const qc = useQueryClient();
   return useMutation({
@@ -70,6 +142,24 @@ export function useReviewZone() {
       toast.success(`Zone ${status}`);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Review failed'),
+  });
+}
+
+export function useAssignZoneToProperty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ zoneId, propertyId, notes }) =>
+      masterPlanAPI.assignZoneToProperty(zoneId, { propertyId, notes }).then((r) => r.data.data),
+    onSuccess: (data, { propertyId }) => {
+      qc.invalidateQueries({ queryKey: ['properties'] });
+      qc.invalidateQueries({ queryKey: ['property', propertyId] });
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-intelligence'] });
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      qc.invalidateQueries({ queryKey: ['deal'] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace'] });
+      toast.success(`Assigned ${data?.zone?.zone_code || 'reviewed zone'}`);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Zone assignment failed'),
   });
 }
 

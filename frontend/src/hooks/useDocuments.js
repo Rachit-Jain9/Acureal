@@ -95,8 +95,8 @@ export function useUploadDocument() {
 export function useExtractDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ documentId }) =>
-      extractionAPI.extract(documentId).then((response) => response.data.data),
+    mutationFn: ({ documentId, docType }) =>
+      extractionAPI.extract(documentId, docType ? { docType } : undefined).then((response) => response.data.data),
     onSuccess: (extraction, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['extractions', dealId] });
       qc.invalidateQueries({ queryKey: ['documents', dealId] });

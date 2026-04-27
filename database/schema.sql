@@ -817,12 +817,22 @@ CREATE TABLE regulatory_data.master_plan_documents (
   city TEXT NOT NULL DEFAULT 'Bengaluru',
   plan_name TEXT NOT NULL,
   plan_version TEXT,
+  file_name TEXT,
+  file_type TEXT,
+  file_size_bytes BIGINT DEFAULT 0,
   file_url TEXT,
   storage_path TEXT,
+  doc_type TEXT,
   deleted_at TIMESTAMPTZ,
   extraction_status TEXT NOT NULL DEFAULT 'pending'
     CHECK (extraction_status IN ('pending','in_progress','completed','failed')),
   zones_extracted INT NOT NULL DEFAULT 0,
+  far_rules_extracted INT NOT NULL DEFAULT 0,
+  guidance_rows_extracted INT NOT NULL DEFAULT 0,
+  evidence_facts_extracted INT NOT NULL DEFAULT 0,
+  extraction_error TEXT,
+  evidence_source_id UUID,
+  extracted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -931,6 +941,12 @@ CREATE TABLE regulatory_data.evidence_sources (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE regulatory_data.master_plan_documents
+  ADD CONSTRAINT master_plan_documents_evidence_source_id_fkey
+  FOREIGN KEY (evidence_source_id)
+  REFERENCES regulatory_data.evidence_sources(id)
+  ON DELETE SET NULL;
 
 CREATE TABLE regulatory_data.evidence_facts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

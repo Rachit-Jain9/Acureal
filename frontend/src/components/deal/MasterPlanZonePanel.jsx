@@ -3,7 +3,7 @@ import { CheckCircle2, Edit3, ExternalLink, Info, Search, Shield, Unlink } from 
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
-import { useZones, useZone } from '../../hooks/useMasterPlan';
+import { useZones, useZone, useAssignZoneToProperty } from '../../hooks/useMasterPlan';
 import { useUpdateProperty } from '../../hooks/useProperties';
 import { SectionHeader, ErrorState } from '../../design-system';
 
@@ -17,6 +17,7 @@ export default function MasterPlanZonePanel({ property }) {
   const [zoneNotesDraft, setZoneNotesDraft] = useState(property?.zone_notes || '');
 
   const updateProp = useUpdateProperty();
+  const assignZoneMutation = useAssignZoneToProperty();
   const { data: zone, isLoading: zoneLoading } = useZone(property?.zone_id);
   const { data: searchResults = [], isLoading: searching } = useZones(
     search.trim().length >= 1
@@ -25,9 +26,10 @@ export default function MasterPlanZonePanel({ property }) {
   );
 
   const assignZone = async (selectedZone) => {
-    await updateProp.mutateAsync({
-      id: property.id,
-      data: { zoneId: selectedZone.id, zoneNotes: zoneNotesDraft || null },
+    await assignZoneMutation.mutateAsync({
+      zoneId: selectedZone.id,
+      propertyId: property.id,
+      notes: zoneNotesDraft || null,
     });
     setShowPicker(false);
     setSearch('');

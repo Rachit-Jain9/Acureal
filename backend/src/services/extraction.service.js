@@ -406,13 +406,41 @@ Return ONLY the JSON. No commentary.`,
 Extract table values exactly as printed. Do not fill blanks and do not invent formulas.
 Return a JSON object with:
 {
+  "city": "Bengaluru",
   "plan_version": "",
   "table_number": "",
   "source_page": null,
   "source_section": "",
+  "planning_districts": [
+    {
+      "pd_code": "",
+      "pd_name": "",
+      "source_page": null,
+      "source_section": ""
+    }
+  ],
+  "zones": [
+    {
+      "zone_code": "",
+      "zone_name": "",
+      "planning_district_code": "",
+      "permissible_fsi_base": null,
+      "permissible_fsi_max": null,
+      "fsi_road_width_rules": [{"road_width_m": null, "fsi": null}],
+      "ground_coverage_pct": null,
+      "building_height_max_m": null,
+      "road_width_min_m": null,
+      "permissible_uses": [],
+      "prohibited_uses": [],
+      "source_page": null,
+      "source_section": "",
+      "notes": ""
+    }
+  ],
   "rules": [
     {
       "zone_code": "",
+      "zone_name": "",
       "planning_zone": "",
       "land_use_family": "",
       "plot_area_min_sqm": null,
@@ -725,6 +753,83 @@ async function updateDocumentDocType(documentId, docType) {
   );
 }
 
+async function extractStoredFileFields({
+  fileUrl,
+  fileName,
+  mimeType,
+  dealId = null,
+  documentId = null,
+  userId = null,
+  options = {},
+} = {}) {
+  if (!fileUrl) {
+    throw new Error('Stored file URL is required for extraction.');
+  }
+
+  const effectiveMime = inferMimeType(fileName, mimeType);
+  const { base64 } = await fetchFileAsBase64(fileUrl);
+
+  const aiAttach = options.attach || {
+    documentId: documentId || null,
+    dealId: dealId || null,
+    userId: userId || null,
+  };
+
+  let docType = normalizeRequestedDocType(options.docType || options.requestedDocType);
+  try {
+    if (!docType) {
+      docType = await classifyDocumentContent(base64, effectiveMime, {
+        fileName,
+        context: options.context,
+        attach: aiAttach,
+      });
+    }
+  } catch {
+    docType = 'other';
+  }
+  docType = normalizeRequestedDocType(docType) || 'other';
+
+  const prompt = buildExtractionPrompt(docType, {
+    fileName,
+    context: options.context,
+  });
+  const rawText = await callGemini(prompt, base64, effectiveMime, aiAttach);
+
+  let structuredFields = null;
+  let parseError = null;
+  try {
+    structuredFields = toPlainObject(parseJsonResponse(rawText));
+  } catch (e) {
+    parseError = `JSON parse failed: ${e.message}`;
+  }
+
+  if (structuredFields) {
+    try {
+      structuredFields = pickBestStructuredFields(
+        structuredFields,
+        toPlainObject(await normalizeStructuredFieldsWithClaude({
+          docType,
+          rawText,
+          structuredFields,
+        }))
+      );
+    } catch (normalizationError) {
+      parseError = parseError
+        ? `${parseError}; Claude normalization skipped: ${normalizationError.message}`
+        : `Claude normalization skipped: ${normalizationError.message}`;
+    }
+  }
+
+  return {
+    docType,
+    rawText,
+    structuredFields,
+    confidenceScores: structuredFields ? computeConfidenceScores(structuredFields) : {},
+    parseError,
+    effectiveMime,
+  };
+}
+
 async function extractDocument(
   documentId,
   fileUrl,
@@ -747,68 +852,21 @@ async function extractDocument(
   const extractionId = extraction.id;
 
   try {
-    const effectiveMime = inferMimeType(fileName, mimeType);
-    const { base64 } = await fetchFileAsBase64(fileUrl);
-
-    // Step 1: classify
-    const aiAttach = {
-      documentId,
-      dealId: dealId || null,
-      userId: userId || null,
-    };
-
-    let docType = normalizeRequestedDocType(options.docType || options.requestedDocType);
-    try {
-      if (!docType) {
-        docType = await classifyDocumentContent(base64, effectiveMime, {
-          fileName,
-          context: options.context,
-          attach: aiAttach,
-        });
-      }
-    } catch {
-      docType = 'other';
-    }
-    docType = normalizeRequestedDocType(docType) || 'other';
-
-    // Step 2: extract using typed prompt
-    const prompt = buildExtractionPrompt(docType, {
+    const {
+      docType,
+      rawText,
+      structuredFields,
+      confidenceScores,
+      parseError,
+    } = await extractStoredFileFields({
+      fileUrl,
       fileName,
-      context: options.context,
+      mimeType,
+      dealId,
+      documentId,
+      userId,
+      options,
     });
-    const rawText = await callGemini(prompt, base64, effectiveMime, {
-      ...aiAttach,
-      // metadata gets surfaced in ai_call_logs.metadata for downstream cost
-      // attribution and lineage queries.
-    });
-
-    // Step 3: parse structured output
-    let structuredFields = null;
-    let parseError = null;
-    try {
-      structuredFields = toPlainObject(parseJsonResponse(rawText));
-    } catch (e) {
-      parseError = `JSON parse failed: ${e.message}`;
-    }
-
-    if (structuredFields) {
-      try {
-        structuredFields = pickBestStructuredFields(
-          structuredFields,
-          toPlainObject(await normalizeStructuredFieldsWithClaude({
-            docType,
-            rawText,
-            structuredFields,
-          }))
-        );
-      } catch (normalizationError) {
-        parseError = parseError
-          ? `${parseError}; Claude normalization skipped: ${normalizationError.message}`
-          : `Claude normalization skipped: ${normalizationError.message}`;
-      }
-    }
-
-    const confidenceScores = structuredFields ? computeConfidenceScores(structuredFields) : {};
 
     // Step 4: persist result
     const updateResult = await query(
@@ -1102,6 +1160,7 @@ async function applyCorrections(extractionId, corrections, userId) {
 module.exports = {
   classifyDocument,
   extractDocument,
+  extractStoredFileFields,
   getExtractionByDocument,
   getDealExtractions,
   applyCorrections,

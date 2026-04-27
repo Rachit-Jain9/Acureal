@@ -115,4 +115,70 @@ router.get('/documents', authenticate, async (req, res, next) => {
   }
 });
 
+// POST /api/master-plan/documents/upload-url
+router.post('/documents/upload-url', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const { fileName, fileSize } = req.body || {};
+    const data = await masterplanService.getSourceDocumentUploadUrl({
+      fileName,
+      fileSize,
+      organizationId: req.user.organization_id,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/master-plan/documents/confirm-upload
+router.post('/documents/confirm-upload', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const doc = await masterplanService.confirmSourceDocumentUpload({
+      ...(req.body || {}),
+      organizationId: req.user.organization_id,
+    });
+    res.status(201).json({ success: true, data: doc });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/master-plan/documents/:id/download
+router.get('/documents/:id/download', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getSourceDocumentDownload(req.params.id);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/master-plan/documents/:id/extract
+router.post('/documents/:id/extract', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const data = await masterplanService.extractSourceDocument(req.params.id, {
+      docType: req.body?.docType,
+      userId: req.user.id,
+    });
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/master-plan/zones/:id/assign-property
+router.post('/zones/:id/assign-property', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const data = await masterplanService.assignReviewedZoneToProperty({
+      zoneId: req.params.id,
+      propertyId: req.body?.propertyId,
+      notes: req.body?.notes,
+      userId: req.user.id,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

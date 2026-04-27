@@ -105,26 +105,47 @@ const loadExtraction = async (extractionId) => {
 
 const findOrCreateSource = async ({ row, fields, scores, userId }) => {
   const orgId = row.organization_id || row.document_organization_id || null;
-  const existing = await query(
-    `SELECT id
-     FROM regulatory_data.evidence_sources
-     WHERE document_id = $1
-       AND (
-         ($2::uuid IS NULL AND org_id IS NULL)
-         OR org_id = $2::uuid
-       )
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [row.document_id, orgId]
-  );
+  let existing;
+  if (row.document_id) {
+    existing = await query(
+      `SELECT id
+       FROM regulatory_data.evidence_sources
+       WHERE document_id = $1
+         AND (
+           ($2::uuid IS NULL AND org_id IS NULL)
+           OR org_id = $2::uuid
+         )
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [row.document_id, orgId]
+    );
+  } else {
+    existing = await query(
+      `SELECT id
+       FROM regulatory_data.evidence_sources
+       WHERE document_id IS NULL
+         AND source_title = $1
+         AND COALESCE(storage_path, '') = COALESCE($2, '')
+         AND (
+           ($3::uuid IS NULL AND org_id IS NULL)
+           OR org_id = $3::uuid
+         )
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [sourceTitleFor(row), row.storage_path || row.document_file_url || null, orgId]
+    );
+  }
 
   const extractionStatus = row.extraction_status === 'failed' ? 'failed' : 'completed';
   const params = [
     orgId,
-    row.document_id,
+    row.document_id || null,
+    row.source_kind || 'user_upload',
     textOrNull(fields.issuing_authority) || textOrNull(fields.authority_name),
     sourceTitleFor(row),
+    row.source_url || null,
     row.document_file_url || null,
+    row.storage_path || null,
     textOrNull(fields.city) || textOrNull(fields.district),
     textOrNull(fields.plan_version),
     dateOrNull(fields.effective_from),
@@ -138,21 +159,24 @@ const findOrCreateSource = async ({ row, fields, scores, userId }) => {
     const updated = await query(
       `UPDATE regulatory_data.evidence_sources
        SET authority_name = COALESCE($1, authority_name),
-           source_title = $2,
-           file_url = COALESCE($3, file_url),
-           city = COALESCE($4, city),
-           plan_version = COALESCE($5, plan_version),
-           effective_from = COALESCE($6, effective_from),
-           effective_to = COALESCE($7, effective_to),
-           extraction_status = $8,
-           confidence_score = COALESCE($9, confidence_score),
+           source_kind = COALESCE($2, source_kind),
+           source_title = $3,
+           source_url = COALESCE($4, source_url),
+           file_url = COALESCE($5, file_url),
+           storage_path = COALESCE($6, storage_path),
+           city = COALESCE($7, city),
+           plan_version = COALESCE($8, plan_version),
+           effective_from = COALESCE($9, effective_from),
+           effective_to = COALESCE($10, effective_to),
+           extraction_status = $11,
+           confidence_score = COALESCE($12, confidence_score),
            notes = 'Auto-created from document extraction; human approval required before use.',
            updated_at = NOW()
-       WHERE id = $10
+       WHERE id = $13
        RETURNING id`,
       [
-        params[2],
         params[3],
+        params[2],
         params[4],
         params[5],
         params[6],
@@ -160,6 +184,9 @@ const findOrCreateSource = async ({ row, fields, scores, userId }) => {
         params[8],
         params[9],
         params[10],
+        params[11],
+        params[12],
+        params[13],
         existing.rows[0].id,
       ]
     );
@@ -173,7 +200,9 @@ const findOrCreateSource = async ({ row, fields, scores, userId }) => {
        source_kind,
        authority_name,
        source_title,
+       source_url,
        file_url,
+       storage_path,
        city,
        plan_version,
        effective_from,
@@ -188,7 +217,6 @@ const findOrCreateSource = async ({ row, fields, scores, userId }) => {
      VALUES (
        COALESCE($1::uuid, current_organization_id()),
        $2,
-       'user_upload',
        $3,
        $4,
        $5,
@@ -197,11 +225,14 @@ const findOrCreateSource = async ({ row, fields, scores, userId }) => {
        $8,
        $9,
        $10,
-       'pending',
        $11,
+       $12,
+       $13,
+       'pending',
+       $14,
        '{}'::jsonb,
        'Auto-created from document extraction; human approval required before use.',
-       $12
+       $15
      )
      RETURNING id`,
     params
@@ -639,25 +670,216 @@ const insertFarRuleCandidates = async ({ sourceId, orgId, fields, scores }) => {
   return created;
 };
 
-async function ingestExtraction(extractionId, userId = null) {
-  const row = await loadExtraction(extractionId);
-  if (!row) {
-    return { skipped: true, reason: 'extraction_not_found' };
+const normalizedZonesFrom = (fields) => {
+  if (Array.isArray(fields.zones)) return fields.zones;
+  if (
+    hasValue(fields.zone_code)
+    && (hasValue(fields.zone_name) || hasValue(fields.zoning_classification))
+  ) {
+    return [fields];
+  }
+  return [];
+};
+
+const upsertPlanningDistrict = async ({ city, district }) => {
+  const code = textOrNull(district?.pd_code || district?.planning_district_code || district?.code);
+  if (!code) return null;
+
+  const result = await query(
+    `INSERT INTO regulatory_data.planning_districts (pd_code, pd_name, city)
+     VALUES ($1, $2, COALESCE($3, 'Bengaluru'))
+     ON CONFLICT (pd_code) DO UPDATE
+       SET pd_name = COALESCE(EXCLUDED.pd_name, regulatory_data.planning_districts.pd_name),
+           city = COALESCE(EXCLUDED.city, regulatory_data.planning_districts.city)
+     RETURNING id`,
+    [
+      code,
+      textOrNull(district?.pd_name || district?.planning_district_name || district?.name),
+      city,
+    ],
+  );
+
+  return result.rows[0]?.id || null;
+};
+
+const buildPlanningDistrictMap = async ({ fields, city }) => {
+  const map = new Map();
+  const districts = Array.isArray(fields.planning_districts) ? fields.planning_districts : [];
+
+  for (const district of districts) {
+    const code = textOrNull(district?.pd_code || district?.planning_district_code || district?.code);
+    if (!code) continue;
+    const id = await upsertPlanningDistrict({ city, district });
+    if (id) map.set(code, id);
   }
 
-  const docType = row.doc_type;
+  return map;
+};
+
+const insertMasterPlanZoneCandidates = async ({
+  sourceId,
+  orgId,
+  fields,
+  scores,
+  masterPlanDocumentId = null,
+}) => {
+  const zones = normalizedZonesFrom(fields);
+  if (!zones.length) return 0;
+
+  const city = textOrNull(fields.city) || textOrNull(fields.district) || 'Bengaluru';
+  const planVersion = textOrNull(fields.plan_version);
+  const pdMap = await buildPlanningDistrictMap({ fields, city });
+  let created = 0;
+
+  for (const zone of zones) {
+    const zoneCode = textOrNull(zone.zone_code || zone.code);
+    const zoneName = textOrNull(zone.zone_name || zone.name || zone.zoning_classification);
+    if (!zoneCode || !zoneName) continue;
+
+    const pdCode = textOrNull(
+      zone.planning_district_code
+        || zone.pd_code
+        || fields.planning_district_code
+        || fields.pd_code,
+    );
+    let planningDistrictId = pdCode ? pdMap.get(pdCode) : null;
+    if (!planningDistrictId && pdCode) {
+      planningDistrictId = await upsertPlanningDistrict({
+        city,
+        district: {
+          pd_code: pdCode,
+          pd_name: zone.planning_district_name || fields.planning_district_name,
+        },
+      });
+    }
+
+    const sourceSection = textOrNull(zone.source_section)
+      || textOrNull(fields.source_section)
+      || textOrNull(fields.table_number);
+
+    const duplicate = await query(
+      `SELECT id
+       FROM regulatory_data.master_plan_zones
+       WHERE document_id IS NOT DISTINCT FROM $1::uuid
+         AND zone_code = $2
+         AND plan_version IS NOT DISTINCT FROM $3
+         AND planning_district_id IS NOT DISTINCT FROM $4::uuid
+       LIMIT 1`,
+      [
+        masterPlanDocumentId,
+        zoneCode.toUpperCase(),
+        textOrNull(zone.plan_version) || planVersion,
+        planningDistrictId,
+      ],
+    );
+
+    if (duplicate.rows[0]) continue;
+
+    const inserted = await query(
+      `INSERT INTO regulatory_data.master_plan_zones (
+         document_id,
+         planning_district_id,
+         city,
+         plan_version,
+         zone_code,
+         zone_name,
+         permissible_fsi_base,
+         permissible_fsi_max,
+         fsi_road_width_rules,
+         ground_coverage_pct,
+         building_height_max_m,
+         road_width_min_m,
+         setback_rules,
+         permissible_uses,
+         prohibited_uses,
+         notes,
+         source_page,
+         source_section,
+         confidence_score,
+         review_status
+       )
+       VALUES (
+         $1::uuid,
+         $2::uuid,
+         COALESCE($3, 'Bengaluru'),
+         $4,
+         $5,
+         $6,
+         $7,
+         $8,
+         $9::jsonb,
+         $10,
+         $11,
+         $12,
+         $13::jsonb,
+         $14,
+         $15,
+         $16,
+         $17,
+         $18,
+         $19,
+         'pending'
+       )
+       ON CONFLICT (zone_code, plan_version, planning_district_id) DO NOTHING
+       RETURNING id`,
+      [
+        masterPlanDocumentId,
+        planningDistrictId,
+        textOrNull(zone.city) || city,
+        textOrNull(zone.plan_version) || planVersion,
+        zoneCode.toUpperCase(),
+        zoneName,
+        numberOrNull(zone.permissible_fsi_base || zone.base_fsi || zone.base_far),
+        numberOrNull(zone.permissible_fsi_max || zone.max_fsi || zone.max_far),
+        JSON.stringify(Array.isArray(zone.fsi_road_width_rules) ? zone.fsi_road_width_rules : []),
+        numberOrNull(zone.ground_coverage_pct),
+        numberOrNull(zone.building_height_max_m),
+        numberOrNull(zone.road_width_min_m),
+        JSON.stringify(isObject(zone.setback_rules) ? zone.setback_rules : {}),
+        Array.isArray(zone.permissible_uses) ? zone.permissible_uses.map(String) : [],
+        Array.isArray(zone.prohibited_uses) ? zone.prohibited_uses.map(String) : [],
+        textOrNull(zone.notes)
+          || `Proposed from source ${sourceId}; human approval required before use.`,
+        pageOrNull(zone.source_page) || pageOrNull(fields.source_page),
+        sourceSection,
+        confidenceFor(scores, 'zones', confidenceFor(scores, '_overall')),
+      ],
+    );
+    if (inserted.rows[0]) created += 1;
+  }
+
+  return created;
+};
+
+async function ingestRegulatoryFields({
+  docType,
+  fields,
+  scores = {},
+  source = {},
+  userId = null,
+} = {}) {
   if (!REGULATORY_DOC_TYPES.has(docType)) {
     return { skipped: true, reason: 'unsupported_doc_type', doc_type: docType || null };
   }
 
-  const baseFields = parseJsonField(row.structured_fields);
-  const corrections = parseJsonField(row.human_corrections);
-  const fields = mergeStructuredFields(baseFields, corrections);
   if (!hasValue(fields)) {
     return { skipped: true, reason: 'no_structured_fields', doc_type: docType };
   }
 
-  const scores = parseJsonField(row.confidence_scores);
+  const row = {
+    id: source.extraction_id || null,
+    doc_type: docType,
+    extraction_status: source.extraction_status || 'completed',
+    organization_id: source.org_id || source.organization_id || null,
+    document_organization_id: source.org_id || source.document_organization_id || null,
+    document_id: source.document_id || null,
+    document_name: source.document_name || source.source_title || source.file_name,
+    document_file_url: source.file_url || null,
+    storage_path: source.storage_path || null,
+    source_url: source.source_url || null,
+    source_kind: source.source_kind || 'user_upload',
+  };
+
   const orgId = row.organization_id || row.document_organization_id || null;
   const sourceId = await findOrCreateSource({ row, fields, scores, userId });
   const facts = buildEvidenceFacts({ docType, fields, scores });
@@ -680,17 +902,57 @@ async function ingestExtraction(extractionId, userId = null) {
     ? await insertFarRuleCandidates({ sourceId, orgId, fields, scores })
     : 0;
 
+  const zonesCreated = docType === 'rmp_table' || docType === 'zoning_certificate'
+    ? await insertMasterPlanZoneCandidates({
+      sourceId,
+      orgId,
+      fields,
+      scores,
+      masterPlanDocumentId: source.master_plan_document_id || null,
+    })
+    : 0;
+
   return {
     skipped: false,
     source_id: sourceId,
     evidence_facts_created: evidenceFactsCreated,
     guidance_values_created: guidanceValuesCreated,
     far_rules_created: farRulesCreated,
+    zones_created: zonesCreated,
   };
+}
+
+async function ingestExtraction(extractionId, userId = null) {
+  const row = await loadExtraction(extractionId);
+  if (!row) {
+    return { skipped: true, reason: 'extraction_not_found' };
+  }
+
+  const docType = row.doc_type;
+  if (!REGULATORY_DOC_TYPES.has(docType)) {
+    return { skipped: true, reason: 'unsupported_doc_type', doc_type: docType || null };
+  }
+
+  const baseFields = parseJsonField(row.structured_fields);
+  const corrections = parseJsonField(row.human_corrections);
+  const fields = mergeStructuredFields(baseFields, corrections);
+  if (!hasValue(fields)) {
+    return { skipped: true, reason: 'no_structured_fields', doc_type: docType };
+  }
+
+  const scores = parseJsonField(row.confidence_scores);
+  return ingestRegulatoryFields({
+    docType,
+    fields,
+    scores,
+    source: row,
+    userId,
+  });
 }
 
 module.exports = {
   REGULATORY_DOC_TYPES,
   buildEvidenceFacts,
+  ingestRegulatoryFields,
   ingestExtraction,
 };

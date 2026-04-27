@@ -1,7 +1,21 @@
 'use strict';
 
+const path = require('path');
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
+const { createUploadUrl, getDownloadUrl } = require('../config/storage');
+const extractionService = require('./extraction.service');
+const evidenceIngestionService = require('./evidenceIngestion.service');
+
+const ALLOWED_SOURCE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
+const EXTRACTABLE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
+const MAX_SOURCE_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
+const MASTERPLAN_DOC_TYPES = new Set([
+  'rmp_table',
+  'igr_guidance_pdf',
+  'guidance_value_report',
+  'zoning_certificate',
+]);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Rules engine
@@ -13,6 +27,36 @@ const toNumber = (value) => {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+};
+
+const textOrNull = (value) => {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+};
+
+const normalizeDocType = (value) => {
+  const normalized = textOrNull(value);
+  return normalized && MASTERPLAN_DOC_TYPES.has(normalized) ? normalized : null;
+};
+
+const sourceFileExt = (fileName = '') => path.extname(String(fileName)).toLowerCase();
+
+const assertSourceFileAllowed = (fileName, fileSize = 0) => {
+  const ext = sourceFileExt(fileName);
+  if (!ALLOWED_SOURCE_EXTENSIONS.has(ext)) {
+    throw createError(`File type ${ext || 'unknown'} is not supported for regulatory extraction. Upload PDF or image source files.`, 400);
+  }
+
+  if (Number(fileSize) > MAX_SOURCE_FILE_SIZE) {
+    throw createError(`File too large. Maximum allowed size is ${MAX_SOURCE_FILE_SIZE / (1024 * 1024)} MB.`, 413);
+  }
+};
+
+const isExtractableSource = (doc) => {
+  const ext = sourceFileExt(doc.file_name || doc.plan_name || '');
+  const mime = String(doc.file_type || '').toLowerCase();
+  return EXTRACTABLE_EXTENSIONS.has(ext) || mime.includes('pdf') || mime.startsWith('image/');
 };
 
 function calculateEffectiveFSI(zone, roadWidthM) {
@@ -418,13 +462,325 @@ async function listDocuments({ city } = {}) {
   }
 
   const result = await query(
-    `SELECT id, city, plan_name, plan_version, extraction_status, zones_extracted, created_at
+    `SELECT id,
+            city,
+            plan_name,
+            plan_version,
+            file_name,
+            file_type,
+            file_size_bytes,
+            file_url,
+            storage_path,
+            doc_type,
+            extraction_status,
+            zones_extracted,
+            far_rules_extracted,
+            guidance_rows_extracted,
+            evidence_facts_extracted,
+            extraction_error,
+            evidence_source_id,
+            extracted_at,
+            created_at
      FROM regulatory_data.master_plan_documents
      WHERE ${conditions.join(' AND ')}
      ORDER BY created_at DESC`,
     values,
   );
   return result.rows;
+}
+
+async function getSourceDocumentUploadUrl({ fileName, fileSize = 0, organizationId }) {
+  if (!organizationId) {
+    throw createError('Active organization is required for masterplan source uploads.', 400);
+  }
+  if (!fileName) {
+    throw createError('fileName is required.', 400);
+  }
+
+  assertSourceFileAllowed(fileName, fileSize);
+
+  try {
+    const result = await createUploadUrl(fileName, 'master-plan', organizationId);
+    return {
+      signedUrl: result.signedUrl,
+      storagePath: result.path,
+      token: result.token,
+    };
+  } catch (error) {
+    throw createError(`Could not create upload URL: ${error.message}`, 500);
+  }
+}
+
+async function confirmSourceDocumentUpload({
+  storagePath,
+  originalName,
+  fileType,
+  fileSize = 0,
+  city = 'Bengaluru',
+  planName,
+  planVersion,
+  docType,
+  organizationId,
+}) {
+  if (!organizationId) {
+    throw createError('Active organization is required for masterplan source uploads.', 400);
+  }
+  if (!storagePath) {
+    throw createError('Storage path is required.', 400);
+  }
+  assertSourceFileAllowed(originalName || planName || storagePath, fileSize);
+
+  const resolvedPlanName = textOrNull(planName) || textOrNull(originalName) || 'Masterplan source document';
+  const result = await query(
+    `INSERT INTO regulatory_data.master_plan_documents (
+       org_id,
+       city,
+       plan_name,
+       plan_version,
+       file_name,
+       file_type,
+       file_size_bytes,
+       file_url,
+       storage_path,
+       doc_type,
+       extraction_status
+     )
+     VALUES (
+       $1::uuid,
+       COALESCE($2, 'Bengaluru'),
+       $3,
+       $4,
+       $5,
+       $6,
+       $7,
+       $8,
+       $8,
+       $9,
+       'pending'
+     )
+     RETURNING *`,
+    [
+      organizationId,
+      textOrNull(city) || 'Bengaluru',
+      resolvedPlanName,
+      textOrNull(planVersion),
+      textOrNull(originalName) || resolvedPlanName,
+      textOrNull(fileType) || sourceFileExt(originalName || '').slice(1) || null,
+      Number(fileSize) || 0,
+      storagePath,
+      normalizeDocType(docType),
+    ],
+  );
+
+  return result.rows[0];
+}
+
+async function getSourceDocumentById(id) {
+  const result = await query(
+    `SELECT *
+     FROM regulatory_data.master_plan_documents
+     WHERE id = $1::uuid
+       AND deleted_at IS NULL
+       AND (org_id IS NULL OR org_id = current_organization_id())`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+async function getSourceDocumentDownload(id) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+  const fileRef = doc.file_url || doc.storage_path;
+  if (!fileRef) throw createError('Source document has no stored file reference.', 400);
+
+  return {
+    url: await getDownloadUrl(fileRef, 3600),
+    expires_in: 3600,
+    document: doc,
+  };
+}
+
+async function extractSourceDocument(id, { docType, userId } = {}) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+  if (!isExtractableSource(doc)) {
+    throw createError('Only PDF and image source documents can be extracted in this intake flow.', 400);
+  }
+
+  await query(
+    `UPDATE regulatory_data.master_plan_documents
+     SET extraction_status = 'in_progress',
+         extraction_error = NULL
+     WHERE id = $1::uuid`,
+    [id],
+  );
+
+  try {
+    const requestedDocType = normalizeDocType(docType) || normalizeDocType(doc.doc_type);
+    const extraction = await extractionService.extractStoredFileFields({
+      fileUrl: doc.file_url || doc.storage_path,
+      fileName: doc.file_name || doc.plan_name,
+      mimeType: doc.file_type,
+      userId,
+      options: {
+        docType: requestedDocType,
+        context: {
+          city: doc.city,
+          plan_name: doc.plan_name,
+          plan_version: doc.plan_version,
+        },
+        attach: {
+          masterPlanDocumentId: doc.id,
+          userId: userId || null,
+        },
+      },
+    });
+
+    const ingestion = await evidenceIngestionService.ingestRegulatoryFields({
+      docType: extraction.docType,
+      fields: extraction.structuredFields || {},
+      scores: extraction.confidenceScores || {},
+      source: {
+        master_plan_document_id: doc.id,
+        org_id: doc.org_id,
+        source_kind: 'official_pdf',
+        source_title: doc.plan_name,
+        document_name: doc.plan_name,
+        file_name: doc.file_name,
+        file_url: doc.file_url || doc.storage_path,
+        storage_path: doc.storage_path,
+        extraction_status: extraction.structuredFields ? 'completed' : 'failed',
+      },
+      userId,
+    });
+
+    const completed = Boolean(extraction.structuredFields);
+    const updated = await query(
+      `UPDATE regulatory_data.master_plan_documents
+       SET extraction_status = $1,
+           doc_type = $2,
+           zones_extracted = $3,
+           far_rules_extracted = $4,
+           guidance_rows_extracted = $5,
+           evidence_facts_extracted = $6,
+           evidence_source_id = $7::uuid,
+           extraction_error = $8,
+           extracted_at = NOW()
+       WHERE id = $9::uuid
+       RETURNING *`,
+      [
+        completed ? 'completed' : 'failed',
+        extraction.docType,
+        ingestion.skipped ? 0 : Number(ingestion.zones_created || 0),
+        ingestion.skipped ? 0 : Number(ingestion.far_rules_created || 0),
+        ingestion.skipped ? 0 : Number(ingestion.guidance_values_created || 0),
+        ingestion.skipped ? 0 : Number(ingestion.evidence_facts_created || 0),
+        ingestion.skipped ? null : ingestion.source_id,
+        extraction.parseError || (ingestion.skipped ? ingestion.reason : null),
+        id,
+      ],
+    );
+
+    return {
+      document: updated.rows[0],
+      extraction: {
+        doc_type: extraction.docType,
+        status: completed ? 'completed' : 'failed',
+        error_message: extraction.parseError || null,
+      },
+      ingestion,
+    };
+  } catch (error) {
+    await query(
+      `UPDATE regulatory_data.master_plan_documents
+       SET extraction_status = 'failed',
+           extraction_error = $1
+       WHERE id = $2::uuid`,
+      [error.message, id],
+    );
+    throw error;
+  }
+}
+
+async function assignReviewedZoneToProperty({ zoneId, propertyId, userId, notes }) {
+  const zone = await getZoneById(zoneId);
+  if (!zone) throw createError('Zone not found.', 404);
+  if (zone.review_status !== 'approved') {
+    throw createError('Only approved master plan zones can be assigned to a property.', 409);
+  }
+
+  const propertyResult = await query(
+    `SELECT p.id,
+            p.name,
+            p.address,
+            p.zone_id,
+            d.id AS deal_id
+     FROM properties p
+     LEFT JOIN deals d
+       ON d.property_id = p.id
+      AND d.organization_id = current_organization_id()
+      AND d.is_archived = FALSE
+      AND d.stage <> 'dead'
+     WHERE p.id = $1::uuid
+       AND p.organization_id = current_organization_id()
+     ORDER BY d.updated_at DESC NULLS LAST
+     LIMIT 1`,
+    [propertyId],
+  );
+
+  const property = propertyResult.rows[0];
+  if (!property) throw createError('Property not found.', 404);
+
+  const updated = await query(
+    `UPDATE properties
+     SET zone_id = $1::uuid,
+         zone_assigned_by = $2::uuid,
+         zone_assigned_at = NOW(),
+         zone_notes = $3,
+         updated_at = NOW()
+     WHERE id = $4::uuid
+       AND organization_id = current_organization_id()
+     RETURNING *`,
+    [
+      zone.id,
+      userId || null,
+      textOrNull(notes) || `Assigned approved ${zone.zone_code} zone from ${zone.plan_version || 'master plan source'}.`,
+      property.id,
+    ],
+  );
+
+  let activityId = null;
+  if (property.deal_id) {
+    const activity = await query(
+      `INSERT INTO activities (
+         deal_id,
+         activity_type,
+         description,
+         performed_by,
+         activity_date,
+         is_important,
+         status,
+         priority,
+         completed_at,
+         completed_by
+       )
+       VALUES ($1, 'note', $2, $3, NOW(), TRUE, 'completed', 'medium', NOW(), $3)
+       RETURNING id`,
+      [
+        property.deal_id,
+        `Assigned reviewed master plan zone ${zone.zone_code} (${zone.zone_name}) to property.`,
+        userId || null,
+      ],
+    );
+    activityId = activity.rows[0]?.id || null;
+    await query('UPDATE deals SET updated_at = NOW() WHERE id = $1', [property.deal_id]);
+  }
+
+  return {
+    property: updated.rows[0],
+    zone,
+    activity_id: activityId,
+  };
 }
 
 async function getZoneVersions(zoneId) {
@@ -447,5 +803,10 @@ module.exports = {
   updateZone,
   reviewZone,
   listDocuments,
+  getSourceDocumentUploadUrl,
+  confirmSourceDocumentUpload,
+  getSourceDocumentDownload,
+  extractSourceDocument,
+  assignReviewedZoneToProperty,
   getZoneVersions,
 };

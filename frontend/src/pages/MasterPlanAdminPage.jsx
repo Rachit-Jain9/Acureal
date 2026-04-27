@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Plus, X, Search, Shield, CheckCircle2, XCircle, Clock, Edit3,
-  FileText, AlertTriangle,
+  FileText, AlertTriangle, Upload, FileSearch, ExternalLink, Loader2, RefreshCw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import useAuthStore from '../store/authStore';
@@ -14,6 +15,9 @@ import {
   useCreateZone,
   useUpdateZone,
   useReviewZone,
+  useUploadMasterPlanDocument,
+  useExtractMasterPlanDocument,
+  useOpenMasterPlanDocument,
 } from '../hooks/useMasterPlan';
 
 const EDITOR_ROLES = ['admin', 'owner', 'editor', 'analyst'];
@@ -39,6 +43,43 @@ const EMPTY_ZONE = {
   effective_to: '',
   review_status: 'pending',
 };
+
+const SOURCE_DOC_TYPES = [
+  { value: 'rmp_table', label: 'RMP / FAR table' },
+  { value: 'igr_guidance_pdf', label: 'IGR guidance PDF' },
+  { value: 'guidance_value_report', label: 'Guidance report' },
+  { value: 'zoning_certificate', label: 'Zoning certificate' },
+];
+
+const DOC_STATUS_META = {
+  pending: { label: 'pending', color: 'bg-slate-100 text-slate-700', icon: Clock },
+  in_progress: { label: 'extracting', color: 'bg-blue-100 text-blue-700', icon: Loader2 },
+  completed: { label: 'queued for review', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
+  failed: { label: 'failed', color: 'bg-red-100 text-red-700', icon: XCircle },
+};
+
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '-';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDocType(docType) {
+  return SOURCE_DOC_TYPES.find((item) => item.value === docType)?.label || (docType ? docType.replace(/_/g, ' ') : 'Auto-classify');
+}
+
+function SourceStatusBadge({ status }) {
+  const cfg = DOC_STATUS_META[status] || DOC_STATUS_META.pending;
+  const Icon = cfg.icon;
+  const spinning = status === 'in_progress';
+  return (
+    <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.color)}>
+      <Icon size={11} className={spinning ? 'animate-spin' : ''} /> {cfg.label}
+    </span>
+  );
+}
 
 function StatusBadge({ status }) {
   const cfg = {
@@ -451,36 +492,234 @@ function ZoneLibrary({ canEdit }) {
   );
 }
 
-function DocumentsPanel() {
-  const { data: docs = [], isLoading } = useMasterPlanDocuments();
+function DocumentsPanel({ canEdit }) {
+  const { data: docs = [], isLoading, isError, refetch } = useMasterPlanDocuments();
+  const uploadMut = useUploadMasterPlanDocument();
+  const extractMut = useExtractMasterPlanDocument();
+  const openMut = useOpenMasterPlanDocument();
+
+  const [file, setFile] = useState(null);
+  const [form, setForm] = useState({
+    city: 'Bengaluru',
+    planName: '',
+    planVersion: 'RMP 2031 Draft',
+    docType: 'rmp_table',
+  });
+  const [extractingId, setExtractingId] = useState(null);
+  const [fileError, setFileError] = useState('');
+
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleFile = (event) => {
+    const selected = event.target.files?.[0] || null;
+    setFileError('');
+    setFile(selected);
+    if (!selected) return;
+    const lower = selected.name.toLowerCase();
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'].some((ext) => lower.endsWith(ext));
+    if (!allowed) {
+      setFileError('Upload a PDF or image source file.');
+      setFile(null);
+      return;
+    }
+    if (!form.planName.trim()) {
+      set('planName', selected.name.replace(/\.[^.]+$/, ''));
+    }
+  };
+
+  const handleUpload = async (event) => {
+    event.preventDefault();
+    if (!file) {
+      setFileError('Select a source file first.');
+      return;
+    }
+    await uploadMut.mutateAsync({
+      file,
+      city: form.city,
+      planName: form.planName.trim() || file.name,
+      planVersion: form.planVersion.trim() || null,
+      docType: form.docType,
+    });
+    setFile(null);
+  };
+
+  const handleExtract = async (doc) => {
+    setExtractingId(doc.id);
+    try {
+      await extractMut.mutateAsync({ id: doc.id, docType: doc.doc_type || form.docType });
+    } finally {
+      setExtractingId(null);
+    }
+  };
+
   if (isLoading) return <div className="py-12 flex justify-center"><LoadingSpinner /></div>;
-  if (docs.length === 0) {
+
+  if (isError) {
     return (
-      <EmptyState
-        icon={FileText}
-        title="No master plan documents yet"
-        description="PDF upload and automated extraction ship in a future phase. Zones are curated manually for now — use the Zone Library tab to add them from the RMP 2031 PDF."
-      />
+      <div className="card-editorial text-center py-12">
+        <AlertTriangle size={28} className="text-red-400 mx-auto mb-2" />
+        <p className="text-sm text-red-600 mb-3">Failed to load source documents.</p>
+        <button onClick={refetch} className="btn btn-secondary text-sm inline-flex items-center gap-1.5">
+          <RefreshCw size={14} /> Retry
+        </button>
+      </div>
     );
   }
+
   return (
-    <div className="space-y-2">
-      {docs.map((d) => (
-        <div key={d.id} className="card-editorial flex items-center justify-between">
-          <div>
-            <div className="font-semibold text-content-primary">{d.plan_name}</div>
-            <div className="text-xs text-content-secondary">
-              {d.city} • {d.plan_version || '—'} • {d.extraction_status}
-              {d.zones_extracted ? ` • ${d.zones_extracted} zones extracted` : ''}
+    <div className="space-y-5">
+      {canEdit && (
+        <form onSubmit={handleUpload} className="card-editorial border-hairline-strong bg-bg-elevated">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-content-primary">Source document intake</h3>
+              <p className="mt-0.5 text-xs text-content-secondary">
+                Upload official Masterplan, RMP, FAR, zoning, or guidance source files for review-backed extraction.
+              </p>
+            </div>
+            <SourceStatusBadge status="pending" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">City</label>
+              <input className="input text-sm" value={form.city} onChange={(e) => set('city', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Plan version</label>
+              <input className="input text-sm" value={form.planVersion} onChange={(e) => set('planVersion', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Document type</label>
+              <select className="input text-sm" value={form.docType} onChange={(e) => set('docType', e.target.value)}>
+                {SOURCE_DOC_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Source file</label>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff"
+                onChange={handleFile}
+                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
+              />
             </div>
           </div>
-          {d.file_url && (
-            <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs text-primary-600 hover:underline">
-              Open
-            </a>
-          )}
+
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-content-secondary mb-1">Source title</label>
+            <input
+              className="input text-sm"
+              value={form.planName}
+              onChange={(e) => set('planName', e.target.value)}
+              placeholder="Volume-6 Zoning Regulations"
+            />
+            {fileError && <p className="mt-1 text-xs text-red-600">{fileError}</p>}
+            {file && !fileError && (
+              <p className="mt-1 text-xs text-content-muted">{file.name} | {formatBytes(file.size)}</p>
+            )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-hairline pt-3">
+            <Link to="/dashboard/settings/parcel-intelligence" className="text-xs font-medium text-primary-600 hover:underline">
+              Review queue
+            </Link>
+            <button
+              type="submit"
+              disabled={uploadMut.isPending || !file}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
+            >
+              {uploadMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {uploadMut.isPending ? 'Uploading...' : 'Upload source'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {docs.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="No master plan source documents"
+          description="Upload reviewed source material to extract candidate zones, FAR rules, planning districts, and guidance values into the review queue."
+        />
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-hairline bg-bg-elevated">
+          <div className="hidden border-b border-hairline-strong px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-content-secondary md:grid md:grid-cols-[minmax(260px,1.4fr),minmax(160px,0.9fr),minmax(180px,0.9fr),minmax(150px,0.7fr)] md:gap-3">
+            <div>Source</div>
+            <div>Extraction</div>
+            <div>Review candidates</div>
+            <div className="text-right">Actions</div>
+          </div>
+          <div className="divide-y divide-hairline">
+            {docs.map((doc) => {
+              const counts = [
+                ['zones', doc.zones_extracted],
+                ['FAR', doc.far_rules_extracted],
+                ['guidance', doc.guidance_rows_extracted],
+                ['facts', doc.evidence_facts_extracted],
+              ].filter(([, value]) => Number(value) > 0);
+              const busy = extractingId === doc.id || doc.extraction_status === 'in_progress';
+
+              return (
+                <div
+                  key={doc.id}
+                  className="grid grid-cols-1 gap-3 px-4 py-3 md:grid-cols-[minmax(260px,1.4fr),minmax(160px,0.9fr),minmax(180px,0.9fr),minmax(150px,0.7fr)] md:items-center hover:bg-bg-secondary"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-content-primary">{doc.plan_name}</div>
+                    <div className="mt-0.5 text-xs text-content-secondary">
+                      {[doc.city, doc.plan_version || null, doc.file_name || null].filter(Boolean).join(' | ')}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <SourceStatusBadge status={doc.extraction_status} />
+                    <div className="text-xs text-content-muted">{formatDocType(doc.doc_type)}</div>
+                    {doc.extraction_error && (
+                      <div className="line-clamp-2 text-xs text-red-600">{doc.extraction_error}</div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {counts.length === 0 ? (
+                      <span className="text-xs text-content-muted">No queued rows yet</span>
+                    ) : counts.map(([label, value]) => (
+                      <span key={label} className="rounded-md bg-bg-secondary px-2 py-1 text-xs font-medium text-content-secondary">
+                        {value} {label}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openMut.mutate(doc.id)}
+                      disabled={openMut.isPending}
+                      className="rounded-lg p-1.5 text-content-muted hover:bg-bg-secondary hover:text-primary-600 disabled:opacity-50"
+                      title="Open source"
+                    >
+                      <ExternalLink size={15} />
+                    </button>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => handleExtract(doc)}
+                        disabled={busy || extractingId !== null}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                      >
+                        {busy ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
+                        {doc.extraction_status === 'completed' ? 'Re-extract' : 'Extract'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -526,7 +765,7 @@ export default function MasterPlanAdminPage() {
         ))}
       </div>
 
-      {tab === 'zones' ? <ZoneLibrary canEdit={canEdit} /> : <DocumentsPanel />}
+      {tab === 'zones' ? <ZoneLibrary canEdit={canEdit} /> : <DocumentsPanel canEdit={canEdit} />}
     </div>
   );
 }

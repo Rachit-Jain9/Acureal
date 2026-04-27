@@ -258,7 +258,12 @@ export const masterPlanAPI = {
   createZone:   (data)                => api.post('/master-plan/zones', data),
   updateZone:   (id, data)            => api.put(`/master-plan/zones/${id}`, data),
   reviewZone:   (id, data)            => api.put(`/master-plan/zones/${id}/review`, data),
+  assignZoneToProperty: (id, data)     => api.post(`/master-plan/zones/${id}/assign-property`, data),
   listDocs:     (params)              => api.get('/master-plan/documents', { params }),
+  getDocUploadUrl: (fileName, fileSize) => api.post('/master-plan/documents/upload-url', { fileName, fileSize }),
+  confirmDocUpload: (data)             => api.post('/master-plan/documents/confirm-upload', data),
+  downloadDoc:  (id)                   => api.get(`/master-plan/documents/${id}/download`),
+  extractDoc:   (id, data)             => api.post(`/master-plan/documents/${id}/extract`, data),
 };
 
 // Parcel Intelligence admin / evidence operations
