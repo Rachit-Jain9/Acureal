@@ -2,6 +2,7 @@
 
 const { query } = require('../config/database');
 const { mergeStructuredFields } = require('../utils/extractionFields');
+const igrPdfAdapter = require('./adapters/igrPdf.adapter');
 
 const REGULATORY_DOC_TYPES = new Set([
   'sale_deed',
@@ -11,6 +12,7 @@ const REGULATORY_DOC_TYPES = new Set([
   'conversion_certificate',
   'khata',
   'guidance_value_report',
+  'igr_guidance_pdf',
   'zoning_certificate',
   'e_khata',
   'layout_approval',
@@ -391,6 +393,81 @@ const insertGuidanceValueCandidate = async ({ sourceId, orgId, fields, scores })
   return 1;
 };
 
+// IGR PDFs list dozens of localities per page. Gemini structured extraction may miss rows the
+// regex parser catches (and vice versa); we run both, then rely on the SQL dedup inside
+// insertGuidanceValueCandidate to keep candidates unique on (locality, road, value).
+const buildGuidanceFieldsFromRow = (row, headerFields) => {
+  const unit = textOrNull(row.unit_type) || textOrNull(row.unit);
+  const value = numberOrNull(row.value);
+  return {
+    city: textOrNull(row.city) || textOrNull(headerFields.city) || textOrNull(headerFields.district),
+    sro_name: textOrNull(row.sro_name) || textOrNull(headerFields.sro_name),
+    locality: textOrNull(row.locality),
+    road_name: textOrNull(row.road_name),
+    land_use_type: textOrNull(row.land_use_type) || textOrNull(headerFields.land_use_type) || 'unspecified',
+    guidance_value_per_sqft: unit === 'sqft' && value !== null ? value : numberOrNull(row.guidance_value_per_sqft),
+    guidance_value_per_acre: unit === 'acre' && value !== null ? value : numberOrNull(row.guidance_value_per_acre),
+    unit,
+    effective_from: dateOrNull(row.effective_from) || dateOrNull(headerFields.effective_from),
+    effective_to: dateOrNull(row.effective_to) || dateOrNull(headerFields.effective_to),
+    source_page: pageOrNull(row.source_page) || pageOrNull(headerFields.source_page),
+    source_section: textOrNull(row.source_section) || textOrNull(headerFields.source_section),
+  };
+};
+
+const insertIgrGuidanceCandidates = async ({ sourceId, orgId, fields, scores }) => {
+  const headerFields = {
+    city: fields.city,
+    district: fields.district,
+    sro_name: fields.sro_name,
+    land_use_type: fields.land_use_type,
+    effective_from: fields.effective_from,
+    effective_to: fields.effective_to,
+    source_page: fields.source_page,
+    source_section: fields.source_section,
+  };
+
+  let created = 0;
+  const overallScore = confidenceFor(scores, '_overall');
+
+  if (Array.isArray(fields.rows)) {
+    for (const row of fields.rows) {
+      const mergedFields = buildGuidanceFieldsFromRow(row, headerFields);
+      const rowScore = numberOrNull(row.confidence);
+      const rowScores = { _overall: rowScore !== null ? rowScore : overallScore };
+      created += await insertGuidanceValueCandidate({
+        sourceId,
+        orgId,
+        fields: mergedFields,
+        scores: rowScores,
+      });
+    }
+  }
+
+  const rawText = textOrNull(fields.raw_text);
+  if (rawText) {
+    const parsed = igrPdfAdapter.parseGuidanceText(rawText, {
+      sro_name: headerFields.sro_name,
+      page_number: headerFields.source_page,
+      source_section: headerFields.source_section,
+      land_use_type: headerFields.land_use_type || 'residential',
+    });
+
+    for (const row of parsed.rows || []) {
+      const mergedFields = buildGuidanceFieldsFromRow(row, headerFields);
+      const rowScores = { _overall: numberOrNull(row.confidence) };
+      created += await insertGuidanceValueCandidate({
+        sourceId,
+        orgId,
+        fields: mergedFields,
+        scores: rowScores,
+      });
+    }
+  }
+
+  return created;
+};
+
 const normalizedRulesFrom = (fields) => {
   if (Array.isArray(fields.rules)) return fields.rules;
   if (hasValue(fields.land_use_family) || hasValue(fields.base_far) || hasValue(fields.max_far)) {
@@ -592,9 +669,12 @@ async function ingestExtraction(extractionId, userId = null) {
     facts,
   });
 
-  const guidanceValuesCreated = docType === 'guidance_value_report'
-    ? await insertGuidanceValueCandidate({ sourceId, orgId, fields, scores })
-    : 0;
+  let guidanceValuesCreated = 0;
+  if (docType === 'guidance_value_report') {
+    guidanceValuesCreated = await insertGuidanceValueCandidate({ sourceId, orgId, fields, scores });
+  } else if (docType === 'igr_guidance_pdf') {
+    guidanceValuesCreated = await insertIgrGuidanceCandidates({ sourceId, orgId, fields, scores });
+  }
 
   const farRulesCreated = docType === 'rmp_table'
     ? await insertFarRuleCandidates({ sourceId, orgId, fields, scores })

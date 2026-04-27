@@ -173,6 +173,103 @@ describe('evidenceIngestion.service', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.far_rules'))).toBe(true);
   });
 
+  test('igr_guidance_pdf with structured rows creates one candidate per row', async () => {
+    mockQueryForExtraction({
+      id: 'extraction-igr-1',
+      document_id: 'document-igr-1',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'IGR-Bengaluru-Urban-2025.pdf',
+      document_file_url: 'https://example.com/igr.pdf',
+      doc_type: 'igr_guidance_pdf',
+      extraction_status: 'completed',
+      structured_fields: {
+        issuing_authority: 'Inspector General of Registration, Karnataka',
+        district: 'Bengaluru Urban',
+        sro_name: 'Jayanagar',
+        land_use_type: 'residential',
+        effective_from: '2025-04-01',
+        effective_to: '2026-03-31',
+        source_page: 12,
+        rows: [
+          { locality: 'Jayanagar 4th Block', road_name: '11th Main', value: 12500, unit_type: 'sqft', confidence: 0.85 },
+          { locality: 'Jayanagar 4th Block', road_name: '12th Main', value: 11800, unit_type: 'sqft', confidence: 0.82 },
+          { locality: 'BTM 2nd Stage', road_name: '16th Main', value: 9800, unit_type: 'sqft', confidence: 0.80 },
+        ],
+      },
+      confidence_scores: { _overall: 0.83 },
+    });
+
+    const result = await service.ingestExtraction('extraction-igr-1', 'user-1');
+
+    expect(result.skipped).toBe(false);
+    expect(result.guidance_values_created).toBe(3);
+    expect(result.far_rules_created).toBe(0);
+    const insertCalls = query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO regulatory_data.guidance_values'));
+    expect(insertCalls).toHaveLength(3);
+  });
+
+  test('igr_guidance_pdf parses raw_text rows when Gemini returns no structured rows', async () => {
+    const rawText = [
+      'Jayanagar 4th Block   11th Main Road    Rs 12,500 per sqft',
+      'BTM 2nd Stage         16th Main Road    Rs 9,800 per sqft',
+      'HSR Layout            27th Main Road    Rs 11,200 per sqft',
+    ].join('\n');
+
+    mockQueryForExtraction({
+      id: 'extraction-igr-2',
+      document_id: 'document-igr-2',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'IGR-Bengaluru-Urban-2025.pdf',
+      document_file_url: 'https://example.com/igr.pdf',
+      doc_type: 'igr_guidance_pdf',
+      extraction_status: 'completed',
+      structured_fields: {
+        issuing_authority: 'Inspector General of Registration, Karnataka',
+        district: 'Bengaluru Urban',
+        sro_name: 'Jayanagar',
+        land_use_type: 'residential',
+        effective_from: '2025-04-01',
+        source_page: 12,
+        rows: [],
+        raw_text: rawText,
+      },
+      confidence_scores: { _overall: 0.9 },
+    });
+
+    const result = await service.ingestExtraction('extraction-igr-2', 'user-1');
+
+    expect(result.skipped).toBe(false);
+    expect(result.guidance_values_created).toBeGreaterThan(0);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.guidance_values'))).toBe(true);
+  });
+
+  test('igr_guidance_pdf with neither rows nor raw_text records the source but creates zero candidates', async () => {
+    mockQueryForExtraction({
+      id: 'extraction-igr-3',
+      document_id: 'document-igr-3',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'IGR-Empty.pdf',
+      document_file_url: 'https://example.com/igr-empty.pdf',
+      doc_type: 'igr_guidance_pdf',
+      extraction_status: 'completed',
+      structured_fields: {
+        issuing_authority: 'Inspector General of Registration, Karnataka',
+        district: 'Bengaluru Urban',
+        sro_name: 'Jayanagar',
+      },
+      confidence_scores: { _overall: 0.5 },
+    });
+
+    const result = await service.ingestExtraction('extraction-igr-3', 'user-1');
+
+    expect(result.skipped).toBe(false);
+    expect(result.guidance_values_created).toBe(0);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.guidance_values'))).toBe(false);
+  });
+
   test('skips non-regulatory document types without writing evidence', async () => {
     query.mockResolvedValueOnce({
       rows: [{
