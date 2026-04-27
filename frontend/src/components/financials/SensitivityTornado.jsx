@@ -323,6 +323,13 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
   );
 }
 
+// Map dynamic per-bar fill colors (driven by JS state from kernel-computed
+// up/down deltas) onto CSS-var-backed values. The colors themselves must be
+// inline since they're computed per-bar, but routing through CSS vars means
+// theme switching still works.
+const POSITIVE = 'var(--color-data-positive)';
+const NEGATIVE = 'var(--color-data-negative)';
+
 function TornadoChart({ bars, maxMagnitude, kpi }) {
   return (
     <div className="space-y-1.5">
@@ -331,10 +338,10 @@ function TornadoChart({ bars, maxMagnitude, kpi }) {
         const upPct   = maxMagnitude > 0 ? Math.min(50, (Math.abs(b.up)   / maxMagnitude) * 50) : 0;
         const downLeft = 50 - downPct;
 
-        const downFill = b.down < 0 ? 'var(--color-data-negative)' : 'var(--color-data-positive)';
-        const upFill   = b.up   > 0 ? 'var(--color-data-positive)' : 'var(--color-data-negative)';
-        const downLabelColor = b.down < 0 ? 'var(--color-data-negative)' : 'var(--color-data-positive)';
-        const upLabelColor   = b.up   > 0 ? 'var(--color-data-positive)' : 'var(--color-data-negative)';
+        const downFill = b.down < 0 ? NEGATIVE : POSITIVE;
+        const upFill   = b.up   > 0 ? POSITIVE : NEGATIVE;
+        const downLabelColor = b.down < 0 ? NEGATIVE : POSITIVE;
+        const upLabelColor   = b.up   > 0 ? POSITIVE : NEGATIVE;
 
         return (
           <div
@@ -342,44 +349,33 @@ function TornadoChart({ bars, maxMagnitude, kpi }) {
             className="grid grid-cols-[8rem_1fr_9rem] items-center gap-3 text-xs group"
             title={`Base ${b.current.toLocaleString('en-IN')} → tested ${b.low.toLocaleString('en-IN')} … ${b.high.toLocaleString('en-IN')}`}
           >
-            <div
-              className="font-medium truncate text-right"
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
+            <div className="font-medium truncate text-right text-content-secondary">
               {b.label}
             </div>
             <div className="relative h-7">
+              <div className="absolute inset-y-0 left-1/2 w-px bg-hairline-strong" />
               <div
-                className="absolute inset-y-0 left-1/2 w-px"
-                style={{ backgroundColor: 'var(--color-border-strong)' }}
-              />
-              <div
-                className="absolute top-1 bottom-1 rounded-l-sm transition-all duration-300"
+                className="absolute top-1 bottom-1 rounded-l-sm transition-all duration-300 opacity-85"
                 style={{
                   left: `${downLeft}%`,
                   width: `${downPct}%`,
                   backgroundColor: downFill,
-                  opacity: 0.85,
                 }}
               />
               <div
-                className="absolute top-1 bottom-1 rounded-r-sm transition-all duration-300"
+                className="absolute top-1 bottom-1 rounded-r-sm transition-all duration-300 opacity-85"
                 style={{
                   left: '50%',
                   width: `${upPct}%`,
                   backgroundColor: upFill,
-                  opacity: 0.85,
                 }}
               />
             </div>
-            <div
-              className="flex items-center justify-between tabular-nums font-medium"
-              style={{ fontSize: '10.5px' }}
-            >
+            <div className="flex items-center justify-between tabular-nums font-medium text-[10.5px]">
               <span style={{ color: downLabelColor }}>
                 {fmtDelta(b.down, kpi.decimals, kpi.suffix)}
               </span>
-              <span style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}>|</span>
+              <span className="text-content-muted opacity-60">|</span>
               <span style={{ color: upLabelColor }}>
                 {fmtDelta(b.up, kpi.decimals, kpi.suffix)}
               </span>

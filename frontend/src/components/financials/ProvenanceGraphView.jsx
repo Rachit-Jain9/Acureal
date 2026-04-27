@@ -257,7 +257,7 @@ export default function ProvenanceGraphView({
                     <g
                       key={n.id}
                       transform={`translate(${n.x},${n.y})`}
-                      style={{ cursor: 'pointer' }}
+                      className="cursor-pointer"
                       onClick={() =>
                         setSelected((prev) => (prev === n.id ? null : n.id))
                       }
@@ -277,8 +277,7 @@ export default function ProvenanceGraphView({
                         x={n.width / 2}
                         y={formatted ? n.height / 2 - 4 : n.height / 2 + 4}
                         textAnchor="middle"
-                        className={`text-[11px] font-medium ${style.label}`}
-                        style={{ pointerEvents: 'none' }}
+                        className={`text-[11px] font-medium pointer-events-none ${style.label}`}
                       >
                         {n.label.length > 28 ? `${n.label.slice(0, 26)}…` : n.label}
                       </text>
@@ -287,8 +286,7 @@ export default function ProvenanceGraphView({
                           x={n.width / 2}
                           y={n.height / 2 + 10}
                           textAnchor="middle"
-                          className="text-[10px] fill-gray-500 font-mono"
-                          style={{ pointerEvents: 'none' }}
+                          className="text-[10px] fill-content-muted font-mono pointer-events-none"
                         >
                           {formatted}
                         </text>

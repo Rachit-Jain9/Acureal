@@ -53,29 +53,22 @@ const tooltipStyle = {
 function Tip({ active, payload, label, valueFormatter = (v) => `₹${Number(v).toFixed(2)} Cr` }) {
   if (!active || !payload?.length) return null;
   return (
+    // tooltipStyle stays inline — Recharts renders its own tooltip wrapper that
+    // doesn't accept className, and several of these properties (boxShadow,
+    // padding, fontSize) need to be applied at this exact node.
     <div style={tooltipStyle}>
-      <div
-        className="mb-1"
-        style={{
-          fontSize: '11px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          color: 'var(--color-text-muted)',
-        }}
-      >
+      <div className="mb-1 text-[11px] uppercase tracking-[0.06em] text-content-muted">
         {label}
       </div>
       {payload.map((p) => (
         <div key={p.dataKey} className="flex items-center gap-2 text-xs">
+          {/* Per-series color comes from the chart palette — must stay inline. */}
           <span
             className="inline-block w-2 h-2 rounded-full"
             style={{ background: p.color }}
           />
-          <span style={{ color: 'var(--color-text-secondary)' }}>{p.name}:</span>
-          <span
-            className="font-semibold tabular-nums"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
+          <span className="text-content-secondary">{p.name}:</span>
+          <span className="font-semibold tabular-nums text-content-primary">
             {valueFormatter(p.value)}
           </span>
         </div>
