@@ -201,24 +201,19 @@ export default function CommandPalette() {
         key={`${item.kind}-${item.payload.id || idx}`}
         onClick={() => navigateTo(item)}
         onMouseEnter={() => setActiveIndex(idx)}
-        className={`w-full flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-          isActive ? 'bg-[var(--color-bg-tertiary)]' : 'hover:bg-[var(--color-bg-tertiary)]'
+        className={`w-full flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors text-content-primary ${
+          isActive ? 'bg-surface' : 'hover:bg-surface'
         }`}
-        style={{ color: 'var(--color-text-primary)' }}
       >
         <span className="flex items-center gap-3 min-w-0">
           {icon}
           <span className="min-w-0">
             <div className="truncate font-medium">{label}</div>
-            {hint && (
-              <div className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                {hint}
-              </div>
-            )}
+            {hint && <div className="truncate text-xs text-content-muted">{hint}</div>}
           </span>
         </span>
         {suffix}
-        <ArrowRight className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-text-tertiary)' }} />
+        <ArrowRight className="w-3.5 h-3.5 shrink-0 text-content-muted" />
       </button>
     );
   };
@@ -231,41 +226,36 @@ export default function CommandPalette() {
       aria-modal="true"
       aria-label="Command palette"
     >
-      <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }} />
+      <div className="absolute inset-0 bg-black/45" />
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-xl rounded-lg shadow-2xl"
-        style={{
-          backgroundColor: 'var(--color-bg-secondary)',
-          border: '1px solid var(--color-border)',
-        }}
+        className="relative w-full max-w-xl rounded-lg shadow-2xl bg-bg-secondary border border-hairline"
       >
-        <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <Search className="w-4 h-4 shrink-0" style={{ color: 'var(--color-text-tertiary)' }} />
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-hairline">
+          <Search className="w-4 h-4 shrink-0 text-content-muted" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDownInput}
             placeholder="Type to search deals or jump to a page…"
-            className="flex-1 bg-transparent outline-none text-sm py-1.5"
-            style={{ color: 'var(--color-text-primary)' }}
+            className="flex-1 bg-transparent outline-none text-sm py-1.5 text-content-primary"
             aria-label="Command palette search"
           />
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="p-1 rounded hover:bg-[var(--color-bg-tertiary)]"
+            className="p-1 rounded hover:bg-surface"
             aria-label="Close command palette"
           >
-            <X className="w-4 h-4" style={{ color: 'var(--color-text-tertiary)' }} />
+            <X className="w-4 h-4 text-content-muted" />
           </button>
         </div>
 
         <div className="max-h-[60vh] overflow-y-auto p-2">
           {filteredQuickActions.length > 0 && (
             <div className="mb-2">
-              <div className="px-2 py-1 text-[11px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="px-2 py-1 text-[11px] uppercase tracking-wider text-content-muted">
                 Jump to
               </div>
               {filteredQuickActions.map((action) =>
@@ -281,7 +271,7 @@ export default function CommandPalette() {
 
           {filteredRecent.length > 0 && (
             <div className="mb-2">
-              <div className="px-2 py-1 text-[11px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="px-2 py-1 text-[11px] uppercase tracking-wider text-content-muted">
                 Recent deals
               </div>
               {filteredRecent.map((deal) =>
@@ -290,7 +280,7 @@ export default function CommandPalette() {
                   deal.city || deal.stage || null,
                   { kind: 'recent', payload: deal },
                   null,
-                  <Clock className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-text-tertiary)' }} />
+                  <Clock className="w-3.5 h-3.5 shrink-0 text-content-muted" />
                 )
               )}
             </div>
@@ -298,18 +288,14 @@ export default function CommandPalette() {
 
           {trimmedQ.length >= 2 && (
             <div>
-              <div className="px-2 py-1 text-[11px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="px-2 py-1 text-[11px] uppercase tracking-wider text-content-muted">
                 Deals matching &ldquo;{trimmedQ}&rdquo;
               </div>
               {dealSearch.isFetching && (
-                <div className="px-3 py-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  Searching deals…
-                </div>
+                <div className="px-3 py-2 text-xs text-content-muted">Searching deals…</div>
               )}
               {!dealSearch.isFetching && dealResults.length === 0 && (
-                <div className="px-3 py-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  No deals matched.
-                </div>
+                <div className="px-3 py-2 text-xs text-content-muted">No deals matched.</div>
               )}
               {dealResults.map((deal) =>
                 renderRow(
@@ -322,16 +308,13 @@ export default function CommandPalette() {
           )}
 
           {trimmedQ.length < 2 && filteredQuickActions.length === 0 && filteredRecent.length === 0 && (
-            <div className="px-3 py-6 text-center text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            <div className="px-3 py-6 text-center text-xs text-content-muted">
               Press <kbd>↑</kbd> <kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to select, <kbd>Esc</kbd> to close.
             </div>
           )}
         </div>
 
-        <div
-          className="flex items-center justify-between px-3 py-1.5 text-[11px] border-t"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}
-        >
+        <div className="flex items-center justify-between px-3 py-1.5 text-[11px] border-t border-hairline text-content-muted">
           <span>
             <kbd>{navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'}</kbd>+<kbd>K</kbd> toggles this palette
           </span>
