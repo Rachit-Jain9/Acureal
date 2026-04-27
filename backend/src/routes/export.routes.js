@@ -1,7 +1,7 @@
 const express = require('express');
 const { query } = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
 const pptxgen = require('pptxgenjs');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
@@ -21,6 +21,66 @@ const escapeCsvField = (value) => {
 };
 
 const toCsvRow = (fields) => fields.map(escapeCsvField).join(',');
+
+const DEALS_XLSX_COLUMNS = [
+  'Deal Name',
+  'Type',
+  'Stage',
+  'Priority',
+  'Asset Class',
+  'Property',
+  'City',
+  'State',
+  'Land Area (sqft)',
+  'Ask Price (Cr)',
+  'Negotiated Price (Cr)',
+  'Revenue (Cr)',
+  'Total Cost (Cr)',
+  'Gross Profit (Cr)',
+  'Margin %',
+  'IRR %',
+  'NPV (Cr)',
+  'Equity Multiple',
+  'RLV (Cr)',
+  'Assigned To',
+  'Created',
+  'Updated',
+];
+
+const COMPS_XLSX_COLUMNS = [
+  'Project',
+  'Developer',
+  'City',
+  'Locality',
+  'Type',
+  'BHK Config',
+  'Carpet (sqft)',
+  'Super Built-up (sqft)',
+  'Rate/sqft (₹)',
+  'Total Units',
+  'Launch Year',
+  'Possession Year',
+  'RERA',
+  'Source',
+];
+
+const addJsonWorksheet = (workbook, name, columns, rows = []) => {
+  const worksheet = workbook.addWorksheet(name);
+  worksheet.columns = columns.map((header) => ({
+    header,
+    key: header,
+    width: Math.min(Math.max(String(header).length + 4, 14), 28),
+  }));
+  rows.forEach((row) => worksheet.addRow(row));
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).alignment = { vertical: 'middle' };
+  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  worksheet.autoFilter = {
+    from: 'A1',
+    to: `${worksheet.getColumn(columns.length).letter}1`,
+  };
+  return worksheet;
+};
 
 // GET /exports/deals — retired; use per-deal CSV/XLSX/PPTX/PDF exports
 router.get(
@@ -909,15 +969,13 @@ router.get(
          FROM comps ORDER BY city, rate_per_sqft DESC`
       );
 
-      const wb = XLSX.utils.book_new();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'REDIP';
+      workbook.created = new Date();
+      workbook.modified = new Date();
 
-      // Deals sheet
-      const dealsWs = XLSX.utils.json_to_sheet(dealsResult.rows);
-      XLSX.utils.book_append_sheet(wb, dealsWs, 'Deals Pipeline');
-
-      // Comps sheet
-      const compsWs = XLSX.utils.json_to_sheet(compsResult.rows);
-      XLSX.utils.book_append_sheet(wb, compsWs, 'Comps');
+      addJsonWorksheet(workbook, 'Deals Pipeline', DEALS_XLSX_COLUMNS, dealsResult.rows);
+      addJsonWorksheet(workbook, 'Comps', COMPS_XLSX_COLUMNS, compsResult.rows);
 
       // Summary sheet
       const summaryData = [
@@ -926,10 +984,9 @@ router.get(
         { Metric: 'Exported By', Value: req.user.name },
         { Metric: 'Platform', Value: 'REDIP — Real Estate Development Intelligence' },
       ];
-      const summaryWs = XLSX.utils.json_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+      addJsonWorksheet(workbook, 'Summary', ['Metric', 'Value'], summaryData);
 
-      const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      const buffer = await workbook.xlsx.writeBuffer();
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="redip-deals-${new Date().toISOString().slice(0, 10)}.xlsx"`);
