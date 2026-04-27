@@ -93,23 +93,9 @@ export default function DashboardPage() {
   if (isError) {
     return (
       <div className="text-center py-20">
-        <AlertTriangle
-          size={36}
-          className="mx-auto mb-3"
-          style={{ color: 'var(--color-data-negative)' }}
-        />
-        <p
-          className="text-base font-semibold"
-          style={{ color: 'var(--color-text-primary)' }}
-        >
-          Failed to load dashboard
-        </p>
-        <p
-          className="text-sm mt-1"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          {error?.message}
-        </p>
+        <AlertTriangle size={36} className="mx-auto mb-3 text-data-negative" />
+        <p className="text-base font-semibold text-content-primary">Failed to load dashboard</p>
+        <p className="text-sm mt-1 text-content-muted">{error?.message}</p>
         <button onClick={() => refetch()} className="btn btn-secondary mt-4">
           Retry
         </button>
@@ -236,21 +222,11 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="py-16 text-center">
-              <Briefcase
-                size={28}
-                className="mx-auto mb-2"
-                style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}
-              />
-              <p
-                className="text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                No pipeline data yet
-              </p>
+              <Briefcase size={28} className="mx-auto mb-2 text-content-muted opacity-50" />
+              <p className="text-sm text-content-muted">No pipeline data yet</p>
               <Link
                 to="/dashboard/deals"
-                className="text-xs mt-1 inline-block hover:underline"
-                style={{ color: 'var(--color-brand-accent)' }}
+                className="text-xs mt-1 inline-block hover:underline text-accent"
               >
                 Create your first deal
               </Link>
@@ -326,11 +302,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={item.name}
-                      className="flex items-center justify-between rounded-md px-3 py-2"
-                      style={{
-                        backgroundColor: 'var(--color-surface)',
-                        border: '1px solid var(--color-border-secondary)',
-                      }}
+                      className="flex items-center justify-between rounded-md px-3 py-2 bg-surface border border-hairline-soft"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span
@@ -338,24 +310,13 @@ export default function DashboardPage() {
                           style={{ backgroundColor: chartPalette[idx % chartPalette.length] }}
                         />
                         <div className="min-w-0">
-                          <p
-                            className="text-sm font-medium truncate"
-                            style={{ color: 'var(--color-text-primary)' }}
-                          >
+                          <p className="text-sm font-medium truncate text-content-primary">
                             {item.name}
                           </p>
-                          <p
-                            className="text-xs tabular-nums"
-                            style={{ color: 'var(--color-text-muted)' }}
-                          >
-                            {pct}%
-                          </p>
+                          <p className="text-xs tabular-nums text-content-muted">{pct}%</p>
                         </div>
                       </div>
-                      <span
-                        className="text-sm font-bold ml-2 tabular-nums"
-                        style={{ color: 'var(--color-text-primary)' }}
-                      >
+                      <span className="text-sm font-bold ml-2 tabular-nums text-content-primary">
                         {item.value}
                       </span>
                     </div>
@@ -365,10 +326,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="py-16 text-center">
-              <p
-                className="text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
+              <p className="text-sm text-content-muted">
                 Cities will appear once deals have location data
               </p>
             </div>
@@ -385,8 +343,7 @@ export default function DashboardPage() {
           action={
             <Link
               to="/dashboard/deals"
-              className="text-xs hover:underline flex items-center gap-1"
-              style={{ color: 'var(--color-brand-accent)' }}
+              className="text-xs hover:underline flex items-center gap-1 text-accent"
             >
               View all <ArrowRight size={12} />
             </Link>
@@ -397,34 +354,18 @@ export default function DashboardPage() {
               {recent_activities.map((activity, idx) => (
                 <li
                   key={activity.id || idx}
-                  className="flex items-start gap-3 p-3 rounded-md"
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-secondary)',
-                  }}
+                  className="flex items-start gap-3 p-3 rounded-md bg-surface border border-hairline-soft"
                 >
-                  <div
-                    className="w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: 'var(--color-brand-accent)' }}
-                  />
+                  <div className="w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0 bg-accent" />
                   <div className="min-w-0 flex-1">
-                    <p
-                      className="text-sm leading-snug"
-                      style={{ color: 'var(--color-text-primary)' }}
-                    >
+                    <p className="text-sm leading-snug text-content-primary">
                       {activity.description}
                     </p>
-                    <p
-                      className="text-xs mt-1"
-                      style={{ color: 'var(--color-text-muted)' }}
-                    >
+                    <p className="text-xs mt-1 text-content-muted">
                       <Clock size={10} className="inline mr-1" />
                       {formatRelativeTime(activity.activity_date || activity.created_at)}
                       {activity.deal_name && (
-                        <span
-                          className="ml-1"
-                          style={{ color: 'var(--color-text-secondary)' }}
-                        >
+                        <span className="ml-1 text-content-secondary">
                           &middot; {activity.deal_name}
                         </span>
                       )}
@@ -435,16 +376,8 @@ export default function DashboardPage() {
             </ul>
           ) : (
             <div className="py-10 text-center">
-              <p
-                className="text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                No activities yet
-              </p>
-              <p
-                className="text-xs mt-1"
-                style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}
-              >
+              <p className="text-sm text-content-muted">No activities yet</p>
+              <p className="text-xs mt-1 text-content-muted opacity-70">
                 Activities logged on deals will appear here
               </p>
             </div>
@@ -458,8 +391,7 @@ export default function DashboardPage() {
           action={
             <Link
               to="/dashboard/deals"
-              className="text-xs hover:underline flex items-center gap-1"
-              style={{ color: 'var(--color-brand-accent)' }}
+              className="text-xs hover:underline flex items-center gap-1 text-accent"
             >
               All deals <ArrowRight size={12} />
             </Link>
@@ -469,49 +401,17 @@ export default function DashboardPage() {
             <div className="overflow-x-auto -mx-1">
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-                    <th
-                      className="text-left py-2 pr-3 font-medium"
-                      style={{
-                        color: 'var(--color-text-muted)',
-                        fontSize: '0.6875rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
+                  <tr className="border-b border-hairline">
+                    <th className="text-left py-2 pr-3 text-eyebrow text-content-muted font-medium">
                       Deal
                     </th>
-                    <th
-                      className="text-left py-2 pr-3 font-medium"
-                      style={{
-                        color: 'var(--color-text-muted)',
-                        fontSize: '0.6875rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
+                    <th className="text-left py-2 pr-3 text-eyebrow text-content-muted font-medium">
                       Stage
                     </th>
-                    <th
-                      className="text-right py-2 pr-3 font-medium"
-                      style={{
-                        color: 'var(--color-text-muted)',
-                        fontSize: '0.6875rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
+                    <th className="text-right py-2 pr-3 text-eyebrow text-content-muted font-medium">
                       Value
                     </th>
-                    <th
-                      className="text-right py-2 font-medium"
-                      style={{
-                        color: 'var(--color-text-muted)',
-                        fontSize: '0.6875rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
+                    <th className="text-right py-2 text-eyebrow text-content-muted font-medium">
                       IRR
                     </th>
                   </tr>
@@ -519,30 +419,20 @@ export default function DashboardPage() {
                 <tbody>
                   {top_deals_by_irr.map((deal, idx) => {
                     const stageConf = STAGE_CONFIG[deal.stage] || {};
-                    const irrColor = Number(deal.irr_pct) >= 20
-                      ? 'var(--color-data-positive)'
+                    const irrToneClass = Number(deal.irr_pct) >= 20
+                      ? 'text-data-positive'
                       : Number(deal.irr_pct) >= 15
-                        ? 'var(--color-brand-premium)'
-                        : 'var(--color-brand-accent)';
+                        ? 'text-premium'
+                        : 'text-accent';
                     return (
                       <tr
                         key={deal.id || idx}
-                        className="transition-colors"
-                        style={{
-                          borderBottom: '1px solid var(--color-border-secondary)',
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.backgroundColor = 'var(--color-surface)')
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.backgroundColor = 'transparent')
-                        }
+                        className="border-b border-hairline-soft transition-colors hover:bg-surface"
                       >
                         <td className="py-2.5 pr-3">
                           <Link
                             to={`/dashboard/deals/${deal.id}`}
-                            className="font-medium truncate max-w-[140px] block"
-                            style={{ color: 'var(--color-text-primary)' }}
+                            className="font-medium truncate max-w-[140px] block text-content-primary"
                           >
                             {deal.name}
                           </Link>
@@ -552,16 +442,10 @@ export default function DashboardPage() {
                             {stageConf.label || deal.stage}
                           </Badge>
                         </td>
-                        <td
-                          className="py-2.5 pr-3 text-right whitespace-nowrap tabular-nums"
-                          style={{ color: 'var(--color-text-secondary)' }}
-                        >
+                        <td className="py-2.5 pr-3 text-right whitespace-nowrap tabular-nums text-content-secondary">
                           {formatCrores(deal.total_revenue_cr)}
                         </td>
-                        <td
-                          className="py-2.5 text-right font-semibold whitespace-nowrap tabular-nums"
-                          style={{ color: irrColor }}
-                        >
+                        <td className={`py-2.5 text-right font-semibold whitespace-nowrap tabular-nums ${irrToneClass}`}>
                           {formatPct(deal.irr_pct)}
                         </td>
                       </tr>
@@ -572,15 +456,8 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="py-10 text-center">
-              <TrendingUp
-                size={28}
-                className="mx-auto mb-2"
-                style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}
-              />
-              <p
-                className="text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
+              <TrendingUp size={28} className="mx-auto mb-2 text-content-muted opacity-50" />
+              <p className="text-sm text-content-muted">
                 Run a financial model on a deal to see IRR rankings
               </p>
             </div>
