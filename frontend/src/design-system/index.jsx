@@ -1,7 +1,7 @@
 // REDIP design-system primitives — editorial, IC-grade.
 // All colors route through CSS variables (see `frontend/src/index.css`), so
 // both themes work with a single `data-theme` flip.
-// Import as: import { Card, SectionHeader, MetricTile, ErrorState } from '@/design-system'
+// Import as: import { Card, SectionHeader, MetricTile, StatTile, ErrorState } from '@/design-system'
 // Pill/status labels: use `components/common/Badge` (CSS-class-based, themed).
 
 import clsx from 'clsx';
@@ -106,6 +106,28 @@ export function MetricTile({
       )}
       {footnote && <div className="text-[11px] text-content-muted mt-1.5">{footnote}</div>}
       {children}
+    </div>
+  );
+}
+
+// ── StatTile ───────────────────────────────────────────────────────────────
+// Compact secondary summary tile for use INSIDE a panel/card, where MetricTile
+// would over-emphasize. Neutral chrome (no shadow, smaller value font) so the
+// tile visually subordinates to the page-level KPIs above it.
+// `negative` flips the value colour to data-negative (use for explicit losses).
+export function StatTile({ label, value, footnote, negative = false, className }) {
+  return (
+    <div className={clsx('bg-bg-secondary rounded-lg p-3', className)}>
+      <p className="text-xs text-content-muted mb-0.5">{label}</p>
+      <p
+        className={clsx(
+          'text-base font-bold tabular-nums',
+          negative ? 'text-data-negative' : 'text-content-primary',
+        )}
+      >
+        {value}
+      </p>
+      {footnote && <p className="text-xs text-content-muted mt-0.5">{footnote}</p>}
     </div>
   );
 }

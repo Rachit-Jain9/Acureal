@@ -6,6 +6,8 @@
 import { useMemo, useState } from 'react';
 import { Layers, ChevronRight } from 'lucide-react';
 import { buildDebtSchedule } from '../../utils/waterfall';
+import Badge from '../common/Badge';
+import { StatTile } from '../../design-system';
 
 export default function DebtSchedulePanel({ financials: rawFinancials }) {
   const [open, setOpen] = useState(false);
@@ -74,15 +76,11 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
             </span>
           )}
           {hasAmortizing && (
-            <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2 py-0.5">
+            <Badge tone="success">
               Amortizing — {amortizingSchedule.termLoan?.amortizationYears || amortizingSchedule.lrd?.amortizationYears}yr
-            </span>
+            </Badge>
           )}
-          {debtLTV > 0 && (
-            <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
-              {(debtLTV * 100).toFixed(0)}% LTV
-            </span>
-          )}
+          {debtLTV > 0 && <Badge tone="warn">{(debtLTV * 100).toFixed(0)}% LTV</Badge>}
         </div>
         <ChevronRight
           size={16}
@@ -149,24 +147,13 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
 
           {schedule && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-amber-50 rounded-lg p-3">
-                <p className="text-xs text-amber-500 mb-0.5">Total Debt Drawn</p>
-                <p className="text-base font-bold text-amber-800">₹{schedule.totalDebtCr.toFixed(2)} Cr</p>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-3">
-                <p className="text-xs text-amber-500 mb-0.5">Interest Cost</p>
-                <p className="text-base font-bold text-amber-800">₹{schedule.totalInterestCr.toFixed(2)} Cr</p>
-              </div>
-              <div className="bg-bg-secondary rounded-lg p-3">
-                <p className="text-xs text-content-muted mb-0.5">Interest Rate</p>
-                <p className="text-base font-bold text-content-primary">{schedule.debtRatePct}% pa</p>
-              </div>
-              <div className="bg-bg-secondary rounded-lg p-3">
-                <p className="text-xs text-content-muted mb-0.5">Total Debt Service</p>
-                <p className="text-base font-bold text-content-primary">
-                  ₹{(schedule.totalDebtCr + schedule.totalInterestCr).toFixed(2)} Cr
-                </p>
-              </div>
+              <StatTile label="Total Debt Drawn" value={`₹${schedule.totalDebtCr.toFixed(2)} Cr`} />
+              <StatTile label="Interest Cost" value={`₹${schedule.totalInterestCr.toFixed(2)} Cr`} />
+              <StatTile label="Interest Rate" value={`${schedule.debtRatePct}% pa`} />
+              <StatTile
+                label="Total Debt Service"
+                value={`₹${(schedule.totalDebtCr + schedule.totalInterestCr).toFixed(2)} Cr`}
+              />
             </div>
           )}
 
