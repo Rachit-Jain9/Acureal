@@ -402,16 +402,16 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-hairline">
-                    <th className="text-left py-2 pr-3 text-eyebrow text-content-muted font-medium">
+                    <th className="text-left py-2 pr-3 text-eyebrow uppercase text-content-muted font-medium">
                       Deal
                     </th>
-                    <th className="text-left py-2 pr-3 text-eyebrow text-content-muted font-medium">
+                    <th className="text-left py-2 pr-3 text-eyebrow uppercase text-content-muted font-medium">
                       Stage
                     </th>
-                    <th className="text-right py-2 pr-3 text-eyebrow text-content-muted font-medium">
+                    <th className="text-right py-2 pr-3 text-eyebrow uppercase text-content-muted font-medium">
                       Value
                     </th>
-                    <th className="text-right py-2 text-eyebrow text-content-muted font-medium">
+                    <th className="text-right py-2 text-eyebrow uppercase text-content-muted font-medium">
                       IRR
                     </th>
                   </tr>
