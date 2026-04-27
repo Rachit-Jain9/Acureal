@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, X, Search, Filter, Info, Database,
+  X, Search, Filter, Info, Database,
   Building2, Coins, TrendingUp, Landmark, Layers, Hotel, MapPin,
 } from 'lucide-react';
 import { financialsAPI } from '../../services/api';
