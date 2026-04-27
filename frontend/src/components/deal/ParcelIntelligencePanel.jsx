@@ -12,11 +12,22 @@ import {
   MapPin,
   RefreshCw,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 import { Card, ErrorState, SectionHeader } from '../../design-system';
-import { useParcelIntelligence, useRefreshParcelIntelligence } from '../../hooks/useProperties';
+import {
+  useParcelIntelligence,
+  useParcelVerifications,
+  useRefreshParcelIntelligence,
+  useUnverifyParcelItem,
+  useVerifyParcelItem,
+} from '../../hooks/useProperties';
 import { useParcelVerdict } from '../../hooks/useParcelVerdict';
+import useAuthStore from '../../store/authStore';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
+import VerifyItemDialog from './VerifyItemDialog';
+
+const EDITOR_ROLES = new Set(['admin', 'owner', 'editor', 'analyst']);
 
 const TABS = [
   { key: 'verified', label: 'Verified' },
@@ -225,7 +236,49 @@ function RedFlags({ flags = [] }) {
   );
 }
 
-function BucketList({ items = [], empty }) {
+function VerifiedPill({ verification, canEdit, onUnverify, isPending }) {
+  const verifiedBy = verification.verified_by_name || verification.created_by_name || 'analyst';
+  const url = verification.external_url;
+  return (
+    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+      <CheckCircle2 size={12} />
+      Manually verified · {verifiedBy}
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
+        >
+          source
+          <ExternalLink size={10} />
+        </a>
+      ) : null}
+      {canEdit && onUnverify ? (
+        <button
+          type="button"
+          onClick={onUnverify}
+          disabled={isPending}
+          aria-label="Remove verification"
+          className="rounded p-0.5 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+        >
+          <Trash2 size={11} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function BucketList({
+  items = [],
+  empty,
+  showVerifyAction = false,
+  verificationsByKey = {},
+  canEdit = false,
+  onVerify,
+  onUnverify,
+  unverifyingId = null,
+}) {
   if (!items.length) {
     return (
       <div className="rounded-editorial border border-hairline bg-bg-elevated p-4 text-sm text-content-secondary">
@@ -236,24 +289,47 @@ function BucketList({ items = [], empty }) {
 
   return (
     <div className="rounded-editorial border border-hairline bg-bg-elevated divide-y divide-hairline">
-      {items.map((item, index) => (
-        <div key={`${item.label}-${index}`} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-content-primary">{item.label}</div>
-              <div className="text-sm text-content-secondary mt-1">{item.detail}</div>
-              {item.source && (
-                <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-content-muted">{item.source.replace(/_/g, ' ')}</div>
-              )}
-            </div>
-            <div className="flex flex-wrap justify-end gap-1.5 shrink-0">
-              {(item.citations || []).map((citation) => (
-                <CitationChip key={citation.id || citation.label} citation={citation} />
-              ))}
+      {items.map((item, index) => {
+        const verification = item.key ? verificationsByKey[item.key] : null;
+        return (
+          <div key={`${item.label}-${index}`} className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-content-primary">{item.label}</div>
+                <div className="text-sm text-content-secondary mt-1">{item.detail}</div>
+                {item.source && (
+                  <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-content-muted">{item.source.replace(/_/g, ' ')}</div>
+                )}
+                {verification ? (
+                  <VerifiedPill
+                    verification={verification}
+                    canEdit={canEdit}
+                    onUnverify={onUnverify ? () => onUnverify(verification) : undefined}
+                    isPending={unverifyingId === verification.id}
+                  />
+                ) : null}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  {(item.citations || []).map((citation) => (
+                    <CitationChip key={citation.id || citation.label} citation={citation} />
+                  ))}
+                </div>
+                {showVerifyAction && canEdit && item.key && !verification && onVerify ? (
+                  <button
+                    type="button"
+                    onClick={() => onVerify(item)}
+                    className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-2.5 py-1 text-[11px] font-semibold text-content-primary hover:border-primary-300"
+                  >
+                    <CheckCircle2 size={12} />
+                    Mark verified
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -344,10 +420,35 @@ function VerificationLinks({ links = {}, onUploadClick }) {
 
 export default function ParcelIntelligencePanel({ property, deal, dealId, onUploadClick }) {
   const [activeTab, setActiveTab] = useState('verified');
+  const [verifyTarget, setVerifyTarget] = useState(null);
   const propertyId = property?.id;
   const { data: intelligence, isLoading, isError, error } = useParcelIntelligence(propertyId);
   const refreshMutation = useRefreshParcelIntelligence();
+  const verificationsQuery = useParcelVerifications(propertyId);
+  const verifyMutation = useVerifyParcelItem();
+  const unverifyMutation = useUnverifyParcelItem();
+  const user = useAuthStore((state) => state.user);
+  const canEdit = EDITOR_ROLES.has(String(user?.role || '').toLowerCase());
   const linkedDealId = dealId || deal?.id || null;
+
+  const verificationsByKey = useMemo(() => {
+    const list = verificationsQuery.data?.verifications || [];
+    return list.reduce((acc, link) => {
+      if (link.item_key) acc[link.item_key] = link;
+      return acc;
+    }, {});
+  }, [verificationsQuery.data]);
+
+  const handleVerify = ({ itemKey, externalUrl, notes }) => {
+    verifyMutation.mutate(
+      { propertyId, itemKey, externalUrl, notes },
+      { onSuccess: () => setVerifyTarget(null) }
+    );
+  };
+
+  const handleUnverify = (verification) => {
+    unverifyMutation.mutate({ propertyId, linkId: verification.id });
+  };
 
   const buildability = intelligence?.buildability;
   const values = buildability?.values || {};
@@ -544,6 +645,12 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
                       ? 'No calculations are available until required inputs are present.'
                       : 'No pending verification items.'
                 }
+                showVerifyAction={activeTab === 'needs_verification'}
+                verificationsByKey={verificationsByKey}
+                canEdit={canEdit}
+                onVerify={(item) => setVerifyTarget(item)}
+                onUnverify={handleUnverify}
+                unverifyingId={unverifyMutation.isPending ? unverifyMutation.variables?.linkId : null}
               />
             </div>
           </Card>
@@ -579,6 +686,13 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
           </div>
         </div>
       </Card>
+
+      <VerifyItemDialog
+        item={verifyTarget}
+        onClose={() => setVerifyTarget(null)}
+        onSubmit={handleVerify}
+        isPending={verifyMutation.isPending}
+      />
     </div>
   );
 }

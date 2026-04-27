@@ -116,7 +116,8 @@ describe('parcelIntelligence.service', () => {
   test('returns needs-verification output when no zone is assigned', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: null }] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior' }] });
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
@@ -125,7 +126,8 @@ describe('parcelIntelligence.service', () => {
     expect(result.buildability.status).toBe('needs_verification');
     expect(result.guidance_value.vendor.status).toBe('not_configured');
     expect(result.red_flags.map((flag) => flag.label)).toContain('Planning zone not assigned');
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(result.snapshot_id).toBe('snapshot-prior');
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
   test('matches FAR rule, guidance value, and cached K-GIS context without refresh', async () => {
@@ -144,7 +146,8 @@ describe('parcelIntelligence.service', () => {
             updated_at: '2026-04-25T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior' }] });
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
