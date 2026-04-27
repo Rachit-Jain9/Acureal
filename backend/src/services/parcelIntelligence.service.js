@@ -10,6 +10,7 @@ const {
 const guidanceService = require('./guidance.service');
 const landeedAdapter = require('./adapters/landeed.adapter');
 const kgisAdapter = require('./adapters/kgis.adapter');
+const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
 const { EVENTS, publish } = require('../lib/eventBus');
 
 const VERIFICATION_LINKS = {
@@ -604,7 +605,10 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     red_flags: redFlags,
     citations,
     buckets,
-    verification_links: VERIFICATION_LINKS,
+    // Rich, context-aware list of authority deep links / hints / copy-text.
+    // Replaces the flat VERIFICATION_LINKS map (still exported for callers
+    // that only need the bare URLs).
+    verification_links: buildVerificationLinks({ property, kgis }),
     source_versions: {
       rmp: buildability.rule?.plan_version || 'RMP 2031 Draft',
       guidance: guidance.selected?.effective_from || null,

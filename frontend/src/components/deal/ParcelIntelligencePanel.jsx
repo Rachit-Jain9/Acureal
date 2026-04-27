@@ -383,28 +383,24 @@ function KgisPreview({ intelligence }) {
   );
 }
 
-function VerificationLinks({ links = {}, onUploadClick }) {
-  const items = [
-    ['Kaveri', links.kaveri],
-    ['BBMP e-Aasthi', links.bbmp_eaasthi],
-    ['IGR Guidance', links.igr_guidance],
-  ];
+function VerificationLinks({ links = [], onUploadClick }) {
+  const list = Array.isArray(links) ? links : [];
+  const [copiedKey, setCopiedKey] = useState(null);
 
-  return (
-    <div className="flex flex-wrap gap-2">
-      {items.map(([label, href]) => (
-        <a
-          key={label}
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-medium text-content-primary hover:border-primary-300"
-        >
-          {label}
-          <ExternalLink size={13} />
-        </a>
-      ))}
-      {onUploadClick && (
+  const handleCopy = async (link) => {
+    if (!link.copy_text || typeof navigator?.clipboard?.writeText !== 'function') return;
+    try {
+      await navigator.clipboard.writeText(link.copy_text);
+      setCopiedKey(link.key);
+      window.setTimeout(() => setCopiedKey((current) => (current === link.key ? null : current)), 1500);
+    } catch {
+      // clipboard denied — silently swallow; the open-link path still works
+    }
+  };
+
+  if (!list.length && onUploadClick) {
+    return (
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onUploadClick}
@@ -413,7 +409,71 @@ function VerificationLinks({ links = {}, onUploadClick }) {
           Upload Evidence
           <FileText size={13} />
         </button>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      {list.map((link) => (
+        <div
+          key={link.key}
+          className="rounded-editorial border border-hairline bg-bg-elevated p-3"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-sm font-semibold text-content-primary">{link.label}</span>
+                {link.deep_link ? (
+                  <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                    deep link
+                  </span>
+                ) : null}
+                {link.status === 'inputs_missing' ? (
+                  <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                    add inputs
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-0.5 text-[11px] text-content-muted">{link.authority}</div>
+            </div>
+            <a
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center gap-1 rounded-editorial border border-hairline bg-bg-secondary px-2 py-1 text-[11px] font-semibold text-content-primary hover:border-primary-300"
+            >
+              Open
+              <ExternalLink size={11} />
+            </a>
+          </div>
+          {link.purpose ? (
+            <p className="mt-2 text-xs text-content-secondary">{link.purpose}</p>
+          ) : null}
+          {link.hint ? (
+            <p className="mt-1 text-[11px] leading-relaxed text-content-muted">{link.hint}</p>
+          ) : null}
+          {link.copy_text ? (
+            <button
+              type="button"
+              onClick={() => handleCopy(link)}
+              className="mt-2 inline-flex items-center gap-1 rounded-editorial border border-hairline bg-bg-secondary px-2 py-1 text-[11px] font-medium text-content-secondary hover:border-primary-300"
+            >
+              {copiedKey === link.key ? 'Copied' : 'Copy parcel context'}
+            </button>
+          ) : null}
+        </div>
+      ))}
+      {onUploadClick ? (
+        <button
+          type="button"
+          onClick={onUploadClick}
+          className="inline-flex items-center justify-center gap-1.5 rounded-editorial border border-dashed border-hairline bg-bg-elevated px-3 py-3 text-xs font-medium text-content-secondary hover:border-primary-300"
+        >
+          <FileText size={13} />
+          Upload Evidence
+        </button>
+      ) : null}
     </div>
   );
 }
