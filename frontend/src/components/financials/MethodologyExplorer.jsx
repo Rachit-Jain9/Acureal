@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, X, Sparkles, Calculator, TrendingUp, Layers,
+  BookOpen, X, Sparkles, TrendingUp, Layers,
   GitFork, Landmark, Building2, IndianRupee, Waves,
-  ChevronRight, ChevronDown, Gauge, Coins, Target, PiggyBank, Scale,
+  ChevronRight, ChevronDown, Gauge, Target, Scale,
   Route, ArrowRight, TrendingDown, Activity, Percent,
 } from 'lucide-react';
 

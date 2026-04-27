@@ -3,10 +3,7 @@ import {
   BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
 } from 'recharts';
-import {
-  Hotel, TrendingUp, IndianRupee, Layers, PieChart as PieIcon,
-  Wallet, Users, BarChart3, Receipt, Sparkles, Percent, Info,
-} from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
 
 // Renders the extended USALI hospitality output: 10-year P&L, Sources & Uses,

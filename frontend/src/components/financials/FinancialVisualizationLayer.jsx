@@ -5,7 +5,7 @@ import {
   Cell, ReferenceLine, ReferenceDot,
 } from 'recharts';
 import {
-  TrendingUp, TrendingDown, DollarSign, Layers, Target, Activity,
+  TrendingUp, DollarSign, Layers, Target, Activity,
   GitBranch, Gauge, LineChart as LineIcon, BarChart3,
 } from 'lucide-react';
 import { formatCrores, formatPct, formatINR } from '../../utils/format';
