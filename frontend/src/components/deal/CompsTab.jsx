@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MapPin, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
 import { compsAPI } from '../../services/api';
 import LoadingSpinner from '../common/LoadingSpinner';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, ErrorState } from '../../design-system';
 
 function formatRate(value) {
   if (value == null) return '-';
@@ -163,15 +163,11 @@ export default function CompsTab({ deal }) {
 
   return (
     <div className="space-y-6">
-      {/* No geocode warning */}
       {!hasLatLng && (
-        <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-          <AlertCircle size={16} className="text-amber-500 flex-shrink-0" />
-          <p className="text-sm text-amber-800">
-            Geocode the property to view nearby comparable transactions. Navigate to the{' '}
-            <strong>Parcel / Site</strong> tab and ensure the property record has been geocoded.
-          </p>
-        </div>
+        <ErrorState tone="warn">
+          Geocode the property to view nearby comparable transactions. Navigate to the{' '}
+          <strong>Parcel / Site</strong> tab and ensure the property record has been geocoded.
+        </ErrorState>
       )}
 
       {/* Market Benchmark */}

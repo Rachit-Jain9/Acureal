@@ -21,6 +21,7 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
 import { toast } from '../components/common/Toast';
+import { SectionHeader } from '../design-system';
 import {
   formatArea,
   formatDate,
@@ -244,7 +245,7 @@ export default function PropertyDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="card-editorial lg:col-span-2">
-          <h2 className="mb-4 text-lg font-semibold text-content-primary">Property Overview</h2>
+          <SectionHeader size="sm" title="Property Overview" />
           <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             <DetailField
               label="Property Type"
@@ -288,7 +289,7 @@ export default function PropertyDetailPage() {
 
         <section className="card-editorial space-y-5">
           <div>
-            <h2 className="mb-4 text-lg font-semibold text-content-primary">At a Glance</h2>
+            <SectionHeader size="sm" title="At a Glance" />
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <div className="shrink-0 rounded-lg bg-primary-50 p-2 text-primary-600">
@@ -416,7 +417,7 @@ export default function PropertyDetailPage() {
       <ParcelIntelligencePanel property={property} />
 
       <section className="card-editorial">
-        <h2 className="mb-4 text-lg font-semibold text-content-primary">Related Deals</h2>
+        <SectionHeader size="sm" title="Related Deals" />
 
         {relatedDeals.length === 0 ? (
           <EmptyState
