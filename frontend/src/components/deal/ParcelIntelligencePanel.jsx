@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Card, ErrorState, SectionHeader } from '../../design-system';
+import Badge from '../common/Badge';
 import {
   useParcelIntelligence,
   useParcelVerifications,
@@ -76,16 +77,12 @@ function CitationChip({ citation }) {
 function StatusPill({ status }) {
   const normalized = String(status || '').replace(/_/g, ' ');
   const good = ['reference match', 'matched', 'assigned reference', 'reference ready'].includes(normalized);
+  const Icon = good ? CheckCircle2 : AlertTriangle;
   return (
-    <span
-      className={clsx(
-        'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
-        good ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800',
-      )}
-    >
-      {good ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+    <Badge tone={good ? 'success' : 'warn'} className="gap-1">
+      <Icon size={11} />
       {normalized || 'needs verification'}
-    </span>
+    </Badge>
   );
 }
 
@@ -424,16 +421,8 @@ function VerificationLinks({ links = [], onUploadClick }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-sm font-semibold text-content-primary">{link.label}</span>
-                {link.deep_link ? (
-                  <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                    deep link
-                  </span>
-                ) : null}
-                {link.status === 'inputs_missing' ? (
-                  <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-                    add inputs
-                  </span>
-                ) : null}
+                {link.deep_link ? <Badge tone="success">deep link</Badge> : null}
+                {link.status === 'inputs_missing' ? <Badge tone="warn">add inputs</Badge> : null}
               </div>
               <div className="mt-0.5 text-[11px] text-content-muted">{link.authority}</div>
             </div>

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, MapPin, AlertCircle, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, MapPin, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
 import { formatArea, formatDate } from '../../utils/format';
 import { SQFT_PER_ACRE } from '../../config/india';
 import { useProperties, useCreateProperty } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
 import SiteWeatherCard from './SiteWeatherCard';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, ErrorState } from '../../design-system';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 
 function FieldRow({ label, value, span = false }) {
@@ -334,22 +334,20 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-          <div className="flex items-center gap-3">
-            <AlertCircle size={16} className="text-amber-500 flex-shrink-0" />
-            <p className="text-sm text-amber-800">
-              No property record linked. Link a property to unlock geocoding, site details, and nearby comps.
-            </p>
-          </div>
-          {canEdit && (
+        <ErrorState
+          tone="warn"
+          title="No property record linked"
+          action={canEdit && (
             <button
               onClick={() => setShowPicker(true)}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-700 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-700"
             >
               <Link2 size={13} /> Link Property
             </button>
           )}
-        </div>
+        >
+          Link a property to unlock geocoding, site details, and nearby comps.
+        </ErrorState>
       )}
 
       {/* Site Details Grid */}
