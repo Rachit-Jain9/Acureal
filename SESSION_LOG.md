@@ -93,3 +93,39 @@ Two more PRs shipped, both merged and deployed to https://redip.vercel.app.
   - Add count-up animations to KPI tiles on data refresh per FRONTEND_GUIDELINES section 5
 
 ---
+
+## 2026-04-28 (second session — same day, continued after PRs #71/#72)
+
+**Context:** Resumed from a prior context-compressed session. Q-now roadmap from the Command Deck plan was in-flight.
+
+### PRs shipped this session
+
+**T5: Red-flag rule registry + snapshot_stale rule (direct commits)**
+- Extracted 10 inline red-flag predicates from `composeParcelIntelligence` into `backend/src/engines/parcelRedFlags.engine.js`. Each rule is a named object with `id`, `severity`, `label`, `description`, `predicate`, `detailFor`.
+- Added 11th rule `snapshot_stale` — fires when a prior snapshot is >30 days old, silent on first load.
+- Renamed `getLatestSnapshotId` → `loadLatestSnapshotMeta` (returns `{ id, generated_at }`), eliminating a redundant DB query.
+- Admin widget `RedFlagRulesCard` in `ParcelIntelligenceAdminPage.jsx` — lists all 11 rules with severity Badge, collapsed to 4 rows by default.
+- Full per-rule unit tests for `snapshot_stale` (7 cases), 7-fixture parity guard, updated service/verify tests.
+- **P1/P2**: Replaced hand-rolled `StatusPill`/`SourceStatusBadge`/`StatusBadge` with `<Badge tone>` primitives; replaced amber warning divs with `<ErrorState tone="warn">`.
+
+**P3 — Drop inline CSS-var color styles from LandingPage.jsx (commit ef71495)**
+- Replaced all `style={{ color: 'var(--color-text-*)' }}` and `style={{ color: 'var(--color-brand-*)' }}` with Tailwind utilities (`text-content-primary`, `text-content-secondary`, `text-content-muted`, `text-premium`, `text-accent`). Net −50 lines. Build green.
+
+**T4 — HMAC snapshot signing (commit b57653d)**
+- `computeSignature` HMAC-SHA256 over `inputs_hash|output_hash|engine_version`, keyed by `PARCEL_SIGNING_SECRET`. Gracefully returns null when secret not set.
+- `saveSnapshot` writes `signature` + `engine_version` columns to DB.
+- `verifySnapshotSignature(snapshotId)` with `timingSafeEqual`.
+- New route: `GET /api/parcel-intelligence/snapshots/:id/verify-signature`
+- `ParcelIntelligencePanel.jsx`: "Signed" Badge pill appears when refresh response carries a signature.
+- Migration: `database/migrations/20260428_parcel_intelligence_signature.sql`
+
+**Manual steps still required:**
+1. Apply migration to Supabase production (two nullable ADD COLUMN IF NOT EXISTS).
+2. Set `PARCEL_SIGNING_SECRET` on Vercel (32+ char random string).
+
+**What's next (Q-next):**
+- T1 — What-if buildability sliders (client-side, zero new endpoints)
+- T2 — Source explorer drawer (citation chip → PDF page + bounding box)
+- P5/P6 — AI cost widget + confidence breakdown drilldown
+
+---

@@ -21,6 +21,17 @@ All rules here apply to every session, every PR, every code change.
 
 No jargon. Write it as if explaining to someone who doesn't code.
 
+## Plain-English recap after every shipped task
+
+**Mandatory.** After every commit pushed, deploy, or migration applied, write a short recap in chat for the user. Rules:
+
+- No code terms, no file paths, no jargon.
+- 2–4 short bullets max. One sentence each.
+- Lead with what the user can now see, do, or trust that they couldn't before.
+- Close with one line on why it matters for the product, if non-obvious.
+
+Different from the PR description rule above (which lives in the PR body). This recap rule is for the in-chat reply right after the work lands.
+
 ## Session logging
 
 At the end of every session, append a summary to `SESSION_LOG.md` in the repo root. Include:
