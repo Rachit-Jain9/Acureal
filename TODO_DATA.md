@@ -17,12 +17,14 @@ Data sources that REDIP would benefit from but cannot fabricate or assume availa
 - Source needed: BWSSB, BBMP GIS, Lakes Authority of Karnataka
 - Workaround: Manual overlay upload as GeoJSON; spatial check via Turf.js once uploaded
 - Architecture: ZoningRuleSet with buffer geometry, Turf.js intersection engine
+- Also needed: heritage, ecology, airport-height, and road-widening overlay datasets — same approach
 
 ### BBMP/BDA master plan zones (Bengaluru)
 - Status: MANUAL
 - Source: BBMP/BDA website (PDFs + scanned maps), Revised Master Plan 2031
 - Workaround: Upload PDFs → Gemini extraction → structured rules in zoning_rule_sets table
 - Architecture: Ready
+- Requirements: upload versioned documents only; separate live/gazetted rules from draft or consultation; record authority metadata, effective dates, and source-document references for every rule set; keep approximate outputs clearly labeled until parcel geometries are verified
 
 ### Parcel polygons (survey-level geometry)
 - Status: BLOCKED
@@ -34,18 +36,6 @@ Data sources that REDIP would benefit from but cannot fabricate or assume availa
 - Status: PARTIAL (OSM has reasonable road data)
 - Source: OpenStreetMap via Overpass API
 - Architecture: GeocodeService + Overpass adapter (not yet built)
-
----
-
-## Regulatory / Zoning Data
-
-- Upload versioned Bengaluru / GBA master-plan, zoning, and gazette documents.
-- Separate live/gazetted rules from draft or consultation documents.
-- Add authority metadata, effective dates, and source-document references for every structured rule set.
-
-### Geospatial overlays
-- Source verified lake, rajakaluve, nala, heritage, ecology, airport-height, and road-widening datasets.
-- Keep approximate outputs clearly labeled until parcel geometries and overlay coverage are verified.
 
 ---
 

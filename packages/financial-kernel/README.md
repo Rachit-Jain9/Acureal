@@ -12,9 +12,11 @@ Pure, deterministic underwriting kernel for REDIP.
 
 ## Integration
 
-Kernel is wired into the legacy engine behind the `FIN_KERNEL_V2` flag.
-The flag is **off by default**. Legacy underwriting remains authoritative
-until golden-test parity has been confirmed for every live deal in staging.
+The kernel is the sole financial computation path. `backend/src/engines/kernel.service.js` wraps it and is called directly by `financial.service.js`. There is no feature flag — the kernel always runs.
+
+Operator escape hatches:
+- `DEBT_ENGINE_KILL=1` — emergency zero-overlay fallback
+- `DEBT_ENGINE_SILENT=1` — suppresses decision log lines (test use only)
 
 ## Supported asset classes
 
@@ -37,4 +39,4 @@ npm run build
 npm test
 ```
 
-Output lands in `dist/` and is picked up by `backend/src/engines/kernel.adapter.js`.
+Output lands in `dist/` and is picked up by `backend/src/engines/kernel.service.js`.

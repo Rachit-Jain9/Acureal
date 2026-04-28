@@ -90,7 +90,6 @@ One React-Query key per deal: `['deal-workspace', dealId]`. Backend returns a si
 
 ### Dependencies & risks
 
-- Shared cache must not depend on Python service availability.
 - RLS policies may need per-domain revisiting when the single `/workspace` endpoint assembles the payload.
 - Frontend bundle risk: a single Provider importing 4 module trees — code-split by route, not by Provider.
 
@@ -98,49 +97,7 @@ One React-Query key per deal: `['deal-workspace', dealId]`. Backend returns a si
 
 If "one brain" slips more than 2 sprints past its entry criteria, re-scope Phase A (read consolidation) as a standalone win — the latency improvement justifies it even without B–E.
 
-Last reviewed: 2026-04-21 (resumption from session `festive-wilson-234dcf`).
-
----
-
-## 2. Legacy JS Engine Retirement
-
-**Status: ✅ COMPLETE (2026-04-22)**
-
-`backend/src/engines/financial.engine.js`, `kernel.adapter.js`, and the
-six `kernel.*.parity.test.js` suites are deleted. The backend service
-imports `computeFullFinancials` / `computeScenarios` directly from
-`backend/src/engines/kernel.service.js`, which composes the TS kernel
-(`@redip/financial-kernel`) with its post-processors. `FIN_KERNEL_V2`
-flag is removed.
-
-Verification: 101 backend tests + 392 kernel tests green.
-
-### Follow-up (not blocking)
-
-- `postprocess/legacyShape.ts` (inside the kernel) is still used to emit
-  the snake_case `_legacy` block for DB column bindings. Retire only
-  after the financial_scenarios / deal persistence layer is refactored
-  to read from `kpis.*` / `costs.*` / `revenue.*` directly.
-
-### Non-goals
-
-- Not retiring the Python parity engine. Separate decision (see item 3).
-
----
-
-## 3. Python Parity Engine — Retired
-
-**Status: ✅ COMPLETE (pre-session, confirmed 2026-04-22 audit).**
-
-A repo-wide audit confirms no `.py` files, no `debt-engine-py/`
-directory, and no `DEBT_ENGINE_PY_URL` runtime references remain. The
-TypeScript debt engine (`packages/financial-kernel/src/debt-engine/*`)
-is the sole runtime. `packages/financial-kernel/src/orchestration/featureFlag.ts:16-18`
-records the retirement.
-
-Operator escape hatches that remain:
-- `DEBT_ENGINE_KILL=1` — emergency zero-overlay fallback.
-- `DEBT_ENGINE_SILENT=1` — suppresses decision log lines (test use).
+Last reviewed: 2026-04-28.
 
 ---
 
