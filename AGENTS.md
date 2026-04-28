@@ -43,6 +43,24 @@ The goal: compress the time between spotting a deal and making a confident IC de
 
 ---
 
+## Frontend motion and polish — mandatory
+
+For ALL frontend work, read **`docs/FRONTEND_GUIDELINES.md`** before writing code. Hard requirements:
+
+- Every interactive element has hover / focus-visible / active states (Tailwind pattern in section 3).
+- Skeletons (not spinners) for any operation > 100ms. Match final layout.
+- Live data: numbers count up/down (600ms ease-out). Status pills cross-fade (180ms). Lists slide-in from top.
+- Use the exact timing/easing table in section 2 — don't invent durations.
+- 3D / parallax only when it represents a real state change. Default is flat.
+- Charts: draw-in on first render (700ms staggered), smooth transitions on update, tabular-nums always.
+- Page-level transitions: 180ms cross-fade on tab/route switch, 220ms slide+fade for modals (decelerate). Shell never animates on route change.
+- `prefers-reduced-motion: reduce` must collapse non-essential motion to instant.
+- 60fps minimum. Animate `transform`/`opacity` only — never `width`/`height`/`top`/`left`.
+
+Banned: gradients on hero tiles, glow/neon, decorative emojis, auto-play, spinner-for-skeleton, saturated whole-tile pastel tints, decorative parallax, bouncy spring physics on professional surfaces.
+
+The seven feel-check questions in section 12 of the guidelines doc are mandatory before any visual PR merges.
+
 ## Code quality rules
 
 ### Token mapping — always use these instead of raw CSS vars or colors

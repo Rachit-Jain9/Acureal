@@ -163,6 +163,21 @@ Track via session usage, time-to-stage transitions, and qualitative feedback fro
 - Remove low-value mock/demo logic instead of layering more UI over it.
 - If a change affects deals, inspect downstream DD, approvals, risks, documents, dashboard summaries, and financial readouts.
 
+## Frontend motion and polish rules
+
+For every frontend change — components, pages, modals, charts, maps, exports — the standing bar is defined in `docs/FRONTEND_GUIDELINES.md`. Read that file before writing UI code. Key non-negotiables:
+
+- Smooth, alive, decisive, trustworthy — Bloomberg / Stripe / Linear, never AI-SaaS-tacky.
+- Every interactive element needs all four states: default, hover, focus-visible, active.
+- Skeletons (not spinners) for loads > 100ms. Numbers count up/down on change. Status pills cross-fade.
+- Exact timing values (120ms hover, 220ms modal open, 600ms count-up, etc.) live in the guidelines table — use those, do not invent your own.
+- Respect `prefers-reduced-motion`. WCAG AA contrast. 60fps minimum.
+- Default to flat. 3D / parallax only when it earns its complexity (hero KPI hover, card flip for source detail, cadastral map tilt).
+- Charts must draw in on first render and transition smoothly on update. Tabular numbers always.
+- No decorative emojis, no gradients on hero tiles, no auto-playing media, no spinner-for-skeleton.
+
+The seven feel-check questions in section 12 of the guidelines doc are mandatory before any visual PR merges.
+
 ## PR communication rule
 
 Every PR must include a plain-English section explaining:
