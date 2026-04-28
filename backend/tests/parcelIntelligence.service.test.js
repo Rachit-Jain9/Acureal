@@ -116,8 +116,8 @@ describe('parcelIntelligence.service', () => {
   test('returns needs-verification output when no zone is assigned', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: null }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior' }] });
+      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior', generated_at: new Date().toISOString() }] })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
@@ -135,6 +135,7 @@ describe('parcelIntelligence.service', () => {
     query
       .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: residentialZone }] })
       .mockResolvedValueOnce({ rows: [farRule] })
+      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior', generated_at: new Date().toISOString() }] })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -146,8 +147,7 @@ describe('parcelIntelligence.service', () => {
             updated_at: '2026-04-25T00:00:00.000Z',
           },
         ],
-      })
-      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior' }] });
+      });
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
@@ -183,6 +183,7 @@ describe('parcelIntelligence.service', () => {
       .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: residentialZone }] })
       .mockResolvedValueOnce({ rows: [farRule] })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: 'cache-1' }] })
       .mockResolvedValueOnce({ rows: [{ id: 'snapshot-1' }] });
 
@@ -191,9 +192,9 @@ describe('parcelIntelligence.service', () => {
     expect(landeedAdapter.lookupGuidanceValue).toHaveBeenCalledWith(expect.objectContaining({ id: 'prop-1' }));
     expect(kgisAdapter.fetchKgisContext).toHaveBeenCalledWith(expect.objectContaining({ id: 'prop-1' }));
     expect(result.kgis.status).toBe('matched');
-    expect(query.mock.calls[2][0]).toContain('UPDATE regulatory_data.kgis_cache');
-    expect(query.mock.calls[3][0]).toContain('INSERT INTO regulatory_data.kgis_cache');
-    expect(query.mock.calls[4][0]).toContain('INSERT INTO regulatory_data.parcel_intelligence_snapshots');
+    expect(query.mock.calls[3][0]).toContain('UPDATE regulatory_data.kgis_cache');
+    expect(query.mock.calls[4][0]).toContain('INSERT INTO regulatory_data.kgis_cache');
+    expect(query.mock.calls[5][0]).toContain('INSERT INTO regulatory_data.parcel_intelligence_snapshots');
   });
 
   test('classifies commercial zone codes even when property zoning is default residential', () => {

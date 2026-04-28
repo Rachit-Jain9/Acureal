@@ -16,7 +16,7 @@
  */
 
 const evidenceLinks = require('./evidenceLinks.service');
-const { getLatestSnapshotId, NEEDS_VERIFICATION_KEYS } = require('./parcelIntelligence.service');
+const { loadLatestSnapshotMeta, NEEDS_VERIFICATION_KEYS } = require('./parcelIntelligence.service');
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 
@@ -36,7 +36,7 @@ const verifyItem = async ({
     throw createError(`Unknown verification item key: ${itemKey}`, 400);
   }
 
-  const snapshotId = await getLatestSnapshotId(propertyId);
+  const snapshotId = (await loadLatestSnapshotMeta(propertyId))?.id || null;
   if (!snapshotId) {
     throw createError(
       'No parcel intelligence snapshot exists for this property yet. Refresh parcel intelligence first.',
@@ -66,7 +66,7 @@ const verifyItem = async ({
 };
 
 const listVerifications = async (propertyId) => {
-  const snapshotId = await getLatestSnapshotId(propertyId);
+  const snapshotId = (await loadLatestSnapshotMeta(propertyId))?.id || null;
   if (!snapshotId) {
     return { snapshot_id: null, verifications: [] };
   }
@@ -89,7 +89,7 @@ const listVerifications = async (propertyId) => {
 };
 
 const removeVerification = async ({ propertyId, linkId }) => {
-  const snapshotId = await getLatestSnapshotId(propertyId);
+  const snapshotId = (await loadLatestSnapshotMeta(propertyId))?.id || null;
   if (!snapshotId) {
     throw createError(
       'No parcel intelligence snapshot exists for this property yet. Refresh parcel intelligence first.',

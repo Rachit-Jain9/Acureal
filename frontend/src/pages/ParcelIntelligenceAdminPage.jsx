@@ -136,6 +136,52 @@ function SchemaReadinessCard({ schema }) {
   );
 }
 
+const SEVERITY_TONE = { high: 'danger', medium: 'warn', low: 'neutral' };
+
+function RedFlagRulesCard({ rules = [] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? rules : rules.slice(0, 4);
+
+  return (
+    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+          <AlertTriangle size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-content-primary">Red Flag Rule Registry</div>
+          <p className="mt-0.5 text-xs text-content-secondary">
+            {rules.length} deterministic rules evaluated on every parcel snapshot — pure predicates, no AI, no fabrication.
+          </p>
+        </div>
+      </div>
+      <div className="divide-y divide-hairline">
+        {visible.map((rule) => (
+          <div key={rule.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+            <Badge tone={SEVERITY_TONE[rule.severity] || 'neutral'} className="mt-0.5 shrink-0">
+              {rule.severity}
+            </Badge>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-content-primary">{rule.label}</div>
+              <div className="mt-0.5 text-xs leading-relaxed text-content-secondary">{rule.description}</div>
+              <div className="mt-1 font-mono text-[10px] text-content-muted">{rule.id}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {rules.length > 4 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-3 text-xs font-medium text-primary-600 hover:underline"
+        >
+          {expanded ? 'Show less' : `Show ${rules.length - 4} more rules`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function payloadSummary(payload = {}) {
   const keys = [
     'source_title',
@@ -650,6 +696,7 @@ export default function ParcelIntelligenceAdminPage() {
           </div>
 
           <SchemaReadinessCard schema={ops?.schema} />
+          {ops?.red_flag_rules?.length > 0 && <RedFlagRulesCard rules={ops.red_flag_rules} />}
         </>
       )}
 
