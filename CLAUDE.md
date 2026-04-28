@@ -119,3 +119,22 @@ Instead:
 - Prefer progressive refactors to broad rewrites.
 - Remove low-value mock/demo logic instead of layering more UI over it.
 - If a change affects deals, inspect downstream DD, approvals, risks, documents, dashboard summaries, and financial readouts.
+
+## PR communication rule
+
+Every PR must include a plain-English section explaining:
+- What the site can do now that it couldn't before (or what was broken and is now fixed)
+- What the user can see or click that's different
+- Why it matters
+
+No jargon. Write it as if explaining to someone who doesn't code.
+
+## Session logging rule
+
+At the end of every session, append a summary to `SESSION_LOG.md` in the repo root:
+- Date
+- What was worked on in plain English
+- Which PRs were opened or merged
+- What's left to do next
+
+This is mandatory. It ensures work history survives even when chat sessions disappear.
