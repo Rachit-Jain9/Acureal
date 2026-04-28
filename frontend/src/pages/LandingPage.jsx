@@ -52,17 +52,11 @@ function Nav() {
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
         <div className="flex items-baseline gap-3 sm:gap-6 min-w-0">
-          <span
-            className="font-serif text-xl font-semibold tracking-tight"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
+          <span className="font-serif text-xl font-semibold tracking-tight text-content-primary">
             REDIP
-            <span style={{ color: 'var(--color-brand-premium)' }}>.</span>
+            <span className="text-premium">.</span>
           </span>
-          <span
-            className="hidden sm:inline text-[11px] uppercase tracking-[0.18em]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
+          <span className="hidden sm:inline text-[11px] uppercase tracking-[0.18em] text-content-muted">
             Real Estate Deal Intelligence · India
           </span>
         </div>
@@ -70,15 +64,13 @@ function Nav() {
           <button
             onClick={toggleTheme}
             aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="p-2 rounded-md transition-colors"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="p-2 rounded-md transition-colors text-content-secondary"
           >
             {mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="text-sm px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap text-content-secondary"
           >
             Sign in
           </button>
@@ -194,10 +186,9 @@ function LiveTicker() {
         {row.map(([label, metric, tone], i) => (
           <div
             key={i}
-            className="flex items-baseline gap-3 px-6 text-[12px] tabular-nums"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="flex items-baseline gap-3 px-6 text-[12px] tabular-nums text-content-secondary"
           >
-            <span className="uppercase tracking-[0.12em] text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="uppercase tracking-[0.12em] text-[10px] text-content-muted">
               {label}
             </span>
             <span
@@ -211,7 +202,7 @@ function LiveTicker() {
             >
               {metric}
             </span>
-            <span style={{ color: 'var(--color-text-muted)' }}>·</span>
+            <span className="text-content-muted">·</span>
           </div>
         ))}
       </div>
@@ -226,8 +217,7 @@ function Hero() {
       <HeroBackdrop />
       <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
         <div
-          className="text-[11px] uppercase tracking-[0.22em] mb-6 flex items-center gap-2"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="text-[11px] uppercase tracking-[0.22em] mb-6 flex items-center gap-2 text-content-muted"
         >
           <span
             className="inline-block w-1.5 h-1.5 rounded-full"
@@ -236,14 +226,12 @@ function Hero() {
           Institutional · Private beta
         </div>
         <h1
-          className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight max-w-4xl"
-          style={{ color: 'var(--color-text-primary)' }}
+          className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight max-w-4xl text-content-primary"
         >
-          The deal intelligence platform <em className="italic" style={{ color: 'var(--color-brand-accent)' }}>private capital</em> runs on.
+          The deal intelligence platform <em className="italic text-accent">private capital</em> runs on.
         </h1>
         <p
-          className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl"
-          style={{ color: 'var(--color-text-secondary)' }}
+          className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl text-content-secondary"
         >
           REDIP unifies sourcing, diligence, underwriting, and investor-grade
           reporting into one institutional workspace. AI accelerates the work.
@@ -261,9 +249,8 @@ function Hero() {
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm font-medium px-5 py-2.5 rounded-md"
+            className="text-sm font-medium px-5 py-2.5 rounded-md text-content-primary"
             style={{
-              color: 'var(--color-text-primary)',
               border: '1px solid var(--color-border-strong)',
               backgroundColor: 'transparent',
             }}
@@ -295,13 +282,10 @@ function Hero() {
               >
                 {stat}
               </div>
-              <div
-                className="mt-2 text-xs uppercase tracking-[0.16em]"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
+              <div className="mt-2 text-xs uppercase tracking-[0.16em] text-content-secondary">
                 {label}
               </div>
-              <div className="mt-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{note}</div>
+              <div className="mt-1 text-[11px] text-content-muted">{note}</div>
             </div>
           ))}
         </div>
@@ -348,13 +332,10 @@ function Columns() {
               <div className="text-[11px] uppercase tracking-[0.22em] mb-4" style={{ color: toneColor(c.tone) }}>
                 {c.tag}
               </div>
-              <h3
-                className="font-serif text-2xl leading-snug tracking-tight"
-                style={{ color: 'var(--color-text-primary)' }}
-              >
+              <h3 className="font-serif text-2xl leading-snug tracking-tight text-content-primary">
                 {c.title}
               </h3>
-              <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+              <p className="mt-4 text-sm leading-relaxed text-content-secondary">
                 {c.body}
               </p>
               <ul
@@ -362,7 +343,7 @@ function Columns() {
                 style={{ borderTop: '1px solid var(--color-border-primary)' }}
               >
                 {c.bullets.map((b) => (
-                  <li key={b} className="flex items-baseline gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                  <li key={b} className="flex items-baseline gap-2 text-content-primary">
                     <span className="font-mono text-[11px]" style={{ color: toneColor(c.tone) }}>→</span>
                     <span>{b}</span>
                   </li>
@@ -399,19 +380,13 @@ function AssetClasses() {
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-12 gap-8">
           <Reveal className="md:col-span-4">
-            <div className="text-[11px] uppercase tracking-[0.22em] mb-4" style={{ color: 'var(--color-brand-accent)' }}>
+            <div className="text-[11px] uppercase tracking-[0.22em] mb-4 text-accent">
               § Asset coverage
             </div>
-            <h2
-              className="font-serif text-3xl md:text-4xl leading-tight tracking-tight"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
+            <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-content-primary">
               Every asset class an Indian GP actually underwrites.
             </h2>
-            <p
-              className="mt-5 leading-relaxed text-[15px]"
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
+            <p className="mt-5 leading-relaxed text-[15px] text-content-secondary">
               Not a toy subset. Each class is modelled against its own cash-flow
               shape — apartment absorption is not a plotted layout, and a hotel
               is nobody&rsquo;s office tower.
@@ -426,17 +401,14 @@ function AssetClasses() {
                     style={{ borderBottom: '1px solid var(--color-border-primary)' }}
                   >
                     <div className="flex items-baseline gap-4">
-                      <span
-                        className="font-mono text-[11px] tabular-nums"
-                        style={{ color: 'var(--color-text-muted)' }}
-                      >
+                      <span className="font-mono text-[11px] tabular-nums text-content-muted">
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      <span className="font-medium text-content-primary">
                         {name}
                       </span>
                     </div>
-                    <span className="text-[12.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                    <span className="text-[12.5px] text-content-muted">
                       {note}
                     </span>
                   </div>
@@ -455,24 +427,15 @@ function Conviction() {
     <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
         <Reveal className="md:col-span-5">
-          <div
-            className="text-[11px] uppercase tracking-[0.22em] mb-4"
-            style={{ color: 'var(--color-brand-premium)' }}
-          >
+          <div className="text-[11px] uppercase tracking-[0.22em] mb-4 text-premium">
             § Conviction, engineered
           </div>
-          <h2
-            className="font-serif text-3xl md:text-4xl leading-tight tracking-tight"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
+          <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-content-primary">
             Every number traced. Every assumption stressed. Every memo, defensible in the room.
           </h2>
         </Reveal>
         <Reveal className="md:col-span-7" delay={120}>
-          <div
-            className="text-[15px] leading-relaxed space-y-4"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
+          <div className="text-[15px] leading-relaxed space-y-4 text-content-secondary">
             <p>
               Other platforms export spreadsheets. REDIP exports conviction. A
               deterministic financial kernel that records every calculation —
@@ -504,22 +467,13 @@ function Close() {
     >
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="max-w-3xl">
-          <div
-            className="text-[11px] uppercase tracking-[0.22em] mb-5"
-            style={{ color: 'var(--color-brand-premium)' }}
-          >
+          <div className="text-[11px] uppercase tracking-[0.22em] mb-5 text-premium">
             § Deploy
           </div>
-          <h2
-            className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
+          <h2 className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight text-content-primary">
             Put REDIP on your pipeline.
           </h2>
-          <p
-            className="mt-5 text-lg max-w-2xl leading-relaxed"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
+          <p className="mt-5 text-lg max-w-2xl leading-relaxed text-content-secondary">
             Spin up a deal workspace, link a parcel, run the kernel, and export
             an IC memo in the time it would have taken to reconcile your
             spreadsheet tabs.
@@ -534,9 +488,8 @@ function Close() {
             </button>
             <button
               onClick={() => navigate('/login')}
-              className="text-sm font-medium px-5 py-2.5 rounded-md"
+              className="text-sm font-medium px-5 py-2.5 rounded-md text-content-primary"
               style={{
-                color: 'var(--color-text-primary)',
                 border: '1px solid var(--color-border-strong)',
                 backgroundColor: 'transparent',
               }}
@@ -560,21 +513,18 @@ function Footer() {
     >
       <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px]">
         <div>
-          <span className="font-serif text-base" style={{ color: 'var(--color-text-primary)' }}>
+          <span className="font-serif text-base text-content-primary">
             REDIP
-            <span style={{ color: 'var(--color-brand-premium)' }}>.</span>
+            <span className="text-premium">.</span>
           </span>
-          <span
-            className="ml-3 uppercase tracking-[0.18em] text-[10.5px]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
+          <span className="ml-3 uppercase tracking-[0.18em] text-[10.5px] text-content-muted">
             Real Estate Deal Intelligence
           </span>
         </div>
-        <div style={{ color: 'var(--color-text-muted)' }}>
+        <div className="text-content-muted">
           India-first · No mock data · No fabricated facts
         </div>
-        <div className="tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="tabular-nums text-content-muted">
           © {new Date().getFullYear()} REDIP
         </div>
       </div>
@@ -585,8 +535,8 @@ function Footer() {
 export default function LandingPage() {
   return (
     <div
-      className="min-h-screen antialiased"
-      style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}
+      className="min-h-screen antialiased text-content-primary"
+      style={{ backgroundColor: 'var(--color-bg-primary)' }}
     >
       <Nav />
       <Hero />
