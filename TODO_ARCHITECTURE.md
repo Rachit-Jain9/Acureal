@@ -90,7 +90,6 @@ One React-Query key per deal: `['deal-workspace', dealId]`. Backend returns a si
 
 ### Dependencies & risks
 
-- Shared cache must not depend on Python service availability.
 - RLS policies may need per-domain revisiting when the single `/workspace` endpoint assembles the payload.
 - Frontend bundle risk: a single Provider importing 4 module trees — code-split by route, not by Provider.
 
@@ -98,7 +97,7 @@ One React-Query key per deal: `['deal-workspace', dealId]`. Backend returns a si
 
 If "one brain" slips more than 2 sprints past its entry criteria, re-scope Phase A (read consolidation) as a standalone win — the latency improvement justifies it even without B–E.
 
-Last reviewed: 2026-04-21 (resumption from session `festive-wilson-234dcf`).
+Last reviewed: 2026-04-28.
 
 ---
 
