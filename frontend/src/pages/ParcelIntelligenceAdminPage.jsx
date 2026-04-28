@@ -5,6 +5,8 @@ import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
+import Badge from '../components/common/Badge';
+import { ErrorState } from '../design-system';
 import {
   useParcelIntelligenceReviewQueue,
   useParcelIntelligenceStatus,
@@ -40,19 +42,19 @@ function initialOption(searchParams, key, fallback, allowedValues) {
 }
 
 function statusTone(status) {
-  if (status === 'approved' || status === 'configured' || status === 'parser_available' || status === 'ready') return 'text-emerald-700 bg-emerald-50';
-  if (status === 'rejected' || status === 'error' || status === 'action_required' || status === 'unknown') return 'text-rose-700 bg-rose-50';
-  if (status === 'not_configured' || status === 'review') return 'text-amber-800 bg-amber-50';
-  return 'text-content-secondary bg-bg-secondary';
+  if (status === 'approved' || status === 'configured' || status === 'parser_available' || status === 'ready') return 'success';
+  if (status === 'rejected' || status === 'error' || status === 'action_required' || status === 'unknown') return 'danger';
+  if (status === 'not_configured' || status === 'review') return 'warn';
+  return 'neutral';
 }
 
 function StatusBadge({ status }) {
   const Icon = status === 'approved' || status === 'configured' || status === 'ready' ? CheckCircle2 : status === 'rejected' || status === 'action_required' ? XCircle : Clock;
   return (
-    <span className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(status))}>
+    <Badge tone={statusTone(status)} className="gap-1">
       <Icon size={11} />
       {String(status || 'unknown').replace(/_/g, ' ')}
-    </span>
+    </Badge>
   );
 }
 
@@ -106,15 +108,9 @@ function SchemaReadinessCard({ schema }) {
               {schema?.message || 'Schema readiness has not been checked yet.'}
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-content-secondary">
-              <span className="rounded-md bg-bg-secondary px-2 py-1">
-                {summary.required_relations ?? 0} objects checked
-              </span>
-              <span className="rounded-md bg-bg-secondary px-2 py-1">
-                {summary.required_columns ?? 0} columns checked
-              </span>
-              <span className={clsx('rounded-md px-2 py-1', missingCount ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700')}>
-                {missingCount} missing
-              </span>
+              <Badge tone="neutral">{summary.required_relations ?? 0} objects checked</Badge>
+              <Badge tone="neutral">{summary.required_columns ?? 0} columns checked</Badge>
+              <Badge tone={missingCount ? 'danger' : 'success'}>{missingCount} missing</Badge>
             </div>
           </div>
         </div>
@@ -289,9 +285,9 @@ function AuthorityInputPanel({ dealId, onClose }) {
       </div>
 
       {!dealId ? (
-        <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+        <ErrorState tone="warn">
           Open this page from a deal's Parcel Intelligence panel before adding authority inputs.
-        </div>
+        </ErrorState>
       ) : (
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
@@ -770,8 +766,10 @@ export default function ParcelIntelligenceAdminPage() {
         )}
 
         {ops?.degraded && (
-          <div className="border-b border-hairline-strong bg-rose-50 px-4 py-3 text-sm text-rose-800">
-            Parcel intelligence review is paused because required database schema objects are missing or could not be verified.
+          <div className="border-b border-hairline-strong p-4">
+            <ErrorState tone="danger">
+              Parcel intelligence review is paused because required database schema objects are missing or could not be verified.
+            </ErrorState>
           </div>
         )}
 

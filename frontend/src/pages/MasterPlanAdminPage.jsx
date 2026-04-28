@@ -9,6 +9,8 @@ import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
+import Badge from '../components/common/Badge';
+import { ErrorState } from '../design-system';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -52,10 +54,10 @@ const SOURCE_DOC_TYPES = [
 ];
 
 const DOC_STATUS_META = {
-  pending: { label: 'pending', color: 'bg-slate-100 text-slate-700', icon: Clock },
-  in_progress: { label: 'extracting', color: 'bg-blue-100 text-blue-700', icon: Loader2 },
-  completed: { label: 'queued for review', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
-  failed: { label: 'failed', color: 'bg-red-100 text-red-700', icon: XCircle },
+  pending: { label: 'pending', tone: 'neutral', icon: Clock },
+  in_progress: { label: 'extracting', tone: 'info', icon: Loader2 },
+  completed: { label: 'queued for review', tone: 'success', icon: CheckCircle2 },
+  failed: { label: 'failed', tone: 'danger', icon: XCircle },
 };
 
 function formatBytes(bytes) {
@@ -75,23 +77,25 @@ function SourceStatusBadge({ status }) {
   const Icon = cfg.icon;
   const spinning = status === 'in_progress';
   return (
-    <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.color)}>
-      <Icon size={11} className={spinning ? 'animate-spin' : ''} /> {cfg.label}
-    </span>
+    <Badge tone={cfg.tone} className="gap-1">
+      <Icon size={11} className={spinning ? 'animate-spin' : ''} />
+      {cfg.label}
+    </Badge>
   );
 }
 
 function StatusBadge({ status }) {
   const cfg = {
-    approved: { color: 'bg-green-100 text-green-700', icon: CheckCircle2, label: 'Approved' },
-    pending:  { color: 'bg-amber-100 text-amber-700', icon: Clock, label: 'Pending review' },
-    rejected: { color: 'bg-red-100 text-red-700', icon: XCircle, label: 'Rejected' },
-  }[status] || { color: 'bg-bg-secondary text-content-secondary', icon: Clock, label: status || '—' };
+    approved: { tone: 'success', icon: CheckCircle2, label: 'Approved' },
+    pending:  { tone: 'warn', icon: Clock, label: 'Pending review' },
+    rejected: { tone: 'danger', icon: XCircle, label: 'Rejected' },
+  }[status] || { tone: 'neutral', icon: Clock, label: status || '—' };
   const Icon = cfg.icon;
   return (
-    <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.color)}>
-      <Icon size={11} /> {cfg.label}
-    </span>
+    <Badge tone={cfg.tone} className="gap-1">
+      <Icon size={11} />
+      {cfg.label}
+    </Badge>
   );
 }
 
@@ -738,13 +742,10 @@ export default function MasterPlanAdminPage() {
       />
 
       {!canEdit && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
-          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
-          <div>
-            Read-only view. Only admins, owners, editors, and analysts can add or edit zones.
-            Always verify regulatory data with BBMP/BDA before using it in underwriting.
-          </div>
-        </div>
+        <ErrorState tone="warn" className="mb-4">
+          Read-only view. Only admins, owners, editors, and analysts can add or edit zones.
+          Always verify regulatory data with BBMP/BDA before using it in underwriting.
+        </ErrorState>
       )}
 
       <div className="flex gap-1 border-b border-hairline-strong mb-4">
