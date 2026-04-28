@@ -28,8 +28,19 @@ const normalizeLandUseFamily = (property = {}, zone = null) => {
   return 'residential';
 };
 
+const ENGINE_VERSION = '1.0.0';
+
 const hashInputs = (payload) =>
   crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+
+const computeSignature = (inputs_hash, output_hash) => {
+  const secret = process.env.PARCEL_SIGNING_SECRET;
+  if (!secret) return null;
+  return crypto
+    .createHmac('sha256', secret)
+    .update(`${inputs_hash}|${output_hash}|${ENGINE_VERSION}`)
+    .digest('hex');
+};
 
 const loadPropertyWithZone = async (propertyId) => {
   const result = await query(
@@ -245,28 +256,36 @@ const formatKgis = (cacheRow, liveResult = null) => {
 
 const saveSnapshot = async ({ propertyId, output, userId }) => {
   try {
+    const outputStr = JSON.stringify(output);
+    const inputs_hash = hashInputs(output.inputs || {});
+    const output_hash = crypto.createHash('sha256').update(outputStr).digest('hex');
+    const signature = computeSignature(inputs_hash, output_hash);
+
     const result = await query(
       `INSERT INTO regulatory_data.parcel_intelligence_snapshots (
-         org_id, property_id, inputs_hash, output_json, source_versions, generated_by
+         org_id, property_id, inputs_hash, output_json, source_versions, generated_by,
+         signature, engine_version
        )
        VALUES (
-         current_organization_id(), $1, $2, $3::jsonb, $4::jsonb, $5
+         current_organization_id(), $1, $2, $3::jsonb, $4::jsonb, $5, $6, $7
        )
        RETURNING id`,
       [
         propertyId,
-        hashInputs(output.inputs || {}),
-        JSON.stringify(output),
+        inputs_hash,
+        outputStr,
         JSON.stringify(output.source_versions || {}),
         userId || null,
+        signature,
+        ENGINE_VERSION,
       ]
     );
-    return result.rows[0]?.id || null;
+    return { id: result.rows[0]?.id || null, signature };
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.warn('Parcel intelligence snapshot skipped:', error.message);
     }
-    return null;
+    return { id: null, signature: null };
   }
 };
 
@@ -541,10 +560,12 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   // links via the polymorphic evidence-links endpoint. On refresh we use the
   // newly-saved row; on read we use the prior snapshot loaded at compose-start.
   if (refresh) {
-    const newId = await saveSnapshot({ propertyId, output, userId });
+    const { id: newId, signature } = await saveSnapshot({ propertyId, output, userId });
     output.snapshot_id = newId || previousMeta?.id || null;
+    output.signature = signature || null;
   } else {
     output.snapshot_id = previousMeta?.id || null;
+    output.signature = null;
   }
   return output;
 };
@@ -575,11 +596,49 @@ const refreshParcelIntelligence = async (propertyId, userId = null) => {
   return output;
 };
 
+const verifySnapshotSignature = async (snapshotId) => {
+  const result = await query(
+    `SELECT inputs_hash, output_json, signature, engine_version
+     FROM regulatory_data.parcel_intelligence_snapshots
+     WHERE id = $1
+       AND org_id = current_organization_id()`,
+    [snapshotId]
+  );
+
+  if (!result.rows[0]) {
+    throw createError('Snapshot not found.', 404);
+  }
+
+  const row = result.rows[0];
+
+  if (!row.signature) {
+    return { valid: false, reason: 'unsigned', snapshot_id: snapshotId, engine_version: row.engine_version || null };
+  }
+
+  if (!process.env.PARCEL_SIGNING_SECRET) {
+    return { valid: false, reason: 'secret_not_configured', snapshot_id: snapshotId, engine_version: row.engine_version };
+  }
+
+  const output_hash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(row.output_json))
+    .digest('hex');
+  const expected = computeSignature(row.inputs_hash, output_hash);
+
+  const valid = crypto.timingSafeEqual(
+    Buffer.from(row.signature, 'hex'),
+    Buffer.from(expected, 'hex')
+  );
+
+  return { valid, snapshot_id: snapshotId, engine_version: row.engine_version };
+};
+
 module.exports = {
   getParcelIntelligence,
   refreshParcelIntelligence,
   normalizeLandUseFamily,
   loadLatestSnapshotMeta,
+  verifySnapshotSignature,
   NEEDS_VERIFICATION_KEYS,
   VERIFICATION_LINKS,
 };

@@ -3,6 +3,7 @@ const { body, param, query: qv } = require('express-validator');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const parcelIntelligenceAdminService = require('../services/parcelIntelligenceAdmin.service');
+const { verifySnapshotSignature } = require('../services/parcelIntelligence.service');
 
 const router = express.Router();
 
@@ -164,6 +165,23 @@ router.post(
         overwrite: req.body.overwrite === true,
       });
       res.json({ success: true, message: 'Evidence fact promoted to property input.', data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /parcel-intelligence/snapshots/:id/verify-signature
+// Verifies the HMAC signature of a snapshot without re-running compose.
+router.get(
+  '/snapshots/:id/verify-signature',
+  authenticate,
+  [param('id').isUUID()],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await verifySnapshotSignature(req.params.id);
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

@@ -671,6 +671,9 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
           />
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill status={intelligence?.status} />
+            {intelligence?.signature && (
+              <Badge tone="success" className="text-[10px]">Signed</Badge>
+            )}
             <Link
               to={reviewQueueUrl}
               className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-primary-300 transition-colors"
