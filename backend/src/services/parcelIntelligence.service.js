@@ -11,6 +11,7 @@ const guidanceService = require('./guidance.service');
 const landeedAdapter = require('./adapters/landeed.adapter');
 const kgisAdapter = require('./adapters/kgis.adapter');
 const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
+const { runParcelRedFlags } = require('../engines/parcelRedFlags.engine');
 const { EVENTS, publish } = require('../lib/eventBus');
 
 const VERIFICATION_LINKS = {
@@ -18,12 +19,6 @@ const VERIFICATION_LINKS = {
   bbmp_eaasthi: 'https://www.bbmpeaasthi.karnataka.gov.in/',
   igr_guidance: 'https://igr.karnataka.gov.in/page/Revised%2BGuidelines%2BValue/en',
   kgis_protocol: 'https://ksrsac.in/web/sites/default/files/projects/2018-02/K-GIS%20Data%20Exchange%20Protocol.pdf',
-};
-
-const toNumber = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
 };
 
 const normalizeLandUseFamily = (property = {}, zone = null) => {
@@ -292,82 +287,6 @@ const getLatestSnapshotId = async (propertyId) => {
   }
 };
 
-const buildRedFlags = ({ property, zone, buildability, guidance, kgis, landeed }) => {
-  const flags = [];
-
-  if (!zone?.zone_code) {
-    flags.push({
-      severity: 'high',
-      label: 'Planning zone not assigned',
-      detail: 'Assign a reviewed RMP zone before relying on FAR/buildability output.',
-    });
-  }
-
-  if (!toNumber(property.land_area_sqft)) {
-    flags.push({ severity: 'high', label: 'Land area missing', detail: 'Buildability cannot be calculated without land extent.' });
-  }
-
-  if (toNumber(property.road_width_mtrs) === null) {
-    flags.push({ severity: 'medium', label: 'Road width missing', detail: 'FAR matrix matching needs abutting road width.' });
-  }
-
-  if (buildability?.status === 'needs_verification') {
-    flags.push({
-      severity: 'medium',
-      label: 'Buildability pending verification',
-      detail: buildability.message,
-    });
-  }
-
-  if (buildability?.values?.setback_input_status === 'partial') {
-    flags.push({
-      severity: 'medium',
-      label: 'Setback inputs are partial',
-      detail: 'The screening buildable area applies available setback rules, but plot frontage/depth and full side/rear setback rules should be verified.',
-    });
-  }
-
-  if (!['matched', 'low_confidence'].includes(guidance?.status)) {
-    flags.push({
-      severity: 'medium',
-      label: 'Guidance value not matched',
-      detail: guidance?.message || 'Upload a guidance report or configure approved IGR rows.',
-    });
-  } else if (guidance.status === 'low_confidence') {
-    flags.push({
-      severity: 'medium',
-      label: 'Low-confidence guidance match',
-      detail: 'Analyst review is required before using this guidance value in IC material.',
-    });
-  }
-
-  if (landeed?.status === 'not_configured') {
-    flags.push({
-      severity: 'low',
-      label: 'Vendor guidance backup not configured',
-      detail: 'Landeed can remain disabled, but API credentials are required for vendor-backed guidance refresh.',
-    });
-  }
-
-  if (kgis?.status === 'not_requested') {
-    flags.push({
-      severity: 'low',
-      label: 'K-GIS not refreshed',
-      detail: 'Run refresh when coordinates are available to cache reference hierarchy/survey context.',
-    });
-  }
-
-  if (zone?.plan_status === 'draft' || buildability?.rule?.plan_status === 'draft_reference') {
-    flags.push({
-      severity: 'medium',
-      label: 'RMP status is draft/reference',
-      detail: 'Use as screening intelligence only until live authority status is verified.',
-    });
-  }
-
-  return flags;
-};
-
 const buildVerdict = ({ status, confidence, redFlags, buckets, verificationLinks }) => {
   const high = redFlags.filter((flag) => flag.severity === 'high').length;
   const medium = redFlags.filter((flag) => flag.severity === 'medium').length;
@@ -552,7 +471,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     ...(guidance.citations || []),
     ...(kgis.citations || []),
   ];
-  const redFlags = buildRedFlags({ property, zone, buildability, guidance, kgis, landeed });
+  const redFlags = runParcelRedFlags({ property, zone, buildability, guidance, kgis, landeed });
   const confidence = buildConfidence({ zone, buildability, guidance, kgis });
   const buckets = buildBuckets({ property, zone, buildability, guidance, kgis, landeed });
   const verdict = buildVerdict({

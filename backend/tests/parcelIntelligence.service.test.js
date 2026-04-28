@@ -205,3 +205,213 @@ describe('parcelIntelligence.service', () => {
     expect(result).toBe('commercial');
   });
 });
+
+// ── Parity guard for the red-flag registry extraction ──────────────────────
+//
+// The body of `buildRedFlags` from parcelIntelligence.service.js (pre-refactor)
+// is inlined below verbatim and compared against the new
+// engines/parcelRedFlags.engine.runParcelRedFlags output. If the engine ever
+// drifts from the original 10-rule contract, this test fails before the
+// extraction can land. Once the engine is settled this guard can be removed
+// in a follow-up — by then we'll have the engine's own per-rule unit tests as
+// the primary contract.
+
+const { runParcelRedFlags } = require('../src/engines/parcelRedFlags.engine');
+
+const toNumberLegacy = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const legacyBuildRedFlags = ({ property, zone, buildability, guidance, kgis, landeed }) => {
+  const flags = [];
+
+  if (!zone?.zone_code) {
+    flags.push({
+      severity: 'high',
+      label: 'Planning zone not assigned',
+      detail: 'Assign a reviewed RMP zone before relying on FAR/buildability output.',
+    });
+  }
+
+  if (!toNumberLegacy(property.land_area_sqft)) {
+    flags.push({ severity: 'high', label: 'Land area missing', detail: 'Buildability cannot be calculated without land extent.' });
+  }
+
+  if (toNumberLegacy(property.road_width_mtrs) === null) {
+    flags.push({ severity: 'medium', label: 'Road width missing', detail: 'FAR matrix matching needs abutting road width.' });
+  }
+
+  if (buildability?.status === 'needs_verification') {
+    flags.push({
+      severity: 'medium',
+      label: 'Buildability pending verification',
+      detail: buildability.message,
+    });
+  }
+
+  if (buildability?.values?.setback_input_status === 'partial') {
+    flags.push({
+      severity: 'medium',
+      label: 'Setback inputs are partial',
+      detail: 'The screening buildable area applies available setback rules, but plot frontage/depth and full side/rear setback rules should be verified.',
+    });
+  }
+
+  if (!['matched', 'low_confidence'].includes(guidance?.status)) {
+    flags.push({
+      severity: 'medium',
+      label: 'Guidance value not matched',
+      detail: guidance?.message || 'Upload a guidance report or configure approved IGR rows.',
+    });
+  } else if (guidance.status === 'low_confidence') {
+    flags.push({
+      severity: 'medium',
+      label: 'Low-confidence guidance match',
+      detail: 'Analyst review is required before using this guidance value in IC material.',
+    });
+  }
+
+  if (landeed?.status === 'not_configured') {
+    flags.push({
+      severity: 'low',
+      label: 'Vendor guidance backup not configured',
+      detail: 'Landeed can remain disabled, but API credentials are required for vendor-backed guidance refresh.',
+    });
+  }
+
+  if (kgis?.status === 'not_requested') {
+    flags.push({
+      severity: 'low',
+      label: 'K-GIS not refreshed',
+      detail: 'Run refresh when coordinates are available to cache reference hierarchy/survey context.',
+    });
+  }
+
+  if (zone?.plan_status === 'draft' || buildability?.rule?.plan_status === 'draft_reference') {
+    flags.push({
+      severity: 'medium',
+      label: 'RMP status is draft/reference',
+      detail: 'Use as screening intelligence only until live authority status is verified.',
+    });
+  }
+
+  return flags;
+};
+
+const fixtures = {
+  // F1 — pristine: zone assigned, area+road set, guidance matched, K-GIS matched.
+  pristine: {
+    property: { land_area_sqft: 5000, road_width_mtrs: 18 },
+    zone: { zone_code: 'R-PZ-A', plan_status: 'live' },
+    buildability: {
+      status: 'reference_match',
+      rule: { plan_status: 'live' },
+      values: { setback_input_status: 'complete' },
+      message: null,
+    },
+    guidance: { status: 'matched', message: 'Matched.' },
+    kgis: { status: 'matched' },
+    landeed: { status: 'matched' },
+  },
+  // F2 — no zone (cascades into guidance not matched as a separate rule).
+  noZone: {
+    property: { land_area_sqft: 5000, road_width_mtrs: 18 },
+    zone: null,
+    buildability: {
+      status: 'reference_match',
+      rule: { plan_status: 'live' },
+      values: { setback_input_status: 'complete' },
+    },
+    guidance: { status: 'not_available', message: null },
+    kgis: { status: 'matched' },
+    landeed: { status: 'matched' },
+  },
+  // F3 — no land area, otherwise pristine.
+  noLandArea: {
+    property: { land_area_sqft: null, road_width_mtrs: 18 },
+    zone: { zone_code: 'R-PZ-A', plan_status: 'live' },
+    buildability: {
+      status: 'reference_match',
+      rule: { plan_status: 'live' },
+      values: { setback_input_status: 'complete' },
+    },
+    guidance: { status: 'matched' },
+    kgis: { status: 'matched' },
+    landeed: { status: 'matched' },
+  },
+  // F4 — no road, buildability pending, setback partial.
+  buildabilityCascade: {
+    property: { land_area_sqft: 5000, road_width_mtrs: null },
+    zone: { zone_code: 'R-PZ-A', plan_status: 'live' },
+    buildability: {
+      status: 'needs_verification',
+      message: 'Match a reviewed FAR matrix rule before reliance.',
+      rule: { plan_status: 'live' },
+      values: { setback_input_status: 'partial' },
+    },
+    guidance: { status: 'matched' },
+    kgis: { status: 'matched' },
+    landeed: { status: 'matched' },
+  },
+  // F5 — guidance low confidence, landeed missing, kgis not run.
+  vendorAndGuidanceWeak: {
+    property: { land_area_sqft: 5000, road_width_mtrs: 18 },
+    zone: { zone_code: 'R-PZ-A', plan_status: 'live' },
+    buildability: {
+      status: 'reference_match',
+      rule: { plan_status: 'live' },
+      values: { setback_input_status: 'complete' },
+    },
+    guidance: { status: 'low_confidence' },
+    kgis: { status: 'not_requested' },
+    landeed: { status: 'not_configured' },
+  },
+  // F6 — RMP draft (zone or rule).
+  rmpDraft: {
+    property: { land_area_sqft: 5000, road_width_mtrs: 18 },
+    zone: { zone_code: 'R-PZ-A', plan_status: 'draft' },
+    buildability: {
+      status: 'reference_match',
+      rule: { plan_status: 'draft_reference' },
+      values: { setback_input_status: 'complete' },
+    },
+    guidance: { status: 'matched' },
+    kgis: { status: 'matched' },
+    landeed: { status: 'matched' },
+  },
+  // F7 — empty inputs (defensive). Engine must not throw.
+  empty: {
+    property: {},
+    zone: null,
+    buildability: null,
+    guidance: null,
+    kgis: null,
+    landeed: null,
+  },
+};
+
+describe('parcelRedFlags engine — parity vs legacy buildRedFlags', () => {
+  test.each(Object.entries(fixtures))(
+    'fixture %s: registry output matches inlined legacy output exactly',
+    (_name, input) => {
+      const legacy = legacyBuildRedFlags(input);
+      const next = runParcelRedFlags(input);
+      expect(next).toEqual(legacy);
+    },
+  );
+
+  test('high/medium/low counts are stable across all fixtures', () => {
+    for (const [, input] of Object.entries(fixtures)) {
+      const legacy = legacyBuildRedFlags(input);
+      const next = runParcelRedFlags(input);
+      const summarise = (flags) => ({
+        high: flags.filter((f) => f.severity === 'high').length,
+        medium: flags.filter((f) => f.severity === 'medium').length,
+        low: flags.filter((f) => f.severity === 'low').length,
+      });
+      expect(summarise(next)).toEqual(summarise(legacy));
+    }
+  });
+});
