@@ -462,6 +462,34 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     buildability.reason = farReason;
   }
 
+  // T1 — what-if sliders need every candidate rule (not just the selected one)
+  // so the client can re-run selectFarRule + computeBuildabilityFromRule when
+  // road width / land area change. Strip to the columns the math actually uses.
+  buildability.far_rules_candidates = farRules.map((r) => ({
+    id: r.id,
+    org_id: r.org_id || null,
+    zone_code: r.zone_code,
+    planning_zone: r.planning_zone,
+    land_use_family: r.land_use_family,
+    plot_area_min_sqm: r.plot_area_min_sqm,
+    plot_area_max_sqm: r.plot_area_max_sqm,
+    road_width_min_m: r.road_width_min_m,
+    road_width_max_m: r.road_width_max_m,
+    base_far: r.base_far,
+    additional_far: r.additional_far,
+    max_far: r.max_far,
+    ground_coverage_pct: r.ground_coverage_pct,
+    front_setback_m: r.front_setback_m,
+    rear_setback_m: r.rear_setback_m,
+    side_setback_m: r.side_setback_m,
+    plan_version: r.plan_version,
+    plan_status: r.plan_status,
+    source_page: r.source_page,
+    source_section: r.source_section,
+    review_status: r.review_status,
+    confidence_score: r.confidence_score,
+  }));
+
   const guidance = await guidanceService.findGuidanceMatches(property);
   const landeed = refresh ? await landeedAdapter.lookupGuidanceValue(property) : landeedAdapter.getStatus();
 

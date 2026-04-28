@@ -28,6 +28,7 @@ import { useParcelVerdict } from '../../hooks/useParcelVerdict';
 import useAuthStore from '../../store/authStore';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 import VerifyItemDialog from './VerifyItemDialog';
+import WhatIfBuildability from './WhatIfBuildability';
 
 const EDITOR_ROLES = new Set(['admin', 'owner', 'editor', 'analyst']);
 
@@ -757,6 +758,8 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               citation={farCitation}
             />
           </div>
+
+          <WhatIfBuildability intelligence={intelligence} />
 
           <Card className="p-0 overflow-hidden">
             <div className="flex flex-col gap-3 border-b border-hairline-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
