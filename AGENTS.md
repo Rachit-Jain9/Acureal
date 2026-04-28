@@ -39,6 +39,8 @@ REDIP is an India-first, Bengaluru-priority deal intelligence platform. It is th
 
 It is NOT a generic CRM or document vault.
 
+The goal: compress the time between spotting a deal and making a confident IC decision, while surfacing the blind spots common in Indian real estate — title disputes, hidden encumbrances, approval gaps, RERA deviations, promoter execution risk.
+
 ---
 
 ## Code quality rules
@@ -97,11 +99,17 @@ It is NOT a generic CRM or document vault.
 - Never ship UI that looks real if the data behind it is fake or stubbed.
 - Never hardcode secrets, tokens, or credentials.
 - Never create duplicate top-level entities for the same real-world object.
+- Never auto-generate or imply legal conclusions on title, zoning, RERA, or approvals. Frame as "extraction/synthesis aid" with disclaimers and human verification prompts.
+- Never expose unverified comps or market data as authoritative. Always show source, freshness, and confidence — or "No verified feed available."
+- Every AI-synthesized narrative (risk summary, DD brief, IC memo) must carry an "AI-assisted — requires human review" label in UI and exports.
+- Preserve an immutable audit trail for every material change to a deal. Non-negotiable.
 
 ## AI routing
-- **Gemini**: document classification, OCR extraction, Kannada/English understanding, field extraction
-- **Claude**: cross-document reasoning, DD synthesis, risk narrative, IC-style analysis
-- **Deterministic code only**: all financial math, KPI calculations, approval logic, scoring
+- **Gemini**: document classification, OCR extraction (Kannada/English/Hindi), translation, field extraction from agreements, sale deeds, RERA docs
+- **Claude**: cross-document reasoning, DD synthesis, risk narrative, IC-style memo drafting, inconsistency detection across documents
+- **Deterministic code only**: all financial math, KPI calculations, area/price normalization, approval logic, scoring, GIS math
+- Route AI only when confidence thresholds are met. Otherwise show raw extraction + "low confidence — manual verification required."
+- All AI outputs that influence decisions must trace back to specific uploaded documents or verified feeds.
 
 ## Asset classes to audit when fixing financials
 When fixing a bug in one asset class, check all 9:

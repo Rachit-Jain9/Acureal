@@ -10,6 +10,12 @@ REDIP is an India-first, Bengaluru-priority, AI-powered deal intelligence, due d
 - Keep copy, formatting, and outputs investor-grade and explicit about confidence, units, and missing data.
 - Bengaluru first, India second.
 
+## Core philosophy
+
+REDIP exists to compress the time between spotting a deal and making a confident IC decision, while reducing the catastrophic blind spots common in Indian real estate — title disputes, hidden encumbrances, approval gaps, RERA deviations, and promoter execution risk. The platform must feel like a sharp co-pilot for seasoned deal professionals in Bengaluru, not a generic tool.
+
+Prioritize depth on live deals over breadth of features. Support messy, early-stage sourcing data without friction, but enforce rigor and explicit confidence levels as the deal matures toward underwriting and IC.
+
 ## Hard rules
 
 - Never fabricate zoning, legal, title, RERA, ownership, market, comp, GIS, or financial facts.
@@ -18,6 +24,10 @@ REDIP is an India-first, Bengaluru-priority, AI-powered deal intelligence, due d
 - Never hardcode secrets, tokens, or credentials.
 - Never create duplicate top-level entities for the same real-world object.
 - Never reintroduce top-level `Properties`, `Documents`, or `Actions` navigation as primary workflows.
+- Never auto-generate or imply legal conclusions on title, zoning, RERA compliance, or approvals. AI outputs must be framed as "extraction/synthesis aid" with clear disclaimers and human verification prompts.
+- Never expose unverified market intelligence or comps as authoritative. Always surface source, freshness, and confidence level — or "No verified feed available."
+- Every AI-synthesized narrative (risk summary, DD brief, IC memo) must carry a prominent "AI-assisted — requires human review" label in both UI and exported outputs.
+- Preserve an immutable audit trail for every material change to a deal (stage, financials, risks, approvals, DD items). This is non-negotiable for investor-grade reporting.
 
 ## Current information architecture
 
@@ -25,8 +35,8 @@ Primary navigation should stay focused on:
 
 - Dashboard
 - Deals
-- Market Intelligence
-- Comps
+- Market Intelligence (broad/external — city-level benchmarks, macro data, market trends)
+- Comps (verified transaction database)
 - Reports / Exports
 - Admin / Settings
 
@@ -39,30 +49,48 @@ Each deal should remain the workspace for:
 - Financial Engine
 - DD / Approvals
 - Risk
-- Market / Comps
+- Market / Comps (deal-contextualized — nearby comps, benchmarks specific to this site)
+
+Note: **Market Intelligence** (top-nav) is broad and external. **Market / Comps** (deal tab) is deal-specific and contextualized. Keep these distinct in both UI and data model.
 
 ## Domain conventions
 
-- Unknown parcel name/address is valid during sourcing.
-- Land pricing supports total price in crore, INR per sqft, and INR per acre.
+- Unknown parcel name/address is valid during sourcing. Every deal must support a "Sourcing" stage with minimal required fields — even just a temporary label like "Opportunity X – Whitefield area."
+- Land pricing supports total price in crore, INR per sqft, and INR per acre. Financial inputs must gracefully handle mixed units and partial data (e.g., "approx. 5 acres @ ₹2.5 Cr/acre" or "total consideration ₹18 Cr for ~2,80,000 sqft").
 - Area inputs may be in sqft or acres, but calculations should normalize cleanly.
 - Deal stages and transitions are defined in `backend/src/constants/domain.js`.
 - `deals.is_archived` is the archive control. Do not hard-delete active live deals.
 - External market intelligence must remain verified-data-only. If no verified feed exists, show a truthful unavailable state.
+- Risk flags must support categories common in Indian deals: Legal/Title, Regulatory/Approvals, Promoter/Execution, Market/Demand, Environmental, Financial/Model, Operational.
+- Track promoter/builder track record, past project delivery delays, and RERA project linkages — even if verification is manual initially. Never leave this field absent from the deal model.
 
 ## Backend guardrails
 
 - Keep routes thin. Put workflow logic in `backend/src/services/`.
 - Reusable deterministic calculations belong in `backend/src/utils/` or dedicated engines.
-- Read models that combine DD, approvals, risks, financials, and documents should be synthesized server-side so the frontend reads one grounded payload.
+- Read models that combine DD, approvals, risks, financials, and documents should be synthesized server-side so the frontend reads one grounded payload. Version these where material.
 - Preserve Vercel serverless compatibility. No long-lived workers or background assumptions in request handlers.
 - Provider integrations must stay behind adapters under `backend/src/services/ai/`.
+- All document processing happens server-side. Never send full documents to client-side AI calls. Log access to sensitive documents.
+
+## Data and integration strategy
+
+- Verified external data only for Market Intelligence and Comps. If no reliable, up-to-date feed exists for a data type, show a clear "Unavailable — manual input required" state with import hooks. Never fake it.
+- Prioritize adapters for:
+  - Document storage with signed URLs
+  - Future official sources (BDA, BBMP, RERA, Registration dept.) via secure APIs when available
+  - WhatsApp/email for deal activity logging — common in Indian deal flow and should be a first-class ingestion path
+- Track data provenance and last-verified date for every critical field. An unverified comp looks different from a verified one.
+- Synthesized read models (DD + approvals + risks + financials + documents) must be generated server-side and versioned where material.
+- Direct integration with Karnataka land records (Bhoomi / Kaveri portal) and automated RERA project status verification are classic manual blockers. Record the exact workaround in `TODO_DATA.md` or `TODO_LEGAL.md`. Do not fake connectivity.
 
 ## AI routing policy
 
-- Gemini: document classification, OCR-style extraction, scanned Kannada/English understanding, translation, field extraction.
-- Claude: cross-document reasoning, DD synthesis, risk narrative, next-step recommendations, IC-style analysis.
-- Deterministic code only: financial math, KPI math, sensitivities, GIS math, approval status logic, comp normalization, scoring.
+- **Gemini**: Document classification, OCR-style extraction (including scanned Kannada/English/Hindi), translation, structured field extraction from agreements, sale deeds, approvals, and RERA documents.
+- **Claude**: Cross-document reasoning, DD synthesis, risk narrative generation, next-step recommendations, IC-style memo drafting, inconsistency detection across documents.
+- **Deterministic code only**: All financial math, KPI calculations, sensitivities, area/price normalizations (sqft ↔ acres, crore, per-acre, per-sqft), comp normalization, approval status logic, scoring/risk flagging, GIS calculations.
+- Route AI only when confidence thresholds are met. Otherwise surface raw extraction with a "low confidence — manual verification required" prompt.
+- All AI outputs that influence decisions must include traceable references back to specific uploaded documents or verified feeds. No free-floating AI assertions.
 
 ## Security and privacy
 
@@ -71,6 +99,7 @@ Each deal should remain the workspace for:
 - Validate file type and size on upload.
 - Prefer signed URLs or controlled access for private storage.
 - Make session persistence explicit to the user. Default browser-session login should end on browser close unless `Remember me` is chosen.
+- All document processing happens server-side. Never send full documents to client-side AI calls. Log access to sensitive documents.
 
 ## Validation expectations
 
@@ -79,6 +108,7 @@ When a workflow changes, verify as much of this chain as possible:
 - create deal
 - link/unlink parcel
 - upload/download/delete document
+- AI extraction → human review → commit to deal record
 - seed and edit DD items
 - seed and edit approval items
 - create/update/delete risk flags
@@ -95,6 +125,8 @@ If a feature needs one of these, do not fake it:
 - official zoning/master-plan/rule documents
 - Karnataka RERA verification access
 - EC/registry access beyond uploaded documents
+- Direct integration with Karnataka land records (Bhoomi / Kaveri portal)
+- Automated RERA project status verification
 - private provider credentials or storage tokens
 - production deployment auth
 
@@ -103,6 +135,17 @@ Instead:
 - build the right adapter, schema, or UI hook
 - leave the feature disabled or clearly manual
 - record the exact blocker in `TODO_MANUAL.md`, `TODO_DATA.md`, or `TODO_LEGAL.md`
+
+## Adoption and success metrics
+
+The platform succeeds when deal teams spend dramatically less time on mechanical data chasing and more time on judgment. Target outcomes:
+
+- Time from deal creation to complete DD summary is significantly reduced.
+- IC memos are generated with clear traceability and explicit confidence calls.
+- Zero tolerance for "it worked in demo but breaks on real messy data."
+- High internal adoption: users actively use the Financial Engine, Risk module, and Activity timeline instead of falling back to Excel and email.
+
+Track via session usage, time-to-stage transitions, and qualitative feedback from Bengaluru deal professionals.
 
 ## Local commands
 
