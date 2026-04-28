@@ -457,6 +457,20 @@ html[data-theme='dark'] {
   .redip-hero-pulse    { animation: redip-grid-pulse 10s ease-in-out infinite; }
   .redip-ticker        { animation: redip-ticker 45s linear infinite; }
 
+  /* Editorial UI motion — short, decisive transitions per FRONTEND_GUIDELINES.md */
+  @keyframes zonepicker-slide {
+    0%   { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    0%   { opacity: 0; transform: translateY(4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scaleIn {
+    0%   { opacity: 0; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .redip-reveal { opacity: 1; transform: none; transition: none; }
     .redip-hero-drift, .redip-hero-skyline, .redip-hero-orbit,
