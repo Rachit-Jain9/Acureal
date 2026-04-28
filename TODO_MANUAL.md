@@ -73,23 +73,6 @@ Verify these flows against a live DB and storage setup:
 - open deal overview and confirm readiness + next steps render
 - trigger document extraction on an uploaded PDF/image
 
-### 6. Re-run blocked validations outside sandbox if needed
-
-The local sandbox blocked process spawning for:
-
-- `backend` tests
-- `frontend` build
-
-Re-run these with local shell access or escalated execution:
-
-```powershell
-cd backend
-powershell -ExecutionPolicy Bypass -Command "npm test"
-
-cd ..\frontend
-powershell -ExecutionPolicy Bypass -Command "npm run build"
-```
-
 ## Data / legal blockers
 
 These are intentionally not faked in code:
@@ -124,17 +107,7 @@ These need design, credentials, or infrastructure this repo doesn't have. Do NOT
 - Risk model, scoring, recommendation — all blocked on a labeled-deal dataset.
 - CLAUDE.md hard rule: "Never use LLMs for deterministic math, rule-engine decisions, or core underwriting calculations." Any ML here must be an overlay, not a replacement.
 
-### 10. Recharts → Tremor or custom charts rewrite
-
-- Cosmetic, non-urgent. Don't do it unless a concrete chart requirement can't be met by Recharts.
-
-### 11. Interactive MethodologyExplorer rewrite
+### 10. Interactive MethodologyExplorer rewrite
 
 - Currently a static page. Partially addressed in this cycle by the new client-side `ProvenanceGraphView` (deal-level DAG view). A full interactive explainer (filter by asset class, toggle kill switches live, what-if) is a bigger UX project.
 
-## Current product notes
-
-- Deals are the core entity and top-level properties list has been folded out of the main navigation.
-- Documents and activities are deal-level modules, not separate primary pages.
-- Session persistence is now explicit: browser-session by default, persistent only when `Remember me` is chosen.
-- India regulatory constants live in `packages/financial-kernel/src/config/india.ts` — all downstream code imports from there instead of hardcoding rates.

@@ -10,7 +10,7 @@
 
 **Gate opens when:** key management provisioned (HSM/KMS), signing service deployed, verification UX shipped, compliance sign-off on scheme (RSA/ECDSA + envelope format).
 
-Tracked in `TODO_MANUAL.md` item 9.
+Tracked in `TODO_MANUAL.md` item 7.
 
 ---
 
