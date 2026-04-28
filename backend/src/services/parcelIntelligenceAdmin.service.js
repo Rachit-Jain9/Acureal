@@ -2,6 +2,7 @@ const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const landeedAdapter = require('./adapters/landeed.adapter');
 const { getProviderAvailability } = require('./ai/providerRegistry');
+const { listRegistryDescriptors: listRedFlagRuleDescriptors } = require('../engines/parcelRedFlags.engine');
 
 const REVIEW_STATUSES = new Set(['pending', 'approved', 'rejected', 'needs_review']);
 const REVIEW_TYPES = new Set(['evidence_source', 'evidence_fact', 'guidance_value', 'far_rule']);
@@ -437,6 +438,7 @@ const getStatus = async () => {
         latest_snapshot_at: null,
         latest_evidence_source_at: null,
       },
+      red_flag_rules: listRedFlagRuleDescriptors(),
     };
   }
 
@@ -500,6 +502,7 @@ const getStatus = async () => {
       latest_snapshot_at: latestSnapshot.rows[0]?.generated_at || null,
       latest_evidence_source_at: latestEvidence.rows[0]?.created_at || null,
     },
+    red_flag_rules: listRedFlagRuleDescriptors(),
   };
 };
 
