@@ -47,9 +47,49 @@ UI redesign — PR opened, not yet merged:
 - VerifiedPill now uses the design-system `<Badge tone="success">` primitive instead of hand-rolled emerald
 - 1 file changed, +287 / −196 lines, build green, no logic/hook/query changes (presentation only)
 
+**Late-late session — same day, after PR #70 merged and deployed:**
+
+Two more PRs shipped, both merged and deployed to https://redip.vercel.app.
+
+**PR #71 — Frontend motion/polish guidelines** (merged):
+- Created `docs/FRONTEND_GUIDELINES.md` — the standing rulebook for every visual change
+- 13 numbered sections: motion principles, exact timing tables (120ms hover, 220ms modal open, 600ms count-up, 700ms chart draw-in), required 4-state interactions, skeleton-not-spinner rule, live data treatment, 3D/parallax used surgically, chart animation, page transitions, accessibility, performance budget, content presence, 7 feel-check questions, default tooling
+- Wired into `CLAUDE.md` and `AGENTS.md` so every AI tool (Claude Code, Codex, Cursor) reads it automatically at session start
+- Anti-patterns explicitly banned: gradients on hero, glow/neon, decorative emojis, auto-play, spinner-for-skeleton, saturated pastel tints, decorative parallax, bouncy spring physics on professional surfaces
+- 253 lines added, no code changes. Pure docs.
+
+**PR #72 — Master Plan panel editorial + larger interactive K-GIS map** (merged):
+- First PR following the new FRONTEND_GUIDELINES rulebook
+- **Master Plan Zone panel** (`MasterPlanZonePanel.jsx`):
+  - Saturated `bg-primary-600` blue header replaced with neutral chrome + 4px colored left stripe (green=assigned, amber=unassigned)
+  - "Assigned" success Badge appears next to zone code
+  - ZoneFact tiles: em-dash + single "Needs review" chip for missing values; review status renders as proper Badge tone (success/warn) instead of plain text
+  - Picker dropdown slides in 220ms decelerate, skeleton rows pulse staggered while loading
+  - Save/Cancel buttons fade-up 180ms when notes are dirty
+  - All buttons have full 4-state interactions (default → hover → focus-visible → active)
+  - Custom rotating chevron on source-notes details element
+- **K-GIS map upgrade** (`ReadOnlyPropertyMap.jsx`):
+  - Default height 224px → **440px** (almost 2× bigger)
+  - **Layer toggle** in top-right: Streets (OSM) ↔ Satellite (Esri imagery)
+  - **Scroll-wheel zoom enabled** — was disabled before, felt dead
+  - **Auto-fits to parcel geometry** with 500ms animated zoom when geometry exists
+  - **Fullscreen button** bottom-right (browser Fullscreen API, no new dependency)
+  - Better marker (filled blue circle, proper border) and stronger teal geometry overlay
+- **Parcel panel layout restructure** (`ParcelIntelligencePanel.jsx`):
+  - K-GIS card moved out of the cramped right sidebar into its own full-width row at the bottom
+  - Right sidebar now reserved for confidence + flags only
+- **Motion plumbing** (`index.css`):
+  - 3 new keyframes: `zonepicker-slide` (220ms decelerate), `fadeInUp` (180ms ease-out), `scaleIn` (150ms ease-out)
+  - Already covered by existing `prefers-reduced-motion: reduce` media query
+- 4 files changed, +396 / −123 lines, build green (37s)
+- No new dependencies. framer-motion considered and rejected — pure CSS keyframes sufficient.
+
 **What's next:**
-- Wait for PR #70 CI to pass and merge
-- Verify the Parcel Intelligence redesign visually on the live deal page after deploy
-- Open candidates for follow-up: same editorial treatment for `MasterPlanZonePanel.jsx` (sibling component on the same tab, same pastel issues likely), build a "change member role" admin UI (currently no way to demote/promote existing teammates), prominent Parcel/Zoning map (Grok flagged it as too small)
+- Visually verify the live https://redip.vercel.app deal Regulatory/Zoning tab after deploy completes
+- Open candidates for follow-up:
+  - Build a "change member role" admin UI (currently no way to demote/promote existing teammates without direct DB updates)
+  - Add a verification UI for the new authority-verification card cluster (Grok flagged that interactivity needs work)
+  - Apply the same editorial treatment to other surfaces with similar issues (Comps, Risk tab, Financials KPI cards as needed)
+  - Add count-up animations to KPI tiles on data refresh per FRONTEND_GUIDELINES section 5
 
 ---
