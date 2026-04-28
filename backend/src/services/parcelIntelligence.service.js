@@ -270,10 +270,10 @@ const saveSnapshot = async ({ propertyId, output, userId }) => {
   }
 };
 
-const getLatestSnapshotId = async (propertyId) => {
+const loadLatestSnapshotMeta = async (propertyId) => {
   try {
     const result = await query(
-      `SELECT id
+      `SELECT id, generated_at
        FROM regulatory_data.parcel_intelligence_snapshots
        WHERE property_id = $1
          AND org_id = current_organization_id()
@@ -281,7 +281,7 @@ const getLatestSnapshotId = async (propertyId) => {
        LIMIT 1`,
       [propertyId]
     );
-    return result.rows[0]?.id || null;
+    return result.rows[0] || null;
   } catch {
     return null;
   }
@@ -432,6 +432,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   const zone = property.zone || null;
   const landUseFamily = normalizeLandUseFamily(property, zone);
   const farRules = await loadFarRules({ property, zone, landUseFamily });
+  const previousMeta = await loadLatestSnapshotMeta(propertyId);
   const { rule, reason: farReason } = selectFarRule(farRules, {
     landAreaSqft: property.land_area_sqft,
     roadWidthMtrs: property.road_width_mtrs,
@@ -471,7 +472,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     ...(guidance.citations || []),
     ...(kgis.citations || []),
   ];
-  const redFlags = runParcelRedFlags({ property, zone, buildability, guidance, kgis, landeed });
+  const redFlags = runParcelRedFlags({ property, zone, buildability, guidance, kgis, landeed, snapshot: { generated_at: previousMeta?.generated_at || null } });
   const confidence = buildConfidence({ zone, buildability, guidance, kgis });
   const buckets = buildBuckets({ property, zone, buildability, guidance, kgis, landeed });
   const verdict = buildVerdict({
@@ -538,12 +539,12 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
 
   // Always expose a snapshot_id so the frontend can attach manual evidence
   // links via the polymorphic evidence-links endpoint. On refresh we use the
-  // newly-saved row; on read we fall back to the most recent prior snapshot.
+  // newly-saved row; on read we use the prior snapshot loaded at compose-start.
   if (refresh) {
     const newId = await saveSnapshot({ propertyId, output, userId });
-    output.snapshot_id = newId || (await getLatestSnapshotId(propertyId));
+    output.snapshot_id = newId || previousMeta?.id || null;
   } else {
-    output.snapshot_id = await getLatestSnapshotId(propertyId);
+    output.snapshot_id = previousMeta?.id || null;
   }
   return output;
 };
@@ -578,7 +579,7 @@ module.exports = {
   getParcelIntelligence,
   refreshParcelIntelligence,
   normalizeLandUseFamily,
-  getLatestSnapshotId,
+  loadLatestSnapshotMeta,
   NEEDS_VERIFICATION_KEYS,
   VERIFICATION_LINKS,
 };

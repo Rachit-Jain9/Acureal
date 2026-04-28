@@ -122,6 +122,24 @@ const PARCEL_RED_FLAG_REGISTRY = Object.freeze([
       zone?.plan_status === 'draft' || buildability?.rule?.plan_status === 'draft_reference',
     detailFor: () => 'Use as screening intelligence only until live authority status is verified.',
   },
+  {
+    id: 'snapshot_stale',
+    severity: SEVERITY.LOW,
+    label: 'Parcel snapshot is stale',
+    description:
+      'No parcel intelligence refresh has been run in the last 30 days. K-GIS hierarchy, guidance match, and buildability may not reflect current data.',
+    predicate: ({ snapshot } = {}) => {
+      const generatedAt = snapshot?.generated_at;
+      if (!generatedAt) return false;
+      return Date.now() - new Date(generatedAt).getTime() > 30 * 24 * 60 * 60 * 1000;
+    },
+    detailFor: ({ snapshot } = {}) => {
+      const generatedAt = snapshot?.generated_at;
+      if (!generatedAt) return 'Run a refresh to update K-GIS hierarchy, guidance match, and buildability.';
+      const days = Math.floor((Date.now() - new Date(generatedAt).getTime()) / (1000 * 60 * 60 * 24));
+      return `Last refresh was ${days} day${days === 1 ? '' : 's'} ago. Run a refresh to ensure K-GIS, guidance, and buildability are current.`;
+    },
+  },
 ]);
 
 // Run every registered rule against the inputs. Returns the same

@@ -1,5 +1,5 @@
 jest.mock('../src/services/parcelIntelligence.service', () => ({
-  getLatestSnapshotId: jest.fn(),
+  loadLatestSnapshotMeta: jest.fn(),
   NEEDS_VERIFICATION_KEYS: new Set([
     'zoning_assignment',
     'far_assignment',
@@ -37,7 +37,7 @@ describe('parcelIntelligenceVerify.verifyItem', () => {
   });
 
   test('errors when no snapshot exists', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue(null);
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue(null);
     await expect(
       verifyService.verifyItem({
         propertyId: 'p1',
@@ -48,14 +48,14 @@ describe('parcelIntelligenceVerify.verifyItem', () => {
   });
 
   test('requires at least one of doc/url/note', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-1', generated_at: new Date().toISOString() });
     await expect(
       verifyService.verifyItem({ propertyId: 'p1', itemKey: 'guidance_value' })
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
   test('uses link_kind=document when documentId provided', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-1', generated_at: new Date().toISOString() });
     evidenceLinks.attachLink.mockResolvedValue({ id: 'link-1' });
     await verifyService.verifyItem({
       propertyId: 'p1',
@@ -76,7 +76,7 @@ describe('parcelIntelligenceVerify.verifyItem', () => {
   });
 
   test('uses link_kind=manual_verification when only url+note', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-1', generated_at: new Date().toISOString() });
     evidenceLinks.attachLink.mockResolvedValue({ id: 'link-2' });
     await verifyService.verifyItem({
       propertyId: 'p1',
@@ -97,14 +97,14 @@ describe('parcelIntelligenceVerify.verifyItem', () => {
 
 describe('parcelIntelligenceVerify.listVerifications', () => {
   test('returns empty when no snapshot exists', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue(null);
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue(null);
     const result = await verifyService.listVerifications('p1');
     expect(result).toEqual({ snapshot_id: null, verifications: [] });
     expect(evidenceLinks.listForOwner).not.toHaveBeenCalled();
   });
 
   test('filters to item-keyed links and parses item_key', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-1', generated_at: new Date().toISOString() });
     evidenceLinks.listForOwner.mockResolvedValue([
       { id: 'l1', source_section: 'item:guidance_value', notes: 'IGR ok' },
       { id: 'l2', source_section: null, notes: 'unrelated link' },
@@ -119,7 +119,7 @@ describe('parcelIntelligenceVerify.listVerifications', () => {
   });
 
   test('treats a stale snapshot owner as an empty verification list', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-stale');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-stale', generated_at: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString() });
     evidenceLinks.listForOwner.mockRejectedValue(Object.assign(new Error('not found'), { statusCode: 404 }));
 
     const result = await verifyService.listVerifications('p1');
@@ -130,7 +130,7 @@ describe('parcelIntelligenceVerify.listVerifications', () => {
 
 describe('parcelIntelligenceVerify.removeVerification', () => {
   test('requires a current snapshot before unlinking', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue(null);
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue(null);
 
     await expect(
       verifyService.removeVerification({ propertyId: 'p1', linkId: 'link-1' })
@@ -139,7 +139,7 @@ describe('parcelIntelligenceVerify.removeVerification', () => {
   });
 
   test('rejects links that do not belong to the parcel snapshot', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-1', generated_at: new Date().toISOString() });
     query.mockResolvedValue({ rows: [] });
 
     await expect(
@@ -149,7 +149,7 @@ describe('parcelIntelligenceVerify.removeVerification', () => {
   });
 
   test('detaches only item-keyed links for the latest parcel snapshot', async () => {
-    parcelService.getLatestSnapshotId.mockResolvedValue('snap-1');
+    parcelService.loadLatestSnapshotMeta.mockResolvedValue({ id: 'snap-1', generated_at: new Date().toISOString() });
     query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
     evidenceLinks.detachLink.mockResolvedValue({ deleted: true, id: 'link-1' });
 

@@ -35,6 +35,9 @@ const baselineInputs = () => ({
   landeed: {
     status: 'matched',
   },
+  snapshot: {
+    generated_at: new Date().toISOString(),
+  },
 });
 
 const ruleById = (id) => PARCEL_RED_FLAG_REGISTRY.find((rule) => rule.id === id);
@@ -327,8 +330,55 @@ describe('rule: rmp_draft_or_reference', () => {
   });
 });
 
+describe('rule: snapshot_stale', () => {
+  const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+  const recentDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+
+  test('fires when generated_at is more than 30 days ago', () => {
+    const inputs = baselineInputs();
+    inputs.snapshot = { generated_at: staleDate };
+    expect(ruleById('snapshot_stale').predicate(inputs)).toBe(true);
+  });
+
+  test('does not fire when generated_at is recent', () => {
+    const inputs = baselineInputs();
+    inputs.snapshot = { generated_at: recentDate };
+    expect(ruleById('snapshot_stale').predicate(inputs)).toBe(false);
+  });
+
+  test('does not fire when generated_at is null (first-ever load)', () => {
+    const inputs = baselineInputs();
+    inputs.snapshot = { generated_at: null };
+    expect(ruleById('snapshot_stale').predicate(inputs)).toBe(false);
+  });
+
+  test('does not fire when snapshot is missing entirely', () => {
+    const inputs = baselineInputs();
+    delete inputs.snapshot;
+    expect(ruleById('snapshot_stale').predicate(inputs)).toBe(false);
+  });
+
+  test('does not fire on baseline (generated_at = now)', () => {
+    expect(ruleById('snapshot_stale').predicate(baselineInputs())).toBe(false);
+  });
+
+  test('detail string includes day count when generated_at is stale', () => {
+    const inputs = baselineInputs();
+    inputs.snapshot = { generated_at: staleDate };
+    const flag = runParcelRedFlags(inputs).find((f) => f.label === 'Parcel snapshot is stale');
+    expect(flag).toBeDefined();
+    expect(flag.detail).toMatch(/31 day/);
+  });
+
+  test('detail falls back to generic message when generated_at is null', () => {
+    const rule = ruleById('snapshot_stale');
+    const detail = rule.detailFor({ snapshot: { generated_at: null } });
+    expect(detail).toContain('Run a refresh');
+  });
+});
+
 describe('parcelRedFlags engine — coverage sweep', () => {
-  test('all 10 documented rules are present in the registry by id', () => {
+  test('all 11 documented rules are present in the registry by id', () => {
     const expectedIds = [
       'planning_zone_not_assigned',
       'land_area_missing',
@@ -340,6 +390,7 @@ describe('parcelRedFlags engine — coverage sweep', () => {
       'landeed_not_configured',
       'kgis_not_refreshed',
       'rmp_draft_or_reference',
+      'snapshot_stale',
     ];
     const actualIds = PARCEL_RED_FLAG_REGISTRY.map((rule) => rule.id);
     expect(actualIds).toEqual(expectedIds);
