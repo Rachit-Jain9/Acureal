@@ -408,53 +408,67 @@ function BucketList({
   );
 }
 
-function KgisPreview({ intelligence }) {
+function KgisHierarchyStrip({ hierarchy = {} }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      {[
+        ['Village', hierarchy.village],
+        ['Hobli', hierarchy.hobli],
+        ['Taluk', hierarchy.taluk],
+        ['District', hierarchy.district],
+      ].map(([label, value]) => (
+        <div key={label} className="rounded-editorial border border-hairline-soft bg-bg-secondary px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.08em] text-content-muted">{label}</div>
+          <div className="mt-1 truncate text-sm font-medium text-content-primary">
+            {value || <span className="text-content-muted">—</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KgisMapCard({ intelligence }) {
   const lat = intelligence?.inputs?.lat;
   const lng = intelligence?.inputs?.lng;
   const kgis = intelligence?.kgis;
   const hierarchy = kgis?.hierarchy || {};
+  const hasCoords = Boolean(lat && lng);
 
   return (
     <Card className="p-0 overflow-hidden">
-      {lat && lng ? (
-        <ReadOnlyPropertyMap
-          lat={lat}
-          lng={lng}
-          geometryGeojson={kgis?.geometry_geojson}
-          title="Parcel reference point"
-          heightClassName="h-56"
-          zoom={15}
-        />
-      ) : (
-        <div className="h-40 flex items-center justify-center bg-bg-secondary text-sm text-content-secondary">
-          Add coordinates to enable K-GIS preview.
-        </div>
-      )}
-      <div className="p-4">
-        <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 border-b border-hairline-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
             <MapPin size={15} />
             K-GIS reference context
           </div>
-          <StatusPill status={kgis?.status} />
+          <p className="mt-1 text-xs text-content-secondary">
+            Cadastral boundary, hierarchy, and reference geometry. Toggle Streets ↔ Satellite or expand to fullscreen.
+          </p>
         </div>
-        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-          {[
-            ['Village', hierarchy.village],
-            ['Hobli', hierarchy.hobli],
-            ['Taluk', hierarchy.taluk],
-            ['District', hierarchy.district],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-editorial border border-hairline-soft bg-bg-secondary px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.08em] text-content-muted">{label}</div>
-              <div className="font-medium text-content-primary mt-1 truncate text-sm">
-                {value || <span className="text-content-muted">—</span>}
-              </div>
-            </div>
-          ))}
-        </div>
+        <StatusPill status={kgis?.status} />
+      </div>
+      <div className="space-y-4 p-5">
+        {hasCoords ? (
+          <ReadOnlyPropertyMap
+            lat={lat}
+            lng={lng}
+            geometryGeojson={kgis?.geometry_geojson}
+            title={intelligence?.inputs?.name || 'Parcel reference point'}
+            heightClassName="h-[440px]"
+            zoom={17}
+          />
+        ) : (
+          <div className="flex h-56 items-center justify-center rounded-editorial border border-dashed border-hairline bg-bg-secondary text-sm text-content-secondary">
+            Add parcel coordinates to enable the K-GIS preview.
+          </div>
+        )}
+        <KgisHierarchyStrip hierarchy={hierarchy} />
         {kgis?.message ? (
-          <div className="mt-3 text-xs text-content-secondary leading-relaxed">{kgis.message}</div>
+          <div className="rounded-editorial border border-hairline-soft bg-bg-secondary px-3 py-2 text-xs leading-relaxed text-content-secondary">
+            {kgis.message}
+          </div>
         ) : null}
       </div>
     </Card>
@@ -799,9 +813,10 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
         <div className="space-y-5">
           <ConfidenceMeter confidence={intelligence?.confidence} />
           <RedFlags flags={intelligence?.red_flags || []} />
-          <KgisPreview intelligence={intelligence} />
         </div>
       </div>
+
+      <KgisMapCard intelligence={intelligence} />
 
       <Card className="p-0 overflow-hidden">
         <div className="border-b border-hairline-soft px-5 py-4">
