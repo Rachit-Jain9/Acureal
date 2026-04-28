@@ -206,7 +206,77 @@ function MetricTile({ label, value, unit, citation }) {
   );
 }
 
-function ConfidenceMeter({ confidence }) {
+// Per-pillar drilldown — names the inputs that produced the score so analysts
+// can see *why* a number is what it is rather than guessing. Mirrors how
+// buildConfidence() in parcelIntelligence.service.js computes each pillar.
+const buildPillarDetails = (key, intelligence) => {
+  const value = Math.max(0, Math.min(1, Number(intelligence?.confidence?.[key] || 0)));
+  if (key === 'zoning') {
+    const z = intelligence?.zoning;
+    const factors = [
+      { label: 'Zone code', value: z?.zone_code || '—' },
+      { label: 'Zone name', value: z?.zone_name || '—' },
+      { label: 'Planning zone', value: z?.planning_zone || '—' },
+      { label: 'Plan version', value: z?.plan_version || '—' },
+      { label: 'Plan status', value: z?.plan_status || '—' },
+    ];
+    const rationale = z?.zone_code
+      ? 'Score reflects an approved RMP zone assignment. Manual verification on K-GIS still recommended.'
+      : 'No reviewed zone is assigned. Assign a zone in the admin to lift this score.';
+    return { value, factors, rationale };
+  }
+  if (key === 'buildability') {
+    const b = intelligence?.buildability;
+    const factors = [
+      { label: 'Status', value: b?.status?.replace(/_/g, ' ') || '—' },
+      { label: 'Source', value: b?.source?.replace(/_/g, ' ') || '—' },
+      { label: 'Base FAR', value: b?.values?.base_far ?? '—' },
+      { label: 'Max FAR', value: b?.values?.max_far ?? '—' },
+      { label: 'Setback inputs', value: b?.values?.setback_input_status?.replace(/_/g, ' ') || '—' },
+    ];
+    const rationale = b?.status === 'reference_match'
+      ? 'A reviewed FAR matrix rule matched this parcel. Setback estimate applied where rule values exist.'
+      : b?.rule
+        ? 'A rule is matched but additional/TDR FAR is pending authority verification.'
+        : 'No FAR matrix rule matches this parcel. Buildability cannot be reference-bound.';
+    return { value, factors, rationale };
+  }
+  if (key === 'guidance') {
+    const g = intelligence?.guidance_value?.official;
+    const sel = g?.selected;
+    const factors = [
+      { label: 'Status', value: g?.status?.replace(/_/g, ' ') || '—' },
+      { label: 'Locality', value: sel?.locality || '—' },
+      { label: 'Road', value: sel?.road_name || '—' },
+      { label: '₹ / sqft', value: sel?.value_inr_per_sqft ? `₹${Number(sel.value_inr_per_sqft).toLocaleString('en-IN')}` : '—' },
+      { label: 'Effective from', value: sel?.effective_from || '—' },
+    ];
+    const rationale = g?.status === 'matched'
+      ? 'An approved IGR guidance row matched this parcel locality. Verify on igr.karnataka.gov.in before reliance.'
+      : 'No approved guidance match. Upload a guidance source or run an authority lookup.';
+    return { value, factors, rationale };
+  }
+  if (key === 'kgis') {
+    const k = intelligence?.kgis;
+    const factors = [
+      { label: 'Status', value: k?.status?.replace(/_/g, ' ') || '—' },
+      { label: 'Village', value: k?.hierarchy?.village || '—' },
+      { label: 'Hobli', value: k?.hierarchy?.hobli || '—' },
+      { label: 'Taluk', value: k?.hierarchy?.taluk || '—' },
+      { label: 'Refreshed', value: k?.refreshed_at ? new Date(k.refreshed_at).toLocaleDateString('en-IN') : '—' },
+    ];
+    const rationale = k?.status === 'matched'
+      ? 'K-GIS reference hierarchy and survey context cached. Treat geometry as reference-only.'
+      : k?.status === 'not_requested'
+        ? 'K-GIS lookup has not been run. Refresh the parcel with coordinates set to lift this score.'
+        : 'K-GIS context unavailable. Verify on kgis.ksrsac.in/cadastral.';
+    return { value, factors, rationale };
+  }
+  return { value, factors: [], rationale: null };
+};
+
+function ConfidenceMeter({ confidence, intelligence }) {
+  const [openPillar, setOpenPillar] = useState(null);
   const overall = Math.max(0, Math.min(1, Number(confidence?.overall || 0)));
   const pillarValues = CONFIDENCE_PILLARS.map((pillar) => ({
     ...pillar,
@@ -220,6 +290,16 @@ function ConfidenceMeter({ confidence }) {
     return 'bg-bg-secondary';
   };
 
+  const toneAccent = (value) => {
+    if (value >= 0.7) return 'border-l-emerald-500';
+    if (value >= 0.4) return 'border-l-amber-500';
+    if (value > 0) return 'border-l-rose-400';
+    return 'border-l-content-muted';
+  };
+
+  const detail = openPillar ? buildPillarDetails(openPillar, intelligence) : null;
+  const openLabel = openPillar ? CONFIDENCE_PILLARS.find((p) => p.key === openPillar)?.label : null;
+
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
@@ -228,7 +308,7 @@ function ConfidenceMeter({ confidence }) {
             Reference confidence
           </div>
           <div className="mt-1 text-xs text-content-secondary">
-            Quality across zoning, buildability, guidance, and K-GIS.
+            Quality across zoning, buildability, guidance, and K-GIS. Click a pillar for detail.
           </div>
         </div>
         <div className="font-display text-3xl font-semibold text-content-primary tabular-nums">
@@ -238,25 +318,81 @@ function ConfidenceMeter({ confidence }) {
       </div>
 
       <div className="mt-4 grid grid-cols-4 gap-1.5">
-        {pillarValues.map((pillar) => (
-          <div key={pillar.key} className="flex flex-col gap-1.5">
-            <div className="h-1.5 rounded-full bg-bg-secondary overflow-hidden">
-              <div
-                className={clsx('h-full rounded-full transition-all', segmentTone(pillar.value))}
-                style={{ width: `${pillar.value * 100}%` }}
-              />
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[10px] uppercase tracking-[0.08em] text-content-muted">
-                {pillar.label}
-              </span>
-              <span className="text-[11px] font-medium text-content-secondary tabular-nums">
-                {Math.round(pillar.value * 100)}%
-              </span>
-            </div>
-          </div>
-        ))}
+        {pillarValues.map((pillar) => {
+          const isOpen = openPillar === pillar.key;
+          return (
+            <button
+              type="button"
+              key={pillar.key}
+              onClick={() => setOpenPillar(isOpen ? null : pillar.key)}
+              className={clsx(
+                'flex flex-col gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors',
+                'hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+                'active:scale-[0.99]',
+                isOpen && 'bg-bg-secondary'
+              )}
+              aria-expanded={isOpen}
+              aria-label={`${pillar.label} confidence breakdown`}
+            >
+              <div className="h-1.5 rounded-full bg-bg-secondary overflow-hidden">
+                <div
+                  className={clsx('h-full rounded-full transition-all duration-150', segmentTone(pillar.value))}
+                  style={{ width: `${pillar.value * 100}%` }}
+                />
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className={clsx(
+                  'text-[10px] uppercase tracking-[0.08em]',
+                  isOpen ? 'text-content-primary font-semibold' : 'text-content-muted'
+                )}>
+                  {pillar.label}
+                </span>
+                <span className="text-[11px] font-medium text-content-secondary tabular-nums">
+                  {Math.round(pillar.value * 100)}%
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      {detail && (
+        <div
+          className={clsx(
+            'mt-4 rounded-editorial border border-hairline bg-bg-secondary border-l-4 px-4 py-3',
+            toneAccent(detail.value)
+          )}
+        >
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-content-primary">
+              {openLabel} · {Math.round(detail.value * 100)}%
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpenPillar(null)}
+              className="text-[10px] font-medium text-content-muted hover:text-content-primary transition-colors"
+              aria-label="Close confidence breakdown"
+            >
+              ×
+            </button>
+          </div>
+          {detail.rationale && (
+            <p className="text-xs text-content-secondary leading-relaxed mb-3">
+              {detail.rationale}
+            </p>
+          )}
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            {detail.factors.map((f) => (
+              <div key={f.label} className="flex items-baseline justify-between gap-2 text-[11px]">
+                <dt className="text-content-muted shrink-0">{f.label}</dt>
+                <dd className="font-medium text-content-primary tabular-nums truncate" title={String(f.value)}>
+                  {String(f.value)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
     </Card>
   );
 }
@@ -817,7 +953,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
         </div>
 
         <div className="space-y-5">
-          <ConfidenceMeter confidence={intelligence?.confidence} />
+          <ConfidenceMeter confidence={intelligence?.confidence} intelligence={intelligence} />
           <RedFlags flags={intelligence?.red_flags || []} />
         </div>
       </div>

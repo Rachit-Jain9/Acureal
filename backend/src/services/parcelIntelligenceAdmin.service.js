@@ -438,6 +438,7 @@ const getStatus = async () => {
         latest_snapshot_at: null,
         latest_evidence_source_at: null,
       },
+      ai_usage: null,
       red_flag_rules: listRedFlagRuleDescriptors(),
     };
   }
@@ -452,6 +453,7 @@ const getStatus = async () => {
     kgisFreshCount,
     latestSnapshot,
     latestEvidence,
+    aiUsage,
   ] = await Promise.all([
     countByStatus('regulatory_data.evidence_sources'),
     countByStatus('regulatory_data.evidence_facts'),
@@ -483,6 +485,7 @@ const getStatus = async () => {
        ORDER BY created_at DESC
        LIMIT 1`
     ),
+    getAiUsageLast7Days(),
   ]);
 
   return {
@@ -502,8 +505,67 @@ const getStatus = async () => {
       latest_snapshot_at: latestSnapshot.rows[0]?.generated_at || null,
       latest_evidence_source_at: latestEvidence.rows[0]?.created_at || null,
     },
+    ai_usage: aiUsage,
     red_flag_rules: listRedFlagRuleDescriptors(),
   };
+};
+
+// Last-7-day Gemini/Claude/OpenAI usage rollup. Returns a per-provider list
+// (count, p50/p95 latency, total cost, failure rate) plus a totals row.
+// Failures gracefully — if ai_call_logs doesn't exist yet, return null.
+const getAiUsageLast7Days = async () => {
+  try {
+    const result = await query(
+      `SELECT
+         provider,
+         COUNT(*)::int AS calls,
+         COUNT(*) FILTER (WHERE status <> 'success')::int AS failures,
+         ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms))::int AS p50_latency_ms,
+         ROUND(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms))::int AS p95_latency_ms,
+         COALESCE(SUM(cost_usd), 0)::float AS total_cost_usd,
+         COALESCE(SUM(total_tokens), 0)::int AS total_tokens
+       FROM ai_call_logs
+       WHERE created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY provider
+       ORDER BY calls DESC`
+    );
+
+    const providers = result.rows.map((row) => ({
+      provider: row.provider,
+      calls: row.calls,
+      failures: row.failures,
+      failure_rate: row.calls > 0 ? Math.round((row.failures / row.calls) * 1000) / 1000 : 0,
+      p50_latency_ms: row.p50_latency_ms,
+      p95_latency_ms: row.p95_latency_ms,
+      total_cost_usd: Math.round(row.total_cost_usd * 1000000) / 1000000,
+      total_tokens: row.total_tokens,
+    }));
+
+    const totals = providers.reduce(
+      (acc, p) => ({
+        calls: acc.calls + p.calls,
+        failures: acc.failures + p.failures,
+        total_cost_usd: acc.total_cost_usd + p.total_cost_usd,
+        total_tokens: acc.total_tokens + p.total_tokens,
+      }),
+      { calls: 0, failures: 0, total_cost_usd: 0, total_tokens: 0 }
+    );
+
+    return {
+      window: 'last_7_days',
+      providers,
+      totals: {
+        ...totals,
+        failure_rate: totals.calls > 0 ? Math.round((totals.failures / totals.calls) * 1000) / 1000 : 0,
+        total_cost_usd: Math.round(totals.total_cost_usd * 1000000) / 1000000,
+      },
+    };
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('AI usage rollup skipped:', error.message);
+    }
+    return null;
+  }
 };
 
 const queueQueries = {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, PlusCircle, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, PlusCircle, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -178,6 +178,107 @@ function RedFlagRulesCard({ rules = [] }) {
           {expanded ? 'Show less' : `Show ${rules.length - 4} more rules`}
         </button>
       )}
+    </div>
+  );
+}
+
+// Last-7-day AI cost / latency / failure rollup. Renders nothing if no calls.
+const PROVIDER_LABELS = {
+  gemini: 'Gemini',
+  claude: 'Claude',
+  openai: 'OpenAI',
+};
+
+function AiUsageCard({ usage }) {
+  if (!usage || !usage.providers || usage.providers.length === 0) {
+    return (
+      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="rounded-lg bg-bg-secondary p-2 text-content-muted">
+            <Activity size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-content-primary">AI usage · last 7 days</div>
+            <p className="mt-0.5 text-xs text-content-secondary">
+              No AI calls recorded in the last 7 days. Triggers a row when an analyst runs document extraction or refresh.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { totals, providers } = usage;
+  const failureTone = totals.failure_rate > 0.05 ? 'danger' : totals.failure_rate > 0.01 ? 'warn' : 'success';
+
+  return (
+    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+          <Activity size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-content-primary">AI usage · last 7 days</div>
+          <p className="mt-0.5 text-xs text-content-secondary">
+            Per-provider rollup from <span className="font-mono">ai_call_logs</span>. Cost is provider-reported USD; latency is end-to-end including queueing.
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-bg-secondary px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-content-muted font-semibold">Calls</div>
+          <div className="mt-0.5 font-serif text-2xl tabular-nums text-content-primary">
+            {totals.calls.toLocaleString('en-IN')}
+          </div>
+        </div>
+        <div className="rounded-lg bg-bg-secondary px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-content-muted font-semibold">Cost</div>
+          <div className="mt-0.5 font-serif text-2xl tabular-nums text-content-primary">
+            ${totals.total_cost_usd.toFixed(2)}
+          </div>
+        </div>
+        <div className="rounded-lg bg-bg-secondary px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-content-muted font-semibold">Failure rate</div>
+          <div className="mt-0.5 font-serif text-2xl tabular-nums text-content-primary inline-flex items-baseline gap-1.5">
+            {(totals.failure_rate * 100).toFixed(1)}%
+            <Badge tone={failureTone} className="text-[9px]">
+              {totals.failures}/{totals.calls}
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      <div className="divide-y divide-hairline">
+        {providers.map((p) => (
+          <div key={p.provider} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-content-primary">
+                {PROVIDER_LABELS[p.provider] || p.provider}
+              </div>
+              <div className="text-[11px] text-content-muted tabular-nums">
+                {p.calls.toLocaleString('en-IN')} calls · {p.total_tokens.toLocaleString('en-IN')} tokens
+              </div>
+            </div>
+            <div className="flex items-baseline gap-4 shrink-0 text-[11px] tabular-nums">
+              <span title="Median (p50) latency" className="text-content-secondary">
+                p50 <span className="font-medium text-content-primary">{p.p50_latency_ms ?? '—'}</span>ms
+              </span>
+              <span title="95th percentile latency" className="text-content-secondary">
+                p95 <span className="font-medium text-content-primary">{p.p95_latency_ms ?? '—'}</span>ms
+              </span>
+              <span className="text-content-secondary">
+                <span className="font-medium text-content-primary">${p.total_cost_usd.toFixed(2)}</span>
+              </span>
+              {p.failures > 0 && (
+                <Badge tone={p.failure_rate > 0.05 ? 'danger' : 'warn'} className="text-[9px]">
+                  {(p.failure_rate * 100).toFixed(1)}% fail
+                </Badge>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -696,6 +797,7 @@ export default function ParcelIntelligenceAdminPage() {
           </div>
 
           <SchemaReadinessCard schema={ops?.schema} />
+          <AiUsageCard usage={ops?.ai_usage} />
           {ops?.red_flag_rules?.length > 0 && <RedFlagRulesCard rules={ops.red_flag_rules} />}
         </>
       )}
