@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 /**
  * Lightweight modal for one-click verification of a Needs-Verification item.
@@ -22,6 +23,10 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
     }
   }, [item?.key]);
 
+  // Hook must run on every render (rules of hooks); pass `!!item` so the trap
+  // deactivates when the dialog is conceptually closed (early-returned below).
+  const trapRef = useFocusTrap(!!item, { onEscape: onClose });
+
   if (!item) return null;
 
   const handleSubmit = (event) => {
@@ -40,6 +45,7 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
 
   return (
     <div
+      ref={trapRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
       role="dialog"
       aria-modal="true"

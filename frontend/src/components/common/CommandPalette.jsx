@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, X, ArrowRight, Clock } from 'lucide-react';
 import { dealsAPI } from '../../services/api';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 /**
  * Cmd-K command palette.
@@ -189,6 +190,12 @@ export default function CommandPalette() {
     }
   };
 
+  // Trap focus inside the palette while it's open. Hook must run on every
+  // render (rules of hooks); the trap deactivates when `open` is false.
+  // The existing window-level Escape handler stays — pass `autoFocus: false`
+  // because the input itself auto-focuses via inputRef on open.
+  const trapRef = useFocusTrap(open, { autoFocus: false });
+
   if (!open) return null;
 
   let runningIndex = 0;
@@ -220,6 +227,7 @@ export default function CommandPalette() {
 
   return (
     <div
+      ref={trapRef}
       className="fixed inset-0 z-[1000] flex items-start justify-center pt-[10vh] px-4"
       onClick={() => setOpen(false)}
       role="dialog"
