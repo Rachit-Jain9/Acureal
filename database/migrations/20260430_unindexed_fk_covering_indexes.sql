@@ -13,58 +13,64 @@
 -- Each index here covers a single FK column. Naming convention:
 --   idx_<table>_<column>
 --
--- Uses CREATE INDEX CONCURRENTLY so existing reads/writes are not blocked
--- during creation. CONCURRENTLY cannot run inside a transaction block, so
--- this migration is intentionally NOT wrapped in BEGIN/COMMIT — each
--- statement runs in its own implicit transaction.
+-- Plain `CREATE INDEX` (not CONCURRENTLY): wrapped in a single BEGIN/COMMIT
+-- so this file is paste-safe in the Supabase SQL editor (which auto-wraps
+-- everything in a transaction — incompatible with CONCURRENTLY). Brief
+-- table-level write locks during creation are acceptable on REDIP's
+-- current volumes; if a table grows past ~100k rows where a multi-second
+-- lock matters, drop and recreate that one index later via psql with
+-- CONCURRENTLY (which CAN'T run in a transaction; needs psql's per-
+-- statement implicit-commit mode).
 --
 -- IF NOT EXISTS guards every CREATE so the file is idempotent. Re-running
--- after partial application (e.g. one CONCURRENTLY index built but a later
--- one timed out and left an INVALID index) is safe; the failed index can
--- be cleaned up with `DROP INDEX CONCURRENTLY` separately.
+-- after partial application is a no-op.
 -- ============================================================================
 
+BEGIN;
+
 -- ── public schema (24 indexes) ──────────────────────────────────────────────
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_completed_by                              ON public.activities (completed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ai_call_logs_created_by                              ON public.ai_call_logs (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_approval_items_document_id                           ON public.approval_items (document_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_comps_created_by                                     ON public.comps (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dd_items_assigned_to                                 ON public.dd_items (assigned_to);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dd_items_completed_by                                ON public.dd_items (completed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dd_items_document_id                                 ON public.dd_items (document_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deal_events_actor_id                                 ON public.deal_events (actor_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deal_stage_history_changed_by                        ON public.deal_stage_history (changed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_deals_archived_by                                    ON public.deals (archived_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_document_extractions_reviewed_by                     ON public.document_extractions (reviewed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_links_created_by                            ON public.evidence_links (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_links_verified_by                           ON public.evidence_links (verified_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_intelligence_briefs_created_by                       ON public.intelligence_briefs (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_investor_package_snapshots_organization_id           ON public.investor_package_snapshots (organization_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_market_notes_updated_by                              ON public.market_notes (updated_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organization_invitations_accepted_by                 ON public.organization_invitations (accepted_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organization_invitations_invited_by                  ON public.organization_invitations (invited_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organization_members_invited_by                      ON public.organization_members (invited_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organizations_created_by                             ON public.organizations (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_updated_by                                ON public.properties (updated_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_zone_assigned_by                          ON public.properties (zone_assigned_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_risk_flags_created_by                                ON public.risk_flags (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_default_organization_id                        ON public.users (default_organization_id);
+CREATE INDEX IF NOT EXISTS idx_activities_completed_by                              ON public.activities (completed_by);
+CREATE INDEX IF NOT EXISTS idx_ai_call_logs_created_by                              ON public.ai_call_logs (created_by);
+CREATE INDEX IF NOT EXISTS idx_approval_items_document_id                           ON public.approval_items (document_id);
+CREATE INDEX IF NOT EXISTS idx_comps_created_by                                     ON public.comps (created_by);
+CREATE INDEX IF NOT EXISTS idx_dd_items_assigned_to                                 ON public.dd_items (assigned_to);
+CREATE INDEX IF NOT EXISTS idx_dd_items_completed_by                                ON public.dd_items (completed_by);
+CREATE INDEX IF NOT EXISTS idx_dd_items_document_id                                 ON public.dd_items (document_id);
+CREATE INDEX IF NOT EXISTS idx_deal_events_actor_id                                 ON public.deal_events (actor_id);
+CREATE INDEX IF NOT EXISTS idx_deal_stage_history_changed_by                        ON public.deal_stage_history (changed_by);
+CREATE INDEX IF NOT EXISTS idx_deals_archived_by                                    ON public.deals (archived_by);
+CREATE INDEX IF NOT EXISTS idx_document_extractions_reviewed_by                     ON public.document_extractions (reviewed_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_links_created_by                            ON public.evidence_links (created_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_links_verified_by                           ON public.evidence_links (verified_by);
+CREATE INDEX IF NOT EXISTS idx_intelligence_briefs_created_by                       ON public.intelligence_briefs (created_by);
+CREATE INDEX IF NOT EXISTS idx_investor_package_snapshots_organization_id           ON public.investor_package_snapshots (organization_id);
+CREATE INDEX IF NOT EXISTS idx_market_notes_updated_by                              ON public.market_notes (updated_by);
+CREATE INDEX IF NOT EXISTS idx_organization_invitations_accepted_by                 ON public.organization_invitations (accepted_by);
+CREATE INDEX IF NOT EXISTS idx_organization_invitations_invited_by                  ON public.organization_invitations (invited_by);
+CREATE INDEX IF NOT EXISTS idx_organization_members_invited_by                      ON public.organization_members (invited_by);
+CREATE INDEX IF NOT EXISTS idx_organizations_created_by                             ON public.organizations (created_by);
+CREATE INDEX IF NOT EXISTS idx_properties_updated_by                                ON public.properties (updated_by);
+CREATE INDEX IF NOT EXISTS idx_properties_zone_assigned_by                          ON public.properties (zone_assigned_by);
+CREATE INDEX IF NOT EXISTS idx_risk_flags_created_by                                ON public.risk_flags (created_by);
+CREATE INDEX IF NOT EXISTS idx_users_default_organization_id                        ON public.users (default_organization_id);
 
 -- ── regulatory_data schema (14 indexes) ─────────────────────────────────────
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_facts_created_by                            ON regulatory_data.evidence_facts (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_facts_reviewed_by                           ON regulatory_data.evidence_facts (reviewed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_sources_created_by                          ON regulatory_data.evidence_sources (created_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_sources_document_id                         ON regulatory_data.evidence_sources (document_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_evidence_sources_reviewed_by                         ON regulatory_data.evidence_sources (reviewed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_far_rules_zone_id                                    ON regulatory_data.far_rules (zone_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_kgis_cache_org_id                                    ON regulatory_data.kgis_cache (org_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_kgis_cache_property_id                               ON regulatory_data.kgis_cache (property_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_master_plan_documents_evidence_source_id             ON regulatory_data.master_plan_documents (evidence_source_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_master_plan_zones_document_id                        ON regulatory_data.master_plan_zones (document_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_master_plan_zones_reviewed_by                        ON regulatory_data.master_plan_zones (reviewed_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_parcel_intelligence_snapshots_generated_by           ON regulatory_data.parcel_intelligence_snapshots (generated_by);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_parcel_intelligence_snapshots_property_id            ON regulatory_data.parcel_intelligence_snapshots (property_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_zone_versions_changed_by                             ON regulatory_data.zone_versions (changed_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_facts_created_by                            ON regulatory_data.evidence_facts (created_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_facts_reviewed_by                           ON regulatory_data.evidence_facts (reviewed_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_created_by                          ON regulatory_data.evidence_sources (created_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_document_id                         ON regulatory_data.evidence_sources (document_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_reviewed_by                         ON regulatory_data.evidence_sources (reviewed_by);
+CREATE INDEX IF NOT EXISTS idx_far_rules_zone_id                                    ON regulatory_data.far_rules (zone_id);
+CREATE INDEX IF NOT EXISTS idx_kgis_cache_org_id                                    ON regulatory_data.kgis_cache (org_id);
+CREATE INDEX IF NOT EXISTS idx_kgis_cache_property_id                               ON regulatory_data.kgis_cache (property_id);
+CREATE INDEX IF NOT EXISTS idx_master_plan_documents_evidence_source_id             ON regulatory_data.master_plan_documents (evidence_source_id);
+CREATE INDEX IF NOT EXISTS idx_master_plan_zones_document_id                        ON regulatory_data.master_plan_zones (document_id);
+CREATE INDEX IF NOT EXISTS idx_master_plan_zones_reviewed_by                        ON regulatory_data.master_plan_zones (reviewed_by);
+CREATE INDEX IF NOT EXISTS idx_parcel_intelligence_snapshots_generated_by           ON regulatory_data.parcel_intelligence_snapshots (generated_by);
+CREATE INDEX IF NOT EXISTS idx_parcel_intelligence_snapshots_property_id            ON regulatory_data.parcel_intelligence_snapshots (property_id);
+CREATE INDEX IF NOT EXISTS idx_zone_versions_changed_by                             ON regulatory_data.zone_versions (changed_by);
+
+COMMIT;
 
 -- ── Verification ────────────────────────────────────────────────────────────
 --   Re-run the FK coverage probe from the 2026-04-29 audit:
