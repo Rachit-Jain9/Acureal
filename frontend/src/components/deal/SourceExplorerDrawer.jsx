@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ExternalLink, FileText, X, Hash, Calendar, ShieldCheck, AlertCircle } from 'lucide-react';
 import Badge from '../common/Badge';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 /**
  * T2 Lite — Source Explorer drawer.
@@ -65,6 +66,11 @@ export default function SourceExplorerDrawer({ citation, onClose }) {
     return () => document.removeEventListener('keydown', handleKey);
   }, [citation, onClose]);
 
+  // Trap focus inside the drawer when a citation is open. Hook must run on
+  // every render (rules of hooks); pass `!!citation` so it deactivates when
+  // the drawer is conceptually closed even though we early-return below.
+  const trapRef = useFocusTrap(!!citation);
+
   if (!citation) return null;
 
   const confidencePct = formatConfidence(citation.confidence_score ?? citation.confidence);
@@ -82,6 +88,7 @@ export default function SourceExplorerDrawer({ citation, onClose }) {
 
       {/* Drawer panel */}
       <aside
+        ref={trapRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-explorer-title"
