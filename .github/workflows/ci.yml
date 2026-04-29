@@ -26,7 +26,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: packages/financial-kernel/package-lock.json
       - run: npm ci --prefix packages/financial-kernel
-      - run: npm run typecheck --prefix packages/financial-kernel
+      # `npm run build` typechecks against tsconfig.build.json (production config).
+      # The plain `npm run typecheck` script uses the looser tsconfig.json that
+      # also includes /tests, which can't share a rootDir with /src — that path
+      # is jest-only.
+      - run: npm run build --prefix packages/financial-kernel
       - run: npm test --prefix packages/financial-kernel -- --ci
 
   backend:
