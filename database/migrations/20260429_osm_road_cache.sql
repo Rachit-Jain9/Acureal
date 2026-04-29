@@ -38,11 +38,11 @@ DROP POLICY IF EXISTS osm_road_cache_tenant_select ON regulatory_data.osm_road_c
 CREATE POLICY osm_road_cache_tenant_select
   ON regulatory_data.osm_road_cache
   FOR SELECT
-  USING (org_id = regulatory_data.current_organization_id());
+  USING (org_id = current_organization_id());
 
 DROP POLICY IF EXISTS osm_road_cache_tenant_modify ON regulatory_data.osm_road_cache;
 CREATE POLICY osm_road_cache_tenant_modify
   ON regulatory_data.osm_road_cache
   FOR ALL
-  USING (org_id = regulatory_data.current_organization_id())
-  WITH CHECK (org_id = regulatory_data.current_organization_id());
+  USING (org_id = current_organization_id())
+  WITH CHECK (org_id = current_organization_id());
