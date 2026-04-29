@@ -202,4 +202,34 @@ After applying, the Supabase advisor `error`-severity count drops 3 → 1 (only 
 - `PARCEL_SIGNING_SECRET` — 32-byte hex generated locally, pasted into Vercel (Production + Preview).
 - `CRON_SECRET` — 32-byte hex generated locally, pasted into Vercel (Production + Preview).
 
+### PR #76 applied — verification (2026-04-29 evening)
+
+Operator ran the three SQL files from PR #76. Verified post-apply via Supabase MCP:
+
+- `public.users` RLS enabled, 3 policies present (`users_self_read`, `users_org_mates_read`, `users_self_update`).
+- `public.deal_summary` reloptions: `security_invoker=true`.
+- `feature_flag_cohorts` policy count: 1 (read only — write policy dropped).
+- All 7 functions have pinned `search_path` (six at `""`, `sync_property_geom` at `"public"`, `regulatory_data.effective_fsi` at `"regulatory_data"`).
+
+Advisor security count: **25 → 14**. ERROR-severity: **3 → 1** (only PostGIS-shipped `spatial_ref_sys`). The 7 `function_search_path_mutable` WARN lints and the `rls_policy_always_true` WARN are gone.
+
+### PR #78 — `chore(perf): cover 38 unindexed foreign keys` (merged, awaits apply)
+
+One new SQL migration file authored. Closes the 38 `unindexed_foreign_keys` performance lints from the audit's perf advisor.
+
+- `database/migrations/20260430_unindexed_fk_covering_indexes.sql` — 24 indexes on `public` (every `*_by` user-tracking column plus a few document/org references), 14 on `regulatory_data` (evidence + masterplan + parcel snapshot lineage). All single-column. Built with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` so writes are not blocked during apply, and the file is idempotent.
+- `database/current_schema.sql` — manifest updated under Phase 4.
+
+**Operator action required:**
+
+```
+psql "$DATABASE_URL" -f database/migrations/20260430_unindexed_fk_covering_indexes.sql
+```
+
+Or paste the file into Supabase SQL editor → Run. Do not wrap in a transaction — `CONCURRENTLY` is incompatible with explicit `BEGIN/COMMIT`.
+
+After apply: perf advisor `unindexed_foreign_keys` count drops 38 → 0.
+
+**Deliberately deferred:** the 109 `multiple_permissive_policies` and 86 `unused_index` lints. The first needs per-table audit (replacing stacked policies with single unions); the second needs a 30-day `pg_stat_user_indexes` snapshot before any `DROP INDEX` can be safely run.
+
 ---
