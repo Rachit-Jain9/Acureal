@@ -37,6 +37,7 @@ const { query } = require('../../config/database');
 const providerRegistry = require('./providerRegistry');
 const log = require('../../lib/logger').child({ module: 'ai.router' });
 const { getRequestContext } = require('../../lib/requestContext');
+const { assertWithinDailyCap, CostCapExceededError } = require('../../lib/costGuard');
 
 // Approximate USD cost per 1M tokens, sourced from public pricing pages
 // (Gemini 2.5 flash, Claude Sonnet 4.6, GPT-4o-mini). Used as a directional
@@ -206,6 +207,40 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, run })
   const resolvedProvider = provider || resolveProviderForTask(task);
   const resolvedModel = model || resolveDefaultModel(resolvedProvider);
   const start = Date.now();
+
+  // Per-org daily cost guard. Throws CostCapExceededError (HTTP 429) if the
+  // org has already burned through its `AI_DAILY_COST_CAP_USD` envelope.
+  // No-ops in dev/staging when the env var is unset.
+  const ctx = getRequestContext();
+  const orgIdForCap = attach?.organizationId ?? ctx.organizationId ?? null;
+  try {
+    await assertWithinDailyCap({ organizationId: orgIdForCap });
+  } catch (err) {
+    if (err instanceof CostCapExceededError) {
+      log.warn('ai_call_cost_capped', {
+        task,
+        provider: resolvedProvider,
+        organization_id: orgIdForCap,
+        spent_usd: err.spentUsd,
+        cap_usd: err.capUsd,
+      });
+      // Log the rejection so cost dashboards see "blocked" attempts.
+      await persistCallLog({
+        task,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        status: 'cost_capped',
+        latencyMs: 0,
+        tokens: { promptTokens: null, completionTokens: null, totalTokens: null },
+        cost: 0,
+        attach,
+        metadata: { ...(metadata || {}), cap_spent_usd: err.spentUsd, cap_usd: err.capUsd },
+        errorCode: err.code,
+        errorMessage: err.message,
+      });
+    }
+    throw err;
+  }
 
   let result = null;
   let status = 'success';

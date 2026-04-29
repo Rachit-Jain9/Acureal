@@ -35,9 +35,22 @@ const ENGINE_VERSION = '1.0.0';
 const hashInputs = (payload) =>
   crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 
+// In production, refuse to mint a snapshot without a real signing secret —
+// an unsigned snapshot in prod is worse than no snapshot, because investors
+// downstream will assume the absence of a signature pill is a UI bug rather
+// than a missing operator config. Dev/test fall through to null so local
+// flows don't crash; the panel renders without the "Signed" pill.
 const computeSignature = (inputs_hash, output_hash) => {
   const secret = process.env.PARCEL_SIGNING_SECRET;
-  if (!secret) return null;
+  if (!secret) {
+    if ((process.env.NODE_ENV || 'development').toLowerCase() === 'production') {
+      throw createError(
+        'PARCEL_SIGNING_SECRET is not configured. Refusing to mint an unsigned snapshot in production.',
+        500,
+      );
+    }
+    return null;
+  }
   return crypto
     .createHmac('sha256', secret)
     .update(`${inputs_hash}|${output_hash}|${ENGINE_VERSION}`)
