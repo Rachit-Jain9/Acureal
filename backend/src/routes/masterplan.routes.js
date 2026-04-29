@@ -6,6 +6,23 @@ const masterplanService = require('../services/masterplan.service');
 
 const router = express.Router();
 
+// T3 — Zoning overlay GeoJSON for the deal map.
+// Returns a FeatureCollection of master_plan_zones whose `geom` is non-null,
+// optionally filtered to a bbox around a centre lat/lng for performance.
+// Empty `features` array is a valid response — UI renders a "no zone
+// geometry uploaded yet" empty state when the array is empty.
+router.get('/zones/geojson', authenticate, async (req, res, next) => {
+  try {
+    const radiusKm = Math.min(20, Math.max(0.5, Number(req.query.radius_km) || 5));
+    const lat = req.query.lat ? Number(req.query.lat) : null;
+    const lng = req.query.lng ? Number(req.query.lng) : null;
+    const result = await masterplanService.listZoneGeoJSON({ lat, lng, radiusKm });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/zones
 // Viewers see only approved zones; editors+ can request other statuses.
 router.get('/zones', authenticate, async (req, res, next) => {

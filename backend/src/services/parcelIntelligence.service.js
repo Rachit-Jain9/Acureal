@@ -10,6 +10,7 @@ const {
 const guidanceService = require('./guidance.service');
 const landeedAdapter = require('./adapters/landeed.adapter');
 const kgisAdapter = require('./adapters/kgis.adapter');
+const osmRoadAdapter = require('./adapters/osmRoadWidth.adapter');
 const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
 const { runParcelRedFlags } = require('../engines/parcelRedFlags.engine');
 const { EVENTS, publish } = require('../lib/eventBus');
@@ -116,6 +117,183 @@ const getCachedKgis = async (property) => {
   );
 
   return result.rows[0] || null;
+};
+
+// ─── T6 — OSM road-width cache helpers ────────────────────────────────────
+// Mirrors the KGIS cache pattern. Cache key keys on property + 6dp lat/lng so
+// a parcel that's been geocoded to a different point gets a fresh lookup.
+
+const buildOsmCacheKey = (property = {}) => {
+  if (!property.id) return null;
+  if (property.lat === null || property.lat === undefined) return null;
+  if (property.lng === null || property.lng === undefined) return null;
+  const lat = Number(property.lat).toFixed(6);
+  const lng = Number(property.lng).toFixed(6);
+  return `property:${property.id}:lat:${lat}:lng:${lng}:radius:80`;
+};
+
+const getCachedOsmRoad = async (property) => {
+  const cacheKey = buildOsmCacheKey(property);
+  if (!cacheKey) return null;
+  try {
+    const result = await query(
+      `SELECT *
+       FROM regulatory_data.osm_road_cache
+       WHERE cache_key = $1
+         AND org_id = current_organization_id()
+         AND (expires_at IS NULL OR expires_at > NOW())
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [cacheKey]
+    );
+    return result.rows[0] || null;
+  } catch {
+    // Migration may not be applied yet — fail soft so production keeps serving.
+    return null;
+  }
+};
+
+const upsertOsmRoadCache = async (property, osmResult) => {
+  const cacheKey = buildOsmCacheKey(property);
+  if (!cacheKey) return null;
+
+  const requestPayload = {
+    lat: property.lat,
+    lng: property.lng,
+    radius_m: 80,
+  };
+
+  try {
+    const updateResult = await query(
+      `UPDATE regulatory_data.osm_road_cache
+       SET provider_status   = $2,
+           request_payload   = $3::jsonb,
+           response_payload  = $4::jsonb,
+           inferred_width_m  = $5,
+           inferred_lanes    = $6,
+           inferred_highway  = $7,
+           candidate_count   = $8,
+           confidence_score  = $9,
+           expires_at        = NOW() + INTERVAL '30 days',
+           updated_at        = NOW()
+       WHERE cache_key = $1
+         AND org_id = current_organization_id()
+       RETURNING *`,
+      [
+        cacheKey,
+        osmResult.status || 'unknown',
+        JSON.stringify(requestPayload),
+        osmResult.raw ? JSON.stringify(osmResult.raw) : null,
+        osmResult.inferred_width_m,
+        osmResult.inferred_lanes,
+        osmResult.inferred_highway,
+        osmResult.candidate_count || 0,
+        osmResult.confidence || 0,
+      ]
+    );
+
+    if (updateResult.rows[0]) return updateResult.rows[0];
+
+    const insertResult = await query(
+      `INSERT INTO regulatory_data.osm_road_cache (
+         org_id, property_id, cache_key, provider_status,
+         request_payload, response_payload,
+         inferred_width_m, inferred_lanes, inferred_highway,
+         candidate_count, confidence_score, expires_at
+       )
+       VALUES (
+         current_organization_id(), $1, $2, $3,
+         $4::jsonb, $5::jsonb,
+         $6, $7, $8,
+         $9, $10, NOW() + INTERVAL '30 days'
+       )
+       RETURNING *`,
+      [
+        property.id,
+        cacheKey,
+        osmResult.status || 'unknown',
+        JSON.stringify(requestPayload),
+        osmResult.raw ? JSON.stringify(osmResult.raw) : null,
+        osmResult.inferred_width_m,
+        osmResult.inferred_lanes,
+        osmResult.inferred_highway,
+        osmResult.candidate_count || 0,
+        osmResult.confidence || 0,
+      ]
+    );
+    return insertResult.rows[0] || null;
+  } catch {
+    return null;
+  }
+};
+
+const formatOsmRoad = (cacheRow, liveResult = null) => {
+  if (liveResult) {
+    return {
+      provider: 'osm_overpass',
+      status: liveResult.status,
+      confidence: liveResult.confidence || 0,
+      message: liveResult.message,
+      reference_only: true,
+      inferred_width_m: liveResult.inferred_width_m,
+      inferred_lanes: liveResult.inferred_lanes,
+      inferred_highway: liveResult.inferred_highway,
+      inferred_road_name: liveResult.inferred_road_name || null,
+      derivation_method: liveResult.derivation_method,
+      candidate_count: liveResult.candidate_count || 0,
+      refreshed_at: new Date().toISOString(),
+      citations: liveResult.inferred_width_m
+        ? [{
+            id: 'osm-road-reference',
+            kind: 'osm',
+            label: 'OpenStreetMap road context',
+            source_url: 'https://www.openstreetmap.org/copyright',
+            authority: 'OpenStreetMap (crowdsourced)',
+            status: 'reference_only',
+          }]
+        : [],
+    };
+  }
+
+  if (!cacheRow) {
+    return {
+      provider: 'osm_overpass',
+      status: 'not_requested',
+      confidence: 0,
+      message: 'OSM road-width inference has not been run for this parcel.',
+      reference_only: true,
+      inferred_width_m: null,
+      inferred_lanes: null,
+      inferred_highway: null,
+      derivation_method: null,
+      candidate_count: 0,
+      citations: [],
+    };
+  }
+
+  return {
+    provider: 'osm_overpass',
+    status: cacheRow.provider_status,
+    confidence: Number(cacheRow.confidence_score || 0),
+    message: 'Cached OSM-inferred road context. Treat as reference only — verify on site.',
+    reference_only: true,
+    inferred_width_m: cacheRow.inferred_width_m ? Number(cacheRow.inferred_width_m) : null,
+    inferred_lanes: cacheRow.inferred_lanes,
+    inferred_highway: cacheRow.inferred_highway,
+    derivation_method: null,
+    candidate_count: cacheRow.candidate_count || 0,
+    refreshed_at: cacheRow.updated_at,
+    citations: cacheRow.inferred_width_m
+      ? [{
+          id: 'osm-road-reference',
+          kind: 'osm',
+          label: 'OpenStreetMap road context (cached)',
+          source_url: 'https://www.openstreetmap.org/copyright',
+          authority: 'OpenStreetMap (crowdsourced)',
+          status: 'reference_only',
+        }]
+      : [],
+  };
 };
 
 const buildKgisCacheKey = (property = {}) => {
@@ -514,10 +692,42 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   const kgisCache = refresh && kgisLive ? null : await getCachedKgis(property);
   const kgis = formatKgis(kgisCache, kgisLive);
 
+  // T6 — OSM road-width inference. Only fire on refresh AND only when the
+  // user-provided road width is missing. Never overwrites authority data.
+  let osmLive = null;
+  const propertyRoadWidth = property.road_width_mtrs == null ? null : Number(property.road_width_mtrs);
+  const shouldFetchOsm =
+    refresh &&
+    propertyRoadWidth === null &&
+    property.lat != null &&
+    property.lng != null;
+
+  if (shouldFetchOsm) {
+    try {
+      osmLive = await osmRoadAdapter.fetchRoadWidth({ lat: property.lat, lng: property.lng });
+      if (osmLive) await upsertOsmRoadCache(property, osmLive);
+    } catch (error) {
+      osmLive = {
+        provider: 'osm_overpass',
+        status: 'error',
+        confidence: 0,
+        message: error.message || 'OSM Overpass lookup failed.',
+        candidate_count: 0,
+        inferred_width_m: null,
+        inferred_lanes: null,
+        inferred_highway: null,
+        derivation_method: null,
+      };
+    }
+  }
+  const osmCache = refresh && osmLive ? null : await getCachedOsmRoad(property);
+  const osmRoad = formatOsmRoad(osmCache, osmLive);
+
   const citations = [
     ...(buildability.citations || []),
     ...(guidance.citations || []),
     ...(kgis.citations || []),
+    ...(osmRoad.citations || []),
   ];
   const redFlags = runParcelRedFlags({ property, zone, buildability, guidance, kgis, landeed, snapshot: { generated_at: previousMeta?.generated_at || null } });
   const confidence = buildConfidence({ zone, buildability, guidance, kgis });
@@ -569,6 +779,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
       selected: guidance.selected || (landeed.status === 'matched' ? landeed : null),
     },
     kgis,
+    osm_road: osmRoad,
     red_flags: redFlags,
     citations,
     buckets,

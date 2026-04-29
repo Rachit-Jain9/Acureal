@@ -171,6 +171,7 @@ export const computeBuildabilityFromRule = ({ property = {}, zone = null, rule =
       status: 'needs_verification',
       source: 'missing_input',
       message: 'Land area is required before buildable area can be calculated.',
+      message_key: 'buildability.missing_input.land_area',
       citations: [],
       values: null,
     };
@@ -183,6 +184,9 @@ export const computeBuildabilityFromRule = ({ property = {}, zone = null, rule =
       message: manualFsi
         ? 'Only a user-provided FSI is available. Match an approved FAR matrix rule before using this as reference buildability.'
         : 'No approved FAR matrix rule matched this parcel.',
+      message_key: manualFsi
+        ? 'buildability.missing_rule.with_user_fsi'
+        : 'buildability.missing_rule.no_user_fsi',
       citations: [],
       values: manualFsi
         ? {
@@ -219,6 +223,10 @@ export const computeBuildabilityFromRule = ({ property = {}, zone = null, rule =
       additionalFar > 0
         ? 'Base FAR is reference-matched. Additional/TDR FAR remains pending authority and project-specific verification. Buildable area is a screening estimate after available setback deductions.'
         : 'FAR is matched to an approved reference rule. Buildable area is a screening estimate after available setback deductions.',
+    message_key:
+      additionalFar > 0
+        ? 'buildability.status.reference_match.with_additional'
+        : 'buildability.status.reference_match.global',
     zone_code: rule.zone_code || zone?.zone_code || null,
     planning_zone: rule.planning_zone || zone?.planning_zone || null,
     land_use_family: rule.land_use_family || null,

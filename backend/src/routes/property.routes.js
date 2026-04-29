@@ -3,6 +3,7 @@ const { body, query: qv } = require('express-validator');
 const propertyService = require('../services/property.service');
 const parcelIntelligenceService = require('../services/parcelIntelligence.service');
 const parcelVerifyService = require('../services/parcelIntelligenceVerify.service');
+const parcelNarrativeService = require('../services/parcelNarrative.service');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -121,6 +122,28 @@ router.post('/:id/parcel-intelligence/refresh', authenticate, requireAdminOrAnal
     next(error);
   }
 });
+
+// POST /properties/:id/parcel-intelligence/narrative
+// Generates a Claude-summarised executive narrative of the deterministic
+// snapshot. Carries an explicit "AI-assisted — requires human review"
+// disclaimer (CLAUDE.md hard rule).
+router.post(
+  '/:id/parcel-intelligence/narrative',
+  authenticate,
+  requireAdminOrAnalyst,
+  async (req, res, next) => {
+    try {
+      const result = await parcelNarrativeService.generateNarrative({
+        propertyId: req.params.id,
+        userId: req.user.id,
+        dealId: req.body?.deal_id || null,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // GET /properties/:id/parcel-intelligence/verifications
 // Lists manual verifications attached to the latest snapshot.

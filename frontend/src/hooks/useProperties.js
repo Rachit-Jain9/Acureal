@@ -108,6 +108,19 @@ export function useRefreshParcelIntelligence() {
   });
 }
 
+// AI augmentation — Claude-generated parcel verdict narrative.
+// Carries an explicit "AI-assisted — requires human review" disclaimer.
+export function useGenerateParcelNarrative() {
+  return useMutation({
+    mutationFn: ({ propertyId, dealId }) =>
+      propertiesAPI
+        .parcelNarrative(propertyId, dealId ? { deal_id: dealId } : {})
+        .then((r) => r.data.data),
+    onError: (err) =>
+      toast.error(err.response?.data?.message || 'Narrative generation failed'),
+  });
+}
+
 export function useParcelVerifications(propertyId) {
   return useQuery({
     queryKey: ['property', propertyId, 'parcel-verifications'],

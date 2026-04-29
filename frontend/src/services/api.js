@@ -110,6 +110,7 @@ export const propertiesAPI = {
   bulkGeocode: () => api.post('/properties/bulk-geocode'),
   parcelIntelligence: (id) => api.get(`/properties/${id}/parcel-intelligence`),
   refreshParcelIntelligence: (id) => api.post(`/properties/${id}/parcel-intelligence/refresh`),
+  parcelNarrative: (id, payload) => api.post(`/properties/${id}/parcel-intelligence/narrative`, payload || {}),
   parcelVerifications: (id) => api.get(`/properties/${id}/parcel-intelligence/verifications`),
   verifyParcelItem: (id, payload) => api.post(`/properties/${id}/parcel-intelligence/verify-item`, payload),
   unverifyParcelItem: (id, linkId) => api.delete(`/properties/${id}/parcel-intelligence/verifications/${linkId}`),

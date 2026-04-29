@@ -15,6 +15,10 @@ jest.mock('../src/services/adapters/kgis.adapter', () => ({
   fetchKgisContext: jest.fn(),
 }));
 
+jest.mock('../src/services/adapters/osmRoadWidth.adapter', () => ({
+  fetchRoadWidth: jest.fn(),
+}));
+
 const { query } = require('../src/config/database');
 const guidanceService = require('../src/services/guidance.service');
 const landeedAdapter = require('../src/services/adapters/landeed.adapter');
@@ -117,7 +121,8 @@ describe('parcelIntelligence.service', () => {
     query
       .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: null }] })
       .mockResolvedValueOnce({ rows: [{ id: 'snapshot-prior', generated_at: new Date().toISOString() }] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [] })   // kgis_cache read
+      .mockResolvedValueOnce({ rows: [] });  // osm_road_cache read (T6)
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
@@ -127,7 +132,8 @@ describe('parcelIntelligence.service', () => {
     expect(result.guidance_value.vendor.status).toBe('not_configured');
     expect(result.red_flags.map((flag) => flag.label)).toContain('Planning zone not assigned');
     expect(result.snapshot_id).toBe('snapshot-prior');
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(result.osm_road.status).toBe('not_requested');
+    expect(query).toHaveBeenCalledTimes(4);
   });
 
   test('matches FAR rule, guidance value, and cached K-GIS context without refresh', async () => {
@@ -147,7 +153,8 @@ describe('parcelIntelligence.service', () => {
             updated_at: '2026-04-25T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });  // osm_road_cache read (T6)
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
@@ -180,12 +187,13 @@ describe('parcelIntelligence.service', () => {
     });
 
     query
-      .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: residentialZone }] })
-      .mockResolvedValueOnce({ rows: [farRule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: 'cache-1' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-1' }] });
+      .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: residentialZone }] })  // property
+      .mockResolvedValueOnce({ rows: [farRule] })                                       // far rules
+      .mockResolvedValueOnce({ rows: [] })                                              // latest snapshot meta
+      .mockResolvedValueOnce({ rows: [] })                                              // kgis_cache UPDATE (no row)
+      .mockResolvedValueOnce({ rows: [{ id: 'cache-1' }] })                             // kgis_cache INSERT
+      .mockResolvedValueOnce({ rows: [] })                                              // osm_road_cache read (baseProperty has road_width=18, so OSM live skipped)
+      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-1' }] });                         // snapshot INSERT
 
     const result = await parcelIntelligenceService.refreshParcelIntelligence('prop-1', 'user-1');
 
@@ -194,7 +202,7 @@ describe('parcelIntelligence.service', () => {
     expect(result.kgis.status).toBe('matched');
     expect(query.mock.calls[3][0]).toContain('UPDATE regulatory_data.kgis_cache');
     expect(query.mock.calls[4][0]).toContain('INSERT INTO regulatory_data.kgis_cache');
-    expect(query.mock.calls[5][0]).toContain('INSERT INTO regulatory_data.parcel_intelligence_snapshots');
+    expect(query.mock.calls[6][0]).toContain('INSERT INTO regulatory_data.parcel_intelligence_snapshots');
   });
 
   test('classifies commercial zone codes even when property zoning is default residential', () => {

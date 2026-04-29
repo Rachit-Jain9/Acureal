@@ -29,6 +29,8 @@ import useAuthStore from '../../store/authStore';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 import VerifyItemDialog from './VerifyItemDialog';
 import WhatIfBuildability from './WhatIfBuildability';
+import SourceExplorerDrawer from './SourceExplorerDrawer';
+import ParcelNarrativeCard from './ParcelNarrativeCard';
 
 const EDITOR_ROLES = new Set(['admin', 'owner', 'editor', 'analyst']);
 
@@ -57,10 +59,30 @@ const formatInr = (value) => {
   return formatted === null ? null : `₹${formatted}`;
 };
 
-function CitationChip({ citation }) {
+function CitationChip({ citation, onSelect }) {
   if (!citation) return null;
   const label = citation.page ? `p. ${citation.page}` : citation.status || 'source';
   const title = [citation.label, citation.source_title, citation.authority].filter(Boolean).join(' — ');
+
+  // T2 Lite — citation chip is now a button that opens the Source Explorer
+  // drawer. Falls back to a plain anchor when no onSelect handler is wired
+  // (legacy callers and downstream embeds).
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        title={title}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(citation);
+        }}
+        className="inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-2 py-0.5 text-[10px] font-medium text-content-secondary hover:border-primary-300 hover:text-content-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+      >
+        <FileText size={11} />
+        {label}
+      </button>
+    );
+  }
 
   const content = (
     <span
@@ -172,7 +194,7 @@ function VerdictBanner({ verdict }) {
   );
 }
 
-function MetricTile({ label, value, unit, citation }) {
+function MetricTile({ label, value, unit, citation, onCitationSelect }) {
   const isMissing = value === null || value === undefined || value === '';
 
   return (
@@ -181,7 +203,7 @@ function MetricTile({ label, value, unit, citation }) {
         <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
           {label}
         </div>
-        <CitationChip citation={citation} />
+        <CitationChip citation={citation} onSelect={onCitationSelect} />
       </div>
       <div className="mt-auto pt-3">
         {isMissing ? (
@@ -486,6 +508,7 @@ function BucketList({
   canEdit = false,
   onVerify,
   onUnverify,
+  onCitationSelect,
   unverifyingId = null,
 }) {
   if (!items.length) {
@@ -523,7 +546,7 @@ function BucketList({
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <div className="flex flex-wrap justify-end gap-1.5">
                   {(item.citations || []).map((citation) => (
-                    <CitationChip key={citation.id || citation.label} citation={citation} />
+                    <CitationChip key={citation.id || citation.label} citation={citation} onSelect={onCitationSelect} />
                   ))}
                 </div>
                 {showVerifyAction && canEdit && item.key && !verification && onVerify ? (
@@ -707,6 +730,7 @@ function VerificationLinks({ links = [], onUploadClick }) {
 export default function ParcelIntelligencePanel({ property, deal, dealId, onUploadClick }) {
   const [activeTab, setActiveTab] = useState('verified');
   const [verifyTarget, setVerifyTarget] = useState(null);
+  const [activeCitation, setActiveCitation] = useState(null);
   const propertyId = property?.id;
   const { data: intelligence, isLoading, isError, error } = useParcelIntelligence(propertyId);
   const refreshMutation = useRefreshParcelIntelligence();
@@ -850,17 +874,20 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               label="Max FAR"
               value={formatNumber(values.max_far, 2)}
               citation={farCitation}
+              onCitationSelect={setActiveCitation}
             />
             <MetricTile
               label="Base FAR"
               value={formatNumber(values.base_far, 2)}
               citation={farCitation}
+              onCitationSelect={setActiveCitation}
             />
             <MetricTile
               label="Screening buildable"
               value={formatNumber(values.max_buildable_area_sqft)}
               unit="sqft"
               citation={farCitation}
+              onCitationSelect={setActiveCitation}
             />
           </div>
 
@@ -870,18 +897,21 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               value={formatInr(selectedGuidance?.value_inr_per_sqft)}
               unit={selectedGuidance?.value_inr_per_sqft ? '/ sqft' : null}
               citation={guidanceCitation}
+              onCitationSelect={setActiveCitation}
             />
             <MetricTile
               label="Gross FAR area"
               value={formatNumber(values.gross_max_buildable_area_sqft)}
               unit="sqft"
               citation={farCitation}
+              onCitationSelect={setActiveCitation}
             />
             <MetricTile
               label="Ground coverage"
               value={formatNumber(values.ground_coverage_pct, 1)}
               unit={values.ground_coverage_pct ? '%' : null}
               citation={farCitation}
+              onCitationSelect={setActiveCitation}
             />
             <MetricTile
               label="Setback deduction"
@@ -892,10 +922,17 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
                   : null
               }
               citation={farCitation}
+              onCitationSelect={setActiveCitation}
             />
           </div>
 
           <WhatIfBuildability intelligence={intelligence} />
+
+          <ParcelNarrativeCard
+            propertyId={propertyId}
+            dealId={linkedDealId}
+            intelligence={intelligence}
+          />
 
           <Card className="p-0 overflow-hidden">
             <div className="flex flex-col gap-3 border-b border-hairline-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -946,6 +983,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
                 canEdit={canEdit}
                 onVerify={(item) => setVerifyTarget(item)}
                 onUnverify={handleUnverify}
+                onCitationSelect={setActiveCitation}
                 unverifyingId={unverifyMutation.isPending ? unverifyMutation.variables?.linkId : null}
               />
             </div>
@@ -989,6 +1027,11 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
         onClose={() => setVerifyTarget(null)}
         onSubmit={handleVerify}
         isPending={verifyMutation.isPending}
+      />
+
+      <SourceExplorerDrawer
+        citation={activeCitation}
+        onClose={() => setActiveCitation(null)}
       />
     </div>
   );

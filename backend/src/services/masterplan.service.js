@@ -783,6 +783,64 @@ async function assignReviewedZoneToProperty({ zoneId, propertyId, userId, notes 
   };
 }
 
+// T3 — Zoning overlay GeoJSON.
+// Returns a GeoJSON FeatureCollection of approved zones with non-null geom.
+// When (lat,lng) is provided, filters to a bbox via PostGIS — much cheaper
+// than serialising every zone in the country. Falls back to global on no
+// coordinates.
+async function listZoneGeoJSON({ lat = null, lng = null, radiusKm = 5 } = {}) {
+  const params = [];
+  let geomFilter = '';
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    // ST_DWithin on geography type takes radius in metres.
+    params.push(lng, lat, radiusKm * 1000);
+    geomFilter = `AND ST_DWithin(z.geom::geography, ST_SetSRID(ST_MakePoint($${params.length - 2}, $${params.length - 1}), 4326)::geography, $${params.length})`;
+  }
+
+  const result = await query(
+    `SELECT
+       z.id,
+       z.zone_code,
+       z.zone_name,
+       z.planning_zone,
+       z.permissible_fsi_base,
+       z.permissible_fsi_max,
+       z.review_status,
+       ST_AsGeoJSON(z.geom)::jsonb AS geometry
+     FROM regulatory_data.master_plan_zones z
+     WHERE z.geom IS NOT NULL
+       AND z.review_status = 'approved'
+       ${geomFilter}
+     LIMIT 200`,
+    params,
+  );
+
+  const features = result.rows.map((row) => ({
+    type: 'Feature',
+    id: row.id,
+    geometry: row.geometry,
+    properties: {
+      zone_code: row.zone_code,
+      zone_name: row.zone_name,
+      planning_zone: row.planning_zone,
+      permissible_fsi_base: row.permissible_fsi_base ? Number(row.permissible_fsi_base) : null,
+      permissible_fsi_max: row.permissible_fsi_max ? Number(row.permissible_fsi_max) : null,
+      review_status: row.review_status,
+    },
+  }));
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    meta: {
+      total_zones_with_geom: features.length,
+      bbox_filtered: Boolean(geomFilter),
+      radius_km: geomFilter ? radiusKm : null,
+    },
+  };
+}
+
 async function getZoneVersions(zoneId) {
   const result = await query(
     `SELECT v.*, u.name AS changed_by_name
@@ -809,4 +867,5 @@ module.exports = {
   extractSourceDocument,
   assignReviewedZoneToProperty,
   getZoneVersions,
+  listZoneGeoJSON,
 };
