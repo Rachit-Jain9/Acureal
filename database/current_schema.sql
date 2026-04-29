@@ -71,6 +71,7 @@
 \i 20260430_function_search_path_lockdown.sql  -- pin search_path on REDIP functions
 \i 20260430_feature_flag_cohorts_write_policy.sql -- drop USING(true) write policy
 \i 20260430_unindexed_fk_covering_indexes.sql  -- 38 CREATE INDEX CONCURRENTLY for FK coverage
+\i 20260430_rls_no_policy_tables.sql           -- policies for the 5 RLS-on-no-policy tables
 
 -- ============================================================================
 -- After applying:
