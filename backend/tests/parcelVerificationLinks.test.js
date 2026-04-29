@@ -11,20 +11,35 @@ describe('parcelVerificationLinks.buildVerificationLinks', () => {
       'igr_guidance',
       'kgis_cadastral',
     ]);
+    // Google Maps deep-link is only emitted when lat/lng are present.
     // Every link with no inputs should be inputs_missing.
     links.forEach((link) => expect(link.status).toBe('inputs_missing'));
   });
 
-  test('K-GIS cadastral becomes a deep link when coordinates are present', () => {
+  test('K-GIS cadastral is a copy-paste card (no deep-link) and Google Maps is the satellite deep-link', () => {
     const links = buildVerificationLinks({
       property: { lat: 13.035, lng: 77.59 },
     });
+
     const kgis = links.find((l) => l.key === 'kgis_cadastral');
-    expect(kgis.deep_link).toBe(true);
+    expect(kgis.deep_link).toBe(false);
     expect(kgis.status).toBe('ready');
-    expect(kgis.href).toContain('lat=13.035000');
-    expect(kgis.href).toContain('lng=77.590000');
-    expect(kgis.href).toContain('zoom=18');
+    // Points to the working K-GIS viewer homepage; coords go in copy payload.
+    expect(kgis.href).toBe('https://kgis.ksrsac.in/kgis/');
+    expect(kgis.copy_text).toBe('13.035000, 77.590000');
+
+    const gmaps = links.find((l) => l.key === 'google_maps_satellite');
+    expect(gmaps).toBeDefined();
+    expect(gmaps.deep_link).toBe(true);
+    expect(gmaps.status).toBe('ready');
+    expect(gmaps.href).toContain('13.035000,77.590000');
+    expect(gmaps.href).toContain('1e3');
+  });
+
+  test('Google Maps deep-link is omitted when no coordinates exist', () => {
+    const links = buildVerificationLinks();
+    const gmaps = links.find((l) => l.key === 'google_maps_satellite');
+    expect(gmaps).toBeUndefined();
   });
 
   test('Bhoomi RTC and Kaveri become ready when survey + village land', () => {

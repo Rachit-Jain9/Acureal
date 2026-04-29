@@ -32,7 +32,11 @@ const HOMEPAGES = {
   igr_guidance: 'https://igr.karnataka.gov.in/page/Revised%2BGuidelines%2BValue/en',
   rera: 'https://rera.karnataka.gov.in/home/searchProjects',
   kgis_protocol: 'https://ksrsac.in/web/sites/default/files/projects/2018-02/K-GIS%20Data%20Exchange%20Protocol.pdf',
-  kgis_cadastral: 'https://kgis.ksrsac.in/cadastral/',
+  // K-GIS hosts its public viewer at /kgis/. The /cadastral/ path was an
+  // assumption that 404'd in production — it does not accept lat/lng deep
+  // links. Use the viewer homepage and surface lat/lng in the copy payload
+  // so the analyst can paste into the viewer's search box.
+  kgis_viewer: 'https://kgis.ksrsac.in/kgis/',
 };
 
 const trim = (value) => (value == null ? '' : String(value).trim());
@@ -188,9 +192,11 @@ const buildVerificationLinks = ({ property = {}, kgis = {} } = {}) => {
     copy_text: contextLines.join(' | '),
   });
 
-  // ── K-GIS Cadastral Atlas (deep-link if we have lat/lng) ─────────────
-  // K-GIS public viewer accepts ?lat=&lng=&zoom= query params. When we
-  // have coordinates, this is a true deep link straight to the parcel.
+  // ── K-GIS Cadastral Atlas (homepage link + copy-paste coords) ─────────
+  // The K-GIS viewer does NOT accept lat/lng query parameters — the previous
+  // deep-link URL 404'd in production. Now we link to the viewer homepage
+  // and surface the coords in the copy payload so the analyst can paste
+  // into the viewer's search box.
   const lat = property.lat;
   const lng = property.lng;
   const hasCoords = lat != null && lng != null;
@@ -199,20 +205,42 @@ const buildVerificationLinks = ({ property = {}, kgis = {} } = {}) => {
     label: 'K-GIS Cadastral',
     authority: 'Karnataka State Remote Sensing Applications Centre',
     purpose: 'Cross-check zoning overlays, land-use, and survey boundaries on the master map.',
-    href: hasCoords
-      ? `${HOMEPAGES.kgis_cadastral}?lat=${Number(lat).toFixed(6)}&lng=${Number(lng).toFixed(6)}&zoom=18`
-      : HOMEPAGES.kgis_cadastral,
-    deep_link: hasCoords,
+    href: HOMEPAGES.kgis_viewer,
+    deep_link: false,
     status: hasCoords ? 'ready' : 'inputs_missing',
     hint: hasCoords
-      ? 'Opens the cadastral viewer centred on this parcel.'
-      : 'Geocode the property to get a deep-link to the parcel on K-GIS.',
+      ? 'Opens the K-GIS viewer; paste the copied lat/lng into the search box.'
+      : 'Geocode the property to enable the K-GIS workflow.',
     inputs: {
       lat: presence(lat),
       lng: presence(lng),
     },
-    copy_text: hasCoords ? `Lat: ${Number(lat).toFixed(6)}, Lng: ${Number(lng).toFixed(6)}` : '',
+    copy_text: hasCoords ? `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}` : '',
   });
+
+  // ── Google Maps satellite (true deep-link, universally reliable) ──────
+  // Independent visual verification of the parcel location. The K-GIS
+  // viewer is the canonical regulatory source, but Google's satellite
+  // imagery is current and the URL pattern is stable (no auth, no CAPTCHA).
+  if (hasCoords) {
+    const latStr = Number(lat).toFixed(6);
+    const lngStr = Number(lng).toFixed(6);
+    links.push({
+      key: 'google_maps_satellite',
+      label: 'Google Maps satellite',
+      authority: 'Google Maps imagery',
+      purpose: 'Visually confirm the parcel location, road frontage, and surroundings on current satellite imagery.',
+      href: `https://www.google.com/maps/@${latStr},${lngStr},19z/data=!3m1!1e3`,
+      deep_link: true,
+      status: 'ready',
+      hint: 'Opens the satellite view centred on the parcel pin.',
+      inputs: {
+        lat: presence(lat),
+        lng: presence(lng),
+      },
+      copy_text: `${latStr}, ${lngStr}`,
+    });
+  }
 
   return links;
 };
