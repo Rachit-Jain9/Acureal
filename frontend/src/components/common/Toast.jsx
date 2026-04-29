@@ -37,18 +37,30 @@ const colors = {
 
 function ToastItem({ toast: t, onRemove }) {
   const Icon = icons[t.type] || Info;
+  const isError = t.type === 'error';
 
   useEffect(() => {
     const timer = setTimeout(() => onRemove(t.id), 4000);
     return () => clearTimeout(timer);
   }, [t.id, onRemove]);
 
+  // Errors get role="alert" + aria-live="assertive" so screen readers
+  // interrupt; everything else is "status"/"polite" per WAI-ARIA APG.
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${colors[t.type]}`}>
-      <Icon size={18} />
+    <div
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${colors[t.type]}`}
+    >
+      <Icon size={18} aria-hidden="true" />
       <span className="text-sm flex-1">{t.message}</span>
-      <button onClick={() => onRemove(t.id)} className="opacity-60 hover:opacity-100">
-        <X size={14} />
+      <button
+        type="button"
+        onClick={() => onRemove(t.id)}
+        aria-label="Dismiss notification"
+        className="opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-black/30 rounded"
+      >
+        <X size={14} aria-hidden="true" />
       </button>
     </div>
   );
@@ -60,7 +72,10 @@ export default function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+    <div
+      aria-label="Notifications"
+      className="fixed top-4 right-4 z-50 space-y-2 max-w-sm"
+    >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onRemove={removeToast} />
       ))}

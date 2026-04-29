@@ -471,10 +471,19 @@ html[data-theme='dark'] {
     100% { opacity: 1; transform: scale(1); }
   }
 
+  /* KPI / metric tile value-change cross-fade — 180ms ease-out per FRONTEND_GUIDELINES §2.
+     Triggered by `key={value}` re-mount on the tile's value node. */
+  @keyframes value-cross-fade {
+    0%   { opacity: 0.35; }
+    100% { opacity: 1; }
+  }
+  .metric-value-fade { animation: value-cross-fade 180ms ease-out; }
+
   @media (prefers-reduced-motion: reduce) {
     .redip-reveal { opacity: 1; transform: none; transition: none; }
     .redip-hero-drift, .redip-hero-skyline, .redip-hero-orbit,
     .redip-hero-pulse, .redip-ticker { animation: none; }
+    .metric-value-fade { animation: none; }
   }
 
   /* Thin, themed scrollbars */

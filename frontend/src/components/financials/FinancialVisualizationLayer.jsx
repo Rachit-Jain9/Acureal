@@ -40,6 +40,12 @@ const METHOD_LABELS = {
 
 const safeNumber = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 
+// Recharts tick props — `fontVariantNumeric: 'tabular-nums'` keeps axis
+// labels column-aligned per FRONTEND_GUIDELINES §7. Hoisted to module scope
+// so identity is stable and Recharts doesn't redraw on every render.
+const AXIS_TICK = { fontSize: 11, fontVariantNumeric: 'tabular-nums' };
+const AXIS_TICK_SMALL = { fontSize: 10, fontVariantNumeric: 'tabular-nums' };
+
 const tooltipStyle = {
   backgroundColor: 'var(--color-bg-elevated)',
   color: 'var(--color-text-primary)',
@@ -195,8 +201,8 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={comparison} layout="vertical" margin={{ left: 20, right: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                <XAxis type="number" tickFormatter={(v) => `${Number(v).toFixed(0)}`} tick={{ fontSize: 11 }} />
-                <YAxis dataKey="label" type="category" tick={{ fontSize: 11 }} width={140} />
+                <XAxis type="number" tickFormatter={(v) => `${Number(v).toFixed(0)}`} tick={AXIS_TICK} />
+                <YAxis dataKey="label" type="category" tick={AXIS_TICK} width={140} />
                 <Tooltip content={<Tip />} />
                 <Bar dataKey="value" name="Terminal Value (₹ Cr)" radius={[0, 4, 4, 0]}>
                   {comparison.map((entry) => (
@@ -256,16 +262,16 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+            <XAxis dataKey="year" tick={AXIS_TICK} />
             <YAxis
               yAxisId="left"
-              tick={{ fontSize: 11 }}
+              tick={AXIS_TICK}
               tickFormatter={(v) => `₹${Number(v).toFixed(0)}`}
             />
             <YAxis
               yAxisId="right"
               orientation="right"
-              tick={{ fontSize: 11 }}
+              tick={AXIS_TICK}
               tickFormatter={(v) => `₹${Number(v).toFixed(0)}`}
             />
             <Tooltip content={<Tip />} />
@@ -339,11 +345,11 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="cap"
-              tick={{ fontSize: 11 }}
+              tick={AXIS_TICK}
               label={{ value: 'Exit Cap Rate (%)', position: 'insideBottom', offset: -2, fontSize: 11 }}
             />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={AXIS_TICK}
               tickFormatter={(v) => `₹${Number(v).toFixed(0)}`}
             />
             <Tooltip content={<Tip />} />
@@ -424,8 +430,8 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} stackOffset="sign">
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="quarter" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
+            <XAxis dataKey="quarter" tick={AXIS_TICK_SMALL} />
+            <YAxis tick={AXIS_TICK} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
             <Tooltip content={<Tip />} />
             <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
             <Bar dataKey="construction" name="Construction" stackId="a" fill={PHASE_COLORS.construction} />
@@ -475,8 +481,8 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="quarter" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
+            <XAxis dataKey="quarter" tick={AXIS_TICK_SMALL} />
+            <YAxis tick={AXIS_TICK} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
             <Tooltip content={<Tip />} />
             <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
             {breakEvenIdx > 0 && (
@@ -586,10 +592,10 @@ export function CostCompositionChart({ costs }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
             <XAxis
               type="number"
-              tick={{ fontSize: 10 }}
+              tick={AXIS_TICK_SMALL}
               tickFormatter={(v) => `₹${Number(v).toFixed(0)}`}
             />
-            <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={110} />
+            <YAxis dataKey="name" type="category" tick={AXIS_TICK} width={110} />
             <Tooltip content={<Tip />} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]}>
               {items.map((e) => (
