@@ -64,6 +64,13 @@
 \i 20260428_parcel_intelligence_signature.sql  -- HMAC snapshot signing (T4)
 \i 20260429_osm_road_cache.sql                 -- OSM Overpass road-width cache (T6)
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- Phase 4 — RLS hardening (Bet 2 from 2026-04-29 audit)
+-- ────────────────────────────────────────────────────────────────────────────
+\i 20260430_users_rls_and_summary_invoker.sql  -- public.users RLS + deal_summary as security_invoker
+\i 20260430_function_search_path_lockdown.sql  -- pin search_path on REDIP functions
+\i 20260430_feature_flag_cohorts_write_policy.sql -- drop USING(true) write policy
+
 -- ============================================================================
 -- After applying:
 --   1. Verify: SELECT COUNT(*) FROM regulatory_data.far_rules WHERE org_id IS NULL;
