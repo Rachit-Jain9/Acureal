@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Maximize2, Minimize2, Map as MapIcon } from 'lucide-react';
+import { Layers, Maximize2, Minimize2, Map as MapIcon, MapPin, Check, X as XIcon } from 'lucide-react';
 import clsx from 'clsx';
 import 'leaflet/dist/leaflet.css';
-import api from '../../services/api';
+import api, { propertiesAPI } from '../../services/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from '../common/Toast';
 
 const toNumber = (value) => {
   const numeric = Number(value);
@@ -25,6 +27,31 @@ const TILE_LAYERS = {
     maxZoom: 19,
   },
 };
+
+// Pin-relocation helper. When the parent enables relocate mode, every map
+// click drops the pending pin; analyst can also drag the marker. Saving
+// posts to PUT /properties/:id and invalidates query caches.
+function MapClickCapture({ active, onPick }) {
+  useMapEvents({
+    click(e) {
+      if (!active) return;
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+// Default Leaflet marker icons need a manual setup in Vite — without this
+// `Marker` renders as a broken-image. Reuse the standard CDN images.
+const DEFAULT_ICON = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
 
 function FitToGeometry({ geometry, fallbackCenter, fallbackZoom }) {
   const map = useMap();
@@ -64,6 +91,13 @@ export default function ReadOnlyPropertyMap({
   enableScrollZoom = true,
   enableFullscreen = true,
   enableLayerToggle = true,
+  // T6.1 — pin relocation. When propertyId is provided and canEdit is true,
+  // analysts get a "Move pin" button to drag/click the marker to its real
+  // location and save back to /properties/:id. Critical for Bengaluru where
+  // address geocoding is often 100-300m off the actual parcel.
+  propertyId = null,
+  canEdit = false,
+  onPinUpdated = null,
 }) {
   const containerRef = useRef(null);
   const [activeLayer, setActiveLayer] = useState('streets');
@@ -75,6 +109,12 @@ export default function ReadOnlyPropertyMap({
   const [zoningGeo, setZoningGeo] = useState(null);
   const [zoningLoading, setZoningLoading] = useState(false);
   const [zoningError, setZoningError] = useState(null);
+
+  // T6.1 — pin relocation state
+  const [relocateMode, setRelocateMode] = useState(false);
+  const [pendingPin, setPendingPin] = useState(null); // [lat, lng] | null
+  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   const center = useMemo(() => {
     const latitude = toNumber(lat);
@@ -138,6 +178,37 @@ export default function ReadOnlyPropertyMap({
       });
     return () => { cancelled = true; };
   }, [zoningEnabled, zoningGeo, zoningLoading, center]);
+
+  // Save the relocated pin. Posts to PUT /properties/:id with new coords,
+  // then invalidates the property + parcel-intelligence query caches so the
+  // panel re-fetches with the corrected lat/lng (which also re-runs OSM and
+  // K-GIS lookups on the next refresh).
+  const saveRelocatedPin = async () => {
+    if (!propertyId || !pendingPin) return;
+    setSaving(true);
+    try {
+      await propertiesAPI.update(propertyId, {
+        lat: pendingPin[0],
+        lng: pendingPin[1],
+      });
+      queryClient.invalidateQueries({ queryKey: ['property', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-intelligence'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      toast.success('Pin updated. Refresh parcel intelligence to re-run OSM and K-GIS lookups.');
+      setRelocateMode(false);
+      setPendingPin(null);
+      if (onPinUpdated) onPinUpdated(pendingPin);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to save pin.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelRelocate = () => {
+    setRelocateMode(false);
+    setPendingPin(null);
+  };
 
   if (!center) {
     return null;
@@ -222,12 +293,83 @@ export default function ReadOnlyPropertyMap({
             color: '#1d4ed8',
             weight: 2,
             fillColor: '#3b82f6',
-            fillOpacity: 0.55,
+            fillOpacity: relocateMode && pendingPin ? 0.18 : 0.55,
           }}
         >
           <Popup>{title}</Popup>
         </CircleMarker>
+
+        {/* T6.1 — Pin relocation overlay */}
+        <MapClickCapture
+          active={relocateMode}
+          onPick={(la, lo) => setPendingPin([la, lo])}
+        />
+        {relocateMode && (pendingPin || center) && (
+          <Marker
+            position={pendingPin || center}
+            icon={DEFAULT_ICON}
+            draggable
+            eventHandlers={{
+              dragend: (e) => {
+                const ll = e.target.getLatLng();
+                setPendingPin([ll.lat, ll.lng]);
+              },
+            }}
+          >
+            <Popup>
+              <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+                <div style={{ fontWeight: 600 }}>Pending pin</div>
+                <div style={{ fontFamily: 'monospace', marginTop: 2 }}>
+                  {(pendingPin || center)[0].toFixed(6)}, {(pendingPin || center)[1].toFixed(6)}
+                </div>
+                <div style={{ marginTop: 4, color: '#64748b' }}>
+                  Drag this marker, or click anywhere on the map to move it.
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
+
+      {/* T6.1 — Pin relocation. Visible only when propertyId + canEdit are
+          provided (deal pages). Two states:
+          1. Idle: small "Move pin" button below the zoning toggle.
+          2. Active: instructional banner + Save / Cancel buttons. */}
+      {propertyId && canEdit && relocateMode && (
+        <div className="absolute left-1/2 top-3 z-[1100] -translate-x-1/2 flex max-w-[460px] flex-col gap-2 rounded-editorial border border-primary-300 bg-bg-elevated/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+          <div className="flex items-start gap-2">
+            <MapPin size={13} className="mt-0.5 shrink-0 text-primary-600" />
+            <div className="text-[11px] leading-relaxed text-content-primary">
+              <span className="font-semibold">Click the map</span> or drag the marker to set the actual parcel pin.
+              {pendingPin && (
+                <span className="ml-1 font-mono tabular-nums text-content-muted">
+                  {pendingPin[0].toFixed(6)}, {pendingPin[1].toFixed(6)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={cancelRelocate}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded-md border border-hairline bg-bg-secondary px-2.5 py-1 text-[11px] font-semibold text-content-secondary hover:text-content-primary disabled:opacity-50 transition-colors"
+            >
+              <XIcon size={11} />
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveRelocatedPin}
+              disabled={!pendingPin || saving}
+              className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+            >
+              <Check size={11} />
+              {saving ? 'Saving…' : 'Save pin'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* T3 — Zoning overlay toggle. Empty state when no zones have geom. */}
       <div className="absolute left-3 top-3 z-[1000] flex flex-col gap-1.5">
@@ -261,6 +403,21 @@ export default function ReadOnlyPropertyMap({
           <div className="max-w-[220px] rounded-editorial border border-hairline bg-bg-elevated/95 px-2.5 py-1.5 text-[10px] text-content-muted shadow-sm backdrop-blur-sm leading-relaxed">
             No zone geometry uploaded yet for this area. Upload RMP zone GeoJSON in the master-plan admin to populate this overlay.
           </div>
+        )}
+        {/* T6.1 — Move pin button (only when allowed) */}
+        {propertyId && canEdit && !relocateMode && (
+          <button
+            type="button"
+            onClick={() => {
+              setRelocateMode(true);
+              setPendingPin(center);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated/95 px-2.5 py-1.5 text-[11px] font-medium text-content-secondary hover:border-primary-300 hover:text-content-primary transition-colors duration-150 ease-out shadow-sm backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            title="Pin not at the actual parcel? Move it"
+          >
+            <MapPin size={11} />
+            Move pin
+          </button>
         )}
       </div>
 

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Sliders, RotateCcw } from 'lucide-react';
+import { Sliders, RotateCcw, Info } from 'lucide-react';
 import { Card } from '../../design-system';
 import {
   selectFarRule,
   computeBuildabilityFromRule,
+  SQFT_PER_SQM,
 } from '../../utils/parcelBuildability';
 
 const formatInt = (n) => {
@@ -74,6 +75,48 @@ export default function WhatIfBuildability({ intelligence }) {
     const result = computeBuildabilityFromRule({ property, zone, rule });
     return { rule, values: result.values, status: result.status };
   }, [candidates, landArea, roadWidth, landUseFamily, zone, inputs.frontage_mtrs, inputs.depth_mtrs]);
+
+  // Coverage bands: when no rule matches, show analyst what *is* covered so
+  // they understand the gap rather than seeing an opaque "no match" message.
+  // Aggregates min/max plot-area and road-width across all candidates filtered
+  // to the current land-use family.
+  const coverageBands = useMemo(() => {
+    const matching = candidates.filter(
+      (rule) => !landUseFamily || String(rule.land_use_family || '').toLowerCase() === landUseFamily.toLowerCase()
+    );
+    if (!matching.length) return null;
+
+    const plotMins = matching.map((r) => Number(r.plot_area_min_sqm) || 0);
+    const plotMaxes = matching
+      .map((r) => (r.plot_area_max_sqm == null ? Number.POSITIVE_INFINITY : Number(r.plot_area_max_sqm)))
+      .filter((v) => Number.isFinite(v));
+    const roadMins = matching.map((r) => Number(r.road_width_min_m) || 0);
+    const roadMaxes = matching
+      .map((r) => (r.road_width_max_m == null ? Number.POSITIVE_INFINITY : Number(r.road_width_max_m)))
+      .filter((v) => Number.isFinite(v));
+
+    const plotMinSqft = Math.min(...plotMins) * SQFT_PER_SQM;
+    const plotMaxSqft = plotMaxes.length ? Math.max(...plotMaxes) * SQFT_PER_SQM : Number.POSITIVE_INFINITY;
+    const roadMin = Math.min(...roadMins);
+    const roadMax = roadMaxes.length ? Math.max(...roadMaxes) : Number.POSITIVE_INFINITY;
+
+    const landAreaSqm = landArea / SQFT_PER_SQM;
+    const reasonsOutOfBand = [];
+    if (landAreaSqm < Math.min(...plotMins)) reasonsOutOfBand.push('plot-area below smallest band');
+    if (plotMaxes.length && landAreaSqm > Math.max(...plotMaxes)) reasonsOutOfBand.push('plot-area above largest band');
+    if (roadWidth < Math.min(...roadMins)) reasonsOutOfBand.push('road-width below smallest band');
+    if (roadMaxes.length && roadWidth > Math.max(...roadMaxes)) reasonsOutOfBand.push('road-width above largest band');
+
+    return {
+      plot_min_sqft: Math.round(plotMinSqft),
+      plot_max_sqft: Number.isFinite(plotMaxSqft) ? Math.round(plotMaxSqft) : null,
+      road_min_m: roadMin,
+      road_max_m: Number.isFinite(roadMax) ? roadMax : null,
+      rule_count: matching.length,
+      land_use_family: landUseFamily,
+      reasons: reasonsOutOfBand,
+    };
+  }, [candidates, landUseFamily, landArea, roadWidth]);
 
   const reset = () => {
     setLandArea(actualLandArea || 5000);
@@ -205,7 +248,47 @@ export default function WhatIfBuildability({ intelligence }) {
           </div>
         ) : (
           <div className="rounded-editorial border border-hairline bg-bg-secondary px-4 py-3 text-xs text-content-secondary">
-            No reviewed FAR rule matches this combination. Try a different road width or land area band — or upload an FAR rule covering this band.
+            <div className="flex items-start gap-2">
+              <Info size={12} className="mt-0.5 shrink-0 text-content-muted" />
+              <div className="min-w-0">
+                <div className="font-semibold text-content-primary mb-1">
+                  No reviewed {coverageBands?.land_use_family || ''} FAR rule matches this combination
+                </div>
+                {coverageBands ? (
+                  <>
+                    <div className="leading-relaxed">
+                      Available rules ({coverageBands.rule_count}) cover{' '}
+                      <span className="font-medium text-content-primary tabular-nums">
+                        {coverageBands.plot_min_sqft.toLocaleString('en-IN')}
+                        {coverageBands.plot_max_sqft
+                          ? `–${coverageBands.plot_max_sqft.toLocaleString('en-IN')}`
+                          : '+'} sqft
+                      </span>{' '}
+                      plots on{' '}
+                      <span className="font-medium text-content-primary tabular-nums">
+                        {coverageBands.road_min_m}
+                        {coverageBands.road_max_m
+                          ? `–${coverageBands.road_max_m}`
+                          : '+'} m
+                      </span>{' '}
+                      roads.
+                    </div>
+                    {coverageBands.reasons.length > 0 && (
+                      <div className="mt-1 leading-relaxed text-content-muted">
+                        Your input is outside: {coverageBands.reasons.join(' · ')}.
+                      </div>
+                    )}
+                    <div className="mt-1.5 leading-relaxed text-content-muted">
+                      Move sliders into the covered band, or upload an FAR rule for this band in the master-plan admin.
+                    </div>
+                  </>
+                ) : (
+                  <div className="leading-relaxed">
+                    No FAR rules are available for the assigned land-use family. Upload an FAR rule covering this band before relying on what-if buildability.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

@@ -431,7 +431,13 @@ export default function ParcelTab({ deal, dealId, canEdit }) {
                 Satellite view <ExternalLink size={12} />
               </a>
             </div>
-            <ReadOnlyPropertyMap lat={deal.lat} lng={deal.lng} title="Linked property reference point" />
+            <ReadOnlyPropertyMap
+              lat={deal.lat}
+              lng={deal.lng}
+              title="Linked property reference point"
+              propertyId={deal.property_id || deal.propertyId || null}
+              canEdit={canEdit}
+            />
             <p className="text-xs text-content-secondary">
               Pin at exact lat/lng. If the location looks off, re-geocode the property or enter manual coordinates on the Property Record.
             </p>

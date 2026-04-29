@@ -401,6 +401,8 @@ export default function PropertyDetailPage() {
                   lng={property.lng}
                   title="Property reference point"
                   heightClassName="h-72"
+                  propertyId={property.id}
+                  canEdit
                 />
               </div>
             ) : (

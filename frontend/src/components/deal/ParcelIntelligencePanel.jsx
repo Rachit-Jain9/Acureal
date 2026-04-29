@@ -588,7 +588,7 @@ function KgisHierarchyStrip({ hierarchy = {} }) {
   );
 }
 
-function KgisMapCard({ intelligence }) {
+function KgisMapCard({ intelligence, propertyId, canEdit }) {
   const lat = intelligence?.inputs?.lat;
   const lng = intelligence?.inputs?.lng;
   const kgis = intelligence?.kgis;
@@ -618,6 +618,8 @@ function KgisMapCard({ intelligence }) {
             title={intelligence?.inputs?.name || 'Parcel reference point'}
             heightClassName="h-[440px]"
             zoom={17}
+            propertyId={propertyId}
+            canEdit={canEdit}
           />
         ) : (
           <div className="flex h-56 items-center justify-center rounded-editorial border border-dashed border-hairline bg-bg-secondary text-sm text-content-secondary">
@@ -996,7 +998,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
         </div>
       </div>
 
-      <KgisMapCard intelligence={intelligence} />
+      <KgisMapCard intelligence={intelligence} propertyId={propertyId} canEdit={canEdit} />
 
       <Card className="p-0 overflow-hidden">
         <div className="border-b border-hairline-soft px-5 py-4">
