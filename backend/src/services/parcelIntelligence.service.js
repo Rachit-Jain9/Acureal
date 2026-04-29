@@ -11,6 +11,7 @@ const guidanceService = require('./guidance.service');
 const landeedAdapter = require('./adapters/landeed.adapter');
 const kgisAdapter = require('./adapters/kgis.adapter');
 const osmRoadAdapter = require('./adapters/osmRoadWidth.adapter');
+const localityIntelligenceService = require('./localityIntelligence.service');
 const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
 const { runParcelRedFlags } = require('../engines/parcelRedFlags.engine');
 const { EVENTS, publish } = require('../lib/eventBus');
@@ -723,6 +724,33 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   const osmCache = refresh && osmLive ? null : await getCachedOsmRoad(property);
   const osmRoad = formatOsmRoad(osmCache, osmLive);
 
+  // T8 — Cross-deal locality intelligence. Aggregate within-tenant prior
+  // signal for the same locality (other deals, approved guidance, recurring
+  // red flags). Best-effort: never blocks the snapshot if the lookup fails,
+  // and the locality string is whatever we can derive (property locality,
+  // K-GIS village, or the matched guidance row).
+  let localityIntelligence = null;
+  const localityCandidate =
+    property.locality ||
+    guidance?.selected?.locality ||
+    kgis?.hierarchy?.village ||
+    null;
+
+  if (localityCandidate) {
+    try {
+      localityIntelligence = await localityIntelligenceService.getLocalityIntelligence({
+        locality: localityCandidate,
+        city: property.city || null,
+        excludePropertyId: property.id,
+      });
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Locality intelligence lookup skipped:', error.message);
+      }
+      localityIntelligence = null;
+    }
+  }
+
   const citations = [
     ...(buildability.citations || []),
     ...(guidance.citations || []),
@@ -780,6 +808,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     },
     kgis,
     osm_road: osmRoad,
+    locality_intelligence: localityIntelligence,
     red_flags: redFlags,
     citations,
     buckets,

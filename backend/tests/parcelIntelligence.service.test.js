@@ -154,7 +154,8 @@ describe('parcelIntelligence.service', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [] });  // osm_road_cache read (T6)
+      .mockResolvedValueOnce({ rows: [] })   // osm_road_cache read (T6)
+      .mockResolvedValueOnce({ rows: [{ properties: null, guidance: null, evidence: null, flag_counts: null }] });  // locality intelligence (T8)
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
@@ -193,6 +194,7 @@ describe('parcelIntelligence.service', () => {
       .mockResolvedValueOnce({ rows: [] })                                              // kgis_cache UPDATE (no row)
       .mockResolvedValueOnce({ rows: [{ id: 'cache-1' }] })                             // kgis_cache INSERT
       .mockResolvedValueOnce({ rows: [] })                                              // osm_road_cache read (baseProperty has road_width=18, so OSM live skipped)
+      .mockResolvedValueOnce({ rows: [{ properties: null, guidance: null, evidence: null, flag_counts: null }] })  // locality intelligence (T8)
       .mockResolvedValueOnce({ rows: [{ id: 'snapshot-1' }] });                         // snapshot INSERT
 
     const result = await parcelIntelligenceService.refreshParcelIntelligence('prop-1', 'user-1');
@@ -202,7 +204,7 @@ describe('parcelIntelligence.service', () => {
     expect(result.kgis.status).toBe('matched');
     expect(query.mock.calls[3][0]).toContain('UPDATE regulatory_data.kgis_cache');
     expect(query.mock.calls[4][0]).toContain('INSERT INTO regulatory_data.kgis_cache');
-    expect(query.mock.calls[6][0]).toContain('INSERT INTO regulatory_data.parcel_intelligence_snapshots');
+    expect(query.mock.calls[7][0]).toContain('INSERT INTO regulatory_data.parcel_intelligence_snapshots');
   });
 
   test('classifies commercial zone codes even when property zoning is default residential', () => {

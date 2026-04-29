@@ -31,6 +31,7 @@ import VerifyItemDialog from './VerifyItemDialog';
 import WhatIfBuildability from './WhatIfBuildability';
 import SourceExplorerDrawer from './SourceExplorerDrawer';
 import ParcelNarrativeCard from './ParcelNarrativeCard';
+import LocalityIntelligenceCard from './LocalityIntelligenceCard';
 
 const EDITOR_ROLES = new Set(['admin', 'owner', 'editor', 'analyst']);
 
@@ -929,6 +930,8 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
           </div>
 
           <WhatIfBuildability intelligence={intelligence} />
+
+          <LocalityIntelligenceCard data={intelligence?.locality_intelligence} />
 
           <ParcelNarrativeCard
             propertyId={propertyId}
