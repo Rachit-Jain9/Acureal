@@ -96,7 +96,13 @@ export function MetricTile({
         {action && <div className="shrink-0 -mt-1 -mr-1">{action}</div>}
       </div>
       <div className="flex items-baseline gap-1.5">
-        <div className="font-display text-2xl sm:text-3xl font-semibold text-content-primary tabular-nums tracking-tight">
+        {/* `key={value}` re-mounts the node on change so the keyframe replays.
+            The `metric-value-fade` class collapses to a no-op under
+            `prefers-reduced-motion` (see index.css). */}
+        <div
+          key={String(value)}
+          className="metric-value-fade font-display text-2xl sm:text-3xl font-semibold text-content-primary tabular-nums tracking-tight"
+        >
           {value}
         </div>
         {unit && <div className="text-sm text-content-muted">{unit}</div>}
