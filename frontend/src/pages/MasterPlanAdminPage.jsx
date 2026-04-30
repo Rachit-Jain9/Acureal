@@ -12,6 +12,7 @@ import Badge from '../components/common/Badge';
 import { ErrorState } from '../design-system';
 import MasterPlanCorpusPanel from '../components/masterplan/MasterPlanCorpusPanel';
 import MasterPlanBbmpUavPanel from '../components/masterplan/MasterPlanBbmpUavPanel';
+import ZoneGeoJsonImportButton from '../components/masterplan/ZoneGeoJsonImportButton';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -945,6 +946,7 @@ function ZoneLibrary({ canEdit }) {
             <Plus size={14} /> Add Zone
           </button>
         )}
+        {canEdit && <ZoneGeoJsonImportButton />}
       </div>
 
       {isLoading ? (
