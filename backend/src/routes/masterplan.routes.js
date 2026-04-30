@@ -261,6 +261,26 @@ router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, ne
   }
 });
 
+// POST /api/master-plan/zones/import-geojson
+// Imports polygon geometry for already-reviewed zones from a GeoJSON
+// FeatureCollection. Never creates new zones — only attaches geometry
+// to zones that already exist in the registry (by zone_code + plan_version).
+// Every change is logged to zone_versions for the audit trail.
+router.post('/zones/import-geojson', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const summary = await masterplanService.importZoneGeoJSON({
+      featureCollection: req.body?.featureCollection,
+      planVersion: req.body?.planVersion,
+      changeReason: req.body?.changeReason,
+      overwriteGeom: Boolean(req.body?.overwriteGeom),
+      userId: req.user.id,
+    });
+    res.status(201).json({ success: true, data: summary });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/master-plan/zones/:id/assign-property
 router.post('/zones/:id/assign-property', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {

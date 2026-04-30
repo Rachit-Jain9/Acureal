@@ -689,6 +689,161 @@ describe('masterplan.service corpus auto-classification', () => {
     ]));
   });
 
+  test('importZoneGeoJSON updates geometry for matched zones and skips zones with existing geom by default', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'zone-1',
+          zone_code: 'R1',
+          plan_version: 'RMP 2031 Provisional',
+          has_geom: false,
+          geom_geojson: null,
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'zone-1', zone_code: 'R1', plan_version: 'RMP 2031 Provisional' }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'zone-2',
+          zone_code: 'R2',
+          plan_version: 'RMP 2031 Provisional',
+          has_geom: true,
+          geom_geojson: { type: 'Polygon', coordinates: [] },
+        }],
+      });
+
+    const summary = await service.importZoneGeoJSON({
+      featureCollection: {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { zone_code: 'R1' },
+            geometry: { type: 'Polygon', coordinates: [[[77, 12], [77.1, 12], [77.1, 12.1], [77, 12.1], [77, 12]]] },
+          },
+          {
+            type: 'Feature',
+            properties: { zone_code: 'R2' },
+            geometry: { type: 'Polygon', coordinates: [[[77, 12], [77.1, 12], [77.1, 12.1], [77, 12]]] },
+          },
+        ],
+      },
+      userId: 'user-1',
+    });
+
+    expect(summary).toMatchObject({
+      received: 2,
+      updated: 1,
+      skipped_existing_geom: 1,
+      skipped_unknown_zone: 0,
+      rejected: 0,
+    });
+    expect(summary.updates).toHaveLength(1);
+    expect(summary.updates[0]).toMatchObject({ zone_code: 'R1', replaced_geom: false });
+  });
+
+  test('importZoneGeoJSON overwrites existing geom when overwriteGeom is true', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'zone-1',
+          zone_code: 'R1',
+          plan_version: 'RMP 2031 Provisional',
+          has_geom: true,
+          geom_geojson: { type: 'Polygon', coordinates: [[[1, 2], [3, 4], [5, 6], [1, 2]]] },
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'zone-1', zone_code: 'R1', plan_version: 'RMP 2031 Provisional' }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const summary = await service.importZoneGeoJSON({
+      featureCollection: {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { zone_code: 'R1' },
+            geometry: { type: 'Polygon', coordinates: [[[7, 8], [9, 10], [11, 12], [7, 8]]] },
+          },
+        ],
+      },
+      overwriteGeom: true,
+      userId: 'user-1',
+    });
+
+    expect(summary.updated).toBe(1);
+    expect(summary.skipped_existing_geom).toBe(0);
+    expect(summary.updates[0].replaced_geom).toBe(true);
+  });
+
+  test('importZoneGeoJSON skips features whose zone_code is not in the registry', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    const summary = await service.importZoneGeoJSON({
+      featureCollection: {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { zone_code: 'GHOST' },
+            geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+          },
+        ],
+      },
+      userId: 'user-1',
+    });
+
+    expect(summary.received).toBe(1);
+    expect(summary.skipped_unknown_zone).toBe(1);
+    expect(summary.updated).toBe(0);
+    expect(summary.errors[0]).toMatchObject({
+      zone_code: 'GHOST',
+      reason: expect.stringMatching(/no reviewed zone/i),
+    });
+  });
+
+  test('importZoneGeoJSON rejects features missing zone_code or geometry', async () => {
+    const summary = await service.importZoneGeoJSON({
+      featureCollection: {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 1], [0, 0]]] } },
+          { type: 'Feature', properties: { zone_code: 'R1' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+        ],
+      },
+      userId: 'user-1',
+    });
+
+    expect(summary.rejected).toBe(2);
+    expect(summary.updated).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('importZoneGeoJSON throws on missing or empty feature collections', async () => {
+    await expect(service.importZoneGeoJSON({})).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.importZoneGeoJSON({ featureCollection: { type: 'NotACollection' } }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.importZoneGeoJSON({ featureCollection: { type: 'FeatureCollection', features: [] } }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('importZoneGeoJSON caps imports at 500 features', async () => {
+    const features = Array.from({ length: 501 }, () => ({
+      type: 'Feature',
+      properties: { zone_code: 'R1' },
+      geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 1], [0, 0]]] },
+    }));
+    await expect(service.importZoneGeoJSON({
+      featureCollection: { type: 'FeatureCollection', features },
+    })).rejects.toMatchObject({ statusCode: 413 });
+    expect(query).not.toHaveBeenCalled();
+  });
+
   test('listMasterplanCorpus returns 12 entries with upload status from listDocuments', async () => {
     query.mockResolvedValueOnce({
       rows: [
