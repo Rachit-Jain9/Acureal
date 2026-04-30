@@ -2,6 +2,7 @@ import ParcelIntelligencePanel from './ParcelIntelligencePanel';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
 import { ErrorState } from '../../design-system';
 import { useProperty } from '../../hooks/useProperties';
+import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 
 const resolveLinkedProperty = (deal) => {
   if (deal?.property?.id) return deal.property;
@@ -17,7 +18,9 @@ const resolveLinkedProperty = (deal) => {
   return null;
 };
 
-export default function ZoningTab({ deal, dealId, setTab }) {
+export default function ZoningTab({ setTab }) {
+  const { dealId } = useDealContext();
+  const deal = useDealRecord();
   const propertyStub = resolveLinkedProperty(deal);
   const { data: hydratedProperty } = useProperty(propertyStub?.id);
   const property = hydratedProperty ? { ...propertyStub, ...hydratedProperty } : propertyStub;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDealContext } from '../../hooks/useDealContext';
 import {
   ClipboardList,
   Plus,
@@ -718,7 +719,8 @@ function ApprovalsSection({ dealId }) {
 
 // ----------------------- Main DDTab -----------------------
 
-export default function DDTab({ dealId, assetClass, dealStructure }) {
+export default function DDTab() {
+  const { dealId } = useDealContext();
   return (
     <div className="space-y-10">
       <DDSection dealId={dealId} />

@@ -398,21 +398,17 @@ export default function DealDetailPage() {
             useDealContext + useDealRecord — no props. Pilot consumer for the
             TODO_ARCHITECTURE Phase A reactive seam (see hooks/useDealContext.jsx). */}
         {activeTab === 'overview' && <OverviewTab />}
-        {activeTab === 'parcel' && <ParcelTab deal={deal} dealId={id} canEdit={canEdit} />}
-        {activeTab === 'zoning' && <ZoningTab deal={deal} dealId={id} setTab={setTab} />}
-        {/* DocumentsTab + ActivityTab + RiskTab read dealId from useDealContext. */}
+        {/* All deal tabs read deal/dealId from useDealContext (TODO_ARCHITECTURE
+            Phase A complete). Only auxiliary parent-supplied props remain:
+            ParcelTab.canEdit (auth-derived), ZoningTab.setTab (router callback). */}
+        {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
+        {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
         {activeTab === 'documents' && <DocumentsTab />}
         {activeTab === 'activity' && <ActivityTab />}
-        {activeTab === 'financial' && <FinancialTab deal={deal} />}
-        {activeTab === 'dd' && (
-          <DDTab
-            dealId={id}
-            assetClass={deal.asset_class}
-            dealStructure={deal.deal_structure}
-          />
-        )}
+        {activeTab === 'financial' && <FinancialTab />}
+        {activeTab === 'dd' && <DDTab />}
         {activeTab === 'risk' && <RiskTab />}
-        {activeTab === 'comps' && <CompsTab deal={deal} />}
+        {activeTab === 'comps' && <CompsTab />}
       </div>
 
       {/* ── Edit Modal ───────────────────────────────────────────────────── */}

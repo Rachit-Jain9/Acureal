@@ -3,6 +3,7 @@ import { MapPin, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
 import { compsAPI } from '../../services/api';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { SectionHeader, ErrorState } from '../../design-system';
+import { useDealRecord } from '../../hooks/useDealContext';
 
 function formatRate(value) {
   if (value == null) return '-';
@@ -126,7 +127,8 @@ function BenchmarkCard({ benchmark, city }) {
   );
 }
 
-export default function CompsTab({ deal }) {
+export default function CompsTab() {
+  const deal = useDealRecord();
   const hasLatLng = deal?.lat != null && deal?.lng != null;
   const city = deal?.city;
 
