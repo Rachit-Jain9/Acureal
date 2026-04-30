@@ -19,6 +19,7 @@ import {
   useDeleteDeal,
   useUpdateDeal,
 } from '../hooks/useDeals';
+import { DealContextProvider } from '../hooks/useDealContext';
 import useAuthStore from '../store/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Badge from '../components/common/Badge';
@@ -215,7 +216,14 @@ export default function DealDetailPage() {
   const nextStages  = STAGE_TRANSITIONS[deal.stage] || [];
 
   // ── Page ─────────────────────────────────────────────────────────────────
+  // Wrap in DealContextProvider so descendants can opt into useDealContext()
+  // instead of receiving deal data via props. Tabs migrate to the context one
+  // at a time in follow-up PRs; the existing prop interfaces stay unchanged
+  // here. The provider internally calls useDealWorkspace(id) which de-dupes
+  // against the same query key already in flight, so this is one render +
+  // zero extra network calls.
   return (
+    <DealContextProvider dealId={id}>
     <div>
       {/* Back nav */}
       <button
@@ -645,5 +653,6 @@ export default function DealDetailPage() {
       )}
 
     </div>
+    </DealContextProvider>
   );
 }
