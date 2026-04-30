@@ -11,6 +11,7 @@ import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import { ErrorState } from '../design-system';
 import MasterPlanCorpusPanel from '../components/masterplan/MasterPlanCorpusPanel';
+import MasterPlanBbmpUavPanel from '../components/masterplan/MasterPlanBbmpUavPanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1733,6 +1734,7 @@ export default function MasterPlanAdminPage() {
           { key: 'zones', label: 'Zone Library' },
           { key: 'documents', label: 'Source Documents' },
           { key: 'corpus', label: 'Source Corpus' },
+          { key: 'bbmp-uav', label: 'BBMP UAV' },
         ].map((t) => (
           <button
             key={t.key}
@@ -1750,6 +1752,7 @@ export default function MasterPlanAdminPage() {
       {tab === 'zones' && <ZoneLibrary canEdit={canEdit} />}
       {tab === 'documents' && <DocumentsPanel canEdit={canEdit} />}
       {tab === 'corpus' && <MasterPlanCorpusPanel />}
+      {tab === 'bbmp-uav' && <MasterPlanBbmpUavPanel />}
     </div>
   );
 }
