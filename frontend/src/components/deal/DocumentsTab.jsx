@@ -13,6 +13,7 @@ import {
 import { clsx } from 'clsx';
 import { useDocuments, useUploadDocument, useDeleteDocument, useExtractDocument } from '../../hooks/useDocuments';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
+import { useDealContext } from '../../hooks/useDealContext';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -59,7 +60,8 @@ function formatDocType(docType) {
   return docType ? docType.replace(/_/g, ' ') : 'extracted';
 }
 
-export default function DocumentsTab({ dealId }) {
+export default function DocumentsTab() {
+  const { dealId } = useDealContext();
   const { data: docsData, isLoading, isError, refetch } = useDocuments(dealId);
   const { data: extractionData } = useDealExtractions(dealId);
   const uploadDoc = useUploadDocument();

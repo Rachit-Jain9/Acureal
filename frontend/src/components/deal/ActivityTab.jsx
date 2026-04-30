@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { useDealContext } from '../../hooks/useDealContext';
 import { clsx } from 'clsx';
 import {
   useActivities,
@@ -59,7 +60,8 @@ function ActivityIcon({ type }) {
   return <Icon size={15} className="text-content-muted" />;
 }
 
-export default function ActivityTab({ dealId }) {
+export default function ActivityTab() {
+  const { dealId } = useDealContext();
   const { data: activitiesData, isLoading, isError, refetch } = useActivities(dealId);
   const createActivity = useCreateActivity();
   const updateStatus = useUpdateActivityStatus();
