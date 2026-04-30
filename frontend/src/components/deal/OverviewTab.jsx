@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
+import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
 import { SectionHeader } from '../../design-system';
@@ -97,7 +98,21 @@ const STAGE_NEXT_STEPS = {
   ],
 };
 
-export default function OverviewTab({ deal, id }) {
+/**
+ * Pilot consumer of `useDealContext` (TODO_ARCHITECTURE Phase A pilot).
+ *
+ * Reads the deal record + dealId from the workspace context that
+ * `DealDetailPage` mounts via `<DealContextProvider>`. No props.
+ *
+ * If you're migrating another tab, copy this pattern: drop the
+ * `({ deal, id })` props, replace with `useDealContext()` + a selector
+ * (e.g. `useDealRecord()`), and stop the parent from passing those
+ * props. The hook throws if mounted outside the provider so wiring
+ * regressions surface at mount.
+ */
+export default function OverviewTab() {
+  const { dealId } = useDealContext();
+  const deal = useDealRecord();
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -106,7 +121,7 @@ export default function OverviewTab({ deal, id }) {
     setAiLoading(true);
     setAiError(null);
     try {
-      const res = await intelligenceAPI.getDealAnalysis(id);
+      const res = await intelligenceAPI.getDealAnalysis(dealId);
       setAiAnalysis(res.data.data);
     } catch (err) {
       setAiError(
