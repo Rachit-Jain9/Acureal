@@ -4,6 +4,28 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-04-30 (Codex source-document review history)
+
+**What was worked on in plain English:**
+- Added a history view for uploaded masterplan and regulatory source files.
+- Reviewers can now see who changed source metadata, when it changed, and what the previous values were.
+- This makes authority status, OCR readiness, confidence, and source-role changes easier to trust before extraction output is used.
+
+**PRs opened/merged:** PR #98 opened and merged.
+
+**Verification:**
+- Backend source-registry history test passed.
+- Frontend Master Plan admin history test passed.
+- Backend full test suite passed: 453 tests.
+- Frontend full test suite passed: 84 tests.
+- Frontend production build passed.
+
+**What's left to do:**
+- Continue toward the next source-registry step: OCR/review workflow for image-heavy files and richer source explorer behavior.
+- No manual environment-variable action was needed for this task.
+
+---
+
 ## 2026-04-30 (Codex source-registry start)
 
 **What was worked on in plain English:**
