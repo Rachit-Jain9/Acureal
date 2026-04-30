@@ -394,7 +394,10 @@ export default function DealDetailPage() {
 
       {/* Active tab content */}
       <div>
-        {activeTab === 'overview' && <OverviewTab deal={deal} id={id} />}
+        {/* OverviewTab reads dealId + deal record from <DealContextProvider> via
+            useDealContext + useDealRecord — no props. Pilot consumer for the
+            TODO_ARCHITECTURE Phase A reactive seam (see hooks/useDealContext.jsx). */}
+        {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'parcel' && <ParcelTab deal={deal} dealId={id} canEdit={canEdit} />}
         {activeTab === 'zoning' && <ZoningTab deal={deal} dealId={id} setTab={setTab} />}
         {activeTab === 'documents' && <DocumentsTab dealId={id} />}
