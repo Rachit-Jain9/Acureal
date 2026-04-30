@@ -33,6 +33,14 @@ export function useMasterPlanDocuments(params = {}) {
   });
 }
 
+export function useMasterPlanDocumentVersions(id) {
+  return useQuery({
+    queryKey: ['master-plan-doc-versions', id],
+    queryFn: () => masterPlanAPI.getDocVersions(id).then((r) => r.data.data ?? []),
+    enabled: !!id,
+  });
+}
+
 export function useUploadMasterPlanDocument() {
   const qc = useQueryClient();
   return useMutation({
@@ -116,8 +124,9 @@ export function useUpdateMasterPlanDocumentMetadata() {
   return useMutation({
     mutationFn: ({ id, data }) =>
       masterPlanAPI.updateDocMetadata(id, data).then((r) => r.data.data),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['master-plan-docs'] });
+      qc.invalidateQueries({ queryKey: ['master-plan-doc-versions', id] });
       toast.success('Source metadata updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Source metadata update failed'),

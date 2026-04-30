@@ -264,6 +264,7 @@ export const masterPlanAPI = {
   getDocUploadUrl: (fileName, fileSize) => api.post('/master-plan/documents/upload-url', { fileName, fileSize }),
   confirmDocUpload: (data)             => api.post('/master-plan/documents/confirm-upload', data),
   updateDocMetadata: (id, data)         => api.put(`/master-plan/documents/${id}/metadata`, data),
+  getDocVersions: (id)                  => api.get(`/master-plan/documents/${id}/versions`),
   downloadDoc:  (id)                   => api.get(`/master-plan/documents/${id}/download`),
   extractDoc:   (id, data)             => api.post(`/master-plan/documents/${id}/extract`, data),
 };

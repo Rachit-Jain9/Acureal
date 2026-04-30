@@ -200,6 +200,51 @@ describe('masterplan.service source intake and zone assignment', () => {
     });
   });
 
+  test('returns source-registry metadata history for a document', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-2',
+          plan_name: 'RMP-Provisional',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'version-1',
+          document_id: 'doc-2',
+          changed_by_name: 'Rachit Jain',
+          previous_values: {
+            processing_mode: 'ocr_required',
+            ocr_required: true,
+          },
+          change_reason: 'source registry review',
+        }],
+      });
+
+    const result = await service.getSourceDocumentVersions('doc-2');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 'version-1',
+      changed_by_name: 'Rachit Jain',
+      previous_values: {
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+      },
+    });
+    expect(query.mock.calls[1][0]).toContain('master_plan_document_versions');
+    expect(query.mock.calls[1][1]).toEqual(['doc-2']);
+  });
+
+  test('rejects source-registry metadata history for a missing document', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(service.getSourceDocumentVersions('missing-doc')).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   test('rejects invalid source-registry metadata updates', async () => {
     await expect(service.updateSourceDocumentMetadata('doc-2', {
       textCoverageRatio: 1.5,

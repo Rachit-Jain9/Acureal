@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 let docsQuery;
+let versionsQuery;
 let updateMetadataMock;
 
 vi.mock('../../store/authStore', () => ({
@@ -13,6 +14,7 @@ vi.mock('../../store/authStore', () => ({
 vi.mock('../../hooks/useMasterPlan', () => ({
   useZones: () => ({ data: [], isLoading: false }),
   useMasterPlanDocuments: () => docsQuery,
+  useMasterPlanDocumentVersions: () => versionsQuery,
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
@@ -45,6 +47,13 @@ describe('MasterPlanAdminPage source documents', () => {
     docsQuery = {
       data: [],
       isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    versionsQuery = {
+      data: [],
+      isLoading: false,
+      isFetching: false,
       isError: false,
       refetch: vi.fn(),
     };
@@ -124,6 +133,61 @@ describe('MasterPlanAdminPage source documents', () => {
     expect(screen.getByText('7 facts')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ocr review/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /re-extract/i })).toBeEnabled();
+  });
+
+  it('shows source review history with previous metadata values', async () => {
+    const user = userEvent.setup();
+    docsQuery = {
+      data: [{
+        id: 'doc-1',
+        city: 'Bengaluru',
+        plan_name: 'RMP-Provisional',
+        plan_version: 'RMP 2031 Draft',
+        file_name: 'RMP-Provisional.pdf',
+        doc_type: 'rmp_table',
+        extraction_status: 'pending',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'text_extraction',
+        ocr_required: false,
+        text_coverage_ratio: 0.92,
+      }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    versionsQuery = {
+      data: [{
+        id: 'version-1',
+        changed_by_name: 'Rachit Jain',
+        changed_at: '2026-04-30T08:45:00.000Z',
+        change_reason: 'source registry review',
+        previous_values: {
+          processing_mode: 'ocr_required',
+          ocr_required: true,
+          text_coverage_ratio: 0.02,
+        },
+      }],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    await openSourceDocuments();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /review history rmp-provisional/i }));
+    });
+
+    const dialog = screen.getByRole('dialog', { name: /source review history/i });
+    expect(within(dialog).getByText('Rachit Jain')).toBeInTheDocument();
+    expect(within(dialog).getByText('source registry review')).toBeInTheDocument();
+    expect(within(dialog).getByText('Previous Processing')).toBeInTheDocument();
+    expect(within(dialog).getByText('OCR required')).toBeInTheDocument();
+    expect(within(dialog).getByText('Previous OCR needed')).toBeInTheDocument();
+    expect(within(dialog).getByText('Previous Text coverage')).toBeInTheDocument();
+    expect(within(dialog).getByText('2%')).toBeInTheDocument();
   });
 
   it('lets reviewers mark an OCR source as text-ready', async () => {

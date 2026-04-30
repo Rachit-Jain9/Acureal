@@ -176,6 +176,16 @@ router.put('/documents/:id/metadata', authenticate, requireAdminOrAnalyst, async
   }
 });
 
+// GET /api/master-plan/documents/:id/versions
+router.get('/documents/:id/versions', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const versions = await masterplanService.getSourceDocumentVersions(req.params.id);
+    res.json({ success: true, data: versions });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/documents/:id/download
 router.get('/documents/:id/download', authenticate, async (req, res, next) => {
   try {
