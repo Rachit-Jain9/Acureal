@@ -296,7 +296,7 @@ export default function OverviewTab() {
             title="Financial Summary"
             action={
               <Link
-                to={`/dashboard/financials/${id}`}
+                to={`/dashboard/financials/${dealId}`}
                 className="text-sm text-accent hover:opacity-80 flex items-center gap-1"
               >
                 Full Model <ArrowRight size={14} />

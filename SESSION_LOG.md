@@ -55,7 +55,7 @@ Running history of every working session. Read this to understand what was built
 - Blocked automated extraction when a source is explicitly marked as OCR-required, image-review, manual-entry, or not extractable.
 - Kept provisional/image-heavy PDFs from looking equally ready until a human review or OCR pass happens.
 
-**PRs opened/merged:** PR #94 opened and merged. This readiness branch is in progress.
+**PRs opened/merged:** PR #94 and PR #95 opened and merged.
 
 **Verification:**
 - Backend full test suite passed: 449 tests.
@@ -63,8 +63,25 @@ Running history of every working session. Read this to understand what was built
 - Frontend production build passed.
 
 **What's left to do:**
-- Push and preview the readiness branch.
 - Add an actual OCR/review workflow for image-heavy PDFs once the queue is visible.
+
+---
+
+## 2026-04-30 (Codex deal overview hotfix)
+
+**What was worked on in plain English:**
+- Investigated a production deal-page crash showing "id is not defined" on the overview page.
+- Fixed the Full Model link so it uses the current deal identifier from the deal workspace context.
+- Added a regression test to make sure the overview page can render the financial summary link without crashing.
+
+**PRs opened/merged:** PR #96 opened and merged.
+
+**Verification:**
+- Frontend Overview tab regression test passed.
+- Frontend production build passed.
+
+**What's left to do:**
+- Watch for any remaining deal-page context migration regressions.
 
 ---
 
