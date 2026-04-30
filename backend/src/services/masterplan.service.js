@@ -872,6 +872,28 @@ async function updateSourceDocumentMetadata(id, data, userId, { changeReason } =
   return doc;
 }
 
+async function getSourceDocumentVersions(id) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+
+  const result = await query(
+    `SELECT v.id,
+            v.document_id,
+            v.changed_by,
+            u.name AS changed_by_name,
+            v.previous_values,
+            v.change_reason,
+            v.changed_at
+     FROM regulatory_data.master_plan_document_versions v
+     LEFT JOIN public.users u ON u.id = v.changed_by
+     WHERE v.document_id = $1::uuid
+     ORDER BY v.changed_at DESC
+     LIMIT 100`,
+    [id],
+  );
+  return result.rows;
+}
+
 async function getSourceDocumentDownload(id) {
   const doc = await getSourceDocumentById(id);
   if (!doc) throw createError('Masterplan source document not found.', 404);
@@ -1160,6 +1182,7 @@ module.exports = {
   getSourceDocumentUploadUrl,
   confirmSourceDocumentUpload,
   updateSourceDocumentMetadata,
+  getSourceDocumentVersions,
   getSourceDocumentDownload,
   extractSourceDocument,
   assignReviewedZoneToProperty,

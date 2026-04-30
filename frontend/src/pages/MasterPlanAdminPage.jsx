@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus, X, Search, Shield, CheckCircle2, XCircle, Clock, Edit3,
-  FileText, AlertTriangle, Upload, FileSearch, ExternalLink, Loader2, RefreshCw,
+  FileText, AlertTriangle, Upload, FileSearch, ExternalLink, Loader2, RefreshCw, History,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import useAuthStore from '../store/authStore';
@@ -20,6 +20,7 @@ import {
   useUploadMasterPlanDocument,
   useExtractMasterPlanDocument,
   useUpdateMasterPlanDocumentMetadata,
+  useMasterPlanDocumentVersions,
   useOpenMasterPlanDocument,
 } from '../hooks/useMasterPlan';
 
@@ -87,6 +88,21 @@ const PROCESSING_MODES = [
   { value: 'manual_entry', label: 'Manual entry' },
   { value: 'not_extractable', label: 'Not extractable' },
 ];
+
+const SOURCE_HISTORY_FIELD_LABELS = {
+  doc_type: 'Document type',
+  source_role: 'Source role',
+  legal_status: 'Legal status',
+  authority_name: 'Authority',
+  published_on: 'Published on',
+  source_url: 'Source URL',
+  page_count: 'Page count',
+  processing_mode: 'Processing',
+  text_coverage_ratio: 'Text coverage',
+  ocr_required: 'OCR needed',
+  source_confidence: 'Confidence',
+  registry_notes: 'Registry notes',
+};
 
 const DOC_STATUS_META = {
   pending: { label: 'pending', tone: 'neutral', icon: Clock },
@@ -271,6 +287,48 @@ function pctToRatio(value) {
   return Math.max(0, Math.min(100, n)) / 100;
 }
 
+function formatHistoryDate(value) {
+  if (!value) return 'Time not recorded';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function formatHistoryField(field) {
+  return SOURCE_HISTORY_FIELD_LABELS[field] || field.replace(/_/g, ' ');
+}
+
+function formatHistoryValue(field, value) {
+  if (value === null || value === undefined || value === '') return 'Blank';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (field === 'doc_type') return formatDocType(value);
+  if (field === 'source_role') return formatOption(SOURCE_ROLES, value) || 'Blank';
+  if (field === 'legal_status') return formatOption(LEGAL_STATUSES, value) || 'Blank';
+  if (field === 'processing_mode') return formatOption(PROCESSING_MODES, value) || 'Blank';
+  if (field === 'text_coverage_ratio' || field === 'source_confidence') {
+    return formatPercent(value) || 'Blank';
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function normalizePreviousValues(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function SourceReviewModal({ doc, isOpen, onClose, onSubmit, submitting }) {
   const [form, setForm] = useState({
     docType: 'rmp_table',
@@ -446,6 +504,115 @@ function SourceReviewModal({ doc, isOpen, onClose, onSubmit, submitting }) {
             </div>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function SourceHistoryModal({ doc, isOpen, onClose, versions = [], isLoading, isError, onRetry }) {
+  if (!isOpen || !doc) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40 transition-opacity duration-150 ease-out" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="source-history-title"
+        className="relative mx-4 max-h-[84vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl motion-safe:animate-[fadeInUp_220ms_cubic-bezier(0.16,1,0.3,1)]"
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="source-history-title" className="truncate text-lg font-semibold text-content-primary">
+              Source review history
+            </h2>
+            <p className="mt-0.5 truncate text-xs text-content-secondary">{doc.plan_name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close source review history"
+            className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div role="status" aria-busy="true" className="space-y-3">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="rounded-lg border border-hairline bg-bg-elevated p-3">
+                <div className="h-3 w-36 rounded bg-bg-secondary animate-pulse" />
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                </div>
+              </div>
+            ))}
+            <span className="sr-only">Loading source review history</span>
+          </div>
+        ) : isError ? (
+          <ErrorState
+            tone="danger"
+            title="Could not load history"
+            action={(
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+              >
+                Retry
+              </button>
+            )}
+          >
+            The source registry kept the edit, but the history list could not be loaded.
+          </ErrorState>
+        ) : versions.length === 0 ? (
+          <div className="rounded-lg border border-hairline bg-bg-elevated px-4 py-8 text-center">
+            <p className="text-sm font-medium text-content-primary">No source review history yet.</p>
+            <p className="mt-1 text-xs text-content-secondary">Metadata edits will appear here after the first review save.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {versions.map((version) => {
+              const previousValues = normalizePreviousValues(version.previous_values);
+              const changedFields = Object.entries(previousValues);
+              return (
+                <article key={version.id} className="rounded-lg border border-hairline bg-bg-elevated p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="neutral">{version.changed_by_name || 'System'}</Badge>
+                        <span className="text-xs text-content-muted">{formatHistoryDate(version.changed_at)}</span>
+                      </div>
+                      <p className="mt-1 text-xs font-medium text-content-secondary">
+                        {version.change_reason || 'Source metadata review'}
+                      </p>
+                    </div>
+                    <Badge tone="info">{changedFields.length} field{changedFields.length === 1 ? '' : 's'}</Badge>
+                  </div>
+
+                  {changedFields.length > 0 ? (
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {changedFields.map(([field, value]) => (
+                        <div key={field} className="rounded-lg border border-hairline-soft bg-bg-secondary px-3 py-2">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-content-muted">
+                            Previous {formatHistoryField(field)}
+                          </div>
+                          <div className="mt-1 break-words text-xs font-medium text-content-primary">
+                            {formatHistoryValue(field, value)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-content-muted">No changed fields were recorded for this entry.</p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -855,6 +1022,8 @@ function DocumentsPanel({ canEdit }) {
   const [fileError, setFileError] = useState('');
   const [readinessFilter, setReadinessFilter] = useState('all');
   const [reviewingDoc, setReviewingDoc] = useState(null);
+  const [historyDoc, setHistoryDoc] = useState(null);
+  const historyQuery = useMasterPlanDocumentVersions(historyDoc?.id);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -1208,6 +1377,17 @@ function DocumentsPanel({ canEdit }) {
                         <Edit3 size={15} />
                       </button>
                     )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setHistoryDoc(doc)}
+                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                        title="Review history"
+                        aria-label={`Review history ${doc.plan_name}`}
+                      >
+                        <History size={15} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => openMut.mutate(doc.id)}
@@ -1241,6 +1421,15 @@ function DocumentsPanel({ canEdit }) {
         onClose={() => setReviewingDoc(null)}
         onSubmit={handleReviewSubmit}
         submitting={updateDocMut.isPending}
+      />
+      <SourceHistoryModal
+        doc={historyDoc}
+        isOpen={Boolean(historyDoc)}
+        onClose={() => setHistoryDoc(null)}
+        versions={historyQuery.data || []}
+        isLoading={historyQuery.isLoading || historyQuery.isFetching}
+        isError={historyQuery.isError}
+        onRetry={() => historyQuery.refetch()}
       />
     </div>
   );
