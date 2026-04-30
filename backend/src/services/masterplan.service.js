@@ -140,16 +140,110 @@ const isExtractableSource = (doc) => {
   return EXTRACTABLE_EXTENSIONS.has(ext) || mime.includes('pdf') || mime.startsWith('image/');
 };
 
-const getExtractionBlockReason = (doc) => {
+const SOURCE_METADATA_FIELDS = [
+  { field: 'source_role', label: 'source role' },
+  { field: 'legal_status', label: 'legal status' },
+  { field: 'authority_name', label: 'authority' },
+];
+
+const getSourceMetadataGaps = (doc = {}) => SOURCE_METADATA_FIELDS
+  .filter(({ field }) => !textOrNull(doc[field]))
+  .map(({ field, label }) => ({ field, label }));
+
+const getSourceDocumentReadiness = (doc = {}) => {
   const mode = doc?.processing_mode;
   if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
-    return 'This source is marked as needing OCR or image review before automated extraction.';
+    return {
+      key: 'ocr',
+      label: mode === 'image_review' ? 'Image review' : 'OCR review',
+      tone: 'warn',
+      description: 'OCR or image review required before extraction',
+      can_extract: false,
+      action_label: 'OCR review',
+      block_reason: 'This source is marked as needing OCR or image review before automated extraction.',
+      missing_fields: [],
+    };
   }
   if (mode === 'manual_entry') {
-    return 'This source is marked for manual entry. Automated extraction is disabled.';
+    return {
+      key: 'manual',
+      label: 'Manual entry',
+      tone: 'warn',
+      description: 'Manual entry source',
+      can_extract: false,
+      action_label: 'Manual only',
+      block_reason: 'This source is marked for manual entry. Automated extraction is disabled.',
+      missing_fields: [],
+    };
   }
   if (mode === 'not_extractable') {
-    return 'This source is marked as not extractable. Automated extraction is disabled.';
+    return {
+      key: 'manual',
+      label: 'Reference only',
+      tone: 'neutral',
+      description: 'Not extractable',
+      can_extract: false,
+      action_label: 'Reference',
+      block_reason: 'This source is marked as not extractable. Automated extraction is disabled.',
+      missing_fields: [],
+    };
+  }
+  if (doc?.extraction_status === 'failed') {
+    return {
+      key: 'failed',
+      label: 'Failed',
+      tone: 'danger',
+      description: 'Fix the source issue before retrying',
+      can_extract: true,
+      action_label: 'Retry',
+      block_reason: null,
+      missing_fields: [],
+    };
+  }
+
+  const missingFields = getSourceMetadataGaps(doc);
+  if (missingFields.length > 0) {
+    return {
+      key: 'metadata',
+      label: 'Metadata gap',
+      tone: 'warn',
+      description: `Missing ${missingFields.map((field) => field.label).join(', ')}`,
+      can_extract: true,
+      action_label: 'Extract',
+      block_reason: null,
+      missing_fields: missingFields,
+    };
+  }
+
+  if (doc?.extraction_status === 'completed') {
+    return {
+      key: 'review',
+      label: 'Review queued',
+      tone: 'success',
+      description: 'Candidates are queued for review',
+      can_extract: true,
+      action_label: 'Re-extract',
+      block_reason: null,
+      missing_fields: [],
+    };
+  }
+
+  return {
+    key: 'ready',
+    label: 'Ready',
+    tone: 'info',
+    description: 'Text-ready source',
+    can_extract: true,
+    action_label: 'Extract',
+    block_reason: null,
+    missing_fields: [],
+  };
+};
+
+const getExtractionBlockReason = (doc) => {
+  const readiness = getSourceDocumentReadiness(doc);
+  if (!readiness.can_extract) {
+    return readiness.block_reason || readiness.description;
   }
   return null;
 };
@@ -672,7 +766,10 @@ async function listDocuments({ city } = {}) {
      ORDER BY created_at DESC`,
     values,
   );
-  return result.rows;
+  return result.rows.map((doc) => ({
+    ...doc,
+    source_readiness: getSourceDocumentReadiness(doc),
+  }));
 }
 
 async function getSourceDocumentUploadUrl({ fileName, fileSize = 0, organizationId }) {
@@ -1173,6 +1270,7 @@ async function getZoneVersions(zoneId) {
 
 module.exports = {
   calculateEffectiveFSI,
+  getSourceDocumentReadiness,
   searchZones,
   getZoneById,
   createZone,

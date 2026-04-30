@@ -253,6 +253,76 @@ describe('masterplan.service source intake and zone assignment', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  test('adds server-owned readiness metadata to listed source documents', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-ocr',
+        plan_name: 'RMP-Provisional',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+      }, {
+        id: 'doc-gap',
+        plan_name: 'Guidance Value',
+        processing_mode: 'text_extraction',
+        ocr_required: false,
+        source_role: null,
+        legal_status: 'gazetted',
+        authority_name: null,
+      }],
+    });
+
+    const result = await service.listDocuments({ city: 'Bengaluru' });
+
+    expect(result[0].source_readiness).toMatchObject({
+      key: 'ocr',
+      label: 'OCR review',
+      can_extract: false,
+      action_label: 'OCR review',
+      block_reason: 'This source is marked as needing OCR or image review before automated extraction.',
+    });
+    expect(result[1].source_readiness).toMatchObject({
+      key: 'metadata',
+      label: 'Metadata gap',
+      can_extract: true,
+      missing_fields: [
+        { field: 'source_role', label: 'source role' },
+        { field: 'authority_name', label: 'authority' },
+      ],
+    });
+  });
+
+  test('uses the same readiness block reason when extraction is disabled', async () => {
+    const readiness = service.getSourceDocumentReadiness({
+      processing_mode: 'manual_entry',
+      ocr_required: false,
+    });
+
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-manual',
+        plan_name: 'Hand-entered guidance table',
+        file_name: 'guidance.pdf',
+        file_type: 'application/pdf',
+        processing_mode: 'manual_entry',
+        ocr_required: false,
+      }],
+    });
+
+    await expect(service.extractSourceDocument('doc-manual', {
+      docType: 'igr_guidance_pdf',
+      userId: 'user-1',
+    })).rejects.toMatchObject({
+      statusCode: 409,
+      message: readiness.block_reason,
+    });
+
+    expect(extractionService.extractStoredFileFields).not.toHaveBeenCalled();
+    expect(evidenceIngestionService.ingestRegulatoryFields).not.toHaveBeenCalled();
+  });
+
   test('blocks automated extraction for OCR-required source documents', async () => {
     query.mockResolvedValueOnce({
       rows: [{

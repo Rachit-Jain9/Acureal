@@ -154,7 +154,24 @@ function formatPercent(value) {
   return Number.isFinite(n) ? `${Math.round(n * 100)}%` : null;
 }
 
+function normalizeSourceReadiness(readiness) {
+  if (!readiness) return null;
+  return {
+    key: readiness.key || 'ready',
+    label: readiness.label || 'Ready',
+    tone: readiness.tone || 'info',
+    description: readiness.description || 'Text-ready source',
+    canExtract: readiness.can_extract ?? readiness.canExtract ?? true,
+    actionLabel: readiness.action_label || readiness.actionLabel || 'Extract',
+    blockReason: readiness.block_reason || readiness.blockReason || null,
+    missingFields: readiness.missing_fields || readiness.missingFields || [],
+  };
+}
+
 function getSourceReadiness(doc) {
+  const serverReadiness = normalizeSourceReadiness(doc?.source_readiness || doc?.sourceReadiness);
+  if (serverReadiness) return serverReadiness;
+
   const mode = doc?.processing_mode;
   if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
     return {
@@ -164,6 +181,8 @@ function getSourceReadiness(doc) {
       description: 'OCR or image review required before extraction',
       canExtract: false,
       actionLabel: 'OCR review',
+      blockReason: 'This source is marked as needing OCR or image review before automated extraction.',
+      missingFields: [],
     };
   }
   if (mode === 'manual_entry') {
@@ -174,6 +193,8 @@ function getSourceReadiness(doc) {
       description: 'Manual entry source',
       canExtract: false,
       actionLabel: 'Manual only',
+      blockReason: 'This source is marked for manual entry. Automated extraction is disabled.',
+      missingFields: [],
     };
   }
   if (mode === 'not_extractable') {
@@ -184,6 +205,8 @@ function getSourceReadiness(doc) {
       description: 'Not extractable',
       canExtract: false,
       actionLabel: 'Reference',
+      blockReason: 'This source is marked as not extractable. Automated extraction is disabled.',
+      missingFields: [],
     };
   }
   if (doc?.extraction_status === 'failed') {
@@ -194,21 +217,25 @@ function getSourceReadiness(doc) {
       description: 'Fix the source issue before retrying',
       canExtract: true,
       actionLabel: 'Retry',
+      blockReason: null,
+      missingFields: [],
     };
   }
   const missing = [
-    !doc?.source_role && 'source role',
-    !doc?.legal_status && 'legal status',
-    !doc?.authority_name && 'authority',
+    !doc?.source_role && { field: 'source_role', label: 'source role' },
+    !doc?.legal_status && { field: 'legal_status', label: 'legal status' },
+    !doc?.authority_name && { field: 'authority_name', label: 'authority' },
   ].filter(Boolean);
   if (missing.length > 0) {
     return {
       key: 'metadata',
       label: 'Metadata gap',
       tone: 'warn',
-      description: `Missing ${missing.join(', ')}`,
+      description: `Missing ${missing.map((field) => field.label).join(', ')}`,
       canExtract: true,
       actionLabel: 'Extract',
+      blockReason: null,
+      missingFields: missing,
     };
   }
   if (doc?.extraction_status === 'completed') {
@@ -219,6 +246,8 @@ function getSourceReadiness(doc) {
       description: 'Candidates are queued for review',
       canExtract: true,
       actionLabel: 'Re-extract',
+      blockReason: null,
+      missingFields: [],
     };
   }
   return {
@@ -228,6 +257,8 @@ function getSourceReadiness(doc) {
     description: 'Text-ready source',
     canExtract: true,
     actionLabel: 'Extract',
+    blockReason: null,
+    missingFields: [],
   };
 }
 
@@ -1402,6 +1433,7 @@ function DocumentsPanel({ canEdit }) {
                         type="button"
                         onClick={() => handleExtract(doc)}
                         disabled={busy || extractingId !== null || !readiness.canExtract}
+                        title={readiness.blockReason || readiness.description}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-medium text-primary-700 transition-colors duration-150 ease-out hover:bg-primary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50"
                       >
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
