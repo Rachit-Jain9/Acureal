@@ -71,17 +71,49 @@ jobs:
           CI: true
       - run: npm test --prefix frontend -- --run
 
+  audit:
+    name: Audit & migration lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Migration filename + CONCURRENTLY lint
+        run: node scripts/lint-migrations.js
+      - name: Backend npm audit (fail on high/critical)
+        run: npm audit --audit-level=high --omit=dev --prefix backend
+      - name: Frontend npm audit (fail on high/critical)
+        run: npm audit --audit-level=high --prefix frontend
+      - name: Kernel npm audit (fail on high/critical)
+        run: npm audit --audit-level=high --prefix packages/financial-kernel
+      - name: Moderate advisory snapshot (informational)
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "::group::Backend moderate+ advisories"
+          npm audit --audit-level=moderate --omit=dev --prefix backend || true
+          echo "::endgroup::"
+          echo "::group::Frontend moderate+ advisories"
+          npm audit --audit-level=moderate --prefix frontend || true
+          echo "::endgroup::"
+          echo "::group::Kernel moderate+ advisories"
+          npm audit --audit-level=moderate --prefix packages/financial-kernel || true
+          echo "::endgroup::"
+
   ci-passed:
     name: CI passed
     runs-on: ubuntu-latest
-    needs: [kernel, backend, frontend]
+    needs: [kernel, backend, frontend, audit]
     if: always()
     steps:
       - name: Verify all checks passed
         run: |
           if [ "${{ needs.kernel.result }}" != "success" ] || \
              [ "${{ needs.backend.result }}" != "success" ] || \
-             [ "${{ needs.frontend.result }}" != "success" ]; then
+             [ "${{ needs.frontend.result }}" != "success" ] || \
+             [ "${{ needs.audit.result }}" != "success" ]; then
             echo "One or more required checks failed."
             exit 1
           fi
