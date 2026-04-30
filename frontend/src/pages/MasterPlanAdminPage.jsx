@@ -94,6 +94,16 @@ const DOC_STATUS_META = {
   failed: { label: 'failed', tone: 'danger', icon: XCircle },
 };
 
+const READINESS_FILTERS = [
+  { key: 'all', label: 'All sources' },
+  { key: 'ready', label: 'Ready' },
+  { key: 'review', label: 'Review queued' },
+  { key: 'ocr', label: 'OCR / image' },
+  { key: 'metadata', label: 'Metadata gaps' },
+  { key: 'manual', label: 'Manual / reference' },
+  { key: 'failed', label: 'Failed' },
+];
+
 function formatBytes(bytes) {
   const n = Number(bytes);
   if (!Number.isFinite(n) || n <= 0) return '-';
@@ -125,6 +135,83 @@ function legalStatusTone(status) {
 function formatPercent(value) {
   const n = Number(value);
   return Number.isFinite(n) ? `${Math.round(n * 100)}%` : null;
+}
+
+function getSourceReadiness(doc) {
+  const mode = doc?.processing_mode;
+  if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
+    return {
+      key: 'ocr',
+      label: mode === 'image_review' ? 'Image review' : 'OCR review',
+      tone: 'warn',
+      description: 'OCR or image review required before extraction',
+      canExtract: false,
+      actionLabel: 'OCR review',
+    };
+  }
+  if (mode === 'manual_entry') {
+    return {
+      key: 'manual',
+      label: 'Manual entry',
+      tone: 'warn',
+      description: 'Manual entry source',
+      canExtract: false,
+      actionLabel: 'Manual only',
+    };
+  }
+  if (mode === 'not_extractable') {
+    return {
+      key: 'manual',
+      label: 'Reference only',
+      tone: 'neutral',
+      description: 'Not extractable',
+      canExtract: false,
+      actionLabel: 'Reference',
+    };
+  }
+  if (doc?.extraction_status === 'failed') {
+    return {
+      key: 'failed',
+      label: 'Failed',
+      tone: 'danger',
+      description: 'Fix the source issue before retrying',
+      canExtract: true,
+      actionLabel: 'Retry',
+    };
+  }
+  const missing = [
+    !doc?.source_role && 'source role',
+    !doc?.legal_status && 'legal status',
+    !doc?.authority_name && 'authority',
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    return {
+      key: 'metadata',
+      label: 'Metadata gap',
+      tone: 'warn',
+      description: `Missing ${missing.join(', ')}`,
+      canExtract: true,
+      actionLabel: 'Extract',
+    };
+  }
+  if (doc?.extraction_status === 'completed') {
+    return {
+      key: 'review',
+      label: 'Review queued',
+      tone: 'success',
+      description: 'Candidates are queued for review',
+      canExtract: true,
+      actionLabel: 'Re-extract',
+    };
+  }
+  return {
+    key: 'ready',
+    label: 'Ready',
+    tone: 'info',
+    description: 'Text-ready source',
+    canExtract: true,
+    actionLabel: 'Extract',
+  };
 }
 
 function SourceStatusBadge({ status }) {
@@ -572,8 +659,29 @@ function DocumentsPanel({ canEdit }) {
   });
   const [extractingId, setExtractingId] = useState(null);
   const [fileError, setFileError] = useState('');
+  const [readinessFilter, setReadinessFilter] = useState('all');
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const docsWithReadiness = useMemo(
+    () => docs.map((doc) => ({ doc, readiness: getSourceReadiness(doc) })),
+    [docs],
+  );
+
+  const readinessCounts = useMemo(() => {
+    const counts = { all: docs.length };
+    docsWithReadiness.forEach(({ readiness }) => {
+      counts[readiness.key] = (counts[readiness.key] || 0) + 1;
+    });
+    return counts;
+  }, [docs.length, docsWithReadiness]);
+
+  const filteredDocs = useMemo(
+    () => (readinessFilter === 'all'
+      ? docsWithReadiness
+      : docsWithReadiness.filter(({ readiness }) => readiness.key === readinessFilter)),
+    [docsWithReadiness, readinessFilter],
+  );
 
   const handleFile = (event) => {
     const selected = event.target.files?.[0] || null;
@@ -762,7 +870,7 @@ function DocumentsPanel({ canEdit }) {
             <button
               type="submit"
               disabled={uploadMut.isPending || !file}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 ease-out hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-60"
             >
               {uploadMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
               {uploadMut.isPending ? 'Uploading...' : 'Upload source'}
@@ -771,12 +879,54 @@ function DocumentsPanel({ canEdit }) {
         </form>
       )}
 
+      {docs.length > 0 && (
+        <div className="rounded-lg border border-hairline bg-bg-elevated p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-content-primary">Source readiness</h3>
+              <p className="mt-0.5 text-xs text-content-secondary">
+                Text-ready sources, OCR gaps, and manual-reference documents.
+              </p>
+            </div>
+            <Badge tone="neutral">{docs.length} total</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
+            {READINESS_FILTERS.map((filter) => {
+              const selected = readinessFilter === filter.key;
+              const count = readinessCounts[filter.key] || 0;
+              return (
+                <button
+                  key={filter.key}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setReadinessFilter(filter.key)}
+                  className={clsx(
+                    'rounded-lg border px-3 py-2 text-left transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]',
+                    selected
+                      ? 'border-primary-300 bg-primary-50 text-primary-700'
+                      : 'border-hairline bg-bg-elevated text-content-secondary hover:border-primary-300 hover:bg-bg-secondary',
+                  )}
+                >
+                  <div className="text-lg font-semibold tabular-nums">{count}</div>
+                  <div className="truncate text-[11px] font-medium">{filter.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {docs.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No master plan source documents"
           description="Upload reviewed source material to extract candidate zones, FAR rules, planning districts, and guidance values into the review queue."
         />
+      ) : filteredDocs.length === 0 ? (
+        <div className="rounded-lg border border-hairline bg-bg-elevated px-4 py-8 text-center">
+          <p className="text-sm font-medium text-content-primary">No sources match this readiness view.</p>
+          <p className="mt-1 text-xs text-content-secondary">The registry has no documents in this readiness state.</p>
+        </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-hairline bg-bg-elevated">
           <div className="hidden border-b border-hairline-strong px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-content-secondary md:grid md:grid-cols-[minmax(260px,1.4fr),minmax(160px,0.9fr),minmax(180px,0.9fr),minmax(150px,0.7fr)] md:gap-3">
@@ -786,7 +936,7 @@ function DocumentsPanel({ canEdit }) {
             <div className="text-right">Actions</div>
           </div>
           <div className="divide-y divide-hairline">
-            {docs.map((doc) => {
+            {filteredDocs.map(({ doc, readiness }) => {
               const counts = [
                 ['zones', doc.zones_extracted],
                 ['FAR', doc.far_rules_extracted],
@@ -822,12 +972,14 @@ function DocumentsPanel({ canEdit }) {
                       )}
                       {doc.ocr_required && <Badge tone="warn">OCR needed</Badge>}
                       {textCoverage && <Badge tone="neutral">Text {textCoverage}</Badge>}
+                      <Badge tone={readiness.tone}>{readiness.label}</Badge>
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <SourceStatusBadge status={doc.extraction_status} />
                     <div className="text-xs text-content-muted">{formatDocType(doc.doc_type)}</div>
+                    <div className="text-xs text-content-muted">{readiness.description}</div>
                     {doc.extraction_error && (
                       <div className="line-clamp-2 text-xs text-red-600">{doc.extraction_error}</div>
                     )}
@@ -848,7 +1000,7 @@ function DocumentsPanel({ canEdit }) {
                       type="button"
                       onClick={() => openMut.mutate(doc.id)}
                       disabled={openMut.isPending}
-                      className="rounded-lg p-1.5 text-content-muted hover:bg-bg-secondary hover:text-primary-600 disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50"
                       title="Open source"
                     >
                       <ExternalLink size={15} />
@@ -857,11 +1009,11 @@ function DocumentsPanel({ canEdit }) {
                       <button
                         type="button"
                         onClick={() => handleExtract(doc)}
-                        disabled={busy || extractingId !== null}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                        disabled={busy || extractingId !== null || !readiness.canExtract}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-medium text-primary-700 transition-colors duration-150 ease-out hover:bg-primary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50"
                       >
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
-                        {doc.extraction_status === 'completed' ? 'Re-extract' : 'Extract'}
+                        {busy ? 'Extracting...' : readiness.actionLabel}
                       </button>
                     )}
                   </div>

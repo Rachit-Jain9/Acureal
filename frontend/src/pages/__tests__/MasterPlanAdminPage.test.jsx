@@ -64,21 +64,39 @@ describe('MasterPlanAdminPage source documents', () => {
       data: [{
         id: 'doc-1',
         city: 'Bengaluru',
+        plan_name: 'RMP-Provisional',
+        plan_version: 'RMP 2031 Draft',
+        file_name: 'RMP-Provisional.pdf',
+        doc_type: 'rmp_table',
+        extraction_status: 'completed',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+        text_coverage_ratio: 0.02,
+        zones_extracted: 2,
+        far_rules_extracted: 5,
+        guidance_rows_extracted: 0,
+        evidence_facts_extracted: 7,
+      }, {
+        id: 'doc-2',
+        city: 'Bengaluru',
         plan_name: 'Volume-6 Zoning Regulations',
         plan_version: 'RMP 2031 Draft',
         file_name: 'Volume-6 Zoning Regulations.pdf',
         doc_type: 'rmp_table',
         extraction_status: 'completed',
-        source_role: 'draft_plan',
-        legal_status: 'draft',
+        source_role: 'operative_regulation',
+        legal_status: 'gazetted',
         authority_name: 'Bangalore Development Authority',
         processing_mode: 'text_extraction',
-        ocr_required: true,
-        text_coverage_ratio: 0.35,
-        zones_extracted: 2,
-        far_rules_extracted: 5,
+        ocr_required: false,
+        text_coverage_ratio: 0.88,
+        zones_extracted: 0,
+        far_rules_extracted: 0,
         guidance_rows_extracted: 0,
-        evidence_facts_extracted: 7,
+        evidence_facts_extracted: 0,
       }],
       isLoading: false,
       isError: false,
@@ -88,16 +106,20 @@ describe('MasterPlanAdminPage source documents', () => {
     await openSourceDocuments();
 
     expect(await screen.findByText('Source document intake')).toBeInTheDocument();
+    expect(screen.getByText('Source readiness')).toBeInTheDocument();
+    expect(screen.getByText('RMP-Provisional')).toBeInTheDocument();
     expect(screen.getByText('Volume-6 Zoning Regulations')).toBeInTheDocument();
-    expect(screen.getByText('queued for review')).toBeInTheDocument();
-    expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Draft plan').length).toBeGreaterThan(0);
-    expect(screen.getByText('Bangalore Development Authority')).toBeInTheDocument();
+    expect(screen.getAllByText('queued for review').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Provisional').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Provisional plan').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bangalore Development Authority').length).toBeGreaterThan(0);
     expect(screen.getAllByText('OCR needed').length).toBeGreaterThan(0);
-    expect(screen.getByText('Text 35%')).toBeInTheDocument();
+    expect(screen.getByText('Text 2%')).toBeInTheDocument();
+    expect(screen.getAllByText('OCR review').length).toBeGreaterThan(0);
     expect(screen.getByText('2 zones')).toBeInTheDocument();
     expect(screen.getByText('5 FAR')).toBeInTheDocument();
     expect(screen.getByText('7 facts')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ocr review/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /re-extract/i })).toBeEnabled();
   });
 

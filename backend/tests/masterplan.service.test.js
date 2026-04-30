@@ -145,6 +145,28 @@ describe('masterplan.service source intake and zone assignment', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  test('blocks automated extraction for OCR-required source documents', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-ocr',
+        plan_name: 'RMP-Provisional',
+        file_name: 'RMP-Provisional.pdf',
+        file_type: 'application/pdf',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+      }],
+    });
+
+    await expect(service.extractSourceDocument('doc-ocr', {
+      docType: 'rmp_table',
+      userId: 'user-1',
+    })).rejects.toMatchObject({ statusCode: 409 });
+
+    expect(extractionService.extractStoredFileFields).not.toHaveBeenCalled();
+    expect(evidenceIngestionService.ingestRegulatoryFields).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   test('extracts a source document into pending review candidates without approving rows', async () => {
     query
       .mockResolvedValueOnce({
