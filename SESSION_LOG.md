@@ -34,17 +34,37 @@ Running history of every working session. Read this to understand what was built
 - Added registry metadata for uploaded masterplan/regulatory source files: source role, legal status, authority, published date, source URL, page count, OCR readiness, text coverage, source confidence, and registry notes.
 - Updated the source-document intake screen so analysts can record authority/status/OCR context before extraction.
 
-**PRs opened/merged:** PR #93 opened and merged; no PR yet for `codex/source-registry-metadata`.
+**PRs opened/merged:** PR #93 and PR #94 opened and merged.
 
 **Verification:**
-- Backend full test suite passed: 445 tests.
+- Backend full test suite passed: 448 tests.
 - Frontend Master Plan admin test passed.
 - Frontend production build passed.
 
 **What's left to do:**
-- The new source-registry metadata migration was applied to Supabase production on 2026-04-30.
-- Push/open the metadata branch now that the database is ready.
 - Continue with OCR-specific handling for image-only PDFs such as provisional scans.
+- Consider seeding the attached official documents into the registry with source role, legal status, authority, and OCR status.
+
+---
+
+## 2026-04-30 (Codex source-registry readiness)
+
+**What was worked on in plain English:**
+- Landed the source-registry metadata step and deployed it to production.
+- Added a clear readiness view for masterplan source files so analysts can separate text-ready sources from OCR/image-review, manual-entry, metadata-gap, and failed sources.
+- Blocked automated extraction when a source is explicitly marked as OCR-required, image-review, manual-entry, or not extractable.
+- Kept provisional/image-heavy PDFs from looking equally ready until a human review or OCR pass happens.
+
+**PRs opened/merged:** PR #94 opened and merged. This readiness branch is in progress.
+
+**Verification:**
+- Backend full test suite passed: 449 tests.
+- Frontend Master Plan admin test passed.
+- Frontend production build passed.
+
+**What's left to do:**
+- Push and preview the readiness branch.
+- Add an actual OCR/review workflow for image-heavy PDFs once the queue is visible.
 
 ---
 

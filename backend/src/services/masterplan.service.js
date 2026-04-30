@@ -131,6 +131,20 @@ const isExtractableSource = (doc) => {
   return EXTRACTABLE_EXTENSIONS.has(ext) || mime.includes('pdf') || mime.startsWith('image/');
 };
 
+const getExtractionBlockReason = (doc) => {
+  const mode = doc?.processing_mode;
+  if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
+    return 'This source is marked as needing OCR or image review before automated extraction.';
+  }
+  if (mode === 'manual_entry') {
+    return 'This source is marked for manual entry. Automated extraction is disabled.';
+  }
+  if (mode === 'not_extractable') {
+    return 'This source is marked as not extractable. Automated extraction is disabled.';
+  }
+  return null;
+};
+
 function calculateEffectiveFSI(zone, roadWidthM) {
   const base = toNumber(zone?.permissible_fsi_base);
   const width = toNumber(roadWidthM);
@@ -737,6 +751,10 @@ async function extractSourceDocument(id, { docType, userId } = {}) {
   if (!doc) throw createError('Masterplan source document not found.', 404);
   if (!isExtractableSource(doc)) {
     throw createError('Only PDF and image source documents can be extracted in this intake flow.', 400);
+  }
+  const blockReason = getExtractionBlockReason(doc);
+  if (blockReason) {
+    throw createError(blockReason, 409);
   }
 
   await query(
