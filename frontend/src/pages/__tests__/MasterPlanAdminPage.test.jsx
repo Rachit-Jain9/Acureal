@@ -53,6 +53,13 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isFetching: false,
     refetch: vi.fn(),
   }),
+  useBbmpUavEntries: () => ({
+    data: { schema_ready: true, rows: [] },
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
@@ -477,5 +484,17 @@ describe('MasterPlanAdminPage source corpus tab', () => {
     expect(screen.getByText('volume-6-zoning-regulations.pdf')).toBeInTheDocument();
     expect(screen.getByText('guidance-value.pdf')).toBeInTheDocument();
     expect(screen.getByText(/BBMP property tax — separate from IGR sale guidance/i)).toBeInTheDocument();
+  });
+
+  it('renders the BBMP UAV review queue when the BBMP UAV tab is selected', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /bbmp uav/i }));
+    });
+
+    expect(await screen.findByText(/Unit Area Value \(UAV\) review queue/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not IGR sale guidance/i)).toBeInTheDocument();
   });
 });

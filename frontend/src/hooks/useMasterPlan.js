@@ -40,6 +40,14 @@ export function useMasterPlanCorpus(params = {}) {
   });
 }
 
+export function useBbmpUavEntries(params = {}) {
+  return useQuery({
+    queryKey: ['master-plan-bbmp-uav', params],
+    queryFn: () => masterPlanAPI.listBbmpUav(params).then((r) => r.data.data ?? { schema_ready: true, rows: [] }),
+    keepPreviousData: true,
+  });
+}
+
 export function useMasterPlanDocumentVersions(id) {
   return useQuery({
     queryKey: ['master-plan-doc-versions', id],
