@@ -53,6 +53,7 @@ describe('MasterPlanAdminPage source documents', () => {
 
     expect(await screen.findByText('Source document intake')).toBeInTheDocument();
     expect(screen.getByText('No master plan source documents')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /BBMP UAV \/ property tax/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upload source/i })).toBeDisabled();
   });
 

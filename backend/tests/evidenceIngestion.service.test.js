@@ -375,6 +375,58 @@ describe('evidenceIngestion.service', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.guidance_values'))).toBe(false);
   });
 
+  test('keeps BBMP UAV property-tax PDFs as evidence-only facts', async () => {
+    mockQueryForExtraction({
+      id: 'extraction-bbmp-uav',
+      document_id: 'document-bbmp-uav',
+      organization_id: '11111111-1111-1111-1111-111111111111',
+      document_organization_id: '11111111-1111-1111-1111-111111111111',
+      document_name: 'Guidance Value.pdf',
+      document_file_url: 'https://example.com/bbmp-uav.pdf',
+      doc_type: 'bbmp_uav_pdf',
+      extraction_status: 'completed',
+      structured_fields: {
+        issuing_authority: 'Bruhat Bengaluru Mahanagara Palike',
+        city: 'Bengaluru',
+        document_title: 'Unit Area Value zone classification',
+        assessment_year: '2024-25',
+        source_page: 7,
+        source_section: 'Ward-wise roads',
+        uav_zone_codes: ['A', 'B', 'C'],
+        rows: [
+          {
+            zone_code: 'B',
+            ward_number: '150',
+            ward_name: 'Bellandur',
+            road_name: 'Outer Ring Road',
+            area_or_locality: 'Bellandur',
+            unit_area_value: 5,
+            unit: 'per sqft per month',
+            source_page: 7,
+            confidence: 0.86,
+          },
+        ],
+        raw_text: 'Bellandur Outer Ring Road Zone B UAV 5',
+        needs_human_review: true,
+      },
+      confidence_scores: { _overall: 0.88, rows: 0.82 },
+    });
+
+    const result = await service.ingestExtraction('extraction-bbmp-uav', 'user-1');
+    const insertedFacts = query.mock.calls
+      .filter(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_facts'))
+      .map(([, params]) => params[3]);
+
+    expect(result.skipped).toBe(false);
+    expect(result.guidance_values_created).toBe(0);
+    expect(result.far_rules_created).toBe(0);
+    expect(result.zones_created).toBe(0);
+    expect(insertedFacts).toEqual(expect.arrayContaining(['issuing_authority', 'uav_zone_codes', 'row_count']));
+    expect(insertedFacts).not.toContain('rows');
+    expect(insertedFacts).not.toContain('raw_text');
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.guidance_values'))).toBe(false);
+  });
+
   test('skips non-regulatory document types without writing evidence', async () => {
     query.mockResolvedValueOnce({
       rows: [{

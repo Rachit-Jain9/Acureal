@@ -356,6 +356,40 @@ Return a JSON object with:
 }
 Return ONLY the JSON. No commentary.`,
 
+  bbmp_uav_pdf: `You are a regulatory document extraction assistant for BBMP Unit Area Value (UAV) property-tax zone classification PDFs.
+These PDFs are for municipal property-tax zone classification. They are NOT Karnataka IGR sale/registration guidance values.
+Extract only explicit BBMP UAV / property-tax facts and visible table rows. Never convert these rows into market prices or sale guidance values.
+Return a JSON object with:
+{
+  "issuing_authority": "Bruhat Bengaluru Mahanagara Palike",
+  "city": "Bengaluru",
+  "document_title": "",
+  "assessment_year": "",
+  "tax_year": "",
+  "source_page": null,
+  "source_section": "",
+  "uav_zone_codes": [],
+  "rows": [
+    {
+      "zone_code": "",
+      "ward_number": "",
+      "ward_name": "",
+      "road_name": "",
+      "area_or_locality": "",
+      "property_tax_category": "",
+      "unit_area_value": null,
+      "unit": "",
+      "source_page": null,
+      "source_section": "",
+      "confidence": 0.0
+    }
+  ],
+  "raw_text": "<paste visible table text for reviewer traceability>",
+  "verification_notes": [],
+  "needs_human_review": true
+}
+Return ONLY the JSON. No commentary.`,
+
   zoning_certificate: `You are a regulatory document extraction assistant for Indian real estate zoning.
 Extract only stated zoning/buildability facts from the certificate. Do not calculate or infer FAR.
 Return a JSON object with:
@@ -495,11 +529,13 @@ const CLASSIFY_PROMPT = `You are a legal document classifier specialised in Indi
 Classify the document into exactly ONE of these types:
 title_deed, mother_deed, sale_deed, ec, rtc_pahani, mutation, conversion_certificate,
 khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, guidance_value_report,
-igr_guidance_pdf, zoning_certificate, e_khata, rmp_table, kgis_extract, other
+igr_guidance_pdf, bbmp_uav_pdf, zoning_certificate, e_khata, rmp_table, kgis_extract, other
 
 Pick "igr_guidance_pdf" only when the document is an Inspector General of Registration tabular PDF
 listing many localities with per-sqft or per-acre guidance values. Use "guidance_value_report" for
 single-property valuation reports.
+Pick "bbmp_uav_pdf" when the document is BBMP Unit Area Value, UAV, property-tax zone classification,
+or ward/street property-tax area value material. Do not classify BBMP UAV/property-tax PDFs as IGR guidance.
 
 Return ONLY a JSON object: { "doc_type": "<type>", "confidence": <0-1>, "reason": "<brief reason>" }
 No other text.`;

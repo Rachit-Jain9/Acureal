@@ -137,6 +137,7 @@ const DOC_TYPES = [
   'broker_quote',
   'guidance_value_report',
   'igr_guidance_pdf',
+  'bbmp_uav_pdf',
   'zoning_certificate',
   'e_khata',
   'rmp_table',

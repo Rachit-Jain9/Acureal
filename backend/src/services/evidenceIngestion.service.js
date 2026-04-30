@@ -13,6 +13,7 @@ const REGULATORY_DOC_TYPES = new Set([
   'khata',
   'guidance_value_report',
   'igr_guidance_pdf',
+  'bbmp_uav_pdf',
   'zoning_certificate',
   'e_khata',
   'layout_approval',
@@ -23,9 +24,13 @@ const REGULATORY_DOC_TYPES = new Set([
 
 const FACT_EXCLUDED_KEYS = new Set([
   'rules',
+  'rows',
+  'raw_text',
   'needs_human_review',
   'verification_notes',
 ]);
+
+const ROW_COUNT_FACT_DOC_TYPES = new Set(['igr_guidance_pdf', 'bbmp_uav_pdf']);
 
 const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
 
@@ -266,6 +271,17 @@ const buildEvidenceFacts = ({ docType, fields, scores }) => {
       page_number: page,
       source_section: sourceSection,
       confidence_score: confidenceFor(scores, 'rules'),
+    });
+  }
+
+  if (ROW_COUNT_FACT_DOC_TYPES.has(docType) && Array.isArray(fields.rows) && fields.rows.length > 0) {
+    facts.push({
+      fact_type: docType,
+      fact_key: 'row_count',
+      fact_value: fields.rows.length,
+      page_number: page,
+      source_section: sourceSection,
+      confidence_score: confidenceFor(scores, 'rows', confidenceFor(scores, '_overall')),
     });
   }
 
