@@ -10,6 +10,7 @@ import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import { ErrorState } from '../design-system';
+import MasterPlanCorpusPanel from '../components/masterplan/MasterPlanCorpusPanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1731,6 +1732,7 @@ export default function MasterPlanAdminPage() {
         {[
           { key: 'zones', label: 'Zone Library' },
           { key: 'documents', label: 'Source Documents' },
+          { key: 'corpus', label: 'Source Corpus' },
         ].map((t) => (
           <button
             key={t.key}
@@ -1745,7 +1747,9 @@ export default function MasterPlanAdminPage() {
         ))}
       </div>
 
-      {tab === 'zones' ? <ZoneLibrary canEdit={canEdit} /> : <DocumentsPanel canEdit={canEdit} />}
+      {tab === 'zones' && <ZoneLibrary canEdit={canEdit} />}
+      {tab === 'documents' && <DocumentsPanel canEdit={canEdit} />}
+      {tab === 'corpus' && <MasterPlanCorpusPanel />}
     </div>
   );
 }

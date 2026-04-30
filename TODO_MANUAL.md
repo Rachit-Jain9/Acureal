@@ -25,19 +25,19 @@ Current assumption:
 - the backend Postgres role is a superuser or service-role style account that can bypass RLS for writes
 - if you use a restricted DB role, add explicit write policies before enabling production traffic
 
-### 2. Apply the source page ledger migration
+### 2. Apply the source page ledger migration — APPLIED 2026-04-30
 
 File:
 
 - `database/migrations/20260430_source_document_pages_and_uav.sql`
 
-Run it against the target Postgres/Supabase database before using source page review, OCR page tracking, citation anchors, or BBMP UAV review rows.
+Applied to Supabase project `lsbhrbvuynzqhdtzczco` on 2026-04-30 via Supabase MCP `apply_migration` (history version `20260430180134`, name `source_document_pages_and_uav`). Both `regulatory_data.master_plan_document_pages` and `regulatory_data.bbmp_uav_entries` now exist with RLS enabled and read/modify policies scoped via `current_organization_id()`.
+
+If a fresh environment ever needs the same migration:
 
 ```powershell
 psql "$DATABASE_URL" -f database/migrations/20260430_source_document_pages_and_uav.sql
 ```
-
-Until this is applied, the app will keep loading safely and the source page modal will show that page storage is not applied yet.
 
 ### 3. Verify production AI environment variables
 

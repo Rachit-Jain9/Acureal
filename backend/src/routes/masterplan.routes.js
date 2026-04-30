@@ -231,6 +231,20 @@ router.post('/documents/:id/extract', authenticate, requireAdminOrAnalyst, async
   }
 });
 
+// GET /api/master-plan/corpus
+// Returns the canonical Bengaluru RMP 2031 source corpus with upload status.
+// Reviewers see the 12 expected files, their pre-classification, and which
+// have already been uploaded. No facts get promoted from this endpoint —
+// classification metadata only.
+router.get('/corpus', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const data = await masterplanService.listMasterplanCorpus({ city: req.query.city });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {

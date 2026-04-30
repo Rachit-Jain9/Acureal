@@ -4,6 +4,22 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-04-30 (continued - applied source page ledger migration)
+
+**What was worked on in plain English:**
+- Turned on the new source page ledger and BBMP property-tax storage in the live database.
+- The admin page that earlier said "page storage not applied yet" can now actually save reviewer notes, OCR status, and page citations against each uploaded source document.
+- BBMP Unit Area Value entries are now stored in their own area, kept apart from sale-price guidance, so tax-zone numbers can never get treated as land-price numbers.
+- Production stayed healthy throughout — the live site responded normally and no errors were introduced.
+
+**PRs opened/merged:** None — this was a database-only update applied directly to the live Supabase project. No code changes.
+
+**What's left:**
+- Backfill page rows for existing uploaded source documents (currently 0 page rows).
+- Apply the rest of the unrecorded April-30 migrations to bring Supabase migration history fully back in sync.
+
+---
+
 ## 2026-04-30 (continued - source readiness contract)
 
 ### What was worked on
