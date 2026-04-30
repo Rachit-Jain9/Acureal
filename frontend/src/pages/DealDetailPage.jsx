@@ -400,8 +400,9 @@ export default function DealDetailPage() {
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'parcel' && <ParcelTab deal={deal} dealId={id} canEdit={canEdit} />}
         {activeTab === 'zoning' && <ZoningTab deal={deal} dealId={id} setTab={setTab} />}
-        {activeTab === 'documents' && <DocumentsTab dealId={id} />}
-        {activeTab === 'activity' && <ActivityTab dealId={id} />}
+        {/* DocumentsTab + ActivityTab + RiskTab read dealId from useDealContext. */}
+        {activeTab === 'documents' && <DocumentsTab />}
+        {activeTab === 'activity' && <ActivityTab />}
         {activeTab === 'financial' && <FinancialTab deal={deal} />}
         {activeTab === 'dd' && (
           <DDTab
@@ -410,7 +411,7 @@ export default function DealDetailPage() {
             dealStructure={deal.deal_structure}
           />
         )}
-        {activeTab === 'risk' && <RiskTab dealId={id} />}
+        {activeTab === 'risk' && <RiskTab />}
         {activeTab === 'comps' && <CompsTab deal={deal} />}
       </div>
 

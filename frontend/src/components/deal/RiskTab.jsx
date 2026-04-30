@@ -11,6 +11,7 @@ import {
 import Badge from '../common/Badge';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { SectionHeader } from '../../design-system';
+import { useDealContext } from '../../hooks/useDealContext';
 
 const RISK_CATEGORIES = [
   { value: 'title', label: 'Title' },
@@ -241,7 +242,8 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
   );
 }
 
-export default function RiskTab({ dealId }) {
+export default function RiskTab() {
+  const { dealId } = useDealContext();
   const { data: flagsData, isLoading, isError, refetch } = useRiskFlags(dealId);
   const { data: scoreData } = useRiskScore(dealId);
   const createFlag = useCreateRiskFlag();
