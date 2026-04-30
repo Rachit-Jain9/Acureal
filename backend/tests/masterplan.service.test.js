@@ -56,6 +56,35 @@ describe('masterplan.service source intake and zone assignment', () => {
     ]));
   });
 
+  test('accepts BBMP UAV property-tax source documents in the intake registry', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-uav',
+        plan_name: 'Guidance Value',
+        doc_type: 'bbmp_uav_pdf',
+        extraction_status: 'pending',
+      }],
+    });
+
+    const result = await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/guidance-value.pdf',
+      originalName: 'Guidance Value.pdf',
+      fileType: 'application/pdf',
+      fileSize: 54321,
+      city: 'Bengaluru',
+      planName: 'Guidance Value',
+      planVersion: 'BBMP UAV',
+      docType: 'bbmp_uav_pdf',
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(result).toMatchObject({ id: 'doc-uav', doc_type: 'bbmp_uav_pdf' });
+    expect(query.mock.calls[0][1]).toEqual(expect.arrayContaining([
+      'Guidance Value',
+      'bbmp_uav_pdf',
+    ]));
+  });
+
   test('extracts a source document into pending review candidates without approving rows', async () => {
     query
       .mockResolvedValueOnce({

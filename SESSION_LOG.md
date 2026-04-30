@@ -4,6 +4,27 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-04-30 (Codex source-registry start)
+
+**What was worked on in plain English:**
+- Read the repo Markdown rulebook, TODOs, architecture notes, and session history to align on product rules and prior work.
+- Started the attached-masterplan source cleanup by separating BBMP Unit Area Value / property-tax material from true IGR guidance-value material.
+- Added a new BBMP UAV source type to intake, classification, extraction prompts, and the Master Plan source-document picker.
+- Guarded ingestion so BBMP UAV/property-tax rows are kept as review evidence only and never written into the IGR guidance-value candidate table.
+
+**PRs opened/merged:** None yet. Work is on branch `codex/source-registry-provenance`.
+
+**Verification:**
+- Backend focused tests passed for extraction prompts, evidence ingestion, and masterplan intake.
+- Frontend focused test passed for the Master Plan admin source-document UI.
+
+**What's left to do:**
+- Continue the source-registry pass for the attached RMP/masterplan PDFs: legal status, authority metadata, OCR coverage, and source roles.
+- Add OCR handling for image-only/provisional PDFs before trusting extracted rows.
+- Decide whether BBMP UAV needs its own structured table later; for now it is intentionally evidence-only.
+
+---
+
 ## 2026-04-28
 
 **What happened:**

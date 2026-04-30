@@ -49,6 +49,7 @@ const EMPTY_ZONE = {
 const SOURCE_DOC_TYPES = [
   { value: 'rmp_table', label: 'RMP / FAR table' },
   { value: 'igr_guidance_pdf', label: 'IGR guidance PDF' },
+  { value: 'bbmp_uav_pdf', label: 'BBMP UAV / property tax' },
   { value: 'guidance_value_report', label: 'Guidance report' },
   { value: 'zoning_certificate', label: 'Zoning certificate' },
 ];

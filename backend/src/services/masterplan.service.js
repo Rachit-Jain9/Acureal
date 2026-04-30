@@ -13,6 +13,7 @@ const MAX_SOURCE_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) 
 const MASTERPLAN_DOC_TYPES = new Set([
   'rmp_table',
   'igr_guidance_pdf',
+  'bbmp_uav_pdf',
   'guidance_value_report',
   'zoning_certificate',
 ]);
