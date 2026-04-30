@@ -54,6 +54,39 @@ const SOURCE_DOC_TYPES = [
   { value: 'zoning_certificate', label: 'Zoning certificate' },
 ];
 
+const SOURCE_ROLES = [
+  { value: '', label: 'Select role' },
+  { value: 'operative_regulation', label: 'Operative regulation' },
+  { value: 'draft_plan', label: 'Draft plan' },
+  { value: 'provisional_plan', label: 'Provisional plan' },
+  { value: 'base_map', label: 'Base map' },
+  { value: 'land_use_schedule', label: 'Land-use schedule' },
+  { value: 'guidance_value', label: 'Guidance value' },
+  { value: 'property_tax_uav', label: 'Property-tax UAV' },
+  { value: 'derived_notes', label: 'Derived notes' },
+  { value: 'supporting_dataset', label: 'Supporting dataset' },
+  { value: 'other', label: 'Other' },
+];
+
+const LEGAL_STATUSES = [
+  { value: '', label: 'Select status' },
+  { value: 'gazetted', label: 'Gazetted' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'provisional', label: 'Provisional' },
+  { value: 'advisory', label: 'Advisory' },
+  { value: 'user_supplied', label: 'User supplied' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'unknown', label: 'Unknown' },
+];
+
+const PROCESSING_MODES = [
+  { value: 'text_extraction', label: 'Text extraction' },
+  { value: 'ocr_required', label: 'OCR required' },
+  { value: 'image_review', label: 'Image review' },
+  { value: 'manual_entry', label: 'Manual entry' },
+  { value: 'not_extractable', label: 'Not extractable' },
+];
+
 const DOC_STATUS_META = {
   pending: { label: 'pending', tone: 'neutral', icon: Clock },
   in_progress: { label: 'extracting', tone: 'info', icon: Loader2 },
@@ -71,6 +104,27 @@ function formatBytes(bytes) {
 
 function formatDocType(docType) {
   return SOURCE_DOC_TYPES.find((item) => item.value === docType)?.label || (docType ? docType.replace(/_/g, ' ') : 'Auto-classify');
+}
+
+function formatOption(options, value) {
+  return options.find((item) => item.value === value)?.label || (value ? value.replace(/_/g, ' ') : '');
+}
+
+function legalStatusTone(status) {
+  return {
+    gazetted: 'success',
+    draft: 'warn',
+    provisional: 'warn',
+    advisory: 'info',
+    user_supplied: 'neutral',
+    vendor: 'neutral',
+    unknown: 'neutral',
+  }[status] || 'neutral';
+}
+
+function formatPercent(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${Math.round(n * 100)}%` : null;
 }
 
 function SourceStatusBadge({ status }) {
@@ -509,6 +563,12 @@ function DocumentsPanel({ canEdit }) {
     planName: '',
     planVersion: 'RMP 2031 Draft',
     docType: 'rmp_table',
+    sourceRole: '',
+    legalStatus: '',
+    authorityName: '',
+    processingMode: 'text_extraction',
+    ocrRequired: false,
+    registryNotes: '',
   });
   const [extractingId, setExtractingId] = useState(null);
   const [fileError, setFileError] = useState('');
@@ -544,6 +604,12 @@ function DocumentsPanel({ canEdit }) {
       planName: form.planName.trim() || file.name,
       planVersion: form.planVersion.trim() || null,
       docType: form.docType,
+      sourceRole: form.sourceRole || null,
+      legalStatus: form.legalStatus || null,
+      authorityName: form.authorityName.trim() || null,
+      processingMode: form.processingMode || 'text_extraction',
+      ocrRequired: form.ocrRequired || form.processingMode === 'ocr_required' || form.processingMode === 'image_review',
+      registryNotes: form.registryNotes.trim() || null,
     });
     setFile(null);
   };
@@ -613,6 +679,46 @@ function DocumentsPanel({ canEdit }) {
             </div>
           </div>
 
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Source role</label>
+              <select className="input text-sm" value={form.sourceRole} onChange={(e) => set('sourceRole', e.target.value)}>
+                {SOURCE_ROLES.map((role) => (
+                  <option key={role.value || 'none'} value={role.value}>{role.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Legal status</label>
+              <select className="input text-sm" value={form.legalStatus} onChange={(e) => set('legalStatus', e.target.value)}>
+                {LEGAL_STATUSES.map((status) => (
+                  <option key={status.value || 'none'} value={status.value}>{status.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Authority</label>
+              <input
+                className="input text-sm"
+                value={form.authorityName}
+                onChange={(e) => set('authorityName', e.target.value)}
+                placeholder="BDA / BBMP"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Processing</label>
+              <select
+                className="input text-sm"
+                value={form.processingMode}
+                onChange={(e) => set('processingMode', e.target.value)}
+              >
+                {PROCESSING_MODES.map((mode) => (
+                  <option key={mode.value} value={mode.value}>{mode.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="mt-3">
             <label className="block text-xs font-medium text-content-secondary mb-1">Source title</label>
             <input
@@ -626,6 +732,28 @@ function DocumentsPanel({ canEdit }) {
               <p className="mt-1 text-xs text-content-muted">{file.name} | {formatBytes(file.size)}</p>
             )}
           </div>
+
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-[minmax(0,1fr),auto] gap-3 md:items-end">
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Registry notes</label>
+              <input
+                className="input text-sm"
+                value={form.registryNotes}
+                onChange={(e) => set('registryNotes', e.target.value)}
+                placeholder="Draft source, image-only PDF, derived from user remarks..."
+              />
+            </div>
+            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-within:ring-2 focus-within:ring-primary-500/40 active:scale-[0.99]">
+              <input
+                type="checkbox"
+                checked={form.ocrRequired}
+                onChange={(e) => set('ocrRequired', e.target.checked)}
+                className="h-4 w-4 rounded border-hairline text-primary-600 focus:ring-primary-500/40"
+              />
+              OCR needed
+            </label>
+          </div>
+
 
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-hairline pt-3">
             <Link to="/dashboard/settings/parcel-intelligence" className="text-xs font-medium text-primary-600 hover:underline">
@@ -666,6 +794,7 @@ function DocumentsPanel({ canEdit }) {
                 ['facts', doc.evidence_facts_extracted],
               ].filter(([, value]) => Number(value) > 0);
               const busy = extractingId === doc.id || doc.extraction_status === 'in_progress';
+              const textCoverage = formatPercent(doc.text_coverage_ratio);
 
               return (
                 <div
@@ -676,6 +805,23 @@ function DocumentsPanel({ canEdit }) {
                     <div className="truncate text-sm font-semibold text-content-primary">{doc.plan_name}</div>
                     <div className="mt-0.5 text-xs text-content-secondary">
                       {[doc.city, doc.plan_version || null, doc.file_name || null].filter(Boolean).join(' | ')}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {doc.legal_status && (
+                        <Badge tone={legalStatusTone(doc.legal_status)}>
+                          {formatOption(LEGAL_STATUSES, doc.legal_status)}
+                        </Badge>
+                      )}
+                      {doc.source_role && (
+                        <Badge tone="neutral">{formatOption(SOURCE_ROLES, doc.source_role)}</Badge>
+                      )}
+                      {doc.authority_name && (
+                        <span className="rounded-md bg-bg-secondary px-2 py-1 text-xs font-medium text-content-secondary">
+                          {doc.authority_name}
+                        </span>
+                      )}
+                      {doc.ocr_required && <Badge tone="warn">OCR needed</Badge>}
+                      {textCoverage && <Badge tone="neutral">Text {textCoverage}</Badge>}
                     </div>
                   </div>
 

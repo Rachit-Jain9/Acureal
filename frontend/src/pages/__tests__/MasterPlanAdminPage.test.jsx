@@ -54,6 +54,8 @@ describe('MasterPlanAdminPage source documents', () => {
     expect(await screen.findByText('Source document intake')).toBeInTheDocument();
     expect(screen.getByText('No master plan source documents')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /BBMP UAV \/ property tax/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /provisional plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /ocr required/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upload source/i })).toBeDisabled();
   });
 
@@ -67,6 +69,12 @@ describe('MasterPlanAdminPage source documents', () => {
         file_name: 'Volume-6 Zoning Regulations.pdf',
         doc_type: 'rmp_table',
         extraction_status: 'completed',
+        source_role: 'draft_plan',
+        legal_status: 'draft',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'text_extraction',
+        ocr_required: true,
+        text_coverage_ratio: 0.35,
         zones_extracted: 2,
         far_rules_extracted: 5,
         guidance_rows_extracted: 0,
@@ -82,6 +90,11 @@ describe('MasterPlanAdminPage source documents', () => {
     expect(await screen.findByText('Source document intake')).toBeInTheDocument();
     expect(screen.getByText('Volume-6 Zoning Regulations')).toBeInTheDocument();
     expect(screen.getByText('queued for review')).toBeInTheDocument();
+    expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Draft plan').length).toBeGreaterThan(0);
+    expect(screen.getByText('Bangalore Development Authority')).toBeInTheDocument();
+    expect(screen.getAllByText('OCR needed').length).toBeGreaterThan(0);
+    expect(screen.getByText('Text 35%')).toBeInTheDocument();
     expect(screen.getByText('2 zones')).toBeInTheDocument();
     expect(screen.getByText('5 FAR')).toBeInTheDocument();
     expect(screen.getByText('7 facts')).toBeInTheDocument();

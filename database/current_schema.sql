@@ -1,6 +1,6 @@
 -- ============================================================================
 -- REDIP — Schema consolidation manifest (P7)
--- Last reviewed: 2026-04-29
+-- Last reviewed: 2026-04-30
 -- ============================================================================
 -- This file is NOT applied directly. It is the *ordered manifest* of every
 -- migration in `database/migrations/`. New environments (Supabase preview
@@ -63,6 +63,7 @@
 \i 20260427_masterplan_guidance_intake.sql     -- 27 RMP 2031 Draft FAR rows (seed)
 \i 20260428_parcel_intelligence_signature.sql  -- HMAC snapshot signing (T4)
 \i 20260429_osm_road_cache.sql                 -- OSM Overpass road-width cache (T6)
+\i 20260430_source_document_registry_metadata.sql -- source authority/status/OCR metadata
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Phase 4 — RLS hardening (Bet 2 from 2026-04-29 audit)

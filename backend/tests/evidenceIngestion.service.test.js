@@ -96,6 +96,30 @@ describe('evidenceIngestion.service', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_facts'))).toBe(true);
   });
 
+  test('uses source-registry authority metadata when extraction fields omit authority', async () => {
+    mockQueryForExtraction({}, 'source-authority');
+
+    await service.ingestRegulatoryFields({
+      docType: 'zoning_certificate',
+      fields: {
+        zone_code: 'R1',
+        zoning_classification: 'Residential Main',
+        source_page: 1,
+      },
+      scores: { _overall: 0.7 },
+      source: {
+        org_id: '11111111-1111-1111-1111-111111111111',
+        document_name: 'Zoning Certificate.pdf',
+        authority_name: 'Bangalore Development Authority',
+        source_kind: 'official_pdf',
+      },
+      userId: 'user-1',
+    });
+
+    const sourceInsert = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO regulatory_data.evidence_sources'));
+    expect(sourceInsert?.[1][3]).toBe('Bangalore Development Authority');
+  });
+
   test('unwraps nested extracted_json payloads before writing evidence facts', async () => {
     mockQueryForExtraction({
       id: 'extraction-e-khata',

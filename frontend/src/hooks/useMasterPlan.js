@@ -36,7 +36,19 @@ export function useMasterPlanDocuments(params = {}) {
 export function useUploadMasterPlanDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ file, city, planName, planVersion, docType }) => {
+    mutationFn: async ({
+      file,
+      city,
+      planName,
+      planVersion,
+      docType,
+      sourceRole,
+      legalStatus,
+      authorityName,
+      processingMode,
+      ocrRequired,
+      registryNotes,
+    }) => {
       const urlRes = await masterPlanAPI.getDocUploadUrl(file.name, file.size);
       const { signedUrl, storagePath } = urlRes.data.data;
 
@@ -60,6 +72,12 @@ export function useUploadMasterPlanDocument() {
         planName,
         planVersion,
         docType,
+        sourceRole,
+        legalStatus,
+        authorityName,
+        processingMode,
+        ocrRequired,
+        registryNotes,
       });
 
       return confirmRes.data.data;

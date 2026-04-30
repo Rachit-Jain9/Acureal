@@ -17,6 +17,35 @@ const MASTERPLAN_DOC_TYPES = new Set([
   'guidance_value_report',
   'zoning_certificate',
 ]);
+const SOURCE_ROLES = new Set([
+  'operative_regulation',
+  'draft_plan',
+  'provisional_plan',
+  'base_map',
+  'land_use_schedule',
+  'guidance_value',
+  'property_tax_uav',
+  'derived_notes',
+  'supporting_dataset',
+  'other',
+]);
+const LEGAL_STATUSES = new Set([
+  'gazetted',
+  'draft',
+  'provisional',
+  'advisory',
+  'user_supplied',
+  'vendor',
+  'unknown',
+]);
+const PROCESSING_MODES = new Set([
+  'text_extraction',
+  'ocr_required',
+  'image_review',
+  'manual_entry',
+  'geojson',
+  'not_extractable',
+]);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Rules engine
@@ -39,6 +68,48 @@ const textOrNull = (value) => {
 const normalizeDocType = (value) => {
   const normalized = textOrNull(value);
   return normalized && MASTERPLAN_DOC_TYPES.has(normalized) ? normalized : null;
+};
+
+const normalizeEnum = (value, allowed, fieldName) => {
+  const normalized = textOrNull(value);
+  if (!normalized) return null;
+  if (!allowed.has(normalized)) {
+    throw createError(`${fieldName} is not supported.`, 400);
+  }
+  return normalized;
+};
+
+const normalizeRatio = (value, fieldName) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = toNumber(value);
+  if (numeric === null || numeric < 0 || numeric > 1) {
+    throw createError(`${fieldName} must be between 0 and 1.`, 400);
+  }
+  return numeric;
+};
+
+const normalizePositiveInt = (value, fieldName) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = toNumber(value);
+  if (numeric === null || numeric <= 0) {
+    throw createError(`${fieldName} must be a positive number.`, 400);
+  }
+  return Math.round(numeric);
+};
+
+const normalizeDate = (value, fieldName) => {
+  const normalized = textOrNull(value);
+  if (!normalized) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw createError(`${fieldName} must use YYYY-MM-DD format.`, 400);
+  }
+  return normalized;
+};
+
+const normalizeBoolean = (value) => {
+  if (value === true || value === false) return value;
+  if (value === null || value === undefined || value === '') return false;
+  return ['true', '1', 'yes'].includes(String(value).trim().toLowerCase());
 };
 
 const sourceFileExt = (fileName = '') => path.extname(String(fileName)).toLowerCase();
@@ -473,6 +544,17 @@ async function listDocuments({ city } = {}) {
             file_url,
             storage_path,
             doc_type,
+            source_role,
+            legal_status,
+            authority_name,
+            published_on,
+            source_url,
+            page_count,
+            processing_mode,
+            text_coverage_ratio,
+            ocr_required,
+            source_confidence,
+            registry_notes,
             extraction_status,
             zones_extracted,
             far_rules_extracted,
@@ -521,6 +603,17 @@ async function confirmSourceDocumentUpload({
   planName,
   planVersion,
   docType,
+  sourceRole,
+  legalStatus,
+  authorityName,
+  publishedOn,
+  sourceUrl,
+  pageCount,
+  processingMode,
+  textCoverageRatio,
+  ocrRequired,
+  sourceConfidence,
+  registryNotes,
   organizationId,
 }) {
   if (!organizationId) {
@@ -532,6 +625,11 @@ async function confirmSourceDocumentUpload({
   assertSourceFileAllowed(originalName || planName || storagePath, fileSize);
 
   const resolvedPlanName = textOrNull(planName) || textOrNull(originalName) || 'Masterplan source document';
+  const normalizedProcessingMode = normalizeEnum(processingMode, PROCESSING_MODES, 'processing_mode')
+    || 'text_extraction';
+  const normalizedOcrRequired = normalizeBoolean(ocrRequired)
+    || normalizedProcessingMode === 'ocr_required'
+    || normalizedProcessingMode === 'image_review';
   const result = await query(
     `INSERT INTO regulatory_data.master_plan_documents (
        org_id,
@@ -544,6 +642,17 @@ async function confirmSourceDocumentUpload({
        file_url,
        storage_path,
        doc_type,
+       source_role,
+       legal_status,
+       authority_name,
+       published_on,
+       source_url,
+       page_count,
+       processing_mode,
+       text_coverage_ratio,
+       ocr_required,
+       source_confidence,
+       registry_notes,
        extraction_status
      )
      VALUES (
@@ -557,6 +666,17 @@ async function confirmSourceDocumentUpload({
        $8,
        $8,
        $9,
+       $10,
+       $11,
+       $12,
+       $13,
+       $14,
+       $15,
+       $16,
+       $17,
+       $18,
+       $19,
+       $20,
        'pending'
      )
      RETURNING *`,
@@ -570,6 +690,17 @@ async function confirmSourceDocumentUpload({
       Number(fileSize) || 0,
       storagePath,
       normalizeDocType(docType),
+      normalizeEnum(sourceRole, SOURCE_ROLES, 'source_role'),
+      normalizeEnum(legalStatus, LEGAL_STATUSES, 'legal_status'),
+      textOrNull(authorityName),
+      normalizeDate(publishedOn, 'published_on'),
+      textOrNull(sourceUrl),
+      normalizePositiveInt(pageCount, 'page_count'),
+      normalizedProcessingMode,
+      normalizeRatio(textCoverageRatio, 'text_coverage_ratio'),
+      normalizedOcrRequired,
+      normalizeRatio(sourceConfidence, 'source_confidence'),
+      textOrNull(registryNotes),
     ],
   );
 
@@ -629,6 +760,11 @@ async function extractSourceDocument(id, { docType, userId } = {}) {
           city: doc.city,
           plan_name: doc.plan_name,
           plan_version: doc.plan_version,
+          source_role: doc.source_role,
+          legal_status: doc.legal_status,
+          authority_name: doc.authority_name,
+          processing_mode: doc.processing_mode,
+          ocr_required: doc.ocr_required,
         },
         attach: {
           masterPlanDocumentId: doc.id,
@@ -645,6 +781,8 @@ async function extractSourceDocument(id, { docType, userId } = {}) {
         master_plan_document_id: doc.id,
         org_id: doc.org_id,
         source_kind: 'official_pdf',
+        source_url: doc.source_url,
+        authority_name: doc.authority_name,
         source_title: doc.plan_name,
         document_name: doc.plan_name,
         file_name: doc.file_name,
