@@ -4,6 +4,37 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-01 (Source-registry build-out arc — PRs #103, #104, #105, #106)
+
+**What was worked on in plain English:**
+- Every PR now goes through a fresh security gate: any high or critical vulnerability in backend, frontend, or the financial kernel will fail the build before it can merge. Database migration filenames are also linted automatically.
+- A new server endpoint accepts a Bengaluru zone-boundary GeoJSON file and attaches the polygons to the matching reviewed zones — without ever creating zones, and with a full audit trail of every replacement.
+- The Master Plan admin page got a fourth tab: **BBMP UAV** — a clean review queue for property-tax Unit Area Value rows, kept strictly separate from IGR sale guidance.
+- Admins can now drop a GeoJSON file straight from the browser, on the Zone Library tab, and see results inline (received / updated / skipped / unmatched plus the first 5 reasons for any rejected feature).
+
+**PRs opened/merged:**
+- PR #103 — `ci: gate npm audit + lint migration filenames` — squash-merged as `bef49f2`.
+- PR #104 — `feat(master-plan): import reviewed zone polygons from GeoJSON` — squash-merged as `63e91fa`.
+- PR #105 — `feat(master-plan): add BBMP UAV admin review panel` — squash-merged as `e45c3cb`.
+- PR #106 — `feat(master-plan): admin UI to import zone polygons from GeoJSON` — squash-merged as `62d1ebc`.
+
+**Verification:**
+- Backend test suite: 487 → 493 (+6 GeoJSON service tests).
+- Frontend test suite: 96 → 111 (+15 across BBMP UAV panel + GeoJSON import button + corpus tab integration).
+- Frontend production build: clean.
+- Local lint script: `node scripts/lint-migrations.js` → 36 migrations clean.
+- CI: every PR landed with all five checks green (Backend / Frontend / Financial kernel / Audit & migration lint / CI passed / Vercel).
+
+**What's left:**
+- Operator-side: upload the 12 corpus files via the new admin upload (auto-classification will fire on each), and drop a GeoJSON of Bengaluru zone polygons into the new Import button.
+- OCR pass on `RMP-Provisional.pdf` once it's uploaded.
+- Rule ETL from Volume 6 + `Master Plan.docx` into structured rule families (setbacks, parking, TOD, buffers, approvals).
+- Planning-district ingestion from Volumes 1 / 3 / 4 / Index Map / Existing-Land-Use / Proposed-Land-Use into `regulatory_data.planning_districts`.
+- Migration-history repair in Supabase (still 4 tracked vs 36 in repo) — risky DDL; do via approved migration tooling.
+- Dependency audit cleanup (3 backend + 4 frontend moderate advisories — mostly require breaking-version bumps).
+
+---
+
 ## 2026-04-30 (continued - Bengaluru RMP 2031 corpus manifest)
 
 **What was worked on in plain English:**
