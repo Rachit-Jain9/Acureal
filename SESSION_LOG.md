@@ -85,6 +85,28 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-04-30 (Codex source-document review controls)
+
+**What was worked on in plain English:**
+- Added review controls for uploaded masterplan/regulatory source files so analysts can correct authority, legal status, source role, processing mode, OCR flag, text coverage, confidence, source URL, page count, and notes after upload.
+- Added a source-document edit history table so registry changes are recorded instead of silently overwritten.
+- Applied the additive Supabase migration for that history table and verified it exists.
+- Checked the Vercel environment-variable list from the CLI; secret values stay hidden, and the dashboard badges may still need manual review in Vercel.
+
+**PRs opened/merged:** Source-document review-controls branch in progress.
+
+**Verification:**
+- Backend full test suite passed: 451 tests.
+- Frontend Master Plan admin test passed.
+- Frontend production build passed.
+- Supabase migration verified.
+
+**What's left to do:**
+- Push, preview, merge, and deploy this branch.
+- Manually review the Vercel "Needs Attention" environment-variable badges in the dashboard if Vercel requires rotation or re-save.
+
+---
+
 ## 2026-04-28
 
 **What happened:**

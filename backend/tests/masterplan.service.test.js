@@ -145,6 +145,69 @@ describe('masterplan.service source intake and zone assignment', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  test('updates source-registry metadata and records previous values', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-2',
+          plan_name: 'RMP-Provisional',
+          doc_type: 'rmp_table',
+          processing_mode: 'ocr_required',
+          ocr_required: true,
+          text_coverage_ratio: 0.02,
+          source_confidence: 0.65,
+          legal_status: 'provisional',
+          source_role: 'provisional_plan',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-2',
+          plan_name: 'RMP-Provisional',
+          doc_type: 'rmp_table',
+          processing_mode: 'text_extraction',
+          ocr_required: false,
+          text_coverage_ratio: 0.92,
+          source_confidence: 0.85,
+          legal_status: 'provisional',
+          source_role: 'provisional_plan',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await service.updateSourceDocumentMetadata('doc-2', {
+      processingMode: 'text_extraction',
+      ocrRequired: false,
+      textCoverageRatio: 0.92,
+      sourceConfidence: 0.85,
+      registryNotes: 'OCR pass completed; text layer reviewed.',
+    }, '11111111-1111-1111-1111-111111111111', {
+      changeReason: 'source registry review',
+    });
+
+    expect(result).toMatchObject({
+      id: 'doc-2',
+      processing_mode: 'text_extraction',
+      ocr_required: false,
+    });
+    expect(query.mock.calls[1][0]).toContain('UPDATE regulatory_data.master_plan_documents');
+    expect(query.mock.calls[2][0]).toContain('master_plan_document_versions');
+    expect(JSON.parse(query.mock.calls[2][1][2])).toMatchObject({
+      processing_mode: 'ocr_required',
+      ocr_required: true,
+      text_coverage_ratio: 0.02,
+      source_confidence: 0.65,
+    });
+  });
+
+  test('rejects invalid source-registry metadata updates', async () => {
+    await expect(service.updateSourceDocumentMetadata('doc-2', {
+      textCoverageRatio: 1.5,
+    }, '11111111-1111-1111-1111-111111111111')).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   test('blocks automated extraction for OCR-required source documents', async () => {
     query.mockResolvedValueOnce({
       rows: [{

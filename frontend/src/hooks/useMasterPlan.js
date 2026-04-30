@@ -111,6 +111,19 @@ export function useExtractMasterPlanDocument() {
   });
 }
 
+export function useUpdateMasterPlanDocumentMetadata() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      masterPlanAPI.updateDocMetadata(id, data).then((r) => r.data.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['master-plan-docs'] });
+      toast.success('Source metadata updated');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Source metadata update failed'),
+  });
+}
+
 export function useOpenMasterPlanDocument() {
   return useMutation({
     mutationFn: (id) => masterPlanAPI.downloadDoc(id).then((r) => r.data.data),

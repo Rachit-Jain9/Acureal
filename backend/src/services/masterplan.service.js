@@ -70,6 +70,15 @@ const normalizeDocType = (value) => {
   return normalized && MASTERPLAN_DOC_TYPES.has(normalized) ? normalized : null;
 };
 
+const normalizeDocTypeStrict = (value, fieldName = 'doc_type') => {
+  const normalized = textOrNull(value);
+  if (!normalized) return null;
+  if (!MASTERPLAN_DOC_TYPES.has(normalized)) {
+    throw createError(`${fieldName} is not supported.`, 400);
+  }
+  return normalized;
+};
+
 const normalizeEnum = (value, allowed, fieldName) => {
   const normalized = textOrNull(value);
   if (!normalized) return null;
@@ -212,6 +221,36 @@ const snakeKeys = {
   effectiveTo: 'effective_to',
 };
 
+const sourceDocumentSnakeKeys = {
+  docType: 'doc_type',
+  sourceRole: 'source_role',
+  legalStatus: 'legal_status',
+  authorityName: 'authority_name',
+  publishedOn: 'published_on',
+  sourceUrl: 'source_url',
+  pageCount: 'page_count',
+  processingMode: 'processing_mode',
+  textCoverageRatio: 'text_coverage_ratio',
+  ocrRequired: 'ocr_required',
+  sourceConfidence: 'source_confidence',
+  registryNotes: 'registry_notes',
+};
+
+const SOURCE_DOCUMENT_METADATA_FIELDS = [
+  'doc_type',
+  'source_role',
+  'legal_status',
+  'authority_name',
+  'published_on',
+  'source_url',
+  'page_count',
+  'processing_mode',
+  'text_coverage_ratio',
+  'ocr_required',
+  'source_confidence',
+  'registry_notes',
+];
+
 const DECIMAL_FIELDS = new Set([
   'permissible_fsi_base',
   'permissible_fsi_max',
@@ -318,6 +357,56 @@ const normalizeZonePayload = (input = {}) => {
     if (payload.permissible_fsi_max < 0 || payload.permissible_fsi_max > 20) {
       throw createError('permissible_fsi_max must be between 0 and 20', 400);
     }
+  }
+
+  return payload;
+};
+
+const normalizeSourceDocumentMetadataPayload = (input = {}) => {
+  const src = { ...input };
+  for (const [camel, snake] of Object.entries(sourceDocumentSnakeKeys)) {
+    if (src[camel] !== undefined && src[snake] === undefined) {
+      src[snake] = src[camel];
+    }
+  }
+
+  const payload = {};
+  for (const field of SOURCE_DOCUMENT_METADATA_FIELDS) {
+    if (src[field] === undefined) continue;
+    let value = src[field];
+
+    if (value === '') value = null;
+
+    if (field === 'doc_type') {
+      value = normalizeDocTypeStrict(value, 'doc_type');
+    } else if (field === 'source_role') {
+      value = normalizeEnum(value, SOURCE_ROLES, 'source_role');
+    } else if (field === 'legal_status') {
+      value = normalizeEnum(value, LEGAL_STATUSES, 'legal_status');
+    } else if (field === 'processing_mode') {
+      value = normalizeEnum(value, PROCESSING_MODES, 'processing_mode');
+    } else if (field === 'published_on') {
+      value = normalizeDate(value, 'published_on');
+    } else if (field === 'page_count') {
+      value = normalizePositiveInt(value, 'page_count');
+    } else if (field === 'text_coverage_ratio') {
+      value = normalizeRatio(value, 'text_coverage_ratio');
+    } else if (field === 'source_confidence') {
+      value = normalizeRatio(value, 'source_confidence');
+    } else if (field === 'ocr_required') {
+      value = normalizeBoolean(value);
+    } else if (typeof value === 'string') {
+      value = textOrNull(value);
+    }
+
+    payload[field] = value;
+  }
+
+  if (
+    payload.processing_mode === 'ocr_required'
+    || payload.processing_mode === 'image_review'
+  ) {
+    payload.ocr_required = true;
   }
 
   return payload;
@@ -733,6 +822,56 @@ async function getSourceDocumentById(id) {
   return result.rows[0] || null;
 }
 
+async function updateSourceDocumentMetadata(id, data, userId, { changeReason } = {}) {
+  const payload = normalizeSourceDocumentMetadataPayload(data);
+  const fields = Object.keys(payload);
+  if (fields.length === 0) {
+    throw createError('At least one source metadata field is required.', 400);
+  }
+
+  const existing = await getSourceDocumentById(id);
+  if (!existing) throw createError('Masterplan source document not found.', 404);
+
+  const diff = diffValues(existing, payload);
+  if (Object.keys(diff).length === 0) return existing;
+
+  const setClauses = fields.map((field, index) => `${field} = $${index + 1}`);
+  const values = fields.map((field) => payload[field]);
+  values.push(id);
+
+  const updated = await query(
+    `UPDATE regulatory_data.master_plan_documents
+     SET ${setClauses.join(', ')}
+     WHERE id = $${fields.length + 1}::uuid
+       AND deleted_at IS NULL
+       AND (org_id IS NULL OR org_id = current_organization_id())
+     RETURNING *`,
+    values,
+  );
+
+  const doc = updated.rows[0];
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+
+  const previousSnapshot = {};
+  for (const key of Object.keys(diff)) {
+    previousSnapshot[key] = existing[key] ?? null;
+  }
+
+  await query(
+    `INSERT INTO regulatory_data.master_plan_document_versions
+       (document_id, changed_by, previous_values, change_reason)
+     VALUES ($1::uuid, $2::uuid, $3::jsonb, $4)`,
+    [
+      id,
+      userId || null,
+      JSON.stringify(previousSnapshot),
+      changeReason || 'source metadata review',
+    ],
+  );
+
+  return doc;
+}
+
 async function getSourceDocumentDownload(id) {
   const doc = await getSourceDocumentById(id);
   if (!doc) throw createError('Masterplan source document not found.', 404);
@@ -1020,6 +1159,7 @@ module.exports = {
   listDocuments,
   getSourceDocumentUploadUrl,
   confirmSourceDocumentUpload,
+  updateSourceDocumentMetadata,
   getSourceDocumentDownload,
   extractSourceDocument,
   assignReviewedZoneToProperty,

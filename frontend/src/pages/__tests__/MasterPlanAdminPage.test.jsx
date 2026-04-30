@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 let docsQuery;
+let updateMetadataMock;
 
 vi.mock('../../store/authStore', () => ({
   default: () => ({ user: { role: 'admin' } }),
@@ -17,6 +18,7 @@ vi.mock('../../hooks/useMasterPlan', () => ({
   useReviewZone: () => ({ mutate: vi.fn() }),
   useUploadMasterPlanDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useExtractMasterPlanDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateMasterPlanDocumentMetadata: () => ({ mutateAsync: updateMetadataMock, isPending: false }),
   useOpenMasterPlanDocument: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -46,6 +48,7 @@ describe('MasterPlanAdminPage source documents', () => {
       isError: false,
       refetch: vi.fn(),
     };
+    updateMetadataMock = vi.fn().mockResolvedValue({});
   });
 
   it('renders controlled source intake and empty state', async () => {
@@ -121,6 +124,55 @@ describe('MasterPlanAdminPage source documents', () => {
     expect(screen.getByText('7 facts')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ocr review/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /re-extract/i })).toBeEnabled();
+  });
+
+  it('lets reviewers mark an OCR source as text-ready', async () => {
+    const user = userEvent.setup();
+    docsQuery = {
+      data: [{
+        id: 'doc-1',
+        city: 'Bengaluru',
+        plan_name: 'RMP-Provisional',
+        plan_version: 'RMP 2031 Draft',
+        file_name: 'RMP-Provisional.pdf',
+        doc_type: 'rmp_table',
+        extraction_status: 'pending',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+        text_coverage_ratio: 0.02,
+        source_confidence: 0.65,
+      }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    await openSourceDocuments();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /review source rmp-provisional/i }));
+    });
+
+    const dialog = screen.getByRole('dialog', { name: /review source metadata/i });
+    await act(async () => {
+      await user.selectOptions(within(dialog).getByLabelText(/processing/i), 'text_extraction');
+      await user.clear(within(dialog).getByLabelText(/text coverage/i));
+      await user.type(within(dialog).getByLabelText(/text coverage/i), '92');
+      await user.click(within(dialog).getByLabelText(/ocr needed/i));
+      await user.click(within(dialog).getByRole('button', { name: /save review/i }));
+    });
+
+    expect(updateMetadataMock).toHaveBeenCalledWith({
+      id: 'doc-1',
+      data: expect.objectContaining({
+        processingMode: 'text_extraction',
+        ocrRequired: false,
+        textCoverageRatio: 0.92,
+        changeReason: 'source registry review',
+      }),
+    });
   });
 
   it('shows loading and failed states without document rows', async () => {
