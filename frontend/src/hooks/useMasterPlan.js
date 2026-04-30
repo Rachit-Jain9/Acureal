@@ -48,6 +48,28 @@ export function useBbmpUavEntries(params = {}) {
   });
 }
 
+export function useImportZoneGeoJSON() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => masterPlanAPI.importZonesGeoJSON(data).then((r) => r.data.data),
+    onSuccess: (summary) => {
+      qc.invalidateQueries({ queryKey: ['master-plan-zones'] });
+      const updated = Number(summary?.updated || 0);
+      const skippedExisting = Number(summary?.skipped_existing_geom || 0);
+      const skippedUnknown = Number(summary?.skipped_unknown_zone || 0);
+      const rejected = Number(summary?.rejected || 0);
+      if (updated > 0) {
+        toast.success(`${updated} zone${updated === 1 ? '' : 's'} updated · ${skippedExisting} skipped (already had geometry) · ${skippedUnknown} unmatched · ${rejected} rejected`);
+      } else if (skippedExisting > 0 || skippedUnknown > 0 || rejected > 0) {
+        toast.info(`No zones updated · ${skippedExisting} already had geometry · ${skippedUnknown} unmatched · ${rejected} rejected`);
+      } else {
+        toast.success('GeoJSON processed');
+      }
+    },
+    onError: (err) => toast.error(err.response?.data?.message || err.message || 'GeoJSON import failed'),
+  });
+}
+
 export function useMasterPlanDocumentVersions(id) {
   return useQuery({
     queryKey: ['master-plan-doc-versions', id],

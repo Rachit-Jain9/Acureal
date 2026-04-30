@@ -271,6 +271,7 @@ export const masterPlanAPI = {
   extractDoc:   (id, data)             => api.post(`/master-plan/documents/${id}/extract`, data),
   listBbmpUav:  (params)               => api.get('/master-plan/bbmp-uav', { params }),
   listCorpus:   (params)               => api.get('/master-plan/corpus', { params }),
+  importZonesGeoJSON: (data)            => api.post('/master-plan/zones/import-geojson', data),
 };
 
 // Parcel Intelligence admin / evidence operations

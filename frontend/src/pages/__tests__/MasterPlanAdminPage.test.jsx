@@ -60,6 +60,7 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isFetching: false,
     refetch: vi.fn(),
   }),
+  useImportZoneGeoJSON: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
