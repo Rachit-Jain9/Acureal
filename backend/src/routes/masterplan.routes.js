@@ -160,6 +160,22 @@ router.post('/documents/confirm-upload', authenticate, requireAdminOrAnalyst, as
   }
 });
 
+// PUT /api/master-plan/documents/:id/metadata
+router.put('/documents/:id/metadata', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const { changeReason, ...payload } = req.body || {};
+    const doc = await masterplanService.updateSourceDocumentMetadata(
+      req.params.id,
+      payload,
+      req.user.id,
+      { changeReason },
+    );
+    res.json({ success: true, data: doc });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/documents/:id/download
 router.get('/documents/:id/download', authenticate, async (req, res, next) => {
   try {
