@@ -135,6 +135,46 @@ describe('MasterPlanAdminPage source documents', () => {
     expect(screen.getByRole('button', { name: /re-extract/i })).toBeEnabled();
   });
 
+  it('uses server readiness when the source row includes a readiness contract', async () => {
+    docsQuery = {
+      data: [{
+        id: 'doc-contract',
+        city: 'Bengaluru',
+        plan_name: 'Index Map',
+        plan_version: 'RMP 2031 Draft',
+        file_name: 'Index Map.pdf',
+        doc_type: 'rmp_table',
+        extraction_status: 'pending',
+        source_role: 'base_map',
+        legal_status: 'draft',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'text_extraction',
+        ocr_required: false,
+        source_readiness: {
+          key: 'manual',
+          label: 'GIS review',
+          tone: 'warn',
+          description: 'Coordinate source needs GIS review before extraction',
+          can_extract: false,
+          action_label: 'GIS review',
+          block_reason: 'GIS review must finish before extraction.',
+        },
+      }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    await openSourceDocuments();
+
+    expect(await screen.findByText('Index Map')).toBeInTheDocument();
+    expect(screen.getAllByText('GIS review').length).toBeGreaterThan(0);
+    expect(screen.getByText('Coordinate source needs GIS review before extraction')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: /gis review/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'GIS review must finish before extraction.');
+  });
+
   it('shows source review history with previous metadata values', async () => {
     const user = userEvent.setup();
     docsQuery = {
