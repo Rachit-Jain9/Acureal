@@ -4,6 +4,25 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-04-30 (continued - source readiness contract)
+
+### What was worked on
+
+Master plan source documents now return a server-owned readiness status. Reviewers can tell whether a source is ready to extract, blocked for OCR or manual review, reference-only, failed, queued for review, or missing provenance details.
+
+The extract action now follows the same readiness decision as the backend. A blocked source should no longer look safe to extract in the admin page while being rejected later by the service.
+
+### PRs opened / merged
+
+- PR #99 - `feat(source-registry): add server readiness contract` - opened.
+
+### What's left
+
+- Merge PR #99 after CI passes, then deploy to production.
+- Continue the source registry roadmap by improving manual OCR/GIS review workflow clarity and provenance completeness.
+
+---
+
 ## 2026-04-30 (Codex source-document review history)
 
 **What was worked on in plain English:**
