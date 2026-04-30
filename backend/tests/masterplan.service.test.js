@@ -588,3 +588,132 @@ describe('masterplan.service source intake and zone assignment', () => {
     );
   });
 });
+
+describe('masterplan.service corpus auto-classification', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('auto-applies the corpus manifest defaults when uploading Volume 6', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-vol6', plan_name: 'RMP 2031 Volume 6 — Zoning Regulations' }] });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/volume-6.pdf',
+      originalName: 'Volume-6 Zoning Regulations.pdf',
+      fileType: 'application/pdf',
+      fileSize: 12345,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    const args = query.mock.calls[0][1];
+    expect(args).toEqual(expect.arrayContaining([
+      'RMP 2031 Volume 6 — Zoning Regulations',
+      'rmp_table',
+      'provisional_plan',
+      'provisional',
+      'Bangalore Development Authority',
+      'text_extraction',
+      false,
+    ]));
+  });
+
+  test('forces RMP-Provisional.pdf into ocr_required mode', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-rmp', plan_name: 'RMP 2031 Provisional Master Plan' }] });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/rmp.pdf',
+      originalName: 'RMP-Provisional.pdf',
+      fileType: 'application/pdf',
+      fileSize: 999999,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    const args = query.mock.calls[0][1];
+    expect(args).toEqual(expect.arrayContaining([
+      'ocr_required',
+      true,
+    ]));
+  });
+
+  test('forces Guidance Value.pdf into BBMP UAV classification', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-bbmp', plan_name: 'BBMP UAV', doc_type: 'bbmp_uav_pdf' }] });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/bbmp.pdf',
+      originalName: 'Guidance Value.pdf',
+      fileType: 'application/pdf',
+      fileSize: 50000,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    const args = query.mock.calls[0][1];
+    expect(args).toEqual(expect.arrayContaining([
+      'bbmp_uav_pdf',
+      'property_tax_uav',
+      'Bruhat Bengaluru Mahanagara Palike',
+    ]));
+  });
+
+  test('rejects Guidance Value.pdf when an admin tries to mis-classify it as IGR guidance', async () => {
+    await expect(service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/bbmp.pdf',
+      originalName: 'Guidance Value.pdf',
+      fileType: 'application/pdf',
+      fileSize: 50000,
+      docType: 'igr_guidance_pdf',
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    })).rejects.toMatchObject({ statusCode: 400, message: expect.stringMatching(/BBMP/) });
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('reviewer-supplied values still win over corpus defaults', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-vol6' }] });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/volume-6.pdf',
+      originalName: 'Volume-6 Zoning Regulations.pdf',
+      fileType: 'application/pdf',
+      fileSize: 12345,
+      legalStatus: 'gazetted',
+      sourceConfidence: 0.99,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    const args = query.mock.calls[0][1];
+    expect(args).toEqual(expect.arrayContaining([
+      'gazetted',
+      0.99,
+      'rmp_table',
+      'provisional_plan',
+    ]));
+  });
+
+  test('listMasterplanCorpus returns 12 entries with upload status from listDocuments', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'doc-vol6',
+          plan_name: 'RMP 2031 Volume 6 — Zoning Regulations',
+          file_name: 'Volume-6 Zoning Regulations.pdf',
+          extraction_status: 'pending',
+          source_role: 'provisional_plan',
+          legal_status: 'provisional',
+          processing_mode: 'text_extraction',
+          ocr_required: false,
+          source_confidence: 0.85,
+          created_at: '2026-04-30T10:00:00Z',
+        },
+      ],
+    });
+
+    const result = await service.listMasterplanCorpus({ city: 'Bengaluru' });
+    expect(result).toHaveLength(12);
+    const vol6 = result.find((row) => row.canonical_name === 'volume-6-zoning-regulations.pdf');
+    const guidance = result.find((row) => row.canonical_name === 'guidance-value.pdf');
+    expect(vol6.uploaded).toBe(true);
+    expect(vol6.document.id).toBe('doc-vol6');
+    expect(guidance.uploaded).toBe(false);
+    expect(guidance.doc_type).toBe('bbmp_uav_pdf');
+  });
+});

@@ -6,6 +6,7 @@ const { createError } = require('../middleware/errorHandler');
 const { createUploadUrl, getDownloadUrl } = require('../config/storage');
 const extractionService = require('./extraction.service');
 const evidenceIngestionService = require('./evidenceIngestion.service');
+const masterplanCorpus = require('./masterplanCorpus');
 
 const ALLOWED_SOURCE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
 const EXTRACTABLE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
@@ -829,6 +830,44 @@ async function confirmSourceDocumentUpload({
   }
   assertSourceFileAllowed(originalName || planName || storagePath, fileSize);
 
+  try {
+    masterplanCorpus.assertCorpusClassification({
+      fileName: originalName || planName || storagePath,
+      docType,
+    });
+  } catch (err) {
+    if (err && err.statusCode) throw createError(err.message, err.statusCode);
+    throw err;
+  }
+
+  const corpusMatch = masterplanCorpus.applyCorpusDefaults({
+    fileName: originalName || planName || storagePath,
+    requested: {
+      planName,
+      planVersion,
+      docType,
+      sourceRole,
+      legalStatus,
+      authorityName,
+      processingMode,
+      sourceConfidence,
+      registryNotes,
+      ocrRequired,
+    },
+  });
+
+  const merged = corpusMatch.payload;
+  planName = merged.planName;
+  planVersion = merged.planVersion;
+  docType = merged.docType;
+  sourceRole = merged.sourceRole;
+  legalStatus = merged.legalStatus;
+  authorityName = merged.authorityName;
+  processingMode = merged.processingMode;
+  sourceConfidence = merged.sourceConfidence;
+  registryNotes = merged.registryNotes;
+  ocrRequired = merged.ocrRequired;
+
   const resolvedPlanName = textOrNull(planName) || textOrNull(originalName) || 'Masterplan source document';
   const normalizedProcessingMode = normalizeEnum(processingMode, PROCESSING_MODES, 'processing_mode')
     || 'text_extraction';
@@ -1470,6 +1509,11 @@ async function getZoneVersions(zoneId) {
   return result.rows;
 }
 
+async function listMasterplanCorpus({ city } = {}) {
+  const docs = await listDocuments({ city });
+  return masterplanCorpus.buildCorpusStatus(docs);
+}
+
 module.exports = {
   calculateEffectiveFSI,
   getSourceDocumentReadiness,
@@ -1487,6 +1531,7 @@ module.exports = {
   listSourceDocumentPages,
   prepareSourceDocumentPages,
   listBbmpUavEntries,
+  listMasterplanCorpus,
   extractSourceDocument,
   assignReviewedZoneToProperty,
   getZoneVersions,

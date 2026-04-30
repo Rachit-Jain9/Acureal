@@ -17,6 +17,42 @@ vi.mock('../../hooks/useMasterPlan', () => ({
   useZones: () => ({ data: [], isLoading: false }),
   useMasterPlanDocuments: () => docsQuery,
   useMasterPlanDocumentVersions: () => versionsQuery,
+  useMasterPlanCorpus: () => ({
+    data: [
+      {
+        canonical_name: 'volume-6-zoning-regulations.pdf',
+        plan_name: 'RMP 2031 Volume 6 — Zoning Regulations',
+        plan_version: 'RMP 2031 Provisional',
+        doc_type: 'rmp_table',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'text_extraction',
+        ocr_required: false,
+        source_confidence: 0.85,
+        uploaded: false,
+        document: null,
+      },
+      {
+        canonical_name: 'guidance-value.pdf',
+        plan_name: 'BBMP Unit Area Value (UAV) — Property Tax Zones',
+        plan_version: 'BBMP UAV',
+        doc_type: 'bbmp_uav_pdf',
+        source_role: 'property_tax_uav',
+        legal_status: 'advisory',
+        authority_name: 'Bruhat Bengaluru Mahanagara Palike',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+        source_confidence: 0.8,
+        uploaded: false,
+        document: null,
+      },
+    ],
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
@@ -400,5 +436,46 @@ describe('MasterPlanAdminPage source documents', () => {
 
     expect(screen.getByText('Failed to load source documents.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+});
+
+describe('MasterPlanAdminPage source corpus tab', () => {
+  beforeEach(() => {
+    docsQuery = {
+      data: [],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    versionsQuery = {
+      data: [],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    pagesQuery = {
+      data: { schema_ready: true, pages: [] },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    updateMetadataMock = vi.fn().mockResolvedValue({});
+    preparePagesMock = vi.fn().mockResolvedValue({});
+  });
+
+  it('renders the corpus checklist when the Source Corpus tab is selected', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /source corpus/i }));
+    });
+
+    expect(await screen.findByText(/Bengaluru RMP 2031 — expected sources/)).toBeInTheDocument();
+    expect(screen.getByText('volume-6-zoning-regulations.pdf')).toBeInTheDocument();
+    expect(screen.getByText('guidance-value.pdf')).toBeInTheDocument();
+    expect(screen.getByText(/BBMP property tax — separate from IGR sale guidance/i)).toBeInTheDocument();
   });
 });

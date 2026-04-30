@@ -33,6 +33,13 @@ export function useMasterPlanDocuments(params = {}) {
   });
 }
 
+export function useMasterPlanCorpus(params = {}) {
+  return useQuery({
+    queryKey: ['master-plan-corpus', params],
+    queryFn: () => masterPlanAPI.listCorpus(params).then((r) => r.data.data ?? []),
+  });
+}
+
 export function useMasterPlanDocumentVersions(id) {
   return useQuery({
     queryKey: ['master-plan-doc-versions', id],
