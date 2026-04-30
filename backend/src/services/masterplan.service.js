@@ -1514,6 +1514,139 @@ async function listMasterplanCorpus({ city } = {}) {
   return masterplanCorpus.buildCorpusStatus(docs);
 }
 
+const ALLOWED_GEOJSON_GEOMETRY_TYPES = new Set(['Polygon', 'MultiPolygon']);
+
+// Import polygon geometry for already-reviewed master plan zones from a
+// GeoJSON FeatureCollection. Never creates new zones — geometry can only
+// attach to a zone that has already gone through the human review path.
+//
+// Each feature must carry properties.zone_code; planVersion can be set per
+// feature or via the top-level argument (default 'RMP 2031 Provisional').
+// By default, features are skipped when a zone already has geometry; pass
+// overwriteGeom=true to replace existing geometry. Every change is recorded
+// in zone_versions so the audit trail keeps working.
+async function importZoneGeoJSON({
+  featureCollection,
+  planVersion = 'RMP 2031 Provisional',
+  changeReason,
+  overwriteGeom = false,
+  userId,
+} = {}) {
+  if (!featureCollection || typeof featureCollection !== 'object') {
+    throw createError('featureCollection must be a GeoJSON object.', 400);
+  }
+  if (featureCollection.type !== 'FeatureCollection') {
+    throw createError('featureCollection.type must be "FeatureCollection".', 400);
+  }
+  const features = Array.isArray(featureCollection.features) ? featureCollection.features : null;
+  if (!features || features.length === 0) {
+    throw createError('featureCollection.features must be a non-empty array.', 400);
+  }
+  if (features.length > 500) {
+    throw createError('A single import is limited to 500 features.', 413);
+  }
+
+  const summary = {
+    received: features.length,
+    updated: 0,
+    skipped_existing_geom: 0,
+    skipped_unknown_zone: 0,
+    rejected: 0,
+    updates: [],
+    errors: [],
+  };
+
+  for (let index = 0; index < features.length; index += 1) {
+    const feature = features[index];
+    const props = feature?.properties || {};
+    const geometry = feature?.geometry;
+    const zoneCode = textOrNull(props.zone_code);
+    const featurePlanVersion = textOrNull(props.plan_version) || planVersion;
+
+    if (!zoneCode) {
+      summary.rejected += 1;
+      summary.errors.push({ index, reason: 'feature is missing properties.zone_code' });
+      continue;
+    }
+    if (!geometry || !ALLOWED_GEOJSON_GEOMETRY_TYPES.has(geometry.type)) {
+      summary.rejected += 1;
+      summary.errors.push({
+        index,
+        zone_code: zoneCode,
+        reason: 'feature.geometry must be a Polygon or MultiPolygon',
+      });
+      continue;
+    }
+    if (!Array.isArray(geometry.coordinates) || geometry.coordinates.length === 0) {
+      summary.rejected += 1;
+      summary.errors.push({ index, zone_code: zoneCode, reason: 'feature.geometry.coordinates is empty' });
+      continue;
+    }
+
+    const lookup = await query(
+      `SELECT id, zone_code, plan_version, geom IS NOT NULL AS has_geom,
+              ST_AsGeoJSON(geom)::jsonb AS geom_geojson
+         FROM regulatory_data.master_plan_zones
+        WHERE UPPER(zone_code) = UPPER($1)
+          AND ($2::text IS NULL OR plan_version = $2)
+        LIMIT 1`,
+      [zoneCode, featurePlanVersion],
+    );
+    const existing = lookup.rows[0];
+
+    if (!existing) {
+      summary.skipped_unknown_zone += 1;
+      summary.errors.push({
+        index,
+        zone_code: zoneCode,
+        plan_version: featurePlanVersion,
+        reason: 'no reviewed zone matches this zone_code + plan_version',
+      });
+      continue;
+    }
+
+    if (existing.has_geom && !overwriteGeom) {
+      summary.skipped_existing_geom += 1;
+      continue;
+    }
+
+    const updated = await query(
+      `UPDATE regulatory_data.master_plan_zones
+          SET geom = ST_GeomFromGeoJSON($1::text)
+        WHERE id = $2::uuid
+        RETURNING id, zone_code, plan_version`,
+      [JSON.stringify(geometry), existing.id],
+    );
+
+    if (updated.rows.length === 0) {
+      summary.rejected += 1;
+      summary.errors.push({ index, zone_code: zoneCode, reason: 'update returned no rows' });
+      continue;
+    }
+
+    await query(
+      `INSERT INTO regulatory_data.zone_versions (zone_id, changed_by, previous_values, change_reason)
+       VALUES ($1::uuid, $2::uuid, $3::jsonb, $4)`,
+      [
+        existing.id,
+        userId || null,
+        JSON.stringify({ geom: existing.geom_geojson || null }),
+        changeReason || 'GeoJSON import',
+      ],
+    );
+
+    summary.updated += 1;
+    summary.updates.push({
+      zone_id: updated.rows[0].id,
+      zone_code: updated.rows[0].zone_code,
+      plan_version: updated.rows[0].plan_version,
+      replaced_geom: Boolean(existing.has_geom),
+    });
+  }
+
+  return summary;
+}
+
 module.exports = {
   calculateEffectiveFSI,
   getSourceDocumentReadiness,
@@ -1532,6 +1665,7 @@ module.exports = {
   prepareSourceDocumentPages,
   listBbmpUavEntries,
   listMasterplanCorpus,
+  importZoneGeoJSON,
   extractSourceDocument,
   assignReviewedZoneToProperty,
   getZoneVersions,
