@@ -4,6 +4,29 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-04-30 (continued - Bengaluru RMP 2031 corpus manifest)
+
+**What was worked on in plain English:**
+- The Master Plan admin page now has a third tab — Source Corpus — that lists the 12 official Bengaluru regulatory files we expect, how each is classified, and which have been uploaded.
+- When an admin uploads a known file by name, REDIP auto-applies the right classification (role, legal status, authority, processing mode, confidence). No more re-classifying every upload by hand.
+- The BBMP property-tax file is hard-routed to its own area and refuses to be uploaded as IGR sale guidance — closes a longstanding mix-up risk.
+- The provisional master plan PDF is forced into OCR-required mode so it cannot bypass review before extraction.
+
+**PRs opened/merged:** PR #101 — `feat(source-registry): add Bengaluru RMP 2031 corpus manifest` — opened, CI green (Backend / Frontend / Financial kernel / CI passed / Vercel), squash-merged as 451d5df.
+
+**Verification:**
+- Backend test suite: 510 tests pass (23 new).
+- Frontend test suite: 96 tests pass (8 new).
+- Frontend production build: clean.
+- Visual surface is auth-gated; correctness locked by tests.
+
+**What's left:**
+- Ingest the actual file bytes for the 12 expected sources via the admin upload UI (auto-classify will fire on each).
+- Run OCR on RMP-Provisional.pdf so the page ledger can fill.
+- Begin rule ETL from Volume 6 + Master Plan.docx now that classifications are pinned.
+
+---
+
 ## 2026-04-30 (continued - applied source page ledger migration)
 
 **What was worked on in plain English:**
