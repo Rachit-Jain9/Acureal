@@ -121,6 +121,11 @@ const normalizeBoolean = (value) => {
   return ['true', '1', 'yes'].includes(String(value).trim().toLowerCase());
 };
 
+const isMissingOptionalSourceTable = (error) => (
+  error?.code === '42P01'
+  || /regulatory_data\.(master_plan_document_pages|bbmp_uav_entries)/i.test(error?.message || '')
+);
+
 const sourceFileExt = (fileName = '') => path.extname(String(fileName)).toLowerCase();
 
 const assertSourceFileAllowed = (fileName, fileSize = 0) => {
@@ -1004,6 +1009,203 @@ async function getSourceDocumentDownload(id) {
   };
 }
 
+async function listSourceDocumentPages(id) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+
+  try {
+    const result = await query(
+      `SELECT id,
+              document_id,
+              page_number,
+              page_label,
+              ocr_status,
+              ocr_engine,
+              text_coverage_ratio,
+              page_checksum_sha256,
+              page_image_url,
+              citation_anchors,
+              review_status,
+              reviewer_notes,
+              confidence_score,
+              reviewed_by,
+              reviewed_at,
+              created_at,
+              updated_at
+       FROM regulatory_data.master_plan_document_pages
+       WHERE document_id = $1::uuid
+       ORDER BY page_number ASC
+       LIMIT 1000`,
+      [id],
+    );
+
+    return {
+      schema_ready: true,
+      document: {
+        id: doc.id,
+        plan_name: doc.plan_name,
+        page_count: doc.page_count || null,
+        processing_mode: doc.processing_mode || null,
+        ocr_required: Boolean(doc.ocr_required),
+      },
+      pages: result.rows,
+    };
+  } catch (error) {
+    if (isMissingOptionalSourceTable(error)) {
+      return {
+        schema_ready: false,
+        document: {
+          id: doc.id,
+          plan_name: doc.plan_name,
+          page_count: doc.page_count || null,
+          processing_mode: doc.processing_mode || null,
+          ocr_required: Boolean(doc.ocr_required),
+        },
+        pages: [],
+        message: 'Page-level source storage is pending. Apply the source document pages migration before preparing OCR pages.',
+      };
+    }
+    throw error;
+  }
+}
+
+async function prepareSourceDocumentPages(id, { pageCount } = {}) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+
+  const resolvedPageCount = normalizePositiveInt(pageCount ?? doc.page_count, 'page_count');
+  if (!resolvedPageCount) {
+    throw createError('Set a page count before preparing the source page ledger.', 400);
+  }
+  if (resolvedPageCount > 1000) {
+    throw createError('Page ledger preparation is limited to 1000 pages per source.', 400);
+  }
+
+  try {
+    const created = await query(
+      `INSERT INTO regulatory_data.master_plan_document_pages (
+         document_id,
+         page_number,
+         ocr_status,
+         review_status
+       )
+       SELECT $1::uuid,
+              page_number,
+              CASE
+                WHEN $3::boolean THEN 'queued'
+                ELSE 'not_started'
+              END,
+              CASE
+                WHEN $3::boolean THEN 'needs_ocr'
+                ELSE 'pending'
+              END
+       FROM generate_series(1, $2::int) AS page_number
+       ON CONFLICT (document_id, page_number) DO NOTHING
+       RETURNING id`,
+      [id, resolvedPageCount, Boolean(doc.ocr_required)],
+    );
+    const listed = await listSourceDocumentPages(id);
+    return {
+      ...listed,
+      pages_created: created.rows.length,
+    };
+  } catch (error) {
+    if (isMissingOptionalSourceTable(error)) {
+      return {
+        schema_ready: false,
+        document: {
+          id: doc.id,
+          plan_name: doc.plan_name,
+          page_count: doc.page_count || null,
+          processing_mode: doc.processing_mode || null,
+          ocr_required: Boolean(doc.ocr_required),
+        },
+        pages: [],
+        pages_created: 0,
+        message: 'Page-level source storage is pending. Apply the source document pages migration before preparing OCR pages.',
+      };
+    }
+    throw error;
+  }
+}
+
+async function listBbmpUavEntries({ documentId, city, status = 'pending', search, limit = 100 } = {}) {
+  const conditions = ['1=1'];
+  const values = [];
+  let idx = 1;
+
+  if (documentId) {
+    conditions.push(`document_id = $${idx++}::uuid`);
+    values.push(documentId);
+  }
+  if (city) {
+    conditions.push(`LOWER(city) = LOWER($${idx++})`);
+    values.push(city);
+  }
+  if (status && status !== 'all') {
+    conditions.push(`review_status = $${idx++}`);
+    values.push(status);
+  }
+  if (search) {
+    conditions.push(`(
+      uav_zone_code ILIKE $${idx}
+      OR ward_name ILIKE $${idx}
+      OR road_name ILIKE $${idx}
+      OR area_name ILIKE $${idx}
+    )`);
+    values.push(`%${search}%`);
+    idx++;
+  }
+
+  values.push(Math.min(parseInt(limit, 10) || 100, 500));
+
+  try {
+    const result = await query(
+      `SELECT id,
+              org_id,
+              document_id,
+              evidence_source_id,
+              page_id,
+              city,
+              authority_name,
+              assessment_year,
+              uav_zone_code,
+              uav_zone_name,
+              ward_number,
+              ward_name,
+              road_name,
+              area_name,
+              property_use,
+              unit_area_value_inr,
+              unit_label,
+              source_page,
+              source_section,
+              confidence_score,
+              review_status,
+              notes,
+              reviewed_by,
+              reviewed_at,
+              created_at,
+              updated_at
+       FROM regulatory_data.bbmp_uav_entries
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT $${idx}`,
+      values,
+    );
+    return { schema_ready: true, rows: result.rows };
+  } catch (error) {
+    if (isMissingOptionalSourceTable(error)) {
+      return {
+        schema_ready: false,
+        rows: [],
+        message: 'BBMP UAV review storage is pending. Apply the source document pages migration before reviewing UAV rows.',
+      };
+    }
+    throw error;
+  }
+}
+
 async function extractSourceDocument(id, { docType, userId } = {}) {
   const doc = await getSourceDocumentById(id);
   if (!doc) throw createError('Masterplan source document not found.', 404);
@@ -1282,6 +1484,9 @@ module.exports = {
   updateSourceDocumentMetadata,
   getSourceDocumentVersions,
   getSourceDocumentDownload,
+  listSourceDocumentPages,
+  prepareSourceDocumentPages,
+  listBbmpUavEntries,
   extractSourceDocument,
   assignReviewedZoneToProperty,
   getZoneVersions,

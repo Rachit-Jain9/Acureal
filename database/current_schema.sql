@@ -65,6 +65,7 @@
 \i 20260429_osm_road_cache.sql                 -- OSM Overpass road-width cache (T6)
 \i 20260430_source_document_registry_metadata.sql -- source authority/status/OCR metadata
 \i 20260430_master_plan_document_versions.sql  -- audit trail for source registry edits
+\i 20260430_source_document_pages_and_uav.sql  -- page ledger + BBMP UAV review rows
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Phase 4 — RLS hardening (Bet 2 from 2026-04-29 audit)

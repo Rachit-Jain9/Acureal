@@ -7,7 +7,6 @@ import {
 import { clsx } from 'clsx';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import { ErrorState } from '../design-system';
@@ -21,6 +20,8 @@ import {
   useExtractMasterPlanDocument,
   useUpdateMasterPlanDocumentMetadata,
   useMasterPlanDocumentVersions,
+  useMasterPlanDocumentPages,
+  usePrepareMasterPlanDocumentPages,
   useOpenMasterPlanDocument,
 } from '../hooks/useMasterPlan';
 
@@ -945,7 +946,7 @@ function ZoneLibrary({ canEdit }) {
       </div>
 
       {isLoading ? (
-        <div className="py-12 flex justify-center"><LoadingSpinner /></div>
+        <ZoneTableSkeleton />
       ) : zones.length === 0 ? (
         <EmptyState
           icon={Shield}
@@ -1029,12 +1030,219 @@ function ZoneLibrary({ canEdit }) {
   );
 }
 
+function pageStatusTone(status) {
+  return {
+    completed: 'success',
+    reviewed: 'success',
+    queued: 'warn',
+    needs_ocr: 'warn',
+    failed: 'danger',
+    rejected: 'danger',
+    not_required: 'neutral',
+  }[status] || 'neutral';
+}
+
+function ZoneTableSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="overflow-hidden rounded-lg border border-hairline bg-bg-elevated">
+      <div className="grid grid-cols-[0.7fr,1.4fr,1fr,0.7fr,0.8fr,0.9fr] gap-3 border-b border-hairline-strong px-4 py-3">
+        {[0, 1, 2, 3, 4, 5].map((item) => (
+          <div key={item} className="h-3 rounded bg-bg-secondary animate-pulse" />
+        ))}
+      </div>
+      <div className="divide-y divide-hairline">
+        {[0, 1, 2, 3].map((row) => (
+          <div key={row} className="grid grid-cols-[0.7fr,1.4fr,1fr,0.7fr,0.8fr,0.9fr] gap-3 px-4 py-3">
+            {[0, 1, 2, 3, 4, 5].map((item) => (
+              <div key={item} className="h-8 rounded bg-bg-secondary animate-pulse" />
+            ))}
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Loading master plan zones</span>
+    </div>
+  );
+}
+
+function SourceDocumentsSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="space-y-4">
+      <div className="rounded-lg border border-hairline bg-bg-elevated p-4">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="space-y-2">
+            <div className="h-4 w-36 rounded bg-bg-secondary animate-pulse" />
+            <div className="h-3 w-80 max-w-full rounded bg-bg-secondary animate-pulse" />
+          </div>
+          <div className="h-6 w-20 rounded bg-bg-secondary animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          {[0, 1, 2, 3].map((item) => (
+            <div key={item} className="h-10 rounded-lg bg-bg-secondary animate-pulse" />
+          ))}
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-lg border border-hairline bg-bg-elevated">
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="grid grid-cols-1 gap-3 border-b border-hairline px-4 py-3 last:border-b-0 md:grid-cols-[minmax(260px,1.4fr),minmax(160px,0.9fr),minmax(180px,0.9fr),minmax(150px,0.7fr)]">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="h-12 rounded bg-bg-secondary animate-pulse" />
+            ))}
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Loading source documents</span>
+    </div>
+  );
+}
+
+function SourcePagesModal({
+  doc,
+  isOpen,
+  onClose,
+  data,
+  isLoading,
+  isError,
+  onRetry,
+  onPrepare,
+  preparing,
+}) {
+  if (!isOpen || !doc) return null;
+
+  const pages = data?.pages || [];
+  const schemaReady = data?.schema_ready !== false;
+  const canPrepare = schemaReady && Number(doc.page_count) > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40 transition-opacity duration-150 ease-out" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="source-pages-title"
+        className="relative mx-4 max-h-[84vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl motion-safe:animate-[fadeInUp_220ms_cubic-bezier(0.16,1,0.3,1)]"
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="source-pages-title" className="truncate text-lg font-semibold text-content-primary">
+              Source page ledger
+            </h2>
+            <p className="mt-0.5 truncate text-xs text-content-secondary">{doc.plan_name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close source page ledger"
+            className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div role="status" aria-busy="true" className="space-y-3">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="rounded-lg border border-hairline bg-bg-elevated p-3">
+                <div className="h-3 w-28 rounded bg-bg-secondary animate-pulse" />
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                </div>
+              </div>
+            ))}
+            <span className="sr-only">Loading source page ledger</span>
+          </div>
+        ) : isError ? (
+          <ErrorState
+            tone="danger"
+            title="Could not load page ledger"
+            action={(
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+              >
+                Retry
+              </button>
+            )}
+          >
+            Page-level source review could not be loaded.
+          </ErrorState>
+        ) : !schemaReady ? (
+          <ErrorState tone="warn" title="Page storage not applied yet">
+            {data?.message || 'Apply the page-level source storage migration before preparing OCR pages.'}
+          </ErrorState>
+        ) : pages.length === 0 ? (
+          <div className="rounded-lg border border-hairline bg-bg-elevated px-4 py-8 text-center">
+            <p className="text-sm font-medium text-content-primary">No pages prepared yet.</p>
+            <p className="mt-1 text-xs text-content-secondary">
+              {canPrepare
+                ? 'Prepare empty page rows before OCR, citation anchoring, or reviewer notes are attached.'
+                : 'Set a page count in source review before preparing the page ledger.'}
+            </p>
+            <button
+              type="button"
+              onClick={onPrepare}
+              disabled={!canPrepare || preparing}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition-colors duration-150 ease-out hover:bg-primary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {preparing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              {preparing ? 'Preparing...' : 'Prepare pages'}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <Badge tone="neutral">{pages.length} page{pages.length === 1 ? '' : 's'}</Badge>
+              <button
+                type="button"
+                onClick={onPrepare}
+                disabled={!canPrepare || preparing}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {preparing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                {preparing ? 'Preparing...' : 'Fill missing pages'}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {pages.map((page) => (
+                <article key={page.id || page.page_number} className="rounded-lg border border-hairline bg-bg-elevated p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-content-primary">Page {page.page_number}</p>
+                      <p className="mt-0.5 text-xs text-content-secondary">{page.page_label || 'No page label'}</p>
+                    </div>
+                    <Badge tone={pageStatusTone(page.ocr_status)}>{String(page.ocr_status || 'not_started').replace(/_/g, ' ')}</Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <Badge tone={pageStatusTone(page.review_status)}>{String(page.review_status || 'pending').replace(/_/g, ' ')}</Badge>
+                    {formatPercent(page.text_coverage_ratio) && (
+                      <Badge tone="neutral">Text {formatPercent(page.text_coverage_ratio)}</Badge>
+                    )}
+                    {page.confidence_score !== null && page.confidence_score !== undefined && (
+                      <Badge tone="neutral">Confidence {formatPercent(page.confidence_score)}</Badge>
+                    )}
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-xs text-content-muted">
+                    {page.reviewer_notes || page.page_checksum_sha256 || 'OCR text and citation anchors are not stored for this page yet.'}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DocumentsPanel({ canEdit }) {
   const { data: docs = [], isLoading, isError, refetch } = useMasterPlanDocuments();
   const uploadMut = useUploadMasterPlanDocument();
   const extractMut = useExtractMasterPlanDocument();
   const updateDocMut = useUpdateMasterPlanDocumentMetadata();
   const openMut = useOpenMasterPlanDocument();
+  const preparePagesMut = usePrepareMasterPlanDocumentPages();
 
   const [file, setFile] = useState(null);
   const [form, setForm] = useState({
@@ -1054,7 +1262,9 @@ function DocumentsPanel({ canEdit }) {
   const [readinessFilter, setReadinessFilter] = useState('all');
   const [reviewingDoc, setReviewingDoc] = useState(null);
   const [historyDoc, setHistoryDoc] = useState(null);
+  const [pagesDoc, setPagesDoc] = useState(null);
   const historyQuery = useMasterPlanDocumentVersions(historyDoc?.id);
+  const pagesQuery = useMasterPlanDocumentPages(pagesDoc?.id);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -1132,7 +1342,15 @@ function DocumentsPanel({ canEdit }) {
     setReviewingDoc(null);
   };
 
-  if (isLoading) return <div className="py-12 flex justify-center"><LoadingSpinner /></div>;
+  const handlePreparePages = async () => {
+    if (!pagesDoc?.id) return;
+    await preparePagesMut.mutateAsync({
+      id: pagesDoc.id,
+      pageCount: pagesDoc.page_count || undefined,
+    });
+  };
+
+  if (isLoading) return <SourceDocumentsSkeleton />;
 
   if (isError) {
     return (
@@ -1419,6 +1637,17 @@ function DocumentsPanel({ canEdit }) {
                         <History size={15} />
                       </button>
                     )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setPagesDoc(doc)}
+                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                        title="Page ledger"
+                        aria-label={`Page ledger ${doc.plan_name}`}
+                      >
+                        <FileText size={15} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => openMut.mutate(doc.id)}
@@ -1462,6 +1691,17 @@ function DocumentsPanel({ canEdit }) {
         isLoading={historyQuery.isLoading || historyQuery.isFetching}
         isError={historyQuery.isError}
         onRetry={() => historyQuery.refetch()}
+      />
+      <SourcePagesModal
+        doc={pagesDoc}
+        isOpen={Boolean(pagesDoc)}
+        onClose={() => setPagesDoc(null)}
+        data={pagesQuery.data}
+        isLoading={pagesQuery.isLoading || pagesQuery.isFetching}
+        isError={pagesQuery.isError}
+        onRetry={() => pagesQuery.refetch()}
+        onPrepare={handlePreparePages}
+        preparing={preparePagesMut.isPending}
       />
     </div>
   );

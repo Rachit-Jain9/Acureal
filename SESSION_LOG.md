@@ -463,3 +463,18 @@ Performance advisor `unindexed_foreign_keys`: **38 → 0**. Remaining performanc
 4. **Override history drawer** — uses `useDealEvents()` selector exposed by PR #86. Closes the audit-trail visibility gap noted in TODO_MANUAL.
 
 ---
+## 2026-04-30 (continued - Source Registry PR v2)
+
+### What was worked on
+
+Prepared the next masterplan trust-layer step: source documents can now have page-by-page review rows for OCR status, reviewer notes, checksums, and future citation anchors. BBMP Unit Area Value entries also get their own review table so property-tax values stay separate from official sale guidance values. The admin source document view now exposes a page ledger action, prepares empty page rows, and uses skeleton loading states instead of spinners.
+
+### PRs opened/merged
+
+**PR #100 - `feat(source-registry): add source page ledger foundation`** - opened and merged after local verification and CI.
+
+### What's left to do
+
+Apply the new Supabase migration in production before page storage and BBMP UAV review rows can persist. Next product steps are OCR extraction into page rows, citation anchors, full attached-file source seeding, and reviewed rule ETL from Volume 6 and `Master Plan.docx`.
+
+---
