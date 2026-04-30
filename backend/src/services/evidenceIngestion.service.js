@@ -146,7 +146,7 @@ const findOrCreateSource = async ({ row, fields, scores, userId }) => {
     orgId,
     row.document_id || null,
     row.source_kind || 'user_upload',
-    textOrNull(fields.issuing_authority) || textOrNull(fields.authority_name),
+    textOrNull(fields.issuing_authority) || textOrNull(fields.authority_name) || textOrNull(row.authority_name),
     sourceTitleFor(row),
     row.source_url || null,
     row.document_file_url || null,
@@ -894,6 +894,7 @@ async function ingestRegulatoryFields({
     storage_path: source.storage_path || null,
     source_url: source.source_url || null,
     source_kind: source.source_kind || 'user_upload',
+    authority_name: source.authority_name || null,
   };
 
   const orgId = row.organization_id || row.document_organization_id || null;

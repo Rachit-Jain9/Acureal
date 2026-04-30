@@ -85,6 +85,66 @@ describe('masterplan.service source intake and zone assignment', () => {
     ]));
   });
 
+  test('persists source-registry metadata for legal status and OCR readiness', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-2',
+        plan_name: 'RMP-Provisional',
+        legal_status: 'provisional',
+        source_role: 'provisional_plan',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+      }],
+    });
+
+    const result = await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/rmp-provisional.pdf',
+      originalName: 'RMP-Provisional.pdf',
+      fileType: 'application/pdf',
+      fileSize: 22222,
+      city: 'Bengaluru',
+      planName: 'RMP-Provisional',
+      planVersion: 'RMP 2031 Draft',
+      docType: 'rmp_table',
+      sourceRole: 'provisional_plan',
+      legalStatus: 'provisional',
+      authorityName: 'Bangalore Development Authority',
+      publishedOn: '2026-01-15',
+      sourceUrl: 'https://example.com/rmp-provisional',
+      pageCount: 12,
+      processingMode: 'ocr_required',
+      textCoverageRatio: 0.02,
+      sourceConfidence: 0.65,
+      registryNotes: 'Image-only provisional source; OCR pass required.',
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(result).toMatchObject({ id: 'doc-2', legal_status: 'provisional' });
+    expect(query.mock.calls[0][0]).toContain('source_role');
+    expect(query.mock.calls[0][1]).toEqual(expect.arrayContaining([
+      'provisional_plan',
+      'provisional',
+      'Bangalore Development Authority',
+      'ocr_required',
+      true,
+      0.65,
+    ]));
+  });
+
+  test('rejects invalid source-registry metadata values', async () => {
+    await expect(service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/source.pdf',
+      originalName: 'source.pdf',
+      fileType: 'application/pdf',
+      fileSize: 1,
+      docType: 'rmp_table',
+      sourceRole: 'made_up_role',
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    })).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   test('extracts a source document into pending review candidates without approving rows', async () => {
     query
       .mockResolvedValueOnce({

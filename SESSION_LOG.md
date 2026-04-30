@@ -8,20 +8,43 @@ Running history of every working session. Read this to understand what was built
 
 **What was worked on in plain English:**
 - Read the repo Markdown rulebook, TODOs, architecture notes, and session history to align on product rules and prior work.
-- Started the attached-masterplan source cleanup by separating BBMP Unit Area Value / property-tax material from true IGR guidance-value material.
+- Separated BBMP Unit Area Value / property-tax material from true IGR guidance-value material.
 - Added a new BBMP UAV source type to intake, classification, extraction prompts, and the Master Plan source-document picker.
 - Guarded ingestion so BBMP UAV/property-tax rows are kept as review evidence only and never written into the IGR guidance-value candidate table.
 
-**PRs opened/merged:** None yet. Work is on branch `codex/source-registry-provenance`.
+**PRs opened/merged:** PR #93 opened and merged.
 
 **Verification:**
-- Backend focused tests passed for extraction prompts, evidence ingestion, and masterplan intake.
-- Frontend focused test passed for the Master Plan admin source-document UI.
+- Backend full test suite passed.
+- Frontend Master Plan admin test passed.
+- Frontend production build passed.
 
 **What's left to do:**
 - Continue the source-registry pass for the attached RMP/masterplan PDFs: legal status, authority metadata, OCR coverage, and source roles.
 - Add OCR handling for image-only/provisional PDFs before trusting extracted rows.
 - Decide whether BBMP UAV needs its own structured table later; for now it is intentionally evidence-only.
+
+---
+
+## 2026-04-30 (Codex source-registry metadata)
+
+**What was worked on in plain English:**
+- Shipped the first source-registry slice as draft PR #93 with a Vercel preview: BBMP Unit Area Value / property-tax PDFs are separated from true IGR guidance-value PDFs.
+- Started the next source-registry slice on branch `codex/source-registry-metadata`.
+- Added registry metadata for uploaded masterplan/regulatory source files: source role, legal status, authority, published date, source URL, page count, OCR readiness, text coverage, source confidence, and registry notes.
+- Updated the source-document intake screen so analysts can record authority/status/OCR context before extraction.
+
+**PRs opened/merged:** PR #93 opened and merged; no PR yet for `codex/source-registry-metadata`.
+
+**Verification:**
+- Backend full test suite passed: 445 tests.
+- Frontend Master Plan admin test passed.
+- Frontend production build passed.
+
+**What's left to do:**
+- The new source-registry metadata migration was applied to Supabase production on 2026-04-30.
+- Push/open the metadata branch now that the database is ready.
+- Continue with OCR-specific handling for image-only PDFs such as provisional scans.
 
 ---
 
