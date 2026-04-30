@@ -294,6 +294,126 @@ describe('masterplan.service source intake and zone assignment', () => {
     });
   });
 
+  test('lists page-level source records for a reviewed document', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-pages',
+          plan_name: 'Volume-6 Zoning Regulations',
+          page_count: 2,
+          processing_mode: 'text_extraction',
+          ocr_required: false,
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'page-1',
+          document_id: 'doc-pages',
+          page_number: 1,
+          ocr_status: 'not_started',
+          review_status: 'pending',
+          citation_anchors: [],
+        }],
+      });
+
+    const result = await service.listSourceDocumentPages('doc-pages');
+
+    expect(result).toMatchObject({
+      schema_ready: true,
+      document: { id: 'doc-pages', page_count: 2 },
+    });
+    expect(result.pages).toHaveLength(1);
+    expect(query.mock.calls[1][0]).toContain('regulatory_data.master_plan_document_pages');
+  });
+
+  test('prepares empty page placeholders without extracting facts', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-pages',
+          plan_name: 'RMP-Provisional',
+          page_count: 3,
+          processing_mode: 'ocr_required',
+          ocr_required: true,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'page-1' }, { id: 'page-2' }, { id: 'page-3' }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-pages',
+          plan_name: 'RMP-Provisional',
+          page_count: 3,
+          processing_mode: 'ocr_required',
+          ocr_required: true,
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 'page-1', page_number: 1, ocr_status: 'queued', review_status: 'needs_ocr' },
+          { id: 'page-2', page_number: 2, ocr_status: 'queued', review_status: 'needs_ocr' },
+          { id: 'page-3', page_number: 3, ocr_status: 'queued', review_status: 'needs_ocr' },
+        ],
+      });
+
+    const result = await service.prepareSourceDocumentPages('doc-pages');
+
+    expect(result).toMatchObject({
+      schema_ready: true,
+      pages_created: 3,
+    });
+    expect(result.pages).toHaveLength(3);
+    expect(query.mock.calls[1][0]).toContain('generate_series');
+    expect(query.mock.calls[1][1]).toEqual(['doc-pages', 3, true]);
+    expect(extractionService.extractStoredFileFields).not.toHaveBeenCalled();
+  });
+
+  test('reports page-ledger migration pending when optional table is missing', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-pages',
+          plan_name: 'Index Map',
+          page_count: 1,
+          processing_mode: 'image_review',
+          ocr_required: true,
+        }],
+      })
+      .mockRejectedValueOnce({ code: '42P01', message: 'relation "regulatory_data.master_plan_document_pages" does not exist' });
+
+    const result = await service.listSourceDocumentPages('doc-pages');
+
+    expect(result).toMatchObject({
+      schema_ready: false,
+      pages: [],
+    });
+    expect(result.message).toContain('Page-level source storage is pending');
+  });
+
+  test('lists BBMP UAV review rows separately from IGR guidance', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'uav-1',
+        document_id: 'doc-uav',
+        city: 'Bengaluru',
+        uav_zone_code: 'B',
+        ward_name: 'Bellandur',
+        road_name: 'Outer Ring Road',
+        review_status: 'pending',
+      }],
+    });
+
+    const result = await service.listBbmpUavEntries({
+      documentId: 'doc-uav',
+      city: 'Bengaluru',
+      status: 'pending',
+      search: 'Bellandur',
+    });
+
+    expect(result).toMatchObject({ schema_ready: true });
+    expect(result.rows[0]).toMatchObject({ uav_zone_code: 'B' });
+    expect(query.mock.calls[0][0]).toContain('regulatory_data.bbmp_uav_entries');
+  });
+
   test('uses the same readiness block reason when extraction is disabled', async () => {
     const readiness = service.getSourceDocumentReadiness({
       processing_mode: 'manual_entry',

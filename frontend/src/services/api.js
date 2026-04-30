@@ -265,8 +265,11 @@ export const masterPlanAPI = {
   confirmDocUpload: (data)             => api.post('/master-plan/documents/confirm-upload', data),
   updateDocMetadata: (id, data)         => api.put(`/master-plan/documents/${id}/metadata`, data),
   getDocVersions: (id)                  => api.get(`/master-plan/documents/${id}/versions`),
+  getDocPages:    (id)                  => api.get(`/master-plan/documents/${id}/pages`),
+  prepareDocPages: (id, data)            => api.post(`/master-plan/documents/${id}/pages/prepare`, data),
   downloadDoc:  (id)                   => api.get(`/master-plan/documents/${id}/download`),
   extractDoc:   (id, data)             => api.post(`/master-plan/documents/${id}/extract`, data),
+  listBbmpUav:  (params)               => api.get('/master-plan/bbmp-uav', { params }),
 };
 
 // Parcel Intelligence admin / evidence operations

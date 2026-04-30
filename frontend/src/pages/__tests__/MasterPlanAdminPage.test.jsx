@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom';
 
 let docsQuery;
 let versionsQuery;
+let pagesQuery;
 let updateMetadataMock;
+let preparePagesMock;
 
 vi.mock('../../store/authStore', () => ({
   default: () => ({ user: { role: 'admin' } }),
@@ -21,6 +23,8 @@ vi.mock('../../hooks/useMasterPlan', () => ({
   useUploadMasterPlanDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useExtractMasterPlanDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateMasterPlanDocumentMetadata: () => ({ mutateAsync: updateMetadataMock, isPending: false }),
+  useMasterPlanDocumentPages: () => pagesQuery,
+  usePrepareMasterPlanDocumentPages: () => ({ mutateAsync: preparePagesMock, isPending: false }),
   useOpenMasterPlanDocument: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -57,7 +61,15 @@ describe('MasterPlanAdminPage source documents', () => {
       isError: false,
       refetch: vi.fn(),
     };
+    pagesQuery = {
+      data: { schema_ready: true, pages: [] },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
     updateMetadataMock = vi.fn().mockResolvedValue({});
+    preparePagesMock = vi.fn().mockResolvedValue({});
   });
 
   it('renders controlled source intake and empty state', async () => {
@@ -228,6 +240,103 @@ describe('MasterPlanAdminPage source documents', () => {
     expect(within(dialog).getByText('Previous OCR needed')).toBeInTheDocument();
     expect(within(dialog).getByText('Previous Text coverage')).toBeInTheDocument();
     expect(within(dialog).getByText('2%')).toBeInTheDocument();
+  });
+
+  it('shows page ledger rows for a source document', async () => {
+    const user = userEvent.setup();
+    docsQuery = {
+      data: [{
+        id: 'doc-1',
+        city: 'Bengaluru',
+        plan_name: 'RMP-Provisional',
+        plan_version: 'RMP 2031 Draft',
+        file_name: 'RMP-Provisional.pdf',
+        doc_type: 'rmp_table',
+        extraction_status: 'pending',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+        text_coverage_ratio: 0.02,
+        page_count: 2,
+      }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    pagesQuery = {
+      data: {
+        schema_ready: true,
+        pages: [{
+          id: 'page-1',
+          page_number: 1,
+          ocr_status: 'queued',
+          review_status: 'needs_ocr',
+          text_coverage_ratio: 0.02,
+          confidence_score: 0.65,
+        }, {
+          id: 'page-2',
+          page_number: 2,
+          ocr_status: 'not_started',
+          review_status: 'pending',
+        }],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    await openSourceDocuments();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /page ledger rmp-provisional/i }));
+    });
+
+    const dialog = screen.getByRole('dialog', { name: /source page ledger/i });
+    expect(within(dialog).getByText('Page 1')).toBeInTheDocument();
+    expect(within(dialog).getByText('Page 2')).toBeInTheDocument();
+    expect(within(dialog).getByText('needs ocr')).toBeInTheDocument();
+    expect(within(dialog).getByText('Text 2%')).toBeInTheDocument();
+    expect(within(dialog).getByText('Confidence 65%')).toBeInTheDocument();
+  });
+
+  it('prepares empty page rows before OCR and citation review', async () => {
+    const user = userEvent.setup();
+    docsQuery = {
+      data: [{
+        id: 'doc-1',
+        city: 'Bengaluru',
+        plan_name: 'RMP-Provisional',
+        plan_version: 'RMP 2031 Draft',
+        file_name: 'RMP-Provisional.pdf',
+        doc_type: 'rmp_table',
+        extraction_status: 'pending',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+        authority_name: 'Bangalore Development Authority',
+        processing_mode: 'ocr_required',
+        ocr_required: true,
+        text_coverage_ratio: 0.02,
+        page_count: 2,
+      }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    await openSourceDocuments();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /page ledger rmp-provisional/i }));
+    });
+
+    const dialog = screen.getByRole('dialog', { name: /source page ledger/i });
+    expect(within(dialog).getByText('No pages prepared yet.')).toBeInTheDocument();
+    await act(async () => {
+      await user.click(within(dialog).getByRole('button', { name: /prepare pages/i }));
+    });
+
+    expect(preparePagesMock).toHaveBeenCalledWith({ id: 'doc-1', pageCount: 2 });
   });
 
   it('lets reviewers mark an OCR source as text-ready', async () => {

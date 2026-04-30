@@ -86,6 +86,11 @@ const confidenceFor = (scores, key, fallback = null) => {
   return Math.max(0, Math.min(1, numeric));
 };
 
+const isMissingOptionalReviewTable = (error) => (
+  error?.code === '42P01'
+  || /regulatory_data\.bbmp_uav_entries/i.test(error?.message || '')
+);
+
 const sourceTitleFor = (row) => {
   const docType = row.doc_type || row.document_doc_type || 'regulatory_document';
   const name = row.document_name || row.document_id;
@@ -515,6 +520,149 @@ const insertIgrGuidanceCandidates = async ({ sourceId, orgId, fields, scores }) 
   return created;
 };
 
+const insertBbmpUavCandidates = async ({
+  sourceId,
+  orgId,
+  masterPlanDocumentId,
+  fields,
+  scores,
+}) => {
+  const rows = Array.isArray(fields.rows) ? fields.rows : [];
+  const codeRows = rows.length > 0
+    ? []
+    : (Array.isArray(fields.uav_zone_codes) ? fields.uav_zone_codes.map((code) => ({ zone_code: code })) : []);
+  const candidates = rows.length > 0 ? rows : codeRows;
+  if (candidates.length === 0) return 0;
+
+  let created = 0;
+  const overallScore = confidenceFor(scores, '_overall');
+
+  try {
+    for (const row of candidates) {
+      const sourcePage = pageOrNull(row.source_page) || pageOrNull(fields.source_page);
+      const candidate = {
+        city: textOrNull(row.city) || textOrNull(fields.city) || 'Bengaluru',
+        authority_name: textOrNull(fields.issuing_authority) || textOrNull(fields.authority_name) || 'Bruhat Bengaluru Mahanagara Palike',
+        assessment_year: textOrNull(row.assessment_year) || textOrNull(fields.assessment_year),
+        uav_zone_code: textOrNull(row.uav_zone_code) || textOrNull(row.zone_code),
+        uav_zone_name: textOrNull(row.uav_zone_name) || textOrNull(row.zone_name),
+        ward_number: textOrNull(row.ward_number),
+        ward_name: textOrNull(row.ward_name),
+        road_name: textOrNull(row.road_name) || textOrNull(row.street_name),
+        area_name: textOrNull(row.area_name) || textOrNull(row.area_or_locality) || textOrNull(row.locality),
+        property_use: textOrNull(row.property_use) || textOrNull(row.land_use_type),
+        unit_area_value_inr: numberOrNull(row.unit_area_value_inr || row.unit_area_value || row.value),
+        unit_label: textOrNull(row.unit_label) || textOrNull(row.unit),
+        source_page: sourcePage,
+        source_section: textOrNull(row.source_section) || textOrNull(fields.source_section),
+        confidence_score: confidenceFor({ _overall: row.confidence }, '_overall', overallScore),
+      };
+
+      if (!candidate.uav_zone_code
+        && !candidate.ward_name
+        && !candidate.road_name
+        && !candidate.area_name
+        && candidate.unit_area_value_inr === null) {
+        continue;
+      }
+
+      const duplicate = await query(
+        `SELECT id
+         FROM regulatory_data.bbmp_uav_entries
+         WHERE evidence_source_id = $1::uuid
+           AND source_page IS NOT DISTINCT FROM $2
+           AND uav_zone_code IS NOT DISTINCT FROM $3
+           AND ward_name IS NOT DISTINCT FROM $4
+           AND road_name IS NOT DISTINCT FROM $5
+           AND area_name IS NOT DISTINCT FROM $6
+         LIMIT 1`,
+        [
+          sourceId,
+          candidate.source_page,
+          candidate.uav_zone_code,
+          candidate.ward_name,
+          candidate.road_name,
+          candidate.area_name,
+        ],
+      );
+      if (duplicate.rows[0]) continue;
+
+      await query(
+        `INSERT INTO regulatory_data.bbmp_uav_entries (
+           org_id,
+           document_id,
+           evidence_source_id,
+           city,
+           authority_name,
+           assessment_year,
+           uav_zone_code,
+           uav_zone_name,
+           ward_number,
+           ward_name,
+           road_name,
+           area_name,
+           property_use,
+           unit_area_value_inr,
+           unit_label,
+           source_page,
+           source_section,
+           confidence_score,
+           review_status,
+           notes
+         )
+         VALUES (
+           COALESCE($1::uuid, current_organization_id()),
+           $2::uuid,
+           $3::uuid,
+           $4,
+           $5,
+           $6,
+           $7,
+           $8,
+           $9,
+           $10,
+           $11,
+           $12,
+           $13,
+           $14,
+           $15,
+           $16,
+           $17,
+           $18,
+           'pending',
+           'BBMP UAV property-tax classification candidate; not IGR sale guidance.'
+         )`,
+        [
+          orgId,
+          masterPlanDocumentId || null,
+          sourceId,
+          candidate.city,
+          candidate.authority_name,
+          candidate.assessment_year,
+          candidate.uav_zone_code,
+          candidate.uav_zone_name,
+          candidate.ward_number,
+          candidate.ward_name,
+          candidate.road_name,
+          candidate.area_name,
+          candidate.property_use,
+          candidate.unit_area_value_inr,
+          candidate.unit_label,
+          candidate.source_page,
+          candidate.source_section,
+          candidate.confidence_score,
+        ],
+      );
+      created += 1;
+    }
+  } catch (error) {
+    if (isMissingOptionalReviewTable(error)) return 0;
+    throw error;
+  }
+
+  return created;
+};
+
 const normalizedRulesFrom = (fields) => {
   if (Array.isArray(fields.rules)) return fields.rules;
   if (hasValue(fields.land_use_family) || hasValue(fields.base_far) || hasValue(fields.max_far)) {
@@ -895,6 +1043,7 @@ async function ingestRegulatoryFields({
     source_url: source.source_url || null,
     source_kind: source.source_kind || 'user_upload',
     authority_name: source.authority_name || null,
+    master_plan_document_id: source.master_plan_document_id || null,
   };
 
   const orgId = row.organization_id || row.document_organization_id || null;
@@ -915,6 +1064,16 @@ async function ingestRegulatoryFields({
     guidanceValuesCreated = await insertIgrGuidanceCandidates({ sourceId, orgId, fields, scores });
   }
 
+  const bbmpUavEntriesCreated = docType === 'bbmp_uav_pdf'
+    ? await insertBbmpUavCandidates({
+      sourceId,
+      orgId,
+      masterPlanDocumentId: row.master_plan_document_id,
+      fields,
+      scores,
+    })
+    : 0;
+
   const farRulesCreated = docType === 'rmp_table'
     ? await insertFarRuleCandidates({ sourceId, orgId, fields, scores })
     : 0;
@@ -934,6 +1093,7 @@ async function ingestRegulatoryFields({
     source_id: sourceId,
     evidence_facts_created: evidenceFactsCreated,
     guidance_values_created: guidanceValuesCreated,
+    bbmp_uav_entries_created: bbmpUavEntriesCreated,
     far_rules_created: farRulesCreated,
     zones_created: zonesCreated,
   };

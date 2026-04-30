@@ -25,7 +25,21 @@ Current assumption:
 - the backend Postgres role is a superuser or service-role style account that can bypass RLS for writes
 - if you use a restricted DB role, add explicit write policies before enabling production traffic
 
-### 2. Verify production AI environment variables
+### 2. Apply the source page ledger migration
+
+File:
+
+- `database/migrations/20260430_source_document_pages_and_uav.sql`
+
+Run it against the target Postgres/Supabase database before using source page review, OCR page tracking, citation anchors, or BBMP UAV review rows.
+
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260430_source_document_pages_and_uav.sql
+```
+
+Until this is applied, the app will keep loading safely and the source page modal will show that page storage is not applied yet.
+
+### 3. Verify production AI environment variables
 
 Required for current AI-backed features:
 
@@ -47,7 +61,7 @@ Also required for the investor-grade audit log:
   missing key logs a warning on `calculate_and_save` but does not block the
   calc. Suggested: `openssl rand -hex 32`.
 
-### 3. Verify document storage configuration
+### 4. Verify document storage configuration
 
 At least one of these needs to be valid in the deployed environment:
 
@@ -56,12 +70,12 @@ At least one of these needs to be valid in the deployed environment:
 
 ## High priority
 
-### 4. Confirm geocoding provider access
+### 5. Confirm geocoding provider access
 
 - `GOOGLE_MAPS_API_KEY` if Google geocoding is being used
 - otherwise keep location workflows manual / cached / low-volume
 
-### 5. Run real post-migration smoke tests
+### 6. Run real post-migration smoke tests
 
 Verify these flows against a live DB and storage setup:
 

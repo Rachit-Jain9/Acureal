@@ -186,6 +186,28 @@ router.get('/documents/:id/versions', authenticate, requireAdminOrAnalyst, async
   }
 });
 
+// GET /api/master-plan/documents/:id/pages
+router.get('/documents/:id/pages', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const data = await masterplanService.listSourceDocumentPages(req.params.id);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/master-plan/documents/:id/pages/prepare
+router.post('/documents/:id/pages/prepare', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const data = await masterplanService.prepareSourceDocumentPages(req.params.id, {
+      pageCount: req.body?.pageCount,
+    });
+    res.status(data.schema_ready ? 201 : 200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/documents/:id/download
 router.get('/documents/:id/download', authenticate, async (req, res, next) => {
   try {
@@ -204,6 +226,22 @@ router.post('/documents/:id/extract', authenticate, requireAdminOrAnalyst, async
       userId: req.user.id,
     });
     res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/master-plan/bbmp-uav
+router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const data = await masterplanService.listBbmpUavEntries({
+      documentId: req.query.documentId,
+      city: req.query.city,
+      status: req.query.status,
+      search: req.query.search,
+      limit: req.query.limit,
+    });
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }

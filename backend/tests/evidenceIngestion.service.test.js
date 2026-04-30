@@ -443,12 +443,14 @@ describe('evidenceIngestion.service', () => {
 
     expect(result.skipped).toBe(false);
     expect(result.guidance_values_created).toBe(0);
+    expect(result.bbmp_uav_entries_created).toBe(1);
     expect(result.far_rules_created).toBe(0);
     expect(result.zones_created).toBe(0);
     expect(insertedFacts).toEqual(expect.arrayContaining(['issuing_authority', 'uav_zone_codes', 'row_count']));
     expect(insertedFacts).not.toContain('rows');
     expect(insertedFacts).not.toContain('raw_text');
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.guidance_values'))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO regulatory_data.bbmp_uav_entries'))).toBe(true);
   });
 
   test('skips non-regulatory document types without writing evidence', async () => {

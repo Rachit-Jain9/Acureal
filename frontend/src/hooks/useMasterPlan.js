@@ -41,6 +41,32 @@ export function useMasterPlanDocumentVersions(id) {
   });
 }
 
+export function useMasterPlanDocumentPages(id) {
+  return useQuery({
+    queryKey: ['master-plan-doc-pages', id],
+    queryFn: () => masterPlanAPI.getDocPages(id).then((r) => r.data.data ?? { pages: [] }),
+    enabled: !!id,
+  });
+}
+
+export function usePrepareMasterPlanDocumentPages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, pageCount }) =>
+      masterPlanAPI.prepareDocPages(id, { pageCount }).then((r) => r.data.data),
+    onSuccess: (data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['master-plan-doc-pages', id] });
+      if (data?.schema_ready === false) {
+        toast.error(data.message || 'Source page storage is not ready');
+        return;
+      }
+      const created = Number(data?.pages_created || 0);
+      toast.success(created > 0 ? `${created} source page${created === 1 ? '' : 's'} prepared` : 'Source pages already prepared');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not prepare source pages'),
+  });
+}
+
 export function useUploadMasterPlanDocument() {
   const qc = useQueryClient();
   return useMutation({
