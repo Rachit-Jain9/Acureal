@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { ExternalLink, MapPin, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
 import { formatArea, formatDate } from '../../utils/format';
 import { SQFT_PER_ACRE } from '../../config/india';
@@ -293,7 +294,9 @@ function PropertyPickerModal({ dealId, onClose }) {
   );
 }
 
-export default function ParcelTab({ deal, dealId, canEdit }) {
+export default function ParcelTab({ canEdit }) {
+  const { dealId } = useDealContext();
+  const deal = useDealRecord();
   const [showPicker, setShowPicker] = useState(false);
   const hasProperty = !!deal.property_id;
   const hasLatLng = deal.lat != null && deal.lng != null;

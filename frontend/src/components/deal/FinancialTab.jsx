@@ -5,6 +5,7 @@ import { formatCrores, formatPct, formatArea } from '../../utils/format';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
 import AuditTimelineView from '../financials/AuditTimelineView';
 import { SectionHeader } from '../../design-system';
+import { useDealRecord } from '../../hooks/useDealContext';
 
 function MetricCard({ label, value, sub, highlight }) {
   return (
@@ -58,7 +59,8 @@ function formatINRPerUnit(val, unit) {
   return unit ? `${formatted}/${unit}` : formatted;
 }
 
-export default function FinancialTab({ deal }) {
+export default function FinancialTab() {
+  const deal = useDealRecord();
   const financials = deal?.financials;
   const dealId = deal?.id;
 
