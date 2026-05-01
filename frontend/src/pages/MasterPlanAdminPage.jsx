@@ -1403,7 +1403,7 @@ function DocumentsPanel({ canEdit }) {
               <label className="block text-xs font-medium text-content-secondary mb-1">Source file</label>
               <input
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.docx"
                 onChange={handleFile}
                 className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
               />
