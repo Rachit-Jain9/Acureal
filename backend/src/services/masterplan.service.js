@@ -1294,6 +1294,126 @@ async function listBbmpUavEntries({ documentId, city, status = 'pending', search
   }
 }
 
+// Synchronous part of an extraction request: validate the document, mark it
+// in_progress, return the row to the caller. The actual Gemini work is run
+// after the HTTP response is sent (see runExtractionJob).
+async function queueExtractionJob(id, { docType } = {}) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) throw createError('Masterplan source document not found.', 404);
+  if (!isExtractableSource(doc)) {
+    throw createError('Only PDF and image source documents can be extracted in this intake flow.', 400);
+  }
+  const blockReason = getExtractionBlockReason(doc);
+  if (blockReason) {
+    throw createError(blockReason, 409);
+  }
+
+  const requestedDocType = normalizeDocType(docType) || normalizeDocType(doc.doc_type);
+
+  await query(
+    `UPDATE regulatory_data.master_plan_documents
+     SET extraction_status = 'in_progress',
+         extraction_error = NULL,
+         extraction_started_at = NOW()
+     WHERE id = $1::uuid`,
+    [id],
+  );
+
+  return { document: { ...doc, extraction_status: 'in_progress' }, requestedDocType };
+}
+
+// Run the Gemini extraction + ingestion work. Always called *after* the row
+// has been transitioned to 'in_progress' by queueExtractionJob. Errors here
+// are captured into the document row, never thrown back to the caller —
+// this is fire-and-forget from the HTTP layer.
+async function runExtractionJob(id, { docType, userId } = {}) {
+  const doc = await getSourceDocumentById(id);
+  if (!doc) return;
+  try {
+    const requestedDocType = normalizeDocType(docType) || normalizeDocType(doc.doc_type);
+    const extraction = await extractionService.extractStoredFileFields({
+      fileUrl: doc.file_url || doc.storage_path,
+      fileName: doc.file_name || doc.plan_name,
+      mimeType: doc.file_type,
+      userId,
+      options: {
+        docType: requestedDocType,
+        context: {
+          city: doc.city,
+          plan_name: doc.plan_name,
+          plan_version: doc.plan_version,
+          source_role: doc.source_role,
+          legal_status: doc.legal_status,
+          authority_name: doc.authority_name,
+          processing_mode: doc.processing_mode,
+          ocr_required: doc.ocr_required,
+        },
+        attach: {
+          masterPlanDocumentId: doc.id,
+          userId: userId || null,
+        },
+      },
+    });
+
+    const ingestion = await evidenceIngestionService.ingestRegulatoryFields({
+      docType: extraction.docType,
+      fields: extraction.structuredFields || {},
+      scores: extraction.confidenceScores || {},
+      source: {
+        master_plan_document_id: doc.id,
+        org_id: doc.org_id,
+        source_kind: 'official_pdf',
+        source_url: doc.source_url,
+        authority_name: doc.authority_name,
+        source_title: doc.plan_name,
+        document_name: doc.plan_name,
+        file_name: doc.file_name,
+        file_url: doc.file_url || doc.storage_path,
+        storage_path: doc.storage_path,
+        extraction_status: extraction.structuredFields ? 'completed' : 'failed',
+      },
+      userId,
+    });
+
+    const completed = Boolean(extraction.structuredFields);
+    await query(
+      `UPDATE regulatory_data.master_plan_documents
+       SET extraction_status = $1,
+           doc_type = $2,
+           zones_extracted = $3,
+           far_rules_extracted = $4,
+           guidance_rows_extracted = $5,
+           evidence_facts_extracted = $6,
+           evidence_source_id = $7::uuid,
+           extraction_error = $8,
+           extracted_at = NOW()
+       WHERE id = $9::uuid`,
+      [
+        completed ? 'completed' : 'failed',
+        extraction.docType,
+        ingestion.skipped ? 0 : Number(ingestion.zones_created || 0),
+        ingestion.skipped ? 0 : Number(ingestion.far_rules_created || 0),
+        ingestion.skipped ? 0 : Number(ingestion.guidance_values_created || 0),
+        ingestion.skipped ? 0 : Number(ingestion.evidence_facts_created || 0),
+        ingestion.skipped ? null : ingestion.source_id,
+        extraction.parseError || (ingestion.skipped ? ingestion.reason : null),
+        id,
+      ],
+    );
+  } catch (error) {
+    await query(
+      `UPDATE regulatory_data.master_plan_documents
+       SET extraction_status = 'failed',
+           extraction_error = $1
+       WHERE id = $2::uuid`,
+      [error.message || 'Unknown extraction error', id],
+    );
+  }
+}
+
+// Legacy synchronous extraction — kept for tests and backward compat. New
+// callers should use queueExtractionJob + runExtractionJob via the route's
+// waitUntil pattern so the HTTP response returns immediately.
 async function extractSourceDocument(id, { docType, userId } = {}) {
   const doc = await getSourceDocumentById(id);
   if (!doc) throw createError('Masterplan source document not found.', 404);
@@ -1717,6 +1837,8 @@ module.exports = {
   listMasterplanCorpus,
   importZoneGeoJSON,
   extractSourceDocument,
+  queueExtractionJob,
+  runExtractionJob,
   assignReviewedZoneToProperty,
   getZoneVersions,
   listZoneGeoJSON,

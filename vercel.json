@@ -6,7 +6,7 @@
   "installCommand": "npm install --prefix backend && npm install --include=dev --prefix frontend && npm install --prefix packages/financial-kernel --include=dev && (cd packages/financial-kernel && npx tsc -p tsconfig.build.json)",
   "functions": {
     "api/index.js": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024,
       "includeFiles": "{backend,packages/financial-kernel/dist}/**"
     }

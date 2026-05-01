@@ -269,6 +269,7 @@ export const masterPlanAPI = {
   prepareDocPages: (id, data)            => api.post(`/master-plan/documents/${id}/pages/prepare`, data),
   downloadDoc:  (id)                   => api.get(`/master-plan/documents/${id}/download`),
   extractDoc:   (id, data)             => api.post(`/master-plan/documents/${id}/extract`, data),
+  extractDocsBatch: (ids)              => api.post('/master-plan/documents/extract-batch', { ids }),
   listBbmpUav:  (params)               => api.get('/master-plan/bbmp-uav', { params }),
   listCorpus:   (params)               => api.get('/master-plan/corpus', { params }),
   importZonesGeoJSON: (data)            => api.post('/master-plan/zones/import-geojson', data),
