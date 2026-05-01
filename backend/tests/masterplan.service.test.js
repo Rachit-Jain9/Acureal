@@ -254,6 +254,8 @@ describe('masterplan.service source intake and zone assignment', () => {
   });
 
   test('adds server-owned readiness metadata to listed source documents', async () => {
+    // Reaper UPDATE runs first inside listDocuments
+    query.mockResolvedValueOnce({ rows: [] });
     query.mockResolvedValueOnce({
       rows: [{
         id: 'doc-ocr',
@@ -954,7 +956,88 @@ describe('masterplan.service corpus auto-classification', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  test('listDocuments reaps stuck in_progress rows older than the timeout threshold', async () => {
+    // First call: the reaper UPDATE
+    query.mockResolvedValueOnce({ rows: [] });
+    // Second call: the SELECT for listDocuments
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await service.listDocuments({ city: 'Bengaluru' });
+
+    expect(query).toHaveBeenCalledTimes(2);
+    const reaperSql = query.mock.calls[0][0];
+    expect(reaperSql).toContain("UPDATE regulatory_data.master_plan_documents");
+    expect(reaperSql).toContain("extraction_status = 'failed'");
+    expect(reaperSql).toContain("extraction_started_at < NOW()");
+    expect(reaperSql).toContain("extraction_status = 'in_progress'");
+  });
+
+  test('listDocuments still returns rows when the reaper UPDATE fails', async () => {
+    // Reaper throws (e.g. transient DB hiccup)
+    query.mockRejectedValueOnce(new Error('transient db error'));
+    // Second call: SELECT still runs
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-1',
+        plan_name: 'RMP 2031 Volume 6 — Zoning Regulations',
+        file_name: 'Volume-6 Zoning Regulations.pdf',
+        extraction_status: 'pending',
+        source_role: 'provisional_plan',
+        legal_status: 'provisional',
+      }],
+    });
+
+    const docs = await service.listDocuments({ city: 'Bengaluru' });
+    expect(docs).toHaveLength(1);
+    expect(docs[0].id).toBe('doc-1');
+  });
+
+  test('extractSourceDocument stamps extraction_started_at when transitioning to in_progress', async () => {
+    query
+      // getSourceDocumentById
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-1',
+          file_name: 'Volume-6 Zoning Regulations.pdf',
+          file_url: 'organizations/org-1/master-plan/v6.pdf',
+          file_type: 'application/pdf',
+          plan_name: 'Volume 6',
+          processing_mode: 'text_extraction',
+          ocr_required: false,
+          extraction_status: 'pending',
+          source_role: 'provisional_plan',
+          legal_status: 'provisional',
+          authority_name: 'BDA',
+        }],
+      })
+      // UPDATE to in_progress (sets extraction_started_at)
+      .mockResolvedValueOnce({ rows: [] })
+      // UPDATE to completed
+      .mockResolvedValueOnce({
+        rows: [{ id: 'doc-1', extraction_status: 'completed' }],
+      });
+
+    extractionService.extractStoredFileFields.mockResolvedValue({
+      docType: 'rmp_table',
+      structuredFields: { zones: [] },
+      confidenceScores: {},
+    });
+    evidenceIngestionService.ingestRegulatoryFields.mockResolvedValue({
+      skipped: true,
+      reason: 'no fields',
+      source_id: null,
+    });
+
+    await service.extractSourceDocument('doc-1', { userId: 'user-1' });
+
+    const inProgressUpdate = query.mock.calls[1][0];
+    expect(inProgressUpdate).toContain("extraction_status = 'in_progress'");
+    expect(inProgressUpdate).toContain('extraction_started_at = NOW()');
+  });
+
   test('listMasterplanCorpus returns 12 entries with upload status from listDocuments', async () => {
+    // Reaper UPDATE inside listDocuments runs first
+    query.mockResolvedValueOnce({ rows: [] });
     query.mockResolvedValueOnce({
       rows: [
         {
