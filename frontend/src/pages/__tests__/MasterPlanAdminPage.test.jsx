@@ -66,6 +66,7 @@ vi.mock('../../hooks/useMasterPlan', () => ({
   useReviewZone: () => ({ mutate: vi.fn() }),
   useUploadMasterPlanDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useExtractMasterPlanDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useExtractMasterPlanDocumentsBatch: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateMasterPlanDocumentMetadata: () => ({ mutateAsync: updateMetadataMock, isPending: false }),
   useMasterPlanDocumentPages: () => pagesQuery,
   usePrepareMasterPlanDocumentPages: () => ({ mutateAsync: preparePagesMock, isPending: false }),

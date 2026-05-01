@@ -30,6 +30,14 @@ export function useMasterPlanDocuments(params = {}) {
   return useQuery({
     queryKey: ['master-plan-docs', params],
     queryFn: () => masterPlanAPI.listDocs(params).then((r) => r.data.data ?? []),
+    // Poll while any row is mid-extraction so the badge flips to completed /
+    // failed without a manual refresh. Polling stops as soon as nothing is
+    // in_progress.
+    refetchInterval: (data) => (
+      Array.isArray(data) && data.some((doc) => doc?.extraction_status === 'in_progress')
+        ? 8000
+        : false
+    ),
   });
 }
 
@@ -166,19 +174,35 @@ export function useExtractMasterPlanDocument() {
   return useMutation({
     mutationFn: ({ id, docType }) =>
       masterPlanAPI.extractDoc(id, { docType }).then((r) => r.data.data),
-    onSuccess: (data) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['master-plan-docs'] });
-      qc.invalidateQueries({ queryKey: ['master-plan-zones'] });
-      qc.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
-      qc.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
-      const queued =
-        (data?.document?.evidence_facts_extracted || 0)
-        + (data?.document?.far_rules_extracted || 0)
-        + (data?.document?.guidance_rows_extracted || 0)
-        + (data?.document?.zones_extracted || 0);
-      toast.success(queued > 0 ? `${queued} item${queued === 1 ? '' : 's'} queued for review` : 'Extraction completed');
+      qc.invalidateQueries({ queryKey: ['master-plan-corpus'] });
+      toast.success('Extraction queued — running in the background. The row updates when it finishes.');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Extraction failed'),
+  });
+}
+
+export function useExtractMasterPlanDocumentsBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids) => masterPlanAPI.extractDocsBatch(ids).then((r) => r.data.data),
+    onSuccess: (summary) => {
+      qc.invalidateQueries({ queryKey: ['master-plan-docs'] });
+      qc.invalidateQueries({ queryKey: ['master-plan-corpus'] });
+      const queued = Number(summary?.queued_count || 0);
+      const skipped = Number(summary?.skipped_count || 0);
+      if (queued > 0 && skipped === 0) {
+        toast.success(`${queued} extraction${queued === 1 ? '' : 's'} queued — running in the background.`);
+      } else if (queued > 0 && skipped > 0) {
+        toast.info(`${queued} queued · ${skipped} skipped (not extractable or blocked).`);
+      } else if (queued === 0 && skipped > 0) {
+        toast.error(`No extractable documents in selection — ${skipped} skipped.`);
+      } else {
+        toast.info('No documents selected for extraction.');
+      }
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Batch extraction failed'),
   });
 }
 

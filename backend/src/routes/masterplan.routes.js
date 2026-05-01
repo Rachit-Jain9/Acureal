@@ -6,6 +6,32 @@ const masterplanService = require('../services/masterplan.service');
 
 const router = express.Router();
 
+// Vercel serverless functions stay alive for `waitUntil`-bound work even
+// after the response is sent. Locally / outside Vercel, the import is a
+// no-op and we just let the promise run unawaited (Express won't exit
+// before the event loop drains).
+let waitUntil = null;
+try {
+  // eslint-disable-next-line global-require
+  waitUntil = require('@vercel/functions').waitUntil;
+} catch {
+  // Package not installed in this environment — fine, fall back to unawaited promise.
+}
+
+function fireAndForget(promise) {
+  if (typeof waitUntil === 'function') {
+    try {
+      waitUntil(promise);
+    } catch {
+      // waitUntil unavailable at runtime (e.g. cold-start error) — let it run unawaited.
+    }
+  }
+  promise.catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[masterplan.extract] background job error:', err);
+  });
+}
+
 // T3 — Zoning overlay GeoJSON for the deal map.
 // Returns a FeatureCollection of master_plan_zones whose `geom` is non-null,
 // optionally filtered to a bbox around a centre lat/lng for performance.
@@ -219,15 +245,67 @@ router.get('/documents/:id/download', authenticate, async (req, res, next) => {
 });
 
 // POST /api/master-plan/documents/:id/extract
+// Queues a background extraction. The HTTP response returns immediately
+// once the row has been transitioned to in_progress, so reviewers can keep
+// working while Gemini runs. The reaper handles any job that exceeds the
+// function timeout.
 router.post('/documents/:id/extract', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const data = await masterplanService.extractSourceDocument(req.params.id, {
+    const queued = await masterplanService.queueExtractionJob(req.params.id, {
+      docType: req.body?.docType,
+    });
+    fireAndForget(masterplanService.runExtractionJob(req.params.id, {
       docType: req.body?.docType,
       userId: req.user.id,
-    });
-    res.status(201).json({ success: true, data });
+    }));
+    res.status(202).json({ success: true, data: { document: queued.document, status: 'queued' } });
   } catch (err) {
     next(err);
+  }
+});
+
+// POST /api/master-plan/documents/extract-batch
+// Queues background extractions for every supplied document id. Documents
+// that aren't extractable (wrong file type, OCR-required, manual_entry) are
+// reported in the response but skipped — the call never throws because of a
+// single bad doc.
+router.post('/documents/extract-batch', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'ids must be a non-empty array' });
+    }
+    if (ids.length > 25) {
+      return res.status(400).json({ success: false, message: 'Batch limited to 25 documents per request.' });
+    }
+
+    const queued = [];
+    const skipped = [];
+    for (const id of ids) {
+      try {
+        const result = await masterplanService.queueExtractionJob(id, {});
+        fireAndForget(masterplanService.runExtractionJob(id, { userId: req.user.id }));
+        queued.push({ id, plan_name: result.document?.plan_name });
+      } catch (err) {
+        skipped.push({
+          id,
+          reason: err.message || 'Could not queue extraction',
+          status_code: err.statusCode || 500,
+        });
+      }
+    }
+
+    return res.status(202).json({
+      success: true,
+      data: {
+        queued_count: queued.length,
+        skipped_count: skipped.length,
+        queued,
+        skipped,
+      },
+    });
+  } catch (err) {
+    return next(err);
   }
 });
 

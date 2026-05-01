@@ -956,6 +956,78 @@ describe('masterplan.service corpus auto-classification', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  test('queueExtractionJob marks the row in_progress and stamps the start timestamp', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-1',
+          file_name: 'Volume-6 Zoning Regulations.pdf',
+          file_url: 'organizations/org-1/master-plan/v6.pdf',
+          file_type: 'application/pdf',
+          plan_name: 'Volume 6',
+          processing_mode: 'text_extraction',
+          ocr_required: false,
+          source_role: 'provisional_plan',
+          legal_status: 'provisional',
+          authority_name: 'BDA',
+          extraction_status: 'pending',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const queued = await service.queueExtractionJob('doc-1', { docType: 'rmp_table' });
+    expect(queued.document.extraction_status).toBe('in_progress');
+
+    const inProgressUpdate = query.mock.calls[1][0];
+    expect(inProgressUpdate).toContain("extraction_status = 'in_progress'");
+    expect(inProgressUpdate).toContain('extraction_started_at = NOW()');
+  });
+
+  test('queueExtractionJob refuses non-extractable formats early', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-docx',
+        file_name: 'Master Plan.docx',
+        plan_name: 'Master Plan',
+        file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        processing_mode: 'text_extraction',
+      }],
+    });
+
+    await expect(service.queueExtractionJob('doc-docx')).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringMatching(/PDF and image/i),
+    });
+  });
+
+  test('runExtractionJob persists failure on extractor error without throwing', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'doc-1',
+          file_name: 'Volume-6 Zoning Regulations.pdf',
+          file_url: 'organizations/org-1/master-plan/v6.pdf',
+          file_type: 'application/pdf',
+          plan_name: 'Volume 6',
+          processing_mode: 'text_extraction',
+          ocr_required: false,
+          source_role: 'provisional_plan',
+          legal_status: 'provisional',
+          authority_name: 'BDA',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    extractionService.extractStoredFileFields.mockRejectedValue(new Error('Gemini upstream 503'));
+
+    await expect(service.runExtractionJob('doc-1', { userId: 'user-1' })).resolves.toBeUndefined();
+
+    const failureUpdate = query.mock.calls[1][0];
+    const failureValues = query.mock.calls[1][1];
+    expect(failureUpdate).toContain("extraction_status = 'failed'");
+    expect(failureValues[0]).toMatch(/Gemini upstream 503/);
+  });
+
   test('listDocuments reaps stuck in_progress rows older than the timeout threshold', async () => {
     // First call: the reaper UPDATE
     query.mockResolvedValueOnce({ rows: [] });

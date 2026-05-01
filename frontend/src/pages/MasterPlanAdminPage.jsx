@@ -21,6 +21,7 @@ import {
   useReviewZone,
   useUploadMasterPlanDocument,
   useExtractMasterPlanDocument,
+  useExtractMasterPlanDocumentsBatch,
   useUpdateMasterPlanDocumentMetadata,
   useMasterPlanDocumentVersions,
   useMasterPlanDocumentPages,
@@ -1244,6 +1245,7 @@ function DocumentsPanel({ canEdit }) {
   const { data: docs = [], isLoading, isError, refetch } = useMasterPlanDocuments();
   const uploadMut = useUploadMasterPlanDocument();
   const extractMut = useExtractMasterPlanDocument();
+  const batchExtractMut = useExtractMasterPlanDocumentsBatch();
   const updateDocMut = useUpdateMasterPlanDocumentMetadata();
   const openMut = useOpenMasterPlanDocument();
   const preparePagesMut = usePrepareMasterPlanDocumentPages();
@@ -1291,6 +1293,26 @@ function DocumentsPanel({ canEdit }) {
       : docsWithReadiness.filter(({ readiness }) => readiness.key === readinessFilter)),
     [docsWithReadiness, readinessFilter],
   );
+
+  // "Extract all eligible" — every doc whose readiness allows extraction and
+  // whose status isn't already in_progress / completed. Capped at 25 by the
+  // backend so it doesn't fan out indefinitely.
+  const eligibleForBatchExtract = useMemo(
+    () => docsWithReadiness
+      .filter(({ doc, readiness }) => (
+        readiness.canExtract
+        && doc.extraction_status !== 'in_progress'
+        && doc.extraction_status !== 'completed'
+      ))
+      .map(({ doc }) => doc.id)
+      .slice(0, 25),
+    [docsWithReadiness],
+  );
+
+  const handleBatchExtract = async () => {
+    if (eligibleForBatchExtract.length === 0) return;
+    await batchExtractMut.mutateAsync(eligibleForBatchExtract);
+  };
 
   const handleFile = (event) => {
     const selected = event.target.files?.[0] || null;
@@ -1511,7 +1533,25 @@ function DocumentsPanel({ canEdit }) {
                 Text-ready sources, OCR gaps, and manual-reference documents.
               </p>
             </div>
-            <Badge tone="neutral">{docs.length} total</Badge>
+            <div className="flex items-center gap-2">
+              {canEdit && eligibleForBatchExtract.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBatchExtract}
+                  disabled={batchExtractMut.isPending}
+                  title={`Queue ${eligibleForBatchExtract.length} extraction${eligibleForBatchExtract.length === 1 ? '' : 's'} in parallel — runs in the background`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 ease-out hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-60"
+                >
+                  {batchExtractMut.isPending ? (
+                    <Loader2 size={12} className="animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    <FileSearch size={12} />
+                  )}
+                  Extract {eligibleForBatchExtract.length} eligible
+                </button>
+              )}
+              <Badge tone="neutral">{docs.length} total</Badge>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
             {READINESS_FILTERS.map((filter) => {
