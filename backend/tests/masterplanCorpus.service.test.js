@@ -70,6 +70,17 @@ describe('masterplanCorpus manifest', () => {
     expect(e3?.canonical_name).toBe('volume-6-zoning-regulations.pdf');
   });
 
+  test('Master Plan auto-classifies for both .docx source and .pdf export', () => {
+    const docxEntry = corpus.findCorpusEntry('Master Plan.docx');
+    const pdfEntry = corpus.findCorpusEntry('Master Plan.pdf');
+    const underscoredPdf = corpus.findCorpusEntry('Master_Plan.pdf');
+    expect(docxEntry?.canonical_name).toBe('master-plan.docx');
+    expect(pdfEntry?.canonical_name).toBe('master-plan.docx');
+    expect(underscoredPdf?.canonical_name).toBe('master-plan.docx');
+    expect(pdfEntry?.source_role).toBe('provisional_plan');
+    expect(pdfEntry?.processing_mode).toBe('text_extraction');
+  });
+
   test('findCorpusEntry strips path prefixes', () => {
     const entry = corpus.findCorpusEntry('/tmp/uploads/Master Plan.docx');
     expect(entry?.canonical_name).toBe('master-plan.docx');
