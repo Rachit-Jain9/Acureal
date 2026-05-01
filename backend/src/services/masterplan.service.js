@@ -8,12 +8,25 @@ const extractionService = require('./extraction.service');
 const evidenceIngestionService = require('./evidenceIngestion.service');
 const masterplanCorpus = require('./masterplanCorpus');
 
-// .docx files are accepted for upload + classification + manual review (the
-// Bengaluru RMP corpus includes Master Plan.docx and analyst remarks DOCX),
-// but they're intentionally NOT in EXTRACTABLE_EXTENSIONS because the AI
-// extraction pipeline only handles PDF / image inputs today. The extract
-// endpoint rejects DOCX explicitly via isExtractableSource().
-const ALLOWED_SOURCE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff', '.docx']);
+// Accept the common document / spreadsheet / image / GIS formats real estate
+// deal teams actually use. Extraction is still gated behind
+// EXTRACTABLE_EXTENSIONS — non-extractable formats land in storage with
+// classification metadata for manual review only. Executables, archives, and
+// scripts are intentionally excluded for safety.
+const ALLOWED_SOURCE_EXTENSIONS = new Set([
+  // Documents
+  '.pdf', '.docx', '.doc', '.rtf', '.odt', '.txt', '.md',
+  // Spreadsheets
+  '.xlsx', '.xls', '.xlsm', '.csv', '.tsv', '.ods',
+  // Presentations
+  '.pptx', '.ppt', '.odp',
+  // Images
+  '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff', '.gif', '.bmp', '.heic', '.heif',
+  // GIS / geospatial
+  '.geojson', '.kml', '.kmz', '.gpx',
+  // Structured data
+  '.json', '.xml',
+]);
 const EXTRACTABLE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
 const MAX_SOURCE_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
 const MASTERPLAN_DOC_TYPES = new Set([

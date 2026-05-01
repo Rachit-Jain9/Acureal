@@ -891,17 +891,66 @@ describe('masterplan.service corpus auto-classification', () => {
     ]));
   });
 
-  test('still rejects unsupported file types like .xlsx', async () => {
-    await expect(service.confirmSourceDocumentUpload({
+  test('accepts spreadsheet uploads (.xlsx) with no manifest match', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-xlsx', plan_name: 'rules' }] });
+
+    const result = await service.confirmSourceDocumentUpload({
       storagePath: 'organizations/org-1/deals/master-plan/spreadsheet.xlsx',
       originalName: 'rules.xlsx',
       fileType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       fileSize: 1234,
       organizationId: '11111111-1111-1111-1111-111111111111',
-    })).rejects.toMatchObject({
-      statusCode: 400,
-      message: expect.stringMatching(/not supported/i),
     });
+
+    expect(result).toMatchObject({ id: 'doc-xlsx' });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('accepts iPhone photo uploads (.heic)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-heic' }] });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/site-photo.heic',
+      originalName: 'site-photo.heic',
+      fileType: 'image/heic',
+      fileSize: 4321,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('accepts GeoJSON uploads (.geojson)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-geojson' }] });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/zones.geojson',
+      originalName: 'zones.geojson',
+      fileType: 'application/geo+json',
+      fileSize: 9999,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('still rejects executables and other unsafe types', async () => {
+    await expect(service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/malware.exe',
+      originalName: 'malware.exe',
+      fileType: 'application/x-msdownload',
+      fileSize: 1,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    })).rejects.toMatchObject({ statusCode: 400 });
+
+    await expect(service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/bundle.zip',
+      originalName: 'bundle.zip',
+      fileType: 'application/zip',
+      fileSize: 1,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    })).rejects.toMatchObject({ statusCode: 400 });
+
     expect(query).not.toHaveBeenCalled();
   });
 
