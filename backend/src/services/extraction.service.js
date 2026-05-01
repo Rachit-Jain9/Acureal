@@ -30,7 +30,20 @@ const MAX_EXTRACTION_FILE_SIZE_MB = Math.max(
   ),
 );
 const MAX_FILE_BYTES = MAX_EXTRACTION_FILE_SIZE_MB * 1024 * 1024;
-const CLAUDE_NORMALIZATION_TIMEOUT_MS = 12000;
+// Claude normalization is a quality-improvement pass over Gemini's output.
+// Tighter than the original 12s — if Claude can't normalize in 5s, the
+// Gemini output is already good enough for review, so we skip rather than
+// blocking the whole extraction. Tabular-rule documents (Volume 6 Zoning,
+// FAR tables, BBMP UAV) come back from Gemini already well-structured;
+// running them through Claude rarely changes the output but doubles the
+// latency, so we skip Claude entirely for those types.
+const CLAUDE_NORMALIZATION_TIMEOUT_MS = 5000;
+const CLAUDE_NORMALIZATION_SKIP_DOC_TYPES = new Set([
+  'rmp_table',
+  'far_table',
+  'bbmp_uav_pdf',
+  'guidance_value_report',
+]);
 let documentsDocTypeColumnAvailable = null;
 
 const KNOWN_DOC_TYPES = new Set(Object.keys(GEMINI_EXTRACTION_PROMPTS));
@@ -193,6 +206,11 @@ function pickBestStructuredFields(primaryFields, secondaryFields) {
 
 async function normalizeStructuredFieldsWithClaude({ docType, rawText, structuredFields }) {
   if (!structuredFields || !getProviderAvailability().claude) {
+    return null;
+  }
+  // Skip the Claude pass for doc types where Gemini already returns clean
+  // tabular structure. The marginal quality lift isn't worth the extra hop.
+  if (docType && CLAUDE_NORMALIZATION_SKIP_DOC_TYPES.has(docType)) {
     return null;
   }
 
