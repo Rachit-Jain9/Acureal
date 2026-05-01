@@ -1028,7 +1028,7 @@ describe('masterplan.service corpus auto-classification', () => {
     expect(failureValues[0]).toMatch(/Gemini upstream 503/);
   });
 
-  test('listDocuments reaps stuck in_progress rows older than the timeout threshold', async () => {
+  test('listDocuments reaps stuck in_progress rows (modern + legacy NULL extraction_started_at)', async () => {
     // First call: the reaper UPDATE
     query.mockResolvedValueOnce({ rows: [] });
     // Second call: the SELECT for listDocuments
@@ -1040,8 +1040,12 @@ describe('masterplan.service corpus auto-classification', () => {
     const reaperSql = query.mock.calls[0][0];
     expect(reaperSql).toContain("UPDATE regulatory_data.master_plan_documents");
     expect(reaperSql).toContain("extraction_status = 'failed'");
-    expect(reaperSql).toContain("extraction_started_at < NOW()");
     expect(reaperSql).toContain("extraction_status = 'in_progress'");
+    // Modern rows: bounded by extraction_started_at + the configurable threshold
+    expect(reaperSql).toContain("extraction_started_at < NOW()");
+    // Legacy rows: bounded by created_at when extraction_started_at is NULL
+    expect(reaperSql).toContain("extraction_started_at IS NULL");
+    expect(reaperSql).toContain("INTERVAL '5 minutes'");
   });
 
   test('listDocuments still returns rows when the reaper UPDATE fails', async () => {

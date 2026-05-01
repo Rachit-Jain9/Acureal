@@ -31,11 +31,13 @@ export function useMasterPlanDocuments(params = {}) {
     queryKey: ['master-plan-docs', params],
     queryFn: () => masterPlanAPI.listDocs(params).then((r) => r.data.data ?? []),
     // Poll while any row is mid-extraction so the badge flips to completed /
-    // failed without a manual refresh. Polling stops as soon as nothing is
-    // in_progress.
+    // failed without a manual refresh. 4-second cadence keeps the UI feeling
+    // live without overloading the listDocuments call (the reaper also runs
+    // there, so each poll doubles as a stuck-row cleanup tick). Polling
+    // stops as soon as nothing is in_progress.
     refetchInterval: (data) => (
       Array.isArray(data) && data.some((doc) => doc?.extraction_status === 'in_progress')
-        ? 8000
+        ? 4000
         : false
     ),
   });

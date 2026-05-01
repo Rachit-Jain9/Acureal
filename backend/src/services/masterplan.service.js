@@ -757,14 +757,26 @@ const EXTRACTION_STUCK_THRESHOLD_MS = 90 * 1000;
 
 async function reapStuckExtractions() {
   try {
+    // Two-clause WHERE handles both modern and legacy stuck rows:
+    //  - rows that were started after PR #112 deployed have
+    //    extraction_started_at and get reaped after the timeout.
+    //  - rows that were stuck before PR #112 deployed (extraction_started_at
+    //    is NULL because the column didn't exist) get reaped via created_at,
+    //    using a longer 5-minute floor to avoid eating freshly-created rows
+    //    that are legitimately on their first run.
     await query(
       `UPDATE regulatory_data.master_plan_documents
        SET extraction_status = 'failed',
-           extraction_error = 'Extraction timed out before completion (Vercel function killed at 60s). Retry with a smaller file or wait for async extraction to ship.'
+           extraction_error = 'Extraction timed out before completion. Click Retry to re-run with the async extractor.'
        WHERE extraction_status = 'in_progress'
-         AND extraction_started_at IS NOT NULL
-         AND extraction_started_at < NOW() - ($1::int || ' milliseconds')::interval
-         AND deleted_at IS NULL`,
+         AND deleted_at IS NULL
+         AND (
+           (extraction_started_at IS NOT NULL
+             AND extraction_started_at < NOW() - ($1::int || ' milliseconds')::interval)
+           OR
+           (extraction_started_at IS NULL
+             AND created_at < NOW() - INTERVAL '5 minutes')
+         )`,
       [EXTRACTION_STUCK_THRESHOLD_MS],
     );
   } catch {
