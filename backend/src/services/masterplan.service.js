@@ -744,7 +744,38 @@ async function reviewZone(id, { status, userId, changeReason }) {
   return getZoneById(result.rows[0].id);
 }
 
+// Vercel serverless functions are capped at 60s (Pro plan max). When a
+// Gemini extraction takes longer, the function gets killed before it can
+// run its catch block, so the row is left at 'in_progress' forever and
+// the admin UI shows a stuck "Extracting..." spinner.
+//
+// This reaper flips any in_progress row older than EXTRACTION_TIMEOUT_MS
+// to 'failed' with a clear error message so the reviewer can retry. It
+// runs at the start of every listDocuments() call — cheap, idempotent,
+// no separate cron needed.
+const EXTRACTION_STUCK_THRESHOLD_MS = 90 * 1000;
+
+async function reapStuckExtractions() {
+  try {
+    await query(
+      `UPDATE regulatory_data.master_plan_documents
+       SET extraction_status = 'failed',
+           extraction_error = 'Extraction timed out before completion (Vercel function killed at 60s). Retry with a smaller file or wait for async extraction to ship.'
+       WHERE extraction_status = 'in_progress'
+         AND extraction_started_at IS NOT NULL
+         AND extraction_started_at < NOW() - ($1::int || ' milliseconds')::interval
+         AND deleted_at IS NULL`,
+      [EXTRACTION_STUCK_THRESHOLD_MS],
+    );
+  } catch {
+    // Reaper failures are intentionally swallowed — the read path should
+    // not break if the cleanup write fails. The next call retries.
+  }
+}
+
 async function listDocuments({ city } = {}) {
+  await reapStuckExtractions();
+
   const conditions = ['deleted_at IS NULL'];
   const values = [];
   let idx = 1;
@@ -1277,7 +1308,8 @@ async function extractSourceDocument(id, { docType, userId } = {}) {
   await query(
     `UPDATE regulatory_data.master_plan_documents
      SET extraction_status = 'in_progress',
-         extraction_error = NULL
+         extraction_error = NULL,
+         extraction_started_at = NOW()
      WHERE id = $1::uuid`,
     [id],
   );
