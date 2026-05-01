@@ -844,6 +844,67 @@ describe('masterplan.service corpus auto-classification', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  test('accepts .docx uploads and applies the corpus manifest defaults for Master Plan.docx', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ id: 'doc-mp-docx', plan_name: 'RMP 2031 Master Plan Document (Word draft)', doc_type: 'rmp_table' }],
+    });
+
+    const result = await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/master-plan.docx',
+      originalName: 'Master Plan.docx',
+      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileSize: 75000,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(result).toMatchObject({ id: 'doc-mp-docx' });
+    const args = query.mock.calls[0][1];
+    expect(args).toEqual(expect.arrayContaining([
+      'rmp_table',
+      'provisional_plan',
+      'provisional',
+      'Bangalore Development Authority',
+      'text_extraction',
+    ]));
+  });
+
+  test('accepts .docx uploads and applies manual_entry classification for analyst notes', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ id: 'doc-grok-docx', plan_name: 'Guidance Value Remarks (analyst notes)', doc_type: 'guidance_value_report' }],
+    });
+
+    await service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/grok-remarks.docx',
+      originalName: 'GROK Guidance Value Remarks.docx',
+      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileSize: 30000,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    const args = query.mock.calls[0][1];
+    expect(args).toEqual(expect.arrayContaining([
+      'guidance_value_report',
+      'derived_notes',
+      'user_supplied',
+      'Internal analyst',
+      'manual_entry',
+    ]));
+  });
+
+  test('still rejects unsupported file types like .xlsx', async () => {
+    await expect(service.confirmSourceDocumentUpload({
+      storagePath: 'organizations/org-1/deals/master-plan/spreadsheet.xlsx',
+      originalName: 'rules.xlsx',
+      fileType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileSize: 1234,
+      organizationId: '11111111-1111-1111-1111-111111111111',
+    })).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringMatching(/not supported/i),
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
   test('listMasterplanCorpus returns 12 entries with upload status from listDocuments', async () => {
     query.mockResolvedValueOnce({
       rows: [
