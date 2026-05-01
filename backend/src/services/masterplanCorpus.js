@@ -39,8 +39,14 @@ const MANIFEST = Object.freeze([
   },
   {
     canonical_name: 'master-plan.docx',
-    aliases: ['master plan.docx', 'master_plan.docx'],
-    plan_name: 'RMP 2031 Master Plan Document (Word draft)',
+    aliases: [
+      'master plan.docx',
+      'master_plan.docx',
+      'master plan.pdf',
+      'master_plan.pdf',
+      'master-plan.pdf',
+    ],
+    plan_name: 'RMP 2031 Master Plan Document',
     plan_version: RMP_2031_PLAN_VERSION,
     doc_type: 'rmp_table',
     source_role: 'provisional_plan',
@@ -49,7 +55,7 @@ const MANIFEST = Object.freeze([
     processing_mode: 'text_extraction',
     ocr_required: false,
     source_confidence: 0.8,
-    registry_notes: 'Draft RMP narrative. Cross-reference with Volume 6 before promoting any rule to a deal record.',
+    registry_notes: 'Draft RMP narrative (Word source — also accepted as PDF). Cross-reference with Volume 6 before promoting any rule to a deal record.',
   },
   {
     canonical_name: 'rmp-provisional.pdf',
