@@ -8,7 +8,12 @@ const extractionService = require('./extraction.service');
 const evidenceIngestionService = require('./evidenceIngestion.service');
 const masterplanCorpus = require('./masterplanCorpus');
 
-const ALLOWED_SOURCE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
+// .docx files are accepted for upload + classification + manual review (the
+// Bengaluru RMP corpus includes Master Plan.docx and analyst remarks DOCX),
+// but they're intentionally NOT in EXTRACTABLE_EXTENSIONS because the AI
+// extraction pipeline only handles PDF / image inputs today. The extract
+// endpoint rejects DOCX explicitly via isExtractableSource().
+const ALLOWED_SOURCE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff', '.docx']);
 const EXTRACTABLE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
 const MAX_SOURCE_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
 const MASTERPLAN_DOC_TYPES = new Set([
