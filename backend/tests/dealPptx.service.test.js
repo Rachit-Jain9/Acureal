@@ -350,4 +350,73 @@ describe('dealPptx.service', () => {
     expect(context.askPrice).toBeNull();
     expect(context.commercialMarker).toBeNull();
   });
+
+  test('inserts a Planning Context slide when planning callouts are present', () => {
+    const exportContext = {
+      ...createExportContext(),
+      planning: {
+        callouts: [
+          { type: 'sdz', key: 'special_development_zones', value: { count: 5, max_far: 3.5, locations: ['Bellary Road', 'Old Madras Road'] } },
+          { type: 'environmental', key: 'ngt_drainage_classification', value: { buffer_m_primary: 50, buffer_m_secondary: 35, buffer_m_tertiary: 25, source: 'NGT' } },
+          { type: 'heritage', key: 'heritage_zones', value: { count: 12, prohibited_radius_m: 100, regulated_radius_m: 200 } },
+          { type: 'road_network', key: 'peripheral_ring_road', value: { width_m: 100, type: 'PRR', note: '100m corridor' } },
+        ],
+        zone: null,
+        city: 'Bengaluru',
+      },
+    };
+    const context = __testables.buildDeckContext(exportContext, {
+      brandName: 'REDIP',
+      generatedAt: '2026-04-15T10:00:00Z',
+    });
+
+    expect(context.hasPlanningContext).toBe(true);
+    expect(context.planningRows).toHaveLength(4);
+    const rowLabels = context.planningRows.map((r) => r.label);
+    expect(rowLabels).toEqual([
+      'Special Development Zones',
+      'NGT drain buffers',
+      'Heritage zones',
+      'Peripheral Ring Road',
+    ]);
+
+    // Slide manifest should include the new slide between location and asset.
+    const slideTitles = context.slideManifest.map((s) => s.title);
+    expect(slideTitles).toContain('Planning Context — RMP 2031');
+    const planningIdx = slideTitles.indexOf('Planning Context — RMP 2031');
+    const locationIdx = slideTitles.indexOf('Location & Site Context');
+    const assetIdx = slideTitles.indexOf('About the Asset');
+    expect(planningIdx).toBeGreaterThan(locationIdx);
+    expect(planningIdx).toBeLessThan(assetIdx);
+  });
+
+  test('omits the Planning Context slide when no callouts are present', () => {
+    const exportContext = {
+      ...createExportContext(),
+      planning: { callouts: [], zone: null, city: 'Bengaluru' },
+    };
+    const context = __testables.buildDeckContext(exportContext, {
+      brandName: 'REDIP',
+      generatedAt: '2026-04-15T10:00:00Z',
+    });
+
+    expect(context.hasPlanningContext).toBe(false);
+    const slideTitles = context.slideManifest.map((s) => s.title);
+    expect(slideTitles).not.toContain('Planning Context — RMP 2031');
+  });
+
+  test('renders a defensive Planning Context slide when context is entirely missing', () => {
+    // No `planning` key at all on the exportContext — the deck must not blow up.
+    const exportContext = createExportContext();
+    delete exportContext.planning;
+    const context = __testables.buildDeckContext(exportContext, {
+      brandName: 'REDIP',
+      generatedAt: '2026-04-15T10:00:00Z',
+    });
+
+    expect(context.planningRows).toEqual([]);
+    expect(context.hasPlanningContext).toBe(false);
+    const slideTitles = context.slideManifest.map((s) => s.title);
+    expect(slideTitles).not.toContain('Planning Context — RMP 2031');
+  });
 });

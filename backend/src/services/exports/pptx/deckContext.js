@@ -58,6 +58,8 @@ const {
   buildTransactionRows,
   buildRiskRows,
   buildNextStepGroups,
+  buildPlanningRows,
+  buildPlanningCommentary,
 } = require('./contentBuilders');
 
 const buildSlideManifest = (context) => {
@@ -77,6 +79,13 @@ const buildSlideManifest = (context) => {
     { key: 'dividerMarket', title: 'Market / Micro-Market' },
     { key: 'marketPositioning', title: context.cityBenchmarks.length ? 'City Benchmarking' : 'Market Positioning' },
     { key: 'locationContext', title: 'Location & Site Context' },
+  );
+
+  if (context.hasPlanningContext) {
+    slides.push({ key: 'planningContext', title: 'Planning Context — RMP 2031' });
+  }
+
+  slides.push(
     { key: 'dividerAsset', title: 'About the Asset' },
     { key: 'assetSnapshot', title: 'Asset Snapshot' },
   );
@@ -271,6 +280,10 @@ const buildDeckContext = (exportContext, options = {}) => {
   context.transactionRows = buildTransactionRows(context, exportContext);
   context.transactionCommentary = buildTransactionCommentary(context);
   context.nextStepGroups = buildNextStepGroups(exportContext);
+  context.planningRows = buildPlanningRows(exportContext);
+  context.planningCommentary = buildPlanningCommentary(exportContext);
+  context.hasPlanningContext = (Array.isArray(context.planningRows) && context.planningRows.length > 0)
+    || Boolean(exportContext?.planning?.zone);
   context.slideManifest = buildSlideManifest(context);
 
   return context;

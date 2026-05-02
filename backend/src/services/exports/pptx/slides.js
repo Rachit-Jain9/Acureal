@@ -899,6 +899,77 @@ const renderDisclaimer = (pptx, slide, context, pageNumber, totalSlides) => {
 };
 
 
+// Planning Context slide — surfaces RMP 2031 city-level callouts (SDZ
+// corridors, NGT drain buffers, heritage zones, Peripheral Ring Road)
+// inside the IC deck so reviewers see the planning constraints without
+// having to flip to the admin terminal. Layout:
+//   - Top half: 2-column commentary card (narrative bullets)
+//   - Bottom half: 4-up callout grid, one tile per RMP fact category
+const renderPlanningContext = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(
+    pptx, slide, context,
+    'Planning Context — RMP 2031',
+    pageNumber, totalSlides,
+    `${context.deal.city || 'Bengaluru'} | verified land-use facts`,
+  );
+
+  // Commentary card (top, full width)
+  addCard(pptx, slide, { x: 0.55, y: 1.25, w: 12.23, h: 1.8, bandColor: COLORS.plum, fill: COLORS.mist });
+  slide.addText('Why this matters', {
+    x: 0.85, y: 1.45, w: 5, h: 0.22,
+    fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
+  });
+  const commentary = Array.isArray(context.planningCommentary) ? context.planningCommentary : [];
+  commentary.slice(0, 3).forEach((line, idx) => {
+    slide.addText(line, {
+      x: 0.85, y: 1.78 + idx * 0.36, w: 11.6, h: 0.32,
+      fontFace: FONT, fontSize: 9.5, color: COLORS.charcoal, fit: 'shrink',
+    });
+  });
+
+  // Callout grid (bottom, 4 columns × 1 row)
+  const rows = Array.isArray(context.planningRows) ? context.planningRows : [];
+  if (rows.length === 0) {
+    addCard(pptx, slide, { x: 0.55, y: 3.25, w: 12.23, h: 3.4, bandColor: COLORS.sandDeep, fill: COLORS.white });
+    slide.addText('No verified RMP 2031 callouts ingested yet.', {
+      x: 0.85, y: 3.55, w: 11.6, h: 0.3,
+      fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
+    });
+    slide.addText('Once the Existing Land Use 2015 + Proposed Land Use 2031 maps and Volume 4 PDR have been ingested, this slide auto-populates with SDZ corridors, NGT drain buffers, heritage radii, and the Peripheral Ring Road alignment — every one page-cited and reviewer-approved.', {
+      x: 0.85, y: 3.95, w: 11.6, h: 1.5,
+      fontFace: FONT, fontSize: 10, color: COLORS.muted, fit: 'shrink',
+    });
+    return;
+  }
+
+  const cardWidth = 2.95;
+  const cardGap = 0.13;
+  rows.slice(0, 4).forEach((row, idx) => {
+    const x = 0.55 + idx * (cardWidth + cardGap);
+    const y = 3.25;
+    addCard(pptx, slide, {
+      x, y, w: cardWidth, h: 3.4,
+      bandColor: idx % 2 === 0 ? COLORS.plum : COLORS.sandDeep,
+      fill: idx % 2 === 0 ? COLORS.white : COLORS.mist,
+    });
+    slide.addText(row.label, {
+      x: x + 0.22, y: y + 0.25, w: cardWidth - 0.4, h: 0.22,
+      fontFace: FONT, fontSize: 10, bold: true, color: COLORS.muted,
+    });
+    slide.addText(row.value, {
+      x: x + 0.22, y: y + 0.6, w: cardWidth - 0.4, h: 1.4,
+      fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+    });
+    if (row.hint) {
+      slide.addText(row.hint, {
+        x: x + 0.22, y: y + 2.2, w: cardWidth - 0.4, h: 1.0,
+        fontFace: FONT, fontSize: 8.5, color: COLORS.muted, valign: 'top', fit: 'shrink',
+      });
+    }
+  });
+};
+
+
 module.exports = {
   renderCover,
   renderContents,
@@ -907,6 +978,7 @@ module.exports = {
   renderStructure,
   renderMarketPositioning,
   renderLocationContext,
+  renderPlanningContext,
   renderAssetSnapshot,
   renderReadiness,
   renderFinancialOverview,

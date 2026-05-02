@@ -37,6 +37,7 @@ const {
   renderStructure,
   renderMarketPositioning,
   renderLocationContext,
+  renderPlanningContext,
   renderAssetSnapshot,
   renderReadiness,
   renderFinancialOverview,
@@ -62,6 +63,7 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
     case 'dividerMarket': addSectionDivider(pptx, slide, context, 'Market / Micro-Market', `${context.deal.city || 'City'} | verified market context`, pageNumber, totalSlides); return;
     case 'marketPositioning': renderMarketPositioning(pptx, slide, context, pageNumber, totalSlides); return;
     case 'locationContext': renderLocationContext(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'planningContext': renderPlanningContext(pptx, slide, context, pageNumber, totalSlides); return;
     case 'dividerAsset': addSectionDivider(pptx, slide, context, 'About the Asset', `${context.assetClassLabel} | site, title, and delivery context`, pageNumber, totalSlides); return;
     case 'assetSnapshot': renderAssetSnapshot(pptx, slide, context, pageNumber, totalSlides); return;
     case 'readiness': renderReadiness(pptx, slide, context, pageNumber, totalSlides); return;
