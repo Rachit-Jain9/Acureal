@@ -1141,3 +1141,209 @@ describe('masterplan.service corpus auto-classification', () => {
     expect(guidance.doc_type).toBe('bbmp_uav_pdf');
   });
 });
+
+describe('masterplan.service district intelligence helpers', () => {
+  describe('normalizePdCode', () => {
+    test('returns null for empty input', () => {
+      expect(service.normalizePdCode(null)).toBeNull();
+      expect(service.normalizePdCode('')).toBeNull();
+      expect(service.normalizePdCode('  ')).toBeNull();
+    });
+
+    test('zero-pads single-digit codes from various spellings', () => {
+      expect(service.normalizePdCode('PD 1')).toBe('PD-01');
+      expect(service.normalizePdCode('PD-1')).toBe('PD-01');
+      expect(service.normalizePdCode('PD1')).toBe('PD-01');
+      expect(service.normalizePdCode('pd 9')).toBe('PD-09');
+    });
+
+    test('preserves two-digit codes', () => {
+      expect(service.normalizePdCode('PD 02')).toBe('PD-02');
+      expect(service.normalizePdCode('PD-42')).toBe('PD-42');
+      expect(service.normalizePdCode('PD42')).toBe('PD-42');
+    });
+
+    test('returns null for non-PD strings', () => {
+      expect(service.normalizePdCode('District 1')).toBeNull();
+      expect(service.normalizePdCode('XYZ-01')).toBeNull();
+    });
+  });
+
+  describe('parseDistrictNotes', () => {
+    test('returns all-null for empty input', () => {
+      const out = service.parseDistrictNotes(null);
+      expect(out).toEqual({ population: null, area_ha: null, density: null, wards: null, villages: null });
+    });
+
+    test('parses Indian-format population with comma-lakh grouping', () => {
+      // PD 1 (Central Business District) — base case
+      const notes = 'Population (2011 Census): 5,93,883; Area of PD: 2774.3 ha; Wards in PD: 19; Gross Density: 214PPH';
+      const out = service.parseDistrictNotes(notes);
+      expect(out.population).toBe(593883);
+      expect(out.area_ha).toBeCloseTo(2774.3, 1);
+      expect(out.density).toBe(214);
+      expect(out.wards).toBe(19);
+      expect(out.villages).toBeNull();
+    });
+
+    test('parses density with parenthetical year and lowercase pph', () => {
+      // PD 5 — "Gross Density (2011 Census): 436 pph" pattern
+      const notes = 'Population (2011 Census): 7,87,560; Area of PD: 18.06 sq.km (1806.63 ha); Wards in PD: 23; Gross Density (2011 Census): 436 pph';
+      const out = service.parseDistrictNotes(notes);
+      expect(out.population).toBe(787560);
+      expect(out.area_ha).toBeCloseTo(1806.63, 2);
+      expect(out.density).toBe(436);
+      expect(out.wards).toBe(23);
+    });
+
+    test('handles equals-sign separator on density (PD 24)', () => {
+      const notes = 'Population (2011 Census): 55,838; Area of PD: 2870.19 ha; Wards in PD: 1; Villages in PD: 1; Gross Density= 20PPH';
+      const out = service.parseDistrictNotes(notes);
+      expect(out.density).toBe(20);
+      expect(out.wards).toBe(1);
+      expect(out.villages).toBe(1);
+    });
+
+    test('parses Gramathanas / Gramthana spelling variants', () => {
+      const a = service.parseDistrictNotes('Population: 28,594; Area of PD: 3132.2 ha; Gramathanas in PD: 12; Gross Density: 06 pph');
+      expect(a.villages).toBe(12);
+
+      const b = service.parseDistrictNotes('Population: 23,314; Area of PD: 3216.94 ha; Gramthana in PD: 13; Gross Density: 07 pph');
+      expect(b.villages).toBe(13);
+    });
+
+    test('parses unprefixed population without commas', () => {
+      // PD 6 — "Population (2011 Census): 621302" (no Indian comma grouping)
+      const notes = 'Population (2011 Census): 621302; Area of PD: 2774.3 ha; Wards in PD: 16; Gross Density (2015): 223PPH';
+      const out = service.parseDistrictNotes(notes);
+      expect(out.population).toBe(621302);
+      expect(out.density).toBe(223);
+    });
+
+    test('falls back to sqkm when no Ha listed', () => {
+      const notes = 'Population: 1000; Area of PD: 5.5 sq.km; Wards in PD: 1; Gross Density: 50PPH';
+      const out = service.parseDistrictNotes(notes);
+      expect(out.area_ha).toBe(550);
+    });
+
+    test('parses "Number of Villages" alternate label', () => {
+      const out = service.parseDistrictNotes('Population (2011 Census): 12925; Area of PD: 1876.43 ha; Number of Villages: 04; Gross Density: 07 PPH');
+      expect(out.villages).toBe(4);
+    });
+  });
+
+  describe('getDistrictIntelligence', () => {
+    test('joins planning_districts with PDR demographics and returns summary + callouts', async () => {
+      // 1st query: planning_districts seed (3 sample PDs)
+      query.mockResolvedValueOnce({
+        rows: [
+          { id: 'd1', pd_code: 'PD-01', pd_name: 'CENTRAL BUSINESS DISTRICT', city: 'Bengaluru' },
+          { id: 'd2', pd_code: 'PD-23', pd_name: 'CHEEMASANDRA SPECIAL DEVELOPMENT ZONE', city: 'Bengaluru' },
+          { id: 'd3', pd_code: 'PD-99', pd_name: 'UNMAPPED DISTRICT', city: 'Bengaluru' },
+        ],
+      });
+      // 2nd query: evidence_facts — rich PD list + SDZ + heritage + landmarks
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            fact_type: 'rmp_table',
+            fact_key: 'planning_districts',
+            fact_value: [
+              {
+                pd_code: 'PD 1',
+                pd_name: 'CENTRAL BUSINESS DISTRICT',
+                source_page: 23,
+                source_section: '2.PD 1: CENTRAL BUSINESS DISTRICT',
+                notes: 'Population (2011 Census): 5,93,883; Area of PD: 2774.3 ha; Wards in PD: 19; Gross Density: 214PPH',
+              },
+              {
+                pd_code: 'PD 23',
+                pd_name: 'CHEEMASANDRA SPECIAL DEVELOPMENT ZONE',
+                source_page: 225,
+                notes: 'Population (2011 Census): 39,377; Area of PD: 2729.41 ha; Villages in PD: 17; Gross Density: 14.4 pph',
+              },
+            ],
+          },
+          {
+            fact_type: 'sdz',
+            fact_key: 'special_development_zones',
+            fact_value: { count: 5, max_far: 3.25, locations: ['Cheemasandra', 'Halanayakanahalli'] },
+          },
+          {
+            fact_type: 'heritage',
+            fact_key: 'heritage_zones',
+            fact_value: { count: 7, prohibited_radius_m: 100, regulated_radius_m: 200 },
+          },
+          {
+            fact_type: 'landmark',
+            fact_key: 'major_landmarks_in_bma',
+            fact_value: [{ name: 'Bangalore Palace' }, { name: 'Lalbagh' }],
+          },
+        ],
+      });
+
+      const result = await service.getDistrictIntelligence();
+
+      expect(result.districts).toHaveLength(3);
+
+      // PD-01 enriched from PDR notes
+      const pd1 = result.districts.find((d) => d.pd_code === 'PD-01');
+      expect(pd1.population_2011).toBe(593883);
+      expect(pd1.area_ha).toBeCloseTo(2774.3, 1);
+      expect(pd1.gross_density_pph).toBe(214);
+      expect(pd1.ward_count).toBe(19);
+      expect(pd1.is_sdz).toBe(false);
+      expect(pd1.source_page).toBe(23);
+
+      // PD-23 is an SDZ by name
+      const pd23 = result.districts.find((d) => d.pd_code === 'PD-23');
+      expect(pd23.is_sdz).toBe(true);
+      expect(pd23.village_count).toBe(17);
+
+      // PD-99 has no matching fact entry — joined as null
+      const pd99 = result.districts.find((d) => d.pd_code === 'PD-99');
+      expect(pd99.population_2011).toBeNull();
+      expect(pd99.source_page).toBeNull();
+
+      // Summary aggregates
+      expect(result.summary.district_count).toBe(3);
+      expect(result.summary.sdz_count).toBe(1);
+      expect(result.summary.total_population_2011).toBe(593883 + 39377);
+
+      // Callouts wired through
+      expect(result.callouts.sdz).toEqual({ count: 5, max_far: 3.25, locations: ['Cheemasandra', 'Halanayakanahalli'] });
+      expect(result.callouts.heritage).toMatchObject({ count: 7 });
+      expect(result.callouts.landmarks).toHaveLength(2);
+
+      expect(result.disclaimer).toMatch(/AI-extracted/i);
+    });
+
+    test('prefers the rich PD fact when both routing and rich rows exist', async () => {
+      // Both a routing-key list (no notes) and a rich list (with notes) — service must pick the rich one.
+      query.mockResolvedValueOnce({ rows: [{ id: 'd1', pd_code: 'PD-01', pd_name: 'CBD', city: 'Bengaluru' }] });
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            fact_type: 'rmp_table',
+            fact_key: 'planning_districts',
+            fact_value: [{ pd_code: 'PD 1', pd_name: 'CBD' }], // routing-only, no notes
+          },
+          {
+            fact_type: 'rmp_table',
+            fact_key: 'planning_districts',
+            fact_value: [{
+              pd_code: 'PD 1',
+              pd_name: 'CBD',
+              source_page: 23,
+              notes: 'Population (2011 Census): 5,93,883; Area of PD: 2774.3 ha; Wards in PD: 19; Gross Density: 214PPH',
+            }],
+          },
+        ],
+      });
+
+      const result = await service.getDistrictIntelligence();
+      expect(result.districts[0].population_2011).toBe(593883);
+      expect(result.districts[0].source_page).toBe(23);
+    });
+  });
+});

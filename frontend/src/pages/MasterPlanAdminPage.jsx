@@ -15,6 +15,7 @@ import MasterPlanBbmpUavPanel from '../components/masterplan/MasterPlanBbmpUavPa
 import ZoneGeoJsonImportButton from '../components/masterplan/ZoneGeoJsonImportButton';
 import DecisionStrip from '../components/masterplan/DecisionStrip';
 import LandUseInsightPanel from '../components/masterplan/LandUseInsightPanel';
+import DistrictIntelligencePanel from '../components/masterplan/DistrictIntelligencePanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1809,6 +1810,9 @@ function PlanningIntelligencePanel() {
       <DecisionStrip />
       <div className="border-t border-hairline pt-8">
         <LandUseInsightPanel />
+      </div>
+      <div className="border-t border-hairline pt-8">
+        <DistrictIntelligencePanel />
       </div>
     </div>
   );

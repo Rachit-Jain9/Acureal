@@ -335,6 +335,19 @@ router.get('/intelligence/land-use', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /api/master-plan/intelligence/districts
+// Returns 42 Bengaluru Planning Districts enriched with per-district
+// demographics from Volume 4 PDR + city-wide callouts (SDZs, heritage
+// zones, NGT buffers, landmarks).
+router.get('/intelligence/districts', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getDistrictIntelligence();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
