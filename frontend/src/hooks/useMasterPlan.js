@@ -82,6 +82,14 @@ export function useReviewQueue() {
   });
 }
 
+export function useUavBenchmark(params = {}) {
+  return useQuery({
+    queryKey: ['master-plan-uav-benchmark', params],
+    queryFn: () => masterPlanAPI.uavBenchmark(params).then((r) => r.data.data ?? { zones: [], uses: [], matrix: [], summary: {}, ratios: {}, unit_label: '', city: '', disclaimer: '' }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],

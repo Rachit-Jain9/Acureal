@@ -1857,6 +1857,102 @@ function parseDistrictNotes(notes) {
 // Land-use intelligence — pulls the existing/proposed BMA land-use breakdown
 // facts seeded from the Existing Land Use 2015 + Proposed Land Use 2031
 // maps. Returns paired rows so the UI can render the 2015 → 2031 shift.
+// UAV Benchmark — pivots BBMP UAV rate-card rows into a comparison matrix
+// where each (zone, property_use) cell is the prevailing INR/sqft/month
+// rate. Adds a "ratio vs Zone A" column so deal teams can see how rates
+// step down from CBD outward — the input that lets them benchmark a
+// transaction price against the property-tax authority's own rate card.
+async function getUavBenchmark({ city = 'Bengaluru' } = {}) {
+  const result = await query(
+    `SELECT
+       uav_zone_code,
+       uav_zone_name,
+       property_use,
+       unit_area_value_inr,
+       unit_label,
+       source_page,
+       source_section,
+       confidence_score,
+       review_status
+     FROM regulatory_data.bbmp_uav_entries
+     WHERE city = $1
+     ORDER BY uav_zone_code, property_use`,
+    [city],
+  );
+  const rows = result.rows;
+
+  if (!rows.length) {
+    return {
+      zones: [],
+      uses: [],
+      matrix: [],
+      summary: { zone_count: 0, use_count: 0, row_count: 0, source_pages: [] },
+      ratios: {},
+      unit_label: 'INR per sqft per month',
+      city,
+      disclaimer: 'BBMP UAV rate card has not been ingested for this city yet.',
+    };
+  }
+
+  const zoneCodes = [...new Set(rows.map((r) => r.uav_zone_code).filter(Boolean))].sort();
+  const useNames = [...new Set(rows.map((r) => r.property_use).filter(Boolean))].sort();
+
+  // (zone, use) → rate lookup
+  const rateMap = new Map();
+  const sourcePages = new Set();
+  for (const r of rows) {
+    if (r.uav_zone_code && r.property_use) {
+      rateMap.set(`${r.uav_zone_code}|${r.property_use}`, Number(r.unit_area_value_inr));
+    }
+    if (r.source_page != null) sourcePages.add(Number(r.source_page));
+  }
+
+  // Pivot into use-rows × zone-columns
+  const matrix = useNames.map((use) => {
+    const cells = zoneCodes.map((z) => ({ zone: z, rate: rateMap.get(`${z}|${use}`) ?? null }));
+    return { use, cells };
+  });
+
+  // "Ratio vs Zone A" — a quick read on how steeply each outer zone discounts
+  // CBD pricing. Ratios are averaged across uses where both Zone A and the
+  // target zone have a rate, so a single missing cell can't skew the average.
+  const baseZone = zoneCodes[0]; // Zone A is the canonical CBD anchor
+  const ratios = {};
+  for (const z of zoneCodes) {
+    if (z === baseZone) {
+      ratios[z] = 1;
+      continue;
+    }
+    const ratiosForZone = useNames
+      .map((use) => {
+        const base = rateMap.get(`${baseZone}|${use}`);
+        const target = rateMap.get(`${z}|${use}`);
+        if (!Number.isFinite(base) || base === 0 || !Number.isFinite(target)) return null;
+        return target / base;
+      })
+      .filter((v) => v !== null);
+    ratios[z] = ratiosForZone.length
+      ? Number((ratiosForZone.reduce((a, b) => a + b, 0) / ratiosForZone.length).toFixed(3))
+      : null;
+  }
+
+  return {
+    zones: zoneCodes,
+    uses: useNames,
+    matrix,
+    ratios,
+    unit_label: rows[0]?.unit_label || 'INR per sqft per month',
+    city,
+    summary: {
+      zone_count: zoneCodes.length,
+      use_count: useNames.length,
+      row_count: rows.length,
+      source_pages: [...sourcePages].sort((a, b) => a - b),
+    },
+    disclaimer: 'BBMP property-tax UAV rates only — these are NOT IGR sale-deed guidance values. Use as a relative benchmark for property-tax-zone pricing tiers, not as a transaction-price comp. Verify against the published BBMP gazette before quoting.',
+  };
+}
+
 // Review queue — buckets every extracted fact by AI confidence and review
 // status. Surfaces what still needs human verification before any of those
 // numbers can be quoted in IC memos. Pure read query; never mutates state.
@@ -2285,6 +2381,7 @@ module.exports = {
   getDistrictIntelligence,
   getSourceExplorer,
   getReviewQueue,
+  getUavBenchmark,
   parseDistrictNotes,
   normalizePdCode,
   importZoneGeoJSON,
