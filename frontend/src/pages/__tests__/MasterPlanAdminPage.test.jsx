@@ -71,6 +71,22 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isLoading: false,
     isError: false,
   }),
+  useDistrictIntelligence: () => ({
+    data: {
+      districts: [
+        {
+          id: 'd1', pd_code: 'PD-01', pd_name: 'CBD', is_sdz: false,
+          population_2011: 593883, area_ha: 2774.3, gross_density_pph: 214,
+          ward_count: 19, village_count: null, source_page: 23, source_section: null, raw_notes: null,
+        },
+      ],
+      summary: { district_count: 1, sdz_count: 0, total_population_2011: 593883, total_area_ha: 2774, mean_density_pph: 214 },
+      callouts: { sdz: null, heritage: null, ngt: null, regional_parks: null, landmarks: [], adjacent_authorities: [], peripheral_ring: null },
+      disclaimer: 'AI-extracted.',
+    },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),

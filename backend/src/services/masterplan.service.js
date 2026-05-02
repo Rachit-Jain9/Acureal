@@ -1696,6 +1696,164 @@ async function listMasterplanCorpus({ city } = {}) {
   return masterplanCorpus.buildCorpusStatus(docs);
 }
 
+// District intelligence — joins the 42 seeded planning_districts with the
+// per-district demographics fact extracted from Volume 4 PDR plus the
+// landmark / SDZ / heritage callouts from the maps. Returns one enriched
+// record per PD so the UI can render demographics + adjacency context
+// without making a second round-trip.
+async function getDistrictIntelligence() {
+  const districtsResult = await query(
+    `SELECT id, pd_code, pd_name, city
+     FROM regulatory_data.planning_districts
+     WHERE city = 'Bengaluru'
+     ORDER BY pd_code`,
+  );
+  const districts = districtsResult.rows;
+
+  // Pull rich per-district facts (populations, areas, densities) plus the
+  // city-wide callouts in one shot so we can stitch them client-side cheaply.
+  const factsResult = await query(
+    `SELECT fact_type, fact_key, fact_value, page_number, source_section, confidence_score
+     FROM regulatory_data.evidence_facts
+     WHERE (fact_type = 'rmp_table' AND fact_key = 'planning_districts')
+        OR fact_type IN ('sdz', 'heritage', 'landmark', 'boundary', 'environmental', 'road_network')`,
+  );
+
+  const facts = factsResult.rows;
+
+  // Find the richest planning_districts fact (the one with full
+  // population/area metadata). There are typically two rmp_table rows —
+  // a routing-key list and the full PDR-derived list. Pick the one whose
+  // entries carry a `notes` field (that's the rich one).
+  const districtFactCandidates = facts
+    .filter((f) => f.fact_type === 'rmp_table' && f.fact_key === 'planning_districts' && Array.isArray(f.fact_value))
+    .map((f) => f.fact_value);
+  const richDistrictFacts = districtFactCandidates.find((arr) => arr.some((d) => d && d.notes))
+    || districtFactCandidates[0]
+    || [];
+
+  // Build a normalised lookup keyed by zero-padded pd_code (PD-01 style)
+  const lookup = new Map();
+  for (const entry of richDistrictFacts) {
+    const code = normalizePdCode(entry?.pd_code);
+    if (!code) continue;
+    lookup.set(code, entry);
+  }
+
+  const sdzFact = facts.find((f) => f.fact_type === 'sdz' && f.fact_key === 'special_development_zones')?.fact_value || null;
+  const heritage = facts.find((f) => f.fact_type === 'heritage' && f.fact_key === 'heritage_zones')?.fact_value || null;
+  const ngt = facts.find((f) => f.fact_type === 'environmental' && f.fact_key === 'ngt_drainage_classification')?.fact_value || null;
+  const regionalParks = facts.find((f) => f.fact_type === 'environmental' && f.fact_key === 'regional_parks')?.fact_value || null;
+  const landmarks = facts.find((f) => f.fact_type === 'landmark' && f.fact_key === 'major_landmarks_in_bma')?.fact_value || [];
+  const adjacentAuthorities = facts.find((f) => f.fact_type === 'boundary' && f.fact_key === 'adjacent_planning_authorities')?.fact_value || [];
+  const peripheralRing = facts.find((f) => f.fact_type === 'road_network' && f.fact_key === 'peripheral_ring_road')?.fact_value || null;
+
+  const enrichedDistricts = districts.map((d) => {
+    const entry = lookup.get(normalizePdCode(d.pd_code)) || null;
+    const parsed = parseDistrictNotes(entry?.notes);
+    const isSdz = /special development zone/i.test(d.pd_name || '');
+    return {
+      id: d.id,
+      pd_code: d.pd_code,
+      pd_name: d.pd_name,
+      is_sdz: isSdz,
+      population_2011: parsed.population,
+      area_ha: parsed.area_ha,
+      gross_density_pph: parsed.density,
+      ward_count: parsed.wards,
+      village_count: parsed.villages,
+      source_page: entry?.source_page || null,
+      source_section: entry?.source_section || null,
+      raw_notes: entry?.notes || null,
+    };
+  });
+
+  // Aggregate stats for the StatTiles
+  const totalPopulation = enrichedDistricts.reduce((sum, d) => sum + (d.population_2011 || 0), 0);
+  const totalArea = enrichedDistricts.reduce((sum, d) => sum + (d.area_ha || 0), 0);
+  const sdzCount = enrichedDistricts.filter((d) => d.is_sdz).length;
+  const populatedDistricts = enrichedDistricts.filter((d) => d.population_2011);
+  const weightedDensity = populatedDistricts.length > 0
+    ? populatedDistricts.reduce((sum, d) => sum + (d.population_2011 || 0), 0)
+        / Math.max(1, populatedDistricts.reduce((sum, d) => sum + (d.area_ha || 0), 0))
+    : null;
+
+  return {
+    districts: enrichedDistricts,
+    summary: {
+      district_count: enrichedDistricts.length,
+      sdz_count: sdzCount,
+      total_population_2011: totalPopulation,
+      total_area_ha: Math.round(totalArea),
+      mean_density_pph: weightedDensity ? Math.round(weightedDensity) : null,
+    },
+    callouts: {
+      sdz: sdzFact,
+      heritage,
+      ngt,
+      regional_parks: regionalParks,
+      landmarks,
+      adjacent_authorities: adjacentAuthorities,
+      peripheral_ring: peripheralRing,
+    },
+    disclaimer: 'AI-extracted from RMP 2031 Volume 4 PDR (per-district demographics) and Existing/Proposed Land Use maps (landmarks, boundaries, callouts). Verify against the published RMP 2031 before quoting in IC memos.',
+  };
+}
+
+// Normalise "PD 1" / "PD 01" / "PD-01" / "PD-1" to "PD-01" so the join
+// with the seeded planning_districts table (which uses PD-01..PD-42)
+// always lands.
+function normalizePdCode(code) {
+  if (!code) return null;
+  const match = String(code).trim().match(/PD[\s-]*(\d+)/i);
+  if (!match) return null;
+  return `PD-${String(parseInt(match[1], 10)).padStart(2, '0')}`;
+}
+
+// Parse the loose-text notes field from the Volume 4 PDR fact into
+// structured fields. Notes look like:
+//   "Population (2011 Census): 5,93,883; Area of PD: 2774.3 ha; Wards in PD: 19; Gross Density: 214PPH"
+// or use sqkm or mix of variants. We do best-effort regex extraction.
+function parseDistrictNotes(notes) {
+  if (!notes) return { population: null, area_ha: null, density: null, wards: null, villages: null };
+  const text = String(notes);
+
+  // Population: skip past any parenthetical "(2011 Census)" qualifier; lock onto
+  // the colon that precedes the actual number. Example: "Population (2011 Census): 5,93,883".
+  const popMatch = text.match(/Population[^:]*:\s*([\d,]+)/i);
+  const population = popMatch ? Number(popMatch[1].replace(/,/g, '')) : null;
+
+  // Area: prefer the Ha value when both sqkm and ha are listed.
+  const haMatch = text.match(/Area[^()]*?(?:\(([\d.]+)\s*ha\)|([\d,.]+)\s*(?:Ha|ha))/i);
+  let area_ha = null;
+  if (haMatch) {
+    area_ha = Number((haMatch[1] || haMatch[2] || '').replace(/,/g, ''));
+  } else {
+    const sqkmMatch = text.match(/Area[^()]*?([\d.]+)\s*sq\.?\s*km/i);
+    if (sqkmMatch) area_ha = Math.round(Number(sqkmMatch[1]) * 100);
+  }
+  if (!Number.isFinite(area_ha)) area_ha = null;
+
+  // Density: skip past any "(2011 Census)" parenthetical to the `:` or `=` that
+  // precedes the number. Examples we need to cover:
+  //   "Gross Density: 214PPH"
+  //   "Gross Density (2011 Census): 436 pph"
+  //   "Gross Density= 20PPH"
+  const densityMatch = text.match(/Density[^:=]*[:=]\s*=?\s*(\d+(?:\.\d+)?)\s*p?ph/i);
+  const density = densityMatch ? Number(densityMatch[1]) : null;
+
+  const wardsMatch = text.match(/Wards in PD:\s*(\d+)/i);
+  const wards = wardsMatch ? Number(wardsMatch[1]) : null;
+
+  // Villages count comes under several spellings ("Villages", "Gramathanas",
+  // "Gramthana") and label variants ("in PD" / "Number of Villages").
+  const villagesMatch = text.match(/(?:Villages|Gramathanas|Gramthana)(?:\s+in\s+PD)?:\s*(\d+)/i)
+    || text.match(/Number of Villages:\s*(\d+)/i);
+  const villages = villagesMatch ? Number(villagesMatch[1]) : null;
+
+  return { population, area_ha, density, wards, villages };
+}
+
 // Land-use intelligence — pulls the existing/proposed BMA land-use breakdown
 // facts seeded from the Existing Land Use 2015 + Proposed Land Use 2031
 // maps. Returns paired rows so the UI can render the 2015 → 2031 shift.
@@ -1930,6 +2088,9 @@ module.exports = {
   listBbmpUavEntries,
   listMasterplanCorpus,
   getLandUseIntelligence,
+  getDistrictIntelligence,
+  parseDistrictNotes,
+  normalizePdCode,
   importZoneGeoJSON,
   extractSourceDocument,
   queueExtractionJob,

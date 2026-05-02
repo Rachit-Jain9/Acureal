@@ -58,6 +58,14 @@ export function useLandUseIntelligence() {
   });
 }
 
+export function useDistrictIntelligence() {
+  return useQuery({
+    queryKey: ['master-plan-district-intelligence'],
+    queryFn: () => masterPlanAPI.districtIntelligence().then((r) => r.data.data ?? { districts: [], summary: {}, callouts: {}, disclaimer: '' }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],
