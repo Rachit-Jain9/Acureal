@@ -92,9 +92,61 @@ const runClaudeReasoning = async ({
   return message.content[0]?.text || null;
 };
 
+// Send a PDF or image directly to Claude's messages API as a document /
+// image content block — used as the fallback path when Gemini is throttled
+// or returns a permanent error. Sonnet 4.x supports up to 32 MB / 100 pages
+// for PDFs and standard image formats inline.
+const runClaudeWithDocument = async ({
+  systemPrompt,
+  prompt,
+  base64Data,
+  mimeType,
+  model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+  maxTokens = 4000,
+}) => {
+  if (!base64Data) {
+    throw new Error('runClaudeWithDocument requires base64Data.');
+  }
+  const client = getAnthropicClient();
+  const lowerMime = String(mimeType || '').toLowerCase();
+  const isPdf = lowerMime.includes('pdf');
+  const isImage = lowerMime.startsWith('image/');
+  if (!isPdf && !isImage) {
+    throw new Error(`runClaudeWithDocument only supports PDF or image inputs (got ${mimeType || 'unknown'}).`);
+  }
+
+  const documentBlock = isPdf
+    ? {
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
+    }
+    : {
+      type: 'image',
+      source: { type: 'base64', media_type: mimeType, data: base64Data },
+    };
+
+  const message = await client.messages.create({
+    model,
+    max_tokens: maxTokens,
+    system: systemPrompt || 'You extract structured JSON from regulatory documents. Return ONLY valid JSON matching the requested schema.',
+    messages: [
+      {
+        role: 'user',
+        content: [documentBlock, { type: 'text', text: prompt || 'Extract the structured fields requested above.' }],
+      },
+    ],
+  });
+
+  const textBlock = Array.isArray(message.content)
+    ? message.content.find((block) => block?.type === 'text')
+    : null;
+  return textBlock?.text || message.content?.[0]?.text || null;
+};
+
 module.exports = {
   getProviderAvailability,
   getRoutingConfig,
   runGeminiInline,
   runClaudeReasoning,
+  runClaudeWithDocument,
 };

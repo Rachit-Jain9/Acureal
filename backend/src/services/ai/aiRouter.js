@@ -365,11 +365,31 @@ const runClaudeReasoning = async (args = {}) => {
   });
 };
 
+/**
+ * Send a PDF / image to Claude as a document content block. Used as the
+ * fallback path for document extraction when Gemini is throttled or fails
+ * permanently. Telemetry is recorded under task='document_extraction' with
+ * provider='claude' so the cost dashboards split correctly.
+ */
+const runClaudeWithDocument = async (args = {}) => {
+  const { task = 'document_extraction', attach, metadata, ...passthrough } = args;
+  return runAIResult({
+    task,
+    provider: 'claude',
+    model: passthrough.model,
+    attach,
+    metadata,
+    run: async ({ providers, model }) =>
+      providers.runClaudeWithDocument({ ...passthrough, model }),
+  });
+};
+
 module.exports = {
   runAI,
   runAIResult,
   runGeminiInline,
   runClaudeReasoning,
+  runClaudeWithDocument,
   estimateCost,
   extractTokenUsage,
   resolveProviderForTask,
