@@ -4,6 +4,38 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-02 (Investor-grade planning terminal — PRs #116, #117, #118, #119, #120)
+
+**What was worked on in plain English:**
+- The Master Plan admin page got a brand new lead tab — **Planning Intelligence** — with six stacked surfaces that turn the RMP 2031 PDFs from a 400-page reference document into a live, searchable terminal.
+- Pick a zone, type a road width and target height, and the **Decision Strip** instantly tells you setbacks, effective FAR, and approximate buildable area — with the exact source-page on every number.
+- The **Buildability Lab** lets the team stack three what-if scenarios side-by-side (zone × road × plot × height), flags the most-buildable combination with a trophy chip, and calls out the trade-off in plain English ("Scenario C unlocks +1,450 sqm vs A").
+- The **Land Use Insight** tile renders the 2015 → 2031 BMA shift as a delta table (residential up 30 percentage points, agriculture down 21) and highlights SDZ corridors, NGT drain buffers, heritage zones, and the Peripheral Ring Road.
+- The **District Intelligence** tile lists all 42 Bengaluru Planning Districts with 2011 Census population, area in hectares, density, and ward / village counts. Search "Whitefield" → land on PD-11 in one click. SDZs flagged.
+- The **Source Explorer** is the *"prove it"* surface — pick any source on the left, see every fact extracted from it grouped by the exact page on the right. Every number REDIP shows is now one click from its source PDF page.
+- The **Review Queue** audits every fact by AI confidence × review status. Right now the corpus is "all clear" — every fact is high-confidence and approved. New low-confidence uploads will surface here automatically before they can be quoted.
+
+**PRs opened/merged:**
+- PR #116 — `feat(planning-intelligence): Decision Strip + Land Use Insight panel` — squash-merged as `95ca4ec`.
+- PR #117 — `feat(planning-intelligence): District Intelligence panel — 42 PDs with demographics` — squash-merged as `51ea304`.
+- PR #118 — `feat(planning-intelligence): Buildability Lab — 3 scenarios stacked side-by-side` — squash-merged as `8578c0a`.
+- PR #119 — `feat(planning-intelligence): Source Explorer — every fact mapped to its source page` — squash-merged as `825f709`.
+- PR #120 — `feat(planning-intelligence): Review Queue — confidence audit on every extracted fact` — squash-merged as `f29059b`.
+
+**Verification:**
+- Backend test suite: 567 → 587 (+20 covering kernel parity, `normalizePdCode`, `parseDistrictNotes` regex variants, `getDistrictIntelligence`, `getSourceExplorer`, `getReviewQueue`).
+- Frontend test suite: 124 → 164 (+40 across DecisionStrip, LandUseInsightPanel, DistrictIntelligencePanel, BuildabilityLab, SourceExplorerPanel, ReviewQueuePanel).
+- Frontend production build: clean (~13–37 s, no new warnings).
+- CI: every PR landed with all checks green (Backend / Frontend / Financial kernel / Audit & migration lint / Vercel).
+
+**What's left:**
+- Wire planning intelligence INTO the deal page itself — when a deal has a parcel with a known zone, surface its setback envelope, district demographics, and SDZ flags directly on the deal's Parcel/Site tab.
+- IC-memo export — a one-page PDF that pulls the six Planning Intelligence surfaces into an investor-ready packet.
+- Comp benchmarks — pair BBMP UAV rates with District demographics so a deal's transaction price gets benchmarked against its district's UAV + density.
+- Direct integrations remain manual blockers (Bhoomi/Kaveri land records, automated RERA verification, etc.) — recorded in TODO_DATA.md / TODO_MANUAL.md.
+
+---
+
 ## 2026-05-01 (Source-registry build-out arc — PRs #103, #104, #105, #106)
 
 **What was worked on in plain English:**
