@@ -348,6 +348,19 @@ router.get('/intelligence/districts', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /api/master-plan/intelligence/sources
+// Source-explorer feed: every evidence_source with its facts grouped by
+// page_number, plus a city-level summary. Powers the Source Explorer UI
+// where reviewers click a fact and land on the exact PDF page it came from.
+router.get('/intelligence/sources', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getSourceExplorer();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {

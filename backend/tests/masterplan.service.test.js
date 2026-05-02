@@ -1318,6 +1318,147 @@ describe('masterplan.service district intelligence helpers', () => {
       expect(result.disclaimer).toMatch(/AI-extracted/i);
     });
 
+    test('prefers the rich PD fact when both routing and rich rows exist (placeholder anchor)', async () => {
+      // Placeholder anchor — see following identical-name test for the actual implementation.
+    });
+  });
+
+  describe('getSourceExplorer', () => {
+    test('joins sources with their facts grouped by page and returns summary', async () => {
+      // 1st query: evidence_sources LEFT JOIN master_plan_documents
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'src-vol6',
+            document_id: 'doc-vol6',
+            source_kind: 'official_pdf',
+            source_title: 'RMP 2031 Volume 6 — Zoning Regulations (rmp_table)',
+            plan_version: 'RMP 2031 (Draft)',
+            authority_name: 'BDA',
+            city: 'Bengaluru',
+            created_at: '2026-04-30T10:00:00Z',
+            file_name: 'Volume-6 Zoning Regulations.pdf',
+            plan_name: 'RMP 2031 Volume 6 — Zoning Regulations',
+            doc_type: 'rmp_table',
+            legal_status: 'gazetted',
+            source_role: 'operative_regulation',
+            processing_mode: 'text_extraction',
+          },
+          {
+            id: 'src-empty',
+            document_id: null,
+            source_kind: 'official_pdf',
+            source_title: 'Empty source — no facts',
+            plan_version: 'RMP 2031',
+            authority_name: null,
+            city: 'Bengaluru',
+            created_at: '2026-04-29T10:00:00Z',
+            file_name: null,
+            plan_name: null,
+            doc_type: null,
+            legal_status: null,
+            source_role: null,
+            processing_mode: null,
+          },
+        ],
+      });
+      // 2nd query: evidence_facts ordered by page then type then key
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'f1',
+            source_id: 'src-vol6',
+            fact_type: 'rmp_table',
+            fact_key: 'front_setback_table',
+            fact_value: { tiers: 10 },
+            page_number: 38,
+            source_section: 'Table 1',
+            confidence_score: 0.95,
+            review_status: 'approved',
+            created_at: '2026-04-30T10:00:00Z',
+          },
+          {
+            id: 'f2',
+            source_id: 'src-vol6',
+            fact_type: 'rmp_table',
+            fact_key: 'height_setback_table',
+            fact_value: { tiers: 16 },
+            page_number: 39,
+            source_section: 'Table 2',
+            confidence_score: 0.95,
+            review_status: 'approved',
+            created_at: '2026-04-30T10:00:00Z',
+          },
+          {
+            id: 'f3',
+            source_id: 'src-vol6',
+            fact_type: 'sdz',
+            fact_key: 'special_development_zones',
+            fact_value: { count: 5 },
+            page_number: 80,
+            source_section: '§6.5',
+            confidence_score: 0.88,
+            review_status: 'pending',
+            created_at: '2026-04-30T10:00:00Z',
+          },
+        ],
+      });
+
+      const result = await service.getSourceExplorer();
+
+      // Empty source is filtered out — only sources with facts come through.
+      expect(result.sources).toHaveLength(1);
+      const vol6 = result.sources[0];
+      expect(vol6.id).toBe('src-vol6');
+      expect(vol6.fact_count).toBe(3);
+      expect(vol6.page_count).toBe(3);
+      expect(vol6.first_page).toBe(38);
+      expect(vol6.last_page).toBe(80);
+      expect(vol6.fact_types).toEqual(['rmp_table', 'sdz']);
+      expect(vol6.facts).toHaveLength(3);
+      expect(vol6.legal_status).toBe('gazetted');
+      expect(vol6.file_name).toBe('Volume-6 Zoning Regulations.pdf');
+
+      // Summary aggregates
+      expect(result.summary.source_count).toBe(1);
+      expect(result.summary.fact_count).toBe(3);
+      expect(result.summary.linked_doc_count).toBe(1);
+      expect(result.summary.fact_type_counts).toEqual({ rmp_table: 2, sdz: 1 });
+      expect(result.disclaimer).toMatch(/IC memos/i);
+    });
+
+    test('handles facts with no page_number gracefully', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'src-1', document_id: null, source_kind: 'official_pdf',
+            source_title: 'Map source', plan_version: null, authority_name: null,
+            city: 'Bengaluru', created_at: '2026-04-30T10:00:00Z',
+            file_name: null, plan_name: null, doc_type: null,
+            legal_status: null, source_role: null, processing_mode: null,
+          },
+        ],
+      });
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'f-noPage', source_id: 'src-1', fact_type: 'landmark',
+            fact_key: 'major_landmarks_in_bma', fact_value: [{ name: 'Lalbagh' }],
+            page_number: null, source_section: null, confidence_score: 0.9,
+            review_status: 'approved', created_at: '2026-04-30T10:00:00Z',
+          },
+        ],
+      });
+
+      const result = await service.getSourceExplorer();
+      expect(result.sources).toHaveLength(1);
+      expect(result.sources[0].first_page).toBeNull();
+      expect(result.sources[0].last_page).toBeNull();
+      expect(result.sources[0].page_count).toBe(0);
+    });
+  });
+
+  describe('getDistrictIntelligence — rich-fact preference', () => {
     test('prefers the rich PD fact when both routing and rich rows exist', async () => {
       // Both a routing-key list (no notes) and a rich list (with notes) — service must pick the rich one.
       query.mockResolvedValueOnce({ rows: [{ id: 'd1', pd_code: 'PD-01', pd_name: 'CBD', city: 'Bengaluru' }] });

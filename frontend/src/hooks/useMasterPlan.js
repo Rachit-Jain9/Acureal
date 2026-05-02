@@ -66,6 +66,14 @@ export function useDistrictIntelligence() {
   });
 }
 
+export function useSourceExplorer() {
+  return useQuery({
+    queryKey: ['master-plan-source-explorer'],
+    queryFn: () => masterPlanAPI.sourceExplorer().then((r) => r.data.data ?? { sources: [], summary: {}, disclaimer: '' }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],

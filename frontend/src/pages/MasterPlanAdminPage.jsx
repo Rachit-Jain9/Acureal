@@ -17,6 +17,7 @@ import DecisionStrip from '../components/masterplan/DecisionStrip';
 import LandUseInsightPanel from '../components/masterplan/LandUseInsightPanel';
 import DistrictIntelligencePanel from '../components/masterplan/DistrictIntelligencePanel';
 import BuildabilityLab from '../components/masterplan/BuildabilityLab';
+import SourceExplorerPanel from '../components/masterplan/SourceExplorerPanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1817,6 +1818,9 @@ function PlanningIntelligencePanel() {
       </div>
       <div className="border-t border-hairline pt-8">
         <DistrictIntelligencePanel />
+      </div>
+      <div className="border-t border-hairline pt-8">
+        <SourceExplorerPanel />
       </div>
     </div>
   );

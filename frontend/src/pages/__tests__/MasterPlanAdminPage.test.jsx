@@ -87,6 +87,15 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isLoading: false,
     isError: false,
   }),
+  useSourceExplorer: () => ({
+    data: {
+      sources: [],
+      summary: { source_count: 0, fact_count: 0, linked_doc_count: 0, fact_type_counts: {} },
+      disclaimer: '',
+    },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
