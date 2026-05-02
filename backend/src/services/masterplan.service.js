@@ -1696,6 +1696,88 @@ async function listMasterplanCorpus({ city } = {}) {
   return masterplanCorpus.buildCorpusStatus(docs);
 }
 
+// Land-use intelligence — pulls the existing/proposed BMA land-use breakdown
+// facts seeded from the Existing Land Use 2015 + Proposed Land Use 2031
+// maps. Returns paired rows so the UI can render the 2015 → 2031 shift.
+async function getLandUseIntelligence() {
+  const result = await query(
+    `SELECT id, source_id, fact_type, fact_key, fact_value, source_section, page_number, confidence_score
+     FROM regulatory_data.evidence_facts
+     WHERE fact_type IN ('land_use_total', 'land_use_share', 'road_network', 'environmental', 'sdz', 'heritage')
+     ORDER BY fact_type, fact_key`,
+  );
+  const rows = result.rows;
+
+  const existingShares = rows
+    .filter((r) => r.fact_type === 'land_use_share' && r.fact_key.startsWith('existing_'))
+    .map((r) => ({
+      key: r.fact_key.replace(/^existing_/, '').replace(/_pct$/, ''),
+      label: prettyCategory(r.fact_key.replace(/^existing_/, '').replace(/_pct$/, '')),
+      value: Number(r.fact_value?.value ?? 0),
+      absolute_ha: r.fact_value?.absolute_ha ?? null,
+      year: r.fact_value?.year ?? 2015,
+      source_section: r.source_section,
+    }));
+
+  const proposedShares = rows
+    .filter((r) => r.fact_type === 'land_use_share' && r.fact_key.startsWith('proposed_'))
+    .map((r) => ({
+      key: r.fact_key.replace(/^proposed_/, '').replace(/_pct$/, ''),
+      label: prettyCategory(r.fact_key.replace(/^proposed_/, '').replace(/_pct$/, '')),
+      value: Number(r.fact_value?.value ?? 0),
+      absolute_ha: r.fact_value?.absolute_ha ?? null,
+      year: r.fact_value?.year ?? 2031,
+      source_section: r.source_section,
+    }));
+
+  const totals = rows
+    .filter((r) => r.fact_type === 'land_use_total')
+    .map((r) => ({
+      key: r.fact_key,
+      label: prettyCategory(r.fact_key),
+      value: r.fact_value,
+      source_section: r.source_section,
+    }));
+
+  const callouts = rows
+    .filter((r) => ['road_network', 'environmental', 'sdz', 'heritage'].includes(r.fact_type))
+    .map((r) => ({
+      type: r.fact_type,
+      key: r.fact_key,
+      value: r.fact_value,
+      source_section: r.source_section,
+    }));
+
+  return {
+    existing: existingShares,
+    proposed: proposedShares,
+    totals,
+    callouts,
+    disclaimer: 'AI-extracted from Volume 4 + Existing Land Use 2015 + Proposed Land Use 2031 maps. Verify against the published RMP 2031 before quoting.',
+  };
+}
+
+const PRETTY = {
+  residential: 'Residential',
+  commercial: 'Commercial',
+  industrial: 'Industrial',
+  psp: 'Public & Semi-Public',
+  psp_defence: 'PSP — Defence',
+  parks_open: 'Parks & Open Spaces',
+  transport: 'Transport & Communication',
+  vacant: 'Vacant',
+  agriculture: 'Agriculture',
+  water_bodies: 'Water Bodies',
+  ngt_buffer: 'NGT Buffer',
+  bma_total_area: 'BMA Total Area',
+  bma_developable_area: 'Developable Area',
+  proposed_agriculture_outside_dev: 'Agriculture (outside developable)',
+};
+
+function prettyCategory(key) {
+  return PRETTY[key] || String(key).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const ALLOWED_GEOJSON_GEOMETRY_TYPES = new Set(['Polygon', 'MultiPolygon']);
 
 // Import polygon geometry for already-reviewed master plan zones from a
@@ -1847,6 +1929,7 @@ module.exports = {
   prepareSourceDocumentPages,
   listBbmpUavEntries,
   listMasterplanCorpus,
+  getLandUseIntelligence,
   importZoneGeoJSON,
   extractSourceDocument,
   queueExtractionJob,

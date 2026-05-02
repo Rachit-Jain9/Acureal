@@ -323,6 +323,18 @@ router.get('/corpus', authenticate, requireAdminOrAnalyst, async (req, res, next
   }
 });
 
+// GET /api/master-plan/intelligence/land-use
+// Returns the BMA land-use intelligence (2015 baseline vs 2031 proposed)
+// extracted from Existing/Proposed Land Use maps and Volume 4 PDR.
+router.get('/intelligence/land-use', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getLandUseIntelligence();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
