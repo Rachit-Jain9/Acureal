@@ -111,6 +111,16 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isLoading: false,
     isError: false,
   }),
+  useUavBenchmark: () => ({
+    data: {
+      zones: [], uses: [], matrix: [], ratios: {},
+      unit_label: 'INR per sqft per month', city: 'Bengaluru',
+      summary: { zone_count: 0, use_count: 0, row_count: 0, source_pages: [] },
+      disclaimer: '',
+    },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),

@@ -1458,6 +1458,93 @@ describe('masterplan.service district intelligence helpers', () => {
     });
   });
 
+  describe('getUavBenchmark', () => {
+    test('pivots BBMP UAV rows into a (use × zone) matrix and computes ratios vs Zone A', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          // Zone A (CBD) — base
+          { uav_zone_code: 'A', uav_zone_name: 'CBD', property_use: 'Residential RCC (owner-occupied)',
+            unit_area_value_inr: 3.0, unit_label: 'INR per sqft per month', source_page: 4, source_section: 'Schedule III',
+            confidence_score: 0.95, review_status: 'approved' },
+          { uav_zone_code: 'A', uav_zone_name: 'CBD', property_use: 'Non-residential premium',
+            unit_area_value_inr: 25.0, unit_label: 'INR per sqft per month', source_page: 4, source_section: 'Schedule III',
+            confidence_score: 0.95, review_status: 'approved' },
+          // Zone B
+          { uav_zone_code: 'B', uav_zone_name: 'Mid-ring', property_use: 'Residential RCC (owner-occupied)',
+            unit_area_value_inr: 2.4, unit_label: 'INR per sqft per month', source_page: 5, source_section: 'Schedule III',
+            confidence_score: 0.95, review_status: 'approved' },
+          { uav_zone_code: 'B', uav_zone_name: 'Mid-ring', property_use: 'Non-residential premium',
+            unit_area_value_inr: 20.0, unit_label: 'INR per sqft per month', source_page: 5, source_section: 'Schedule III',
+            confidence_score: 0.95, review_status: 'approved' },
+          // Zone C — partial coverage
+          { uav_zone_code: 'C', uav_zone_name: 'Outer', property_use: 'Residential RCC (owner-occupied)',
+            unit_area_value_inr: 1.5, unit_label: 'INR per sqft per month', source_page: 6, source_section: 'Schedule III',
+            confidence_score: 0.95, review_status: 'approved' },
+        ],
+      });
+
+      const result = await service.getUavBenchmark({ city: 'Bengaluru' });
+
+      expect(result.zones).toEqual(['A', 'B', 'C']);
+      expect(result.uses).toEqual(['Non-residential premium', 'Residential RCC (owner-occupied)']);
+
+      // Matrix shape: row per use, cells per zone, missing cells return null rate
+      const resRow = result.matrix.find((r) => r.use === 'Residential RCC (owner-occupied)');
+      const cellsByZone = Object.fromEntries(resRow.cells.map((c) => [c.zone, c.rate]));
+      expect(cellsByZone).toEqual({ A: 3.0, B: 2.4, C: 1.5 });
+
+      const nonResRow = result.matrix.find((r) => r.use === 'Non-residential premium');
+      const nonResByZone = Object.fromEntries(nonResRow.cells.map((c) => [c.zone, c.rate]));
+      expect(nonResByZone).toEqual({ A: 25.0, B: 20.0, C: null });
+
+      // Ratios — A=1.0; B=avg(2.4/3.0, 20/25)=avg(0.8,0.8)=0.8; C=1.5/3.0=0.5 (only one shared use)
+      expect(result.ratios.A).toBe(1);
+      expect(result.ratios.B).toBeCloseTo(0.8, 3);
+      expect(result.ratios.C).toBeCloseTo(0.5, 3);
+
+      expect(result.summary).toMatchObject({
+        zone_count: 3,
+        use_count: 2,
+        row_count: 5,
+        source_pages: [4, 5, 6],
+      });
+      expect(result.unit_label).toBe('INR per sqft per month');
+      expect(result.disclaimer).toMatch(/property-tax/i);
+    });
+
+    test('returns an empty result with explanatory disclaimer when no rows exist', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+      const result = await service.getUavBenchmark({ city: 'Bengaluru' });
+      expect(result.zones).toEqual([]);
+      expect(result.uses).toEqual([]);
+      expect(result.matrix).toEqual([]);
+      expect(result.summary.row_count).toBe(0);
+      expect(result.disclaimer).toMatch(/has not been ingested/i);
+    });
+
+    test('returns null ratio when a zone has no overlapping uses with Zone A', async () => {
+      // Zone B only has a use that Zone A doesn't have — no shared comparison possible
+      query.mockResolvedValueOnce({
+        rows: [
+          { uav_zone_code: 'A', uav_zone_name: 'CBD', property_use: 'Residential', unit_area_value_inr: 3.0, unit_label: 'INR/sqft/mo', source_page: 1, source_section: null, confidence_score: 0.9, review_status: 'approved' },
+          { uav_zone_code: 'B', uav_zone_name: 'Outer', property_use: 'Vacant land', unit_area_value_inr: 0.5, unit_label: 'INR/sqft/mo', source_page: 2, source_section: null, confidence_score: 0.9, review_status: 'approved' },
+        ],
+      });
+      const result = await service.getUavBenchmark({ city: 'Bengaluru' });
+      expect(result.ratios.A).toBe(1);
+      expect(result.ratios.B).toBeNull();
+    });
+
+    test('defaults city to Bengaluru when not supplied', async () => {
+      // The parent describe block reuses jest.fn() across tests without a
+      // beforeEach reset, so we capture the call count before invoking.
+      const callsBefore = query.mock.calls.length;
+      query.mockResolvedValueOnce({ rows: [] });
+      await service.getUavBenchmark();
+      expect(query.mock.calls[callsBefore][1]).toEqual(['Bengaluru']);
+    });
+  });
+
   describe('getReviewQueue', () => {
     test('buckets facts by confidence_score and review_status, surfaces non-approved/non-high in needs_review', async () => {
       query.mockResolvedValueOnce({

@@ -374,6 +374,19 @@ router.get('/intelligence/review-queue', authenticate, async (req, res, next) =>
   }
 });
 
+// GET /api/master-plan/intelligence/uav-benchmark
+// BBMP UAV rate card pivoted into a (zone × property_use) matrix with
+// ratios vs Zone A so deal teams can benchmark transaction pricing
+// against the property-tax authority's own rate tiers.
+router.get('/intelligence/uav-benchmark', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getUavBenchmark({ city: req.query.city });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
