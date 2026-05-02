@@ -61,6 +61,16 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     refetch: vi.fn(),
   }),
   useImportZoneGeoJSON: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useLandUseIntelligence: () => ({
+    data: {
+      existing: [{ key: 'residential', label: 'Residential', value: 17.63, absolute_ha: 21284, year: 2015 }],
+      proposed: [{ key: 'residential', label: 'Residential', value: 48.04, absolute_ha: 42486.39, year: 2031 }],
+      totals: [{ key: 'bma_total_area', label: 'BMA Total Area', value: { value: 120697, unit: 'Ha' } }],
+      callouts: [],
+    },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),

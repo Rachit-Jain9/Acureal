@@ -13,6 +13,8 @@ import { ErrorState } from '../design-system';
 import MasterPlanCorpusPanel from '../components/masterplan/MasterPlanCorpusPanel';
 import MasterPlanBbmpUavPanel from '../components/masterplan/MasterPlanBbmpUavPanel';
 import ZoneGeoJsonImportButton from '../components/masterplan/ZoneGeoJsonImportButton';
+import DecisionStrip from '../components/masterplan/DecisionStrip';
+import LandUseInsightPanel from '../components/masterplan/LandUseInsightPanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1773,6 +1775,7 @@ export default function MasterPlanAdminPage() {
 
       <div className="flex gap-1 border-b border-hairline-strong mb-4">
         {[
+          { key: 'intelligence', label: 'Planning Intelligence' },
           { key: 'zones', label: 'Zone Library' },
           { key: 'documents', label: 'Source Documents' },
           { key: 'corpus', label: 'Source Corpus' },
@@ -1791,10 +1794,22 @@ export default function MasterPlanAdminPage() {
         ))}
       </div>
 
+      {tab === 'intelligence' && <PlanningIntelligencePanel />}
       {tab === 'zones' && <ZoneLibrary canEdit={canEdit} />}
       {tab === 'documents' && <DocumentsPanel canEdit={canEdit} />}
       {tab === 'corpus' && <MasterPlanCorpusPanel />}
       {tab === 'bbmp-uav' && <MasterPlanBbmpUavPanel />}
+    </div>
+  );
+}
+
+function PlanningIntelligencePanel() {
+  return (
+    <div className="space-y-10">
+      <DecisionStrip />
+      <div className="border-t border-hairline pt-8">
+        <LandUseInsightPanel />
+      </div>
     </div>
   );
 }

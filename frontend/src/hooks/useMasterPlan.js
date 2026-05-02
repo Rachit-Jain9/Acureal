@@ -50,6 +50,14 @@ export function useMasterPlanCorpus(params = {}) {
   });
 }
 
+export function useLandUseIntelligence() {
+  return useQuery({
+    queryKey: ['master-plan-land-use-intelligence'],
+    queryFn: () => masterPlanAPI.landUseIntelligence().then((r) => r.data.data ?? { existing: [], proposed: [], totals: [], callouts: [] }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],
