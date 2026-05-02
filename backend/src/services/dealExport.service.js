@@ -4,6 +4,7 @@ const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
 const { generateDealInsights } = require('./export.insights.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
+const masterplanService = require('./masterplan.service');
 
 const OPEN_RISK_STATUSES = new Set(['open', 'flagged']);
 const CLOSED_DD_STATUSES = new Set(['completed', 'not_applicable']);
@@ -667,10 +668,36 @@ const getDealExportContext = async (dealId) => {
       summary: documentSummary,
       items: documents,
     },
+    planning: await getPlanningContextForDeal(deal),
     readiness,
     nextSteps,
     ai,
   };
+};
+
+// Pulls verified RMP 2031 city-level callouts (and the deal's assigned
+// zone, if any) into the export context so the IC PPTX deck can render
+// the Planning Context slide without making a second API round-trip.
+// Failures are non-fatal: a deck is more valuable than a missing one.
+const getPlanningContextForDeal = async (deal) => {
+  // Only inject planning context for Bengaluru deals — that's where we
+  // have RMP 2031 corpus coverage. Future cities will gate similarly.
+  const city = (deal?.city || deal?.property_city || '').toLowerCase();
+  if (city && !city.includes('bengaluru') && !city.includes('bangalore')) {
+    return { callouts: [], zone: null, city: deal?.city || null };
+  }
+  try {
+    const landUse = await masterplanService.getLandUseIntelligence();
+    return {
+      callouts: Array.isArray(landUse?.callouts) ? landUse.callouts : [],
+      zone: deal?.zone_id ? { id: deal.zone_id } : null,
+      city: deal?.city || 'Bengaluru',
+      disclaimer: landUse?.disclaimer || null,
+    };
+  } catch (err) {
+    // Don't let a master-plan service hiccup take down the export.
+    return { callouts: [], zone: null, city: deal?.city || null, error: err?.message || 'master-plan service unavailable' };
+  }
 };
 
 module.exports = {

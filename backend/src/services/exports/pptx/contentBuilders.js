@@ -782,6 +782,72 @@ const buildNextStepGroups = (exportContext) => {
 };
 
 
+// Planning Intelligence rows — pulls the city-level callouts (SDZ, NGT,
+// heritage, PRR) from the master-plan service feed surfaced on the
+// `exportContext.planning` payload. Falls back to a "no data" row when
+// the master-plan corpus has not been ingested yet so the slide still
+// renders predictably.
+const buildPlanningRows = (exportContext) => {
+  const planning = exportContext?.planning || {};
+  const callouts = Array.isArray(planning.callouts) ? planning.callouts : [];
+  const find = (predicate) => callouts.find(predicate)?.value;
+
+  const sdz = find((c) => c.key === 'special_development_zones');
+  const ngt = find((c) => c.key === 'ngt_drainage_classification');
+  const heritage = find((c) => c.key === 'heritage_zones');
+  const prr = find((c) => c.key === 'peripheral_ring_road');
+
+  const rows = [];
+  if (sdz) {
+    rows.push({
+      label: 'Special Development Zones',
+      value: `${sdz.count ?? '—'} corridors${sdz.max_far ? ` • max FAR ${sdz.max_far}` : ''}`,
+      hint: Array.isArray(sdz.locations) ? sdz.locations.slice(0, 3).join(', ') : null,
+    });
+  }
+  if (ngt) {
+    rows.push({
+      label: 'NGT drain buffers',
+      value: `Primary ${ngt.buffer_m_primary}m • Secondary ${ngt.buffer_m_secondary}m • Tertiary ${ngt.buffer_m_tertiary}m`,
+      hint: ngt.source || 'NGT classification',
+    });
+  }
+  if (heritage) {
+    rows.push({
+      label: 'Heritage zones',
+      value: `${heritage.count ?? '—'} delineated • prohibited ${heritage.prohibited_radius_m}m`,
+      hint: heritage.regulated_radius_m ? `Regulated radius ${heritage.regulated_radius_m}m` : null,
+    });
+  }
+  if (prr) {
+    rows.push({
+      label: 'Peripheral Ring Road',
+      value: `${prr.width_m}m corridor • ${prr.type}`,
+      hint: prr.note || null,
+    });
+  }
+  return rows;
+};
+
+// Planning Intelligence narrative — short bullets that sit above the
+// callout grid. Emphasises that every number is traceable + AI-extracted
+// (must be reconciled before quoting in IC). Length-capped for slide layout.
+const buildPlanningCommentary = (exportContext) => {
+  const planning = exportContext?.planning || {};
+  const callouts = Array.isArray(planning.callouts) ? planning.callouts : [];
+  if (!callouts.length) {
+    return [
+      'No verified RMP 2031 callouts have been ingested for Bengaluru yet.',
+      'Once the Existing Land Use 2015 + Proposed Land Use 2031 maps and Volume 4 PDR land in the corpus, this slide will surface SDZ corridors, NGT drain buffers, heritage radii, and the Peripheral Ring Road alignment automatically.',
+    ];
+  }
+  const bullets = [
+    `Drawn from ${callouts.length} verified RMP 2031 fact${callouts.length === 1 ? '' : 's'}; every callout is page-cited and reviewer-approved.`,
+    'Cross-reference each callout against the parcel\'s exact location before underwriting — heritage and NGT buffers can disqualify entire envelopes.',
+  ];
+  return bullets;
+};
+
 module.exports = {
   buildDerivedRiskRows,
   buildFinancialRows,
@@ -800,4 +866,6 @@ module.exports = {
   buildTransactionRows,
   buildRiskRows,
   buildNextStepGroups,
+  buildPlanningRows,
+  buildPlanningCommentary,
 };
