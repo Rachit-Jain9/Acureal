@@ -361,6 +361,19 @@ router.get('/intelligence/sources', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /api/master-plan/intelligence/review-queue
+// Confidence + review-status buckets for every extracted fact. Returns
+// counts by (bucket × status) cell plus the actual rows that still need
+// human verification (anything not high-confidence + approved).
+router.get('/intelligence/review-queue', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getReviewQueue();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
