@@ -4,6 +4,30 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-02 (continued — Deal-side wiring + IC export + UAV benchmark — PRs #122, #123, #124)
+
+**What was worked on in plain English:**
+- The admin Planning Intelligence terminal is now wired into the actual deal workspace. Every deal's Zoning tab carries a city-level callout rail (SDZ corridors, NGT drain buffers, heritage radii, Peripheral Ring Road) so deal teams see the planning constraints without leaving the deal.
+- The IC PPTX export now includes a dedicated "Planning Context — RMP 2031" slide for every Bengaluru deal. Reviewers no longer have to hold the admin terminal in another tab while reading the deck.
+- A seventh Planning Intelligence surface landed: **UAV Benchmark**. The BBMP property-tax Unit Area Value rate card pivoted into a (zone × property_use) matrix with a ratio strip, so deal teams can read in seconds that Zone F is ~35% of Zone A pricing instead of staring at a PDF.
+
+**PRs opened/merged:**
+- PR #122 — `feat(deal): wire Bengaluru planning context onto every deal's Zoning tab` — squash-merged as `a338d59`.
+- PR #123 — `feat(ic-deck): add Planning Context slide to the deal export deck` — squash-merged as `ce0d843`.
+- PR #124 — `feat(planning-intelligence): UAV Benchmark — BBMP rate-card pivot with ratio strip` — squash-merged as `f2e7914`.
+
+**Verification:**
+- Backend test suite: 587 → 594 (+7 across `getUavBenchmark` matrix pivot + ratios computation, IC deck planning-slide manifest insertion, defensive empty-payload behaviour).
+- Frontend test suite: 164 → 184 (+20 across DealPlanningContextCard, UavBenchmarkPanel).
+- Frontend production build: clean (13–44 s, no new warnings).
+- CI: every PR landed with all checks green (Backend / Frontend / Financial kernel / Audit & migration lint / Vercel).
+- Fixed a use-classification bug where "Non-residential" was matching the "residential" check first (substring collision); reversed order.
+
+**What's left:**
+- All originally-requested planning terminal work is done. Direct integrations (Bhoomi/Kaveri land records, automated RERA verification, EC live lookup, BBMP/BDA approval status) remain manual blockers — recorded in TODO_DATA.md / TODO_MANUAL.md and unsolvable in code without official credentials/access.
+
+---
+
 ## 2026-05-02 (Investor-grade planning terminal — PRs #116, #117, #118, #119, #120)
 
 **What was worked on in plain English:**
