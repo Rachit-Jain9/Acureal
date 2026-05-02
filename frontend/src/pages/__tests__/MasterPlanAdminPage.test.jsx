@@ -96,6 +96,21 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isLoading: false,
     isError: false,
   }),
+  useReviewQueue: () => ({
+    data: {
+      counts: {
+        high:     { pending: 0, approved: 0, rejected: 0, total: 0 },
+        medium:   { pending: 0, approved: 0, rejected: 0, total: 0 },
+        low:      { pending: 0, approved: 0, rejected: 0, total: 0 },
+        unscored: { pending: 0, approved: 0, rejected: 0, total: 0 },
+      },
+      summary: { fact_count: 0, needs_review_count: 0, high_count: 0, medium_count: 0, low_count: 0, unscored_count: 0 },
+      needs_review: [],
+      disclaimer: '',
+    },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),

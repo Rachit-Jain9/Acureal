@@ -1857,6 +1857,98 @@ function parseDistrictNotes(notes) {
 // Land-use intelligence — pulls the existing/proposed BMA land-use breakdown
 // facts seeded from the Existing Land Use 2015 + Proposed Land Use 2031
 // maps. Returns paired rows so the UI can render the 2015 → 2031 shift.
+// Review queue — buckets every extracted fact by AI confidence and review
+// status. Surfaces what still needs human verification before any of those
+// numbers can be quoted in IC memos. Pure read query; never mutates state.
+async function getReviewQueue() {
+  const result = await query(
+    `SELECT
+       f.id,
+       f.source_id,
+       f.fact_type,
+       f.fact_key,
+       f.fact_value,
+       f.page_number,
+       f.source_section,
+       f.confidence_score,
+       f.review_status,
+       f.created_at,
+       s.source_title,
+       s.plan_version
+     FROM regulatory_data.evidence_facts f
+     LEFT JOIN regulatory_data.evidence_sources s ON s.id = f.source_id
+     ORDER BY
+       CASE
+         WHEN f.confidence_score IS NULL THEN 0
+         WHEN f.confidence_score < 0.7 THEN 1
+         WHEN f.confidence_score < 0.9 THEN 2
+         ELSE 3
+       END ASC,
+       f.created_at DESC`,
+  );
+
+  const facts = result.rows;
+
+  const bucketOf = (score) => {
+    if (score === null || score === undefined) return 'unscored';
+    const n = Number(score);
+    if (!Number.isFinite(n)) return 'unscored';
+    if (n < 0.7) return 'low';
+    if (n < 0.9) return 'medium';
+    return 'high';
+  };
+
+  // Counts per (bucket, status) cell + per-bucket totals
+  const counts = {
+    high: { pending: 0, approved: 0, rejected: 0, total: 0 },
+    medium: { pending: 0, approved: 0, rejected: 0, total: 0 },
+    low: { pending: 0, approved: 0, rejected: 0, total: 0 },
+    unscored: { pending: 0, approved: 0, rejected: 0, total: 0 },
+  };
+  for (const f of facts) {
+    const b = bucketOf(f.confidence_score);
+    const s = (f.review_status || 'pending').toLowerCase();
+    if (counts[b][s] !== undefined) counts[b][s] += 1;
+    counts[b].total += 1;
+  }
+
+  // The "needs review" list: anything that is NOT (high confidence AND approved).
+  // That's what a reviewer should be working through.
+  const needsReview = facts.filter((f) => {
+    const b = bucketOf(f.confidence_score);
+    const s = (f.review_status || 'pending').toLowerCase();
+    return !(b === 'high' && s === 'approved');
+  });
+
+  return {
+    counts,
+    summary: {
+      fact_count: facts.length,
+      needs_review_count: needsReview.length,
+      high_count: counts.high.total,
+      medium_count: counts.medium.total,
+      low_count: counts.low.total,
+      unscored_count: counts.unscored.total,
+    },
+    needs_review: needsReview.map((f) => ({
+      id: f.id,
+      source_id: f.source_id,
+      source_title: f.source_title,
+      plan_version: f.plan_version,
+      fact_type: f.fact_type,
+      fact_key: f.fact_key,
+      fact_value: f.fact_value,
+      page_number: f.page_number,
+      source_section: f.source_section,
+      confidence_score: f.confidence_score === null ? null : Number(f.confidence_score),
+      bucket: bucketOf(f.confidence_score),
+      review_status: f.review_status || 'pending',
+      created_at: f.created_at,
+    })),
+    disclaimer: 'AI-extracted facts that fall below 0.9 confidence or remain in pending review must be verified against the underlying PDF before being quoted in IC memos.',
+  };
+}
+
 // Source explorer — returns every evidence_source with its facts grouped by
 // page_number. Lets the UI render a "what facts came from which page of which
 // document?" browser. Critical for IC defensibility: every number REDIP shows
@@ -2192,6 +2284,7 @@ module.exports = {
   getLandUseIntelligence,
   getDistrictIntelligence,
   getSourceExplorer,
+  getReviewQueue,
   parseDistrictNotes,
   normalizePdCode,
   importZoneGeoJSON,

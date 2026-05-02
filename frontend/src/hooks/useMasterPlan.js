@@ -74,6 +74,14 @@ export function useSourceExplorer() {
   });
 }
 
+export function useReviewQueue() {
+  return useQuery({
+    queryKey: ['master-plan-review-queue'],
+    queryFn: () => masterPlanAPI.reviewQueue().then((r) => r.data.data ?? { counts: {}, summary: {}, needs_review: [], disclaimer: '' }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],

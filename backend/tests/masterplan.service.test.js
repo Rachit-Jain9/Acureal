@@ -1458,6 +1458,102 @@ describe('masterplan.service district intelligence helpers', () => {
     });
   });
 
+  describe('getReviewQueue', () => {
+    test('buckets facts by confidence_score and review_status, surfaces non-approved/non-high in needs_review', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          // High + approved → counted, but NOT in needs_review
+          { id: 'f1', source_id: 's1', source_title: 'Vol 6', plan_version: 'RMP 2031',
+            fact_type: 'rmp_table', fact_key: 'front_setback', fact_value: { tiers: 10 },
+            page_number: 38, source_section: 'Table 1', confidence_score: 0.95, review_status: 'approved', created_at: '2026-04-30T10:00:00Z' },
+          // High + pending → in needs_review
+          { id: 'f2', source_id: 's1', source_title: 'Vol 6', plan_version: 'RMP 2031',
+            fact_type: 'rmp_table', fact_key: 'height_setback', fact_value: { tiers: 16 },
+            page_number: 39, source_section: 'Table 2', confidence_score: 0.92, review_status: 'pending', created_at: '2026-04-30T10:00:00Z' },
+          // Medium + approved → in needs_review (not high)
+          { id: 'f3', source_id: 's2', source_title: 'PDR', plan_version: 'RMP 2031',
+            fact_type: 'rmp_table', fact_key: 'planning_districts', fact_value: [{ pd_code: 'PD-01' }],
+            page_number: 23, source_section: 'PDR §2', confidence_score: 0.85, review_status: 'approved', created_at: '2026-04-29T10:00:00Z' },
+          // Low + approved → in needs_review
+          { id: 'f4', source_id: 's2', source_title: 'PDR', plan_version: 'RMP 2031',
+            fact_type: 'rmp_table', fact_key: 'noise_data', fact_value: 'unclear',
+            page_number: 24, source_section: null, confidence_score: 0.55, review_status: 'approved', created_at: '2026-04-28T10:00:00Z' },
+          // Unscored + pending → in needs_review
+          { id: 'f5', source_id: 's3', source_title: 'Map', plan_version: null,
+            fact_type: 'landmark', fact_key: 'lalbagh', fact_value: { name: 'Lalbagh' },
+            page_number: null, source_section: null, confidence_score: null, review_status: 'pending', created_at: '2026-04-27T10:00:00Z' },
+        ],
+      });
+
+      const result = await service.getReviewQueue();
+
+      expect(result.counts.high.approved).toBe(1);
+      expect(result.counts.high.pending).toBe(1);
+      expect(result.counts.high.total).toBe(2);
+      expect(result.counts.medium.approved).toBe(1);
+      expect(result.counts.medium.total).toBe(1);
+      expect(result.counts.low.approved).toBe(1);
+      expect(result.counts.low.total).toBe(1);
+      expect(result.counts.unscored.pending).toBe(1);
+      expect(result.counts.unscored.total).toBe(1);
+
+      expect(result.summary).toMatchObject({
+        fact_count: 5,
+        needs_review_count: 4,
+        high_count: 2,
+        medium_count: 1,
+        low_count: 1,
+        unscored_count: 1,
+      });
+
+      expect(result.needs_review).toHaveLength(4);
+      // Make sure the high+approved fact is NOT in needs_review
+      expect(result.needs_review.find((f) => f.id === 'f1')).toBeUndefined();
+      const f4 = result.needs_review.find((r) => r.id === 'f4');
+      expect(f4.bucket).toBe('low');
+      expect(f4.confidence_score).toBe(0.55);
+      const f5 = result.needs_review.find((r) => r.id === 'f5');
+      expect(f5.bucket).toBe('unscored');
+      expect(f5.confidence_score).toBeNull();
+
+      expect(result.disclaimer).toMatch(/IC memos/i);
+    });
+
+    test('returns empty needs_review when every fact is high-confidence and approved', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          { id: 'f1', source_id: 's1', source_title: 'Vol 6', plan_version: 'RMP 2031',
+            fact_type: 'rmp_table', fact_key: 'a', fact_value: 1,
+            page_number: 1, source_section: null, confidence_score: 0.95, review_status: 'approved', created_at: '2026-04-30T10:00:00Z' },
+          { id: 'f2', source_id: 's1', source_title: 'Vol 6', plan_version: 'RMP 2031',
+            fact_type: 'rmp_table', fact_key: 'b', fact_value: 2,
+            page_number: 2, source_section: null, confidence_score: 0.99, review_status: 'approved', created_at: '2026-04-30T10:00:00Z' },
+        ],
+      });
+
+      const result = await service.getReviewQueue();
+      expect(result.summary.fact_count).toBe(2);
+      expect(result.summary.needs_review_count).toBe(0);
+      expect(result.needs_review).toEqual([]);
+      expect(result.counts.high.approved).toBe(2);
+    });
+
+    test('treats null review_status as pending and includes in needs_review', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          { id: 'f1', source_id: 's1', source_title: 'Vol 6', plan_version: null,
+            fact_type: 'rmp_table', fact_key: 'a', fact_value: 1,
+            page_number: 1, source_section: null, confidence_score: 0.95, review_status: null, created_at: '2026-04-30T10:00:00Z' },
+        ],
+      });
+
+      const result = await service.getReviewQueue();
+      expect(result.summary.needs_review_count).toBe(1);
+      expect(result.needs_review[0].review_status).toBe('pending');
+      expect(result.counts.high.pending).toBe(1);
+    });
+  });
+
   describe('getDistrictIntelligence — rich-fact preference', () => {
     test('prefers the rich PD fact when both routing and rich rows exist', async () => {
       // Both a routing-key list (no notes) and a rich list (with notes) — service must pick the rich one.

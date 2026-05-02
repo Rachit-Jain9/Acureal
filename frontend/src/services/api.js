@@ -276,6 +276,7 @@ export const masterPlanAPI = {
   landUseIntelligence: ()              => api.get('/master-plan/intelligence/land-use'),
   districtIntelligence: ()             => api.get('/master-plan/intelligence/districts'),
   sourceExplorer: ()                   => api.get('/master-plan/intelligence/sources'),
+  reviewQueue: ()                      => api.get('/master-plan/intelligence/review-queue'),
 };
 
 // Parcel Intelligence admin / evidence operations
