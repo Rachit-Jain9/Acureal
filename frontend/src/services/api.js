@@ -275,6 +275,7 @@ export const masterPlanAPI = {
   importZonesGeoJSON: (data)            => api.post('/master-plan/zones/import-geojson', data),
   landUseIntelligence: ()              => api.get('/master-plan/intelligence/land-use'),
   districtIntelligence: ()             => api.get('/master-plan/intelligence/districts'),
+  sourceExplorer: ()                   => api.get('/master-plan/intelligence/sources'),
 };
 
 // Parcel Intelligence admin / evidence operations

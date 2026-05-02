@@ -1857,6 +1857,108 @@ function parseDistrictNotes(notes) {
 // Land-use intelligence — pulls the existing/proposed BMA land-use breakdown
 // facts seeded from the Existing Land Use 2015 + Proposed Land Use 2031
 // maps. Returns paired rows so the UI can render the 2015 → 2031 shift.
+// Source explorer — returns every evidence_source with its facts grouped by
+// page_number. Lets the UI render a "what facts came from which page of which
+// document?" browser. Critical for IC defensibility: every number REDIP shows
+// must be one click away from the exact PDF page it was extracted from.
+async function getSourceExplorer() {
+  const sourcesResult = await query(
+    `SELECT
+       s.id,
+       s.document_id,
+       s.source_kind,
+       s.source_title,
+       s.plan_version,
+       s.authority_name,
+       s.city,
+       s.created_at,
+       d.file_name,
+       d.plan_name,
+       d.doc_type,
+       d.legal_status,
+       d.source_role,
+       d.processing_mode
+     FROM regulatory_data.evidence_sources s
+     LEFT JOIN regulatory_data.master_plan_documents d ON d.id = s.document_id
+     ORDER BY s.created_at DESC`,
+  );
+
+  const factsResult = await query(
+    `SELECT
+       id,
+       source_id,
+       fact_type,
+       fact_key,
+       fact_value,
+       page_number,
+       source_section,
+       confidence_score,
+       review_status,
+       created_at
+     FROM regulatory_data.evidence_facts
+     ORDER BY page_number NULLS LAST, fact_type, fact_key`,
+  );
+
+  const factsBySource = new Map();
+  for (const fact of factsResult.rows) {
+    const arr = factsBySource.get(fact.source_id) || [];
+    arr.push(fact);
+    factsBySource.set(fact.source_id, arr);
+  }
+
+  const sources = sourcesResult.rows.map((s) => {
+    const facts = factsBySource.get(s.id) || [];
+    const pageNumbers = facts
+      .map((f) => f.page_number)
+      .filter((p) => p !== null && p !== undefined && Number.isFinite(Number(p)))
+      .map((p) => Number(p));
+    const factTypes = [...new Set(facts.map((f) => f.fact_type))].sort();
+    return {
+      id: s.id,
+      document_id: s.document_id,
+      source_kind: s.source_kind,
+      source_title: s.source_title,
+      plan_version: s.plan_version,
+      authority_name: s.authority_name,
+      city: s.city,
+      file_name: s.file_name,
+      plan_name: s.plan_name,
+      doc_type: s.doc_type,
+      legal_status: s.legal_status,
+      source_role: s.source_role,
+      processing_mode: s.processing_mode,
+      fact_count: facts.length,
+      page_count: new Set(pageNumbers).size,
+      fact_types: factTypes,
+      first_page: pageNumbers.length ? Math.min(...pageNumbers) : null,
+      last_page: pageNumbers.length ? Math.max(...pageNumbers) : null,
+      created_at: s.created_at,
+      facts,
+    };
+  }).filter((s) => s.fact_count > 0);
+
+  // Aggregate summary
+  const totalFacts = sources.reduce((sum, s) => sum + s.fact_count, 0);
+  const linkedDocs = sources.filter((s) => s.document_id).length;
+  const factTypeCounts = {};
+  for (const s of sources) {
+    for (const f of s.facts) {
+      factTypeCounts[f.fact_type] = (factTypeCounts[f.fact_type] || 0) + 1;
+    }
+  }
+
+  return {
+    sources,
+    summary: {
+      source_count: sources.length,
+      fact_count: totalFacts,
+      linked_doc_count: linkedDocs,
+      fact_type_counts: factTypeCounts,
+    },
+    disclaimer: 'Each fact below traces back to a specific source-document page. AI-extracted facts must be verified against the underlying PDF before being quoted in IC memos.',
+  };
+}
+
 async function getLandUseIntelligence() {
   const result = await query(
     `SELECT id, source_id, fact_type, fact_key, fact_value, source_section, page_number, confidence_score
@@ -2089,6 +2191,7 @@ module.exports = {
   listMasterplanCorpus,
   getLandUseIntelligence,
   getDistrictIntelligence,
+  getSourceExplorer,
   parseDistrictNotes,
   normalizePdCode,
   importZoneGeoJSON,
