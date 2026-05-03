@@ -5,6 +5,7 @@ import Layout from './components/layout/Layout';
 import ToastContainer from './components/common/Toast';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import CookieBanner from './components/common/CookieBanner';
 
 // Neutralize scroll-wheel on focused number inputs. Browsers increment/decrement
 // <input type="number"> values on wheel when focused, which is a common footgun
@@ -43,6 +44,10 @@ const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
 const ParcelIntelligenceAdminPage = lazy(() => import('./pages/ParcelIntelligenceAdminPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
+const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
+const CookiesPage = lazy(() => import('./pages/legal/CookiesPage'));
+const GrievancePage = lazy(() => import('./pages/legal/GrievancePage'));
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
@@ -76,12 +81,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastContainer />
+      <CookieBanner />
       <Routes>
         {/* Public landing page — no auth required */}
         <Route path="/" element={withSuspense(<LandingPage />)} />
 
         {/* Auth */}
         <Route path="/login" element={withSuspense(<LoginPage />)} />
+
+        {/* Public legal pages — no auth required, linked from signup form
+            and Public footer. Lazy-loaded so they don't bloat the
+            authenticated bundle. */}
+        <Route path="/terms" element={withSuspense(<TermsPage />)} />
+        <Route path="/privacy" element={withSuspense(<PrivacyPage />)} />
+        <Route path="/cookies" element={withSuspense(<CookiesPage />)} />
+        <Route path="/grievance" element={withSuspense(<GrievancePage />)} />
 
         {/* Authenticated app — all under /dashboard */}
         <Route
