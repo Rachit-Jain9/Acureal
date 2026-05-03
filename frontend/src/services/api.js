@@ -74,6 +74,12 @@ export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   getMe: () => api.get('/auth/me'),
   updateMe: (data) => api.put('/auth/me', data),
+  // Email verification — `confirm` is public (consumed before login on a fresh
+  // browser); `request` and `status` require authentication so the dashboard
+  // banner can poll and offer a "resend" action.
+  verifyEmailRequest: () => api.post('/auth/verify-email/request'),
+  verifyEmailConfirm: (token) => api.post('/auth/verify-email/confirm', { token }),
+  verifyEmailStatus: () => api.get('/auth/verify-email/status'),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

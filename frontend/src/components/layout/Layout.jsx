@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import useCurrencyPref from '../../hooks/useCurrencyPref';
 import CommandPalette from '../common/CommandPalette';
+import EmailVerificationBanner from '../common/EmailVerificationBanner';
 
 export default function Layout() {
   // Subscribe once so a currency change anywhere in the app re-renders the
@@ -33,6 +34,7 @@ export default function Layout() {
       <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header onMobileMenuOpen={() => setMobileNavOpen(true)} />
+        <EmailVerificationBanner />
         <main className="flex-1 p-4 sm:p-6 overflow-auto min-w-0">
           <Outlet />
         </main>
