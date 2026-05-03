@@ -18,10 +18,16 @@ jest.mock('../src/services/organization.service', () => ({
   hydrateUserAuthContext: jest.fn(),
 }));
 
+jest.mock('../src/services/legal.service', () => ({
+  resolveSignupAcceptance: jest.fn().mockResolvedValue([1, 2]),
+  recordAcceptance: jest.fn().mockResolvedValue(undefined),
+}));
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../src/config/database');
 const { hydrateUserAuthContext } = require('../src/services/organization.service');
+const legalService = require('../src/services/legal.service');
 const authService = require('../src/services/auth.service');
 
 const makeAccessDeniedError = () => {
@@ -29,6 +35,99 @@ const makeAccessDeniedError = () => {
   error.statusCode = 403;
   return error;
 };
+
+describe('auth.service register cold-signup gate', () => {
+  const originalFlag = process.env.ALLOW_COLD_SIGNUP;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete process.env.ALLOW_COLD_SIGNUP;
+  });
+
+  afterAll(() => {
+    if (originalFlag === undefined) {
+      delete process.env.ALLOW_COLD_SIGNUP;
+    } else {
+      process.env.ALLOW_COLD_SIGNUP = originalFlag;
+    }
+  });
+
+  test('rejects cold signup with 403 when ALLOW_COLD_SIGNUP is not enabled', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // no existing user
+
+    await expect(
+      authService.register('Stranger', 'stranger@example.com', 'Password123', null, {})
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: expect.stringMatching(/by invitation only/i),
+    });
+
+    // Gate must short-circuit before any password hashing or DB writes
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+  });
+
+  test('allows cold signup when ALLOW_COLD_SIGNUP=true', async () => {
+    process.env.ALLOW_COLD_SIGNUP = 'true';
+    query.mockResolvedValueOnce({ rows: [] }); // no existing user
+    bcrypt.hash.mockResolvedValue('hashed');
+
+    const { transaction } = require('../src/config/database');
+    transaction.mockImplementation(async (fn) => {
+      const fakeClient = {
+        query: jest.fn().mockResolvedValueOnce({
+          rows: [{
+            id: 'new-user',
+            email: 'newuser@example.com',
+            name: 'New User',
+            phone: null,
+            is_active: true,
+            default_organization_id: null,
+          }],
+        }),
+      };
+      hydrateUserAuthContext.mockResolvedValue({ user: { id: 'new-user', role: 'owner' } });
+      return fn(fakeClient);
+    });
+
+    const result = await authService.register(
+      'New User', 'newuser@example.com', 'Password123', null, {}
+    );
+
+    expect(bcrypt.hash).toHaveBeenCalled();
+    expect(result.token).toBe('signed-token');
+  });
+
+  test('always allows invitation-based signup regardless of flag', async () => {
+    delete process.env.ALLOW_COLD_SIGNUP;
+    query.mockResolvedValueOnce({ rows: [] });
+    bcrypt.hash.mockResolvedValue('hashed');
+
+    const { transaction } = require('../src/config/database');
+    const { consumeInvitation } = require('../src/services/organization.service');
+    transaction.mockImplementation(async (fn) => {
+      const fakeClient = {
+        query: jest.fn().mockResolvedValueOnce({
+          rows: [{
+            id: 'invited-user',
+            email: 'invited@example.com',
+            name: 'Invited User',
+            phone: null,
+            is_active: true,
+            default_organization_id: null,
+          }],
+        }),
+      };
+      hydrateUserAuthContext.mockResolvedValue({ user: { id: 'invited-user', role: 'editor' } });
+      return fn(fakeClient);
+    });
+
+    await authService.register(
+      'Invited User', 'invited@example.com', 'Password123', null, { invitationToken: 'tok-123' }
+    );
+
+    expect(consumeInvitation).toHaveBeenCalled();
+  });
+});
 
 describe('auth.service login', () => {
   beforeEach(() => {
