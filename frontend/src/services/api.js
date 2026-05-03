@@ -76,6 +76,15 @@ export const authAPI = {
   updateMe: (data) => api.put('/auth/me', data),
 };
 
+// Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.
+// `getActive` is public (no auth); `me` and `accept` require authentication.
+export const legalAPI = {
+  getActive: () => api.get('/legal/active'),
+  getDocument: (kind, version) => api.get(`/legal/${kind}/${version}`),
+  myAcceptances: () => api.get('/legal/me'),
+  recordAcceptance: (documentIds) => api.post('/legal/me/accept', { documentIds }),
+};
+
 // Deals
 export const dealsAPI = {
   list: (params) => api.get('/deals', { params }),
