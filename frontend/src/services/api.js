@@ -80,6 +80,11 @@ export const authAPI = {
   verifyEmailRequest: () => api.post('/auth/verify-email/request'),
   verifyEmailConfirm: (token) => api.post('/auth/verify-email/confirm', { token }),
   verifyEmailStatus: () => api.get('/auth/verify-email/status'),
+  // Federated identity — Google.
+  // googleConfig is public (no auth) and tells the SPA whether to render the
+  // Sign in with Google button + which client_id to initialise GIS with.
+  googleConfig: () => api.get('/auth/google/config'),
+  googleSignIn: (data) => api.post('/auth/google', data),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

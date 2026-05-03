@@ -6,11 +6,12 @@ import { useLegalActive } from '../hooks/useLegalActive';
 import usePublicLightTheme from '../hooks/usePublicLightTheme';
 import Checkbox from '../design-system/Checkbox';
 import PublicFooter from '../components/common/PublicFooter';
+import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 
 export default function LoginPage() {
   usePublicLightTheme();
   const navigate = useNavigate();
-  const { login, register, loading, error, clearError } = useAuthStore();
+  const { login, register, googleSignIn, loading, error, clearError } = useAuthStore();
   const { data: legalDocs, loading: legalLoading, error: legalError } = useLegalActive();
 
   const [isRegister, setIsRegister] = useState(false);
@@ -98,6 +99,39 @@ export default function LoginPage() {
     }
   };
 
+  // Google ID token handler. Forwards the token + (on cold signup) the
+  // accepted T&C / Privacy versions to the backend; the backend resolves
+  // login vs bind vs register from the token claims.
+  const handleGoogleCredential = async (idToken) => {
+    if (isRegister) {
+      // Block if T&C not accepted yet — same gate as the email/password form.
+      if (!acceptTerms) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          acceptTerms:
+            'You must accept the Terms & Conditions and Privacy Policy to create an account.',
+        }));
+        return;
+      }
+      if (!legalDocs?.terms_of_service?.version || !legalDocs?.privacy_policy?.version) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          legal: 'Legal documents are loading or unavailable. Please refresh the page in a moment.',
+        }));
+        return;
+      }
+    }
+    const success = await googleSignIn(
+      {
+        idToken,
+        acceptedTermsVersion: legalDocs?.terms_of_service?.version,
+        acceptedPrivacyVersion: legalDocs?.privacy_policy?.version,
+      },
+      rememberMe,
+    );
+    if (success) navigate('/dashboard');
+  };
+
   const toggleMode = () => {
     setIsRegister((prev) => !prev);
     setValidationErrors({});
@@ -136,6 +170,23 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+
+          {/* Google sign-in. The component itself renders nothing (and no
+              divider) when GOOGLE_OAUTH_CLIENT_ID is not configured server-
+              side, so layout stays clean on deployments where Google is dark. */}
+          <div className="mb-4">
+            <GoogleSignInButton
+              onCredential={handleGoogleCredential}
+              text={isRegister ? 'signup_with' : 'signin_with'}
+              disabled={isRegister && !acceptTerms}
+              disabledReason={
+                isRegister && !acceptTerms
+                  ? 'Accept the Terms & Privacy first.'
+                  : ''
+              }
+              showDivider
+            />
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Name (register only) */}
