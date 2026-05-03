@@ -604,3 +604,25 @@ Prepared the next masterplan trust-layer step: source documents can now have pag
 Apply the new Supabase migration in production before page storage and BBMP UAV review rows can persist. Next product steps are OCR extraction into page rows, citation anchors, full attached-file source seeding, and reviewed rule ETL from Volume 6 and `Master Plan.docx`.
 
 ---
+## 2026-05-03 (Settings IA fix + cold-signup gate)
+
+### What was worked on
+
+Reviewed an external critique of the REDIP Settings page IA, verified the claims against the codebase, and shipped the highest-leverage parts of the fix. The Settings page used to mash personal profile fields (name, email, phone, password) together with two big admin cards for the Master Plan zoning library and the Parcel Intelligence review queue — implying every user was supposed to curate Bengaluru RMP 2031 data from their personal profile. Cold signup also handed out Owner role automatically to anyone who found the URL.
+
+The IA cards moved into a new role-gated **Admin** section in the sidebar (visible only to Editor and above), at clean URLs `/dashboard/admin/master-plan` and `/dashboard/admin/parcel-intelligence`. Old `settings/...` paths redirect so existing bookmarks survive. The Settings page is now strictly personal. Self-signup now requires `ALLOW_COLD_SIGNUP=true` in env — invitation-based signup is unaffected.
+
+Deferred (correctly): a full Workspace/Team management UI and a role-mutation endpoint. Solo user for the next ~2 months, so building member-management for zero users would have been gold-plating.
+
+### PRs opened/merged
+
+**PR #126 — `feat(admin-ia): move data-curation pages out of Settings + gate cold signup`** — opened, awaiting merge. 7 files, +231/-65 lines. New file: `frontend/src/utils/roles.js` (frontend mirror of backend `roleSatisfies` so sidebar gating shares the priority table). Three new auth.service tests for the cold-signup gate. All 597 backend tests pass; frontend build clean.
+
+### What's left to do
+
+- Merge PR #126 and smoke-test on the Vercel preview.
+- Set `ALLOW_COLD_SIGNUP=false` (or leave unset) in production env. Default-deny is the new behavior, but verify the env override isn't already set to true somewhere.
+- When a real second user is about to be added: build the Workspace/Team page, the `PATCH /api/organizations/members/:userId/role` endpoint, and an email-verification flow for invites. Plan file at `~/.claude/plans/c-users-rachi-onedrive-uw-desktop-futur-lazy-charm.md` has the spec.
+- Optional Phase 3 polish (defer until usage justifies): a Data Library landing page with stat tiles, keyboard shortcuts on the review queue, page renames.
+
+---
