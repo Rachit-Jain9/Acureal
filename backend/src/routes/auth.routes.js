@@ -1,10 +1,31 @@
 const express = require('express');
 const { body } = require('express-validator');
 const authService = require('../services/auth.service');
+const emailVerificationService = require('../services/emailVerification.service');
 const { authenticate } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
+const log = require('../lib/logger').child({ module: 'auth.routes' });
 
 const router = express.Router();
+
+// Fire-and-forget: dispatch the verification email in the background after
+// register() commits. We never block the signup response on the mailer; if it
+// fails, the user can request another link from the dashboard banner.
+const dispatchVerificationEmailAsync = ({ userId, email, name, ipAddress, userAgent }) => {
+  setImmediate(async () => {
+    try {
+      await emailVerificationService.sendVerificationEmail({
+        userId,
+        email,
+        name,
+        ipAddress,
+        userAgent,
+      });
+    } catch (error) {
+      log.warn('signup_verification_dispatch_failed', { userId, error: error.message });
+    }
+  });
+};
 
 // POST /auth/register
 router.post(
@@ -61,6 +82,19 @@ router.post(
           userAgent: req.headers['user-agent'] || null,
         },
       });
+      // Best-effort: kick off the verification email after the response is
+      // queued. Failure here is logged but does not break signup — the user
+      // can re-request from the dashboard.
+      if (result?.user?.id && result?.user?.email) {
+        dispatchVerificationEmailAsync({
+          userId: result.user.id,
+          email: result.user.email,
+          name: result.user.name,
+          ipAddress: req.ip || null,
+          userAgent: req.headers['user-agent'] || null,
+        });
+      }
+
       res.status(201).json({
         success: true,
         message: 'Account created successfully.',
@@ -71,6 +105,71 @@ router.post(
     }
   }
 );
+
+// POST /auth/verify-email/request — authenticated; user asks for a fresh link
+router.post('/verify-email/request', authenticate, async (req, res, next) => {
+  try {
+    const status = await emailVerificationService.getVerificationStatus(req.user.id);
+    if (status.verified) {
+      return res.json({
+        success: true,
+        message: 'Email is already verified.',
+        data: { verified: true, email: status.email },
+      });
+    }
+
+    const dispatch = await emailVerificationService.sendVerificationEmail({
+      userId: req.user.id,
+      email: status.email,
+      name: req.user.name,
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null,
+    });
+
+    res.json({
+      success: true,
+      message: 'Verification email sent. Check your inbox for the link.',
+      data: {
+        verified: false,
+        email: status.email,
+        delivered: dispatch.delivered,
+        provider: dispatch.provider,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /auth/verify-email/confirm — public; consumes a one-shot token
+router.post(
+  '/verify-email/confirm',
+  [body('token').isString().trim().isLength({ min: 16, max: 256 })],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const { token } = req.body;
+      const result = await emailVerificationService.confirmToken(token);
+      res.json({
+        success: true,
+        message: 'Email verified.',
+        data: { userId: result.userId, email: result.email, verifiedAt: result.verifiedAt },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /auth/verify-email/status — authenticated; UI polls this to show the banner
+router.get('/verify-email/status', authenticate, async (req, res, next) => {
+  try {
+    const status = await emailVerificationService.getVerificationStatus(req.user.id);
+    res.json({ success: true, data: status });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // POST /auth/login
 router.post(
