@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-03 (after PRs #138, #139, #140).
+Last refreshed: 2026-05-04 (after PR #142 — refresh-token rotation + httpOnly cookies).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -25,6 +25,7 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | Vercel hosting | Hobby tier | See §3.1 |
 | Auth — password sign-up | Live, gated by `ALLOW_COLD_SIGNUP` env | Default deny; add invite token to bypass |
 | Auth — Google sign-in | Live (PR #139) | Confirmed `enabled: true` on `/api/auth/google/config` |
+| Auth — token storage | httpOnly cookies + 15-min access / 30-day refresh, rotated on each use (PR #142) | Reuse detection kills the family on replay; legacy `Authorization: Bearer` header still accepted for back-compat |
 | Email verification | Live (PR #138), dev-mode delivery | Links surface in Vercel logs until Resend is wired |
 | Legal docs | Terms v1, Privacy v2, Cookies v1 — published, DRAFT | **Not lawyer-reviewed.** Do not onboard user #2 until reviewed. |
 | Domain | None (using `redip.vercel.app`) | See §3.3 |
@@ -111,6 +112,7 @@ None of these are written in code; all need a human action.
 | `20260504_login_attempts.sql` | ✅ | Per-account login throttle |
 | `20260505_email_verification.sql` | ✅ | Email verification tokens |
 | `20260506_user_oauth.sql` | ✅ | Google OAuth identity binding |
+| `20260507_refresh_tokens.sql` | ✅ | Refresh-token grants with rotation + family revocation |
 
 **No migration is currently pending application.** When the next PR adds one, it surfaces here.
 
@@ -197,8 +199,9 @@ Sourced from this session's plan + earlier session logs. Sequenced by impact.
 - [x] PR #138 — email verification (token + mailer + UI)
 - [x] PR #139 — Google sign-in via raw OIDC
 - [x] PR #140 — Privacy v2 disclosure
-- [ ] **Refresh-token rotation + httpOnly cookie storage** (next PR — highest priority remaining)
-- [ ] "Set first password" flow for OAuth-only users (depends on above)
+- [x] PR #142 — refresh-token rotation + httpOnly cookies (with reuse-detection family revocation)
+- [ ] **"Set first password" flow for OAuth-only users** (next — they currently cannot sign in with password since their bcrypt is intentionally unusable)
+- [ ] **Drop legacy `Authorization` header path + body `data.token`** (cleanup PR ~2 release cycles after #142, once every active session has rolled over to cookies)
 - [ ] Re-acceptance flow for legal-document version bumps (existing users currently grandfathered)
 - [ ] MFA / TOTP (lowest urgency; opt-in)
 - [ ] Email verification *enforcement* — currently the banner reminds; future PR can require verification before sensitive actions
@@ -247,10 +250,10 @@ Files / directories that survived from earlier explorations and should be review
 These are calibrated to REDIP specifically — not generic best-practice. They survive across sessions until you act on them or explicitly mark "won't do".
 
 ### 9.1 Architecture / sequencing
-- **Refresh-token rotation + httpOnly cookies is the single highest-leverage remaining auth task.** OAuth tokens currently sit in localStorage just like password JWTs — XSS exposure is the same. Ship before adding any third sign-in provider.
+- **Token storage is now cookie-based** (PR #142). The legacy `Authorization` header path and `data.token` response body are kept for back-compat through ~2 release cycles, then cut. Schedule the cleanup PR after the post-#142 deploy has been live ≥4 weeks (every old session will have rolled over by then).
 - **Resist adopting Supabase Auth.** REDIP's `users` table is the master and every other system (legal acceptance, org membership, deal events) is built around it. Adopting Supabase Auth means a parallel `auth.users` table with trigger sync — pure liability for a solo-founder MVP.
 - **Resist adopting SAML SSO before a first enterprise prospect asks.** Procurement teams hand you metadata XML on day one of an enterprise pilot — that's the right moment to build it, via WorkOS or Auth0 (NOT Supabase Auth — vendor coupling).
-- **Don't build refresh tokens AND a "set password" flow in the same PR.** Sequence: refresh first, set-password second. Each is invasive enough that mixing them doubles review burden.
+- **The "set first password" flow for OAuth-only users is the next sequenced item.** They currently have a 64-byte random bcrypt they cannot possibly know. Without this flow, an OAuth-only user is locked out if Google ever revokes their account or they delete the linked Google account.
 
 ### 9.2 Compliance / legal
 - **Lawyer red-line is the bottleneck before user #2.** Every other security item in flight (refresh tokens, MFA, etc.) is moot if the legal docs aren't signed off. Treat that engagement as the critical path.
