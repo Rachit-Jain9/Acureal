@@ -27,15 +27,39 @@ router.post(
     body('phone').optional().trim(),
     body('organizationName').optional().trim().isLength({ min: 2, max: 255 }),
     body('invitationToken').optional().trim().isLength({ min: 16, max: 255 }),
+    body('acceptedTermsVersion')
+      .isString()
+      .trim()
+      .isLength({ min: 1, max: 64 })
+      .withMessage('You must accept the current Terms of Service to create an account.'),
+    body('acceptedPrivacyVersion')
+      .isString()
+      .trim()
+      .isLength({ min: 1, max: 64 })
+      .withMessage('You must accept the current Privacy Policy to create an account.'),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const { email, password, phone, organizationName, invitationToken } = req.body;
+      const {
+        email,
+        password,
+        phone,
+        organizationName,
+        invitationToken,
+        acceptedTermsVersion,
+        acceptedPrivacyVersion,
+      } = req.body;
       const name = req.body.name || req.body.fullName;
       const result = await authService.register(name, email, password, phone, {
         organizationName,
         invitationToken,
+        acceptedTermsVersion,
+        acceptedPrivacyVersion,
+        requestContext: {
+          ipAddress: req.ip || null,
+          userAgent: req.headers['user-agent'] || null,
+        },
       });
       res.status(201).json({
         success: true,
