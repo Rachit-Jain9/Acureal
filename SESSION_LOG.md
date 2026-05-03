@@ -4,6 +4,44 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-03 (Phase 1 legal compliance gate + Phase 2 security hardening — PRs #127–#136)
+
+**What was worked on in plain English:**
+- Every new sign-up now records the user's acceptance of Terms of Service and Privacy Policy against a specific versioned document. This is required by India's Digital Personal Data Protection Act 2023 (§6) before the platform can legally onboard anyone other than the founder.
+- The backend gained a per-account login lockout: after 5 wrong password attempts in 15 minutes, that account is locked for 15 minutes. This closes a gap where an attacker could try thousands of passwords across rotating IPs even though IP-level rate limits were already in place.
+- New sign-ups and password changes now check against the HIBP "Pwned Passwords" database using a k-anonymity API (only the first 5 characters of a one-way hash are ever sent). If the password has appeared in known data breaches it is rejected with a plain-English explanation.
+- The site now sends a full suite of security response headers on every request: Content Security Policy, HTTP Strict Transport Security, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy. The CSP allowlist is tight — only the specific domains the app actually talks to are permitted.
+- The Leaflet map marker images (the blue pins that appear on deal parcel maps) are now served from the app itself instead of being fetched from the public npm CDN (unpkg.com). This removed the last external CDN dependency, tightened the CSP further, and means map markers still render even if the CDN is down.
+- Public legal pages were added at /terms, /privacy, /cookies, and /grievance — accessible without logging in. A cookie notice banner appears on first visit and remembers the dismissal.
+- A versioned legal documents table and acceptance log were added to the database. Every user record now carries timestamps for when Terms and Privacy were accepted.
+
+**PRs opened/merged:**
+- PR #127 — DB migration: `legal_documents` + `user_legal_acceptances` tables — merged
+- PR #128 — Backend legal service + routes (`GET /api/legal/active`, acceptance recording in `register()`) — merged
+- PR #129 — Frontend: signup acceptance checkbox, /terms /privacy /cookies /grievance pages, cookie banner, footer links — merged
+- PR #130 — Legal DRAFT content + grievance officer page + breach runbook — merged
+- PR #131 — DB migration: `login_attempts` table for per-account throttle — merged
+- PR #132 — Backend: per-account login throttle (`enforceLoginThrottle`, `recordFailedLogin`, `clearLoginAttempts`) + HIBP password breach check — merged
+- PR #133 — Backend test suite for login throttle and cold-signup gate — merged
+- PR #134 — Backend: wire `isPasswordBreached` into `register()` and `updateUser()` — merged
+- PR #135 — Security headers via `vercel.json`: enforcing CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy — merged
+- PR #136 — Self-host Leaflet marker PNGs; remove `unpkg.com` from CSP `img-src` — merged
+
+**Verification:**
+- Backend test suite: all passing (cold-signup gate, invitation bypass, login throttle lockout, throttle clearing on success, failed-attempt recording).
+- Frontend production build: clean across all PRs.
+- CI: all PRs landed with all checks green (Backend / Frontend / Financial kernel / Audit & migration lint / Vercel).
+- Legal docs seeded in prod via Supabase MCP (`terms_of_service v1`, `privacy_policy v1`, `cookie_policy v1`).
+- `login_attempts` migration applied to prod via Supabase MCP.
+
+**What's left:**
+- **Lawyer red-line required** before onboarding user #2. The DRAFT legal docs cover every DPDP/IT-Rules-mandated section but need a qualified Indian technology/data-protection lawyer to review.
+- Phase 2 remaining: refresh-token rotation + httpOnly cookies (7-day JWT is still in localStorage), email verification flow, MFA/TOTP.
+- Phase 3: AI retry/fallback chain, prompt versioning, response cache.
+- Phase 4: pgvector semantic search, field-level PII encryption, erasure cron.
+
+---
+
 ## 2026-05-02 (continued — Deal-side wiring + IC export + UAV benchmark — PRs #122, #123, #124)
 
 **What was worked on in plain English:**
