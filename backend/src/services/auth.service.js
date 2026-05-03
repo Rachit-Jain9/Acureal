@@ -9,6 +9,7 @@ const {
 } = require('./organization.service');
 const legalService = require('./legal.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
+const { isPasswordBreached } = require('../utils/passwordBreach');
 
 const SALT_ROUNDS = 12;
 
@@ -102,6 +103,18 @@ const register = async (name, email, password, phone = null, options = {}) => {
     acceptedTermsVersion: options.acceptedTermsVersion,
     acceptedPrivacyVersion: options.acceptedPrivacyVersion,
   });
+
+  // Reject passwords that have appeared in known data breaches. Uses
+  // HIBP's k-anonymity API — only the first 5 hex chars of the SHA-1
+  // are sent. Fails open on connectivity errors; bcrypt + throttle still
+  // in force in that case.
+  const breach = await isPasswordBreached(password);
+  if (breach.breached) {
+    throw createError(
+      'This password has appeared in known data breaches and cannot be used. Please choose a stronger, unique password.',
+      400
+    );
+  }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -233,6 +246,14 @@ const updateUser = async (id, data, requestedOrganizationId = null) => {
     const isValid = await bcrypt.compare(data.currentPassword, userResult.rows[0].password_hash);
     if (!isValid) {
       throw createError('Current password is incorrect.', 400);
+    }
+
+    const breach = await isPasswordBreached(data.newPassword);
+    if (breach.breached) {
+      throw createError(
+        'This password has appeared in known data breaches and cannot be used. Please choose a stronger, unique password.',
+        400
+      );
     }
 
     const newHash = await bcrypt.hash(data.newPassword, SALT_ROUNDS);
