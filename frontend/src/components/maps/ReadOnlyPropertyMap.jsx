@@ -42,11 +42,12 @@ function MapClickCapture({ active, onPick }) {
 }
 
 // Default Leaflet marker icons need a manual setup in Vite — without this
-// `Marker` renders as a broken-image. Reuse the standard CDN images.
+// `Marker` renders as a broken-image. Self-hosted from frontend/public/leaflet
+// to avoid a third-party hop and to keep CSP img-src tight.
 const DEFAULT_ICON = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconUrl: '/leaflet/marker-icon.png',
+  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
+  shadowUrl: '/leaflet/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
