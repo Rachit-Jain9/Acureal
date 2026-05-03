@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { runWithRequestContext } = require('./lib/requestContext');
@@ -55,6 +56,12 @@ app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
+
+// Cookie parser — populates req.cookies for the auth middleware (access
+// cookie read), refresh-token endpoint (refresh cookie read), and any
+// future feature that needs cookies. Must come before any route that
+// reads cookies.
+app.use(cookieParser());
 
 // CORS
 const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173')
