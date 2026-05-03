@@ -4,6 +4,43 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-03 (continued — Email verification + Google sign-in — PRs #138, #139)
+
+**What was worked on in plain English:**
+- Every new sign-up now receives a verification email automatically. Anyone whose email isn't verified yet sees a banner across the dashboard with a one-click "Send verification email" button. The verification link works end-to-end without an email provider — in dev/preview the link surfaces in server logs; in production, set `RESEND_API_KEY` + `MAIL_FROM` to switch to real delivery.
+- A "Continue with Google" button now lives on the login screen. One click signs you in if your Google identity matches an existing account, links it to your account on first use, or creates a fresh REDIP account if cold-signup is enabled (with the same Terms & Privacy gate as email/password).
+- The button is hidden on any deployment where the operator has not configured `GOOGLE_OAUTH_CLIENT_ID`, so the PR was safe to merge before Google Cloud Console setup.
+- Google-onboarded users skip email verification — Google guarantees the email is verified, so the dashboard banner never appears for them.
+- Privacy Policy bumped to v2 disclosing Google LLC (Identity Services) as a federated-sign-in sub-processor; v1 already disclosed Google as a Gemini-API processor. The new version is committed under `docs/legal/privacy_policy_v2.md` and is ready for operator publish.
+
+**Why these were the right next steps:**
+- Email verification was the prerequisite for anything that depends on a working contact channel — grievance disclosure (DPDP §8(9) / IT Rules 3(11)), password reset, multi-tenant invitations.
+- Google sign-in via raw OIDC (not Supabase Auth) was the deliberate architectural call: REDIP's `users` table stays the master, `auth.service.js` extends with one new method, and every existing investment (cold-signup gate, legal acceptance, login throttle, organization hydration, deal-events HMAC signing) reuses the current code paths. No parallel auth system, no migration of existing accounts.
+
+**PRs opened/merged:**
+- PR #138 — `feat(auth): email verification — token + mailer + /verify-email + dashboard banner` — squash-merged as `891dfc6`.
+- PR #139 — `feat(auth): one-click Google sign-in via raw OIDC (no Supabase Auth dependency)` — squash-merged.
+
+**Verification:**
+- Backend test suite: 627 → 645 (+18 across email-verification token issuance / supersede / mailer success+failure / token confirmation rejection paths AND Google OAuth login / account-linking / mismatch / cold-signup paths).
+- Frontend production build: clean across both PRs.
+- CI: every PR landed with all checks green (Backend / Frontend / Financial kernel / Audit & migration lint / Vercel).
+
+**Operator follow-ups still to do:**
+- Apply migration `20260505_email_verification.sql` to prod (now done — confirmed by user on 2026-05-03).
+- Apply migration `20260506_user_oauth.sql` to prod via Supabase.
+- Optional: set `RESEND_API_KEY` + `MAIL_FROM` Vercel env vars to flip email verification to real delivery.
+- Google Cloud Console → OAuth 2.0 Client ID; set `GOOGLE_OAUTH_CLIENT_ID` Vercel env to enable the Google button.
+- Republish Privacy Policy v2 (`docs/legal/privacy_policy_v2.md`) via the publish-legal-doc script; existing users will be re-prompted on next protected request once the re-acceptance flow ships (Phase 2 follow-up).
+
+**What's left for Phase 2:**
+- httpOnly cookie + refresh-token rotation (highest-priority remaining item).
+- "Set first password" flow for OAuth-only users (current bcrypt is intentionally unusable).
+- Re-acceptance flow when legal docs bump version (existing users currently grandfathered).
+- MFA / TOTP (lowest urgency for solo founder).
+
+---
+
 ## 2026-05-03 (Phase 1 legal compliance gate + Phase 2 security hardening — PRs #127–#136)
 
 **What was worked on in plain English:**
