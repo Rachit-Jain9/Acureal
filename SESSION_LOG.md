@@ -604,3 +604,55 @@ Prepared the next masterplan trust-layer step: source documents can now have pag
 Apply the new Supabase migration in production before page storage and BBMP UAV review rows can persist. Next product steps are OCR extraction into page rows, citation anchors, full attached-file source seeding, and reviewed rule ETL from Volume 6 and `Master Plan.docx`.
 
 ---
+
+## 2026-05-04 — T&C / Privacy compliance gate at signup (PRs #127-#130)
+
+### What was worked on
+
+Built and shipped the full Terms & Conditions / Privacy Policy acceptance gate at signup, plus four new public legal pages and a cookie notice. This closes a real compliance gap: REDIP could not legally onboard a non-solo user without an explicit consent record under the DPDP Act 2023 §6 and IT Rules 2021 Rule 3(11). Now there is a versioned legal-document table, an append-only acceptance log with IP and user-agent, public-readable Terms / Privacy / Cookie / Grievance pages, a hyperlinked checkbox on the signup form that blocks submit until ticked, and a dismissible cookie banner that auto-adapts to the active theme.
+
+The legal text in `docs/legal/*.md` is structured around DPDP Act 2023, IT Rules 2021, the Indian Contract Act 1872, the Arbitration & Conciliation Act 1996, and CERT-In Directions April 2022 (6-hour breach reporting). Every section is marked DRAFT — a Bengaluru technology / data-protection lawyer must red-line before any non-solo user is onboarded.
+
+### PRs opened/merged
+
+| PR | Title | Theme |
+|---|---|---|
+| **[#127](https://github.com/Rachit-Jain9/REDIP/pull/127)** | `feat(legal): add legal_documents + user_legal_acceptances migration` | DB layer: versioned-document registry, append-only acceptance log, RLS, `users.terms_accepted_at` shortcut |
+| **[#128](https://github.com/Rachit-Jain9/REDIP/pull/128)** | `feat(legal): legal-document service + signup acceptance integration` | Backend: `legal.service.js`, `legal.routes.js`, atomic acceptance recording inside the registration transaction, `scripts/publish-legal-doc.js` operator script. 612/612 backend tests. |
+| **[#129](https://github.com/Rachit-Jain9/REDIP/pull/129)** | `feat(legal): T&C signup gate UI + public Terms/Privacy/Cookie/Grievance pages` | Frontend: `Checkbox` design-system primitive, `Markdown` renderer, `usePublicLightTheme` hook, signup card, four public pages, cookie banner, public footer. 197/197 frontend tests. |
+| **#130** (this PR) | `docs(legal): drafted T&C / Privacy / Cookie content + breach runbook + retention policy + session log` | Five markdown files under `docs/legal/`. Doc-only. |
+
+### Cumulative session totals
+
+- **4 PRs merged** (1 migration, 1 backend, 1 frontend, 1 docs).
+- **Backend tests**: 597 → **612** (+15 across `legal.service` + `auth.signup.terms`).
+- **Frontend tests**: 184 → **197** (+13 across `LoginPage.terms`, `LegalDocPage`, `CookieBanner`).
+- **New routes**: `/api/legal/active`, `/api/legal/:kind/:version`, `/api/legal/me`, `/api/legal/me/accept`. Public pages: `/terms`, `/privacy`, `/cookies`, `/grievance`.
+- **Operator actions required**: 2 — (a) apply migration `database/migrations/20260504_legal_documents_and_acceptances.sql` via Supabase SQL editor, (b) run `node scripts/publish-legal-doc.js` three times to seed Terms / Privacy / Cookie. The frontend's submit button will stay disabled with an inline error until step (b) lands.
+
+### What's left to do
+
+1. **Operator: apply the migration** in Supabase SQL editor. Verify with the `pg_class` queries at the bottom of the migration file. Tell Claude when applied.
+2. **Operator: seed initial legal docs** — once migration is applied, run:
+   ```
+   node scripts/publish-legal-doc.js terms_of_service v1 docs/legal/terms_of_service_v1.md
+   node scripts/publish-legal-doc.js privacy_policy v1 docs/legal/privacy_policy_v1.md
+   node scripts/publish-legal-doc.js cookie_policy v1 docs/legal/cookie_policy_v1.md
+   ```
+   Each is idempotent — safe to re-run. After this, `GET /api/legal/active` returns the three rows, the signup form's submit becomes enabled, and the public legal pages render the markdown bodies.
+3. **Engage a Bengaluru technology / data-protection lawyer** to red-line the DRAFT skeletons and fill in the placeholders ([LEGAL ENTITY NAME], [REGISTERED ADDRESS], [GRIEVANCE OFFICER NAME], [DATE]) before any user other than the founder is onboarded. Budget: ₹40k–₹1.5L for a first-pass review.
+4. **Existing-user re-acceptance flow (Phase 2)** — when a new version is published, currently-signed-in users continue to use the Platform without re-prompting. The `legal_documents.is_current` + `users.terms_accepted_at` columns already support this; needs a route guard + modal in the dashboard. Not in scope for this session.
+5. **Sign DPAs with sub-processors** (Anthropic, Google, Supabase, Vercel) before the second user is onboarded. Each provider has a self-serve commercial DPA portal as of late 2025 / early 2026.
+
+### Compliance posture after this session
+
+- ✅ DPDP Act 2023 §6 — explicit, informed, recorded consent against a versioned notice.
+- ✅ DPDP Act 2023 §11–14 — rights disclosed in Privacy Policy; grievance pathway exists.
+- ✅ IT Rules 2021 Rule 3(11) — Grievance Officer page live with named officer, email, SLA.
+- ✅ CERT-In Directions April 2022 §II — breach runbook documented with 6-hour reporting workflow.
+- ✅ Indian Contract Act 1872 — click-wrap acceptance with audit-grade record (IP, UA, timestamp).
+- ✅ Indian Arbitration & Conciliation Act 1996 — sole-arbitrator clause, Bengaluru seat, English language.
+- ⏸ DPDP §16 cross-border transfers — disclosed in Privacy Policy; DPA execution with US providers pending.
+- ⏸ DPDP §8(4) reasonable safeguards — bcrypt(12) + RLS + HMAC-signed audit log in place; refresh-token rotation, MFA, field-level PII encryption pending (Phase 2/4 of the security roadmap).
+
+---
