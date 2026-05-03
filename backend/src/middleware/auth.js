@@ -3,20 +3,34 @@ const { getJwtSecret } = require('../services/auth.service');
 const { hydrateUserAuthContext } = require('../services/organization.service');
 const { roleSatisfies } = require('../constants/roles');
 const { setRequestContext } = require('../lib/requestContext');
+const { readAccessCookie } = require('../lib/cookies');
 const log = require('../lib/logger').child({ module: 'auth' });
+
+// Token sources, in order:
+//   1. `redip.access` httpOnly cookie — preferred path going forward.
+//   2. `Authorization: Bearer <jwt>` header — kept for back-compat with
+//      existing localStorage sessions and for any non-browser API client.
+//
+// Once the SPA has been on cookies for two release cycles, the header
+// path can be retired in a follow-up PR.
+const extractAccessToken = (req) => {
+  const cookieToken = readAccessCookie(req);
+  if (cookieToken) return cookieToken;
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) return header.substring(7);
+  return null;
+};
 
 const authenticate = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extractAccessToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return res.status(401).json({
         success: false,
         message: 'Authentication required. Please provide a valid token.',
       });
     }
-
-    const token = authHeader.substring(7);
 
     let decoded;
     try {

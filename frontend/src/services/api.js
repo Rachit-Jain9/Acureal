@@ -15,20 +15,33 @@ const resolveApiUrl = () => {
 
 const API_URL = resolveApiUrl();
 
+// `withCredentials: true` is the linchpin of the cookie-based auth path:
+// it tells fetch / XHR to include cookies on cross-origin requests AND
+// honour Set-Cookie response headers. Backend CORS already advertises
+// `credentials: true`, so this is the only client-side flip required.
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
 const isSessionBootstrapRequest = (config) => {
   const url = String(config?.url || '').toLowerCase();
   return url === '/auth/login'
     || url === '/auth/register'
+    || url === '/auth/google'
+    || url === '/auth/refresh'
     || url.endsWith('/auth/login')
-    || url.endsWith('/auth/register');
+    || url.endsWith('/auth/register')
+    || url.endsWith('/auth/google')
+    || url.endsWith('/auth/refresh');
 };
 
-// Attach JWT token to requests
+// Request interceptor — attaches the legacy Authorization header for any
+// session that still has a JWT in localStorage / sessionStorage. New
+// sessions issued after PR #142 use httpOnly cookies and never write to
+// storage, so this branch is a back-compat path that can be removed once
+// every active token has rolled over.
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const rawUser = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -51,19 +64,66 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 responses
+// 401 interceptor with single-attempt refresh. On the first 401, post to
+// /auth/refresh (which uses the path-scoped refresh cookie). If that
+// succeeds, retry the original request once. If it fails — or the 401 came
+// from the refresh endpoint itself — drop everything and bounce to login.
+//
+// `_retryAttempted` on the config is the recursion guard: a request that
+// already retried once does not retry again (avoids loops on stuck 401s).
+let refreshInFlight = null;
+
+const performRefresh = async () => {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = api
+    .post('/auth/refresh')
+    .finally(() => {
+      refreshInFlight = null;
+    });
+  return refreshInFlight;
+};
+
+const clearLocalSession = () => {
+  // Wipe legacy token/user copies so the next reload doesn't re-attach a
+  // dead Authorization header.
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+};
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
+  async (error) => {
+    const original = error.config || {};
+    const status = error.response?.status;
+    const isRefreshCall = String(original.url || '').endsWith('/auth/refresh');
+
+    // 401 on /auth/refresh itself — the refresh cookie is gone or the
+    // family was revoked. No point retrying; bounce to login.
+    if (status === 401 && isRefreshCall) {
+      clearLocalSession();
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
+      return Promise.reject(error);
     }
+
+    // Generic 401 — try one refresh, then replay the original request.
+    if (status === 401 && !original._retryAttempted) {
+      original._retryAttempted = true;
+      try {
+        await performRefresh();
+        return api(original);
+      } catch (refreshErr) {
+        clearLocalSession();
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshErr);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -85,6 +145,12 @@ export const authAPI = {
   // Sign in with Google button + which client_id to initialise GIS with.
   googleConfig: () => api.get('/auth/google/config'),
   googleSignIn: (data) => api.post('/auth/google', data),
+  // Cookie-based session lifecycle — refresh rotates both cookies; logout
+  // revokes the refresh-token family and clears both cookies. Both are
+  // safe to call without a current session (logout is idempotent;
+  // refresh returns 401 and the interceptor falls through to /login).
+  refresh: () => api.post('/auth/refresh'),
+  logout: () => api.post('/auth/logout'),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

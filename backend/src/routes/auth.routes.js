@@ -1,12 +1,35 @@
+const jwt = require('jsonwebtoken');
 const express = require('express');
 const { body } = require('express-validator');
 const authService = require('../services/auth.service');
 const emailVerificationService = require('../services/emailVerification.service');
+const refreshTokenService = require('../services/refreshToken.service');
 const { authenticate } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
+const {
+  setAccessCookie,
+  setRefreshCookie,
+  clearAuthCookies,
+  readRefreshCookie,
+} = require('../lib/cookies');
 const log = require('../lib/logger').child({ module: 'auth.routes' });
 
 const router = express.Router();
+
+// On every successful auth (login, register, google), issue a fresh
+// refresh-token family and set BOTH cookies (15-min access + 30-day
+// refresh). The access JWT is also returned in the response body for
+// backward compatibility with SPAs still on the localStorage path; once
+// every client has cycled to cookies, that body field can be retired.
+const issueSessionCookies = async (res, { user, token }, requestContext = {}) => {
+  setAccessCookie(res, token);
+  const { rawToken: refreshToken } = await refreshTokenService.issueFamily({
+    userId: user.id,
+    ipAddress: requestContext.ipAddress || null,
+    userAgent: requestContext.userAgent || null,
+  });
+  setRefreshCookie(res, refreshToken);
+};
 
 // Fire-and-forget: dispatch the verification email in the background after
 // register() commits. We never block the signup response on the mailer; if it
@@ -94,6 +117,11 @@ router.post(
           userAgent: req.headers['user-agent'] || null,
         });
       }
+
+      await issueSessionCookies(res, result, {
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
 
       res.status(201).json({
         success: true,
@@ -207,6 +235,11 @@ router.post(
           ? 'Google sign-in linked to your existing account.'
           : 'Login successful.';
 
+      await issueSessionCookies(res, result, {
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+
       res.status(status).json({ success: true, message, data: result });
     } catch (error) {
       next(error);
@@ -241,6 +274,12 @@ router.post(
     try {
       const { email, password } = req.body;
       const result = await authService.login(email, password, req.header('x-organization-id'));
+
+      await issueSessionCookies(res, result, {
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+
       res.json({
         success: true,
         message: 'Login successful.',
@@ -251,6 +290,101 @@ router.post(
     }
   }
 );
+
+// POST /auth/refresh — rotate the refresh token (cookie-only).
+//
+// The SPA never sees the refresh token; it sits in a path-scoped httpOnly
+// cookie that is only sent to /api/auth/refresh. The client just calls
+// this endpoint when an access-cookie request comes back 401.
+//
+// Reuse detection: if a previously-rotated token is presented, the entire
+// family is revoked (handled in refreshTokenService.rotate). The 401
+// returned here drops the SPA back to /login with a fresh sign-in.
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const presented = readRefreshCookie(req);
+    if (!presented) {
+      // Distinguishable from "expired" so the SPA can avoid logging the
+      // user out on a transient navigation that happens before the cookie
+      // is set (e.g., direct hit to a protected URL on a fresh browser).
+      return res.status(401).json({
+        success: false,
+        message: 'No active session.',
+        code: 'NO_REFRESH_TOKEN',
+      });
+    }
+
+    const rotation = await refreshTokenService.rotate({
+      rawToken: presented,
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null,
+    });
+
+    // Mint a fresh access JWT for the user. We re-fetch role from the DB
+    // to pick up any role change that happened mid-session (deactivation,
+    // role bump). hydrateUserAuthContext throws on deactivated accounts.
+    const { hydrateUserAuthContext } = require('../services/organization.service');
+    const authContext = await hydrateUserAuthContext(rotation.userId, null);
+
+    if (!authContext.user.is_active) {
+      // Deactivated mid-session — revoke the family we just rotated into,
+      // clear cookies, force re-auth.
+      await refreshTokenService.revokeFamily(rotation.familyId, 'security');
+      clearAuthCookies(res);
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact the administrator.',
+      });
+    }
+
+    const accessToken = jwt.sign(
+      { userId: authContext.user.id, role: authContext.user.role },
+      authService.getJwtSecret(),
+      { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
+    );
+
+    setAccessCookie(res, accessToken);
+    setRefreshCookie(res, rotation.rawToken);
+
+    res.json({
+      success: true,
+      data: { user: authContext.user, token: accessToken },
+    });
+  } catch (error) {
+    // On any rotation failure (unknown token / expired / family killed),
+    // sweep the cookies so the SPA does not loop on a dead refresh.
+    if (error?.statusCode === 401 || error?.statusCode === 403) {
+      clearAuthCookies(res);
+    }
+    next(error);
+  }
+});
+
+// POST /auth/logout — revoke the refresh-token family + clear cookies.
+//
+// Authentication is NOT required here: the canonical case for logout is a
+// session that has already gone bad (access expired, refresh refused), and
+// we still want to clear server-side state. We use the refresh cookie if
+// present, regardless of access-token validity.
+router.post('/logout', async (req, res, next) => {
+  try {
+    const presented = readRefreshCookie(req);
+    if (presented) {
+      const family = await refreshTokenService.findFamilyByToken(presented);
+      if (family?.family_id) {
+        await refreshTokenService.revokeFamily(family.family_id, 'logout');
+      }
+    }
+    clearAuthCookies(res);
+    res.json({ success: true, message: 'Logged out.' });
+  } catch (error) {
+    // Logout must never fail visibly — clearing cookies is the user-facing
+    // contract. Log the server-side error and return success.
+    log.warn('logout_revoke_failed', { error: error?.message });
+    clearAuthCookies(res);
+    res.json({ success: true, message: 'Logged out.' });
+  }
+});
 
 // GET /auth/me
 router.get('/me', authenticate, async (req, res, next) => {

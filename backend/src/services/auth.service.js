@@ -78,11 +78,19 @@ const getJwtSecret = () => {
   return 'redip-dev-jwt-secret-change-me-please';
 };
 
+// Access tokens are short-lived (15 min) and rotated via refresh-token
+// cookies. The 7-day fallback is kept ONLY for the JWT_EXPIRES_IN env
+// override — if an operator pins a longer expiry, refresh-token rotation
+// becomes meaningless but the system still works (back-compat).
+//
+// Tokens issued before this default flipped from '7d' → '15m' continue to
+// validate against their original `exp` claim until that claim passes;
+// JWT verification is self-describing and indifferent to the default.
 const generateToken = (userId, role) =>
   jwt.sign(
     { userId, role },
     getJwtSecret(),
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
 
 const isOrganizationAccessDenied = (error) =>

@@ -132,7 +132,15 @@ const useAuthStore = create((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    // Best-effort server-side revoke. Failure is logged but never blocks
+    // the local sign-out — the user expects the UI to log them out
+    // immediately, and the cookies will expire on their own anyway.
+    try {
+      await authAPI.logout();
+    } catch {
+      // ignored
+    }
     clearSession();
     set({ user: null, token: null, isAuthenticated: false, sessionPersistence: 'session' });
   },
