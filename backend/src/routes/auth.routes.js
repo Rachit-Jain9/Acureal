@@ -171,6 +171,64 @@ router.get('/verify-email/status', authenticate, async (req, res, next) => {
   }
 });
 
+// POST /auth/google — federated sign-in / sign-up via Google ID token.
+// Body: { idToken, acceptedTermsVersion?, acceptedPrivacyVersion?, invitationToken? }.
+// Acceptance versions are required only on cold signup; existing users
+// (matched by oauth identity or email) skip the check because their prior
+// acceptance is already on file.
+router.post(
+  '/google',
+  [
+    body('idToken').isString().isLength({ min: 20, max: 4096 }).withMessage('Google ID token is required.'),
+    body('acceptedTermsVersion').optional().isString().trim().isLength({ min: 1, max: 64 }),
+    body('acceptedPrivacyVersion').optional().isString().trim().isLength({ min: 1, max: 64 }),
+    body('invitationToken').optional().trim().isLength({ min: 16, max: 255 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const { idToken, acceptedTermsVersion, acceptedPrivacyVersion, invitationToken } = req.body;
+      const result = await authService.loginOrRegisterWithGoogle(idToken, {
+        acceptedTermsVersion,
+        acceptedPrivacyVersion,
+        invitationToken,
+        requestedOrganizationId: req.header('x-organization-id') || null,
+        requestContext: {
+          ipAddress: req.ip || null,
+          userAgent: req.headers['user-agent'] || null,
+        },
+      });
+
+      const status = result.mode === 'register' ? 201 : 200;
+      const message =
+        result.mode === 'register'
+          ? 'Account created with Google.'
+          : result.mode === 'bound'
+          ? 'Google sign-in linked to your existing account.'
+          : 'Login successful.';
+
+      res.status(status).json({ success: true, message, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /auth/google/config — public; tells the frontend whether to render the
+// Sign in with Google button and which client ID to use. Avoids embedding the
+// client ID in the SPA bundle (it's not secret, but avoiding a redeploy when
+// we rotate is cheaper than recompiling).
+router.get('/google/config', (req, res) => {
+  const googleOAuth = require('../lib/oauthGoogle');
+  if (!googleOAuth.isConfigured()) {
+    return res.json({ success: true, data: { enabled: false, clientId: null } });
+  }
+  res.json({
+    success: true,
+    data: { enabled: true, clientId: googleOAuth.getClientId() },
+  });
+});
+
 // POST /auth/login
 router.post(
   '/login',

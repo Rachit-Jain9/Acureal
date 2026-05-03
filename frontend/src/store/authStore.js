@@ -102,6 +102,36 @@ const useAuthStore = create((set) => ({
     }
   },
 
+  // Federated sign-in / sign-up via Google ID token. The backend resolves
+  // (login vs bind vs register) based on the (provider, subject) and email
+  // claims; the frontend only forwards the token + (on cold signup) the
+  // accepted T&C / Privacy versions.
+  googleSignIn: async ({ idToken, acceptedTermsVersion, acceptedPrivacyVersion, invitationToken }, rememberMe = false) => {
+    set({ loading: true, error: null });
+    try {
+      const { data } = await authAPI.googleSignIn({
+        idToken,
+        acceptedTermsVersion,
+        acceptedPrivacyVersion,
+        invitationToken,
+      });
+      const { user, token } = data.data;
+      saveSession(token, user, rememberMe);
+      set({
+        user,
+        token,
+        isAuthenticated: true,
+        loading: false,
+        sessionPersistence: rememberMe ? 'persistent' : 'session',
+      });
+      return true;
+    } catch (err) {
+      const message = getRequestErrorMessage(err, 'Google sign-in failed');
+      set({ error: message, loading: false });
+      return false;
+    }
+  },
+
   logout: () => {
     clearSession();
     set({ user: null, token: null, isAuthenticated: false, sessionPersistence: 'session' });
