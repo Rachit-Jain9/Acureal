@@ -18,10 +18,16 @@ jest.mock('../src/services/organization.service', () => ({
   hydrateUserAuthContext: jest.fn(),
 }));
 
+jest.mock('../src/services/legal.service', () => ({
+  resolveSignupAcceptance: jest.fn().mockResolvedValue([1, 2]),
+  recordAcceptance: jest.fn().mockResolvedValue(undefined),
+}));
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../src/config/database');
 const { hydrateUserAuthContext } = require('../src/services/organization.service');
+const legalService = require('../src/services/legal.service');
 const authService = require('../src/services/auth.service');
 
 const makeAccessDeniedError = () => {

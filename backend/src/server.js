@@ -35,6 +35,7 @@ const localityIntelligenceRoutes = require('./routes/localityIntelligence.routes
 const masterPlanRoutes = require('./routes/masterplan.routes');
 const parcelIntelligenceRoutes = require('./routes/parcelIntelligence.routes');
 const evidenceLinksRoutes = require('./routes/evidenceLinks.routes');
+const legalRoutes = require('./routes/legal.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -168,6 +169,7 @@ app.use('/api/locality-intelligence', localityIntelligenceRoutes);
 app.use('/api/master-plan', masterPlanRoutes);
 app.use('/api/parcel-intelligence', parcelIntelligenceRoutes);
 app.use('/api', evidenceLinksRoutes);
+app.use('/api/legal', legalRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

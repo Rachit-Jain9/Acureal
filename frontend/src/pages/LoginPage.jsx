@@ -1,15 +1,22 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, UserPlus, Mail, Lock, User, Phone, Eye, EyeOff } from 'lucide-react';
 import useAuthStore from '../store/authStore';
+import { useLegalActive } from '../hooks/useLegalActive';
+import usePublicLightTheme from '../hooks/usePublicLightTheme';
+import Checkbox from '../design-system/Checkbox';
+import PublicFooter from '../components/common/PublicFooter';
 
 export default function LoginPage() {
+  usePublicLightTheme();
   const navigate = useNavigate();
   const { login, register, loading, error, clearError } = useAuthStore();
+  const { data: legalDocs, loading: legalLoading, error: legalError } = useLegalActive();
 
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -52,6 +59,15 @@ export default function LoginPage() {
       errors.phone = 'Enter a valid 10-digit phone number';
     }
 
+    if (isRegister && !acceptTerms) {
+      errors.acceptTerms = 'You must accept the Terms & Conditions and Privacy Policy to create an account.';
+    }
+
+    if (isRegister && (!legalDocs?.terms_of_service?.version || !legalDocs?.privacy_policy?.version)) {
+      errors.legal =
+        'Legal documents are loading or unavailable. Please refresh the page in a moment.';
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -68,6 +84,8 @@ export default function LoginPage() {
           email: form.email,
           password: form.password,
           phone: form.phone || undefined,
+          acceptedTermsVersion: legalDocs?.terms_of_service?.version,
+          acceptedPrivacyVersion: legalDocs?.privacy_policy?.version,
         },
         rememberMe,
       );
@@ -86,8 +104,12 @@ export default function LoginPage() {
     clearError();
   };
 
+  const submitDisabled =
+    loading || (isRegister && (!acceptTerms || legalLoading || !!legalError));
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
+    <div className="min-h-screen flex flex-col bg-stone-50">
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
@@ -234,10 +256,89 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {/* Required acceptance — register only */}
+            {isRegister && (
+              <div
+                className={`rounded-lg border px-3 py-3 ${
+                  validationErrors.acceptTerms
+                    ? 'border-rose-300 bg-rose-50'
+                    : 'border-hairline-strong bg-bg-secondary'
+                }`}
+              >
+                <Checkbox
+                  id="acceptTerms"
+                  checked={acceptTerms}
+                  onChange={(e) => {
+                    setAcceptTerms(e.target.checked);
+                    if (validationErrors.acceptTerms) {
+                      setValidationErrors((prev) => ({ ...prev, acceptTerms: null }));
+                    }
+                  }}
+                  tone={validationErrors.acceptTerms ? 'error' : 'default'}
+                  required
+                >
+                  <span className="text-sm text-stone-700 leading-snug">
+                    I have read and agree to the{' '}
+                    <Link
+                      to="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#c2410c] hover:text-[#9a3412] underline underline-offset-2"
+                    >
+                      Terms &amp; Conditions
+                    </Link>{' '}
+                    and{' '}
+                    <Link
+                      to="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#c2410c] hover:text-[#9a3412] underline underline-offset-2"
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </Checkbox>
+                {validationErrors.acceptTerms && (
+                  <p className="text-xs text-rose-700 mt-2">{validationErrors.acceptTerms}</p>
+                )}
+                {validationErrors.legal && (
+                  <p className="text-xs text-rose-700 mt-2">{validationErrors.legal}</p>
+                )}
+                {legalError && (
+                  <p className="text-xs text-rose-700 mt-2">
+                    Could not load the current Terms and Privacy versions. Please refresh the page
+                    or contact{' '}
+                    <a href="mailto:grievance@redip.in" className="underline">
+                      grievance@redip.in
+                    </a>
+                    .
+                  </p>
+                )}
+                {legalLoading && !legalError && (
+                  <p className="mt-2 text-xs text-stone-500">Loading current versions…</p>
+                )}
+                {!legalLoading && !legalError && legalDocs?.terms_of_service && (
+                  <p className="mt-2 text-xs text-stone-500">
+                    Acceptance is recorded with timestamp, IP, and browser for audit (DPDP Act
+                    2023 §6). Current versions:{' '}
+                    <span className="font-mono">
+                      Terms {legalDocs.terms_of_service.version}
+                    </span>
+                    ,{' '}
+                    <span className="font-mono">
+                      Privacy {legalDocs.privacy_policy?.version || '—'}
+                    </span>
+                    .
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitDisabled}
               className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#c2410c] hover:brightness-95 text-white rounded-sm text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -270,6 +371,8 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+      </div>
+      <PublicFooter />
     </div>
   );
 }

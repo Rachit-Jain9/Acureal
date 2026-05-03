@@ -7,6 +7,7 @@ const {
   createWorkspaceForUser,
   hydrateUserAuthContext,
 } = require('./organization.service');
+const legalService = require('./legal.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
 
 const SALT_ROUNDS = 12;
@@ -84,12 +85,23 @@ const register = async (name, email, password, phone = null, options = {}) => {
     throw createError('An account with this email already exists.', 409);
   }
 
+  // Cold-signup gate first — cheap env check, fails fast for anonymous
+  // arrivals at /register. Invitation-token registrations are always allowed
+  // regardless of the env flag.
   if (!options.invitationToken && !isColdSignupAllowed()) {
     throw createError(
       'Sign-up is by invitation only. Please ask your workspace admin to invite you.',
       403
     );
   }
+
+  // Validate the legal-document acceptance BEFORE hashing the password.
+  // Throws 400 if the client did not echo back current versions, 409 if
+  // the published version moved between page-load and submit.
+  const legalDocumentIds = await legalService.resolveSignupAcceptance({
+    acceptedTermsVersion: options.acceptedTermsVersion,
+    acceptedPrivacyVersion: options.acceptedPrivacyVersion,
+  });
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -121,6 +133,18 @@ const register = async (name, email, password, phone = null, options = {}) => {
         organizationName: options.organizationName,
       });
     }
+
+    // Record legal acceptance inside the same transaction. If the user row
+    // commits, the acceptance row commits — never one without the other.
+    await legalService.recordAcceptance(
+      {
+        userId: user.id,
+        documentIds: legalDocumentIds,
+        ipAddress: options.requestContext?.ipAddress || null,
+        userAgent: options.requestContext?.userAgent || null,
+      },
+      client
+    );
 
     const authContext = await hydrateUserAuthContext(user.id, null, client);
     const token = generateToken(authContext.user.id, authContext.user.role);
