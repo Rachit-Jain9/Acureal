@@ -30,8 +30,13 @@
 const path = require('path');
 const fs = require('fs');
 
-require('dotenv').config({ path: path.resolve(__dirname, '..', 'backend', '.env') });
-require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+// `dotenv` lives in backend/node_modules (it is a backend-only dependency),
+// so requiring by bare name fails when this script is run from the repo
+// root. Resolve through the absolute path inside backend/node_modules.
+const backendNodeModules = path.resolve(__dirname, '..', 'backend', 'node_modules');
+const dotenv = require(path.join(backendNodeModules, 'dotenv'));
+dotenv.config({ path: path.resolve(__dirname, '..', 'backend', '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const legalService = require(path.resolve(__dirname, '..', 'backend', 'src', 'services', 'legal.service'));
 
