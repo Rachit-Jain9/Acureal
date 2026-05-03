@@ -4,6 +4,33 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Refresh-token rotation + httpOnly cookies — PRs #141, #142)
+
+**What was worked on in plain English:**
+- Tokens are no longer in your browser's localStorage. New sign-ins put the access token in an httpOnly cookie that JavaScript cannot read — XSS-based session theft is no longer possible for new sessions.
+- The session refreshes itself silently every 15 minutes via a path-scoped refresh cookie that only travels to one endpoint (`/api/auth/refresh`). If a captured refresh token is replayed by an attacker, the system detects the duplicate use, kills the entire session family, and forces a fresh login on both sides.
+- Logout actually revokes the server-side session now. Before, "log out" just cleared local storage; the JWT stayed valid for 7 days. Now the refresh family is marked revoked immediately and any cached access token is irrelevant within 15 minutes.
+- Existing localStorage sessions keep working until their original 7-day token expiry — no forced logout. Once they cycle, they get the new cookie pair.
+- A consolidated **OPERATOR_HANDBOOK.md** landed earlier in the day to give a single dashboard for migrations, tier-upgrade decisions, APIs, routines, and standing recommendations. Read at session start; update at session end.
+
+**PRs opened/merged:**
+- PR #141 — `docs(handbook): single operator dashboard` — squash-merged.
+- PR #142 — `feat(auth): refresh-token rotation + httpOnly cookies` — squash-merged. Migration `20260507_refresh_tokens.sql` applied to prod via Supabase MCP. Live `/api/auth/refresh` smoke-test confirmed the expected `401 NO_REFRESH_TOKEN` response when no refresh cookie is presented.
+
+**Verification:**
+- Backend test suite: 645 → 657 (+12 across refresh-token issuance, rotation happy path, reuse detection, expired/unknown/malformed token rejection, family revoke, findFamilyByToken).
+- Frontend production build: clean.
+- CI: every PR landed with all checks green.
+
+**What's left for Phase 2:**
+- "Set first password" flow for OAuth-only users (currently their bcrypt is intentionally unusable).
+- Cleanup PR (~2 release cycles out) — drop the legacy `Authorization` header path + the `data.token` response body once every active session has cycled to cookies.
+- Re-acceptance flow when legal docs bump version (existing users currently grandfathered).
+- MFA / TOTP (lowest urgency for solo founder).
+- Email verification *enforcement* — currently the banner reminds; future PR can require verification before sensitive actions.
+
+---
+
 ## 2026-05-03 (continued — Email verification + Google sign-in — PRs #138, #139)
 
 **What was worked on in plain English:**
