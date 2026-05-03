@@ -2,18 +2,31 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Brain, BarChart3,
   FileBarChart2, Settings, LogOut, ChevronLeft, ChevronRight, X,
+  Shield, Map, Database,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
+import { roleSatisfies } from '../../utils/roles';
 
-const navItems = [
+const primaryNavItems = [
   { to: '/dashboard',              icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/dashboard/deals',        icon: Briefcase,        label: 'Deals' },
   { to: '/dashboard/intelligence', icon: Brain,            label: 'Market Intelligence' },
   { to: '/dashboard/comps',        icon: BarChart3,        label: 'Comps' },
   { to: '/dashboard/reports',      icon: FileBarChart2,    label: 'Reports / Exports' },
-  { to: '/dashboard/settings',     icon: Settings,         label: 'Admin / Settings' },
+];
+
+// Admin group: shared data curation surfaces. Visible only to roles that can
+// actually contribute (editor and above). Viewers see nothing here — they
+// don't approve zones or evidence facts.
+const adminNavItems = [
+  { to: '/dashboard/admin/master-plan',          icon: Map,      label: 'Master Plan' },
+  { to: '/dashboard/admin/parcel-intelligence',  icon: Database, label: 'Parcel Intelligence' },
+];
+
+const tailNavItems = [
+  { to: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
 
 // Two rendering modes share this component:
@@ -26,6 +39,34 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
   const { logout, user } = useAuthStore();
 
   const desktopWidth = collapsed ? 'md:w-16' : 'md:w-60';
+  const showAdminGroup = roleSatisfies(user?.role, ['editor']);
+
+  const renderItem = ({ to, icon: Icon, label }) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/dashboard'}
+      className={({ isActive }) =>
+        clsx(
+          'group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative',
+          isActive
+            ? 'bg-accent-soft text-accent font-medium'
+            : 'text-content-secondary hover:bg-surface',
+        )
+      }
+      title={collapsed ? label : undefined}
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm bg-accent" />
+          )}
+          <Icon size={17} className="flex-shrink-0" />
+          {!collapsed && <span>{label}</span>}
+        </>
+      )}
+    </NavLink>
+  );
 
   return (
     <>
@@ -83,32 +124,28 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
 
         {/* Navigation */}
         <nav className="flex-1 py-4 space-y-0.5 px-2">
-          {navItems.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/dashboard'}
-              className={({ isActive }) =>
-                clsx(
-                  'group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative',
-                  isActive
-                    ? 'bg-accent-soft text-accent font-medium'
-                    : 'text-content-secondary hover:bg-surface',
-                )
-              }
-              title={collapsed ? label : undefined}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm bg-accent" />
-                  )}
-                  <Icon size={17} className="flex-shrink-0" />
-                  {!collapsed && <span>{label}</span>}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {primaryNavItems.map(renderItem)}
+
+          {showAdminGroup && (
+            <>
+              <div
+                className={clsx(
+                  'pt-4 pb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-content-muted',
+                  collapsed && 'sr-only',
+                )}
+                aria-hidden={collapsed}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Shield size={11} />
+                  Admin
+                </span>
+              </div>
+              {adminNavItems.map(renderItem)}
+            </>
+          )}
+
+          <div className="pt-4 pb-1 px-3" aria-hidden="true" />
+          {tailNavItems.map(renderItem)}
         </nav>
 
         {/* User / logout */}

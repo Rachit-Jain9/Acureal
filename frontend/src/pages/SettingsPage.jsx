@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, Shield, ChevronRight, Database } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
@@ -240,39 +239,6 @@ export default function SettingsPage() {
         title="Settings"
         description="Manage your profile, security, and preferences"
       />
-
-      {/* Admin areas */}
-      <Link
-        to="/dashboard/settings/master-plan"
-        className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-hairline-strong p-4 hover:border-primary-300 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary-50 text-primary-600">
-            <Shield size={18} />
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-content-primary">Master Plan — Regulatory Data</div>
-            <div className="text-xs text-content-secondary">Zoning library (FSI tiers, setbacks, uses). Bengaluru RMP 2031 Draft.</div>
-          </div>
-        </div>
-        <ChevronRight size={16} className="text-content-muted" />
-      </Link>
-
-      <Link
-        to="/dashboard/settings/parcel-intelligence"
-        className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-hairline-strong p-4 hover:border-primary-300 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary-50 text-primary-600">
-            <Database size={18} />
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-content-primary">Parcel Intelligence Operations</div>
-            <div className="text-xs text-content-secondary">Evidence review queue, provider readiness, K-GIS cache, and guidance-value status.</div>
-          </div>
-        </div>
-        <ChevronRight size={16} className="text-content-muted" />
-      </Link>
 
       {/* Profile Section */}
       <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">

@@ -108,8 +108,13 @@ export default function App() {
           <Route path="compare" element={withSuspense(<DealComparePage />)} />
           <Route path="reports" element={withSuspense(<ReportsPage />)} />
           <Route path="settings" element={withSuspense(<SettingsPage />)} />
-          <Route path="settings/master-plan" element={withSuspense(<MasterPlanAdminPage />)} />
-          <Route path="settings/parcel-intelligence" element={withSuspense(<ParcelIntelligenceAdminPage />)} />
+          {/* Admin / data-curation surfaces — moved out of Settings (which is now
+              personal profile only). Old /settings/* paths kept as redirects so
+              existing bookmarks don't break. */}
+          <Route path="admin/master-plan" element={withSuspense(<MasterPlanAdminPage />)} />
+          <Route path="admin/parcel-intelligence" element={withSuspense(<ParcelIntelligenceAdminPage />)} />
+          <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
+          <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}
           <Route path="documents" element={<Navigate to="/dashboard/deals" replace />} />
           <Route path="activities" element={<Navigate to="/dashboard/deals" replace />} />
