@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 /**
  * Gemini extraction + classification prompts, keyed by `doc_type`.
  *
@@ -23,10 +25,26 @@
  *      `evidenceIngestion.service.js`. If it's a simple field grab, the
  *      generic path through `extraction.service.js::extractDocument` is
  *      enough.
+ *   4. Bump `PROMPT_REGISTRY_VERSION` below to `YYYY-MM-DD.<n>`.
+ *
+ * Versioning:
+ *   - `PROMPT_REGISTRY_VERSION` is bumped manually whenever ANY prompt in
+ *     this file changes. The version + per-prompt sha256 ride into
+ *     `ai_call_logs.metadata` so an extraction can always be replayed
+ *     against the prompt that produced it. They also key the response
+ *     cache so a prompt change naturally invalidates prior cached
+ *     extractions.
+ *   - Hashes are computed once at module load via `sha256`.
  *
  * The `KNOWN_DOC_TYPES` set is built from `Object.keys(GEMINI_EXTRACTION_PROMPTS)`
  * by the consumer; don't duplicate that list here.
  */
+
+// Bump whenever any prompt body or CLASSIFY_PROMPT changes. The format is
+// YYYY-MM-DD.<seq>; the seq lets us bump twice in one day if needed.
+const PROMPT_REGISTRY_VERSION = '2026-05-09.1';
+
+const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
 const GEMINI_EXTRACTION_PROMPTS = {
   title_deed: `You are a legal document extraction assistant specialised in Indian real estate.
@@ -540,7 +558,35 @@ or ward/street property-tax area value material. Do not classify BBMP UAV/proper
 Return ONLY a JSON object: { "doc_type": "<type>", "confidence": <0-1>, "reason": "<brief reason>" }
 No other text.`;
 
+// Per-prompt version + hash, computed once at module load. The version is
+// shared across all extraction prompts (single registry version); the hash
+// is per-prompt so an unchanged doctype's cached extractions remain valid
+// when a different doctype's prompt is tuned.
+const PROMPT_VERSIONS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(GEMINI_EXTRACTION_PROMPTS).map(([kind, body]) => [
+      kind,
+      { version: PROMPT_REGISTRY_VERSION, sha256: sha256(body) },
+    ]),
+  ),
+);
+
+const CLASSIFY_PROMPT_VERSION = Object.freeze({
+  version: PROMPT_REGISTRY_VERSION,
+  sha256: sha256(CLASSIFY_PROMPT),
+});
+
+// Lookup helper. Falls back to the `other` doctype's hash for unknown kinds
+// so we never crash on a misclassified upload — the cache will simply miss
+// (still safe) and the call still happens.
+const getExtractionPromptVersion = (kind) =>
+  PROMPT_VERSIONS[kind] || PROMPT_VERSIONS.other || { version: PROMPT_REGISTRY_VERSION, sha256: null };
+
 module.exports = {
   GEMINI_EXTRACTION_PROMPTS,
   CLASSIFY_PROMPT,
+  PROMPT_REGISTRY_VERSION,
+  PROMPT_VERSIONS,
+  CLASSIFY_PROMPT_VERSION,
+  getExtractionPromptVersion,
 };
