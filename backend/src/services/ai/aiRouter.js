@@ -138,6 +138,15 @@ const persistCallLog = async ({
 }) => {
   try {
     const ctx = getRequestContext();
+    // language + doctype were added as first-class columns in PR #155.
+    // Read from `metadata` so existing call sites don't need to change
+    // their top-level args; once a call site sets metadata.language /
+    // metadata.doctype, the dimensions land in dedicated columns AND
+    // remain visible in metadata for forensics.
+    const metadataObj = metadata || {};
+    const language = metadataObj.language || null;
+    const doctype = metadataObj.doctype || null;
+
     const result = await query(
       `INSERT INTO ai_call_logs (
          organization_id,
@@ -158,10 +167,12 @@ const persistCallLog = async ({
          document_id,
          deal_id,
          metadata,
-         created_by
+         created_by,
+         language,
+         doctype
        )
        VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20,$21
        )
        RETURNING id`,
       [
@@ -182,13 +193,18 @@ const persistCallLog = async ({
         attach?.evidenceFactId ?? null,
         attach?.documentId ?? null,
         attach?.dealId ?? null,
-        JSON.stringify(metadata || {}),
+        JSON.stringify(metadataObj),
         attach?.userId ?? ctx.userId ?? null,
+        language,
+        doctype,
       ]
     );
     return result.rows[0]?.id ?? null;
   } catch (err) {
-    // Logging the AI call must never break the AI call itself.
+    // Logging the AI call must never break the AI call itself. If the
+    // INSERT fails because `language` / `doctype` columns don't exist
+    // (pre-migration), we degrade silently — the call still succeeded;
+    // the operator just doesn't see this row in the dashboard.
     log.warn('ai_call_log_persist_failed', { error: err.message, task, provider });
     return null;
   }

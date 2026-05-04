@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Language + doctype telemetry tagged at extraction time — PR #157)
+
+**What was worked on in plain English:**
+- The empty rows in the AI usage dashboard's "By Doctype × Language" table now populate. Every document extraction call tags itself with the document type (sale deed, RTC, RERA registration, etc.). Every Claude normalization call also tags the detected language (English, Kannada, Hindi, Tamil, Telugu, or "mixed"). Result: the dashboard answers "are our Kannada extractions reliable?" with a single look.
+- Built a tiny script-based language detector that reads the first 4,000 characters of an extracted document and counts how many letters belong to each Unicode script. It's not a full ML language identifier — it doesn't need to be, because we're tagging metrics, not making decisions. It correctly handles mixed-script Bengaluru documents (typical land deed: half Kannada, half English) by tagging them as "mul" (mixed).
+- Recommendation on the OpenAI-vs-Claude question, in writing: don't do a wholesale swap. Claude is materially better for institutional-grade analytical writing (deal memos, risk briefs); OpenAI is already wired up for embeddings and as a fallback. The next runtime-routing PR (Tier 2.3) will let you A/B test side-by-side without code changes.
+
+**PRs opened/merged:**
+- PR #157 — `feat(ai): language + doctype telemetry tagged at extraction time` — squash-merged.
+
+**Verification:**
+- Backend test suite: **773 → 784** (+11 covering: English / Hindi / Kannada / Tamil script majority detection, mixed Kannada+English → 'mul', empty / short / numeric-only / non-string → 'und', sample cap perf-safety on 100k-char input, Latin with occasional Indic word still resolves to 'en').
+- Frontend production build: clean.
+- No new migration; columns from PR #155 are now actively populated.
+
+**What's left:**
+- Tier 2.3 — `ai_routing_config` table (runtime provider switching for empirical OpenAI-vs-Claude comparison).
+- Tier 2.1 — Vercel AI SDK migration.
+- Tier 2.2 — OpenTelemetry tracing per AI call.
+- Tier 3 — Agentic layer (deferred until Tier 2 ships).
+- Tier 4 — pgvector + embeddings / PII encryption / Indic NLP.
+- MFA / TOTP for paying-customer onboarding.
+- User-data erasure cron for full DPDP §8(7) closure.
+
+---
+
 ## 2026-05-04 (Migration verified + in-platform AI usage dashboard — PR #156)
 
 **What was worked on in plain English:**

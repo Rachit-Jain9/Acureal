@@ -25,6 +25,7 @@ const {
   getExtractionPromptVersion,
 } = require('./ai/extractionPrompts');
 const { tryParseAndValidate } = require('./ai/aiRouter');
+const { detectLanguage } = require('./ai/languageDetect');
 const log = require('../lib/logger').child({ module: 'extraction' });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -279,7 +280,7 @@ function pickBestStructuredFields(primaryFields, secondaryFields) {
   return secondaryScore > primaryScore ? secondaryFields : primaryFields;
 }
 
-async function normalizeStructuredFieldsWithClaude({ docType, rawText, structuredFields }) {
+async function normalizeStructuredFieldsWithClaude({ docType, rawText, structuredFields, language = null }) {
   if (!structuredFields || !getProviderAvailability().claude) {
     return null;
   }
@@ -314,7 +315,14 @@ STRICT RULES:
         raw_extraction_text: rawText,
       },
       maxTokens: 1600,
-      metadata: { stage: 'extraction_normalization', doc_type: docType },
+      metadata: {
+        stage: 'extraction_normalization',
+        doc_type: docType,
+        // Mirror to the dedicated columns so the AI usage dashboard's
+        // doctype × language breakdown populates for normalization calls.
+        doctype: docType,
+        ...(language && language !== 'und' ? { language } : {}),
+      },
     }),
     CLAUDE_NORMALIZATION_TIMEOUT_MS,
     'Claude extraction normalization'
@@ -465,6 +473,10 @@ async function extractStoredFileFields({
     prompt_kind: docType,
     prompt_version: promptInfo.version,
     prompt_sha256: promptInfo.sha256,
+    // doctype rides into the dedicated `ai_call_logs.doctype` column
+    // (PR #155) so the AI usage dashboard's "By Doctype" breakdown
+    // populates without metadata-JSON unpacking.
+    doctype: docType,
   };
   const extraction = await callExtractionWithFallback({
     prompt,
@@ -475,6 +487,18 @@ async function extractStoredFileFields({
     metadata: extractionMetadata,
   });
   const rawText = extraction.rawText;
+
+  // Best-effort language detection on the extracted text. This populates
+  // the `ai_call_logs.language` column on the NEXT call (Claude
+  // normalization), not the extraction call itself — by then we have a
+  // representative text sample to read script blocks from. Errors here
+  // never block the extraction.
+  let detectedLanguage = null;
+  try {
+    detectedLanguage = detectLanguage(rawText || '');
+  } catch (err) {
+    log.warn('language_detect_failed', { error: err.message, doc_type: docType });
+  }
 
   let structuredFields = null;
   let parseError = null;
@@ -499,6 +523,7 @@ async function extractStoredFileFields({
           docType,
           rawText,
           structuredFields,
+          language: detectedLanguage,
         }))
       );
     } catch (normalizationError) {

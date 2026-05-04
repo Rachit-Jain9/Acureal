@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #156 — in-platform AI usage dashboard widget on Settings page).
+Last refreshed: 2026-05-04 (after PR #157 — language + doctype telemetry tagged at extraction time).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
