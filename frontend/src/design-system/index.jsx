@@ -1,8 +1,20 @@
 // REDIP design-system primitives — editorial, IC-grade.
 // All colors route through CSS variables (see `frontend/src/index.css`), so
 // both themes work with a single `data-theme` flip.
-// Import as: import { Card, SectionHeader, MetricTile, StatTile, ErrorState } from '@/design-system'
+// Import as: import { Card, SectionHeader, MetricTile, StatTile, ErrorState, Skeleton, SkeletonKpi, ... } from '@/design-system'
 // Pill/status labels: use `components/common/Badge` (CSS-class-based, themed).
+
+// Skeleton loading primitives — re-exported from a dedicated file so the
+// keyframe + variants stay co-located.
+export {
+  default as Skeleton,
+  SkeletonLine,
+  SkeletonHeading,
+  SkeletonKpi,
+  SkeletonCard,
+  SkeletonTableRow,
+  SkeletonList,
+} from './Skeleton';
 
 import clsx from 'clsx';
 import { AlertTriangle, Info } from 'lucide-react';

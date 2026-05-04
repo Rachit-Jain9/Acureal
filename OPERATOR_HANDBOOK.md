@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #147 — daily retention sweep cron enforcing Privacy Policy §7 / DPDP §8(7)).
+Last refreshed: 2026-05-04 (after PR #148 — skeleton loading primitives + Dashboard/Deals migration; Phase 2 UI polish).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 

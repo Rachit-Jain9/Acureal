@@ -479,11 +479,51 @@ html[data-theme='dark'] {
   }
   .metric-value-fade { animation: value-cross-fade 180ms ease-out; }
 
+  /* Skeleton shimmer — gentle 1.6s left-to-right wash across a muted base.
+     Used by the design-system <Skeleton/> primitives. The base color carries
+     the resting tint; the gradient layer drifts on top with low opacity so
+     reduced-motion users still see a perfectly readable static placeholder. */
+  @keyframes redip-skeleton-shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  .redip-skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-bg-secondary);
+    border-radius: 4px;
+  }
+  .redip-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 35%,
+      rgba(255, 255, 255, 0.16) 50%,
+      rgba(255, 255, 255, 0.06) 65%,
+      transparent 100%
+    );
+    animation: redip-skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+  [data-theme="light"] .redip-skeleton::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.04) 35%,
+      rgba(0, 0, 0, 0.10) 50%,
+      rgba(0, 0, 0, 0.04) 65%,
+      transparent 100%
+    );
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .redip-reveal { opacity: 1; transform: none; transition: none; }
     .redip-hero-drift, .redip-hero-skyline, .redip-hero-orbit,
     .redip-hero-pulse, .redip-ticker { animation: none; }
     .metric-value-fade { animation: none; }
+    .redip-skeleton::after { animation: none; }
   }
 
   /* Thin, themed scrollbars */

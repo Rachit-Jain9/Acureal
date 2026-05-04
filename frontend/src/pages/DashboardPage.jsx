@@ -21,10 +21,9 @@ import {
 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
-import { Card, SectionHeader, MetricTile } from '../design-system';
+import { Card, SectionHeader, MetricTile, SkeletonKpi, SkeletonCard } from '../design-system';
 import useThemeStore from '../store/themeStore';
 import {
   formatCrores,
@@ -82,10 +81,28 @@ export default function DashboardPage() {
   const tooltipStyle = useTooltipStyle();
   const accentBarFill = chartPalette[0];
 
+  // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
+  // so the layout doesn't reflow when data lands. Per FRONTEND_GUIDELINES §2:
+  // skeletons not spinners for any load > 100ms.
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <LoadingSpinner size="lg" />
+      <div className="space-y-6" aria-busy="true">
+        <PageHeader
+          eyebrow="REDIP — Deal Intelligence"
+          title="Dashboard"
+          description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonCard height="h-64" />
+          <SkeletonCard height="h-64" />
+        </div>
+        <SkeletonCard height="h-72" titleWidth="w-1/4" />
       </div>
     );
   }

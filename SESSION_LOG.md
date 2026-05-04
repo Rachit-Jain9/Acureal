@@ -4,6 +4,29 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Skeleton loading states — design-system primitive + Dashboard/Deals — PR #148)
+
+**What was worked on in plain English:**
+- Loading the Dashboard and the Deals list used to show a single spinning circle in the middle of the screen. Now you see a ghost outline of the page that's coming — the four KPI tiles, the two charts, the table rows — pulsing gently. When the data lands, nothing jumps. The page feels twice as fast even though it isn't.
+- This is the standing FRONTEND_GUIDELINES.md rule ("skeletons not spinners for any load > 100ms") finally applied to the two highest-traffic pages. Other pages still use spinners and will be migrated in follow-up PRs as they're touched.
+- The shimmer animation respects `prefers-reduced-motion` — users with that browser setting see a calm static placeholder, no animation.
+- Built six reusable primitives: `Skeleton`, `SkeletonLine`, `SkeletonHeading`, `SkeletonKpi`, `SkeletonCard`, `SkeletonTableRow`, `SkeletonList`. Future loading-state work just imports the right one.
+
+**PRs opened/merged:**
+- PR #148 — `feat(ui): skeleton loading primitives + Dashboard/Deals migration` — squash-merged.
+
+**Verification:**
+- Frontend test suite: 197 → **206** (+9 covering all six skeleton variants).
+- Production build: clean (no bundle-size regression beyond the new primitive file).
+- Visual: confirmed both light + dark themes shimmer correctly via the theme-flip CSS.
+
+**What's left for Phase 2 polish:**
+- Remaining 33 LoadingSpinner usages across pages/components — migrate as they're touched in feature work, not in a single big-bang PR.
+- Table virtualization for review queue + comp lists when row counts cross 100 (perf rule from FRONTEND_GUIDELINES).
+- Count-up animation on KPI value changes is partial; widen coverage.
+
+---
+
 ## 2026-05-04 (Daily retention sweep cron — PR #147)
 
 **What was worked on in plain English:**

@@ -8,10 +8,10 @@ import { clsx } from 'clsx';
 import { useDeals, useCreateDeal, useDeleteDeal } from '../hooks/useDeals';
 import { useProperties } from '../hooks/useProperties';
 import useAuthStore from '../store/authStore';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import PageHeader from '../components/common/PageHeader';
+import { SkeletonList, SkeletonKpi } from '../design-system';
 import ShareDealPanel from '../components/deal/ShareDealPanel';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
@@ -163,8 +163,23 @@ export default function DealsPage() {
     }
   };
 
+  // Skeleton mirrors the page chrome — header + KPI strip + table — so the
+  // layout stays stable when data resolves.
   if (isLoading) {
-    return <LoadingSpinner className="py-24" />;
+    return (
+      <div aria-busy="true">
+        <PageHeader title="Deals" description="Loading pipeline…" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <div className="bg-bg-elevated border border-hairline rounded-editorial p-2">
+          <SkeletonList rows={8} columns={5} />
+        </div>
+      </div>
+    );
   }
 
   if (isError) {
