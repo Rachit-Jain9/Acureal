@@ -16,6 +16,9 @@ export {
   SkeletonList,
 } from './Skeleton';
 
+// Virtualized list — auto-windows long lists (>= threshold rows).
+export { default as VirtualizedList } from './VirtualizedList';
+
 import clsx from 'clsx';
 import { AlertTriangle, Info } from 'lucide-react';
 import useCountUp from '../hooks/useCountUp';
