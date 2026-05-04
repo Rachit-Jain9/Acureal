@@ -26,6 +26,7 @@ const {
 } = require('./ai/extractionPrompts');
 const { tryParseAndValidate } = require('./ai/aiRouter');
 const { detectLanguage } = require('./ai/languageDetect');
+const embeddingsService = require('./embeddings.service');
 const log = require('../lib/logger').child({ module: 'extraction' });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -498,6 +499,26 @@ async function extractStoredFileFields({
     detectedLanguage = detectLanguage(rawText || '');
   } catch (err) {
     log.warn('language_detect_failed', { error: err.message, doc_type: docType });
+  }
+
+  // Best-effort: index the extracted text into pgvector so the document
+  // becomes semantic-search-able. Fire-and-forget — embedding failures
+  // never block the extraction return. The service swallows errors and
+  // logs them; we don't even await the result on the hot path.
+  if (rawText && options.organizationId && options.documentId) {
+    Promise.resolve()
+      .then(() => embeddingsService.indexDocumentText({
+        organizationId: options.organizationId,
+        documentId: options.documentId,
+        text: rawText,
+        sourceKind: 'document_chunk',
+        metadata: {
+          doc_type: docType,
+          language: detectedLanguage,
+          extraction_at: new Date().toISOString(),
+        },
+      }))
+      .catch((err) => log.warn('embedding_pipeline_dispatch_failed', { error: err.message }));
   }
 
   let structuredFields = null;
