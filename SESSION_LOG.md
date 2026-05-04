@@ -4,6 +4,29 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Daily retention sweep cron — PR #147)
+
+**What was worked on in plain English:**
+- Every night at 03:35 UTC, the platform now does its own housekeeping. Expired AI cache rows, dead refresh tokens past their forensic window, stale login-attempt records, and AI call logs older than 12 months are deleted automatically. Until tonight, those tables grew forever — the Privacy Policy promised 12-month AI-log retention but nothing actually enforced it.
+- This is the code-level enforcement of the retention promises in Privacy Policy §7 and the DPDP Act 2023 §8(7) ("erase personal data once the purpose is fulfilled"). What was prose is now policy.
+- A single failing query no longer aborts the whole sweep — each table is purged in its own try/catch, and the cron summary surfaces per-table errors so a quietly-failing cleanup is visible in Vercel logs.
+
+**PRs opened/merged:**
+- PR #147 — `feat(retention): daily retention sweep cron (DPDP §8(7) / Privacy Policy §7)` — squash-merged.
+
+**Verification:**
+- Backend test suite: **676 → 683** (+7 covering ai_response_cache purge, refresh-token forensic-window predicate, login-attempts lock-aware predicate, ai_call_logs retention, full-sweep aggregation, partial-failure resilience).
+- Frontend production build: clean.
+- No migration in this PR — leverages existing tables.
+
+**What's left for Phase 3:**
+- Vercel AI SDK migration (S16) — streaming + tool use + retries via a single SDK.
+- OpenTelemetry tracing per `routeAi` call.
+- Zod validation at provider boundary for structured outputs.
+- Streaming for long Claude calls (IC memo).
+
+---
+
 ## 2026-05-04 (Phase 3 starts — AI prompt versioning + response cache — PR #146)
 
 **What was worked on in plain English:**

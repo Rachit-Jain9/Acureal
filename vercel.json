@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/parcel-cache-sweep/daily",
       "schedule": "20 3 * * *"
+    },
+    {
+      "path": "/api/cron/retention-sweep/daily",
+      "schedule": "35 3 * * *"
     }
   ],
   "headers": [

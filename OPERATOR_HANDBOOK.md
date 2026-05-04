@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #146 — AI prompt versioning + response cache, Phase 3 foundation).
+Last refreshed: 2026-05-04 (after PR #147 — daily retention sweep cron enforcing Privacy Policy §7 / DPDP §8(7)).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -120,6 +120,16 @@ None of these are written in code; all need a human action.
 | `20260509_ai_response_cache.sql` | ✅ | `ai_response_cache` table for deduplicating identical AI calls (90-day TTL) |
 
 **No migration is currently pending application.** When the next PR adds one, it surfaces here.
+
+### Scheduled crons (Vercel)
+
+| Path | Schedule (UTC) | What it does |
+|---|---|---|
+| `/api/fx/refresh/daily` | 03:05 | Refreshes USD↔INR FX rates |
+| `/api/cron/parcel-cache-sweep/daily` | 03:20 | Purges KGIS/OSM cache, reports stale parcel snapshots |
+| `/api/cron/retention-sweep/daily` | 03:35 | Enforces DPDP §8(7) retention: AI cache expiry, refresh-token forensic window, login-attempts cleanup, AI call logs > 12 months |
+
+All cron endpoints require `Authorization: Bearer ${CRON_SECRET}` (set in Vercel env). 503s if `CRON_SECRET` is missing — never silently allows.
 
 ### Known Security Advisor false positive
 
