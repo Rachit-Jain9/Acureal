@@ -22,7 +22,7 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | System | Status | Notes |
 |---|---|---|
 | Production app | Live at https://redip.vercel.app | |
-| Database (Supabase project `lsbhrbvuynzqhdtzczco`) | Free tier, ap-south-1 region check pending | See §3.2 |
+| Database (Supabase project `lsbhrbvuynzqhdtzczco`) | Free tier, ap-south-1 (Mumbai) ✅ confirmed 2026-05-04 | See §3.2 |
 | Vercel hosting | Hobby tier | See §3.1 |
 | Auth — password sign-up | Live, gated by `ALLOW_COLD_SIGNUP` env | Default deny; add invite token to bypass |
 | Auth — Google sign-in | Live (PR #139) | Confirmed `enabled: true` on `/api/auth/google/config` |
@@ -46,7 +46,7 @@ None of these are written in code; all need a human action.
 
 ### NEXT — pure ops, no urgency but still pending
 - [ ] **Buy a domain** (e.g., `redip.in`, `redip.app`, or company-specific). Required for: real Resend email delivery, grievance@ address, professional sender domain on legal docs. ~₹1k/year via Cloudflare Registrar / GoDaddy / Namecheap. **Recommendation:** `.in` or `.co.in` for India clarity.
-- [ ] **Verify Supabase region** is `ap-south-1` (Mumbai). DPDP soft-compliance and Indian-enterprise procurement plus side. Check at https://supabase.com/dashboard/project/lsbhrbvuynzqhdtzczco/settings/general → "Region".
+- [x] ~~Verify Supabase region~~ ✅ **Confirmed 2026-05-04: ap-south-1 (Mumbai).** DPDP soft-compliance + Indian-enterprise procurement plus side both satisfied.
 - [ ] **Resend (email delivery)** — currently deferred Option B (links in Vercel logs). When you buy a domain: sign up at https://resend.com, add domain, set SPF/DKIM/DMARC DNS records, generate API key, set Vercel env vars `RESEND_API_KEY` + `MAIL_FROM`.
 - [ ] **Move the repo off OneDrive.** Currently at `C:\Users\rachi\OneDrive - UW\Desktop\REDIP`; OneDrive prompts to "delete 320 items?" after every build. Move to `C:\dev\REDIP` (or similar) — git is the source of truth.
 
