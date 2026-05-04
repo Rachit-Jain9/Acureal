@@ -17,6 +17,7 @@ import { useDealContext } from '../../hooks/useDealContext';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import { SectionHeader, SkeletonList } from '../../design-system';
+import SemanticSearchPanel from '../common/SemanticSearchPanel';
 import { formatDate } from '../../utils/format';
 import { downloadAxiosResponse } from '../../utils/download';
 
@@ -192,6 +193,10 @@ export default function DocumentsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Semantic search — find clauses / facts across the workspace's
+          uploaded documents. Powered by pgvector + OpenAI embeddings. */}
+      <SemanticSearchPanel dealId={dealId} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-content-secondary">

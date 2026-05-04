@@ -386,6 +386,15 @@ const streamPost = (path, { onText, onDone, body } = {}) => {
   };
 };
 
+// Semantic search over indexed document chunks (pgvector). Org-scoped
+// via RLS. Returns ranked { chunk_text, document_id, page_number,
+// similarity } rows.
+export const searchAPI = {
+  semantic: ({ q, documentId, kind, k = 8 } = {}) =>
+    api.get('/search/semantic', { params: { q, documentId, kind, k } }),
+  reindex: (documentId) => api.post(`/search/reindex/${documentId}`),
+};
+
 // Intelligence
 export const intelligenceAPI = {
   getDailyBrief:            (date)   => api.get('/intelligence/daily-brief', { params: { date } }),
