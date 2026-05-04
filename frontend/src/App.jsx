@@ -6,6 +6,8 @@ import ToastContainer from './components/common/Toast';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import CookieBanner from './components/common/CookieBanner';
+import LegalReAcceptanceModal from './components/common/LegalReAcceptanceModal';
+import useLegalPending from './hooks/useLegalPending';
 
 // Neutralize scroll-wheel on focused number inputs. Browsers increment/decrement
 // <input type="number"> values on wheel when focused, which is a common footgun
@@ -52,8 +54,21 @@ const VerifyEmailPage = lazy(() => import('./pages/legal/VerifyEmailPage'));
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
+  // `useLegalPending` no-ops while unauthenticated; once auth lands it fetches
+  // /api/legal/me and surfaces any current Terms/Privacy versions the user has
+  // not yet accepted. The modal is rendered inline (above `children`) so it
+  // overlays whatever protected page the router resolves — the user cannot
+  // reach any protected surface without resolving the prompt.
+  const { pending, refresh } = useLegalPending();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  return children;
+  return (
+    <>
+      {children}
+      {pending.length > 0 && (
+        <LegalReAcceptanceModal pending={pending} onAccepted={refresh} />
+      )}
+    </>
+  );
 }
 
 function PageLoader() {
