@@ -89,6 +89,37 @@ router.get('/micro-market-benchmarks', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /intelligence/deal-analysis/:dealId/cached — last persisted analysis
+//
+// Returns the most recent ai_artifacts row for this deal + 'deal_analysis'
+// type, or 200 with `{ data: null }` when no cached artifact exists yet.
+// Lets the deal Overview tab show the last generation immediately on mount
+// instead of regenerating from Claude on every page open.
+router.get(
+  '/deal-analysis/:dealId/cached',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const cached = await intelligenceService.getCachedDealAnalysis(req.params.dealId);
+      if (!cached) {
+        return res.json({ success: true, data: null });
+      }
+      return res.json({
+        success: true,
+        data: {
+          analysis: cached.content_md,
+          generatedAt: cached.generated_at,
+          callId: cached.generated_by_call_id,
+          status: cached.status,
+          snapshotHash: cached.snapshot_hash,
+        },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 // POST /intelligence/deal-analysis/:dealId — Claude-powered deal memo
 router.post('/deal-analysis/:dealId', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {

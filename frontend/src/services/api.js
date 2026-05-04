@@ -384,6 +384,9 @@ export const intelligenceAPI = {
   getMarketTransactions:    (params) => api.get('/intelligence/market-transactions', { params }),
   getMicroMarketBenchmarks: (params) => api.get('/intelligence/micro-market-benchmarks', { params }),
   getDealAnalysis:          (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
+  // Last persisted analysis (or null on miss). Used by OverviewTab on
+  // mount so users see the last generated memo without re-running Claude.
+  getCachedDealAnalysis:    (dealId) => api.get(`/intelligence/deal-analysis/${dealId}/cached`),
   // Streaming variant — perceived latency drops from ~30s wait to <1s first
   // paint. Returns { promise, abort }; consumer wires onText into local state.
   streamDealAnalysis: (dealId, { onText, onDone } = {}) =>

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Brain,
@@ -121,7 +121,29 @@ export default function OverviewTab() {
   const [aiMeta, setAiMeta] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [aiCached, setAiCached] = useState(false);
   const streamCtrl = useRef(null);
+
+  // On mount, fetch the last persisted analysis. If one exists, render it
+  // immediately so the user sees the most recent IC-grade memo without
+  // re-running Claude. The user can press Refresh to regenerate.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await intelligenceAPI.getCachedDealAnalysis(dealId);
+        const cached = res?.data?.data;
+        if (cancelled || !cached) return;
+        setAiText(cached.analysis || '');
+        setAiMeta({ generatedAt: cached.generatedAt, callId: cached.callId });
+        setAiCached(true);
+      } catch {
+        // Cache fetch is best-effort — silent on failure. User can still
+        // generate a fresh analysis.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [dealId]);
 
   const handleAiAnalysis = () => {
     if (aiLoading) return;
@@ -129,6 +151,7 @@ export default function OverviewTab() {
     setAiError(null);
     setAiText('');
     setAiMeta(null);
+    setAiCached(false);
 
     const stream = intelligenceAPI.streamDealAnalysis(dealId, {
       onText: (delta) => setAiText((t) => t + delta),
@@ -379,6 +402,9 @@ export default function OverviewTab() {
               AI Deal Analysis
               <Badge className="ml-2">Claude</Badge>
               <Badge className="ml-1" tone="neutral">AI-assisted — review before relying</Badge>
+              {aiCached && !aiLoading && (
+                <Badge className="ml-1" tone="neutral">Cached</Badge>
+              )}
             </>
           }
           action={

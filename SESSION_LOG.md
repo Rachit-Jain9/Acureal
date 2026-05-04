@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Persisted AI Deal Analysis + log telemetry dimensions — PR #155)
+
+**What was worked on in plain English:**
+- Once an AI Deal Analysis is generated, it now sticks around. Re-opening a deal page shows the last analysis instantly instead of making the user click "Generate Analysis" again. Press "Refresh" to regenerate from scratch — that's the only way to invalidate.
+- The platform tracks a fingerprint of the inputs (financials, comps, market data) that produced each analysis. If those underlying numbers change, the next fetch is a "miss" and the analysis is regenerated automatically. The cache invalidates itself on real changes — no stale memos.
+- Added two more dimensions to the AI call log: `language` and `doctype`. These let future cost/quality dashboards answer questions like "what's our Kannada title-deed extraction quality this month?" with a single SQL group-by, instead of digging through JSON.
+
+**PRs opened/merged:**
+- PR #155 — `feat(ai): persist deal analysis as ai_artifacts + add language/doctype columns to ai_call_logs` — squash-merged.
+
+**Verification:**
+- Backend test suite: **745 → 762** (+17 covering: snapshot-hash determinism + key-order independence, fail-open on missing table / connection error / unknown artifact type, save/getLatest happy path).
+- Frontend test suite: 206/206 green (existing OverviewTab test updated to mock the new `getCachedDealAnalysis` shape).
+- Production builds: clean.
+
+**Operator action required:**
+- Apply migration `database/migrations/20260510_ai_artifacts_and_log_dimensions.sql` via Supabase SQL editor. **Until applied, the feature fails-open** — live generation still works; cached re-fetch returns null. After the migration runs, cached re-fetch unlocks and AI calls start populating language/doctype.
+
+---
+
 ## 2026-05-04 (Streaming for AI Deal Analysis — PR #154)
 
 **What was worked on in plain English:**

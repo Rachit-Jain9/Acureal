@@ -3,6 +3,8 @@
 const { query } = require('../config/database');
 const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runClaudeReasoningStream } = require('./ai/aiRouter');
+const aiArtifacts = require('./aiArtifacts.service');
+const { getRequestContext } = require('../lib/requestContext');
 const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
@@ -461,9 +463,22 @@ const getDealAnalysis = async (dealId) => {
   }
 };
 
+// Returns the most recent persisted deal-analysis artifact for a deal,
+// optionally filtered by snapshot hash. Returns null on miss / fail.
+// Used by the deal Overview tab on mount so the user sees the last
+// generated analysis without re-running Claude on every page open.
+const getCachedDealAnalysis = async (dealId) => {
+  return aiArtifacts.getLatestArtifact({
+    dealId,
+    artifactType: 'deal_analysis',
+  });
+};
+
 // Streaming variant of getDealAnalysis. Same data assembly + same prompt;
-// only the Claude call is replaced with the streaming runner. Caller
-// (the SSE route) supplies callbacks invoked as text arrives + when done.
+// only the Claude call is replaced with the streaming runner. On
+// completion, persists the full text into ai_artifacts so subsequent
+// fetches via getCachedDealAnalysis return instantly. Caller (the SSE
+// route) supplies callbacks invoked as text arrives + when done.
 //
 // Usage:
 //   const stream = await streamDealAnalysis(dealId);
@@ -483,6 +498,13 @@ const streamDealAnalysis = async (dealId) => {
   const input = await buildDealAnalysisInput(dealId);
   if (input.error) return { error: input.error, status: 404 };
 
+  // Snapshot hash from the assembly payload — change in inputs (financials
+  // shift, comp added) invalidates the cache naturally on the next fetch.
+  const snapshotHash = aiArtifacts.computeSnapshotHash({
+    systemPrompt: input.systemPrompt,
+    payload: input.payload,
+  });
+
   const stream = await runClaudeReasoningStream({
     task: 'reasoning',
     systemPrompt: input.systemPrompt,
@@ -490,7 +512,7 @@ const streamDealAnalysis = async (dealId) => {
     payload: input.payload,
     maxTokens: 600,
     attach: { dealId },
-    metadata: { stage: 'deal_analysis' },
+    metadata: { stage: 'deal_analysis', snapshot_hash: snapshotHash },
   });
 
   return {
@@ -500,10 +522,30 @@ const streamDealAnalysis = async (dealId) => {
     dealName: input.dealName,
     async done() {
       const final = await stream.done();
+      // Best-effort persistence — failures here NEVER block the user-visible
+      // result. saveArtifact swallows missing-table / connection errors and
+      // returns null so the SSE 'done' frame still ships on time.
+      const ctx = getRequestContext();
+      const organizationId = ctx?.organizationId || null;
+      let artifactId = null;
+      if (organizationId && final?.result) {
+        const saved = await aiArtifacts.saveArtifact({
+          organizationId,
+          dealId,
+          artifactType: 'deal_analysis',
+          contentMd: final.result,
+          snapshotHash,
+          generatedByCallId: final.callId,
+          status: 'draft',
+        });
+        artifactId = saved?.id || null;
+      }
       return {
         ...final,
         dealName: input.dealName,
         generatedAt: new Date().toISOString(),
+        artifactId,
+        snapshotHash,
       };
     },
   };
@@ -597,4 +639,5 @@ module.exports = {
   getMicroMarketBenchmarks,
   getDealAnalysis,
   streamDealAnalysis,
+  getCachedDealAnalysis,
 };

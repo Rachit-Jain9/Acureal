@@ -30,6 +30,7 @@ vi.mock('../../../services/api', () => ({
   intelligenceAPI: {
     getDealAnalysis: vi.fn(),
     streamDealAnalysis: vi.fn(() => ({ promise: new Promise(() => {}), abort: vi.fn() })),
+    getCachedDealAnalysis: vi.fn(() => Promise.resolve({ data: { data: null } })),
   },
 }));
 
