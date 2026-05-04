@@ -462,4 +462,41 @@ router.post(
   }
 );
 
+// POST /auth/me/close-account
+//
+// User-initiated account closure (DPDP Act 2023 §8(7)). Sets
+// account_closed_at, revokes all refresh tokens, and clears auth cookies.
+// Login is blocked thereafter; PII is anonymized 90 days later by the
+// retention sweep cron.
+//
+// Idempotent on re-call (closing an already-closed account is a no-op).
+// Erased accounts cannot be re-closed; the service returns 404 in that case.
+router.post('/me/close-account', authenticate, async (req, res, next) => {
+  try {
+    const accountClosure = require('../services/accountClosure.service');
+    const { clearAuthCookies } = require('../lib/cookies');
+    const result = await accountClosure.closeAccount(req.user.id);
+
+    // Match logout(): clear the auth cookies so the SPA's next request goes
+    // unauthenticated. The 15-minute access token expires anyway, but
+    // dropping the cookies makes the browser state match the server state
+    // immediately.
+    clearAuthCookies(res);
+
+    res.json({
+      success: true,
+      message: 'Your account has been closed. Personal data will be erased after the 90-day reconciliation window.',
+      data: {
+        closedAt: result.closedAt,
+        erasureScheduledAfterDays: 90,
+      },
+    });
+  } catch (error) {
+    if (/already erased/i.test(error.message)) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return next(error);
+  }
+});
+
 module.exports = router;

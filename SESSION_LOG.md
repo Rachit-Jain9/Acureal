@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Account closure + scheduled erasure — DPDP §8(7) closed end-to-end — PR #158)
+
+**What was worked on in plain English:**
+- Users can now close their own account from the Settings page. A bright "Close my account" card with red trim sits at the bottom; clicking opens a confirm modal that requires typing CLOSE to proceed (the standard pattern for irreversible actions). Once confirmed, the user is logged out everywhere immediately, future logins are blocked, and the platform schedules anonymization of personal data (name, email, phone, password) for 90 days later.
+- The 90-day window matches what the Privacy Policy promised. Until tonight, the policy was prose only — there was no mechanism in code to track "when was this account closed" or "when should it be erased". The Daily retention sweep cron now picks up closed-and-stale accounts and anonymizes them automatically. Deal records, audit events, and AI call logs the user produced are preserved (the platform owns evidentiary records) but stripped of identifying fields.
+- Logged-in sessions on closed accounts: the JWT is short-lived (15 min), and all refresh tokens are revoked at the moment of closure. So even if a closed-account user has a stale tab open, the next API call drops them.
+
+**PRs opened/merged:**
+- PR #158 — `feat(privacy): account closure + scheduled erasure (DPDP §8(7))` — squash-merged.
+
+**Verification:**
+- Backend test suite: **784 → 796** (+12 covering: idempotent close on existing account, refresh-token revocation, throws on missing user / already-erased, fail-open on revoke failure, erasure SQL shape + grace-window predicate, fallback when email_normalized column missing, retention sweep aggregates closed-account row, sweep partial-failure resilience).
+- Frontend test suite: 206/206 green.
+- Production builds: clean.
+- Migration `20260511_account_closure.sql` applied to prod via Supabase MCP. Verified post-apply: 2 new user columns, 1 partial index.
+
+**What's left:**
+- Tier 2.3 — `ai_routing_config` table (runtime provider switching).
+- Tier 2.1 — Vercel AI SDK migration.
+- Tier 2.2 — OpenTelemetry tracing per AI call.
+- Tier 3 — Agentic layer (deferred until Tier 2 ships).
+- Tier 4 — pgvector + embeddings / PII encryption / Indic NLP.
+- MFA / TOTP for paying-customer onboarding.
+
+---
+
 ## 2026-05-04 (Language + doctype telemetry tagged at extraction time — PR #157)
 
 **What was worked on in plain English:**

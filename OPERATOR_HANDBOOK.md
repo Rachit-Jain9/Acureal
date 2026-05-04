@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #157 — language + doctype telemetry tagged at extraction time).
+Last refreshed: 2026-05-04 (after PR #158 — account closure + scheduled erasure (DPDP §8(7) closed end-to-end)).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -120,6 +120,7 @@ None of these are written in code; all need a human action.
 | `20260508_password_set_flag.sql` | ✅ | `users.password_set` boolean — distinguishes real password from OAuth-only unusable bcrypt |
 | `20260509_ai_response_cache.sql` | ✅ | `ai_response_cache` table for deduplicating identical AI calls (90-day TTL) |
 | `20260510_ai_artifacts_and_log_dimensions.sql` | ✅ | New `ai_artifacts` table + `language`/`doctype` columns on `ai_call_logs`. Verified post-apply: RLS on, 4 indexes, 3 policies, 2 new columns. |
+| `20260511_account_closure.sql` | ✅ | `users.account_closed_at` + `users.erased_at` + sweep index. Verified post-apply: 2 new columns, 1 partial index. |
 
 **No migration is currently pending application.** When the next PR adds one, it surfaces here.
 
@@ -129,7 +130,7 @@ None of these are written in code; all need a human action.
 |---|---|---|
 | `/api/fx/refresh/daily` | 03:05 | Refreshes USD↔INR FX rates |
 | `/api/cron/parcel-cache-sweep/daily` | 03:20 | Purges KGIS/OSM cache, reports stale parcel snapshots |
-| `/api/cron/retention-sweep/daily` | 03:35 | Enforces DPDP §8(7) retention: AI cache expiry, refresh-token forensic window, login-attempts cleanup, AI call logs > 12 months |
+| `/api/cron/retention-sweep/daily` | 03:35 | Enforces DPDP §8(7) retention: AI cache expiry, refresh-token forensic window, login-attempts cleanup, AI call logs > 12 months, **erasure of accounts past 90-day grace window** |
 
 All cron endpoints require `Authorization: Bearer ${CRON_SECRET}` (set in Vercel env). 503s if `CRON_SECRET` is missing — never silently allows.
 

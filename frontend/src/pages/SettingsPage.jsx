@@ -8,6 +8,7 @@ import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
 import { emitCurrencyChange } from '../hooks/useCurrencyPref';
 import AIUsageWidget from '../components/admin/AIUsageWidget';
+import CloseAccountCard from '../components/common/CloseAccountCard';
 
 const CURRENCY_OPTIONS = [
   { value: 'crores', label: 'Crores (Cr)' },
@@ -644,6 +645,11 @@ export default function SettingsPage() {
               <p className="mt-1.5 text-xs text-content-muted">Rates are stored in INR base. Display only — stored deal values are never modified.</p>
             </div>
           )}
+
+          {/* Account closure (DPDP §8(7)) — every authenticated user can
+              self-serve. Erasure scheduled +90 days, runs via the daily
+              retention sweep cron. */}
+          <CloseAccountCard />
         </div>
       </div>
     </div>

@@ -156,6 +156,10 @@ export const authAPI = {
   // with email + password too. The authenticated session itself is the
   // proof of possession; no Google re-verify step required.
   setFirstPassword: (data) => api.post('/auth/me/set-first-password', data),
+  // DPDP §8(7) account closure. Sets account_closed_at, revokes all refresh
+  // tokens, clears auth cookies. PII is anonymized 90 days later by the
+  // retention sweep cron. Idempotent on repeat calls.
+  closeAccount: () => api.post('/auth/me/close-account'),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

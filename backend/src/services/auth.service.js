@@ -231,7 +231,8 @@ const login = async (email, password, requestedOrganizationId = null) => {
   await enforceLoginThrottle(normalizedEmail);
 
   const result = await query(
-    `SELECT id, email, password_hash, name, phone, is_active, last_login_at, default_organization_id
+    `SELECT id, email, password_hash, name, phone, is_active, last_login_at, default_organization_id,
+            account_closed_at, erased_at
      FROM users
      WHERE email = $1`,
     [normalizedEmail]
@@ -246,6 +247,17 @@ const login = async (email, password, requestedOrganizationId = null) => {
 
   if (!user.is_active) {
     throw createError('Your account has been deactivated. Please contact the administrator.', 403);
+  }
+
+  // Account closure block (PR #158). Closed accounts cannot reauthenticate.
+  // We deliberately surface the closure state in the error so the user
+  // knows why login is failing — no security-through-obscurity here; a
+  // closed user is the legitimate owner of the account, not an attacker.
+  if (user.account_closed_at) {
+    throw createError(
+      'This account has been closed. Contact grievance@redip.in if this was unexpected.',
+      403,
+    );
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);

@@ -72,14 +72,16 @@ describe('retentionSweep.runSweep', () => {
       .mockResolvedValueOnce({ rowCount: 1 })   // ai_response_cache
       .mockResolvedValueOnce({ rowCount: 2 })   // refresh_token_grants
       .mockResolvedValueOnce({ rowCount: 3 })   // login_attempts
-      .mockResolvedValueOnce({ rowCount: 4 });  // ai_call_logs
+      .mockResolvedValueOnce({ rowCount: 4 })   // ai_call_logs
+      .mockResolvedValueOnce({ rowCount: 5, rows: [{ id: 'u-1' }] }); // closed accounts erased
 
     const summary = await sweep.runSweep();
     expect(summary.ai_response_cache.rows_purged).toBe(1);
     expect(summary.refresh_token_grants.rows_purged).toBe(2);
     expect(summary.login_attempts.rows_purged).toBe(3);
     expect(summary.ai_call_logs.rows_purged).toBe(4);
-    expect(summary.total_rows_purged).toBe(10);
+    expect(summary.closed_accounts.rows_erased).toBe(5);
+    expect(summary.total_rows_purged).toBe(15);
     expect(typeof summary.duration_ms).toBe('number');
   });
 
@@ -88,13 +90,29 @@ describe('retentionSweep.runSweep', () => {
       .mockResolvedValueOnce({ rowCount: 5 })    // ai_response_cache OK
       .mockRejectedValueOnce(new Error('grants down'))  // refresh_token_grants fails
       .mockResolvedValueOnce({ rowCount: 6 })    // login_attempts OK
-      .mockResolvedValueOnce({ rowCount: 7 });   // ai_call_logs OK
+      .mockResolvedValueOnce({ rowCount: 7 })    // ai_call_logs OK
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] }); // closed accounts: nothing to erase
 
     const summary = await sweep.runSweep();
     expect(summary.ai_response_cache.rows_purged).toBe(5);
     expect(summary.refresh_token_grants.error).toBe('grants down');
     expect(summary.login_attempts.rows_purged).toBe(6);
     expect(summary.ai_call_logs.rows_purged).toBe(7);
+    expect(summary.closed_accounts.rows_erased).toBe(0);
     expect(summary.total_rows_purged).toBe(18);
+  });
+
+  test('closed-account erasure failure surfaces in errors but does not abort', async () => {
+    query
+      .mockResolvedValueOnce({ rowCount: 1 })   // ai_response_cache
+      .mockResolvedValueOnce({ rowCount: 1 })   // refresh_token_grants
+      .mockResolvedValueOnce({ rowCount: 1 })   // login_attempts
+      .mockResolvedValueOnce({ rowCount: 1 })   // ai_call_logs
+      .mockRejectedValueOnce(new Error('users table locked')); // closed accounts fails
+
+    const summary = await sweep.runSweep();
+    expect(summary.closed_accounts.rows_erased).toBe(0);
+    expect(summary.closed_accounts.error).toMatch(/locked/);
+    expect(summary.total_rows_purged).toBe(4);
   });
 });

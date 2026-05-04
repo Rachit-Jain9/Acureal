@@ -37,6 +37,7 @@
 
 const { query } = require('../config/database');
 const log = require('../lib/logger').child({ module: 'retention.sweep' });
+const { eraseClosedAccounts } = require('./accountClosure.service');
 
 // Configurable per env so we can shorten in dev / lengthen for an
 // enterprise contract that requires 24-month AI logs.
@@ -129,13 +130,31 @@ const purgeAiCallLogs = async () => {
   }
 };
 
+// Erases closed accounts past the 90-day grace window (DPDP §8(7)).
+// Wraps the closure-service call so failures surface in the per-target
+// summary rather than aborting the whole sweep.
+const purgeClosedAccounts = async () => {
+  try {
+    const result = await eraseClosedAccounts();
+    return {
+      rows_erased: result.rows_erased || 0,
+      grace_days: result.grace_days,
+      ...(result.error ? { error: result.error } : {}),
+    };
+  } catch (err) {
+    log.warn('account_erasure_failed', { error: err.message });
+    return { rows_erased: 0, error: err.message };
+  }
+};
+
 const runSweep = async () => {
   const start = Date.now();
-  const [aiCache, refreshTokens, loginAttempts, aiCallLogs] = await Promise.all([
+  const [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts] = await Promise.all([
     purgeAiResponseCache(),
     purgeRefreshTokenGrants(),
     purgeLoginAttempts(),
     purgeAiCallLogs(),
+    purgeClosedAccounts(),
   ]);
 
   const summary = {
@@ -143,16 +162,18 @@ const runSweep = async () => {
     refresh_token_grants: refreshTokens,
     login_attempts: loginAttempts,
     ai_call_logs: aiCallLogs,
+    closed_accounts: closedAccounts,
     total_rows_purged:
       (aiCache.rows_purged || 0) +
       (refreshTokens.rows_purged || 0) +
       (loginAttempts.rows_purged || 0) +
-      (aiCallLogs.rows_purged || 0),
+      (aiCallLogs.rows_purged || 0) +
+      (closedAccounts.rows_erased || 0),
     duration_ms: Date.now() - start,
   };
 
   // Surface anything that errored so a quiet cron failure isn't invisible.
-  const errors = [aiCache, refreshTokens, loginAttempts, aiCallLogs]
+  const errors = [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts]
     .filter((r) => r.error)
     .map((r) => r.error);
 
@@ -172,4 +193,5 @@ module.exports = {
   purgeRefreshTokenGrants,
   purgeLoginAttempts,
   purgeAiCallLogs,
+  purgeClosedAccounts,
 };
