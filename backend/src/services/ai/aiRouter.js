@@ -87,17 +87,34 @@ const extractTokenUsage = (rawResult) => {
       totalTokens: rawResult.usageMetadata.totalTokenCount ?? null,
     };
   }
-  // Anthropic SDK shape: { usage: { input_tokens, output_tokens } }
+  // Anthropic SDK shape: { usage: { input_tokens, output_tokens,
+  // cache_creation_input_tokens?, cache_read_input_tokens? } }. The cache_*
+  // counts only appear when prompt caching is on. We surface them under
+  // their own keys so the call-log row's metadata can record them without
+  // confusing the headline `promptTokens` (which Anthropic reports as
+  // input_tokens — the *uncached* portion of the input).
+  //
+  // Cache keys are added to the result ONLY when present in the usage
+  // payload. Non-cached calls return the canonical 3-key shape so existing
+  // consumers stay unchanged.
   if (rawResult?.usage && (rawResult.usage.input_tokens != null || rawResult.usage.output_tokens != null)) {
     const promptTokens = rawResult.usage.input_tokens ?? null;
     const completionTokens = rawResult.usage.output_tokens ?? null;
-    return {
-      promptTokens,
-      completionTokens,
-      totalTokens: promptTokens != null && completionTokens != null
-        ? promptTokens + completionTokens
-        : null,
-    };
+    const cacheCreationRaw = rawResult.usage.cache_creation_input_tokens;
+    const cacheReadRaw = rawResult.usage.cache_read_input_tokens;
+    const hasCacheData = cacheCreationRaw != null || cacheReadRaw != null;
+    const baseTotal = promptTokens != null && completionTokens != null
+      ? promptTokens + completionTokens
+      : null;
+    const totalTokens = hasCacheData && baseTotal != null
+      ? baseTotal + (cacheCreationRaw || 0) + (cacheReadRaw || 0)
+      : baseTotal;
+    const result = { promptTokens, completionTokens, totalTokens };
+    if (hasCacheData) {
+      result.cacheCreationTokens = cacheCreationRaw ?? 0;
+      result.cacheReadTokens = cacheReadRaw ?? 0;
+    }
+    return result;
   }
   return { promptTokens: null, completionTokens: null, totalTokens: null };
 };
@@ -434,6 +451,17 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
   // retry. Useful for cost/quality dashboards: "what % of successful calls
   // required a retry?" is a leading indicator of provider degradation.
   const recoveredViaRetry = attemptsMade > 1;
+  // Anthropic prompt cache surfaces — keep them in metadata so cost
+  // dashboards can split paid vs cached input. `tokens.cacheCreationTokens`
+  // is the one-shot write cost; `tokens.cacheReadTokens` is the discounted
+  // read on cache hits. Both default to null when caching is off.
+  const cacheTelemetry = (tokens.cacheCreationTokens != null || tokens.cacheReadTokens != null)
+    ? {
+        cache_creation_input_tokens: tokens.cacheCreationTokens || 0,
+        cache_read_input_tokens: tokens.cacheReadTokens || 0,
+        prompt_cache_used: (tokens.cacheReadTokens || 0) > 0,
+      }
+    : {};
   const callId = await persistCallLog({
     task,
     provider: resolvedProvider,
@@ -447,6 +475,7 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
       ...(metadata || {}),
       attempts: attemptsMade,
       ...(recoveredViaRetry ? { recovered_via_retry: true } : {}),
+      ...cacheTelemetry,
     },
     errorCode,
     errorMessage,

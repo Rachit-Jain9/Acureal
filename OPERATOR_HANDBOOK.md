@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #151 — consolidate AI retry at router layer; remove duplicate extraction-service loop).
+Last refreshed: 2026-05-04 (after PR #152 — Anthropic prompt caching on stable prefixes; Tier 1.1 of `docs/AI_ROADMAP.md`).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -12,6 +12,7 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | [TODO_DATA.md](TODO_DATA.md) | External data sources that are blocked or manual-only |
 | [TODO_LEGAL.md](TODO_LEGAL.md) | Legal & regulatory principles (not actionable items) |
 | [TODO_ARCHITECTURE.md](TODO_ARCHITECTURE.md) | Multi-PR deferred architecture work |
+| [docs/AI_ROADMAP.md](docs/AI_ROADMAP.md) | Canonical AI tiers (cost wins → plumbing → agents → semantic) |
 | [docs/legal/](docs/legal/) | DRAFT legal documents — lawyer review pending |
 
 ---

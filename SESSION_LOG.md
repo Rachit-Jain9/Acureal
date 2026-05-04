@@ -4,6 +4,30 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (AI roadmap integration + Anthropic prompt caching — PR #152)
+
+**What was worked on in plain English:**
+- The roadmap for everything AI in REDIP — what's already built, what's next, what we're deliberately NOT building, and what each tier looks like — is now a single canonical document at `docs/AI_ROADMAP.md`. External advice (e.g. ChatGPT's "use agentic AI" framework) is filtered against what REDIP already does so we don't accidentally re-build things.
+- Shipped Tier 1.1 of that roadmap: Anthropic's prompt caching is now on for the five reasoning calls where the system prompt is identical across requests (extraction normalization, daily market brief, per-deal analysis, parcel verdict narrative, deal-export insights). The first call within a 5-minute window pays a 25% surcharge; every subsequent call pays 10% of the input price for the cached portion. Net: ~80% input-token cost reduction on hot reasoning paths.
+- The cost ledger now records `cache_creation_input_tokens` + `cache_read_input_tokens` + a `prompt_cache_used` flag in each AI-call-log row's metadata. The future cost dashboard can split paid-vs-cached input.
+
+**PRs opened/merged:**
+- PR #152 — `feat(ai): integrate AI_ROADMAP.md + Anthropic prompt caching on stable prefixes (Tier 1.1)` — squash-merged.
+
+**Verification:**
+- Backend test suite: **707 → 717** (+10 covering: providerRegistry default-vs-cached system shape, runClaudeWithDocument cache wiring, error paths; aiRouter extractTokenUsage with/without cache_*).
+- Frontend production build: clean.
+- No migration; no env-var change.
+
+**What's left for Tier 1:**
+- 1.2 Gemini context caching for the master-plan corpus
+- 1.3 Streaming for IC memo generation (SSE)
+- 1.4 Zod validation at provider boundary
+
+See `docs/AI_ROADMAP.md` for the full tier framework.
+
+---
+
 ## 2026-05-04 (Consolidate AI retry at router layer — PR #151)
 
 **What was worked on in plain English:**

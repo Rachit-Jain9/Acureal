@@ -69,6 +69,51 @@ describe('services/ai/aiRouter', () => {
       const tokens = extractTokenUsage('plain string');
       expect(tokens).toEqual({ promptTokens: null, completionTokens: null, totalTokens: null });
     });
+
+    test('Anthropic shape WITHOUT cache fields stays 3-key', () => {
+      const tokens = extractTokenUsage({
+        usage: { input_tokens: 30, output_tokens: 70 },
+      });
+      // Cache keys must be absent (not null) so existing consumers see the
+      // canonical shape unchanged.
+      expect(tokens).toEqual({ promptTokens: 30, completionTokens: 70, totalTokens: 100 });
+      expect(tokens).not.toHaveProperty('cacheCreationTokens');
+      expect(tokens).not.toHaveProperty('cacheReadTokens');
+    });
+
+    test('Anthropic shape WITH cache_creation surfaces cacheCreationTokens', () => {
+      const tokens = extractTokenUsage({
+        usage: {
+          input_tokens: 100,
+          output_tokens: 200,
+          cache_creation_input_tokens: 1500,
+          cache_read_input_tokens: 0,
+        },
+      });
+      expect(tokens.promptTokens).toBe(100);
+      expect(tokens.completionTokens).toBe(200);
+      // Total includes cache_creation tokens (those are real input tokens billed
+      // at 1.25× the base input rate for the write call).
+      expect(tokens.totalTokens).toBe(100 + 200 + 1500);
+      expect(tokens.cacheCreationTokens).toBe(1500);
+      expect(tokens.cacheReadTokens).toBe(0);
+    });
+
+    test('Anthropic shape WITH cache_read surfaces cacheReadTokens', () => {
+      const tokens = extractTokenUsage({
+        usage: {
+          input_tokens: 50,
+          output_tokens: 150,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 1500,
+        },
+      });
+      // The cache-read scenario: 90% discount on the cached portion. Token
+      // count is still the same; the cost-table uses cacheReadTokens to
+      // apply the discount when costs land in `ai_call_logs.metadata`.
+      expect(tokens.cacheReadTokens).toBe(1500);
+      expect(tokens.totalTokens).toBe(50 + 150 + 1500);
+    });
   });
 
   describe('routing config helpers', () => {

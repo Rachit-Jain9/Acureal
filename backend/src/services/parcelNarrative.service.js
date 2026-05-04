@@ -144,13 +144,18 @@ const generateNarrative = async ({ propertyId, userId = null, dealId = null }) =
       confidence_pct: payload.verdict?.confidence_pct,
     },
     run: async ({ providers, model }) => {
-      const message = await providers.runClaudeReasoning({
+      // providerRegistry returns { result, raw } envelope. Pass `raw`
+      // through so aiRouter.extractTokenUsage can lift cache_* token counts
+      // (PR #152) into ai_call_logs.metadata. Stable SYSTEM_PROMPT across
+      // narratives → opt into prompt cache.
+      const envelope = await providers.runClaudeReasoning({
         systemPrompt: SYSTEM_PROMPT,
+        cachePrompt: true,
         payload,
         model,
         maxTokens: 500,
       });
-      return { result: message, raw: { usage: null } };
+      return { result: envelope?.result ?? null, raw: envelope?.raw ?? { usage: null } };
     },
   });
 

@@ -69,18 +69,43 @@ const runGeminiInline = async ({
   return result.response.text().trim();
 };
 
+// Build the system field for Anthropic. When `cachePrompt` is true, the
+// system text is wrapped in a content block with `cache_control: ephemeral`
+// so Anthropic caches the prefix for 5 minutes. Subsequent calls within that
+// window pay 0.1× the input price for the cached portion (90% discount).
+//
+// Caching adds ~25% surcharge to the cache-write call, so opt-in only when
+// the system prompt is stable across calls (IC memo, scenario diagnosis,
+// extraction normalization, export insights — all of these reuse the same
+// system block on every call).
+const buildSystemField = (systemPrompt, cachePrompt) => {
+  if (!systemPrompt) return undefined;
+  if (!cachePrompt) return systemPrompt;
+  return [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }];
+};
+
+// Normalize Anthropic's content-array response back to the text we used to
+// return. Two shapes possible: single text block (most common), or
+// multi-block (rare, e.g. when tool use is enabled — Tier 3+).
+const extractClaudeText = (message) => {
+  if (!Array.isArray(message?.content)) return null;
+  const textBlock = message.content.find((block) => block?.type === 'text');
+  return textBlock?.text || message.content[0]?.text || null;
+};
+
 const runClaudeReasoning = async ({
   systemPrompt,
   payload,
   model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
   maxTokens = 700,
+  cachePrompt = false,
 }) => {
   const client = getAnthropicClient();
 
   const message = await client.messages.create({
     model,
     max_tokens: maxTokens,
-    system: systemPrompt,
+    system: buildSystemField(systemPrompt, cachePrompt),
     messages: [
       {
         role: 'user',
@@ -89,7 +114,10 @@ const runClaudeReasoning = async ({
     ],
   });
 
-  return message.content[0]?.text || null;
+  // Return the raw envelope alongside the text so the router can extract
+  // both regular usage and cache_creation/cache_read token counts. The
+  // router's `runAI` already understands the `{ result, raw }` shape.
+  return { result: extractClaudeText(message), raw: message };
 };
 
 // Send a PDF or image directly to Claude's messages API as a document /
@@ -103,6 +131,7 @@ const runClaudeWithDocument = async ({
   mimeType,
   model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
   maxTokens = 4000,
+  cachePrompt = false,
 }) => {
   if (!base64Data) {
     throw new Error('runClaudeWithDocument requires base64Data.');
@@ -125,10 +154,13 @@ const runClaudeWithDocument = async ({
       source: { type: 'base64', media_type: mimeType, data: base64Data },
     };
 
+  const effectiveSystem = systemPrompt
+    || 'You extract structured JSON from regulatory documents. Return ONLY valid JSON matching the requested schema.';
+
   const message = await client.messages.create({
     model,
     max_tokens: maxTokens,
-    system: systemPrompt || 'You extract structured JSON from regulatory documents. Return ONLY valid JSON matching the requested schema.',
+    system: buildSystemField(effectiveSystem, cachePrompt),
     messages: [
       {
         role: 'user',
@@ -137,10 +169,7 @@ const runClaudeWithDocument = async ({
     ],
   });
 
-  const textBlock = Array.isArray(message.content)
-    ? message.content.find((block) => block?.type === 'text')
-    : null;
-  return textBlock?.text || message.content?.[0]?.text || null;
+  return { result: extractClaudeText(message), raw: message };
 };
 
 module.exports = {

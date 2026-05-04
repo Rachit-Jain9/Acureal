@@ -193,15 +193,20 @@ const generateDealInsights = async ({
 
   let raw;
   try {
-    raw = await withTimeout(
+    // providerRegistry returns { result, raw } (post-2026-05-04 PR #152 —
+    // raw envelope surfaces cache_creation/cache_read tokens). Stable
+    // SYSTEM_PROMPT across exports → opt into ephemeral prompt cache.
+    const envelope = await withTimeout(
       runClaudeReasoning({
         systemPrompt: SYSTEM_PROMPT,
+        cachePrompt: true,
         payload,
         maxTokens: 700,
       }),
       MODEL_TIMEOUT_MS,
       'Claude deal-insights call'
     );
+    raw = envelope?.result ?? envelope;
   } catch (err) {
     return unavailable(`Model call failed: ${err.message}`);
   }

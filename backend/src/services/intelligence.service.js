@@ -144,9 +144,12 @@ Rules:
   };
 
   try {
+    // Stable system prompt across daily briefs → opt into Anthropic
+    // ephemeral prompt cache. The router caches reads at 0.1× input cost.
     return await runClaudeReasoning({
       task: 'market_synthesis',
       systemPrompt,
+      cachePrompt: true,
       payload,
       maxTokens: 700,
       metadata: { stage: 'daily_brief' },
@@ -429,9 +432,11 @@ Rules:
 
   try {
     return {
+      // Stable system prompt across per-deal analyses → cache it.
       analysis: await runClaudeReasoning({
         task: 'reasoning',
         systemPrompt,
+        cachePrompt: true,
         payload,
         maxTokens: 600,
         attach: { dealId },

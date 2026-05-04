@@ -300,6 +300,11 @@ STRICT RULES:
     runClaudeReasoning({
       task: 'document_extraction',
       systemPrompt,
+      // The systemPrompt is identical across normalization calls for the
+      // same doc_type; opt into Anthropic's ephemeral prompt cache so the
+      // 2nd+ normalization within 5 minutes pays 0.1× the input cost on
+      // the cached portion.
+      cachePrompt: true,
       payload: {
         doc_type: docType,
         extracted_json: structuredFields,
