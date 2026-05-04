@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #158 — account closure + scheduled erasure (DPDP §8(7) closed end-to-end)).
+Last refreshed: 2026-05-04 (after the PR #159–#166 sprint: UI polish, ai_routing_config, OTel tracing, MFA/TOTP, VirtualizedList, pgvector flagship, semantic search UI, tool registry foundation).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -121,6 +121,9 @@ None of these are written in code; all need a human action.
 | `20260509_ai_response_cache.sql` | ✅ | `ai_response_cache` table for deduplicating identical AI calls (90-day TTL) |
 | `20260510_ai_artifacts_and_log_dimensions.sql` | ✅ | New `ai_artifacts` table + `language`/`doctype` columns on `ai_call_logs`. Verified post-apply: RLS on, 4 indexes, 3 policies, 2 new columns. |
 | `20260511_account_closure.sql` | ✅ | `users.account_closed_at` + `users.erased_at` + sweep index. Verified post-apply: 2 new columns, 1 partial index. |
+| `20260512_ai_routing_config.sql` | ✅ | `ai_routing_config` table — runtime task→provider routing. Admin-only writes via RLS. Seeded with 5 default tasks. |
+| `20260513_mfa_totp.sql` | ✅ | `users.mfa_secret/enrolled_at/recovery_codes/last_used_at` + `mfa_challenges` table. Required before paying customers. |
+| `20260514_pgvector_document_embeddings.sql` | ✅ | `CREATE EXTENSION vector` + `document_embeddings` table with HNSW cosine index, RLS by org. Foundation for semantic search. |
 
 **No migration is currently pending application.** When the next PR adds one, it surfaces here.
 

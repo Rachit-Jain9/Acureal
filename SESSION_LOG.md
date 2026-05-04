@@ -4,6 +4,93 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Speed sprint — 8 PRs in one session: UI polish through tool registry foundation — PRs #159–#166)
+
+User asked to ship the entire highest-value + medium-value + UI polish backlog in one shot. Eight PRs landed:
+
+**PR #159 — UI polish (U1 + U3)**
+- Migrated remaining 8 LoadingSpinner content-load usages to skeletons
+  (DDTab, RiskTab, DocumentsTab, CompsTab, ActivityTab, DefaultsInspector,
+  ParcelIntelligenceAdminPage). App.jsx Suspense fallback + MapCanvas tile-
+  load spinner kept (right tool for those cases).
+- Baked count-up animation into MetricTile primitive: when `value` is a
+  finite number AND `format` is supplied, runs `useCountUp` (600ms cubic
+  ease-out, prefers-reduced-motion respected). One primitive change unlocks
+  count-up on every existing MetricTile site without touching call sites.
+
+**PR #160 — `ai_routing_config` table (Tier 2.3)**
+- Migration: new `ai_routing_config` table (task PK + provider/model/
+  fallback). RLS admin-only writes. Seeded with 5 default tasks.
+- Service: 60s in-memory cache; admin updates propagate within one window.
+- aiRouter consults the runtime table when no provider is pinned.
+- Admin routes: GET/PUT `/api/admin/ai-routing[/:task]`.
+- Empirical OpenAI-vs-Claude A/B testing now possible with one curl PUT.
+
+**PR #161 — OpenTelemetry-shape tracing per AI call (Tier 2.2)**
+- New `lib/aiTrace.js` — withAiSpan wrapper emits structured JSON log
+  lines (ai.span.start / ai.span.end with attributes). 16-hex span_id
+  per OTel spec; trace_id derived from request_id. Vercel runtime parses
+  these natively; future @vercel/otel migration is a one-line swap.
+- Span attributes: provider, model, latency_ms, total_tokens, cost_usd,
+  attempts, cache_hit, call_id. Errors include error_code + error_message.
+- trace_id + span_id mirrored into ai_call_logs.metadata.
+
+**PR #162 — MFA / TOTP via authenticator app (Phase 2 hardening)**
+- Migration: users.mfa_secret/enrolled_at/recovery_codes/last_used_at +
+  mfa_challenges table.
+- Backend: full RFC 6238 TOTP with otplib + qrcode. 8 sha256-hashed
+  recovery codes, single-use. Login flow gains a challenge step when
+  enrolled. Admin disable + retention sweep purges expired challenges.
+- Frontend: MfaCard on Settings (idle / enrollment / enrolled), LoginPage
+  swaps to 6-digit-code form when /auth/login returns mfaRequired.
+- Required before paying customers. **C1 closed.**
+
+**PR #163 — VirtualizedList primitive (U2)**
+- New design-system primitive with auto-threshold (default 100 rows):
+  below threshold renders inline; above virtualizes via @tanstack/
+  react-virtual. Hook always invoked (rules-of-hooks). Optional empty
+  state slot. Drop-in safe.
+- No call-site wiring — existing tables paginate at ~50 rows; the
+  primitive is ready for the day a workspace breaks 100+ rows.
+
+**PR #164 + #165 — pgvector flagship (Tier 4.1, end-to-end)**
+- Migration: `CREATE EXTENSION vector` + `document_embeddings` table
+  (1536 dim, HNSW cosine index, RLS by org).
+- Backend: embeddings.service (chunk → embed → store via OpenAI
+  text-embedding-3-small; cosine k-NN search). Auto-indexes on every
+  document extraction (Promise.resolve fire-and-forget — embedding
+  failure never blocks extraction).
+- New /api/search/semantic + /api/search/reindex routes.
+- Frontend: SemanticSearchPanel mounted on the deal Documents tab.
+  "Find similar clauses across the corpus" works today.
+
+**PR #166 — Tool registry foundation (Tier 3.1 starter)**
+- New services/ai/tools/index.js with three starter tools: getDeal,
+  searchComps, searchEvidence (all read-tier).
+- Permission tiers (read | compute | draft | approval-required) +
+  invokeTool dispatcher. Zod-validated inputs, structured error codes.
+- Full Deal Analyst persona + agent runner remain DEFERRED behind the
+  ≥50-real-deals entry criterion in AI_ROADMAP §5. Registry pattern
+  itself is reusable today.
+
+**Verification across the 8 PRs:**
+- Backend test suite: 762 → 856 (+94 tests, all green across 66 suites).
+- Frontend test suite: 206 → 210 green.
+- Production builds clean across all 8 PRs.
+- Migrations applied: 4 (verified post-apply — see OPERATOR_HANDBOOK §4).
+
+**Status — what's left in the entire roadmap:**
+- Tier 1.2 (Gemini context caching) — DEFERRED (low ROI for REDIP's current architecture)
+- Tier 2.1 (Vercel AI SDK migration) — DEFERRED (refactor with no new capability; bundle with Tier 3.2 when that ships)
+- Tier 3.2/3.3/3.5 (full agent runner + Deal Analyst persona + Doc Q&A persona) — DEFERRED (entry criterion: ≥50 real deals)
+- Tier 4.2 (field-level PII encryption) — DEFERRED (RLS + at-rest encryption adequate)
+- Tier 4.3/4.5 (Bhashini + Tesseract Kannada) — DEFERRED until Gemini Indic quality dips
+- Operator-only items (lawyer review, DPAs, domain, region check) — see OPERATOR_HANDBOOK §2
+
+**Net for the platform:** every item from the user's "highest value", "medium value", and "UI polish" pending lists is now either shipped or explicitly deferred with rationale. The platform is in launch-ready state pending the operator items.
+
+---
+
 ## 2026-05-04 (Account closure + scheduled erasure — DPDP §8(7) closed end-to-end — PR #158)
 
 **What was worked on in plain English:**

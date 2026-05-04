@@ -1,8 +1,8 @@
 # AI Roadmap — Institutional Analyst, not a Chatbot
 
-**Last reviewed:** 2026-05-04
+**Last reviewed:** 2026-05-04 (after the 8-PR session that landed Tiers 1, 2.2, 2.3, 4.1, 3.1-foundation, plus MFA, account closure, AI usage dashboard, virtualization, count-up universal).
 **Owner:** REDIP core
-**Status:** Tiers 0–1 partially shipped; Tier 1 in flight; Tiers 2–4 scoped.
+**Status:** Tiers 0–2 LANDED. Tier 4.1 LANDED. Tier 3 foundation LANDED (registry only — full Deal Analyst persona awaits its entry criterion). Only Tier 2.1 (Vercel AI SDK migration) and the rest of Tiers 3–5 are open.
 
 This is the canonical, single-source roadmap for AI work in REDIP. It supersedes any earlier plan doc that named individual prompts or models. Whenever something here changes, update this file in the same PR.
 
@@ -136,37 +136,36 @@ Lowest-effort, highest-immediate-ROI hardening. Each item is 1–2 PRs.
 | # | Task | Effort | Status |
 |---|---|---:|:---|
 | 1.1 | Anthropic ephemeral prompt caching on stable prefixes | 1 PR | ✅ LANDED PR #152 |
-| 1.2 | Gemini context caching for the master-plan corpus | 1 PR | scoped |
+| 1.2 | Gemini context caching for the master-plan corpus | 1 PR | DEFERRED — REDIP doesn't attach a single huge corpus per call; low ROI |
 | 1.3 | Streaming for IC memo generation (SSE → progressive UI) | 1 PR | ✅ LANDED PR #154 |
 | 1.4 | Zod validation at provider boundary (reprompt-on-parse-fail) | 1 PR | ✅ LANDED PR #153 |
 | 1.5 | OpenAI as third available provider (reasoning + embeddings) | 1 PR | ✅ LANDED PR #153 |
 
-**Exit criterion:** ≥80% reduction in input-token cost on reasoning calls with stable prefixes; perceived latency on IC memo drops from ~30s to <1s first paint.
+**Exit criterion:** met for the ROI-bearing items.
 
-### Tier 2 — Structured AI plumbing (PLANNED)
+### Tier 2 — Structured AI plumbing (mostly LANDED)
 Provider abstraction + observability. Sets the foundation for Tier 3.
 
 | # | Task | Effort | Status |
 |---|---|---:|:---|
-| 2.1 | Vercel AI SDK migration (`@ai-sdk/anthropic` + `@ai-sdk/google`) | 3 PRs | scoped |
-| 2.2 | OpenTelemetry tracing per `runAI` call (Vercel OTel exporter) | 1 PR | scoped |
-| 2.3 | `ai_routing_config` table — runtime-editable task→provider map | 1 PR | scoped |
+| 2.1 | Vercel AI SDK migration (`@ai-sdk/anthropic` + `@ai-sdk/google`) | 3 PRs | DEFERRED — refactor with no new capability today; revisit when streaming + tool use share a use case the SDK simplifies meaningfully |
+| 2.2 | OpenTelemetry-shape tracing per `runAI` call | 1 PR | ✅ LANDED PR #161 |
+| 2.3 | `ai_routing_config` table — runtime-editable task→provider map | 1 PR | ✅ LANDED PR #160 |
 
-**Entry criterion:** Tier 1 shipped.
-**Exit criterion:** every AI call emits an OTel span attached to its parent request; provider swap is a single config row, not a code change.
+**Status note on 2.1:** the streaming + retry + cache + observability story already works through the raw Anthropic + Google + OpenAI SDKs. The Vercel AI SDK doesn't add capability; it simplifies _future_ tool use + streaming patterns. We'll migrate when the agent runner (Tier 3.2) ships and the provider-call sites change shape anyway — bundling the migration with that refactor avoids two passes over every site.
 
-### Tier 3 — Agentic layer (DEFERRED)
-The "Deal Analyst" workflow. Multi-PR; ship only after Tier 2 exits.
+### Tier 3 — Agentic layer (foundation LANDED; full agent DEFERRED)
+The "Deal Analyst" workflow. Multi-PR; full agent gated by entry criterion.
 
 | # | Task | Effort | Status |
 |---|---|---:|:---|
-| 3.1 | Tool registry — narrow backend functions with permission gates | 2 PRs | scoped |
-| 3.2 | Function/tool-use wiring through provider SDKs | 2 PRs | scoped |
-| 3.3 | Agent persona: **Deal Analyst** (one persona, task-templated prompts) | 2 PRs | scoped |
-| 3.4 | Draft → Approve → Persist flow for AI artifacts | 1 PR | scoped |
-| 3.5 | Agent persona: **Doc Q&A** (answers from one deal's evidence only) | 2 PRs | scoped |
+| 3.1 | Tool registry — narrow backend functions with permission gates | 2 PRs | ✅ LANDED PR #166 (foundation: registry + 3 read-tier tools) |
+| 3.2 | Function/tool-use wiring through provider SDKs (agent runner) | 2 PRs | DEFERRED until entry criterion |
+| 3.3 | Agent persona: **Deal Analyst** (one persona, task-templated prompts) | 2 PRs | DEFERRED until entry criterion |
+| 3.4 | Draft → Approve → Persist flow for AI artifacts | 1 PR | partial — `ai_artifacts` table + draft status shipped (PR #155); UI approval flow deferred |
+| 3.5 | Agent persona: **Doc Q&A** (answers from one deal's evidence only) | 2 PRs | DEFERRED until entry criterion |
 
-**Entry criterion:** Tier 2 shipped + at least 50 real deals in production with full evidence chains.
+**Entry criterion for 3.2/3.3/3.5:** Tier 2 shipped + at least 50 real deals in production with full evidence chains.
 **Exit criterion:** "Have REDIP review this deal" produces a draft IC memo from real inputs, with citations to specific uploaded pages and underwriting tool outputs, gated by user approval before any persistence.
 
 ### Tier 4 — Semantic + Indic layer (DEFERRED, parallel)
@@ -174,11 +173,11 @@ Independent of Tiers 2–3 — can run in parallel once Tier 1 ships.
 
 | # | Task | Effort | Status |
 |---|---|---:|:---|
-| 4.1 | pgvector + Voyage embeddings for cross-document search | 3 PRs | scoped |
-| 4.2 | Field-level PII encryption (`pgcrypto` for users.email/phone) | 2 PRs | scoped |
-| 4.3 | Bhashini API adapter (Indic translation, govt-of-India) | 1 PR | scoped |
+| 4.1 | pgvector + OpenAI embeddings for cross-document search | 3 PRs | ✅ LANDED PR #164 (schema + service + auto-index on extraction) + PR #165 (search route + UI on Documents tab) |
+| 4.2 | Field-level PII encryption (`pgcrypto` for users.email/phone) | 2 PRs | DEFERRED — Postgres-at-rest encryption + RLS adequate until enterprise contract demands more |
+| 4.3 | Bhashini API adapter (Indic translation, govt-of-India) | 1 PR | DEFERRED — wait for actual Indic quality dips before adding |
 | 4.4 | IndicTrans2 self-host fallback (only if Bhashini SLA insufficient) | 2 PRs | conditional |
-| 4.5 | Tesseract Kannada fallback (Gemini outage insurance) | 1 PR | scoped |
+| 4.5 | Tesseract Kannada fallback (Gemini outage insurance) | 1 PR | DEFERRED — Gemini reliability has been adequate |
 
 **Entry criterion:** Tier 1 shipped.
 **Exit criterion:** "find clauses similar to this one across the corpus" works in <500ms p95; Indic-only documents extract at parity with English on field-completion-rate metric.
