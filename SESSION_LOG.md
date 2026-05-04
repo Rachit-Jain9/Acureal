@@ -4,6 +4,31 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Phase 3 starts — AI prompt versioning + response cache — PR #146)
+
+**What was worked on in plain English:**
+- Re-extracting the same document is now free and instant. Previously, hitting "Re-extract" sent the file back to Gemini at full price even if nothing had changed; now the result is cached for 90 days keyed on the document bytes + the exact prompt that produced it. First extraction still calls Gemini; every identical retry/regenerate after that is a database read.
+- Every AI extraction now leaves a permanent record of the *exact prompt body* that produced it — not just "we used the title-deed prompt" but a sha256 of the literal text. Six months from now, any historical extraction can be replayed against the prompt that originally produced it. This is what makes the AI audit trail credible to investors.
+- The cache invalidates itself automatically when a prompt is edited, because the cache key includes the prompt's sha256. There's a single operator dial — `PROMPT_REGISTRY_VERSION` in `extractionPrompts.js` — to bump for "I changed something."
+
+**PRs opened/merged:**
+- PR #146 — `feat(ai): prompt versioning + persistent response cache` — squash-merged. Migration `20260509_ai_response_cache.sql` applied to prod via Supabase MCP.
+
+**Verification:**
+- Backend test suite: 657 → **676** (+19 covering buildCacheKey determinism, lookup hit/miss/expired, recordHit, store insert/update/TTL, fail-open paths, purgeExpired).
+- Frontend production build: clean.
+- Cache integration: fail-open at every layer — a DB error on lookup or store does not block the live provider call.
+
+**What's left for Phase 3:**
+- Daily cron to call `aiResponseCache.purgeExpired()` — small follow-up; wire to `vercel.json` next to existing fx-refresh + parcel-cache-sweep crons.
+- Vercel AI SDK migration (S16 from older roadmap) — gives streaming + tool use + retries via a single SDK.
+- OpenTelemetry tracing per `routeAi` call.
+- Zod validation at provider boundary.
+- Streaming for long Claude calls (IC memo today is 20–40 s with no progress feedback).
+- Generic retry on Claude reasoning calls (today only extraction retries; reasoning calls are one-shot).
+
+---
+
 ## 2026-05-04 (Phase 2 closeout — re-acceptance modal + set-first-password — PRs #144, #145)
 
 **What was worked on in plain English:**

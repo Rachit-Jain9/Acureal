@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PRs #144 + #145 — legal re-acceptance modal and OAuth-only set-first-password).
+Last refreshed: 2026-05-04 (after PR #146 — AI prompt versioning + response cache, Phase 3 foundation).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -117,6 +117,7 @@ None of these are written in code; all need a human action.
 | `20260507_refresh_tokens.sql` | ✅ | Refresh-token grants with rotation + family revocation |
 | `20260504_rls_hardening` | ✅ | RLS enabled on `login_attempts` + `refresh_token_grants` |
 | `20260508_password_set_flag.sql` | ✅ | `users.password_set` boolean — distinguishes real password from OAuth-only unusable bcrypt |
+| `20260509_ai_response_cache.sql` | ✅ | `ai_response_cache` table for deduplicating identical AI calls (90-day TTL) |
 
 **No migration is currently pending application.** When the next PR adds one, it surfaces here.
 
@@ -215,13 +216,15 @@ Sourced from this session's plan + earlier session logs. Sequenced by impact.
 - [ ] Email verification *enforcement* — currently the banner reminds; future PR can require verification before sensitive actions
 
 ### Phase 3 — AI hardening
-- [ ] Retry/fallback chain (Gemini → Claude on extraction outage)
-- [ ] Prompt versioning (`prompt_version` column in `ai_call_logs`)
-- [ ] Response cache (sha256(file) + prompt_version + model → cached output, 90d TTL)
+- [x] Retry/fallback chain — already in `extraction.service.js::callExtractionWithFallback` (Gemini retries → Claude fallback)
+- [x] PR #146 — Prompt versioning (`prompt_version` + `prompt_sha256` in `ai_call_logs.metadata`)
+- [x] PR #146 — Response cache (`ai_response_cache`, 90d TTL, opt-in via `aiRouter.runAI` cache arg)
+- [ ] Daily cron to call `aiResponseCache.purgeExpired()` so the table doesn't grow indefinitely (small follow-up; can be added to `vercel.json` next to existing fx-refresh + parcel-cache-sweep crons)
 - [ ] Vercel AI SDK migration (S16 from older roadmap)
 - [ ] OpenTelemetry tracing per `routeAi` call
 - [ ] Zod validation at provider boundary
 - [ ] Streaming for long Claude calls (IC memo)
+- [ ] Generic retry on Claude reasoning calls (today only extraction retries; reasoning calls one-shot)
 
 ### Phase 4 — Data layer
 - [ ] `pgvector` enable + Voyage / OpenAI embeddings for cross-document similarity
