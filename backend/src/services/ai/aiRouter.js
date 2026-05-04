@@ -41,6 +41,7 @@ const { getRequestContext } = require('../../lib/requestContext');
 const { assertWithinDailyCap, CostCapExceededError } = require('../../lib/costGuard');
 const { withRetry, isRetriableProviderError, DEFAULT_RETRY_OPTIONS } = require('./aiRetry');
 const routingConfigService = require('./routingConfig');
+const { withAiSpan } = require('../../lib/aiTrace');
 
 // Approximate USD cost per 1M tokens, sourced from public pricing pages
 // (Gemini 2.5 flash, Claude Sonnet 4.6, GPT-4o-mini). Used as a directional
@@ -281,13 +282,24 @@ const resolveDefaultModel = (provider) => {
  * @param {Function} args.run       async ({ providers, provider, model, task }) => result
  * @returns {Promise<{ result: any, callId: string|null, status: string, latencyMs: number, cached?: boolean }>}
  */
-const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache, retry, run }) => {
-  if (typeof run !== 'function') {
+const runAI = async (args) => {
+  if (typeof args?.run !== 'function') {
     throw new Error('aiRouter.run: `run` callback is required.');
   }
-  if (!task) {
+  if (!args?.task) {
     throw new Error('aiRouter.run: `task` is required.');
   }
+  // Wrap in an OTel-shape span so each AI call emits trace events
+  // (start / end) with task / provider / model / latency / status. The
+  // span_id is also persisted into ai_call_logs.metadata so a trace ID
+  // links back to the cost ledger row.
+  return withAiSpan(
+    { name: `ai.${args.task}`, attributes: { task: args.task } },
+    (span) => runAIInternal({ ...args, _span: span }),
+  );
+};
+
+const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}, cache, retry, run, _span }) => {
 
   // Routing resolution: explicit provider arg wins; otherwise consult the
   // runtime ai_routing_config table (cached 60s) which itself falls back
@@ -345,8 +357,13 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
             cached_at: hit.created_at || null,
             cached_prompt_version: hit.prompt_version || null,
             cached_cost_usd_at_time: hit.cost_usd_at_time || null,
+            ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
           },
         });
+        if (_span) {
+          _span.setAttribute('cache_hit', true);
+          _span.setAttribute('latency_ms', latencyMs);
+        }
         log.info('ai_call_cache_hit', {
           task,
           provider: resolvedProvider,
@@ -480,10 +497,22 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
       tokens,
       cost: null,
       attach,
-      metadata: { ...(metadata || {}), attempts: attemptsMade },
+      metadata: {
+        ...(metadata || {}),
+        attempts: attemptsMade,
+        ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
+      },
       errorCode,
       errorMessage,
     });
+
+    if (_span) {
+      _span.setAttribute('provider', resolvedProvider);
+      _span.setAttribute('model', resolvedModel);
+      _span.setAttribute('latency_ms', latencyMs);
+      _span.setAttribute('attempts', attemptsMade);
+      _span.setAttribute('status', status);
+    }
 
     log.error('ai_call_failed', err, {
       task,
@@ -527,6 +556,7 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
       attempts: attemptsMade,
       ...(recoveredViaRetry ? { recovered_via_retry: true } : {}),
       ...cacheTelemetry,
+      ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
     },
     errorCode,
     errorMessage,
@@ -554,6 +584,17 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
       costUsd: cost,
       ttlSeconds: cache.ttlSeconds || null,
     });
+  }
+
+  if (_span) {
+    _span.setAttribute('provider', resolvedProvider);
+    _span.setAttribute('model', resolvedModel);
+    _span.setAttribute('latency_ms', latencyMs);
+    _span.setAttribute('total_tokens', tokens.totalTokens || 0);
+    _span.setAttribute('cost_usd', cost || 0);
+    _span.setAttribute('attempts', attemptsMade);
+    _span.setAttribute('cache_hit', false);
+    _span.setAttribute('call_id', callId || null);
   }
 
   log.info('ai_call_completed', {
