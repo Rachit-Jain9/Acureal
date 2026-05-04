@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Brain,
@@ -10,6 +10,7 @@ import {
   IndianRupee,
   Layers,
   MapPin,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
@@ -113,24 +114,45 @@ const STAGE_NEXT_STEPS = {
 export default function OverviewTab() {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
-  const [aiAnalysis, setAiAnalysis] = useState(null);
+  // Streaming AI analysis. The text accumulates as Claude generates it
+  // (perceived latency drops from ~30s to <1s first paint). `streamCtrl`
+  // holds the active stream's `abort()` so the user can cancel mid-flight.
+  const [aiText, setAiText] = useState('');
+  const [aiMeta, setAiMeta] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const streamCtrl = useRef(null);
 
-  const handleAiAnalysis = async () => {
+  const handleAiAnalysis = () => {
+    if (aiLoading) return;
     setAiLoading(true);
     setAiError(null);
-    try {
-      const res = await intelligenceAPI.getDealAnalysis(dealId);
-      setAiAnalysis(res.data.data);
-    } catch (err) {
-      setAiError(
-        err.response?.data?.message ||
-          'Analysis failed. Check that ANTHROPIC_API_KEY is configured.'
-      );
-    } finally {
-      setAiLoading(false);
-    }
+    setAiText('');
+    setAiMeta(null);
+
+    const stream = intelligenceAPI.streamDealAnalysis(dealId, {
+      onText: (delta) => setAiText((t) => t + delta),
+      onDone: (meta) => setAiMeta(meta),
+    });
+    streamCtrl.current = stream;
+
+    stream.promise
+      .catch((err) => {
+        // AbortError → user clicked Cancel; don't surface as error.
+        if (err?.name === 'AbortError') return;
+        setAiError(
+          err?.message ||
+            'Analysis failed. Check that ANTHROPIC_API_KEY is configured.',
+        );
+      })
+      .finally(() => {
+        setAiLoading(false);
+        streamCtrl.current = null;
+      });
+  };
+
+  const handleAiCancel = () => {
+    if (streamCtrl.current) streamCtrl.current.abort();
   };
 
   const financials = deal.financials;
@@ -344,7 +366,10 @@ export default function OverviewTab() {
         </div>
       )}
 
-      {/* AI Deal Analysis */}
+      {/* AI Deal Analysis — streamed via SSE; text accumulates as Claude
+          generates so the user sees first paint in <1s instead of waiting
+          ~30s for the full response. Cancel button aborts the upstream
+          call so cancelled analyses don't burn token budget. */}
       <div className="card-editorial">
         <SectionHeader
           size="sm"
@@ -353,17 +378,30 @@ export default function OverviewTab() {
             <>
               AI Deal Analysis
               <Badge className="ml-2">Claude</Badge>
+              <Badge className="ml-1" tone="neutral">AI-assisted — review before relying</Badge>
             </>
           }
           action={
-            <button
-              onClick={handleAiAnalysis}
-              disabled={aiLoading}
-              className="btn btn-primary flex items-center gap-1.5 text-sm"
-            >
-              {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
-              {aiLoading ? 'Analysing...' : aiAnalysis ? 'Refresh' : 'Generate Analysis'}
-            </button>
+            <div className="flex items-center gap-2">
+              {aiLoading && (
+                <button
+                  onClick={handleAiCancel}
+                  className="btn btn-ghost flex items-center gap-1.5 text-sm"
+                  type="button"
+                >
+                  <X size={14} /> Cancel
+                </button>
+              )}
+              <button
+                onClick={handleAiAnalysis}
+                disabled={aiLoading}
+                className="btn btn-primary flex items-center gap-1.5 text-sm"
+                type="button"
+              >
+                {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
+                {aiLoading ? 'Analysing…' : aiText ? 'Refresh' : 'Generate Analysis'}
+              </button>
+            </div>
           }
         />
         {aiError && (
@@ -371,24 +409,29 @@ export default function OverviewTab() {
             {aiError}
           </p>
         )}
-        {aiAnalysis?.analysis ? (
+        {aiText ? (
           <div className="mt-4 space-y-2">
             <p className="text-sm text-content-primary leading-relaxed whitespace-pre-line">
-              {aiAnalysis.analysis}
+              {aiText}
+              {aiLoading && (
+                <span
+                  aria-hidden="true"
+                  className="inline-block ml-1 w-1.5 h-3.5 align-middle bg-content-secondary animate-pulse"
+                />
+              )}
             </p>
-            <p className="text-xs text-content-muted mt-2">
-              Generated{' '}
-              {aiAnalysis.generatedAt
-                ? new Date(aiAnalysis.generatedAt).toLocaleString('en-IN')
-                : ''}{' '}
-              · Cross-referenced against internal pipeline, market benchmarks, and verified comps
-            </p>
+            {aiMeta && (
+              <p className="text-xs text-content-muted mt-2">
+                Generated {new Date(aiMeta.generatedAt).toLocaleString('en-IN')} · Cross-referenced
+                against internal pipeline, market benchmarks, and verified comps
+              </p>
+            )}
           </div>
         ) : (
           !aiLoading && !aiError && (
             <p className="mt-2 text-sm text-content-secondary">
               Generate a Claude-powered Investor-Grade memo cross-referencing this deal's financials against
-              Bengaluru micro-market benchmarks and verified comps.
+              Bengaluru micro-market benchmarks and verified comps. Streamed live as Claude writes it.
             </p>
           )
         )}

@@ -137,7 +137,7 @@ Lowest-effort, highest-immediate-ROI hardening. Each item is 1–2 PRs.
 |---|---|---:|:---|
 | 1.1 | Anthropic ephemeral prompt caching on stable prefixes | 1 PR | ✅ LANDED PR #152 |
 | 1.2 | Gemini context caching for the master-plan corpus | 1 PR | scoped |
-| 1.3 | Streaming for IC memo generation (SSE → progressive UI) | 2 PRs | scoped |
+| 1.3 | Streaming for IC memo generation (SSE → progressive UI) | 1 PR | ✅ LANDED PR #154 |
 | 1.4 | Zod validation at provider boundary (reprompt-on-parse-fail) | 1 PR | ✅ LANDED PR #153 |
 | 1.5 | OpenAI as third available provider (reasoning + embeddings) | 1 PR | ✅ LANDED PR #153 |
 

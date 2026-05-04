@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Streaming for AI Deal Analysis — PR #154)
+
+**What was worked on in plain English:**
+- Clicking "Generate Analysis" on a deal page used to mean waiting ~30 seconds while Claude wrote its 240-word analysis behind the scenes — the page just sat there with a spinner. Now the text starts appearing within a second and types out word-by-word as Claude writes it. Even though the underlying call still takes 30 seconds total, the user sees content on screen the whole time.
+- Added a "Cancel" button. If the user clicks Cancel mid-generation, the streaming connection closes and the platform stops paying for tokens nobody will read. Without this, a Cancel just hid the text but Claude kept generating.
+- The full AI cost / token / latency record still lands in the audit log when the stream finishes — caching, retries, and cost-cap all still apply. Streaming is purely a UX win, not a guardrails compromise.
+
+**PRs opened/merged:**
+- PR #154 — `feat(ai): SSE streaming for AI Deal Analysis (Tier 1.3)` — squash-merged.
+
+**Verification:**
+- Backend test suite: **741 → 745** (+4 covering streaming provider: text-event dispatch, cachePrompt wrapping, throwing-listener resilience, idempotent abort).
+- Frontend test suite: 206/206 green (existing OverviewTab test updated to mock new `streamDealAnalysis` shape).
+- Production builds (frontend + backend): clean.
+- No migration; no env-var change.
+
+**What's left for Tier 1:**
+- 1.2 Gemini context caching for the master-plan corpus — only Tier 1 item still scoped.
+
+**Tier 2 (next-up phase):**
+- 2.1 Vercel AI SDK migration
+- 2.2 OpenTelemetry tracing per AI call
+- 2.3 `ai_routing_config` table — runtime-editable task→provider map
+
+---
+
 ## 2026-05-04 (OpenAI as third provider + Zod validation at provider boundary — PR #153)
 
 **What was worked on in plain English:**

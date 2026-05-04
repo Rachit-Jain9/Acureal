@@ -2,7 +2,7 @@
 
 const { query } = require('../config/database');
 const { getProviderAvailability } = require('./ai/providerRegistry');
-const { runClaudeReasoning } = require('./ai/aiRouter');
+const { runClaudeReasoning, runClaudeReasoningStream } = require('./ai/aiRouter');
 const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 
@@ -322,11 +322,11 @@ const buildBrief = async (briefDate) => {
 
 // ─── DEAL ANALYSIS ───────────────────────────────────────────────────────────
 
-const getDealAnalysis = async (dealId) => {
-  if (!getProviderAvailability().claude) {
-    return { analysis: null, reason: 'ANTHROPIC_API_KEY not configured' };
-  }
-
+// Builds the system prompt + Claude payload for the per-deal analysis.
+// Extracted out of getDealAnalysis so streamDealAnalysis can reuse the same
+// data-assembly without duplicating five Postgres queries — keeps the two
+// paths producing identical analyses.
+const buildDealAnalysisInput = async (dealId) => {
   const [dealResult, finResult, benchmarksResult, compsResult, txResult] = await Promise.all([
     query(
       `SELECT d.id, d.name, d.stage, d.priority, d.deal_type, d.notes,
@@ -368,7 +368,7 @@ const getDealAnalysis = async (dealId) => {
   ]);
 
   const deal = dealResult.rows[0];
-  if (!deal) return { analysis: null, reason: 'Deal not found' };
+  if (!deal) return { error: 'Deal not found' };
 
   const fin = finResult.rows[0] || null;
   const kpis = fin?.model_params?.kpis || {};
@@ -430,25 +430,83 @@ Rules:
     })),
   };
 
+  return { systemPrompt, payload, dealName: deal.name };
+};
+
+const getDealAnalysis = async (dealId) => {
+  if (!getProviderAvailability().claude) {
+    return { analysis: null, reason: 'ANTHROPIC_API_KEY not configured' };
+  }
+  const input = await buildDealAnalysisInput(dealId);
+  if (input.error) return { analysis: null, reason: input.error };
+
   try {
     return {
       // Stable system prompt across per-deal analyses → cache it.
       analysis: await runClaudeReasoning({
         task: 'reasoning',
-        systemPrompt,
+        systemPrompt: input.systemPrompt,
         cachePrompt: true,
-        payload,
+        payload: input.payload,
         maxTokens: 600,
         attach: { dealId },
         metadata: { stage: 'deal_analysis' },
       }),
       generatedAt: new Date().toISOString(),
-      dealName: deal.name,
+      dealName: input.dealName,
     };
   } catch (err) {
     log.error('deal_analysis_failed', err, { deal_id: dealId });
     return { analysis: null, reason: err.message };
   }
+};
+
+// Streaming variant of getDealAnalysis. Same data assembly + same prompt;
+// only the Claude call is replaced with the streaming runner. Caller
+// (the SSE route) supplies callbacks invoked as text arrives + when done.
+//
+// Usage:
+//   const stream = await streamDealAnalysis(dealId);
+//   if (stream.error) { res.status(404)... return; }
+//   stream.onText((delta) => res.write(`data: ${JSON.stringify({type:'text',text:delta})}\n\n`));
+//   try {
+//     const final = await stream.done();
+//     res.write(`data: ${JSON.stringify({type:'done', ...final})}\n\n`);
+//   } catch (err) {
+//     res.write(`data: ${JSON.stringify({type:'error',message:err.message})}\n\n`);
+//   }
+//   res.end();
+const streamDealAnalysis = async (dealId) => {
+  if (!getProviderAvailability().claude) {
+    return { error: 'ANTHROPIC_API_KEY not configured', status: 503 };
+  }
+  const input = await buildDealAnalysisInput(dealId);
+  if (input.error) return { error: input.error, status: 404 };
+
+  const stream = await runClaudeReasoningStream({
+    task: 'reasoning',
+    systemPrompt: input.systemPrompt,
+    cachePrompt: true,
+    payload: input.payload,
+    maxTokens: 600,
+    attach: { dealId },
+    metadata: { stage: 'deal_analysis' },
+  });
+
+  return {
+    onText: stream.onText,
+    abort: stream.abort,
+    callIdPromise: stream.callIdPromise,
+    dealName: input.dealName,
+    async done() {
+      const final = await stream.done();
+      return {
+        ...final,
+        dealName: input.dealName,
+        generatedAt: new Date().toISOString(),
+      };
+    },
+  };
 };
 
 // ─── PUBLIC API ───────────────────────────────────────────────────────────────
@@ -538,4 +596,5 @@ module.exports = {
   getMarketTransactions,
   getMicroMarketBenchmarks,
   getDealAnalysis,
+  streamDealAnalysis,
 };

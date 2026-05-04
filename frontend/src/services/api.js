@@ -294,6 +294,88 @@ export const dashboardAPI = {
   getStats: () => api.get('/dashboard'),
 };
 
+// SSE reader: opens a POST stream against the API, parses `data: {...}\n\n`
+// frames, and dispatches each parsed event to the supplied handlers. axios
+// doesn't expose ReadableStream cleanly in browsers; native fetch does.
+//
+// Returns `{ promise, abort }` where:
+//   • promise resolves on the `done` event, rejects on `error`/network fail
+//   • abort() cancels the underlying fetch — the backend's req.on('close')
+//     hook then aborts the upstream Anthropic call (no wasted tokens).
+//
+// Usage:
+//   const { promise, abort } = streamPost('/intelligence/deal-analysis/X/stream', {
+//     onText: (delta) => setText((t) => t + delta),
+//     onDone: (meta) => console.log('done', meta),
+//   });
+//   // user clicks Cancel → abort();
+const streamPost = (path, { onText, onDone, body } = {}) => {
+  const controller = new AbortController();
+  const url = `${API_URL}${path}`;
+
+  const promise = (async () => {
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      let message = `Stream failed: HTTP ${response.status}`;
+      try {
+        const json = await response.json();
+        if (json?.message) message = json.message;
+      } catch { /* response wasn't JSON — keep the HTTP-status message */ }
+      throw new Error(message);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let lastDone = null;
+
+    // SSE frames are separated by a blank line (`\n\n`). We accumulate raw
+    // bytes in `buffer`, split on `\n\n`, parse each frame's `data:` payload
+    // as JSON, and dispatch.
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const rawFrame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const dataLine = rawFrame.split('\n').find((line) => line.startsWith('data:'));
+        if (!dataLine) continue;
+        const payloadStr = dataLine.slice(5).trim();
+        if (!payloadStr) continue;
+        let payload;
+        try {
+          payload = JSON.parse(payloadStr);
+        } catch {
+          continue; // ignore malformed frame; keep streaming
+        }
+        if (payload?.type === 'text' && typeof payload.text === 'string') {
+          onText?.(payload.text);
+        } else if (payload?.type === 'done') {
+          lastDone = payload;
+          onDone?.(payload);
+        } else if (payload?.type === 'error') {
+          throw new Error(payload.message || 'Stream error');
+        }
+      }
+    }
+    return lastDone;
+  })();
+
+  return {
+    promise,
+    abort: () => controller.abort(),
+  };
+};
+
 // Intelligence
 export const intelligenceAPI = {
   getDailyBrief:            (date)   => api.get('/intelligence/daily-brief', { params: { date } }),
@@ -302,6 +384,10 @@ export const intelligenceAPI = {
   getMarketTransactions:    (params) => api.get('/intelligence/market-transactions', { params }),
   getMicroMarketBenchmarks: (params) => api.get('/intelligence/micro-market-benchmarks', { params }),
   getDealAnalysis:          (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
+  // Streaming variant — perceived latency drops from ~30s wait to <1s first
+  // paint. Returns { promise, abort }; consumer wires onText into local state.
+  streamDealAnalysis: (dealId, { onText, onDone } = {}) =>
+    streamPost(`/intelligence/deal-analysis/${dealId}/stream`, { onText, onDone }),
 };
 
 // Exports

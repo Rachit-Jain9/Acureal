@@ -194,6 +194,76 @@ const runClaudeWithDocument = async ({
   return { result: extractClaudeText(message), raw: message };
 };
 
+// Streaming Claude reasoning. The Anthropic SDK exposes `messages.stream()`
+// which yields text deltas as they generate. We surface that as a small
+// adapter object so callers don't take a hard dependency on the SDK shape.
+//
+// The returned object has:
+//   • `onText(cb)` — register a callback called for each text delta. cb
+//      receives the chunk string (never the SSE wrapper).
+//   • `done()` — Promise that resolves with `{ result: fullText, raw: msg }`
+//      where `raw.usage` is the final input/output token counts.
+//   • `abort()` — best-effort cancellation. Anthropic's SDK supports
+//      AbortController; we wire one up so client-disconnect kills the call.
+//
+// `cachePrompt: true` works the same way as the non-streaming variant.
+const runClaudeReasoningStream = async ({
+  systemPrompt,
+  payload,
+  model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+  maxTokens = 700,
+  cachePrompt = false,
+}) => {
+  const client = getAnthropicClient();
+  const controller = new AbortController();
+
+  // The SDK's stream() method returns a MessageStream — an EventEmitter +
+  // async iterable. We register handlers up front so the caller-supplied
+  // onText() runs as text arrives rather than after a full collection.
+  const stream = client.messages.stream({
+    model,
+    max_tokens: maxTokens,
+    system: buildSystemField(systemPrompt, cachePrompt),
+    messages: [
+      {
+        role: 'user',
+        content: typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2),
+      },
+    ],
+  }, { signal: controller.signal });
+
+  const textListeners = [];
+
+  // The SDK fires 'text' events as the model emits content_block_delta
+  // chunks. Each event carries (textDelta, snapshotSoFar). We forward only
+  // the delta — accumulating snapshots is the consumer's job and avoids
+  // double-buffering in memory.
+  stream.on('text', (textDelta) => {
+    for (const cb of textListeners) {
+      try {
+        cb(textDelta);
+      } catch (err) {
+        // A throwing listener must not kill the stream — log + continue.
+        // eslint-disable-next-line no-console
+        console.warn('[ai.stream] text listener threw:', err.message);
+      }
+    }
+  });
+
+  return {
+    onText(cb) {
+      if (typeof cb === 'function') textListeners.push(cb);
+    },
+    async done() {
+      const finalMessage = await stream.finalMessage();
+      return { result: extractClaudeText(finalMessage), raw: finalMessage };
+    },
+    abort() {
+      try { controller.abort(); } catch { /* swallow — best-effort */ }
+    },
+  };
+};
+
 // OpenAI reasoning. Returns the same `{ result, raw }` envelope as the
 // Anthropic helpers so the router's existing token-extraction logic
 // (`extractTokenUsage`) finds usage on `raw.usage` (input_tokens /
@@ -281,6 +351,7 @@ module.exports = {
   getRoutingConfig,
   runGeminiInline,
   runClaudeReasoning,
+  runClaudeReasoningStream,
   runClaudeWithDocument,
   runOpenAIReasoning,
   runOpenAIEmbedding,

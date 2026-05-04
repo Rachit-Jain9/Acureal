@@ -99,6 +99,82 @@ router.post('/deal-analysis/:dealId', authenticate, requireRole('admin', 'analys
   }
 });
 
+// POST /intelligence/deal-analysis/:dealId/stream — SSE-streamed deal memo
+//
+// Same prompt + same data assembly as the JSON variant above, but writes
+// text deltas back as Server-Sent Events as Claude generates them.
+// Perceived latency: <1s first paint vs ~30s wait for the JSON variant.
+//
+// SSE frame format:
+//   data: { "type": "text", "text": "<delta>" }\n\n
+//   ...
+//   data: { "type": "done", "callId": "<uuid>", "generatedAt": "...", "dealName": "..." }\n\n
+//   data: { "type": "error", "message": "..." }\n\n   (on failure)
+//
+// Client-disconnect handling: req.on('close') aborts the upstream Anthropic
+// call so we don't keep paying for tokens nobody will read.
+router.post(
+  '/deal-analysis/:dealId/stream',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const stream = await intelligenceService.streamDealAnalysis(req.params.dealId);
+      if (stream.error) {
+        return res.status(stream.status || 500).json({ success: false, message: stream.error });
+      }
+
+      // SSE headers — disable proxy/CDN buffering so chunks reach the client
+      // as the model generates them. `flushHeaders()` ensures headers ship
+      // before the first data frame instead of after.
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+      const writeFrame = (obj) => {
+        if (res.writableEnded) return;
+        res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      };
+
+      // Client disconnects (browser tab close, navigation, Cancel button) →
+      // abort the upstream Anthropic call. Without this we'd keep paying for
+      // the full token budget on calls nobody is reading.
+      let aborted = false;
+      req.on('close', () => {
+        if (!res.writableEnded) {
+          aborted = true;
+          stream.abort();
+        }
+      });
+
+      stream.onText((delta) => writeFrame({ type: 'text', text: delta }));
+
+      try {
+        const final = await stream.done();
+        if (!aborted) {
+          writeFrame({
+            type: 'done',
+            callId: final.callId,
+            dealName: final.dealName,
+            generatedAt: final.generatedAt,
+          });
+        }
+      } catch (err) {
+        if (!aborted) {
+          writeFrame({ type: 'error', message: err.message || 'Stream failed' });
+        }
+      } finally {
+        if (!res.writableEnded) res.end();
+      }
+      return undefined;
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 /**
  * POST /intelligence/investor-package
  *

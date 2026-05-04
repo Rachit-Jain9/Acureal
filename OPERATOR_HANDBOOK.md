@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #153 — OpenAI as third provider + Zod validation at provider boundary; Tiers 1.4 + 1.5).
+Last refreshed: 2026-05-04 (after PR #154 — streaming for AI Deal Analysis; Tier 1.3 of `docs/AI_ROADMAP.md`).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 

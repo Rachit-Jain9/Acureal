@@ -593,6 +593,139 @@ const runClaudeWithDocument = async (args = {}) => {
 };
 
 /**
+ * Streaming Claude reasoning via the router. Same telemetry surface as
+ * `runClaudeReasoning` but the response writes back as text deltas as they
+ * generate. Use this for any user-facing reasoning call > ~5s where
+ * progressive UI feedback materially improves perceived latency.
+ *
+ * Differences from the non-streaming variant:
+ *   • Cost-cap pre-check fires BEFORE the stream opens. If the org is
+ *     over budget the function throws CostCapExceededError synchronously;
+ *     the caller never sees a partial stream from a capped call.
+ *   • Retry is intentionally NOT applied to streaming calls. Mid-stream
+ *     errors are non-recoverable from a UX perspective (the user has
+ *     already seen partial text). We pass `retry: { enabled: false }`
+ *     transparently. Callers wanting retry should use the non-streaming
+ *     variant.
+ *   • Cost / token counts land in `ai_call_logs` only AFTER the stream
+ *     finalizes. Consumers waiting on the call_id should subscribe to
+ *     the `done` callback returned below.
+ *
+ * Returns `{ onText, done, abort, callIdPromise }`. `done` resolves with
+ * `{ result: fullText, callId, latencyMs, tokens, cost }` once the model
+ * has emitted its final block.
+ */
+const runClaudeReasoningStream = async ({
+  task = 'reasoning',
+  systemPrompt,
+  payload,
+  model,
+  maxTokens,
+  cachePrompt,
+  attach = {},
+  metadata = {},
+} = {}) => {
+  const resolvedProvider = 'claude';
+  const resolvedModel = model || resolveDefaultModel(resolvedProvider);
+  const start = Date.now();
+
+  // Cost-cap pre-check. Same logic as runAI but inlined because the streaming
+  // path doesn't go through runAI's wrapper.
+  const ctx = getRequestContext();
+  const orgIdForCap = attach?.organizationId ?? ctx.organizationId ?? null;
+  await assertWithinDailyCap({ organizationId: orgIdForCap });
+
+  const stream = await providerRegistry.runClaudeReasoningStream({
+    systemPrompt,
+    payload,
+    model: resolvedModel,
+    maxTokens,
+    cachePrompt,
+  });
+
+  // Promise that resolves with the call_id once we've persisted the log
+  // row at finalization. Callers that need to attach evidence_facts to the
+  // call (or surface the id in the SSE stream) await this.
+  let resolveCallId;
+  let rejectCallId;
+  const callIdPromise = new Promise((resolve, reject) => {
+    resolveCallId = resolve;
+    rejectCallId = reject;
+  });
+
+  // Wrap done() so we capture telemetry as soon as the stream finalizes.
+  const wrappedDone = async () => {
+    try {
+      const { result, raw } = await stream.done();
+      const latencyMs = Date.now() - start;
+      const tokens = extractTokenUsage(raw);
+      const cost = estimateCost({ provider: resolvedProvider, model: resolvedModel, ...tokens });
+      const cacheTelemetry = (tokens.cacheCreationTokens != null || tokens.cacheReadTokens != null)
+        ? {
+            cache_creation_input_tokens: tokens.cacheCreationTokens || 0,
+            cache_read_input_tokens: tokens.cacheReadTokens || 0,
+            prompt_cache_used: (tokens.cacheReadTokens || 0) > 0,
+          }
+        : {};
+      const callId = await persistCallLog({
+        task,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        status: 'success',
+        latencyMs,
+        tokens,
+        cost,
+        attach,
+        metadata: { ...(metadata || {}), streamed: true, ...cacheTelemetry },
+      });
+      log.info('ai_stream_completed', {
+        task,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        latency_ms: latencyMs,
+        total_tokens: tokens.totalTokens,
+        cost_usd: cost,
+        call_id: callId,
+      });
+      resolveCallId(callId);
+      return { result, callId, latencyMs, tokens, cost };
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      const status = err?.code === 'ETIMEDOUT' || err?.name === 'TimeoutError' ? 'timeout' : 'error';
+      const callId = await persistCallLog({
+        task,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        status,
+        latencyMs,
+        tokens: { promptTokens: null, completionTokens: null, totalTokens: null },
+        cost: null,
+        attach,
+        metadata: { ...(metadata || {}), streamed: true },
+        errorCode: err?.code || err?.name || null,
+        errorMessage: err?.message ? err.message.slice(0, 500) : 'Unknown stream error',
+      });
+      log.error('ai_stream_failed', err, {
+        task,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        call_id: callId,
+        latency_ms: latencyMs,
+      });
+      rejectCallId(err);
+      throw err;
+    }
+  };
+
+  return {
+    onText: stream.onText.bind(stream),
+    done: wrappedDone,
+    abort: stream.abort.bind(stream),
+    callIdPromise,
+  };
+};
+
+/**
  * OpenAI reasoning via the router. Default task is `reasoning`; pass an
  * explicit task for any other purpose so cost dashboards split correctly.
  *
@@ -732,6 +865,7 @@ module.exports = {
   runAIResult,
   runGeminiInline,
   runClaudeReasoning,
+  runClaudeReasoningStream,
   runClaudeWithDocument,
   runOpenAIReasoning,
   runAIWithSchema,
