@@ -21,8 +21,11 @@ const {
   GEMINI_EXTRACTION_PROMPTS,
   CLASSIFY_PROMPT,
   CLASSIFY_PROMPT_VERSION,
+  CLASSIFY_RESPONSE_SCHEMA,
   getExtractionPromptVersion,
 } = require('./ai/extractionPrompts');
+const { tryParseAndValidate } = require('./ai/aiRouter');
+const log = require('../lib/logger').child({ module: 'extraction' });
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Gemini client (lazy init so tests don't crash without API key)
@@ -355,8 +358,20 @@ async function classifyDocumentContent(base64Data, mimeType, options = {}) {
     },
     cache,
   });
-  const parsed = parseJsonResponse(responseText);
-  return parsed.doc_type || 'other';
+
+  // Validate against the Zod schema. Fail-open to 'other' so a malformed
+  // Gemini response never blocks the upload — the user can manually pick
+  // the doctype on the review queue. The validation outcome is logged so
+  // we can track parse-failure rates per prompt version.
+  const validation = tryParseAndValidate(responseText, CLASSIFY_RESPONSE_SCHEMA);
+  if (!validation.ok) {
+    log.warn('classify_response_invalid', {
+      reason: validation.reason,
+      prompt_version: CLASSIFY_PROMPT_VERSION.version,
+    });
+    return 'other';
+  }
+  return validation.value.doc_type || 'other';
 }
 
 async function classifyDocument(fileUrl, fileName, mimeType, options = {}) {

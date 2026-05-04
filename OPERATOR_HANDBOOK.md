@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #152 — Anthropic prompt caching on stable prefixes; Tier 1.1 of `docs/AI_ROADMAP.md`).
+Last refreshed: 2026-05-04 (after PR #153 — OpenAI as third provider + Zod validation at provider boundary; Tiers 1.4 + 1.5).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -148,6 +148,7 @@ All cron endpoints require `Authorization: Bearer ${CRON_SECRET}` (set in Vercel
 | Vercel | Hosting + serverless API + blob storage | Hobby | `BLOB_READ_WRITE_TOKEN` |
 | Anthropic Claude | Reasoning, narrative synthesis, IC memo | Pay-as-you-go | `ANTHROPIC_API_KEY` |
 | Google Gemini | OCR, document extraction | Pay-as-you-go | `GEMINI_API_KEY` |
+| OpenAI | Embeddings (future Tier 4.1) + optional reasoning fallback | Pay-as-you-go | `OPENAI_API_KEY` |
 | Google Identity Services | Federated sign-in | Free | `GOOGLE_OAUTH_CLIENT_ID` |
 | Open-Meteo | Weather (used in some deal contexts) | Free | None (open API) |
 | OpenStreetMap | Map tiles | Free | None (ODbL) |

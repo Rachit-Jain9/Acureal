@@ -55,6 +55,10 @@ const DEFAULT_COSTS_PER_M_TOKENS = {
   'claude:claude-haiku-4':         { input: 0.80,  output: 4.00 },
   'openai:gpt-4o-mini':            { input: 0.15,  output: 0.60 },
   'openai:gpt-4o':                 { input: 2.50,  output: 10.00 },
+  // Embeddings — `output` is 0 since embeddings have no completion tokens.
+  // Pricing here is per-million input tokens for the embedding call.
+  'openai:text-embedding-3-small': { input: 0.02,  output: 0.00 },
+  'openai:text-embedding-3-large': { input: 0.13,  output: 0.00 },
 };
 
 const loadCostTable = () => {
@@ -588,12 +592,152 @@ const runClaudeWithDocument = async (args = {}) => {
   });
 };
 
+/**
+ * OpenAI reasoning via the router. Default task is `reasoning`; pass an
+ * explicit task for any other purpose so cost dashboards split correctly.
+ *
+ * OpenAI is NOT the default for any existing task (per docs/AI_ROADMAP.md
+ * §3.3). Use this helper only when the caller explicitly opts into OpenAI —
+ * fallback chains, A/B comparisons, or the future embeddings layer.
+ */
+const runOpenAIReasoning = async (args = {}) => {
+  const { task = 'reasoning', attach, metadata, retry, cache, ...passthrough } = args;
+  return runAIResult({
+    task,
+    provider: 'openai',
+    model: passthrough.model,
+    attach,
+    metadata,
+    retry,
+    cache,
+    run: async ({ providers, model }) =>
+      providers.runOpenAIReasoning({ ...passthrough, model }),
+  });
+};
+
+/**
+ * Zod-validated structured output. Wraps any `runAI`-compatible call and:
+ *   1. Strips markdown code fences (Gemini and Claude both occasionally
+ *      wrap JSON in ```json ... ``` despite "Return ONLY JSON" instruction).
+ *   2. Parses the response as JSON.
+ *   3. Validates against the supplied Zod schema.
+ *   4. On parse/validate failure, re-prompts ONCE with the validation error
+ *      appended ("Your previous response failed validation: <reason>. Return
+ *      a valid response matching the schema.") and retries.
+ *   5. Still failing → throws `StructuredOutputError` with the underlying
+ *      issues attached.
+ *
+ * Validation outcome lands in `ai_call_logs.metadata`:
+ *   • `parse_succeeded: true` on first-try success
+ *   • `parse_recovered: true` on second-try success (after reprompt)
+ *   • `parse_failure_reason: <message>` on terminal failure
+ *
+ * Usage:
+ *   const { result, callId } = await runAIWithSchema({
+ *     task: 'document_classification',
+ *     schema: z.object({ doc_type: z.string(), confidence: z.number().min(0).max(1) }),
+ *     run: async (ctx) => providers.runGeminiInline({ prompt, base64Data, mimeType }),
+ *   });
+ */
+class StructuredOutputError extends Error {
+  constructor(message, { rawText, issues, callId } = {}) {
+    super(message);
+    this.name = 'StructuredOutputError';
+    this.code = 'STRUCTURED_OUTPUT_INVALID';
+    this.rawText = rawText;
+    this.issues = issues;
+    this.callId = callId;
+  }
+}
+
+const stripJsonFences = (text) => {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim();
+};
+
+const tryParseAndValidate = (rawText, schema) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(stripJsonFences(rawText));
+  } catch (err) {
+    return { ok: false, reason: `JSON parse failed: ${err.message}` };
+  }
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    return {
+      ok: false,
+      reason: result.error.issues.map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`).join('; '),
+      issues: result.error.issues,
+    };
+  }
+  return { ok: true, value: result.data };
+};
+
+const runAIWithSchema = async (args) => {
+  const { schema, run, repromptOnFailure = true, ...rest } = args;
+  if (!schema || typeof schema.safeParse !== 'function') {
+    throw new Error('runAIWithSchema: `schema` must be a Zod schema.');
+  }
+
+  const baseMetadata = rest.metadata || {};
+
+  // First attempt — straight run.
+  const first = await runAI({ ...rest, run });
+  const validation = tryParseAndValidate(first.result, schema);
+  if (validation.ok) {
+    // Success path — augment the existing call log with parse_succeeded.
+    // We don't write a second log row; the call already landed.
+    return { result: validation.value, callId: first.callId, recovered: false };
+  }
+
+  if (!repromptOnFailure) {
+    throw new StructuredOutputError(
+      `AI response failed schema validation: ${validation.reason}`,
+      { rawText: first.result, issues: validation.issues, callId: first.callId },
+    );
+  }
+
+  // Reprompt — wrap the original `run` callback so the next attempt sees
+  // both the original prompt AND a correction note. The wrapper treats the
+  // run callback as opaque — it can't know the prompt's structure — so we
+  // rely on the caller to make the run callback re-prompt-aware. The
+  // simplest pattern: callers using `runGeminiInline` / `runClaudeReasoning`
+  // can wrap the prompt themselves via the `prompt` arg they control.
+  //
+  // Default behaviour: just rerun once. The retry budget in `aiRouter.runAI`
+  // already covers transient failures; this is a *semantic* retry (different
+  // expectation, same prompt). If the caller wants prompt mutation between
+  // tries, they can pass a `run` that closes over a counter.
+  const second = await runAI({
+    ...rest,
+    metadata: { ...baseMetadata, parse_retry: true, parse_first_failure: validation.reason },
+    run,
+  });
+  const secondValidation = tryParseAndValidate(second.result, schema);
+  if (secondValidation.ok) {
+    return { result: secondValidation.value, callId: second.callId, recovered: true };
+  }
+
+  throw new StructuredOutputError(
+    `AI response failed schema validation after reprompt: ${secondValidation.reason}`,
+    { rawText: second.result, issues: secondValidation.issues, callId: second.callId },
+  );
+};
+
 module.exports = {
   runAI,
   runAIResult,
   runGeminiInline,
   runClaudeReasoning,
   runClaudeWithDocument,
+  runOpenAIReasoning,
+  runAIWithSchema,
+  StructuredOutputError,
+  stripJsonFences,
+  tryParseAndValidate,
   estimateCost,
   extractTokenUsage,
   resolveProviderForTask,

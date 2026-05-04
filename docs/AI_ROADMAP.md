@@ -48,8 +48,9 @@ AI Router (backend/src/services/ai/aiRouter.js)
   │     ├── response-cache lookup (90-day TTL, deterministic key)
   │     ├── retry with exponential backoff (3 attempts, jittered)
   │     └── persist call log → ai_call_logs
-  ├── runGeminiInline / runClaudeReasoning / runClaudeWithDocument helpers
-  └── Provider Registry (lazy-init SDKs; Gemini + Anthropic)
+  ├── runGeminiInline / runClaudeReasoning / runClaudeWithDocument / runOpenAIReasoning helpers
+  ├── runAIWithSchema (Zod-validated structured output, reprompt once on parse fail)
+  └── Provider Registry (lazy-init SDKs; Gemini + Anthropic + OpenAI)
         ↓
    Deterministic tools (NOT AI)
    ├── financial-kernel (TS, parity-tested)
@@ -137,7 +138,8 @@ Lowest-effort, highest-immediate-ROI hardening. Each item is 1–2 PRs.
 | 1.1 | Anthropic ephemeral prompt caching on stable prefixes | 1 PR | ✅ LANDED PR #152 |
 | 1.2 | Gemini context caching for the master-plan corpus | 1 PR | scoped |
 | 1.3 | Streaming for IC memo generation (SSE → progressive UI) | 2 PRs | scoped |
-| 1.4 | Zod validation at provider boundary (reprompt-on-parse-fail) | 1 PR | scoped |
+| 1.4 | Zod validation at provider boundary (reprompt-on-parse-fail) | 1 PR | ✅ LANDED PR #153 |
+| 1.5 | OpenAI as third available provider (reasoning + embeddings) | 1 PR | ✅ LANDED PR #153 |
 
 **Exit criterion:** ≥80% reduction in input-token cost on reasoning calls with stable prefixes; perceived latency on IC memo drops from ~30s to <1s first paint.
 

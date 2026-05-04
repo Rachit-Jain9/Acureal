@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { z } = require('zod');
 
 /**
  * Gemini extraction + classification prompts, keyed by `doc_type`.
@@ -576,6 +577,23 @@ const CLASSIFY_PROMPT_VERSION = Object.freeze({
   sha256: sha256(CLASSIFY_PROMPT),
 });
 
+// Zod schema for the classify response. The CLASSIFY_PROMPT contract
+// promises `{ doc_type, confidence, reason }`; this schema enforces it at
+// the consumer boundary so a malformed Gemini response (markdown fence,
+// missing field, wrong type) becomes a structured failure with a clear
+// path back to "classify as 'other' and let a human review".
+//
+// `doc_type` is a free string here (we don't enum-constrain at the schema
+// level so a future doctype addition doesn't break the validator before the
+// prompt is updated). `confidence` is clamped to [0, 1] when present.
+// `reason` is optional — Gemini sometimes omits it on high-confidence calls.
+// `passthrough()` so any future fields don't fail validation.
+const CLASSIFY_RESPONSE_SCHEMA = z.object({
+  doc_type: z.string().min(1),
+  confidence: z.coerce.number().min(0).max(1).optional(),
+  reason: z.string().optional(),
+}).passthrough();
+
 // Lookup helper. Falls back to the `other` doctype's hash for unknown kinds
 // so we never crash on a misclassified upload — the cache will simply miss
 // (still safe) and the call still happens.
@@ -588,5 +606,6 @@ module.exports = {
   PROMPT_REGISTRY_VERSION,
   PROMPT_VERSIONS,
   CLASSIFY_PROMPT_VERSION,
+  CLASSIFY_RESPONSE_SCHEMA,
   getExtractionPromptVersion,
 };

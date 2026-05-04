@@ -4,8 +4,11 @@ const hasConfiguredValue = (value) => !!value && !/your[_-]/i.test(value) && !St
 
 let geminiClient = null;
 let anthropicClient = null;
+let openaiClient = null;
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
 const getProviderAvailability = () => ({
   gemini: hasConfiguredValue(process.env.GEMINI_API_KEY),
@@ -45,6 +48,25 @@ const getAnthropicClient = () => {
   }
 
   return anthropicClient;
+};
+
+// OpenAI client. Provisioned 2026-05-04 as a third available provider.
+// Per `docs/AI_ROADMAP.md`, OpenAI does NOT auto-replace Gemini (better at
+// multimodal native extraction) or Claude (better at long-form reasoning
+// for our domain). It is wired up for:
+//   • Embeddings — `text-embedding-3-small` is the default for the future
+//     pgvector layer (Tier 4.1). Cheap ($0.02/M tokens) and well-supported.
+//   • Optional reasoning fallback when both Gemini and Claude are down.
+//   • A/B comparisons when validating prompt changes.
+const getOpenAIClient = () => {
+  if (!getProviderAvailability().gpt_compatible) {
+    throw new Error('OpenAI is not configured. Set OPENAI_API_KEY to enable OpenAI features.');
+  }
+  if (!openaiClient) {
+    const { OpenAI } = require('openai');
+    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openaiClient;
 };
 
 const runGeminiInline = async ({
@@ -172,10 +194,94 @@ const runClaudeWithDocument = async ({
   return { result: extractClaudeText(message), raw: message };
 };
 
+// OpenAI reasoning. Returns the same `{ result, raw }` envelope as the
+// Anthropic helpers so the router's existing token-extraction logic
+// (`extractTokenUsage`) finds usage on `raw.usage` (input_tokens /
+// output_tokens shape) consistently. We deliberately do NOT support
+// OpenAI's prompt cache yet — Anthropic's is well-covered (PR #152) and
+// OpenAI's caching has different semantics; defer until needed.
+const runOpenAIReasoning = async ({
+  systemPrompt,
+  payload,
+  model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+  maxTokens = 700,
+}) => {
+  const client = getOpenAIClient();
+
+  const completion = await client.chat.completions.create({
+    model,
+    max_tokens: maxTokens,
+    messages: [
+      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+      {
+        role: 'user',
+        content: typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2),
+      },
+    ],
+  });
+
+  const text = completion.choices?.[0]?.message?.content || null;
+  // Translate OpenAI's usage shape (`prompt_tokens` / `completion_tokens`)
+  // into Anthropic's (`input_tokens` / `output_tokens`) so the router's
+  // shared extractor handles it without provider-specific branching.
+  const raw = completion.usage
+    ? {
+        ...completion,
+        usage: {
+          input_tokens: completion.usage.prompt_tokens,
+          output_tokens: completion.usage.completion_tokens,
+        },
+      }
+    : completion;
+  return { result: text, raw };
+};
+
+// OpenAI embeddings. Returns `{ embedding: number[], dimensions, raw }`.
+// Wired up but not yet called by any service; lands the dependency so when
+// Tier 4.1 (pgvector) ships, the embedding plumbing is one import away.
+//
+// `text-embedding-3-small` chosen as default: $0.02/M tokens, 1536 dim,
+// strong baseline. `text-embedding-3-large` (3072 dim, $0.13/M) when
+// quality on Indian-real-estate clauses needs the headroom.
+const runOpenAIEmbedding = async ({
+  input,
+  model = process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL,
+  dimensions,
+}) => {
+  if (!input || (Array.isArray(input) && input.length === 0)) {
+    throw new Error('runOpenAIEmbedding requires non-empty input.');
+  }
+  const client = getOpenAIClient();
+  const response = await client.embeddings.create({
+    model,
+    input,
+    ...(dimensions ? { dimensions } : {}),
+  });
+  // For batch inputs, OpenAI returns an array of embeddings preserving
+  // input order. For a single string, we still return a one-element array
+  // so callers always get the same shape.
+  const embeddings = response.data.map((entry) => entry.embedding);
+  return {
+    result: embeddings,
+    raw: {
+      ...response,
+      usage: response.usage
+        ? {
+            input_tokens: response.usage.prompt_tokens,
+            output_tokens: 0,
+          }
+        : undefined,
+    },
+    dimensions: embeddings[0]?.length || null,
+  };
+};
+
 module.exports = {
   getProviderAvailability,
   getRoutingConfig,
   runGeminiInline,
   runClaudeReasoning,
   runClaudeWithDocument,
+  runOpenAIReasoning,
+  runOpenAIEmbedding,
 };

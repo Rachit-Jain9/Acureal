@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (OpenAI as third provider + Zod validation at provider boundary — PR #153)
+
+**What was worked on in plain English:**
+- The platform now has three AI providers wired up, not two. Google Gemini is still the default for reading documents (it's natively multimodal — best at PDFs, images, mixed-script Indian docs). Claude is still the default for reasoning. OpenAI is now available as a third option for: emergencies if both others are down, future "find similar past clauses" semantic search, and optional comparison testing. **Nothing routinely changes** — your day-to-day Gemini and Claude calls work exactly as before.
+- Added a new safety net: when an AI call is supposed to return structured data (like the document classifier), the platform now validates the response against a strict shape contract. If the AI returns malformed JSON or a missing field, the platform either re-asks the AI (one shot) or falls back to a safe default ("other" doctype, surfaces to manual review). Until tonight, a malformed response would crash with an opaque parse error.
+- The document-classifier specifically now uses this safety net. A weird Gemini response no longer kills an upload — the doctype just defaults to "other" and the user picks it on the review queue.
+
+**PRs opened/merged:**
+- PR #153 — `feat(ai): OpenAI as third provider + Zod validation at provider boundary (Tier 1.4 + 1.5)` — squash-merged.
+
+**Verification:**
+- Backend test suite: **717 → 741** (+24 covering: OpenAI client lazy init, Anthropic-shape usage translation, embedding wiring with batch input + custom dimensions, Zod schema parse + validate, fence stripping, reprompt-on-failure flow, StructuredOutputError diagnostic carrying).
+- Frontend production build: clean.
+- No migration; no env-var change beyond the `OPENAI_API_KEY` you provisioned in Vercel.
+
+**What's left for Tier 1:**
+- 1.2 Gemini context caching for the master-plan corpus
+- 1.3 Streaming for IC memo generation (SSE) — biggest user-felt latency win
+
+**OpenAI use-cases now unlocked (not active until called):**
+- Embeddings via `runOpenAIEmbedding` for the future pgvector layer (Tier 4.1)
+- Reasoning via `runOpenAIReasoning` for fallback chains or A/B testing
+- Cost table extended with `text-embedding-3-small` ($0.02/M) and `text-embedding-3-large` ($0.13/M) entries
+
+---
+
 ## 2026-05-04 (AI roadmap integration + Anthropic prompt caching — PR #152)
 
 **What was worked on in plain English:**
