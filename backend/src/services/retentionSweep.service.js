@@ -38,6 +38,7 @@
 const { query } = require('../config/database');
 const log = require('../lib/logger').child({ module: 'retention.sweep' });
 const { eraseClosedAccounts } = require('./accountClosure.service');
+const mfaService = require('./mfa.service');
 
 // Configurable per env so we can shorten in dev / lengthen for an
 // enterprise contract that requires 24-month AI logs.
@@ -149,12 +150,13 @@ const purgeClosedAccounts = async () => {
 
 const runSweep = async () => {
   const start = Date.now();
-  const [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts] = await Promise.all([
+  const [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts, mfaChallenges] = await Promise.all([
     purgeAiResponseCache(),
     purgeRefreshTokenGrants(),
     purgeLoginAttempts(),
     purgeAiCallLogs(),
     purgeClosedAccounts(),
+    mfaService.purgeExpiredChallenges(),
   ]);
 
   const summary = {
@@ -163,17 +165,19 @@ const runSweep = async () => {
     login_attempts: loginAttempts,
     ai_call_logs: aiCallLogs,
     closed_accounts: closedAccounts,
+    mfa_challenges: mfaChallenges,
     total_rows_purged:
       (aiCache.rows_purged || 0) +
       (refreshTokens.rows_purged || 0) +
       (loginAttempts.rows_purged || 0) +
       (aiCallLogs.rows_purged || 0) +
-      (closedAccounts.rows_erased || 0),
+      (closedAccounts.rows_erased || 0) +
+      (mfaChallenges.rows_purged || 0),
     duration_ms: Date.now() - start,
   };
 
   // Surface anything that errored so a quiet cron failure isn't invisible.
-  const errors = [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts]
+  const errors = [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts, mfaChallenges]
     .filter((r) => r.error)
     .map((r) => r.error);
 

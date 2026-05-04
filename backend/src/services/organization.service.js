@@ -98,6 +98,7 @@ const buildAuthUser = (userRow, memberships, activeMembership) => ({
   // so anyone created before PR #145 is treated as having a real password.
   password_set: userRow.password_set !== false,
   oauth_provider: userRow.oauth_provider || null,
+  mfa_enrolled: Boolean(userRow.mfa_enrolled_at),
   role: activeMembership.role,
   organization_role: activeMembership.role,
   organization_id: activeMembership.organization_id,
@@ -115,7 +116,7 @@ const buildAuthUser = (userRow, memberships, activeMembership) => ({
 const hydrateUserAuthContext = async (userId, requestedOrganizationId = null, client = { query }) => {
   const userResult = await client.query(
     `SELECT id, email, name, phone, is_active, default_organization_id,
-            password_set, oauth_provider
+            password_set, oauth_provider, mfa_enrolled_at
      FROM users
      WHERE id = $1`,
     [userId]

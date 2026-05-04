@@ -275,21 +275,111 @@ router.post(
       const { email, password } = req.body;
       const result = await authService.login(email, password, req.header('x-organization-id'));
 
+      // MFA branch — no cookies issued; user must complete /auth/mfa/verify.
+      if (result?.mfaRequired) {
+        return res.json({
+          success: true,
+          mfaRequired: true,
+          message: 'Enter the 6-digit code from your authenticator app.',
+          data: { challenge: result.challenge, expiresAt: result.expiresAt },
+        });
+      }
+
       await issueSessionCookies(res, result, {
         ipAddress: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Login successful.',
         data: result,
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 );
+
+// POST /auth/mfa/verify — completes a login that landed on the MFA branch.
+// Body: { challenge, code }. Mints the session cookies on success.
+router.post(
+  '/mfa/verify',
+  [
+    body('challenge').isString().isLength({ min: 32, max: 256 }),
+    body('code').isString().isLength({ min: 6, max: 32 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await authService.completeMfaLogin({
+        challenge: req.body.challenge,
+        code: req.body.code,
+        requestedOrganizationId: req.header('x-organization-id'),
+      });
+      await issueSessionCookies(res, result, {
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+      return res.json({ success: true, message: 'MFA verified.', data: result });
+    } catch (error) {
+      const status = error.statusCode || 401;
+      if (status >= 500) return next(error);
+      return res.status(status).json({ success: false, message: error.message });
+    }
+  },
+);
+
+// MFA enrollment + management — all under authenticated user.
+router.post('/me/mfa/begin', authenticate, async (req, res, next) => {
+  try {
+    const mfaService = require('../services/mfa.service');
+    const data = await mfaService.beginEnrollment(req.user.id, req.user.email);
+    // Return secret + QR; recovery codes only shown once.
+    return res.json({
+      success: true,
+      data: {
+        otpauthUrl: data.otpauthUrl,
+        qrDataUrl: data.qrDataUrl,
+        recoveryCodes: data.recoveryCodes,
+      },
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.post(
+  '/me/mfa/verify-enrollment',
+  authenticate,
+  [body('code').isString().isLength({ min: 6, max: 8 })],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const mfaService = require('../services/mfa.service');
+      const data = await mfaService.verifyEnrollment(req.user.id, req.body.code);
+      return res.json({ success: true, message: 'Two-factor authentication enabled.', data });
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
+      return next(error);
+    }
+  },
+);
+
+router.post('/me/mfa/disable', authenticate, async (req, res, next) => {
+  try {
+    const mfaService = require('../services/mfa.service');
+    const data = await mfaService.disable(req.user.id);
+    return res.json({ success: true, message: 'Two-factor authentication disabled.', data });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 // POST /auth/refresh — rotate the refresh token (cookie-only).
 //

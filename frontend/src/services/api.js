@@ -160,6 +160,12 @@ export const authAPI = {
   // tokens, clears auth cookies. PII is anonymized 90 days later by the
   // retention sweep cron. Idempotent on repeat calls.
   closeAccount: () => api.post('/auth/me/close-account'),
+  // MFA / TOTP — enrollment + verification + disable
+  mfaBegin: () => api.post('/auth/me/mfa/begin'),
+  mfaVerifyEnrollment: (code) => api.post('/auth/me/mfa/verify-enrollment', { code }),
+  mfaDisable: () => api.post('/auth/me/mfa/disable'),
+  // Login completion when /auth/login returned mfaRequired: true
+  mfaVerify: (challenge, code) => api.post('/auth/mfa/verify', { challenge, code }),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

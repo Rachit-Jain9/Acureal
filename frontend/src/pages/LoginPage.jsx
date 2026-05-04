@@ -11,7 +11,7 @@ import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 export default function LoginPage() {
   usePublicLightTheme();
   const navigate = useNavigate();
-  const { login, register, googleSignIn, loading, error, clearError } = useAuthStore();
+  const { login, register, googleSignIn, completeMfaLogin, loading, error, clearError } = useAuthStore();
   const { data: legalDocs, loading: legalLoading, error: legalError } = useLegalActive();
 
   const [isRegister, setIsRegister] = useState(false);
@@ -25,6 +25,11 @@ export default function LoginPage() {
     phone: '',
   });
   const [validationErrors, setValidationErrors] = useState({});
+
+  // MFA challenge state — set when /auth/login returns mfaRequired: true.
+  // While set, we render the 6-digit-code prompt instead of the password form.
+  const [mfa, setMfa] = useState(null); // { challenge, expiresAt, rememberMe }
+  const [mfaCode, setMfaCode] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -92,11 +97,33 @@ export default function LoginPage() {
       );
     } else {
       success = await login(form.email, form.password, rememberMe);
+      // MFA branch — login returned a challenge instead of a session.
+      if (success && typeof success === 'object' && success.mfaRequired) {
+        setMfa({ challenge: success.challenge, expiresAt: success.expiresAt, rememberMe: success.rememberMe });
+        return;
+      }
     }
 
-    if (success) {
+    if (success === true) {
       navigate('/dashboard');
     }
+  };
+
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    if (!mfa || mfaCode.length < 6) return;
+    const success = await completeMfaLogin(mfa.challenge, mfaCode, mfa.rememberMe);
+    if (success) {
+      setMfa(null);
+      setMfaCode('');
+      navigate('/dashboard');
+    }
+  };
+
+  const handleMfaCancel = () => {
+    setMfa(null);
+    setMfaCode('');
+    clearError();
   };
 
   // Google ID token handler. Forwards the token + (on cold signup) the
@@ -171,23 +198,67 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Google sign-in. The component itself renders nothing (and no
-              divider) when GOOGLE_OAUTH_CLIENT_ID is not configured server-
-              side, so layout stays clean on deployments where Google is dark. */}
-          <div className="mb-4">
-            <GoogleSignInButton
-              onCredential={handleGoogleCredential}
-              text={isRegister ? 'signup_with' : 'signin_with'}
-              disabled={isRegister && !acceptTerms}
-              disabledReason={
-                isRegister && !acceptTerms
-                  ? 'Accept the Terms & Privacy first.'
-                  : ''
-              }
-              showDivider
-            />
-          </div>
+          {/* Google sign-in. Hidden during MFA challenge step — user is
+              committed to a specific account at that point. */}
+          {!mfa && (
+            <div className="mb-4">
+              <GoogleSignInButton
+                onCredential={handleGoogleCredential}
+                text={isRegister ? 'signup_with' : 'signin_with'}
+                disabled={isRegister && !acceptTerms}
+                disabledReason={
+                  isRegister && !acceptTerms
+                    ? 'Accept the Terms & Privacy first.'
+                    : ''
+                }
+                showDivider
+              />
+            </div>
+          )}
 
+          {mfa ? (
+            <form onSubmit={handleMfaSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm text-stone-700 mb-2 font-medium">
+                  Two-factor code
+                </label>
+                <p className="text-xs text-stone-500 mb-3">
+                  Enter the 6-digit code from your authenticator app, or a recovery code if you've lost your device.
+                </p>
+                <input
+                  type="text"
+                  inputMode="text"
+                  autoFocus
+                  autoComplete="one-time-code"
+                  maxLength={20}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value)}
+                  placeholder="123456"
+                  className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-base font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-[#c2410c]/30"
+                />
+              </div>
+              {error && (
+                <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">{error}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleMfaCancel}
+                  className="btn btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || mfaCode.length < 6}
+                  className="btn btn-primary flex-1"
+                >
+                  {loading ? 'Verifying…' : 'Verify'}
+                </button>
+              </div>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Name (register only) */}
             {isRegister && (
@@ -408,6 +479,7 @@ export default function LoginPage() {
                   : 'Sign In'}
             </button>
           </form>
+          )}
 
           {/* Toggle */}
           <p className="text-center text-sm text-stone-600 mt-6">

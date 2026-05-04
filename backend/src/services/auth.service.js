@@ -267,6 +267,17 @@ const login = async (email, password, requestedOrganizationId = null) => {
   }
 
   await clearLoginAttempts(normalizedEmail);
+
+  // MFA gate: if the user has enrolled in TOTP, hand back a short-lived
+  // challenge ticket instead of an access token. The SPA prompts for the
+  // 6-digit code; POST /auth/mfa/verify completes the login by minting
+  // the regular cookies.
+  const mfaService = require('./mfa.service');
+  if (await mfaService.isMfaRequired(user.id)) {
+    const { challenge, expiresAt } = await mfaService.issueChallenge(user.id);
+    return { mfaRequired: true, challenge, expiresAt };
+  }
+
   await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
   const authContext = await resolveLoginAuthContext(
@@ -276,6 +287,32 @@ const login = async (email, password, requestedOrganizationId = null) => {
   );
   const token = generateToken(authContext.user.id, authContext.user.role);
 
+  return { user: authContext.user, token };
+};
+
+// Completes MFA login. Verifies the user's TOTP/recovery code, mints the
+// access JWT, and returns the same shape as the normal password login
+// path so the calling route can issue cookies the same way.
+const completeMfaLogin = async ({ challenge, code, requestedOrganizationId }) => {
+  const mfaService = require('./mfa.service');
+  const { userId } = await mfaService.verifyChallenge({ challenge, code });
+
+  const userResult = await query(
+    `SELECT id, default_organization_id FROM users WHERE id = $1`,
+    [userId],
+  );
+  const user = userResult.rows[0];
+  if (!user) {
+    throw createError('User not found after MFA verification.', 401);
+  }
+
+  await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [userId]);
+  const authContext = await resolveLoginAuthContext(
+    userId,
+    requestedOrganizationId,
+    user.default_organization_id,
+  );
+  const token = generateToken(authContext.user.id, authContext.user.role);
   return { user: authContext.user, token };
 };
 
@@ -644,6 +681,7 @@ const setFirstPassword = async (userId, newPassword) => {
 module.exports = {
   register,
   login,
+  completeMfaLogin,
   loginOrRegisterWithGoogle,
   getUserById,
   updateUser,

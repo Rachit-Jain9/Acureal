@@ -64,6 +64,14 @@ const useAuthStore = create((set) => ({
     set({ loading: true, error: null });
     try {
       const { data } = await authAPI.login({ email, password });
+
+      // MFA branch — backend returned a challenge, not tokens. The login
+      // form intercepts this return shape and shows the 6-digit code prompt.
+      if (data?.mfaRequired) {
+        set({ loading: false });
+        return { mfaRequired: true, challenge: data.data?.challenge, expiresAt: data.data?.expiresAt, rememberMe };
+      }
+
       const { user, token } = data.data;
       saveSession(token, user, rememberMe);
       set({
@@ -76,6 +84,27 @@ const useAuthStore = create((set) => ({
       return true;
     } catch (err) {
       const message = getRequestErrorMessage(err, 'Login failed');
+      set({ error: message, loading: false });
+      return false;
+    }
+  },
+
+  completeMfaLogin: async (challenge, code, rememberMe = false) => {
+    set({ loading: true, error: null });
+    try {
+      const { data } = await authAPI.mfaVerify(challenge, code);
+      const { user, token } = data.data;
+      saveSession(token, user, rememberMe);
+      set({
+        user,
+        token,
+        isAuthenticated: true,
+        loading: false,
+        sessionPersistence: rememberMe ? 'persistent' : 'session',
+      });
+      return true;
+    } catch (err) {
+      const message = getRequestErrorMessage(err, 'Code did not match. Try again.');
       set({ error: message, loading: false });
       return false;
     }
@@ -154,6 +183,21 @@ const useAuthStore = create((set) => ({
       return true;
     } catch {
       return false;
+    }
+  },
+
+  // Re-fetch the canonical user from /auth/me. Used after MFA enrollment /
+  // disable so the Settings UI reflects the new mfa_enrolled flag without
+  // a hard reload.
+  refreshUser: async () => {
+    try {
+      const { data: res } = await authAPI.getMe();
+      const updatedUser = res.data;
+      persistUser(updatedUser);
+      set({ user: updatedUser });
+      return updatedUser;
+    } catch {
+      return null;
     }
   },
 
