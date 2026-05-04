@@ -35,6 +35,7 @@
 
 const { query } = require('../../config/database');
 const providerRegistry = require('./providerRegistry');
+const responseCache = require('./aiResponseCache');
 const log = require('../../lib/logger').child({ module: 'ai.router' });
 const { getRequestContext } = require('../../lib/requestContext');
 const { assertWithinDailyCap, CostCapExceededError } = require('../../lib/costGuard');
@@ -192,11 +193,27 @@ const resolveDefaultModel = (provider) => {
  * @param {string=}  args.provider  Force a specific provider (otherwise routing config decides)
  * @param {string=}  args.model     Force a specific model
  * @param {Object=}  args.attach    { organizationId, userId, dealId, documentId, evidenceSourceId, evidenceFactId }
- * @param {Object=}  args.metadata  Free-form JSON for the log row
+ * @param {Object=}  args.metadata  Free-form JSON for the log row. May include
+ *                                  `prompt_version`, `prompt_kind`, `prompt_sha256`.
+ * @param {Object=}  args.cache     Optional response-cache hooks:
+ *                                    - `inputSha256` (required to enable the cache):
+ *                                       sha256 of the per-call varying inputs
+ *                                       (rendered prompt + file bytes hash + mime).
+ *                                    - `promptSha256` (optional): per-prompt hash
+ *                                       so prompt edits invalidate the cache key.
+ *                                    - `promptVersion` (optional): registry version,
+ *                                       stored alongside the cache row for forensics.
+ *                                    - `ttlSeconds` (optional): override default 90d.
+ *                                    - `enabled` (optional, default true): set false
+ *                                       to skip cache for one call without dropping
+ *                                       the args.
+ *                                  When the cache is hit, `runAI` returns the
+ *                                  stored response immediately and writes a
+ *                                  status='cache_hit' row to ai_call_logs.
  * @param {Function} args.run       async ({ providers, provider, model, task }) => result
- * @returns {Promise<{ result: any, callId: string|null, status: string, latencyMs: number }>}
+ * @returns {Promise<{ result: any, callId: string|null, status: string, latencyMs: number, cached?: boolean }>}
  */
-const runAI = async ({ task, provider, model, attach = {}, metadata = {}, run }) => {
+const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache, run }) => {
   if (typeof run !== 'function') {
     throw new Error('aiRouter.run: `run` callback is required.');
   }
@@ -207,6 +224,74 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, run })
   const resolvedProvider = provider || resolveProviderForTask(task);
   const resolvedModel = model || resolveDefaultModel(resolvedProvider);
   const start = Date.now();
+
+  // ── Cache lookup ──────────────────────────────────────────────────────────
+  // Only kicks in if the caller passed `cache.inputSha256`. Misses (or any
+  // lookup error) fall straight through to the live provider — fail-open.
+  const cacheEnabled = cache && cache.enabled !== false && cache.inputSha256;
+  let cacheKey = null;
+  if (cacheEnabled) {
+    try {
+      cacheKey = responseCache.buildCacheKey({
+        task,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        promptSha256: cache.promptSha256 || null,
+        inputSha256: cache.inputSha256,
+      });
+      const hit = await responseCache.lookup({ cacheKey });
+      if (hit) {
+        await responseCache.recordHit(hit.id);
+        const latencyMs = Date.now() - start;
+        const cachedTokens = {
+          promptTokens: hit.prompt_tokens ?? null,
+          completionTokens: hit.completion_tokens ?? null,
+          totalTokens: hit.total_tokens ?? null,
+        };
+        const callId = await persistCallLog({
+          task,
+          provider: resolvedProvider,
+          model: resolvedModel,
+          status: 'cache_hit',
+          latencyMs,
+          tokens: cachedTokens,
+          // Cost is zero when the provider isn't called. We surface the
+          // would-have-cost on the cache row (`cost_usd_at_time`) for forensics
+          // but leave the log entry's cost at 0 so cost dashboards correctly
+          // sum spend = paid + cached_savings(0).
+          cost: 0,
+          attach,
+          metadata: {
+            ...(metadata || {}),
+            cache_hit: true,
+            cached_at: hit.created_at || null,
+            cached_prompt_version: hit.prompt_version || null,
+            cached_cost_usd_at_time: hit.cost_usd_at_time || null,
+          },
+        });
+        log.info('ai_call_cache_hit', {
+          task,
+          provider: resolvedProvider,
+          model: resolvedModel,
+          latency_ms: latencyMs,
+          call_id: callId,
+        });
+        return {
+          result: hit.response_jsonb,
+          callId,
+          status: 'cache_hit',
+          latencyMs,
+          tokens: cachedTokens,
+          cost: 0,
+          cached: true,
+        };
+      }
+    } catch (err) {
+      // Hard failure on the cache path is logged but never blocks the call.
+      log.warn('ai_call_cache_path_failed', { error: err.message, task });
+      cacheKey = null;
+    }
+  }
 
   // Per-org daily cost guard. Throws CostCapExceededError (HTTP 429) if the
   // org has already burned through its `AI_DAILY_COST_CAP_USD` envelope.
@@ -307,6 +392,30 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, run })
     errorMessage,
   });
 
+  // ── Cache store ───────────────────────────────────────────────────────────
+  // Only if (a) cache was enabled for this call AND (b) it actually missed
+  // (cacheKey is set) AND (c) the call succeeded. Failures don't poison the
+  // cache. The store is fire-and-forget at the await level — store errors
+  // are logged inside the helper and never bubble.
+  if (cacheEnabled && cacheKey && status === 'success' && result !== null && result !== undefined) {
+    await responseCache.store({
+      cacheKey,
+      task,
+      provider: resolvedProvider,
+      model: resolvedModel,
+      promptVersion: cache.promptVersion || null,
+      promptSha256: cache.promptSha256 || null,
+      inputSha256: cache.inputSha256,
+      // Allow the caller to pass a different shape via cache.responseToCache
+      // (e.g. extracted JSON instead of the SDK envelope). Default to the
+      // resolved result.
+      responseJson: cache.responseToCache !== undefined ? cache.responseToCache : result,
+      tokens,
+      costUsd: cost,
+      ttlSeconds: cache.ttlSeconds || null,
+    });
+  }
+
   log.info('ai_call_completed', {
     task,
     provider: resolvedProvider,
@@ -315,9 +424,10 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, run })
     total_tokens: tokens.totalTokens,
     cost_usd: cost,
     call_id: callId,
+    cache: cacheEnabled ? 'miss_stored' : 'disabled',
   });
 
-  return { result, callId, status, latencyMs, tokens, cost };
+  return { result, callId, status, latencyMs, tokens, cost, cached: false };
 };
 
 /**
@@ -332,15 +442,19 @@ const runAIResult = async (args) => (await runAI(args)).result;
  * swap the import. `task` defaults to `document_extraction` since that is the
  * only Gemini caller in production today; pass an explicit `task` for any
  * other purpose.
+ *
+ * Pass `cache: { inputSha256, promptSha256, promptVersion }` to opt this
+ * call into the response cache.
  */
 const runGeminiInline = async (args = {}) => {
-  const { task = 'document_extraction', attach, metadata, ...passthrough } = args;
+  const { task = 'document_extraction', attach, metadata, cache, ...passthrough } = args;
   return runAIResult({
     task,
     provider: 'gemini',
     model: passthrough.model,
     attach,
     metadata,
+    cache,
     run: async ({ providers, model }) =>
       providers.runGeminiInline({ ...passthrough, model }),
   });
@@ -372,13 +486,14 @@ const runClaudeReasoning = async (args = {}) => {
  * provider='claude' so the cost dashboards split correctly.
  */
 const runClaudeWithDocument = async (args = {}) => {
-  const { task = 'document_extraction', attach, metadata, ...passthrough } = args;
+  const { task = 'document_extraction', attach, metadata, cache, ...passthrough } = args;
   return runAIResult({
     task,
     provider: 'claude',
     model: passthrough.model,
     attach,
     metadata,
+    cache,
     run: async ({ providers, model }) =>
       providers.runClaudeWithDocument({ ...passthrough, model }),
   });

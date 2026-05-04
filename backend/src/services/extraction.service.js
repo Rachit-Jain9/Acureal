@@ -1,12 +1,14 @@
 'use strict';
 
 const axios = require('axios');
+const crypto = require('crypto');
 const { query } = require('../config/database');
 const { getDownloadUrl } = require('../config/storage');
 const { getProviderAvailability } = require('./ai/providerRegistry');
 // Use the telemetry-instrumented router rather than calling the SDK directly so
 // every extraction lands in ai_call_logs with cost / latency / lineage.
 const { runGeminiInline, runClaudeReasoning, runClaudeWithDocument } = require('./ai/aiRouter');
+const responseCache = require('./ai/aiResponseCache');
 const evidenceIngestionService = require('./evidenceIngestion.service');
 const {
   toPlainObject,
@@ -15,7 +17,12 @@ const {
 // Per-doctype Gemini prompts live in their own module so tuning is a
 // one-file diff. Keep `GEMINI_EXTRACTION_PROMPTS` re-exported below to
 // preserve the existing public API surface.
-const { GEMINI_EXTRACTION_PROMPTS, CLASSIFY_PROMPT } = require('./ai/extractionPrompts');
+const {
+  GEMINI_EXTRACTION_PROMPTS,
+  CLASSIFY_PROMPT,
+  CLASSIFY_PROMPT_VERSION,
+  getExtractionPromptVersion,
+} = require('./ai/extractionPrompts');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Gemini client (lazy init so tests don't crash without API key)
@@ -69,10 +76,18 @@ async function fetchFileAsBase64(fileUrl) {
     );
   }
 
+  // Hash the raw bytes once so the response cache can key on the file
+  // identity without re-buffering. The hash travels with the upload through
+  // the rest of extraction; identical re-uploads of the same file (which is
+  // common for retry / regenerate flows) produce the same cache key and
+  // skip the provider entirely.
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+
   return {
     base64: buffer.toString('base64'),
     mimeType: contentType.split(';')[0].trim(),
     sizeBytes: buffer.length,
+    sha256,
   };
 }
 
@@ -143,13 +158,15 @@ function normalizeRequestedDocType(docType) {
   return normalized && KNOWN_DOC_TYPES.has(normalized) ? normalized : null;
 }
 
-async function callGemini(prompt, base64Data, mimeType, attach = {}) {
+async function callGemini(prompt, base64Data, mimeType, attach = {}, options = {}) {
   return runGeminiInline({
     task: 'document_extraction',
     attach,
     prompt,
     base64Data,
     mimeType,
+    metadata: options.metadata,
+    cache: options.cache,
   });
 }
 
@@ -175,14 +192,20 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // exponential backoff) for transient errors, then fall back to Claude with
 // the same PDF/image. Returns { rawText, provider, fallbackReason } so the
 // caller can record which engine produced the output.
-async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach = {} }) {
+//
+// Both the Gemini path and the Claude fallback share the same response-cache
+// key (built from prompt_sha256 + file sha256 + mime type) — a hit on EITHER
+// path serves the response immediately. The cache is opt-in: callers must
+// pass `cache` so we never accidentally cache calls whose inputs are not
+// fully reconstructable.
+async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach = {}, cache = null, metadata = null }) {
   let lastError = null;
   for (let attempt = 0; attempt <= EXTRACTION_RETRY_DELAYS_MS.length; attempt += 1) {
     if (attempt > 0) {
       await sleep(EXTRACTION_RETRY_DELAYS_MS[attempt - 1]);
     }
     try {
-      const rawText = await callGemini(prompt, base64Data, mimeType, attach);
+      const rawText = await callGemini(prompt, base64Data, mimeType, attach, { cache, metadata });
       return { rawText, provider: 'gemini', attempts: attempt + 1, fallbackReason: null };
     } catch (error) {
       lastError = error;
@@ -200,6 +223,8 @@ async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach
         base64Data,
         mimeType,
         systemPrompt: 'You extract structured JSON for Indian real-estate regulatory documents. Return ONLY valid JSON matching the schema in the prompt. Do not invent facts; if unknown, set the field to null.',
+        metadata: metadata ? { ...metadata, fallback_from: 'gemini' } : { fallback_from: 'gemini' },
+        cache,
       });
       return {
         rawText,
@@ -314,12 +339,35 @@ STRICT RULES:
 // ──────────────────────────────────────────────────────────────────────────────
 
 async function classifyDocumentContent(base64Data, mimeType, options = {}) {
+  const prompt = buildClassifyPrompt(options);
+  const fileSha256 = options.fileSha256 || null;
+
+  // The classify prompt is itself versioned; cache hits are keyed by the
+  // SAME prompt sha + file bytes, so a re-upload of the same file sees an
+  // instant doctype answer instead of a Gemini round-trip.
+  const cache = fileSha256
+    ? {
+        promptVersion: CLASSIFY_PROMPT_VERSION.version,
+        promptSha256: CLASSIFY_PROMPT_VERSION.sha256,
+        inputSha256: responseCache.hashInputMaterial([prompt, fileSha256, mimeType]),
+        // Cache ONLY the parsed { doc_type, confidence, reason } object so
+        // we don't reconstruct from the SDK envelope on hit.
+        responseToCache: undefined, // default = full result text
+      }
+    : null;
+
   const responseText = await runGeminiInline({
     task: 'document_classification',
     attach: options.attach,
-    prompt: buildClassifyPrompt(options),
+    prompt,
     base64Data,
     mimeType,
+    metadata: {
+      prompt_kind: 'classify',
+      prompt_version: CLASSIFY_PROMPT_VERSION.version,
+      prompt_sha256: CLASSIFY_PROMPT_VERSION.sha256,
+    },
+    cache,
   });
   const parsed = parseJsonResponse(responseText);
   return parsed.doc_type || 'other';
@@ -327,8 +375,12 @@ async function classifyDocumentContent(base64Data, mimeType, options = {}) {
 
 async function classifyDocument(fileUrl, fileName, mimeType, options = {}) {
   const effectiveMime = inferMimeType(fileName, mimeType);
-  const { base64 } = await fetchFileAsBase64(fileUrl);
-  return classifyDocumentContent(base64, effectiveMime, { ...options, fileName });
+  const { base64, sha256 } = await fetchFileAsBase64(fileUrl);
+  return classifyDocumentContent(base64, effectiveMime, {
+    ...options,
+    fileName,
+    fileSha256: sha256,
+  });
 }
 
 async function canStoreDocumentDocType() {
@@ -375,7 +427,7 @@ async function extractStoredFileFields({
   }
 
   const effectiveMime = inferMimeType(fileName, mimeType);
-  const { base64 } = await fetchFileAsBase64(fileUrl);
+  const { base64, sha256: fileSha256 } = await fetchFileAsBase64(fileUrl);
 
   const aiAttach = options.attach || {
     documentId: documentId || null,
@@ -390,6 +442,7 @@ async function extractStoredFileFields({
         fileName,
         context: options.context,
         attach: aiAttach,
+        fileSha256,
       });
     }
   } catch {
@@ -401,11 +454,24 @@ async function extractStoredFileFields({
     fileName,
     context: options.context,
   });
+  const promptInfo = getExtractionPromptVersion(docType);
+  const extractionCache = {
+    promptVersion: promptInfo.version,
+    promptSha256: promptInfo.sha256,
+    inputSha256: responseCache.hashInputMaterial([prompt, fileSha256, effectiveMime]),
+  };
+  const extractionMetadata = {
+    prompt_kind: docType,
+    prompt_version: promptInfo.version,
+    prompt_sha256: promptInfo.sha256,
+  };
   const extraction = await callExtractionWithFallback({
     prompt,
     base64Data: base64,
     mimeType: effectiveMime,
     attach: aiAttach,
+    cache: extractionCache,
+    metadata: extractionMetadata,
   });
   const rawText = extraction.rawText;
 
