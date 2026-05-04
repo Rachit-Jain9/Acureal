@@ -520,8 +520,9 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
 
     const userResult = await client.query(
       `INSERT INTO users
-         (email, password_hash, name, role, oauth_provider, oauth_subject, email_verified_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         (email, password_hash, name, role, oauth_provider, oauth_subject,
+          email_verified_at, password_set)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), FALSE)
        RETURNING id, email, name, phone, is_active, default_organization_id`,
       [
         normalizedEmail,
@@ -566,11 +567,74 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
   });
 };
 
+// ============================================================================
+// Set first password — for OAuth-only users who have never picked a password.
+// ============================================================================
+//
+// Background: Google cold-signup (loginOrRegisterWithGoogle, path C) creates
+// a user row with a 64-byte random unusable bcrypt and `password_set = false`.
+// That's intentional — one auth factor per account is simpler. The downside
+// is the user is locked out if Google ever revokes their account or they
+// delete the linked Google identity.
+//
+// This endpoint lets such a user attach a password to their existing account
+// without the operator-support escape hatch. The session itself is the proof
+// of possession (JWT < 15 min old, refresh-token rotated, originally issued
+// via Google sign-in) — re-prompting Google in-app would be redundant.
+//
+// Hard rules:
+//   - 409 if the user already has password_set=true. They must use the
+//     standard change-password flow (PUT /me with currentPassword + newPassword).
+//   - HIBP breach check on the new password.
+//   - Password complexity is enforced by the route validator.
+//
+const setFirstPassword = async (userId, newPassword) => {
+  if (!userId) throw createError('User context missing.', 401);
+  if (!newPassword || typeof newPassword !== 'string') {
+    throw createError('A new password is required.', 400);
+  }
+
+  const userRow = await query(
+    'SELECT id, password_set FROM users WHERE id = $1',
+    [userId]
+  );
+  if (userRow.rows.length === 0) {
+    throw createError('User not found.', 404);
+  }
+  if (userRow.rows[0].password_set !== false) {
+    throw createError(
+      'A password is already set for this account. Use the change-password flow to update it.',
+      409
+    );
+  }
+
+  const breach = await isPasswordBreached(newPassword);
+  if (breach.breached) {
+    throw createError(
+      'This password has appeared in known data breaches and cannot be used. Please choose a stronger, unique password.',
+      400
+    );
+  }
+
+  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await query(
+    `UPDATE users
+        SET password_hash = $2,
+            password_set  = TRUE,
+            updated_at    = NOW()
+      WHERE id = $1`,
+    [userId, newHash]
+  );
+
+  return { passwordSet: true };
+};
+
 module.exports = {
   register,
   login,
   loginOrRegisterWithGoogle,
   getUserById,
   updateUser,
+  setFirstPassword,
   getJwtSecret,
 };

@@ -151,6 +151,11 @@ export const authAPI = {
   // refresh returns 401 and the interceptor falls through to /login).
   refresh: () => api.post('/auth/refresh'),
   logout: () => api.post('/auth/logout'),
+  // For OAuth-only users (signed up via Google, never set a password) —
+  // attaches a password to their existing account so they can sign in
+  // with email + password too. The authenticated session itself is the
+  // proof of possession; no Google re-verify step required.
+  setFirstPassword: (data) => api.post('/auth/me/set-first-password', data),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

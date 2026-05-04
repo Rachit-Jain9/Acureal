@@ -92,6 +92,12 @@ const buildAuthUser = (userRow, memberships, activeMembership) => ({
   name: userRow.name,
   phone: userRow.phone,
   is_active: userRow.is_active,
+  // password_set === false means the user signed up via Google OAuth and
+  // has never set a password. Frontend uses this to surface a "Set a
+  // password" card on the Settings page. Defaults to true on the column
+  // so anyone created before PR #145 is treated as having a real password.
+  password_set: userRow.password_set !== false,
+  oauth_provider: userRow.oauth_provider || null,
   role: activeMembership.role,
   organization_role: activeMembership.role,
   organization_id: activeMembership.organization_id,
@@ -108,7 +114,8 @@ const buildAuthUser = (userRow, memberships, activeMembership) => ({
 
 const hydrateUserAuthContext = async (userId, requestedOrganizationId = null, client = { query }) => {
   const userResult = await client.query(
-    `SELECT id, email, name, phone, is_active, default_organization_id
+    `SELECT id, email, name, phone, is_active, default_organization_id,
+            password_set, oauth_provider
      FROM users
      WHERE id = $1`,
     [userId]

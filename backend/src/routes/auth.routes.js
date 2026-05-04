@@ -425,4 +425,41 @@ router.put(
   }
 );
 
+// POST /auth/me/set-first-password
+//
+// Lets a user who signed up via Google OAuth attach a password to their
+// account so they can sign in via password too. Refused if a real password
+// is already set (the standard change-password flow on PUT /me handles
+// that case).
+//
+// The authenticated session itself is the proof of possession — there is no
+// separate Google re-verification step inside the request body. Callers must
+// hold a valid access cookie (or legacy Bearer header).
+router.post(
+  '/me/set-first-password',
+  authenticate,
+  [
+    body('newPassword')
+      .isLength({ min: 8 })
+      .withMessage('New password must be at least 8 characters')
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+      .withMessage('New password must contain uppercase, lowercase and a number'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      await authService.setFirstPassword(req.user.id, req.body.newPassword);
+      // Re-fetch the user so the response carries the new password_set flag.
+      const updated = await authService.getUserById(req.user.id, req.user.organization_id);
+      res.json({
+        success: true,
+        message: 'Password set. You can now sign in with email and password too.',
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 module.exports = router;
