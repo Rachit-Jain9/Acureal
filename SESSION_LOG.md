@@ -4,6 +4,30 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (AI provider retry with exponential backoff — PR #149)
+
+**What was worked on in plain English:**
+- Until tonight, if Gemini sneezed (server error, rate-limit, network blip), the entire extraction failed and the user had to click "Re-extract" themselves. Now the system automatically tries again — up to three attempts, with sensible delays between them — before giving up.
+- The retry policy is conservative on purpose. If the AI says "your API key is wrong" or "this content violates policy," we DON'T retry — those are real errors, retrying just burns money. We only retry on signals that clearly say "try again later" (server errors, rate limits, network drops, timeouts).
+- Every successful call now records how many attempts it took. If a call recovered after a retry, that fact is logged. Over time this gives us a leading indicator of provider health: "Gemini's retry rate jumped 4× yesterday" is visible in the AI call logs without anyone having to dig.
+
+**PRs opened/merged:**
+- PR #149 — `feat(ai): provider retry with exponential backoff (5xx/429/network only)` — squash-merged.
+
+**Verification:**
+- Backend test suite: 683 → **702** (+19 covering classifier truth-table for 5xx/429/4xx/network/timeouts, exponential backoff math, jitter bounds, retry exhaustion, recovery after retry, custom classifier override, onRetry hook, hook-throws-doesn't-abort).
+- Frontend production build: clean (no frontend change in this PR).
+- No migration; no env-var changes (retry is on by default; pass `retry: { enabled: false }` to opt out).
+
+**What's left for Phase 3:**
+- Provider fallback chain (Gemini fails terminally → try Claude with same document). Pairs cleanly with retry: retry handles transients, fallback handles "this provider is down for the day."
+- Vercel AI SDK migration (S16) — still on the table.
+- OpenTelemetry tracing per `routeAi` call.
+- Zod validation at provider boundary for structured outputs.
+- Streaming for long Claude calls (IC memo).
+
+---
+
 ## 2026-05-04 (Skeleton loading states — design-system primitive + Dashboard/Deals — PR #148)
 
 **What was worked on in plain English:**

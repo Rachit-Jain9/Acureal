@@ -39,6 +39,7 @@ const responseCache = require('./aiResponseCache');
 const log = require('../../lib/logger').child({ module: 'ai.router' });
 const { getRequestContext } = require('../../lib/requestContext');
 const { assertWithinDailyCap, CostCapExceededError } = require('../../lib/costGuard');
+const { withRetry, isRetriableProviderError, DEFAULT_RETRY_OPTIONS } = require('./aiRetry');
 
 // Approximate USD cost per 1M tokens, sourced from public pricing pages
 // (Gemini 2.5 flash, Claude Sonnet 4.6, GPT-4o-mini). Used as a directional
@@ -195,6 +196,15 @@ const resolveDefaultModel = (provider) => {
  * @param {Object=}  args.attach    { organizationId, userId, dealId, documentId, evidenceSourceId, evidenceFactId }
  * @param {Object=}  args.metadata  Free-form JSON for the log row. May include
  *                                  `prompt_version`, `prompt_kind`, `prompt_sha256`.
+ * @param {Object=}  args.retry     Optional retry config:
+ *                                    - `attempts` (default 3)
+ *                                    - `baseMs` (default 250) — first backoff
+ *                                    - `maxMs` (default 4000) — backoff cap
+ *                                    - `jitter` (default 0.25) — ±jitter ratio
+ *                                    - `enabled` (default true) — set false to skip retry
+ *                                    - `isRetriable(err)` — override classifier
+ *                                  Only retries on transient signals (5xx, 429,
+ *                                  network errors, timeouts). NEVER retries 4xx.
  * @param {Object=}  args.cache     Optional response-cache hooks:
  *                                    - `inputSha256` (required to enable the cache):
  *                                       sha256 of the per-call varying inputs
@@ -213,7 +223,7 @@ const resolveDefaultModel = (provider) => {
  * @param {Function} args.run       async ({ providers, provider, model, task }) => result
  * @returns {Promise<{ result: any, callId: string|null, status: string, latencyMs: number, cached?: boolean }>}
  */
-const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache, run }) => {
+const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache, retry, run }) => {
   if (typeof run !== 'function') {
     throw new Error('aiRouter.run: `run` callback is required.');
   }
@@ -333,13 +343,48 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
   let errorMessage = null;
   let tokens = { promptTokens: null, completionTokens: null, totalTokens: null };
 
+  // Retry policy. Default-on for transient provider errors; pass
+  // `retry: { enabled: false }` to opt a call out (e.g. for callers that own
+  // their own retry strategy or for one-shot diagnostic calls).
+  const retryEnabled = retry?.enabled !== false;
+  const retryConfig = {
+    attempts: retry?.attempts ?? DEFAULT_RETRY_OPTIONS.attempts,
+    baseMs: retry?.baseMs ?? DEFAULT_RETRY_OPTIONS.baseMs,
+    maxMs: retry?.maxMs ?? DEFAULT_RETRY_OPTIONS.maxMs,
+    jitter: retry?.jitter ?? DEFAULT_RETRY_OPTIONS.jitter,
+  };
+  // Track attempts so the call-log row carries `metadata.attempts` for
+  // dashboards that want to track retry rates per provider/task.
+  let attemptsMade = 0;
+
   try {
-    const raw = await run({
-      providers: providerRegistry,
-      provider: resolvedProvider,
-      model: resolvedModel,
-      task,
-    });
+    const invokeOnce = async () => {
+      attemptsMade += 1;
+      return run({
+        providers: providerRegistry,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        task,
+      });
+    };
+
+    const raw = retryEnabled
+      ? await withRetry(invokeOnce, {
+          ...retryConfig,
+          isRetriable: retry?.isRetriable || isRetriableProviderError,
+          onRetry: ({ err, attempt, delayMs }) => {
+            log.info('ai_call_retrying', {
+              task,
+              provider: resolvedProvider,
+              model: resolvedModel,
+              attempt,
+              next_delay_ms: delayMs,
+              error_code: err.code || err.name || null,
+              error_status: err.status || err.statusCode || null,
+            });
+          },
+        })
+      : await invokeOnce();
 
     // Allow the run callback to return either a plain value or
     // { result, raw } so token usage can be lifted from SDK responses.
@@ -367,17 +412,28 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
       tokens,
       cost: null,
       attach,
-      metadata,
+      metadata: { ...(metadata || {}), attempts: attemptsMade },
       errorCode,
       errorMessage,
     });
 
-    log.error('ai_call_failed', err, { task, provider: resolvedProvider, model: resolvedModel, call_id: callId, latency_ms: latencyMs });
+    log.error('ai_call_failed', err, {
+      task,
+      provider: resolvedProvider,
+      model: resolvedModel,
+      call_id: callId,
+      latency_ms: latencyMs,
+      attempts: attemptsMade,
+    });
     throw err;
   }
 
   const latencyMs = Date.now() - start;
   const cost = estimateCost({ provider: resolvedProvider, model: resolvedModel, ...tokens });
+  // Recovery flag — call ultimately succeeded but only after at least one
+  // retry. Useful for cost/quality dashboards: "what % of successful calls
+  // required a retry?" is a leading indicator of provider degradation.
+  const recoveredViaRetry = attemptsMade > 1;
   const callId = await persistCallLog({
     task,
     provider: resolvedProvider,
@@ -387,7 +443,11 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
     tokens,
     cost,
     attach,
-    metadata,
+    metadata: {
+      ...(metadata || {}),
+      attempts: attemptsMade,
+      ...(recoveredViaRetry ? { recovered_via_retry: true } : {}),
+    },
     errorCode,
     errorMessage,
   });
