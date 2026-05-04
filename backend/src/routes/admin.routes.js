@@ -15,6 +15,7 @@
 const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const aiUsageService = require('../services/aiUsage.service');
+const routingConfigService = require('../services/ai/routingConfig');
 
 const router = express.Router();
 
@@ -34,6 +35,54 @@ router.get('/ai-usage', authenticate, requireRole('admin', 'analyst'), async (re
     res.json({ success: true, data });
   } catch (error) {
     next(error);
+  }
+});
+
+// GET /api/admin/ai-routing
+//
+// Returns every row in the ai_routing_config table. Admin/owner-gated.
+// Used by the Settings page routing editor + ops debugging.
+router.get('/ai-routing', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const rows = await routingConfigService.listRoutingConfig();
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/admin/ai-routing/:task
+//
+// Update or insert routing for a task. Admin-only. Body shape:
+//   { provider, model?, fallbackProvider?, fallbackModel?, notes? }
+//
+// Effective immediately on the next AI call (the in-process cache is
+// invalidated on success).
+router.put('/ai-routing/:task', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { provider, model, fallbackProvider, fallbackModel, notes } = req.body || {};
+    if (!provider) {
+      return res.status(400).json({ success: false, message: 'provider is required' });
+    }
+    const allowed = new Set(['gemini', 'claude', 'openai']);
+    if (!allowed.has(provider)) {
+      return res.status(400).json({ success: false, message: `provider must be one of ${[...allowed].join(', ')}` });
+    }
+    if (fallbackProvider && !allowed.has(fallbackProvider)) {
+      return res.status(400).json({ success: false, message: 'fallbackProvider invalid' });
+    }
+    const updated = await routingConfigService.upsertRouting({
+      task: req.params.task,
+      provider,
+      model: model ?? null,
+      fallbackProvider: fallbackProvider ?? null,
+      fallbackModel: fallbackModel ?? null,
+      notes: notes ?? null,
+      changedBy: req.user.id,
+    });
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return next(error);
   }
 });
 

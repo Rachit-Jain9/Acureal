@@ -40,6 +40,7 @@ const log = require('../../lib/logger').child({ module: 'ai.router' });
 const { getRequestContext } = require('../../lib/requestContext');
 const { assertWithinDailyCap, CostCapExceededError } = require('../../lib/costGuard');
 const { withRetry, isRetriableProviderError, DEFAULT_RETRY_OPTIONS } = require('./aiRetry');
+const routingConfigService = require('./routingConfig');
 
 // Approximate USD cost per 1M tokens, sourced from public pricing pages
 // (Gemini 2.5 flash, Claude Sonnet 4.6, GPT-4o-mini). Used as a directional
@@ -210,7 +211,27 @@ const persistCallLog = async ({
   }
 };
 
+// Async resolution path that consults the runtime ai_routing_config table
+// first, then falls through to env vars + code defaults. Used by callers
+// that don't pin a provider explicitly.
+const resolveTaskRouting = async (task) => {
+  let runtime = null;
+  try {
+    runtime = await routingConfigService.getRoutingForTask(task);
+  } catch {
+    // Fail-open — code default is fine.
+  }
+  const envFallback = providerRegistry.getRoutingConfig();
+  const provider = runtime?.provider || envFallback[task] || 'gemini';
+  const model = runtime?.model || null;
+  const fallbackProvider = runtime?.fallbackProvider || null;
+  const fallbackModel = runtime?.fallbackModel || null;
+  return { provider, model, fallbackProvider, fallbackModel };
+};
+
 const resolveProviderForTask = (task) => {
+  // Synchronous path retained for back-compat. The async runAI call below
+  // upgrades to the runtime table when no explicit provider is supplied.
   const config = providerRegistry.getRoutingConfig();
   return config[task] || 'gemini';
 };
@@ -268,8 +289,18 @@ const runAI = async ({ task, provider, model, attach = {}, metadata = {}, cache,
     throw new Error('aiRouter.run: `task` is required.');
   }
 
-  const resolvedProvider = provider || resolveProviderForTask(task);
-  const resolvedModel = model || resolveDefaultModel(resolvedProvider);
+  // Routing resolution: explicit provider arg wins; otherwise consult the
+  // runtime ai_routing_config table (cached 60s) which itself falls back
+  // to env vars and code defaults. The runtime table lets ops swap a task's
+  // provider without a deploy.
+  let resolvedProvider = provider;
+  let resolvedModel = model;
+  if (!resolvedProvider) {
+    const routing = await resolveTaskRouting(task);
+    resolvedProvider = routing.provider;
+    if (!resolvedModel && routing.model) resolvedModel = routing.model;
+  }
+  if (!resolvedModel) resolvedModel = resolveDefaultModel(resolvedProvider);
   const start = Date.now();
 
   // ── Cache lookup ──────────────────────────────────────────────────────────
@@ -891,5 +922,6 @@ module.exports = {
   estimateCost,
   extractTokenUsage,
   resolveProviderForTask,
+  resolveTaskRouting,
   resolveDefaultModel,
 };
