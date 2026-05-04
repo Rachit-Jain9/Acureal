@@ -21,8 +21,8 @@ import {
 } from '../hooks/useDeals';
 import { DealContextProvider } from '../hooks/useDealContext';
 import useAuthStore from '../store/authStore';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import Badge from '../components/common/Badge';
+import { Skeleton, SkeletonKpi, SkeletonCard } from '../design-system';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
 import { downloadAxiosResponse } from '../utils/download';
@@ -196,8 +196,35 @@ export default function DealDetailPage() {
   };
 
   // ── Loading / error states ────────────────────────────────────────────────
+  // Mirrors the deal workspace shape — back-nav, hero header, stage strip,
+  // KPI row, and tab body — so when data lands the layout doesn't reflow.
   if (isLoading) {
-    return <LoadingSpinner className="py-24" />;
+    return (
+      <div aria-busy="true">
+        <Skeleton className="h-4 w-28 mb-4" />
+        <div className="bg-bg-elevated border border-hairline rounded-editorial p-5 mb-4">
+          <Skeleton className="h-3 w-24 mb-2" />
+          <Skeleton className="h-7 w-2/3 mb-3" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-24 rounded-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <div className="flex gap-2 mb-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-20 rounded-md" />
+          ))}
+        </div>
+        <SkeletonCard height="h-96" />
+      </div>
+    );
   }
 
   if (isError || !deal) {

@@ -4,6 +4,28 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Skeleton loading migration to 7 high-traffic pages — PR #150)
+
+**What was worked on in plain English:**
+- Seven of the most-visited pages — opening a deal, the financial engine, market intelligence, comps, properties, reports, and the deal-compare view — now show a soft outline of the page that's loading instead of a single spinning circle. When real data lands, nothing jumps. The whole platform feels markedly faster on first paint, even though the underlying load times haven't changed.
+- This continues PR #148's Dashboard/Deals work. Each page's skeleton is shaped like its real content — a deal page shows the back-nav + hero header + KPI strip + tab body shape; the financial engine shows the input panel + DCF summary shape — so the layout doesn't reflow when the data arrives.
+- Reduced-motion users (browser setting) see a calm static placeholder. Same readability, no animation.
+
+**PRs opened/merged:**
+- PR #150 — `feat(ui): skeleton loading migration to 7 high-traffic pages` — squash-merged.
+
+**Verification:**
+- Frontend test suite: **206 tests, all green** (no new tests; pages migrated mechanically).
+- Production build: clean.
+- 9 LoadingSpinner usages remain (deal tabs + DefaultsInspector + MapCanvas + ParcelIntelligenceAdminPage). They migrate organically with feature work — none are page-level entry points anymore.
+
+**What's left for Phase 2 polish:**
+- Remaining 9 LoadingSpinner usages in nested components (deal tabs, financials inspector, map canvas).
+- Table virtualization for review queue + comp lists when row counts cross 100.
+- Count-up animation on KPI value changes is partial; widen coverage.
+
+---
+
 ## 2026-05-04 (AI provider retry with exponential backoff — PR #149)
 
 **What was worked on in plain English:**

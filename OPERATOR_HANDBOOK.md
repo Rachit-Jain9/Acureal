@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #149 — AI provider retry with exponential backoff; Phase 3 hardening).
+Last refreshed: 2026-05-04 (after PR #150 — skeleton loading migration to 7 high-traffic pages; continues Phase 2 polish).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 

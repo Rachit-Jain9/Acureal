@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { GitCompare, Plus, Search, X } from 'lucide-react';
 import { useDeal, useDeals } from '../hooks/useDeals';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import { Skeleton, SkeletonCard } from '../design-system';
 import {
   DEAL_TYPE_LABELS,
   formatArea,
@@ -129,8 +129,19 @@ export default function DealComparePage() {
     return values.filter((entry) => entry.value === targetValue).map((entry) => entry.index);
   };
 
+  // Skeleton: page header + deal-picker chip strip + comparison grid placeholder.
   if (isLoading) {
-    return <LoadingSpinner className="py-24" />;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <PageHeader title="Compare Opportunities" description="Pick up to four deals and review land, pricing, and underwriting side by side." />
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-40 rounded-md" />
+          ))}
+        </div>
+        <SkeletonCard height="h-64" titleWidth="w-1/4" />
+      </div>
+    );
   }
 
   return (
@@ -219,7 +230,10 @@ export default function DealComparePage() {
           description="Add at least two deals to unlock a full opportunity comparison."
         />
       ) : isComparing ? (
-        <LoadingSpinner />
+        <div className="space-y-6" aria-busy="true">
+          <SkeletonCard height="h-48" titleWidth="w-1/4" />
+          <SkeletonCard height="h-48" titleWidth="w-1/3" />
+        </div>
       ) : (
         <div className="space-y-6">
           {SECTIONS.map((section) => (

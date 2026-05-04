@@ -26,9 +26,9 @@ import {
   useMarketTransactions,
   useMicroMarketBenchmarks,
 } from '../hooks/useIntelligence';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import { SkeletonKpi, SkeletonCard, Skeleton } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
 import useAuthStore from '../store/authStore';
 
@@ -366,10 +366,24 @@ export default function IntelligencePage() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
 
+  // Skeleton: page header + 4 KPI tiles + 2 chart cards + briefing card. The
+  // brief itself is a multi-section narrative, so the body skeleton is one
+  // tall card to set expectation rather than fake the inner sections.
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <LoadingSpinner size="lg" />
+      <div className="space-y-6" aria-busy="true">
+        <PageHeader title="Market Intelligence" description="Live city benchmarks, transactions, and macro signals" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonCard height="h-64" />
+          <SkeletonCard height="h-64" />
+        </div>
+        <SkeletonCard height="h-72" titleWidth="w-1/4" />
       </div>
     );
   }

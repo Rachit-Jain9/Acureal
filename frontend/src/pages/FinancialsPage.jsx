@@ -26,9 +26,9 @@ import {
 import { useDeal } from '../hooks/useDeals';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
+import { SkeletonKpi, SkeletonCard } from '../design-system';
 import { normalizeFinancials, hasLegacyResidentialLoadingFactor } from '../components/financials/normalizeFinancials';
 
 
@@ -86,7 +86,26 @@ export default function FinancialsPage() {
     setSelectedClass(cls);
   };
 
-  if (isLoading) return <div className="py-20"><LoadingSpinner size="lg" /></div>;
+  // Skeleton: page chrome + KPI strip + DCF inputs panel + summary card. The
+  // financials page mounts a heavy bundle (Recharts + tornado), so a skeleton
+  // anchors the user's eye while the chunk loads.
+  if (isLoading) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <PageHeader title="DCF Underwriting" description="Multi-asset-class financial modeling" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonCard height="h-80" />
+          <SkeletonCard height="h-80" className="lg:col-span-2" />
+        </div>
+      </div>
+    );
+  }
 
   const shouldShowError = error && error?.response?.status !== 404;
 

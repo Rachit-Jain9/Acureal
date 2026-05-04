@@ -3,9 +3,9 @@ import { Download, FileText, Loader2, Presentation } from 'lucide-react';
 import { downloadAxiosResponse } from '../utils/download';
 import { useDeals } from '../hooks/useDeals';
 import { useDailyBrief } from '../hooks/useIntelligence';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import { Skeleton, SkeletonList } from '../design-system';
 import { formatCrores, formatPct, STAGE_CONFIG } from '../utils/format';
 import { exportsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
@@ -198,8 +198,21 @@ export default function ReportsPage() {
     return null;
   };
 
+  // Skeleton: header + tab strip + table-shaped body.
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <PageHeader title="Reports" description="Pipeline analytics, exports, and verified-data intelligence readiness" />
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-24 rounded-md" />
+          ))}
+        </div>
+        <div className="bg-bg-elevated border border-hairline rounded-editorial p-2">
+          <SkeletonList rows={6} columns={5} />
+        </div>
+      </div>
+    );
   }
 
   return (

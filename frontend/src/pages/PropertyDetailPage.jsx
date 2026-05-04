@@ -16,12 +16,11 @@ import MasterPlanZonePanel from '../components/deal/MasterPlanZonePanel';
 import ParcelIntelligencePanel from '../components/deal/ParcelIntelligencePanel';
 import ReadOnlyPropertyMap from '../components/maps/ReadOnlyPropertyMap';
 import { useDeals } from '../hooks/useDeals';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
 import { toast } from '../components/common/Toast';
-import { SectionHeader } from '../design-system';
+import { SectionHeader, Skeleton, SkeletonCard } from '../design-system';
 import {
   formatArea,
   formatDate,
@@ -181,8 +180,19 @@ export default function PropertyDetailPage() {
     }
   };
 
+  // Skeleton: page header + map placeholder + property details card.
   if (isLoading) {
-    return <LoadingSpinner className="py-24" />;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <Skeleton className="h-4 w-32" />
+        <div className="bg-bg-elevated border border-hairline rounded-editorial p-5">
+          <Skeleton className="h-3 w-20 mb-2" />
+          <Skeleton className="h-7 w-1/2" />
+        </div>
+        <SkeletonCard height="h-72" titleWidth="w-1/4" />
+        <SkeletonCard height="h-64" titleWidth="w-1/3" />
+      </div>
+    );
   }
 
   if (isError || !property) {

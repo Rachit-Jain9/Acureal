@@ -9,9 +9,9 @@ import {
   Building2,
 } from 'lucide-react';
 import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
+import { SkeletonList } from '../design-system';
 import { formatINR } from '../utils/format';
 
 const PROJECT_TYPES = [
@@ -417,8 +417,8 @@ export default function CompsPage() {
       </div>
 
       {isLoading ? (
-        <div className="py-20">
-          <LoadingSpinner size="lg" />
+        <div className="bg-bg-elevated border border-hairline rounded-editorial p-2">
+          <SkeletonList rows={6} columns={6} />
         </div>
       ) : comps.length === 0 ? (
         <EmptyState
