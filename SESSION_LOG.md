@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Phase 2 closeout — re-acceptance modal + set-first-password — PRs #144, #145)
+
+**What was worked on in plain English:**
+- The Supabase Security Advisor was showing three "RLS Disabled" errors. Two real ones (`login_attempts`, `refresh_token_grants`) are now locked down. The third (`spatial_ref_sys`, owned by the PostGIS extension) is a known false positive — documented in the handbook so it stops being noise.
+- Anyone who's been a REDIP user since before a Terms or Privacy update will now be asked to re-accept before they can use the app. Until today, the founder account was silently grandfathered against the original Privacy v1 even though Privacy v2 was live. The next time you log in, you'll see a small card: *"Updated Privacy Policy"* with a link to read the full text and a checkbox to accept. Decline is signing out.
+- Anyone who signs in with **Google only** can now go to Settings → Security and add a password to their account. Without this, a Google revocation would have been a permanent lockout. Existing password users see no change at all.
+
+**PRs opened/merged:**
+- RLS hardening migration `20260504_rls_hardening` applied via Supabase MCP. Documented in OPERATOR_HANDBOOK.md §4.
+- PR #144 — `feat(legal): re-acceptance modal for legal-doc version bumps` — squash-merged. Frontend-only; the backend already returned the `pending` array.
+- PR #145 — `feat(auth): set-first-password flow for OAuth-only users` — squash-merged. Migration `20260508_password_set_flag.sql` applied via Supabase MCP. New endpoint `POST /api/auth/me/set-first-password`.
+
+**Verification:**
+- Backend test suite: 657 / 657 green.
+- Frontend production build: clean (PR #144 + PR #145).
+- Supabase Security Advisor: errors dropped from 3 → 1 (the remaining one is the PostGIS false positive).
+
+**What's left for Phase 2:**
+- Re-acceptance flow when legal docs bump version → ✅ shipped (PR #144).
+- "Set first password" for OAuth-only users → ✅ shipped (PR #145).
+- Cleanup PR — drop the legacy `Authorization` header path + the `data.token` response body once every active session has cycled (~4 weeks after PR #142).
+- Email verification *enforcement* — currently the banner reminds; future PR can gate sensitive actions behind verified state.
+- MFA / TOTP (lowest urgency for solo founder).
+
+---
+
 ## 2026-05-04 (Refresh-token rotation + httpOnly cookies — PRs #141, #142)
 
 **What was worked on in plain English:**

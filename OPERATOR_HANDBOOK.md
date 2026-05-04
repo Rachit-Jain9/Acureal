@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #142 — refresh-token rotation + httpOnly cookies).
+Last refreshed: 2026-05-04 (after PRs #144 + #145 — legal re-acceptance modal and OAuth-only set-first-password).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -26,6 +26,8 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | Auth — password sign-up | Live, gated by `ALLOW_COLD_SIGNUP` env | Default deny; add invite token to bypass |
 | Auth — Google sign-in | Live (PR #139) | Confirmed `enabled: true` on `/api/auth/google/config` |
 | Auth — token storage | httpOnly cookies + 15-min access / 30-day refresh, rotated on each use (PR #142) | Reuse detection kills the family on replay; legacy `Authorization: Bearer` header still accepted for back-compat |
+| Auth — set-first-password (OAuth-only users) | Live (PR #145) | Settings → Security flips to "Set a password" card when `user.password_set === false` |
+| Legal — re-acceptance gate | Live (PR #144) | Modal blocks protected app until user re-accepts current Terms/Privacy. Founder will see this on next prod login (Privacy v2 not yet accepted) |
 | Email verification | Live (PR #138), dev-mode delivery | Links surface in Vercel logs until Resend is wired |
 | Legal docs | Terms v1, Privacy v2, Cookies v1 — published, DRAFT | **Not lawyer-reviewed.** Do not onboard user #2 until reviewed. |
 | Domain | None (using `redip.vercel.app`) | See §3.3 |
@@ -113,8 +115,14 @@ None of these are written in code; all need a human action.
 | `20260505_email_verification.sql` | ✅ | Email verification tokens |
 | `20260506_user_oauth.sql` | ✅ | Google OAuth identity binding |
 | `20260507_refresh_tokens.sql` | ✅ | Refresh-token grants with rotation + family revocation |
+| `20260504_rls_hardening` | ✅ | RLS enabled on `login_attempts` + `refresh_token_grants` |
+| `20260508_password_set_flag.sql` | ✅ | `users.password_set` boolean — distinguishes real password from OAuth-only unusable bcrypt |
 
 **No migration is currently pending application.** When the next PR adds one, it surfaces here.
+
+### Known Security Advisor false positive
+
+**`public.spatial_ref_sys` — "RLS Disabled in Public"** — this is a PostGIS extension table owned by the database superuser. Neither Supabase nor the service role can enable RLS on it. It contains only coordinate-system reference data (no PII, no user data, read-only). This warning will persist in the Security Advisor permanently and can be safely ignored. The two real tables (`login_attempts`, `refresh_token_grants`) are now protected.
 
 ---
 
@@ -200,9 +208,9 @@ Sourced from this session's plan + earlier session logs. Sequenced by impact.
 - [x] PR #139 — Google sign-in via raw OIDC
 - [x] PR #140 — Privacy v2 disclosure
 - [x] PR #142 — refresh-token rotation + httpOnly cookies (with reuse-detection family revocation)
-- [ ] **"Set first password" flow for OAuth-only users** (next — they currently cannot sign in with password since their bcrypt is intentionally unusable)
-- [ ] **Drop legacy `Authorization` header path + body `data.token`** (cleanup PR ~2 release cycles after #142, once every active session has rolled over to cookies)
-- [ ] Re-acceptance flow for legal-document version bumps (existing users currently grandfathered)
+- [x] PR #144 — re-acceptance modal for legal-doc version bumps (existing users no longer grandfathered)
+- [x] PR #145 — set-first-password for OAuth-only users (Settings → Security)
+- [ ] **Drop legacy `Authorization` header path + body `data.token`** (cleanup PR ~2 release cycles after #142, once every active session has rolled over to cookies — target ~early June 2026)
 - [ ] MFA / TOTP (lowest urgency; opt-in)
 - [ ] Email verification *enforcement* — currently the banner reminds; future PR can require verification before sensitive actions
 
