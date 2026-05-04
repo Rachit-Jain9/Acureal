@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
 import { compsAPI } from '../../services/api';
-import LoadingSpinner from '../common/LoadingSpinner';
-import { SectionHeader, ErrorState } from '../../design-system';
+import { SectionHeader, ErrorState, SkeletonList } from '../../design-system';
 import { useDealRecord } from '../../hooks/useDealContext';
 
 function formatRate(value) {
@@ -175,7 +174,7 @@ export default function CompsTab() {
       {/* Market Benchmark */}
       {hasLatLng && (
         benchmarkLoading ? (
-          <LoadingSpinner className="py-8" />
+          <div className="card-editorial p-4"><SkeletonList rows={3} columns={3} /></div>
         ) : benchmarkError ? (
           <div className="card-editorial text-center py-8">
             <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
@@ -203,7 +202,7 @@ export default function CompsTab() {
             className="px-5 py-4 border-b border-hairline mb-0"
           />
           {nearbyLoading ? (
-            <LoadingSpinner className="py-10" />
+            <div className="px-5 py-3"><SkeletonList rows={4} columns={5} /></div>
           ) : nearbyError ? (
             <div className="text-center py-8">
               <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />

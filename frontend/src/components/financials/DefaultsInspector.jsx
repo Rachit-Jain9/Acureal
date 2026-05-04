@@ -4,7 +4,7 @@ import {
   Building2, Coins, TrendingUp, Landmark, Layers, Hotel, MapPin,
 } from 'lucide-react';
 import { financialsAPI } from '../../services/api';
-import LoadingSpinner from '../common/LoadingSpinner';
+import { SkeletonList } from '../../design-system';
 import { FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS } from '../../utils/assetClasses';
 
 // Heuristic bucketing by key prefix/substring so analysts scan a coherent
@@ -236,8 +236,8 @@ export default function DefaultsInspector({
 
             <div className="flex-1 overflow-y-auto bg-bg-secondary">
               {loading && (
-                <div className="flex h-full items-center justify-center p-12">
-                  <LoadingSpinner size="lg" />
+                <div className="p-6">
+                  <SkeletonList rows={8} columns={3} />
                 </div>
               )}
 

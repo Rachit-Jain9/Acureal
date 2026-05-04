@@ -22,8 +22,7 @@ import {
   useDeleteActivity,
 } from '../../hooks/useActivities';
 import Badge from '../common/Badge';
-import LoadingSpinner from '../common/LoadingSpinner';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, SkeletonList } from '../../design-system';
 import AuditTimelineView from '../financials/AuditTimelineView';
 import {
   formatDate,
@@ -112,7 +111,7 @@ export default function ActivityTab() {
     deleteActivity.mutate(activityId);
   };
 
-  if (isLoading) return <LoadingSpinner className="py-16" />;
+  if (isLoading) return <div className="py-2"><SkeletonList rows={6} columns={3} /></div>;
 
   if (isError) {
     return (

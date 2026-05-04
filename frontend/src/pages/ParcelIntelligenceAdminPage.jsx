@@ -3,10 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Clock, Database, FileSearch, PlusCircle, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
-import { ErrorState } from '../design-system';
+import { ErrorState, SkeletonList } from '../design-system';
 import {
   useParcelIntelligenceReviewQueue,
   useParcelIntelligenceStatus,
@@ -780,7 +779,7 @@ export default function ParcelIntelligenceAdminPage() {
       />
 
       {statusLoading ? (
-        <div className="flex justify-center py-8"><LoadingSpinner /></div>
+        <div className="py-2"><SkeletonList rows={5} columns={4} /></div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -923,7 +922,7 @@ export default function ParcelIntelligenceAdminPage() {
         )}
 
         {queueLoading ? (
-          <div className="flex justify-center py-12"><LoadingSpinner /></div>
+          <div className="py-2"><SkeletonList rows={6} columns={4} /></div>
         ) : queue.length === 0 ? (
           <div className="p-6">
             <EmptyState

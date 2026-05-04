@@ -9,8 +9,7 @@ import {
   useDeleteRiskFlag,
 } from '../../hooks/useRiskFlags';
 import Badge from '../common/Badge';
-import LoadingSpinner from '../common/LoadingSpinner';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, SkeletonList } from '../../design-system';
 import { useDealContext } from '../../hooks/useDealContext';
 
 const RISK_CATEGORIES = [
@@ -284,7 +283,7 @@ export default function RiskTab() {
     deleteFlag.mutate({ dealId, id: flagId });
   };
 
-  if (isLoading) return <LoadingSpinner className="py-16" />;
+  if (isLoading) return <div className="py-2"><SkeletonList rows={4} columns={4} /></div>;
 
   if (isError) {
     return (

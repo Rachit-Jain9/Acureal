@@ -29,7 +29,7 @@ import {
   useSeedApprovals,
 } from '../../hooks/useApprovals';
 import Badge from '../common/Badge';
-import LoadingSpinner from '../common/LoadingSpinner';
+import { SkeletonList } from '../../design-system';
 import { SectionHeader } from '../../design-system';
 import { formatDate } from '../../utils/format';
 
@@ -160,7 +160,7 @@ function DDSection({ dealId }) {
     deleteItem.mutate({ dealId, id: itemId });
   };
 
-  if (isLoading) return <LoadingSpinner className="py-10" />;
+  if (isLoading) return <div className="py-2"><SkeletonList rows={5} columns={4} /></div>;
 
   if (isError) {
     return (
@@ -435,7 +435,7 @@ function ApprovalsSection({ dealId }) {
     deleteApproval.mutate({ dealId, id: approvalId });
   };
 
-  if (isLoading) return <LoadingSpinner className="py-10" />;
+  if (isLoading) return <div className="py-2"><SkeletonList rows={5} columns={4} /></div>;
 
   if (isError) {
     return (

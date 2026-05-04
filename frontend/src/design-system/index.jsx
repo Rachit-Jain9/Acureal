@@ -18,6 +18,7 @@ export {
 
 import clsx from 'clsx';
 import { AlertTriangle, Info } from 'lucide-react';
+import useCountUp from '../hooks/useCountUp';
 
 // ── Card ───────────────────────────────────────────────────────────────────
 // Neutral elevated surface. `elevated` adds a subtle drop shadow.
@@ -87,12 +88,28 @@ export function MetricTile({
   action,
   children,
   className,
+  /**
+   * If `value` is a finite number AND `format` is provided, MetricTile
+   * runs `useCountUp` to animate from previous → next over 600ms. The
+   * formatter (`format(n) => string`) is called every animation frame
+   * so the displayed text matches the underlying type the caller wants
+   * (₹12.4 Cr, 18.4%, 1,240 deals, etc.).
+   *
+   * If `value` is non-numeric or `format` is omitted, falls back to the
+   * existing cross-fade-on-key-change behaviour.
+   */
+  format,
 }) {
   const toneClass = {
     up: 'text-data-positive',
     down: 'text-data-negative',
     neutral: 'text-content-muted',
   }[tone];
+  const numericValue = typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const animateNumber = numericValue !== null && typeof format === 'function';
+  // Hook always runs (rules-of-hooks) but is a no-op when target is non-finite.
+  const animated = useCountUp(numericValue ?? 0);
+  const displayValue = animateNumber ? format(animated) : value;
   return (
     <div
       className={clsx(
@@ -110,12 +127,17 @@ export function MetricTile({
       <div className="flex items-baseline gap-1.5">
         {/* `key={value}` re-mounts the node on change so the keyframe replays.
             The `metric-value-fade` class collapses to a no-op under
-            `prefers-reduced-motion` (see index.css). */}
+            `prefers-reduced-motion` (see index.css). When `format` is
+            supplied, `useCountUp` provides the animation directly so we
+            disable the cross-fade keyframe to avoid double animation. */}
         <div
-          key={String(value)}
-          className="metric-value-fade font-display text-2xl sm:text-3xl font-semibold text-content-primary tabular-nums tracking-tight"
+          key={animateNumber ? 'count-up' : String(value)}
+          className={clsx(
+            'font-display text-2xl sm:text-3xl font-semibold text-content-primary tabular-nums tracking-tight',
+            !animateNumber && 'metric-value-fade',
+          )}
         >
-          {value}
+          {displayValue}
         </div>
         {unit && <div className="text-sm text-content-muted">{unit}</div>}
       </div>

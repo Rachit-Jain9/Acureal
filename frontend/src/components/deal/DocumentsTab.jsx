@@ -16,8 +16,7 @@ import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useDealContext } from '../../hooks/useDealContext';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
-import LoadingSpinner from '../common/LoadingSpinner';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, SkeletonList } from '../../design-system';
 import { formatDate } from '../../utils/format';
 import { downloadAxiosResponse } from '../../utils/download';
 
@@ -177,7 +176,7 @@ export default function DocumentsTab() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner className="py-16" />;
+  if (isLoading) return <div className="py-2"><SkeletonList rows={5} columns={5} /></div>;
 
   if (isError) {
     return (
