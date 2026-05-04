@@ -1,7 +1,7 @@
 # REDIP — Operator Handbook
 
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
-Last refreshed: 2026-05-04 (after PR #155 — persisted AI Deal Analysis + ai_call_logs language/doctype dimensions).
+Last refreshed: 2026-05-04 (after PR #156 — in-platform AI usage dashboard widget on Settings page).
 
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
@@ -119,9 +119,9 @@ None of these are written in code; all need a human action.
 | `20260504_rls_hardening` | ✅ | RLS enabled on `login_attempts` + `refresh_token_grants` |
 | `20260508_password_set_flag.sql` | ✅ | `users.password_set` boolean — distinguishes real password from OAuth-only unusable bcrypt |
 | `20260509_ai_response_cache.sql` | ✅ | `ai_response_cache` table for deduplicating identical AI calls (90-day TTL) |
-| `20260510_ai_artifacts_and_log_dimensions.sql` | ⚠️ **PENDING — operator action** | New `ai_artifacts` table + `language`/`doctype` columns on `ai_call_logs`. Code ships fail-open — feature works (live generation) without the table; cached re-fetch unlocks once applied. **Apply via Supabase SQL editor.** |
+| `20260510_ai_artifacts_and_log_dimensions.sql` | ✅ | New `ai_artifacts` table + `language`/`doctype` columns on `ai_call_logs`. Verified post-apply: RLS on, 4 indexes, 3 policies, 2 new columns. |
 
-**Pending migration (PR #155):** `database/migrations/20260510_ai_artifacts_and_log_dimensions.sql` — apply via the Supabase SQL editor at https://supabase.com/dashboard/project/lsbhrbvuynzqhdtzczco/sql/new. The deployed app gracefully degrades to "always regenerate" until it lands.
+**No migration is currently pending application.** When the next PR adds one, it surfaces here.
 
 ### Scheduled crons (Vercel)
 

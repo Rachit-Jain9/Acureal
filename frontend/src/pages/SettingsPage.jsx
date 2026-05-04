@@ -7,6 +7,7 @@ import { authAPI } from '../services/api';
 import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
 import { emitCurrencyChange } from '../hooks/useCurrencyPref';
+import AIUsageWidget from '../components/admin/AIUsageWidget';
 
 const CURRENCY_OPTIONS = [
   { value: 'crores', label: 'Crores (Cr)' },
@@ -486,6 +487,10 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {(user?.role === 'owner' || user?.role === 'admin' || user?.role === 'analyst') && (
+        <AIUsageWidget />
+      )}
 
       {(user?.role === 'owner' || user?.role === 'admin') && (
         <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">

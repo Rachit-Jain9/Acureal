@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Migration verified + in-platform AI usage dashboard — PR #156)
+
+**What was worked on in plain English:**
+- The Settings page now shows the platform's own AI usage dashboard (admin / analyst / owner only). It surfaces what Anthropic and Google's billing dashboards cannot — cost broken down by task and provider, cache hit rate, prompt-cache savings, retry recovery rate, p95 latency, and per-doctype quality breakdown. All read-only; org-scoped via existing RLS so each workspace sees only its own usage.
+- Pick a window: last 7 / 30 / 90 days. Switching the window re-queries; a manual refresh button is available too.
+- Confirmed the operator-applied migration landed cleanly: `ai_artifacts` table exists, RLS is on with all three policies, and the new `language` / `doctype` columns on `ai_call_logs` are present.
+
+**PRs opened/merged:**
+- PR #156 — `feat(admin): in-platform AI usage dashboard on Settings page` — squash-merged.
+
+**Verification:**
+- Backend test suite: **762 → 773** (+11 covering: zero-rows summary, cache-hit-rate decimal precision, fail-open on query failure, Date object → ISO formatting, days clamp [1, 365], default 30-day window).
+- Frontend production build: clean.
+- Migration verified post-apply via SQL: `to_regclass('public.ai_artifacts')` returns the table, `relrowsecurity = true`, 3 RLS policies, 4 indexes, 2 new ai_call_logs columns.
+- No new migration; no env-var change.
+
+**What's left:**
+- Tier 1.2 (Gemini context caching for master-plan corpus) — only Tier 1 item still scoped, but probably low-value given REDIP doesn't currently attach a single huge reference corpus to extraction calls.
+- Tier 2 — Vercel AI SDK migration / OpenTelemetry / `ai_routing_config` table.
+- Tier 3 — agentic layer (deferred until Tier 2 ships).
+- Tier 4 — pgvector + embeddings / PII encryption / Indic NLP.
+- MFA / TOTP for paying-customer onboarding.
+- User-data erasure cron for full DPDP §8(7) closure.
+
+---
+
 ## 2026-05-04 (Persisted AI Deal Analysis + log telemetry dimensions — PR #155)
 
 **What was worked on in plain English:**
