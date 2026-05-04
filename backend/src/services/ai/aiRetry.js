@@ -35,14 +35,55 @@ const DEFAULT_RETRY_OPTIONS = {
 //   • Status 429 (rate-limited; provider tells us to wait → retry with backoff)
 //   • Network-level codes: ECONNRESET, ETIMEDOUT, ENOTFOUND, EAI_AGAIN
 //   • Node TimeoutError name
+//   • Gemini message-string patterns (fallback for SDK-wrapped errors that
+//     don't expose `.status` directly — e.g., "RESOURCE_EXHAUSTED",
+//     "UNAVAILABLE", "high demand", or an HTTP code embedded in the message)
 // Explicitly returns false for:
 //   • 4xx other than 429 (auth, bad request, content policy → bug, retry won't help)
+//   • Permission denied / Invalid argument message patterns
 //   • undefined / null (unknown shape; default to safe)
 const NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'ECONNREFUSED']);
 
+// Message-string patterns that Gemini and other providers emit when the
+// underlying transport hiccups but the structured `.status` / `.code` props
+// are missing. Order: 5xx HTTP codes embedded in the message, transient
+// service-state strings, fetch-level network words.
+const TRANSIENT_MESSAGE_PATTERNS = [
+  /\b(429|500|502|503|504)\b/,
+  /high demand/i,
+  /temporarily unavailable/i,
+  /service unavailable/i,
+  /resource[_\s]exhausted/i,
+  /\bunavailable\b/i,
+  /fetch failed/i,
+  /timed out after/i,
+  // No trailing \b — codes like ECONNRESET are one word, "econn" matches
+  // the prefix and there's no separator before "RESET".
+  /\b(econn|etimedout|enetdown|eai_again|enotfound)/i,
+];
+
+// Message-string patterns that look transient but are actually permanent —
+// caller error or auth problem. These short-circuit the retry decision so a
+// 4xx that happens to mention a 5xx-ish word doesn't get retried.
+const PERMANENT_MESSAGE_PATTERNS = [
+  /\b40[0-9]\b/,                   // 4xx HTTP codes
+  /permission denied/i,
+  /invalid (?:argument|request)/i,
+  /not found/i,
+  /authentication/i,
+  /unauthorized/i,
+];
+
+const messageMatches = (msg, patterns) => {
+  if (typeof msg !== 'string' || !msg) return false;
+  return patterns.some((re) => re.test(msg));
+};
+
 const isRetriableProviderError = (err) => {
   if (!err) return false;
-  // Anthropic SDK exposes `.status`; Google SDK exposes `.statusCode`/`.code`.
+  // Anthropic SDK exposes `.status`; Google SDK exposes `.status` on
+  // GoogleGenerativeAIFetchError. Also support the older `.statusCode` and
+  // axios-style `.response.status`.
   const status =
     err.status ?? err.statusCode ?? (typeof err.response?.status === 'number' ? err.response.status : null);
   if (typeof status === 'number') {
@@ -57,6 +98,14 @@ const isRetriableProviderError = (err) => {
   // Aborted fetches surface as DOMException name=AbortError — those are typically
   // intentional (caller bailed). Don't retry.
   if (err.name === 'AbortError') return false;
+  // Fallback: parse the message string. Lets us catch SDK-wrapped errors
+  // where the structured props were lost in translation. Permanent patterns
+  // win over transient ones — a "400 Invalid argument" should not retry
+  // even though "400" technically matches no transient pattern. (We list 4xx
+  // explicitly in the permanent set for safety.)
+  const msg = err.message || '';
+  if (messageMatches(msg, PERMANENT_MESSAGE_PATTERNS)) return false;
+  if (messageMatches(msg, TRANSIENT_MESSAGE_PATTERNS)) return true;
   // Default: don't retry an unknown shape. Better one extra failure than a
   // runaway loop on a permanent error.
   return false;

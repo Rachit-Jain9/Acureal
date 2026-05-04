@@ -170,28 +170,15 @@ async function callGemini(prompt, base64Data, mimeType, attach = {}, options = {
   });
 }
 
-// Transient errors worth retrying: rate limits, capacity throttling,
-// transport hiccups, and Gemini's own "high demand" 5xx responses. The
-// classifyer is conservative — anything that looks like a real semantic
-// error (4xx other than 429, parse errors) is NOT retried.
-function isTransientGeminiError(error) {
-  const message = String(error?.message || error || '');
-  if (/timed out after/i.test(message)) return true;
-  if (/\b(429|503|502|504|500)\b/.test(message)) return true;
-  if (/high demand|temporarily unavailable|service unavailable|RESOURCE_EXHAUSTED|UNAVAILABLE|fetch failed|ECONN|ETIMEDOUT|ENETDOWN|EAI_AGAIN/i.test(message)) {
-    return true;
-  }
-  return false;
-}
-
-const EXTRACTION_RETRY_DELAYS_MS = [1500, 4000];
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Resilient extraction: try Gemini up to 3 times (initial + 2 retries with
-// exponential backoff) for transient errors, then fall back to Claude with
-// the same PDF/image. Returns { rawText, provider, fallbackReason } so the
-// caller can record which engine produced the output.
+// Resilient extraction: try Gemini once, then fall back to Claude with the
+// same PDF/image if the Gemini call fails. Retry of the Gemini call on
+// transient errors is handled inside `aiRouter.runGeminiInline` (see
+// `aiRetry.isRetriableProviderError` for the classifier) — by the time
+// runGeminiInline throws here, Gemini has already been retried 3× with
+// exponential backoff and we know it's permanently down for this request.
+//
+// Returns { rawText, provider, fallbackReason } so the caller can record
+// which engine produced the output.
 //
 // Both the Gemini path and the Claude fallback share the same response-cache
 // key (built from prompt_sha256 + file sha256 + mime type) — a hit on EITHER
@@ -199,21 +186,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // pass `cache` so we never accidentally cache calls whose inputs are not
 // fully reconstructable.
 async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach = {}, cache = null, metadata = null }) {
-  let lastError = null;
-  for (let attempt = 0; attempt <= EXTRACTION_RETRY_DELAYS_MS.length; attempt += 1) {
-    if (attempt > 0) {
-      await sleep(EXTRACTION_RETRY_DELAYS_MS[attempt - 1]);
-    }
-    try {
-      const rawText = await callGemini(prompt, base64Data, mimeType, attach, { cache, metadata });
-      return { rawText, provider: 'gemini', attempts: attempt + 1, fallbackReason: null };
-    } catch (error) {
-      lastError = error;
-      if (!isTransientGeminiError(error)) break;
-    }
+  let geminiError = null;
+  try {
+    const rawText = await callGemini(prompt, base64Data, mimeType, attach, { cache, metadata });
+    return { rawText, provider: 'gemini', fallbackReason: null };
+  } catch (error) {
+    geminiError = error;
   }
 
-  // Gemini exhausted — try Claude with the document directly.
+  // Gemini exhausted (router-level retries already happened) — try Claude
+  // with the document directly.
   if (getProviderAvailability().claude) {
     try {
       const rawText = await runClaudeWithDocument({
@@ -229,19 +211,18 @@ async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach
       return {
         rawText,
         provider: 'claude_fallback',
-        attempts: EXTRACTION_RETRY_DELAYS_MS.length + 2,
-        fallbackReason: lastError?.message || 'Gemini exhausted retries',
+        fallbackReason: geminiError?.message || 'Gemini call failed',
       };
     } catch (claudeError) {
       const combined = new Error(
-        `Gemini failed (${lastError?.message || 'unknown'}); Claude fallback also failed (${claudeError.message || 'unknown'}).`,
+        `Gemini failed (${geminiError?.message || 'unknown'}); Claude fallback also failed (${claudeError.message || 'unknown'}).`,
       );
       combined.cause = claudeError;
       throw combined;
     }
   }
 
-  throw lastError || new Error('Gemini extraction failed and Claude fallback is not configured.');
+  throw geminiError || new Error('Gemini extraction failed and Claude fallback is not configured.');
 }
 
 const withTimeout = (promise, ms, label) =>
@@ -849,7 +830,6 @@ module.exports = {
   extractDocument,
   extractStoredFileFields,
   callExtractionWithFallback,
-  isTransientGeminiError,
   getExtractionByDocument,
   getDealExtractions,
   applyCorrections,

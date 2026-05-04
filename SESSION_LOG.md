@@ -4,6 +4,30 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-04 (Consolidate AI retry at router layer — PR #151)
+
+**What was worked on in plain English:**
+- After PR #149 added retry to the AI router, the document-extraction code still had its own (older) retry loop wrapped around the same calls. That meant a Gemini failure was retried up to 9 times before falling back to Claude — wasteful and slow. Now retry happens in exactly one place (the router), with the same 3-attempt budget. Total attempts went from up-to-9-then-Claude to 3-then-Claude.
+- Made the retry classifier smarter: it now also recognises Gemini's error messages even when the underlying error code got lost in translation through the SDK ("RESOURCE_EXHAUSTED", "high demand", embedded HTTP codes, etc.). The classifier still refuses to retry permanent errors (auth, validation, content policy) — even if they happen to mention something that *looks* transient.
+- Net result: cleaner code (one retry path instead of two), faster recovery (the new backoff is 250ms→500ms→1s instead of 1.5s→4s), no behavior loss.
+
+**PRs opened/merged:**
+- PR #151 — `refactor(ai): consolidate retry at router layer; remove duplicate extraction loop` — squash-merged.
+
+**Verification:**
+- Backend test suite: **702 → 707** (+5 net: +16 new message-string classifier cases in aiRetry, -11 cases moved out of extractionFallback now that the retry classifier lives in one place).
+- Frontend production build: clean.
+- No migration; no env-var change.
+
+**What's left:**
+- Vercel AI SDK migration (S16) — larger bet.
+- OpenTelemetry tracing per `routeAi` call.
+- Zod validation at provider boundary for structured outputs.
+- Streaming for long Claude calls (IC memo).
+- pgvector for semantic search (Phase 4).
+
+---
+
 ## 2026-05-04 (Skeleton loading migration to 7 high-traffic pages — PR #150)
 
 **What was worked on in plain English:**

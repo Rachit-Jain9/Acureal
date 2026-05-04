@@ -56,6 +56,37 @@ describe('isRetriableProviderError', () => {
     expect(isRetriableProviderError({ response: { status: 500 } })).toBe(true);
     expect(isRetriableProviderError({ response: { status: 401 } })).toBe(false);
   });
+
+  // Message-string fallback: covers SDK-wrapped errors where the structured
+  // props are lost. This is the path that catches Gemini's transient throws
+  // when they bubble up through several layers of wrapping.
+  describe('message-string fallback', () => {
+    test.each([
+      'Error fetching from https://generativelanguage.googleapis.com 503 Service Unavailable',
+      '[GoogleGenerativeAI Error]: 429 Too Many Requests',
+      'Gemini call timed out after 60000ms',
+      'fetch failed',
+      'high demand. Please try again later.',
+      'RESOURCE_EXHAUSTED',
+      'UNAVAILABLE',
+      'Service unavailable',
+      'ECONNRESET while reading response',
+    ])('treats %s as transient', (msg) => {
+      expect(isRetriableProviderError(new Error(msg))).toBe(true);
+    });
+
+    test.each([
+      'Invalid request: missing prompt',
+      'Permission denied',
+      '404 Not Found',
+      '400 Invalid argument: missing parameter',
+      'Authentication failed',
+      'Unauthorized',
+      'JSON parse failed: unexpected token',
+    ])('treats %s as non-transient', (msg) => {
+      expect(isRetriableProviderError(new Error(msg))).toBe(false);
+    });
+  });
 });
 
 describe('computeDelay', () => {
