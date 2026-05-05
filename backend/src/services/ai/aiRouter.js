@@ -43,11 +43,11 @@ const { withRetry, isRetriableProviderError, DEFAULT_RETRY_OPTIONS } = require('
 const routingConfigService = require('./routingConfig');
 const { withAiSpan } = require('../../lib/aiTrace');
 
-// Approximate USD cost per 1M tokens, sourced from public pricing pages
-// (Gemini 2.5 flash, Claude Sonnet 4.6, GPT-4o-mini). Used as a directional
-// signal for cost dashboards — not as a billing ledger. Override in env via
-// AI_COST_OVERRIDES_JSON if pricing shifts.
+// Approximate USD cost per 1M tokens, sourced from public pricing pages.
+// Used as a directional signal for cost dashboards — not as a billing
+// ledger. Override in env via AI_COST_OVERRIDES_JSON if pricing shifts.
 const DEFAULT_COSTS_PER_M_TOKENS = {
+  'gemini:gemini-3-flash-preview': { input: 0.50,  output: 3.00 },
   'gemini:gemini-2.5-flash':       { input: 0.075, output: 0.30 },
   'gemini:gemini-2.5-pro':         { input: 1.25,  output: 5.00 },
   'gemini:gemini-1.5-pro':         { input: 1.25,  output: 5.00 },
@@ -55,6 +55,10 @@ const DEFAULT_COSTS_PER_M_TOKENS = {
   'claude:claude-sonnet-4-6':      { input: 3.00,  output: 15.00 },
   'claude:claude-opus-4':          { input: 15.0,  output: 75.00 },
   'claude:claude-haiku-4':         { input: 0.80,  output: 4.00 },
+  'openai:gpt-5.5':                { input: 5.00,  output: 30.00 },
+  'openai:gpt-5.5-pro':             { input: 15.0,  output: 75.00 },
+  'openai:gpt-5.4':                { input: 2.50,  output: 10.00 },
+  'openai:gpt-5.4-mini':            { input: 0.25,  output: 1.00 },
   'openai:gpt-4o-mini':            { input: 0.15,  output: 0.60 },
   'openai:gpt-4o':                 { input: 2.50,  output: 10.00 },
   // Embeddings — `output` is 0 since embeddings have no completion tokens.
@@ -238,9 +242,9 @@ const resolveProviderForTask = (task) => {
 };
 
 const resolveDefaultModel = (provider) => {
-  if (provider === 'gemini') return process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  if (provider === 'gemini') return process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
   if (provider === 'claude') return process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
-  if (provider === 'openai') return process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  if (provider === 'openai') return process.env.OPENAI_MODEL || 'gpt-5.4';
   return 'unknown';
 };
 

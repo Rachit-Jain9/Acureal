@@ -6,8 +6,8 @@ let geminiClient = null;
 let anthropicClient = null;
 let openaiClient = null;
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+const DEFAULT_GEMINI_MODEL = 'gemini-3-flash-preview';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
 const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
 const getProviderAvailability = () => ({
