@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Brain,
   TrendingUp,
@@ -33,9 +33,30 @@ import {
 } from '../hooks/useIntelligence';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import DataToolbar from '../components/common/DataToolbar';
+import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
 import { SkeletonKpi, SkeletonCard, Skeleton } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
 import useAuthStore from '../store/authStore';
+
+// Helper: build cluster filter options from a row set with `cluster` field.
+const buildClusterOptions = (rows) => {
+  const counts = {};
+  for (const r of rows) {
+    const c = r.cluster || 'Other';
+    counts[c] = (counts[c] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([value, count]) => ({ value, label: value, count }))
+    .sort((a, b) => b.count - a.count);
+};
+
+// Helper: filter a set of rows by a search term across the given keys.
+const matchesSearch = (row, term, keys) => {
+  if (!term) return true;
+  const t = term.toLowerCase();
+  return keys.some((k) => String(row[k] ?? '').toLowerCase().includes(t));
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -307,15 +328,28 @@ function TransactionTable({ rows }) {
 
 function BenchmarksTable({ rows }) {
   const [showAll, setShowAll] = useState(false);
+  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all'); // all | listing | ipc
+  const [sort, setSort] = useState({ key: 'avg_price_max_per_sqft', dir: 'desc' });
 
-  const filteredRows = rows.filter((r) => {
-    if (filter === 'listing') return r.data_type === 'listing_q1_2026';
-    if (filter === 'ipc')     return r.data_type === 'ipc_q1_2026';
-    return true;
-  });
-  const visible = showAll ? filteredRows : filteredRows.slice(0, 12);
-  const maxPrice = Math.max(...filteredRows.map((r) => r.avg_price_max_per_sqft || 0));
+  const onSort = useCallback((k) => setSort((p) => cycleSort(k, p)), []);
+
+  const filteredRows = useMemo(() => rows.filter((r) => {
+    if (filter === 'listing' && r.data_type !== 'listing_q1_2026') return false;
+    if (filter === 'ipc'     && r.data_type !== 'ipc_q1_2026')     return false;
+    return matchesSearch(r, search, ['micro_market', 'anchor_hub', 'data_period']);
+  }), [rows, filter, search]);
+
+  const sortedRows = useMemo(() => applySort(filteredRows, sort, {
+    yoy_change: (r) => Number(r.yoy_growth_max_pct ?? r.yoy_growth_min_pct ?? 0),
+    avg_price_max_per_sqft: (r) => Number(r.avg_price_max_per_sqft ?? 0),
+    avg_price_min_per_sqft: (r) => Number(r.avg_price_min_per_sqft ?? 0),
+    sro_rate_per_sqft: (r) => Number(r.sro_rate_per_sqft ?? 0),
+    micro_market: (r) => r.micro_market || '',
+  }), [filteredRows, sort]);
+
+  const visible = showAll ? sortedRows : sortedRows.slice(0, 12);
+  const maxPrice = Math.max(...sortedRows.map((r) => r.avg_price_max_per_sqft || 0));
 
   const dataTypeLabel = {
     listing_q1_2026: { tone: 'info',    label: 'Listing Q1 2026' },
@@ -324,36 +358,34 @@ function BenchmarksTable({ rows }) {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {[
-          { key: 'all', label: `All (${rows.length})` },
-          { key: 'listing', label: `99acres listings (${rows.filter((r) => r.data_type === 'listing_q1_2026').length})` },
-          { key: 'ipc', label: `C&W IPC (${rows.filter((r) => r.data_type === 'ipc_q1_2026').length})` },
-        ].map((opt) => (
-          <button
-            key={opt.key}
-            type="button"
-            onClick={() => { setFilter(opt.key); setShowAll(false); }}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition ${
-              filter === opt.key
-                ? 'bg-content-primary text-white border-content-primary'
-                : 'bg-white text-content-secondary border-hairline-strong hover:bg-bg-secondary'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search micro-market or anchor hub…"
+          ariaLabel="Search residential micro-markets"
+        />
+        <DataToolbar.Chips
+          value={filter === 'all' ? null : filter}
+          onChange={(v) => { setFilter(v || 'all'); setShowAll(false); }}
+          options={[
+            { value: 'listing', label: '99acres listings', count: rows.filter((r) => r.data_type === 'listing_q1_2026').length },
+            { value: 'ipc',     label: 'C&W IPC',          count: rows.filter((r) => r.data_type === 'ipc_q1_2026').length },
+          ]}
+          allowAll
+          allLabel="All sources"
+        />
       </div>
       <div className="overflow-x-auto -mx-5">
         <table className="w-full text-xs border-collapse min-w-[760px]">
           <thead>
             <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Micro-Market</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Range (₹/sqft)</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">SRO ₹/sf</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Anchor Hub</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Source</th>
+              <SortableHeader sortKey="micro_market" sort={sort} onSort={onSort} className="py-2 px-3">Micro-Market</SortableHeader>
+              <SortableHeader sortKey="avg_price_max_per_sqft" sort={sort} onSort={onSort} className="py-2 px-3">Range (₹/sqft)</SortableHeader>
+              <SortableHeader sortKey="yoy_change" sort={sort} onSort={onSort} align="right" className="py-2 px-3">YoY</SortableHeader>
+              <SortableHeader sortKey="sro_rate_per_sqft" sort={sort} onSort={onSort} align="right" className="py-2 px-3">SRO ₹/sf</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Anchor Hub</th>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary whitespace-nowrap">Source</th>
             </tr>
           </thead>
           <tbody>
@@ -407,14 +439,14 @@ function BenchmarksTable({ rows }) {
           </tbody>
         </table>
       </div>
-      {filteredRows.length > 12 && (
+      {sortedRows.length > 12 && (
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="mt-3 text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
+          className="mt-3 text-xs font-medium text-primary-500 hover:text-primary-600 flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 -mx-1"
         >
-          <ChevronDown size={13} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
-          {showAll ? 'Show less' : `Show all ${filteredRows.length} rows`}
+          <ChevronDown size={13} className={`transition-transform duration-150 ${showAll ? 'rotate-180' : ''}`} />
+          {showAll ? 'Show less' : `Show all ${sortedRows.length} rows`}
         </button>
       )}
       <p className="mt-3 text-xs text-content-muted">
@@ -466,11 +498,54 @@ function MacroKpiTile({ kpi }) {
 
 function OfficeBenchmarksTable({ rows }) {
   const [showSubmarkets, setShowSubmarkets] = useState(false);
-  const ipcRows = rows.filter((r) => r.level_type === 'ipc_zone');
-  const subRows = rows.filter((r) => r.level_type === 'submarket');
+  const [search, setSearch] = useState('');
+  const [cluster, setCluster] = useState(null);
+  const [ipcSort, setIpcSort] = useState({ key: 'vacancy_pct', dir: 'asc' });
+  const [subSort, setSubSort] = useState({ key: 'grade_a_rent_high_psf_month', dir: 'desc' });
+
+  const onIpcSort = useCallback((k) => setIpcSort((p) => cycleSort(k, p)), []);
+  const onSubSort = useCallback((k) => setSubSort((p) => cycleSort(k, p)), []);
+
+  const allSubRows = rows.filter((r) => r.level_type === 'submarket');
+  const ipcRowsAll = rows.filter((r) => r.level_type === 'ipc_zone');
+
+  const filterFn = (r) =>
+    matchesSearch(r, search, ['submarket', 'cluster', 'notes']) &&
+    (!cluster || r.cluster === cluster);
+
+  const ipcRows = useMemo(() => applySort(ipcRowsAll.filter(filterFn), ipcSort, {
+    vacancy_pct: (r) => Number(r.vacancy_pct ?? 999),
+    stock_weighted_rent_psf_month: (r) => Number(r.stock_weighted_rent_psf_month ?? 0),
+    submarket: (r) => r.submarket || '',
+  }), [ipcRowsAll, search, cluster, ipcSort]);
+
+  const subRows = useMemo(() => applySort(allSubRows.filter(filterFn), subSort, {
+    grade_a_rent_high_psf_month: (r) => Number(r.grade_a_rent_high_psf_month ?? 0),
+    grade_a_rent_low_psf_month: (r) => Number(r.grade_a_rent_low_psf_month ?? 0),
+    yoy_change_pct: (r) => Number(r.yoy_change_pct ?? 0),
+    submarket: (r) => r.submarket || '',
+  }), [allSubRows, search, cluster, subSort]);
+
+  const clusterOptions = useMemo(() => buildClusterOptions(allSubRows), [allSubRows]);
 
   return (
     <div>
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search submarket, cluster, notes…"
+          ariaLabel="Search office benchmarks"
+        />
+        <DataToolbar.Chips
+          label="Cluster"
+          value={cluster}
+          onChange={setCluster}
+          options={clusterOptions}
+          allowAll
+          allLabel="All clusters"
+        />
+      </div>
       <p className="text-[11px] text-content-muted mb-2">
         IPC zone-level (Cushman &amp; Wakefield, stock-weighted Grade A)
       </p>
@@ -478,11 +553,11 @@ function OfficeBenchmarksTable({ rows }) {
         <table className="w-full text-xs border-collapse min-w-[640px]">
           <thead>
             <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Zone</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Vacancy</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">SW Rent</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary max-w-[260px]">Notes</th>
+              <SortableHeader sortKey="submarket" sort={ipcSort} onSort={onIpcSort} className="py-2 px-3">Zone</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Cluster</th>
+              <SortableHeader sortKey="vacancy_pct" sort={ipcSort} onSort={onIpcSort} align="right" className="py-2 px-3">Vacancy</SortableHeader>
+              <SortableHeader sortKey="stock_weighted_rent_psf_month" sort={ipcSort} onSort={onIpcSort} align="right" className="py-2 px-3">SW Rent</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary max-w-[260px]">Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -512,10 +587,10 @@ function OfficeBenchmarksTable({ rows }) {
       <button
         type="button"
         onClick={() => setShowSubmarkets((v) => !v)}
-        className="mt-3 text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
+        className="mt-3 text-xs font-medium text-primary-500 hover:text-primary-600 flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 -mx-1"
       >
-        <ChevronDown size={13} className={`transition-transform ${showSubmarkets ? 'rotate-180' : ''}`} />
-        {showSubmarkets ? 'Hide submarket Grade A range' : `Show ${subRows.length} submarket Grade A ranges`}
+        <ChevronDown size={13} className={`transition-transform duration-150 ${showSubmarkets ? 'rotate-180' : ''}`} />
+        {showSubmarkets ? 'Hide submarket Grade A range' : `Show ${subRows.length} submarket Grade A range${subRows.length === 1 ? '' : 's'}`}
       </button>
 
       {showSubmarkets && (
@@ -523,11 +598,11 @@ function OfficeBenchmarksTable({ rows }) {
           <table className="w-full text-xs border-collapse min-w-[640px]">
             <thead>
               <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
-                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Grade A (₹/sf/mo)</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Grade B (₹/sf/mo)</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+                <SortableHeader sortKey="submarket" sort={subSort} onSort={onSubSort} className="py-2 px-3">Submarket</SortableHeader>
+                <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Cluster</th>
+                <SortableHeader sortKey="grade_a_rent_high_psf_month" sort={subSort} onSort={onSubSort} align="right" className="py-2 px-3">Grade A (₹/sf/mo)</SortableHeader>
+                <SortableHeader sortKey="grade_a_rent_low_psf_month" sort={subSort} onSort={onSubSort} align="right" className="py-2 px-3">Grade B (₹/sf/mo)</SortableHeader>
+                <SortableHeader sortKey="yoy_change_pct" sort={subSort} onSort={onSubSort} align="right" className="py-2 px-3">YoY</SortableHeader>
               </tr>
             </thead>
             <tbody>
@@ -561,36 +636,79 @@ function OfficeBenchmarksTable({ rows }) {
 }
 
 function RetailBenchmarksTable({ rows }) {
-  const highStreet = rows.filter((r) => r.format === 'high_street');
-  const malls = rows.filter((r) => r.format === 'mall_grade_a');
+  const [search, setSearch] = useState('');
+  const [format, setFormat] = useState(null); // null = both
+  const [hsSort, setHsSort] = useState({ key: 'rent_avg_psf_month', dir: 'desc' });
+  const [mallSort, setMallSort] = useState({ key: 'rent_high_psf_month', dir: 'desc' });
+
+  const onHsSort = useCallback((k) => setHsSort((p) => cycleSort(k, p)), []);
+  const onMallSort = useCallback((k) => setMallSort((p) => cycleSort(k, p)), []);
+
+  const filterFn = (r) => matchesSearch(r, search, ['corridor', 'cluster', 'notes']);
+
+  const highStreet = useMemo(() => applySort(rows.filter((r) => r.format === 'high_street').filter(filterFn), hsSort, {
+    rent_avg_psf_month: (r) => Number(r.rent_avg_psf_month ?? 0),
+    yoy_change_pct: (r) => Number(r.yoy_change_pct ?? 0),
+    qoq_change_pct: (r) => Number(r.qoq_change_pct ?? 0),
+    corridor: (r) => r.corridor || '',
+  }), [rows, search, hsSort]);
+
+  const malls = useMemo(() => applySort(rows.filter((r) => r.format === 'mall_grade_a').filter(filterFn), mallSort, {
+    rent_high_psf_month: (r) => Number(r.rent_high_psf_month ?? 0),
+    rent_low_psf_month: (r) => Number(r.rent_low_psf_month ?? 0),
+    corridor: (r) => r.corridor || '',
+  }), [rows, search, mallSort]);
+
+  const showHS = format !== 'mall_grade_a';
+  const showMalls = format !== 'high_street';
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search corridor, cluster, mall…"
+          ariaLabel="Search retail benchmarks"
+        />
+        <DataToolbar.Chips
+          label="Format"
+          value={format}
+          onChange={setFormat}
+          options={[
+            { value: 'high_street',  label: 'High street', count: rows.filter((r) => r.format === 'high_street').length },
+            { value: 'mall_grade_a', label: 'Grade A mall', count: rows.filter((r) => r.format === 'mall_grade_a').length },
+          ]}
+          allowAll
+          allLabel="Both"
+        />
+      </div>
+      {showHS && (
       <div>
         <p className="text-[11px] text-content-muted mb-2">High-street vanilla GF (carpet) — Cushman &amp; Wakefield Q1 2026</p>
         <div className="overflow-x-auto -mx-5">
           <table className="w-full text-xs border-collapse min-w-[600px]">
             <thead>
               <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Corridor</th>
-                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Avg ₹/sf/mo</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">QoQ</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+                <SortableHeader sortKey="corridor" sort={hsSort} onSort={onHsSort} className="py-2 px-3">Corridor</SortableHeader>
+                <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Cluster</th>
+                <SortableHeader sortKey="rent_avg_psf_month" sort={hsSort} onSort={onHsSort} align="right" className="py-2 px-3">Avg ₹/sf/mo</SortableHeader>
+                <SortableHeader sortKey="qoq_change_pct" sort={hsSort} onSort={onHsSort} align="right" className="py-2 px-3">QoQ</SortableHeader>
+                <SortableHeader sortKey="yoy_change_pct" sort={hsSort} onSort={onHsSort} align="right" className="py-2 px-3">YoY</SortableHeader>
               </tr>
             </thead>
             <tbody>
               {highStreet.map((r) => (
-                <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                <tr key={r.id} className="border-b border-hairline transition-colors duration-150 ease-out hover:bg-bg-secondary">
                   <td className="py-2 px-3 font-medium text-content-primary">{r.corridor}</td>
                   <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
                   <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
                     ₹{r.rent_avg_psf_month}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600">
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500">
                     +{r.qoq_change_pct}%
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500 font-medium">
                     +{r.yoy_change_pct}%
                   </td>
                 </tr>
@@ -599,18 +717,19 @@ function RetailBenchmarksTable({ rows }) {
           </table>
         </div>
       </div>
+      )}
 
-      {malls.length > 0 && (
+      {showMalls && malls.length > 0 && (
         <div>
           <p className="text-[11px] text-content-muted mb-2">Grade A malls — Occupi.in 2025 line-shop range</p>
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-xs border-collapse min-w-[560px]">
               <thead>
                 <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Mall</th>
-                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
-                  <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Range ₹/sf/mo</th>
-                  <th className="text-left py-2 px-3 font-semibold text-content-secondary max-w-[240px]">Notes</th>
+                  <SortableHeader sortKey="corridor" sort={mallSort} onSort={onMallSort} className="py-2 px-3">Mall</SortableHeader>
+                  <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Cluster</th>
+                  <SortableHeader sortKey="rent_high_psf_month" sort={mallSort} onSort={onMallSort} align="right" className="py-2 px-3">Range ₹/sf/mo</SortableHeader>
+                  <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary max-w-[240px]">Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -634,9 +753,35 @@ function RetailBenchmarksTable({ rows }) {
 }
 
 function IndustrialBenchmarksTable({ rows }) {
-  const industrial = rows.filter((r) => r.segment === 'industrial');
-  const warehouse = rows.filter((r) => r.segment === 'warehouse');
-  const land = rows.filter((r) => r.segment === 'serviced_land');
+  const [search, setSearch] = useState('');
+  const [segment, setSegment] = useState(null);
+  const [rentSort, setRentSort] = useState({ key: 'rent_high_psf_month', dir: 'desc' });
+  const [landSort, setLandSort] = useState({ key: 'land_value_high_inr_mn_per_acre', dir: 'desc' });
+
+  const onRentSort = useCallback((k) => setRentSort((p) => cycleSort(k, p)), []);
+  const onLandSort = useCallback((k) => setLandSort((p) => cycleSort(k, p)), []);
+
+  const filterFn = (r) => matchesSearch(r, search, ['submarket', 'cluster', 'notes']);
+
+  const sortRent = (items) => applySort(items, rentSort, {
+    rent_high_psf_month: (r) => Number(r.rent_high_psf_month ?? 0),
+    rent_low_psf_month: (r) => Number(r.rent_low_psf_month ?? 0),
+    yoy_change_pct: (r) => Number(r.yoy_change_pct ?? 0),
+    submarket: (r) => r.submarket || '',
+  });
+
+  const industrial = useMemo(() => sortRent(rows.filter((r) => r.segment === 'industrial').filter(filterFn)), [rows, search, rentSort]);
+  const warehouse = useMemo(() => sortRent(rows.filter((r) => r.segment === 'warehouse').filter(filterFn)), [rows, search, rentSort]);
+  const land = useMemo(() => applySort(rows.filter((r) => r.segment === 'serviced_land').filter(filterFn), landSort, {
+    land_value_high_inr_mn_per_acre: (r) => Number(r.land_value_high_inr_mn_per_acre ?? 0),
+    land_value_low_inr_mn_per_acre: (r) => Number(r.land_value_low_inr_mn_per_acre ?? 0),
+    yoy_change_pct: (r) => Number(r.yoy_change_pct ?? 0),
+    submarket: (r) => r.submarket || '',
+  }), [rows, search, landSort]);
+
+  const showIndustrial = segment === null || segment === 'industrial';
+  const showWarehouse  = segment === null || segment === 'warehouse';
+  const showLand       = segment === null || segment === 'serviced_land';
 
   const RentTable = ({ title, items }) => (
     items.length > 0 && (
@@ -646,21 +791,21 @@ function IndustrialBenchmarksTable({ rows }) {
           <table className="w-full text-xs border-collapse min-w-[520px]">
             <thead>
               <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
-                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Rent ₹/sf/mo</th>
-                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+                <SortableHeader sortKey="submarket" sort={rentSort} onSort={onRentSort} className="py-2 px-3">Submarket</SortableHeader>
+                <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Cluster</th>
+                <SortableHeader sortKey="rent_high_psf_month" sort={rentSort} onSort={onRentSort} align="right" className="py-2 px-3">Rent ₹/sf/mo</SortableHeader>
+                <SortableHeader sortKey="yoy_change_pct" sort={rentSort} onSort={onRentSort} align="right" className="py-2 px-3">YoY</SortableHeader>
               </tr>
             </thead>
             <tbody>
               {items.map((r) => (
-                <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                <tr key={r.id} className="border-b border-hairline transition-colors duration-150 ease-out hover:bg-bg-secondary">
                   <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
                   <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
                   <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
                     ₹{r.rent_low_psf_month}–{r.rent_high_psf_month}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500 font-medium">
                     +{Number(r.yoy_change_pct).toFixed(1)}%
                   </td>
                 </tr>
@@ -674,30 +819,50 @@ function IndustrialBenchmarksTable({ rows }) {
 
   return (
     <div className="space-y-4">
-      <RentTable title="Industrial / manufacturing rents" items={industrial} />
-      <RentTable title="Warehouse / 3PL rents" items={warehouse} />
-      {land.length > 0 && (
+      <div className="flex items-center gap-3 flex-wrap">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search submarket, cluster, notes…"
+          ariaLabel="Search industrial benchmarks"
+        />
+        <DataToolbar.Chips
+          label="Segment"
+          value={segment}
+          onChange={setSegment}
+          options={[
+            { value: 'industrial',     label: 'Industrial', count: rows.filter((r) => r.segment === 'industrial').length },
+            { value: 'warehouse',      label: 'Warehouse',  count: rows.filter((r) => r.segment === 'warehouse').length },
+            { value: 'serviced_land',  label: 'Serviced land', count: rows.filter((r) => r.segment === 'serviced_land').length },
+          ]}
+          allowAll
+          allLabel="All"
+        />
+      </div>
+      {showIndustrial && <RentTable title="Industrial / manufacturing rents" items={industrial} />}
+      {showWarehouse && <RentTable title="Warehouse / 3PL rents" items={warehouse} />}
+      {showLand && land.length > 0 && (
         <div>
           <p className="text-[11px] text-content-muted mb-2">Serviced industrial land (₹ million / acre)</p>
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-xs border-collapse min-w-[520px]">
               <thead>
                 <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
-                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
-                  <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Range ₹ mn/acre</th>
-                  <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+                  <SortableHeader sortKey="submarket" sort={landSort} onSort={onLandSort} className="py-2 px-3">Submarket</SortableHeader>
+                  <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Cluster</th>
+                  <SortableHeader sortKey="land_value_high_inr_mn_per_acre" sort={landSort} onSort={onLandSort} align="right" className="py-2 px-3">Range ₹ mn/acre</SortableHeader>
+                  <SortableHeader sortKey="yoy_change_pct" sort={landSort} onSort={onLandSort} align="right" className="py-2 px-3">YoY</SortableHeader>
                 </tr>
               </thead>
               <tbody>
                 {land.map((r) => (
-                  <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                  <tr key={r.id} className="border-b border-hairline transition-colors duration-150 ease-out hover:bg-bg-secondary">
                     <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
                     <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
                     <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
                       ₹{r.land_value_low_inr_mn_per_acre}–{r.land_value_high_inr_mn_per_acre}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                    <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500 font-medium">
                       +{Number(r.yoy_change_pct).toFixed(1)}%
                     </td>
                   </tr>
@@ -723,22 +888,67 @@ function HospitalityBenchmarksTable({ rows }) {
     midscale_economy: 'Midscale / Economy',
   };
 
+  const [search, setSearch] = useState('');
+  const [segment, setSegment] = useState(null);
+  const [sort, setSort] = useState({ key: 'adr_high_inr', dir: 'desc' });
+  const onSort = useCallback((k) => setSort((p) => cycleSort(k, p)), []);
+
+  const filtered = useMemo(() => rows.filter((r) =>
+    matchesSearch(r, search, ['submarket', 'cluster', 'notes']) &&
+    (!segment || r.segment === segment)
+  ), [rows, search, segment]);
+
+  const sorted = useMemo(() => applySort(filtered, sort, {
+    adr_high_inr: (r) => Number(r.adr_high_inr ?? 0),
+    adr_low_inr: (r) => Number(r.adr_low_inr ?? 0),
+    occupancy_pct: (r) => Number(r.occupancy_pct ?? 0),
+    revpar_inr: (r) => Number(r.revpar_inr ?? 0),
+    submarket: (r) => r.submarket || '',
+  }), [filtered, sort]);
+
+  const segmentOptions = useMemo(() => {
+    const counts = {};
+    for (const r of rows) {
+      const s = r.segment || 'citywide';
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    return Object.entries(counts).map(([value, count]) => ({
+      value, label: SEGMENT_LABEL[value] || value, count,
+    }));
+  }, [rows]);
+
   return (
     <div>
+      <div className="flex items-center gap-3 flex-wrap mb-3">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search submarket, cluster, brand…"
+          ariaLabel="Search hospitality benchmarks"
+        />
+        <DataToolbar.Chips
+          label="Segment"
+          value={segment}
+          onChange={setSegment}
+          options={segmentOptions}
+          allowAll
+          allLabel="All segments"
+        />
+      </div>
       <div className="overflow-x-auto -mx-5">
         <table className="w-full text-xs border-collapse min-w-[640px]">
           <thead>
             <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Segment</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">ADR ₹/key</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Occ %</th>
-              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">RevPAR ₹</th>
+              <SortableHeader sortKey="submarket" sort={sort} onSort={onSort} className="py-2 px-3">Submarket</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Segment</th>
+              <SortableHeader sortKey="adr_high_inr" sort={sort} onSort={onSort} align="right" className="py-2 px-3">ADR ₹/key</SortableHeader>
+              <SortableHeader sortKey="occupancy_pct" sort={sort} onSort={onSort} align="right" className="py-2 px-3">Occ %</SortableHeader>
+              <SortableHeader sortKey="revpar_inr" sort={sort} onSort={onSort} align="right" className="py-2 px-3">RevPAR ₹</SortableHeader>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+            {sorted.map((r) => (
+              <tr key={r.id} className="border-b border-hairline transition-colors duration-150 ease-out hover:bg-bg-secondary">
                 <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
                 <td className="py-2 px-3 text-content-secondary">{SEGMENT_LABEL[r.segment] || r.segment}</td>
                 <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">

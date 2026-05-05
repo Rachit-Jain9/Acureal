@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   Plus,
   Trash2,
-  Search,
   X,
   ChevronLeft,
   ChevronRight,
@@ -12,6 +11,8 @@ import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import DataToolbar from '../components/common/DataToolbar';
+import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
 import { SkeletonList } from '../design-system';
 import { formatINR } from '../utils/format';
 
@@ -20,6 +21,23 @@ const DATA_TYPE_LABEL = {
   listing_q1_2026:             { tone: 'info',    label: 'Listing · Q1 2026' },
   ipc_q1_2026:                 { tone: 'premium', label: 'IPC · Q1 2026' },
 };
+
+const SOURCE_FILTER_OPTIONS = [
+  { value: 'verified', label: 'Verified',   matches: (c) => c.is_verified || c.data_type === 'internal_benchmark_apr_2026' },
+  { value: 'listing',  label: 'Listing',    matches: (c) => c.data_type === 'listing_q1_2026' },
+  { value: 'ipc',      label: 'IPC',        matches: (c) => c.data_type === 'ipc_q1_2026' },
+];
+
+const SORT_OPTIONS = [
+  { value: 'created_desc',     label: 'Newest first',     key: 'created_at',     dir: 'desc' },
+  { value: 'rate_desc',        label: 'Rate ↓',           key: 'rate_per_sqft',  dir: 'desc' },
+  { value: 'rate_asc',         label: 'Rate ↑',           key: 'rate_per_sqft',  dir: 'asc'  },
+  { value: 'yoy_desc',         label: 'YoY ↓',            key: 'yoy_change_pct', dir: 'desc' },
+  { value: 'units_desc',       label: 'Units ↓',          key: 'total_units',    dir: 'desc' },
+  { value: 'launch_desc',      label: 'Launch year ↓',    key: 'launch_year',    dir: 'desc' },
+  { value: 'project_asc',      label: 'Project A→Z',      key: 'project_name',   dir: 'asc'  },
+  { value: 'locality_asc',     label: 'Locality A→Z',     key: 'locality',       dir: 'asc'  },
+];
 
 const PROJECT_TYPES = [
   { value: 'residential', label: 'Residential' },
@@ -266,15 +284,24 @@ export default function CompsPage() {
   const [filters, setFilters] = useState({
     city: '',
     projectType: '',
+    sourceType: null,
     minRate: '',
     maxRate: '',
   });
+  // Inline column-sort state. `key` matches the comp field name; `dir`
+  // is 'asc' | 'desc'. Default: newest first (created_at desc).
+  const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' });
   const [page, setPage] = useState(1);
 
   const pageSize = 15;
 
+  // Server-side filtering for cheap fields (search, city, projectType, rate).
+  // Source-type + sort + range happen client-side because they require richer
+  // data than the API exposes today (we have the full row already).
   const queryParams = useMemo(() => {
-    const params = { page, limit: pageSize };
+    // Pull a wider page so client-side sort/filter is meaningful even when
+    // the user's source-type slice is small.
+    const params = { page, limit: pageSize * 4 };
     if (search) params.search = search;
     if (filters.city) params.city = filters.city;
     if (filters.projectType) params.projectType = filters.projectType;
@@ -287,9 +314,41 @@ export default function CompsPage() {
   const createMutation = useCreateComp();
   const deleteMutation = useDeleteComp();
 
-  const comps = data?.data || [];
-  const totalPages = data?.pagination?.totalPages || 1;
-  const totalCount = data?.pagination?.total || comps.length;
+  const rawRows = data?.data || [];
+  const totalCount = data?.pagination?.total || rawRows.length;
+
+  // Client-side filter — source type and full-text safety net.
+  const filteredRows = useMemo(() => {
+    let rows = rawRows;
+    if (filters.sourceType) {
+      const opt = SOURCE_FILTER_OPTIONS.find((o) => o.value === filters.sourceType);
+      if (opt) rows = rows.filter(opt.matches);
+    }
+    return rows;
+  }, [rawRows, filters.sourceType]);
+
+  // Client-side sort using the SortableHeader helper.
+  const sortedRows = useMemo(
+    () => applySort(filteredRows, sort, {
+      created_at: (r) => (r.created_at ? new Date(r.created_at).getTime() : 0),
+    }),
+    [filteredRows, sort],
+  );
+
+  // Local pagination on the post-sort, post-filter set.
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visible = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  // Per-source-type counts for the chip group (uses the API-filtered rows
+  // — i.e. respects city/projectType/search but not source-type itself).
+  const sourceCounts = useMemo(() => {
+    const c = { verified: 0, listing: 0, ipc: 0 };
+    for (const r of rawRows) {
+      for (const o of SOURCE_FILTER_OPTIONS) if (o.matches(r)) c[o.value]++;
+    }
+    return c;
+  }, [rawRows]);
 
   const handleCreate = (compData) => {
     createMutation.mutate(compData, {
@@ -298,136 +357,143 @@ export default function CompsPage() {
   };
 
   const handleDelete = (id) => {
-    if (!window.confirm('Delete this comparable? This cannot be undone.')) {
-      return;
-    }
+    if (!window.confirm('Delete this comparable? This cannot be undone.')) return;
     deleteMutation.mutate(id);
   };
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
+  const updateFilter = useCallback((patch) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
     setPage(1);
-  };
+  }, []);
 
-  const clearFilters = () => {
-    setFilters({
-      city: '',
-      projectType: '',
-      minRate: '',
-      maxRate: '',
-    });
+  const clearFilters = useCallback(() => {
+    setFilters({ city: '', projectType: '', sourceType: null, minRate: '', maxRate: '' });
     setSearch('');
+    setSort({ key: 'created_at', dir: 'desc' });
     setPage(1);
-  };
+  }, []);
 
-  const hasActiveFilters =
-    search || filters.city || filters.projectType || filters.minRate || filters.maxRate;
+  const onSort = useCallback((key) => setSort((prev) => cycleSort(key, prev)), []);
+
+  // Active filter pill model — only includes things actually applied.
+  const activeFilters = useMemo(() => [
+    search && { id: 'search', label: 'Search', value: search, displayValue: `"${search}"` },
+    filters.city && { id: 'city', label: 'City', value: filters.city },
+    filters.projectType && {
+      id: 'projectType', label: 'Type',
+      value: filters.projectType,
+      displayValue: PROJECT_TYPES.find((p) => p.value === filters.projectType)?.label || filters.projectType,
+    },
+    filters.sourceType && {
+      id: 'sourceType', label: 'Source',
+      value: filters.sourceType,
+      displayValue: SOURCE_FILTER_OPTIONS.find((s) => s.value === filters.sourceType)?.label || filters.sourceType,
+    },
+    filters.minRate && { id: 'minRate', label: 'Min ₹/sqft', value: filters.minRate, displayValue: `≥ ₹${Number(filters.minRate).toLocaleString('en-IN')}` },
+    filters.maxRate && { id: 'maxRate', label: 'Max ₹/sqft', value: filters.maxRate, displayValue: `≤ ₹${Number(filters.maxRate).toLocaleString('en-IN')}` },
+  ].filter(Boolean), [search, filters]);
+
+  const removeFilter = useCallback((id) => {
+    if (id === 'search') setSearch('');
+    else if (id === 'sourceType') updateFilter({ sourceType: null });
+    else updateFilter({ [id]: '' });
+  }, [updateFilter]);
+
+  const hasActiveFilters = activeFilters.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Comparables"
-        description={`${totalCount} comparable${totalCount !== 1 ? 's' : ''} in the database`}
+        description={`${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`}
         actions={
-          <button
-            onClick={() => setShowModal(true)}
-            className="btn btn-primary"
-          >
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
             <Plus size={16} />
             Add Comp
           </button>
         }
       />
 
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-medium text-content-secondary mb-1">Search</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search projects, developers..."
-                className="input pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="w-40">
-            <label className="block text-xs font-medium text-content-secondary mb-1">City</label>
-            <input
-              name="city"
-              value={filters.city}
-              onChange={handleFilterChange}
-              placeholder="Any city"
-              className="input"
-            />
-          </div>
-
-          <div className="w-40">
-            <label className="block text-xs font-medium text-content-secondary mb-1">Project Type</label>
-            <select
-              name="projectType"
-              value={filters.projectType}
-              onChange={handleFilterChange}
-              className="input"
-            >
-              <option value="">All types</option>
-              {PROJECT_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="w-32">
-            <label className="block text-xs font-medium text-content-secondary mb-1">Min Rate</label>
-            <input
-              name="minRate"
-              type="number"
-              value={filters.minRate}
-              onChange={handleFilterChange}
-              placeholder="Min"
-              className="input"
-            />
-          </div>
-
-          <div className="w-32">
-            <label className="block text-xs font-medium text-content-secondary mb-1">Max Rate</label>
-            <input
-              name="maxRate"
-              type="number"
-              value={filters.maxRate}
-              onChange={handleFilterChange}
-              placeholder="Max"
-              className="input"
-            />
-          </div>
-
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-1 px-3 py-2 text-sm text-content-secondary hover:text-content-secondary hover:bg-bg-secondary rounded-lg transition"
-            >
-              <X size={14} />
-              Clear
-            </button>
-          )}
+      <DataToolbar>
+        <div className="flex flex-wrap items-center gap-3">
+          <DataToolbar.Search
+            value={search}
+            onChange={(v) => { setSearch(v); setPage(1); }}
+            placeholder="Search project, developer, RERA…"
+            ariaLabel="Search comparables"
+          />
+          <input
+            value={filters.city}
+            onChange={(e) => updateFilter({ city: e.target.value })}
+            placeholder="City"
+            aria-label="Filter by city"
+            className="w-32 px-3 py-2 rounded-lg text-sm bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400"
+          />
+          <input
+            type="number"
+            value={filters.minRate}
+            onChange={(e) => updateFilter({ minRate: e.target.value })}
+            placeholder="Min ₹/sqft"
+            aria-label="Minimum rate per sqft"
+            className="w-28 px-3 py-2 rounded-lg text-sm tabular-nums bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400"
+          />
+          <input
+            type="number"
+            value={filters.maxRate}
+            onChange={(e) => updateFilter({ maxRate: e.target.value })}
+            placeholder="Max ₹/sqft"
+            aria-label="Maximum rate per sqft"
+            className="w-28 px-3 py-2 rounded-lg text-sm tabular-nums bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400"
+          />
+          <DataToolbar.Sort
+            value={sort.key === 'created_at' && sort.dir === 'desc' ? 'created_desc'
+              : sort.key === 'rate_per_sqft' && sort.dir === 'desc' ? 'rate_desc'
+              : sort.key === 'rate_per_sqft' && sort.dir === 'asc'  ? 'rate_asc'
+              : sort.key === 'yoy_change_pct' && sort.dir === 'desc' ? 'yoy_desc'
+              : sort.key === 'total_units' && sort.dir === 'desc' ? 'units_desc'
+              : sort.key === 'launch_year' && sort.dir === 'desc' ? 'launch_desc'
+              : sort.key === 'project_name' && sort.dir === 'asc' ? 'project_asc'
+              : sort.key === 'locality' && sort.dir === 'asc' ? 'locality_asc'
+              : 'created_desc'}
+            onChange={(v) => {
+              const opt = SORT_OPTIONS.find((o) => o.value === v);
+              if (opt) setSort({ key: opt.key, dir: opt.dir });
+            }}
+            options={SORT_OPTIONS}
+          />
         </div>
-      </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <DataToolbar.Chips
+            label="Asset class"
+            value={filters.projectType || null}
+            onChange={(v) => updateFilter({ projectType: v || '' })}
+            options={PROJECT_TYPES.map((p) => ({ value: p.value, label: p.label }))}
+            allowAll
+            allLabel="All asset classes"
+          />
+          <DataToolbar.Chips
+            label="Source"
+            value={filters.sourceType}
+            onChange={(v) => updateFilter({ sourceType: v })}
+            options={SOURCE_FILTER_OPTIONS.map((s) => ({ value: s.value, label: s.label, count: sourceCounts[s.value] }))}
+            allowAll
+            allLabel="All sources"
+          />
+        </div>
+        <DataToolbar.ActiveFilters
+          filters={activeFilters}
+          onRemove={removeFilter}
+          onClearAll={clearFilters}
+          resultCount={sortedRows.length}
+          totalCount={rawRows.length}
+        />
+      </DataToolbar>
 
       {isLoading ? (
         <div className="bg-bg-elevated border border-hairline rounded-editorial p-2">
           <SkeletonList rows={6} columns={6} />
         </div>
-      ) : comps.length === 0 ? (
+      ) : visible.length === 0 ? (
         <EmptyState
           title="No comparables found"
           description={
@@ -446,26 +512,26 @@ export default function CompsPage() {
           }
         />
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+        <div className="bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-bg-secondary border-b border-hairline-strong">
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Project</th>
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Developer</th>
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Locality</th>
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Type</th>
-                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Rate ₹/sqft</th>
-                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Range</th>
-                  <th className="px-4 py-3 text-right font-medium text-content-secondary">YoY</th>
-                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Units</th>
-                  <th className="px-4 py-3 text-center font-medium text-content-secondary">Launch</th>
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Source</th>
-                  <th className="px-4 py-3 text-center font-medium text-content-secondary">Actions</th>
+                  <SortableHeader sortKey="project_name" sort={sort} onSort={onSort} className="px-4 py-3">Project</SortableHeader>
+                  <SortableHeader sortKey="developer" sort={sort} onSort={onSort} className="px-4 py-3">Developer</SortableHeader>
+                  <SortableHeader sortKey="locality" sort={sort} onSort={onSort} className="px-4 py-3">Locality</SortableHeader>
+                  <th className="px-4 py-3 text-left font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Type</th>
+                  <SortableHeader sortKey="rate_per_sqft" sort={sort} onSort={onSort} align="right" className="px-4 py-3">Rate ₹/sqft</SortableHeader>
+                  <th className="px-4 py-3 text-right font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Range</th>
+                  <SortableHeader sortKey="yoy_change_pct" sort={sort} onSort={onSort} align="right" className="px-4 py-3">YoY</SortableHeader>
+                  <SortableHeader sortKey="total_units" sort={sort} onSort={onSort} align="right" className="px-4 py-3">Units</SortableHeader>
+                  <SortableHeader sortKey="launch_year" sort={sort} onSort={onSort} align="center" className="px-4 py-3">Launch</SortableHeader>
+                  <th className="px-4 py-3 text-left font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Source</th>
+                  <th className="px-4 py-3 text-center font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {comps.map((comp) => {
+                {visible.map((comp) => {
                   const dt = DATA_TYPE_LABEL[comp.data_type] || (comp.is_verified
                     ? { tone: 'success', label: 'Verified' }
                     : { tone: 'neutral', label: 'Internal' });
@@ -478,7 +544,7 @@ export default function CompsPage() {
                   const rangeHigh = comp.rate_per_sqft_max;
                   const hasRange = rangeLow != null && rangeHigh != null && Number(rangeLow) !== Number(rangeHigh);
                   return (
-                    <tr key={comp.id} className="hover:bg-bg-secondary transition">
+                    <tr key={comp.id} className="transition-colors duration-150 ease-out hover:bg-bg-secondary">
                       <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span>{comp.project_name}</span>
@@ -546,23 +612,27 @@ export default function CompsPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-hairline-strong bg-bg-secondary">
-              <p className="text-sm text-content-secondary">
-                Page {page} of {totalPages} ({totalCount} total)
+              <p className="text-xs tabular-nums text-content-secondary">
+                Page <span className="font-semibold text-content-primary">{safePage}</span> of {totalPages}
+                <span className="mx-2 text-content-muted">·</span>
+                <span className="text-content-muted">{sortedRows.length.toLocaleString()} {sortedRows.length === 1 ? 'result' : 'results'}</span>
               </p>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-                  disabled={page === 1}
-                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  aria-label="Previous page"
+                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={15} />
                 </button>
                 <button
-                  onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
-                  disabled={page === totalPages}
-                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  aria-label="Next page"
+                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={15} />
                 </button>
               </div>
             </div>
