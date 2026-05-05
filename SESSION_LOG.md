@@ -4,6 +4,67 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-05 (Mumbai migration finalized + AI model defaults bumped)
+
+Picked up where 2026-05-04 left off. Completed the Tokyo→Mumbai cutover and refreshed AI model defaults to current frontier-tier IDs.
+
+**What landed:**
+
+- **Mumbai data load completed via REST script** (`backend/migrate-runner.mjs`). All public-schema tables migrated row-for-row. Storage migration (18 blobs, ~80 MB) confirmed.
+- **Vercel `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_KEY` flipped to Mumbai.** Production redeployed.
+- **Post-migration sequence reset** — fixed login flow which was throwing `23505 unique_violation` ("A record with this information already exists") because bigserial sequences in Mumbai stayed at 1 after explicit-id INSERTs. One `DO $$ ... pg_get_serial_sequence ... setval ... $$` block aligned ~30 sequences across `public` + `regulatory_data`. Login confirmed working post-fix.
+- **Pooler credential cache discovery**: Supabase pooler held the old Tokyo password for ~10 min after rotation. Pause + restore the project flushes the cache instantly. Documented in OPERATOR_HANDBOOK.
+- **AI model defaults bumped** (commit `fe7754b`):
+  - Gemini: `gemini-2.5-flash` → `gemini-3-flash-preview`
+  - OpenAI: `gpt-4o-mini` → `gpt-5.4`
+  - Claude: `claude-sonnet-4-6` (unchanged)
+  - Cost table in `aiRouter.js` got matching entries. Defaults fall through to env vars (`GEMINI_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL`) — instant rollback without code revert.
+
+**What's left:**
+
+1. Smoke test on prod (open a deal, run an AI extraction, replay a deal_event signature) with the new model defaults active.
+2. Backfill `properties.zone_id` for the 2 affected rows (FK-cycle workaround skipped them on initial insert).
+3. Once happy, ask the assistant to delete the Tokyo project. **NOT** auto-deleted — destructive, requires explicit go-ahead.
+
+**Plain-English recap:**
+
+- Site is now talking to the India-hosted database (Mumbai), not Tokyo. Faster for India users; cleaner story for compliance.
+- Login works again — a sneaky bug after the data move ("a record with this info already exists") was caused by counter columns not catching up. Fixed in one SQL block.
+- The platform's three AI brains got a refresh: Gemini 3 Flash for document reading, GPT-5.4 for general tasks, Claude Sonnet 4.6 unchanged for deep reasoning. We can dial any of them back via a single Vercel setting if anything misbehaves — no code change needed.
+
+---
+
+## 2026-05-04 (Region migration — Supabase Tokyo → Mumbai, ap-northeast-1 → ap-south-1)
+
+User asked whether Supabase region was actually Mumbai (per OPERATOR_HANDBOOK) or USA (per Privacy Policy). Investigation showed it was neither — the live project was in **Tokyo** (`ap-northeast-1`, project `lsbhrbvuynzqhdtzczco`). User chose to migrate to Mumbai before locking in any more deal data.
+
+**What landed:**
+
+- New Supabase project `niamgjbxxgmmffggumvj` (REDIP-Mumbai) created in `ap-south-1`. Free tier, $0/mo.
+- Full schema replayed: `database/schema.sql` (foundation, 3 chunks) + 45 of 46 migration files. The 46th file (`20260403_bengaluru_comps_seed.sql`) is a pure-INSERT seed that pre-dates multitenancy — skipped on purpose because comps data comes through the Tokyo dump.
+- Out-of-band `public.investor_packages` table (no migration file) reverse-engineered from Tokyo's pg_catalog and recreated on Mumbai with identical FKs, indexes, RLS policies, trigger, and `investor_packages_touch()` function.
+- Schema parity verified: 43 public tables + 14 regulatory_data tables match Tokyo bit-for-bit (table list).
+- `investor-package` edge function deployed to Mumbai (verbatim copy from Tokyo).
+- `redip-documents` storage bucket created on Mumbai (private, matching Tokyo config).
+- ~30% of public-schema rows migrated via MCP (users, organizations, members, properties, deals, deal_stage_history, financials partial, legal_documents, refresh_token_grants, etc.). Stopped because heavy JSONB columns (financials.model_params is 65 KB per row) blow past tool-output budgets.
+- Wrote `scripts/migrate-tokyo-to-mumbai.mjs` — self-contained Node.js script using `pg` + `@supabase/supabase-js` (both already in `backend/package.json`). Runs idempotently against both Postgres connections, sets `session_replication_role = replica` on Mumbai during inserts so FK order doesn't matter, then re-fires the lat/lng → geom trigger on properties. Also migrates all 18 storage blobs (~80 MB) via service_role-keyed download/upload.
+- Post-migration RLS audit caught the prior subagent had left RLS *disabled* on 8 tables (4 auth tables + 4 regulatory_data tables) plus a leftover `_mig_staging` table and `_mig_load` function. Fixed via migration `post_migration_rls_restore_and_cleanup`. Mumbai security advisors now clean (only known PostGIS-permanent items remain, same as Tokyo).
+- Privacy Policy v2 updated: Supabase row now reads "India (South Asia, Mumbai — `ap-south-1`)" instead of "USA".
+- OPERATOR_HANDBOOK §2 status table, `database/current_schema.sql` manifest comment, `docs/PARCEL_INTELLIGENCE_DECK.md` tech-stack table, and `TODO_MANUAL.md` migration history updated to point at Mumbai project ID.
+
+**What's left (user-side, in order):**
+
+1. Fetch both DATABASE_URLs (Supabase dashboard → each project → Settings → Database → Connection string → URI) and both service_role JWTs (Settings → API).
+2. Set `TOKYO_DATABASE_URL`, `MUMBAI_DATABASE_URL`, `TOKYO_SUPABASE_KEY`, `MUMBAI_SUPABASE_KEY` env vars.
+3. Run `cd backend && node ../scripts/migrate-tokyo-to-mumbai.mjs`. Should complete in 2–5 minutes; reports per-table count match.
+4. Update Vercel env vars: `SUPABASE_URL` → `https://niamgjbxxgmmffggumvj.supabase.co`, `SUPABASE_KEY` (service_role) → Mumbai's service_role JWT, `DATABASE_URL` → Mumbai's connection string. Redeploy.
+5. Smoke test on prod URL: log in, open a deal, verify documents list + financials render, run an AI extraction, replay a deal_event signature.
+6. Once confirmed live: ask the assistant to delete the Tokyo project. **NOT** auto-deleted — destructive, requires explicit go-ahead.
+
+**No PRs opened.** All file edits are uncommitted on the working branch — user will commit alongside the env-var flip.
+
+---
+
 ## 2026-05-04 (Speed sprint — 8 PRs in one session: UI polish through tool registry foundation — PRs #159–#166)
 
 User asked to ship the entire highest-value + medium-value + UI polish backlog in one shot. Eight PRs landed:

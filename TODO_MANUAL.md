@@ -31,7 +31,7 @@ File:
 
 - `database/migrations/20260430_source_document_pages_and_uav.sql`
 
-Applied to Supabase project `lsbhrbvuynzqhdtzczco` on 2026-04-30 via Supabase MCP `apply_migration` (history version `20260430180134`, name `source_document_pages_and_uav`). Both `regulatory_data.master_plan_document_pages` and `regulatory_data.bbmp_uav_entries` now exist with RLS enabled and read/modify policies scoped via `current_organization_id()`.
+Applied to former Supabase project `lsbhrbvuynzqhdtzczco` (Tokyo) on 2026-04-30 via Supabase MCP `apply_migration` (history version `20260430180134`, name `source_document_pages_and_uav`). Both `regulatory_data.master_plan_document_pages` and `regulatory_data.bbmp_uav_entries` now exist with RLS enabled and read/modify policies scoped via `current_organization_id()`. Re-applied to current Supabase project `niamgjbxxgmmffggumvj` (Mumbai, `ap-south-1`) on 2026-05-04 as part of the Tokyo→Mumbai region migration.
 
 If a fresh environment ever needs the same migration:
 
@@ -45,6 +45,7 @@ Required for current AI-backed features:
 
 - `GEMINI_API_KEY`
 - `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY` (embeddings + reasoning fallback)
 
 Recommended routing defaults:
 
@@ -52,6 +53,16 @@ Recommended routing defaults:
 - `AI_PROVIDER_DOCUMENT_EXTRACTION=gemini`
 - `AI_PROVIDER_TRANSLATION=gemini`
 - `AI_PROVIDER_REASONING=claude`
+
+**Model ID defaults (post-bump 2026-05-05, commit `fe7754b`):**
+
+| Provider | Default model ID | Override env var |
+|---|---|---|
+| Gemini | `gemini-3-flash-preview` | `GEMINI_MODEL` |
+| Claude | `claude-sonnet-4-6` | `CLAUDE_MODEL` |
+| OpenAI | `gpt-5.4` | `OPENAI_MODEL` |
+
+If a model goes flaky in prod, set the override env var on Vercel and redeploy — no code revert needed. Roll-back targets: `gemini-2.5-flash`, `gpt-4o-mini`.
 
 Also required for the investor-grade audit log:
 

@@ -22,7 +22,7 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | System | Status | Notes |
 |---|---|---|
 | Production app | Live at https://redip.vercel.app | |
-| Database (Supabase project `lsbhrbvuynzqhdtzczco`) | Free tier, ap-south-1 (Mumbai) ✅ confirmed 2026-05-04 | See §3.2 |
+| Database (Supabase project `niamgjbxxgmmffggumvj`) | Free tier, ap-south-1 (Mumbai) ✅ migrated to Mumbai 2026-05-04 (was Tokyo `lsbhrbvuynzqhdtzczco`) | See §3.2 |
 | Vercel hosting | Hobby tier | See §3.1 |
 | Auth — password sign-up | Live, gated by `ALLOW_COLD_SIGNUP` env | Default deny; add invite token to bypass |
 | Auth — Google sign-in | Live (PR #139) | Confirmed `enabled: true` on `/api/auth/google/config` |
@@ -71,6 +71,10 @@ None of these are written in code; all need a human action.
 **Recommendation:** Stay Hobby until you take the first paying customer or onboard a co-founder.
 
 ### 3.2 Supabase — Free → Pro
+
+**Pooler credential cache (operational gotcha — recorded 2026-05-05):** The Supabase transaction-mode pooler (`*.pooler.supabase.com:6543`) caches the database password for ~10 minutes after rotation. If you rotate the DB password and the new one keeps failing with `password authentication failed`, **don't retry the same password** — the cache is stale. **Pause the project from the dashboard, then restore it.** That flushes the pooler instantly. Verified the workaround during the Tokyo→Mumbai cutover.
+
+
 
 **Free-tier hard limits:**
 - 500 MB database, 1 GB file storage, 2 GB egress/month
