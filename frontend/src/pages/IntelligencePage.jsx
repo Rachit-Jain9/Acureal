@@ -25,6 +25,11 @@ import {
   useSaveMarketNotes,
   useMarketTransactions,
   useMicroMarketBenchmarks,
+  useOfficeBenchmarks,
+  useRetailBenchmarks,
+  useIndustrialBenchmarks,
+  useHospitalityBenchmarks,
+  useMacroKpis,
 } from '../hooks/useIntelligence';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
@@ -301,47 +306,100 @@ function TransactionTable({ rows }) {
 // ─── Micro-Market Benchmarks Table ────────────────────────────────────────────
 
 function BenchmarksTable({ rows }) {
-  const maxPrice = Math.max(...rows.map((r) => r.avg_price_max_per_sqft || 0));
+  const [showAll, setShowAll] = useState(false);
+  const [filter, setFilter] = useState('all'); // all | listing | ipc
+
+  const filteredRows = rows.filter((r) => {
+    if (filter === 'listing') return r.data_type === 'listing_q1_2026';
+    if (filter === 'ipc')     return r.data_type === 'ipc_q1_2026';
+    return true;
+  });
+  const visible = showAll ? filteredRows : filteredRows.slice(0, 12);
+  const maxPrice = Math.max(...filteredRows.map((r) => r.avg_price_max_per_sqft || 0));
+
+  const dataTypeLabel = {
+    listing_q1_2026: { tone: 'info',    label: 'Listing Q1 2026' },
+    ipc_q1_2026:     { tone: 'premium', label: 'IPC Q1 2026' },
+  };
 
   return (
     <div>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {[
+          { key: 'all', label: `All (${rows.length})` },
+          { key: 'listing', label: `99acres listings (${rows.filter((r) => r.data_type === 'listing_q1_2026').length})` },
+          { key: 'ipc', label: `C&W IPC (${rows.filter((r) => r.data_type === 'ipc_q1_2026').length})` },
+        ].map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => { setFilter(opt.key); setShowAll(false); }}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition ${
+              filter === opt.key
+                ? 'bg-content-primary text-white border-content-primary'
+                : 'bg-white text-content-secondary border-hairline-strong hover:bg-bg-secondary'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
       <div className="overflow-x-auto -mx-5">
-        <table className="w-full text-xs border-collapse min-w-[600px]">
+        <table className="w-full text-xs border-collapse min-w-[760px]">
           <thead>
             <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
               <th className="text-left py-2 px-3 font-semibold text-content-secondary">Micro-Market</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Price Range (₹/sqft)</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY Growth</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Range (₹/sqft)</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">SRO ₹/sf</th>
               <th className="text-left py-2 px-3 font-semibold text-content-secondary">Anchor Hub</th>
-              <th className="text-left py-2 px-3 font-semibold text-content-secondary w-36">Price Band</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Source</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => {
+            {visible.map((row, i) => {
               const barPct = maxPrice > 0 ? Math.round((row.avg_price_max_per_sqft / maxPrice) * 100) : 0;
-              const growthLabel = row.yoy_growth_min_pct != null
-                ? `${row.yoy_growth_min_pct}–${row.yoy_growth_max_pct}%`
-                : '—';
-              const priceLabel = `₹${(row.avg_price_min_per_sqft / 1000).toFixed(1)}k – ₹${(row.avg_price_max_per_sqft / 1000).toFixed(1)}k`;
-              const growthColor = row.yoy_growth_max_pct >= 10
-                ? 'text-emerald-600 font-semibold'
-                : row.yoy_growth_max_pct >= 7
-                  ? 'text-blue-600 font-medium'
-                  : 'text-content-secondary';
+              const yLow  = row.yoy_growth_min_pct != null ? Number(row.yoy_growth_min_pct) : null;
+              const yHigh = row.yoy_growth_max_pct != null ? Number(row.yoy_growth_max_pct) : null;
+              const growthLabel = yLow == null && yHigh == null ? '—'
+                : yLow === yHigh ? `${yLow > 0 ? '+' : ''}${yLow}%`
+                : `${yLow}–${yHigh}%`;
+              const priceLabel = `₹${(Number(row.avg_price_min_per_sqft) / 1000).toFixed(1)}k–${(Number(row.avg_price_max_per_sqft) / 1000).toFixed(1)}k`;
+              const growthVal = yHigh ?? yLow ?? 0;
+              const growthColor = growthVal >= 20 ? 'text-emerald-600 font-semibold'
+                : growthVal >= 10 ? 'text-emerald-600 font-medium'
+                : growthVal >= 5 ? 'text-blue-600 font-medium'
+                : growthVal < 0 ? 'text-red-500 font-medium'
+                : 'text-content-secondary';
+              const dt = dataTypeLabel[row.data_type] || { tone: 'neutral', label: row.data_type || '—' };
 
               return (
                 <tr key={row.id || i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
-                  <td className="py-2.5 px-3 font-medium text-content-primary">{row.micro_market}</td>
-                  <td className="py-2.5 px-3 font-mono text-content-primary whitespace-nowrap">{priceLabel}</td>
-                  <td className={`py-2.5 px-3 whitespace-nowrap ${growthColor}`}>{growthLabel}</td>
-                  <td className="py-2.5 px-3 text-content-secondary">{row.anchor_hub || '—'}</td>
-                  <td className="py-2.5 px-3">
-                    <div className="w-full bg-bg-secondary rounded-full h-1.5">
-                      <div
-                        className="bg-primary-500 h-1.5 rounded-full"
-                        style={{ width: `${barPct}%` }}
-                      />
+                  <td className="py-2.5 px-3 font-medium text-content-primary">
+                    <div className="flex items-center gap-2">
+                      <span>{row.micro_market}</span>
+                      <Badge tone={dt.tone} className="text-[9px]">{dt.label}</Badge>
                     </div>
+                    <div className="w-32 mt-1 bg-bg-secondary rounded-full h-1">
+                      <div className="bg-primary-500 h-1 rounded-full" style={{ width: `${barPct}%` }} />
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 font-mono tabular-nums text-content-primary whitespace-nowrap">{priceLabel}</td>
+                  <td className={`py-2.5 px-3 text-right tabular-nums whitespace-nowrap ${growthColor}`}>{growthLabel}</td>
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-secondary">
+                    {row.sro_rate_per_sqft != null ? `₹${Number(row.sro_rate_per_sqft).toLocaleString('en-IN')}` : '—'}
+                  </td>
+                  <td className="py-2.5 px-3 text-content-secondary">{row.anchor_hub || '—'}</td>
+                  <td className="py-2.5 px-3 whitespace-nowrap">
+                    {row.source_url ? (
+                      <a href={row.source_url} target="_blank" rel="noopener noreferrer"
+                         className="text-primary-600 hover:text-primary-700 underline-offset-2 hover:underline text-[11px]"
+                         title={row.source}>
+                        {row.source?.split(' ').slice(0, 3).join(' ') || 'Link'}
+                      </a>
+                    ) : (
+                      <span className="text-content-muted text-[11px]">{row.source || '—'}</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -349,8 +407,358 @@ function BenchmarksTable({ rows }) {
           </tbody>
         </table>
       </div>
+      {filteredRows.length > 12 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
+        >
+          <ChevronDown size={13} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
+          {showAll ? 'Show less' : `Show all ${filteredRows.length} rows`}
+        </button>
+      )}
       <p className="mt-3 text-xs text-content-muted">
-        Period: {rows[0]?.data_period || '2025–2026'} · Source: verified residential benchmark data, Bengaluru.
+        Period: {rows[0]?.data_period || '2026Q1'} · Listing benchmarks from 99acres / Magicbricks; IPC calibration from Cushman &amp; Wakefield Q1 2026. SRO = Karnataka Sub-Registrar Office transaction rate.
+      </p>
+    </div>
+  );
+}
+
+// ─── Macro KPI strip ──────────────────────────────────────────────────────────
+
+const TREND_TONE = {
+  up:   'text-emerald-600',
+  down: 'text-red-500',
+  flat: 'text-content-muted',
+};
+
+const formatYoY = (n) => {
+  if (n === null || n === undefined) return null;
+  const v = Number(n);
+  const sign = v > 0 ? '+' : '';
+  return `${sign}${v}% YoY`;
+};
+
+function MacroKpiTile({ kpi }) {
+  const tone = TREND_TONE[kpi.trend] || 'text-content-muted';
+  const yoy = formatYoY(kpi.yoy_change_pct);
+  return (
+    <div className="rounded-xl border border-hairline-strong bg-white px-4 py-3 hover:shadow-sm transition-shadow">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-[0.1em] font-medium text-content-muted">
+          {kpi.metric_label}
+        </p>
+        {yoy && <span className={`text-[10px] font-semibold tabular-nums ${tone}`}>{yoy}</span>}
+      </div>
+      <p className="mt-1.5 text-lg font-bold text-content-primary tabular-nums leading-tight">
+        {kpi.value_text}
+      </p>
+      {kpi.source && (
+        <p className="mt-1 text-[10px] text-content-muted truncate" title={kpi.source}>
+          {kpi.source}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Asset-class benchmark tables ────────────────────────────────────────────
+
+function OfficeBenchmarksTable({ rows }) {
+  const [showSubmarkets, setShowSubmarkets] = useState(false);
+  const ipcRows = rows.filter((r) => r.level_type === 'ipc_zone');
+  const subRows = rows.filter((r) => r.level_type === 'submarket');
+
+  return (
+    <div>
+      <p className="text-[11px] text-content-muted mb-2">
+        IPC zone-level (Cushman &amp; Wakefield, stock-weighted Grade A)
+      </p>
+      <div className="overflow-x-auto -mx-5">
+        <table className="w-full text-xs border-collapse min-w-[640px]">
+          <thead>
+            <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Zone</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Vacancy</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">SW Rent</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary max-w-[260px]">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ipcRows.map((r) => {
+              const vacColor = r.vacancy_pct <= 5 ? 'text-emerald-600 font-semibold'
+                : r.vacancy_pct <= 10 ? 'text-blue-600 font-medium'
+                : r.vacancy_pct <= 20 ? 'text-amber-600 font-medium'
+                : 'text-red-500 font-semibold';
+              return (
+                <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                  <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
+                  <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
+                  <td className={`py-2 px-3 text-right tabular-nums whitespace-nowrap ${vacColor}`}>
+                    {r.vacancy_pct != null ? `${Number(r.vacancy_pct).toFixed(1)}%` : '—'}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                    {r.stock_weighted_rent_psf_month != null ? `₹${Number(r.stock_weighted_rent_psf_month).toFixed(0)}` : '—'}
+                  </td>
+                  <td className="py-2 px-3 text-content-secondary max-w-[260px]"><span className="line-clamp-2">{r.notes || '—'}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowSubmarkets((v) => !v)}
+        className="mt-3 text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
+      >
+        <ChevronDown size={13} className={`transition-transform ${showSubmarkets ? 'rotate-180' : ''}`} />
+        {showSubmarkets ? 'Hide submarket Grade A range' : `Show ${subRows.length} submarket Grade A ranges`}
+      </button>
+
+      {showSubmarkets && (
+        <div className="mt-3 overflow-x-auto -mx-5">
+          <table className="w-full text-xs border-collapse min-w-[640px]">
+            <thead>
+              <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
+                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Grade A (₹/sf/mo)</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Grade B (₹/sf/mo)</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subRows.map((r) => (
+                <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                  <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
+                  <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                    {r.grade_a_rent_low_psf_month != null
+                      ? `₹${r.grade_a_rent_low_psf_month}–${r.grade_a_rent_high_psf_month}` : '—'}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-secondary">
+                    {r.grade_b_rent_low_psf_month != null
+                      ? `₹${r.grade_b_rent_low_psf_month}–${r.grade_b_rent_high_psf_month}` : '—'}
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                    {r.yoy_change_pct != null ? `+${r.yoy_change_pct}%` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-content-muted">
+        Source: Cushman &amp; Wakefield Bengaluru Office Q1 2026, JLL India Office Dynamics Q4 2025, Knight Frank APAC Prime Office Q1 2026. Bare-shell warm-shell rents excluding CAM.
+      </p>
+    </div>
+  );
+}
+
+function RetailBenchmarksTable({ rows }) {
+  const highStreet = rows.filter((r) => r.format === 'high_street');
+  const malls = rows.filter((r) => r.format === 'mall_grade_a');
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-[11px] text-content-muted mb-2">High-street vanilla GF (carpet) — Cushman &amp; Wakefield Q1 2026</p>
+        <div className="overflow-x-auto -mx-5">
+          <table className="w-full text-xs border-collapse min-w-[600px]">
+            <thead>
+              <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Corridor</th>
+                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Avg ₹/sf/mo</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">QoQ</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {highStreet.map((r) => (
+                <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                  <td className="py-2 px-3 font-medium text-content-primary">{r.corridor}</td>
+                  <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                    ₹{r.rent_avg_psf_month}
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600">
+                    +{r.qoq_change_pct}%
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                    +{r.yoy_change_pct}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {malls.length > 0 && (
+        <div>
+          <p className="text-[11px] text-content-muted mb-2">Grade A malls — Occupi.in 2025 line-shop range</p>
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-xs border-collapse min-w-[560px]">
+              <thead>
+                <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Mall</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
+                  <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Range ₹/sf/mo</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary max-w-[240px]">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {malls.map((r) => (
+                  <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                    <td className="py-2 px-3 font-medium text-content-primary">{r.corridor}</td>
+                    <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                      ₹{r.rent_low_psf_month}–{r.rent_high_psf_month}
+                    </td>
+                    <td className="py-2 px-3 text-content-secondary max-w-[240px]"><span className="line-clamp-2">{r.notes || '—'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IndustrialBenchmarksTable({ rows }) {
+  const industrial = rows.filter((r) => r.segment === 'industrial');
+  const warehouse = rows.filter((r) => r.segment === 'warehouse');
+  const land = rows.filter((r) => r.segment === 'serviced_land');
+
+  const RentTable = ({ title, items }) => (
+    items.length > 0 && (
+      <div>
+        <p className="text-[11px] text-content-muted mb-2">{title}</p>
+        <div className="overflow-x-auto -mx-5">
+          <table className="w-full text-xs border-collapse min-w-[520px]">
+            <thead>
+              <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
+                <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Rent ₹/sf/mo</th>
+                <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((r) => (
+                <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                  <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
+                  <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                    ₹{r.rent_low_psf_month}–{r.rent_high_psf_month}
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                    +{Number(r.yoy_change_pct).toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  );
+
+  return (
+    <div className="space-y-4">
+      <RentTable title="Industrial / manufacturing rents" items={industrial} />
+      <RentTable title="Warehouse / 3PL rents" items={warehouse} />
+      {land.length > 0 && (
+        <div>
+          <p className="text-[11px] text-content-muted mb-2">Serviced industrial land (₹ million / acre)</p>
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-xs border-collapse min-w-[520px]">
+              <thead>
+                <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
+                  <th className="text-left py-2 px-3 font-semibold text-content-secondary">Cluster</th>
+                  <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Range ₹ mn/acre</th>
+                  <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">YoY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {land.map((r) => (
+                  <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                    <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
+                    <td className="py-2 px-3 text-content-secondary">{r.cluster || '—'}</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                      ₹{r.land_value_low_inr_mn_per_acre}–{r.land_value_high_inr_mn_per_acre}
+                    </td>
+                    <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
+                      +{Number(r.yoy_change_pct).toFixed(1)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-content-muted">
+        Source: Cushman &amp; Wakefield Bengaluru Industrial &amp; Logistics H2 2025. Rents +4–5% YoY; serviced land +9–10% YoY.
+      </p>
+    </div>
+  );
+}
+
+function HospitalityBenchmarksTable({ rows }) {
+  const SEGMENT_LABEL = {
+    citywide: 'Citywide / micro-market',
+    luxury: 'Luxury (5★)',
+    upper_upscale: 'Upper Upscale',
+    upscale_upper_mid: 'Upscale / Upper Mid',
+    midscale_economy: 'Midscale / Economy',
+  };
+
+  return (
+    <div>
+      <div className="overflow-x-auto -mx-5">
+        <table className="w-full text-xs border-collapse min-w-[640px]">
+          <thead>
+            <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Submarket</th>
+              <th className="text-left py-2 px-3 font-semibold text-content-secondary">Segment</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">ADR ₹/key</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">Occ %</th>
+              <th className="text-right py-2 px-3 font-semibold text-content-secondary whitespace-nowrap">RevPAR ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
+                <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
+                <td className="py-2 px-3 text-content-secondary">{SEGMENT_LABEL[r.segment] || r.segment}</td>
+                <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                  {r.adr_low_inr === r.adr_high_inr
+                    ? `₹${Number(r.adr_low_inr).toLocaleString('en-IN')}`
+                    : `₹${Number(r.adr_low_inr).toLocaleString('en-IN')}–${Number(r.adr_high_inr).toLocaleString('en-IN')}`}
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-content-secondary">
+                  {r.occupancy_pct != null ? `${r.occupancy_pct}%` : '—'}
+                </td>
+                <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-secondary">
+                  {r.revpar_inr != null ? `₹${Number(r.revpar_inr).toLocaleString('en-IN')}` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-content-muted">
+        Source: Horwath HTL India Hotel Market Review 2025; ICRA FY25-26 outlook ₹8,200–8,500 premium ADR with +200 bps Occ. Submarket ranges from Marriott/Hyatt/IHG/Taj/Oberoi rack rates and OTA scrapes.
       </p>
     </div>
   );
@@ -363,6 +771,11 @@ export default function IntelligencePage() {
   const { data: brief, isLoading, isError, refetch, isFetching } = useDailyBrief();
   const { data: transactions, isLoading: txLoading } = useMarketTransactions({ city: 'Bengaluru' });
   const { data: benchmarks, isLoading: bmLoading } = useMicroMarketBenchmarks({ city: 'Bengaluru' });
+  const { data: officeBenchmarks } = useOfficeBenchmarks({ city: 'Bengaluru' });
+  const { data: retailBenchmarks } = useRetailBenchmarks({ city: 'Bengaluru' });
+  const { data: industrialBenchmarks } = useIndustrialBenchmarks({ city: 'Bengaluru' });
+  const { data: hospitalityBenchmarks } = useHospitalityBenchmarks({ city: 'Bengaluru' });
+  const { data: macroKpis } = useMacroKpis({ city: 'Bengaluru' });
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
 
@@ -417,6 +830,21 @@ export default function IntelligencePage() {
       />
 
       {notConfigured && <UnconfiguredNotice requirements={brief?.verifiedSourceRequirements} />}
+
+      {/* Bengaluru Macro KPI strip — Q1 2026 verified */}
+      {macroKpis?.length > 0 && (
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
+              Bengaluru Q1 2026 — Verified Macro Indicators
+            </p>
+            <p className="text-[10px] text-content-muted">{macroKpis.length} metrics</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+            {macroKpis.map((k) => <MacroKpiTile key={k.id} kpi={k} />)}
+          </div>
+        </div>
+      )}
 
       {/* Claude AI Brief */}
       {brief?.claudeBrief && (
@@ -559,8 +987,8 @@ export default function IntelligencePage() {
         </SectionCard>
       </div>
 
-      {/* Section 5: Micro-Market Benchmark Summary */}
-      <SectionCard icon={DollarSign} title="5. Micro-Market Benchmark Summary — Bengaluru (2025–2026)">
+      {/* Section 5: Residential Micro-Market Benchmark Summary */}
+      <SectionCard icon={DollarSign} title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026">
         {bmLoading ? (
           <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
             <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
@@ -569,10 +997,38 @@ export default function IntelligencePage() {
           <BenchmarksTable rows={benchmarks} />
         ) : (
           <p className="text-sm text-content-secondary">
-            Run the migration <code className="text-xs bg-bg-secondary px-1 rounded">20260404_market_data.sql</code> in Supabase to load benchmark data.
+            Apply migration <code className="text-xs bg-bg-secondary px-1 rounded">20260505_market_data_q1_2026_refresh.sql</code> to load Q1 2026 benchmarks.
           </p>
         )}
       </SectionCard>
+
+      {/* Section 5a: Commercial Office — Vacancy + Rent (IPC zones + 30 submarkets) */}
+      {officeBenchmarks?.length > 0 && (
+        <SectionCard icon={Building2} title="5a. Commercial Office — Vacancy + Rent, Q1 2026">
+          <OfficeBenchmarksTable rows={officeBenchmarks} />
+        </SectionCard>
+      )}
+
+      {/* Section 5b: Retail — High-street + Mall Grade A */}
+      {retailBenchmarks?.length > 0 && (
+        <SectionCard icon={DollarSign} title="5b. Retail — High-Street + Mall Grade A, Q1 2026">
+          <RetailBenchmarksTable rows={retailBenchmarks} />
+        </SectionCard>
+      )}
+
+      {/* Section 5c: Industrial / Warehouse — H2 2025 */}
+      {industrialBenchmarks?.length > 0 && (
+        <SectionCard icon={Building2} title="5c. Industrial / Warehouse / Serviced Land — H2 2025">
+          <IndustrialBenchmarksTable rows={industrialBenchmarks} />
+        </SectionCard>
+      )}
+
+      {/* Section 5d: Hospitality — ADR / Occupancy / RevPAR */}
+      {hospitalityBenchmarks?.length > 0 && (
+        <SectionCard icon={Building2} title="5d. Hospitality — ADR / Occupancy / RevPAR">
+          <HospitalityBenchmarksTable rows={hospitalityBenchmarks} />
+        </SectionCard>
+      )}
 
       {/* Section 6: Market Transaction Flow */}
       <SectionCard icon={ArrowUpRight} title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)">

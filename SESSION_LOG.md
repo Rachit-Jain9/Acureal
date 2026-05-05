@@ -4,6 +4,52 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-05 (Q1 2026 Comps + Market Intelligence refresh — 4-asset-class expansion)
+
+Refreshed Comps and Market Intelligence end-to-end using verified Q1 2026 sources (99acres locality data, Cushman & Wakefield Bengaluru MarketBeat Q1 2026, JLL India Q4 2025, Knight Frank APAC Prime Office Q1 2026, Horwath HTL Hotel Market Review 2025, ICRA, Mordor Intelligence, CBRE India Market Monitor Q1 2026). Inputs: a `redip_bengaluru_micro_market_rates_v0_2_2026Q1.csv`/`.json` data pack and a long-form `COMPS_REDIP-Claude.docx` rate card.
+
+**Migration applied** (`20260505_market_data_q1_2026_refresh.sql` — split-applied via Supabase MCP):
+
+- **Schema**: added `source`, `source_url`, `data_type`, `qoq_change_pct`, `sro_rate_per_sqft`, `as_of_date`, `notes` to `micro_market_benchmarks`; switched its unique constraint to include `data_type`. Added `source_url` + `as_of_date` to `market_transactions`. Added `source_url`, `data_type`, `as_of_date`, `yoy_change_pct`, `sro_rate_per_sqft` to `comps`.
+- **New tables**: `office_market_benchmarks`, `retail_market_benchmarks`, `industrial_market_benchmarks`, `hospitality_market_benchmarks`, `market_macro_kpis` — all org-scoped with proper as-of unique constraints.
+
+**Data refreshed (Bengaluru only — India-first per CLAUDE.md):**
+
+- `micro_market_benchmarks`: 8 → **38 rows** (30 × 99acres listings + 8 × Cushman & Wakefield IPC calibration). Each row carries source URL, SRO transaction rate, YoY range, anchor hub.
+- `office_market_benchmarks`: 0 → **39 rows** (9 IPC zones with vacancy + stock-weighted rent + 30 submarkets with Grade A/B bare-shell ranges + YoY).
+- `retail_market_benchmarks`: 0 → **21 rows** (12 high-street corridors with QoQ + YoY + 9 Grade A malls).
+- `industrial_market_benchmarks`: 0 → **20 rows** (5 industrial rents + 5 warehouse rents + 10 serviced industrial land ₹mn/acre).
+- `hospitality_market_benchmarks`: 0 → **13 rows** (citywide + airport ADR/Occ/RevPAR + 11 submarket × segment ADR ranges).
+- `market_macro_kpis`: 0 → **18 rows** (24.1 MSF leasing, 14% prime rent growth #1 APAC, 49,252 launches, 8.1% vacancy, ₹93.6/sf/mo city Grade A, ICRA hotel ADR, Mordor 203→398 MW DC forecast, USD 5.1bn Q1 2026 capital flows, etc.).
+- `market_transactions`: 28 → **29 rows** (added Q1 2026 CBRE capital flows record). Existing 28 transactions remain (Brookfield BIRET ECOWORLD ₹13,125 cr, Embassy GolfLinks ₹852 cr, Puravankara Anekal ₹4,800 cr, etc.).
+
+**Backend (no breaking changes):**
+
+- `intelligence.service.js`: added `getOfficeBenchmarks`, `getRetailBenchmarks`, `getIndustrialBenchmarks`, `getHospitalityBenchmarks`, `getMacroKpis`. Extended `getMicroMarketBenchmarks` with optional `dataType` filter and listing-first ordering.
+- `intelligence.routes.js`: added GET `/intelligence/office-benchmarks`, `/retail-benchmarks`, `/industrial-benchmarks`, `/hospitality-benchmarks`, `/macro-kpis`.
+
+**Frontend:**
+
+- `IntelligencePage.jsx`: added Bengaluru Q1 2026 macro KPI strip (18 tiles, 6-up grid), expanded Section 5 residential benchmarks with `Listing/IPC/All` filter chips + source-link column + SRO column + YoY badging, and added new Sections 5a–5d for Office/Retail/Industrial/Hospitality with verified IPC data and clickable source URLs.
+- `CompsPage.jsx`: added YoY column, Range column, source-link badge column with tone mapping by `data_type` (verified, listing, IPC).
+- `useIntelligence.js` + `services/api.js`: added 5 new hooks/endpoints for asset-class benchmarks.
+
+**Validation:**
+
+- Frontend `npm run build` clean (30s). Backend `npm test` 856/856 passing.
+- Spot-checked DB: top-5 by max price = MG Road CBD ₹22–50K, Indiranagar ₹18–28K (+71% YoY listings), Rajajinagar ₹18–28K, Koramangala ₹17–25K, Old Airport Rd ₹18–25K — matches the COMPS doc exactly.
+
+**Migration file**: `database/migrations/20260505_market_data_q1_2026_refresh.sql` (471 lines, idempotent — uses `ADD COLUMN IF NOT EXISTS`, `DROP/ADD CONSTRAINT` guarded, `DO $$` block resolves first org for backfill).
+
+**Plain-English recap:**
+
+- The Comps page now shows YoY price change, a high–low range, and a clickable source badge (99acres, Cushman & Wakefield IPC, internal benchmark) on every row — so analysts can tell at a glance whether a number is a listing signal or a verified transaction comp.
+- Market Intelligence opens with a Bengaluru Q1 2026 macro strip (24.1 MSF leasing, +14% prime rent growth, 49,252 launches, USD 5.1bn capital inflows, etc.) and adds four new sections: Commercial Office (vacancy + rent for 9 IPC zones and 30 submarkets), Retail (12 high-street corridors + 9 Grade A malls), Industrial / Warehouse / Serviced Land (rents + ₹mn/acre by submarket), and Hospitality (ADR/Occ/RevPAR by submarket × segment).
+- The residential benchmark table grew from 8 generic markets to 38 with proper sources — 30 micro-markets from 99acres (with SRO transaction rates) plus 8 Cushman & Wakefield IPC calibration rows for high-end and mid-segment zones. Filter chips switch between listing-portal benchmarks and IPC ceilings.
+- Why it matters: REDIP's underwriting layer can finally cross-check listing prices against IPC benchmarks and SRO transaction rates side-by-side, with traceable sources on every number — exactly the credibility bar an India-first deal-intelligence platform needs.
+
+---
+
 ## 2026-05-05 (Mumbai migration finalized + AI model defaults bumped)
 
 Picked up where 2026-05-04 left off. Completed the Tokyo→Mumbai cutover and refreshed AI model defaults to current frontier-tier IDs.

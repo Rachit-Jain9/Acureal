@@ -82,7 +82,75 @@ router.get('/market-transactions', authenticate, async (req, res, next) => {
 // GET /intelligence/micro-market-benchmarks
 router.get('/micro-market-benchmarks', authenticate, async (req, res, next) => {
   try {
-    const data = await intelligenceService.getMicroMarketBenchmarks({ city: req.query.city });
+    const data = await intelligenceService.getMicroMarketBenchmarks({
+      city: req.query.city,
+      dataType: req.query.dataType,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /intelligence/office-benchmarks
+router.get('/office-benchmarks', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getOfficeBenchmarks({
+      city: req.query.city,
+      levelType: req.query.levelType,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /intelligence/retail-benchmarks
+router.get('/retail-benchmarks', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getRetailBenchmarks({
+      city: req.query.city,
+      format: req.query.format,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /intelligence/industrial-benchmarks
+router.get('/industrial-benchmarks', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getIndustrialBenchmarks({
+      city: req.query.city,
+      segment: req.query.segment,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /intelligence/hospitality-benchmarks
+router.get('/hospitality-benchmarks', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getHospitalityBenchmarks({
+      city: req.query.city,
+      segment: req.query.segment,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /intelligence/macro-kpis
+router.get('/macro-kpis', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getMacroKpis({
+      city: req.query.city,
+      assetClass: req.query.assetClass,
+    });
     res.json({ success: true, data });
   } catch (error) {
     next(error);

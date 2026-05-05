@@ -621,12 +621,112 @@ const getMarketTransactions = async ({ city = 'Bengaluru', fy, quarter, dealType
   return result.rows;
 };
 
-const getMicroMarketBenchmarks = async ({ city = 'Bengaluru' } = {}) => {
+const getMicroMarketBenchmarks = async ({ city = 'Bengaluru', dataType } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (dataType) {
+    params.push(dataType);
+    where += ` AND data_type = $${params.length}`;
+  }
   const result = await query(
     `SELECT * FROM micro_market_benchmarks
-     WHERE organization_id = current_organization_id() AND LOWER(city) = LOWER($1)
-     ORDER BY avg_price_max_per_sqft DESC NULLS LAST`,
-    [city]
+     WHERE ${where}
+     ORDER BY
+       CASE WHEN data_type = 'listing_q1_2026' THEN 0 ELSE 1 END,
+       avg_price_max_per_sqft DESC NULLS LAST`,
+    params
+  );
+  return result.rows;
+};
+
+// Q1 2026 asset-class benchmark readers ──────────────────────────────────
+
+const getOfficeBenchmarks = async ({ city = 'Bengaluru', levelType } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (levelType) {
+    params.push(levelType);
+    where += ` AND level_type = $${params.length}`;
+  }
+  const result = await query(
+    `SELECT * FROM office_market_benchmarks
+     WHERE ${where}
+     ORDER BY level_type ASC,
+       COALESCE(stock_weighted_rent_psf_month, grade_a_rent_high_psf_month) DESC NULLS LAST`,
+    params
+  );
+  return result.rows;
+};
+
+const getRetailBenchmarks = async ({ city = 'Bengaluru', format } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (format) {
+    params.push(format);
+    where += ` AND format = $${params.length}`;
+  }
+  const result = await query(
+    `SELECT * FROM retail_market_benchmarks
+     WHERE ${where}
+     ORDER BY format ASC,
+       COALESCE(rent_avg_psf_month, rent_high_psf_month) DESC NULLS LAST`,
+    params
+  );
+  return result.rows;
+};
+
+const getIndustrialBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (segment) {
+    params.push(segment);
+    where += ` AND segment = $${params.length}`;
+  }
+  const result = await query(
+    `SELECT * FROM industrial_market_benchmarks
+     WHERE ${where}
+     ORDER BY segment ASC, submarket ASC`,
+    params
+  );
+  return result.rows;
+};
+
+const getHospitalityBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (segment) {
+    params.push(segment);
+    where += ` AND segment = $${params.length}`;
+  }
+  const result = await query(
+    `SELECT * FROM hospitality_market_benchmarks
+     WHERE ${where}
+     ORDER BY
+       CASE segment
+         WHEN 'citywide' THEN 0
+         WHEN 'luxury' THEN 1
+         WHEN 'upper_upscale' THEN 2
+         WHEN 'upscale_upper_mid' THEN 3
+         WHEN 'midscale_economy' THEN 4
+         ELSE 5 END,
+       adr_high_inr DESC NULLS LAST`,
+    params
+  );
+  return result.rows;
+};
+
+const getMacroKpis = async ({ city = 'Bengaluru', assetClass } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (assetClass) {
+    params.push(assetClass);
+    where += ` AND asset_class = $${params.length}`;
+  }
+  const result = await query(
+    `SELECT * FROM market_macro_kpis
+     WHERE ${where}
+     ORDER BY display_order ASC, metric_label ASC`,
+    params
   );
   return result.rows;
 };
@@ -637,6 +737,11 @@ module.exports = {
   saveMarketNotes,
   getMarketTransactions,
   getMicroMarketBenchmarks,
+  getOfficeBenchmarks,
+  getRetailBenchmarks,
+  getIndustrialBenchmarks,
+  getHospitalityBenchmarks,
+  getMacroKpis,
   getDealAnalysis,
   streamDealAnalysis,
   getCachedDealAnalysis,

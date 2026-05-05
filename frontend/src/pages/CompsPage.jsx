@@ -11,8 +11,15 @@ import {
 import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
+import Badge from '../components/common/Badge';
 import { SkeletonList } from '../design-system';
 import { formatINR } from '../utils/format';
+
+const DATA_TYPE_LABEL = {
+  internal_benchmark_apr_2026: { tone: 'success', label: 'Verified · Apr 2026' },
+  listing_q1_2026:             { tone: 'info',    label: 'Listing · Q1 2026' },
+  ipc_q1_2026:                 { tone: 'premium', label: 'IPC · Q1 2026' },
+};
 
 const PROJECT_TYPES = [
   { value: 'residential', label: 'Residential' },
@@ -446,50 +453,93 @@ export default function CompsPage() {
                 <tr className="bg-bg-secondary border-b border-hairline-strong">
                   <th className="px-4 py-3 text-left font-medium text-content-secondary">Project</th>
                   <th className="px-4 py-3 text-left font-medium text-content-secondary">Developer</th>
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">City</th>
                   <th className="px-4 py-3 text-left font-medium text-content-secondary">Locality</th>
                   <th className="px-4 py-3 text-left font-medium text-content-secondary">Type</th>
-                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Rate/sqft</th>
+                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Rate ₹/sqft</th>
+                  <th className="px-4 py-3 text-right font-medium text-content-secondary">Range</th>
+                  <th className="px-4 py-3 text-right font-medium text-content-secondary">YoY</th>
                   <th className="px-4 py-3 text-right font-medium text-content-secondary">Units</th>
                   <th className="px-4 py-3 text-center font-medium text-content-secondary">Launch</th>
-                  <th className="px-4 py-3 text-left font-medium text-content-secondary">RERA</th>
+                  <th className="px-4 py-3 text-left font-medium text-content-secondary">Source</th>
                   <th className="px-4 py-3 text-center font-medium text-content-secondary">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {comps.map((comp) => (
-                  <tr key={comp.id} className="hover:bg-bg-secondary transition">
-                    <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
-                      {comp.project_name}
-                    </td>
-                    <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{comp.developer || '-'}</td>
-                    <td className="px-4 py-3 text-content-secondary">{comp.city}</td>
-                    <td className="px-4 py-3 text-content-secondary">{comp.locality || '-'}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
-                        {comp.project_type?.replace(/_/g, ' ') || '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-content-primary">
-                      {comp.rate_per_sqft ? formatINR(comp.rate_per_sqft, 0) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-content-secondary">
-                      {comp.total_units?.toLocaleString('en-IN') || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-center text-content-secondary">{comp.launch_year || '-'}</td>
-                    <td className="px-4 py-3 text-content-secondary text-xs">{comp.rera_number || '-'}</td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleDelete(comp.id)}
-                        disabled={deleteMutation.isPending}
-                        className="p-1.5 rounded-lg text-content-muted hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
-                        title="Delete comparable"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {comps.map((comp) => {
+                  const dt = DATA_TYPE_LABEL[comp.data_type] || (comp.is_verified
+                    ? { tone: 'success', label: 'Verified' }
+                    : { tone: 'neutral', label: 'Internal' });
+                  const yoy = comp.yoy_change_pct;
+                  const yoyColor = yoy == null ? 'text-content-muted'
+                    : yoy >= 20 ? 'text-emerald-600 font-semibold'
+                    : yoy >= 5  ? 'text-emerald-600'
+                    : yoy < 0   ? 'text-red-500' : 'text-content-secondary';
+                  const rangeLow  = comp.rate_per_sqft_min;
+                  const rangeHigh = comp.rate_per_sqft_max;
+                  const hasRange = rangeLow != null && rangeHigh != null && Number(rangeLow) !== Number(rangeHigh);
+                  return (
+                    <tr key={comp.id} className="hover:bg-bg-secondary transition">
+                      <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span>{comp.project_name}</span>
+                          {comp.rera_number && (
+                            <span className="text-[10px] text-content-muted font-mono" title={`RERA ${comp.rera_number}`}>
+                              {comp.rera_number}
+                            </span>
+                          )}
+                        </div>
+                        {comp.city && (
+                          <span className="text-[10px] text-content-muted">{comp.city}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{comp.developer || '—'}</td>
+                      <td className="px-4 py-3 text-content-secondary">{comp.locality || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+                          {comp.project_type?.replace(/_/g, ' ') || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-content-primary tabular-nums">
+                        {comp.rate_per_sqft ? formatINR(comp.rate_per_sqft, 0) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-content-secondary text-xs tabular-nums whitespace-nowrap">
+                        {hasRange ? `${formatINR(rangeLow, 0)}–${formatINR(rangeHigh, 0)}` : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right text-xs tabular-nums whitespace-nowrap ${yoyColor}`}>
+                        {yoy != null ? `${yoy > 0 ? '+' : ''}${yoy}%` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-content-secondary tabular-nums">
+                        {comp.total_units?.toLocaleString('en-IN') || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-content-secondary">{comp.launch_year || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {comp.source_url ? (
+                          <a
+                            href={comp.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block"
+                            title={comp.source || 'Open source'}
+                          >
+                            <Badge tone={dt.tone} className="cursor-pointer hover:opacity-80">{dt.label}</Badge>
+                          </a>
+                        ) : (
+                          <Badge tone={dt.tone} title={comp.source || comp.data_type}>{dt.label}</Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleDelete(comp.id)}
+                          disabled={deleteMutation.isPending}
+                          className="p-1.5 rounded-lg text-content-muted hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                          title="Delete comparable"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -402,6 +402,11 @@ export const intelligenceAPI = {
   saveMarketNotes:          (section, items) => api.put('/intelligence/market-notes', { section, items }),
   getMarketTransactions:    (params) => api.get('/intelligence/market-transactions', { params }),
   getMicroMarketBenchmarks: (params) => api.get('/intelligence/micro-market-benchmarks', { params }),
+  getOfficeBenchmarks:      (params) => api.get('/intelligence/office-benchmarks', { params }),
+  getRetailBenchmarks:      (params) => api.get('/intelligence/retail-benchmarks', { params }),
+  getIndustrialBenchmarks:  (params) => api.get('/intelligence/industrial-benchmarks', { params }),
+  getHospitalityBenchmarks: (params) => api.get('/intelligence/hospitality-benchmarks', { params }),
+  getMacroKpis:             (params) => api.get('/intelligence/macro-kpis', { params }),
   getDealAnalysis:          (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
   // Last persisted analysis (or null on miss). Used by OverviewTab on
   // mount so users see the last generated memo without re-running Claude.

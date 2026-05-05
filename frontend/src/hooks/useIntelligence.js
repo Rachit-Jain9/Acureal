@@ -40,3 +40,43 @@ export function useMicroMarketBenchmarks(params) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export function useOfficeBenchmarks(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'office-benchmarks', params],
+    queryFn: () => intelligenceAPI.getOfficeBenchmarks(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRetailBenchmarks(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'retail-benchmarks', params],
+    queryFn: () => intelligenceAPI.getRetailBenchmarks(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useIndustrialBenchmarks(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'industrial-benchmarks', params],
+    queryFn: () => intelligenceAPI.getIndustrialBenchmarks(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useHospitalityBenchmarks(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'hospitality-benchmarks', params],
+    queryFn: () => intelligenceAPI.getHospitalityBenchmarks(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useMacroKpis(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'macro-kpis', params],
+    queryFn: () => intelligenceAPI.getMacroKpis(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
