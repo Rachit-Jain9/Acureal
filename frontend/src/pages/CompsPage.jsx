@@ -380,6 +380,19 @@ export default function CompsPage() {
     return c;
   }, [rawRows]);
 
+  // Per-asset-class counts — fixes the misleading "All asset classes 0" chip
+  // by attaching real counts. The `allowAll` chip then sums to the total
+  // automatically (DataToolbar.Chips reduces over `count` for the synthetic
+  // All chip).
+  const projectTypeCounts = useMemo(() => {
+    const c = { residential: 0, commercial: 0, mixed_use: 0 };
+    for (const r of rawRows) {
+      const t = r.project_type;
+      if (c[t] != null) c[t] += 1;
+    }
+    return c;
+  }, [rawRows]);
+
   const handleCreate = (compData) => {
     createMutation.mutate(compData, {
       onSuccess: () => setShowModal(false),
@@ -496,6 +509,13 @@ export default function CompsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Sticky page header — pins the Map | Table toggle, Export CSV, and
+          Add Comp to the top of the viewport so they stay reachable while
+          scrolling through long result sets. Backdrop blur keeps the band
+          readable over content scrolling beneath. The negative inline
+          margins extend the band to the layout shell's natural gutter so
+          there's no awkward inner-edge break. */}
+      <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-1 bg-bg-primary/85 backdrop-blur-md">
       <PageHeader
         title="Comparables"
         description={`${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`}
@@ -554,6 +574,7 @@ export default function CompsPage() {
           </div>
         }
       />
+      </div>
 
       <DataToolbar>
         <div className="flex flex-wrap items-center gap-3">
@@ -608,7 +629,7 @@ export default function CompsPage() {
             label="Asset class"
             value={filters.projectType || null}
             onChange={(v) => updateFilter({ projectType: v || '' })}
-            options={PROJECT_TYPES.map((p) => ({ value: p.value, label: p.label }))}
+            options={PROJECT_TYPES.map((p) => ({ value: p.value, label: p.label, count: projectTypeCounts[p.value] }))}
             allowAll
             allLabel="All asset classes"
           />

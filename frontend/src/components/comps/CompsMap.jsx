@@ -9,13 +9,30 @@ import {
   useMap,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Building2, MapPin, Layers } from 'lucide-react';
+import { Building2, MapPin, Layers, MousePointerClick } from 'lucide-react';
+import useTheme from '../../hooks/useTheme';
 
 // Bengaluru fallback center for the comps map. The seed data is residential
 // Bengaluru-only as of audit; this keeps the map oriented even before any
 // row is selected. When the comps span a wider bbox we fit to it.
 const BENGALURU_CENTER = [12.9716, 77.5946];
 const DEFAULT_ZOOM = 11;
+
+// Tile-layer URLs by theme. CartoDB ships matched Light (Positron) and Dark
+// (Dark Matter) styles — we swap based on the active dashboard theme so the
+// map stops looking like a pale rectangle inside a dark UI. The TileLayer's
+// `key` prop is forced to remount on theme change because react-leaflet
+// doesn't react to URL prop changes alone.
+const TILES_BY_THEME = {
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CartoDB',
+  },
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CartoDB',
+  },
+};
 
 // Per-data-type marker palette. Mirrors the source-pill tones on the Comps
 // table so the visual mapping reads instantly: emerald = verified, blue =
@@ -78,6 +95,8 @@ export default function CompsMap({
   onSelectComp,
   height = 520,
 }) {
+  const theme = useTheme();
+  const tile = TILES_BY_THEME[theme] || TILES_BY_THEME.dark;
   // Filter once for points with valid coordinates. Comps without geocode are
   // still listed in the table — they just don't appear on the map. Surfaced
   // in the legend's count below so the user understands the gap.
@@ -115,11 +134,14 @@ export default function CompsMap({
         scrollWheelZoom
         className="h-full w-full"
         // Subtle background so markers stand out against neutral terrain;
-        // CartoDB Positron is the editorial-grade tile we use across REDIP.
+        // tiles swap between Positron (light) and DarkMatter (dark) so the
+        // map blends into whichever theme is active.
       >
         <TileLayer
-          attribution="&copy; OpenStreetMap &copy; CartoDB"
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          // Force a remount on theme change so leaflet swaps tile providers.
+          key={theme}
+          attribution={tile.attribution}
+          url={tile.url}
           subdomains={['a', 'b', 'c', 'd']}
           maxZoom={19}
         />
@@ -128,16 +150,20 @@ export default function CompsMap({
         {mappable.map((comp) => {
           const palette = paletteFor(comp);
           const isSel = comp.id === selectedCompId;
+          // Selected state: bigger radius + heavy stroke that contrasts with
+          // either theme. Uses the theme to pick a stroke that pops on dark
+          // tiles (white) vs. light tiles (deep slate).
+          const selStroke = theme === 'dark' ? '#ffffff' : '#0f172a';
           return (
             <CircleMarker
               key={comp.id}
               center={[comp.lat, comp.lng]}
-              radius={isSel ? 11 : 7}
+              radius={isSel ? 12 : 8}
               pathOptions={{
-                color: isSel ? '#0f172a' : palette.stroke,
+                color: isSel ? selStroke : palette.stroke,
                 weight: isSel ? 3 : 2,
                 fillColor: palette.fill,
-                fillOpacity: isSel ? 1 : 0.85,
+                fillOpacity: isSel ? 1 : 0.92,
               }}
               eventHandlers={{
                 click: () => onSelectComp?.(comp.id),
@@ -253,6 +279,45 @@ export default function CompsMap({
             {formatRate(selectedComp.rate_per_sqft)}
             {selectedComp.locality && <span> · {selectedComp.locality}</span>}
           </p>
+        </div>
+      )}
+
+      {/* Idle hint — bottom-center pill teaching the row↔marker interaction.
+          Only renders when nothing is pinned, so it stays out of the way once
+          users discover the gesture. */}
+      {!selectedComp && mappable.length > 0 && (
+        <div
+          className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 z-[400] inline-flex items-center gap-1.5 rounded-full border border-hairline bg-bg-elevated/90 backdrop-blur px-2.5 py-1 shadow-editorial"
+          aria-hidden="true"
+        >
+          <MousePointerClick size={11} className="text-content-muted" />
+          <span className="text-[10px] uppercase tracking-[0.1em] font-medium text-content-muted">
+            Click any row or marker to focus
+          </span>
+        </div>
+      )}
+
+      {/* Empty-state overlay — when the table has rows but none have coords,
+          or when the table itself is empty. Avoids the "blank pale map" look
+          the user flagged in the screenshot. */}
+      {mappable.length === 0 && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[300] flex items-center justify-center bg-bg-elevated/80 backdrop-blur-sm"
+          role="status"
+        >
+          <div className="text-center max-w-[260px] px-4">
+            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-bg-secondary border border-hairline mb-2.5">
+              <MapPin size={16} className="text-content-muted" />
+            </span>
+            <p className="text-sm font-semibold text-content-primary mb-1">
+              {(comps?.length || 0) === 0 ? 'No comparables to plot' : 'None of these comps are geocoded'}
+            </p>
+            <p className="text-xs text-content-secondary leading-relaxed">
+              {(comps?.length || 0) === 0
+                ? 'Adjust filters above or add a new comp to populate the map.'
+                : `${comps.length} row${comps.length === 1 ? '' : 's'} in the table — add latitude/longitude to make them visible here.`}
+            </p>
+          </div>
         </div>
       )}
     </div>
