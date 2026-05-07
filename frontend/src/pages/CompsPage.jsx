@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Plus,
   Trash2,
@@ -8,6 +8,8 @@ import {
   Building2,
   Download,
   Loader2,
+  Map as MapIcon,
+  Table as TableIcon,
 } from 'lucide-react';
 import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
 import EmptyState from '../components/common/EmptyState';
@@ -19,6 +21,11 @@ import StalenessBadge from '../components/common/StalenessBadge';
 import { SkeletonList } from '../design-system';
 import { formatINR } from '../utils/format';
 import { exportsAPI } from '../services/api';
+
+// Lazy-load the map so the table-only path doesn't pull leaflet (~155 KB
+// gzipped) on first paint. Users land on the table view by default; the map
+// chunk only fetches when they toggle to Split.
+const CompsMap = lazy(() => import('../components/comps/CompsMap'));
 
 const DATA_TYPE_LABEL = {
   internal_benchmark_apr_2026: { tone: 'success', label: 'Verified · Apr 2026' },
@@ -297,6 +304,24 @@ export default function CompsPage() {
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  // View mode: 'table' (default — fast first-paint, no leaflet) | 'split'
+  // (table left, map right; lazy-loads the leaflet chunk on switch).
+  // Persisted in localStorage so power users don't toggle on every visit.
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window === 'undefined') return 'table';
+    return window.localStorage.getItem('comps:viewMode') === 'split' ? 'split' : 'table';
+  });
+  // Selected-comp id is lifted here so the table and map can synchronise:
+  // click a marker → row highlights + scrolls into view; click a row → map
+  // flies to the marker. `null` = nothing pinned.
+  const [selectedCompId, setSelectedCompId] = useState(null);
+  const rowRefs = useRef({});
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('comps:viewMode', viewMode);
+    }
+  }, [viewMode]);
 
   const pageSize = 15;
 
@@ -440,6 +465,35 @@ export default function CompsPage() {
 
   const hasActiveFilters = activeFilters.length > 0;
 
+  // Selecting a row from the map. If the comp lives on a different page than
+  // the visible slice, jump to that page so the row scrolls into view. The
+  // row-ref scroll happens in the effect below once the page state settles.
+  const handleSelectComp = useCallback(
+    (compId) => {
+      if (compId == null) {
+        setSelectedCompId(null);
+        return;
+      }
+      setSelectedCompId(compId);
+      const idx = sortedRows.findIndex((r) => r.id === compId);
+      if (idx >= 0) {
+        const targetPage = Math.floor(idx / pageSize) + 1;
+        if (targetPage !== safePage) setPage(targetPage);
+      }
+    },
+    [sortedRows, safePage, pageSize],
+  );
+
+  // Scroll the selected row into view after page transitions finish. Uses
+  // {block: 'nearest'} so the page doesn't yank if the row is already in view.
+  useEffect(() => {
+    if (!selectedCompId) return;
+    const el = rowRefs.current[selectedCompId];
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedCompId, safePage]);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -447,6 +501,39 @@ export default function CompsPage() {
         description={`${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`}
         actions={
           <div className="flex items-center gap-2">
+            {/* View toggle — segmented, two-state. Stable chrome (border +
+                bg) with a soft accent on the active segment. Lazy-loads
+                the leaflet chunk only when Split is selected. */}
+            <div
+              className="inline-flex items-center rounded-lg border border-hairline-strong bg-bg-elevated p-0.5"
+              role="group"
+              aria-label="Comps view mode"
+            >
+              {[
+                { value: 'table', label: 'Table', icon: TableIcon },
+                { value: 'split', label: 'Split',  icon: MapIcon },
+              ].map(({ value, label, icon: Icon }) => {
+                const active = viewMode === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setViewMode(value)}
+                    className={
+                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ease-out ' +
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ' +
+                      (active
+                        ? 'bg-primary-50 text-primary-700 shadow-sm'
+                        : 'text-content-secondary hover:bg-bg-secondary hover:text-content-primary')
+                    }
+                  >
+                    <Icon size={13} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
             <button
               onClick={handleExport}
               disabled={exporting || rawRows.length === 0}
@@ -566,22 +653,50 @@ export default function CompsPage() {
           }
         />
       ) : (
-        <div className="bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial">
+        <div
+          className={
+            viewMode === 'split'
+              ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-4 items-start'
+              : ''
+          }
+        >
+          {viewMode === 'split' && (
+            <div className="lg:order-last lg:sticky lg:top-4 self-start">
+              <Suspense
+                fallback={
+                  <div
+                    className="bg-bg-secondary border border-hairline rounded-editorial flex items-center justify-center text-sm text-content-muted"
+                    style={{ height: 520 }}
+                  >
+                    <Loader2 size={16} className="animate-spin mr-2" /> Loading map…
+                  </div>
+                }
+              >
+                <CompsMap
+                  comps={sortedRows}
+                  selectedCompId={selectedCompId}
+                  onSelectComp={handleSelectComp}
+                  height={520}
+                />
+              </Suspense>
+            </div>
+          )}
+          <div className="bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-bg-secondary border-b border-hairline-strong">
+                <tr className="bg-bg-secondary/70 border-b border-hairline-strong">
                   <SortableHeader sortKey="project_name" sort={sort} onSort={onSort} className="px-4 py-3">Project</SortableHeader>
                   <SortableHeader sortKey="developer" sort={sort} onSort={onSort} className="px-4 py-3">Developer</SortableHeader>
                   <SortableHeader sortKey="locality" sort={sort} onSort={onSort} className="px-4 py-3">Locality</SortableHeader>
-                  <th className="px-4 py-3 text-left font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Type</th>
+                  <th className="px-4 py-3 text-left font-semibold text-[10px] tracking-[0.08em] uppercase text-content-muted">Type</th>
                   <SortableHeader sortKey="rate_per_sqft" sort={sort} onSort={onSort} align="right" className="px-4 py-3">Rate ₹/sqft</SortableHeader>
-                  <th className="px-4 py-3 text-right font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Range</th>
+                  <th className="px-4 py-3 text-right font-semibold text-[10px] tracking-[0.08em] uppercase text-content-muted">Range</th>
                   <SortableHeader sortKey="yoy_change_pct" sort={sort} onSort={onSort} align="right" className="px-4 py-3">YoY</SortableHeader>
                   <SortableHeader sortKey="total_units" sort={sort} onSort={onSort} align="right" className="px-4 py-3">Units</SortableHeader>
                   <SortableHeader sortKey="launch_year" sort={sort} onSort={onSort} align="center" className="px-4 py-3">Launch</SortableHeader>
-                  <th className="px-4 py-3 text-left font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Source</th>
-                  <th className="px-4 py-3 text-center font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Actions</th>
+                  <th className="px-4 py-3 text-left font-semibold text-[10px] tracking-[0.08em] uppercase text-content-muted">Source</th>
+                  <th className="px-4 py-3 text-center font-semibold text-[10px] tracking-[0.08em] uppercase text-content-muted">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -597,8 +712,19 @@ export default function CompsPage() {
                   const rangeLow  = comp.rate_per_sqft_min;
                   const rangeHigh = comp.rate_per_sqft_max;
                   const hasRange = rangeLow != null && rangeHigh != null && Number(rangeLow) !== Number(rangeHigh);
+                  const isSelected = selectedCompId === comp.id;
                   return (
-                    <tr key={comp.id} className="transition-colors duration-150 ease-out hover:bg-bg-secondary">
+                    <tr
+                      key={comp.id}
+                      ref={(el) => { rowRefs.current[comp.id] = el; }}
+                      onClick={() => handleSelectComp(isSelected ? null : comp.id)}
+                      className={
+                        'cursor-pointer transition-colors duration-150 ease-out ' +
+                        (isSelected
+                          ? 'bg-primary-50/60 ring-1 ring-inset ring-primary-200'
+                          : 'hover:bg-bg-secondary')
+                      }
+                    >
                       <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span>{comp.project_name}</span>
@@ -615,7 +741,11 @@ export default function CompsPage() {
                       <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{comp.developer || '—'}</td>
                       <td className="px-4 py-3 text-content-secondary">{comp.locality || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+                        {/* Type pill — neutral chrome + accent stripe per the
+                            editorial-not-tacky rule. Replaces the prior
+                            saturated blue tile that read as chip-soup. */}
+                        <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-2 py-0.5 text-[11px] font-medium text-content-secondary uppercase tracking-wide">
+                          <span className="w-1 h-1 rounded-full bg-primary-500" aria-hidden="true" />
                           {comp.project_type?.replace(/_/g, ' ') || '—'}
                         </span>
                       </td>
@@ -639,6 +769,7 @@ export default function CompsPage() {
                               href={comp.source_url}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
                               className="inline-block transition-opacity duration-150 ease-out hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded-full"
                               title={comp.source || 'Open source'}
                             >
@@ -658,9 +789,9 @@ export default function CompsPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
-                          onClick={() => handleDelete(comp.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(comp.id); }}
                           disabled={deleteMutation.isPending}
-                          className="p-1.5 rounded-lg text-content-muted hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                          className="p-1.5 rounded-lg text-content-muted transition-colors duration-150 ease-out hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 active:scale-[0.95] disabled:opacity-50"
                           title="Delete comparable"
                         >
                           <Trash2 size={16} />
@@ -700,6 +831,7 @@ export default function CompsPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
 

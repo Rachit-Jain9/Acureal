@@ -81,10 +81,12 @@ const matchesSearch = (row, term, keys) => {
 
 function SectionCard({ icon: Icon, title, children, action, className = '' }) {
   return (
-    <div className={`bg-white rounded-xl border border-hairline-strong shadow-sm overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-hairline bg-bg-secondary">
-        <Icon size={16} className="text-content-secondary shrink-0" />
-        <h3 className="text-sm font-semibold text-content-primary min-w-0 truncate">{title}</h3>
+    <div className={`bg-bg-elevated rounded-xl border border-hairline-strong shadow-editorial overflow-hidden transition-shadow duration-200 ease-out hover:shadow-md ${className}`}>
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-hairline bg-bg-secondary/60">
+        <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-bg-elevated border border-hairline shrink-0">
+          <Icon size={13} className="text-content-secondary" />
+        </span>
+        <h3 className="text-sm font-semibold tracking-tight text-content-primary min-w-0 truncate">{title}</h3>
         {action && <div className="ml-auto shrink-0 flex items-center gap-2">{action}</div>}
       </div>
       <div className="px-5 py-4">{children}</div>
@@ -1079,19 +1081,29 @@ export default function IntelligencePage() {
         </div>
       )}
 
-      {/* Claude AI Brief — must carry the AI-assisted disclaimer per CLAUDE.md
-          hard rule on every AI-synthesised narrative, in both UI and exports. */}
+      {/* Claude AI Brief — editorial chrome (neutral surface + accent stripe
+          on the left) replacing the indigo-tinted tile. Carries the mandated
+          AI-assisted disclaimer per CLAUDE.md hard rule. */}
       {brief?.claudeBrief && (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-6 py-5">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mb-3">
-            <Brain size={16} className="text-indigo-600" />
-            <p className="text-sm font-semibold text-indigo-800">AI Brief — Claude</p>
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800">
-              AI-assisted · review before relying
-            </span>
-            <span className="ml-auto text-xs text-indigo-400">Generated from internal pipeline data only</span>
+        <div className="relative rounded-xl border border-hairline-strong bg-bg-elevated shadow-editorial overflow-hidden">
+          <span
+            className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-indigo-500 via-indigo-400 to-violet-500"
+            aria-hidden="true"
+          />
+          <div className="px-6 py-5 pl-7">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-3">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700">
+                <Brain size={13} />
+              </span>
+              <p className="text-eyebrow uppercase tracking-[0.12em] font-semibold text-content-muted">AI Brief</p>
+              <span className="text-sm font-semibold text-content-primary">Claude · Daily Synthesis</span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800">
+                AI-assisted · review before relying
+              </span>
+              <span className="ml-auto text-[11px] text-content-muted">Generated from internal pipeline data only</span>
+            </div>
+            <p className="text-sm text-content-primary whitespace-pre-line leading-relaxed">{brief.claudeBrief}</p>
           </div>
-          <p className="text-sm text-indigo-900 whitespace-pre-line leading-relaxed">{brief.claudeBrief}</p>
         </div>
       )}
 
