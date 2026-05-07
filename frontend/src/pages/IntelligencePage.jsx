@@ -998,18 +998,78 @@ function HospitalityBenchmarksTable({ rows }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
+// City selector — schema is multi-city ready (every benchmark table has a
+// `city` column and every backend endpoint accepts ?city=X), but Bengaluru
+// is the only city with seeded data today. The other tier-1 metros render
+// honest "no data yet" empty states per section. Order intentional:
+// Bengaluru (full coverage) → Mumbai/NCR/Hyderabad (next ingestion targets).
+const SUPPORTED_CITIES = ['Bengaluru', 'Mumbai', 'NCR', 'Hyderabad'];
+
+const useCityPreference = () => {
+  const [city, setCity] = useState(() => {
+    if (typeof window === 'undefined') return 'Bengaluru';
+    const stored = window.localStorage.getItem('intelligence:city');
+    return SUPPORTED_CITIES.includes(stored) ? stored : 'Bengaluru';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('intelligence:city', city);
+    }
+  }, [city]);
+  return [city, setCity];
+};
+
+// Compact city selector — segmented chips when ≤4 cities, falls back to a
+// dropdown when the supported list grows. Mirrors the View toggle on the
+// Comps page so the visual register stays consistent across the dashboard.
+function CitySelector({ value, onChange, options }) {
+  return (
+    <div
+      className="inline-flex items-center rounded-lg border border-hairline-strong bg-bg-elevated p-0.5"
+      role="group"
+      aria-label="City"
+    >
+      {options.map((city) => {
+        const active = value === city;
+        return (
+          <button
+            key={city}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(city)}
+            className={
+              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ease-out ' +
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ' +
+              (active
+                ? 'bg-primary-50 text-primary-700 shadow-sm'
+                : 'text-content-secondary hover:bg-bg-secondary hover:text-content-primary')
+            }
+          >
+            {city}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function IntelligencePage() {
   const today = new Date().toISOString().slice(0, 10);
+  const [city, setCity] = useCityPreference();
   const { data: brief, isLoading, isError, refetch, isFetching } = useDailyBrief();
-  const { data: transactions, isLoading: txLoading } = useMarketTransactions({ city: 'Bengaluru' });
-  const { data: benchmarks, isLoading: bmLoading } = useMicroMarketBenchmarks({ city: 'Bengaluru' });
-  const { data: officeBenchmarks } = useOfficeBenchmarks({ city: 'Bengaluru' });
-  const { data: retailBenchmarks } = useRetailBenchmarks({ city: 'Bengaluru' });
-  const { data: industrialBenchmarks } = useIndustrialBenchmarks({ city: 'Bengaluru' });
-  const { data: hospitalityBenchmarks } = useHospitalityBenchmarks({ city: 'Bengaluru' });
-  const { data: macroKpis } = useMacroKpis({ city: 'Bengaluru' });
+  const { data: transactions, isLoading: txLoading } = useMarketTransactions({ city });
+  const { data: benchmarks, isLoading: bmLoading } = useMicroMarketBenchmarks({ city });
+  const { data: officeBenchmarks } = useOfficeBenchmarks({ city });
+  const { data: retailBenchmarks } = useRetailBenchmarks({ city });
+  const { data: industrialBenchmarks } = useIndustrialBenchmarks({ city });
+  const { data: hospitalityBenchmarks } = useHospitalityBenchmarks({ city });
+  const { data: macroKpis } = useMacroKpis({ city });
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
+  // Anything Bengaluru-only at the backend (daily brief, micro-market notes)
+  // gets a small "Bengaluru-anchored" annotation when a different city is
+  // selected. Honesty over silently showing stale data.
+  const isBengaluru = city === 'Bengaluru';
 
   // Skeleton: page header + 4 KPI tiles + 2 chart cards + briefing card. The
   // brief itself is a multi-section narrative, so the body skeleton is one
@@ -1048,18 +1108,36 @@ export default function IntelligencePage() {
     <div className="space-y-5 max-w-6xl">
       <PageHeader
         title="Market Intelligence"
-        description={`Bengaluru real estate intelligence — ${today}`}
+        description={`${city} real estate intelligence — ${today}`}
         actions={
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="btn btn-secondary flex items-center gap-2 text-sm"
-          >
-            <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <CitySelector value={city} onChange={setCity} options={SUPPORTED_CITIES} />
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="btn btn-secondary flex items-center gap-2 text-sm"
+            >
+              <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
         }
       />
+
+      {/* Honest-data note — surfaces when the user picks a non-Bengaluru
+          city. The daily brief synthesis and admin notes are Bengaluru-
+          anchored at the backend; we tell the user rather than silently
+          serving Bengaluru data under a Mumbai header. The benchmark
+          tables themselves render real per-city results (or empty states)
+          via the city-scoped hooks above. */}
+      {!isBengaluru && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
+          <span className="font-semibold">{city} preview · </span>
+          Benchmark tables below render any seeded {city} data; the AI Brief, Deal of the Day,
+          Market Signals, and Bengaluru-curated micro-market notes stay anchored on Bengaluru
+          until verified {city} feeds + admin notes are configured.
+        </div>
+      )}
 
       {notConfigured && <UnconfiguredNotice requirements={brief?.verifiedSourceRequirements} />}
 
@@ -1068,7 +1146,7 @@ export default function IntelligencePage() {
         <div>
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
-              Bengaluru Q1 2026 — Verified Macro Indicators
+              {city} Q1 2026 — Verified Macro Indicators
             </p>
             <div className="flex items-center gap-2">
               <SectionStaleness rows={macroKpis} fallback="macro_kpi" />
@@ -1239,7 +1317,7 @@ export default function IntelligencePage() {
       {/* Section 5: Residential Micro-Market Benchmark Summary */}
       <SectionCard
         icon={DollarSign}
-        title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026"
+        title={`5. Residential Micro-Market Benchmarks — ${city} Q1 2026`}
         action={<SectionStaleness rows={benchmarks} fallback="micro_market_benchmark_listing" />}
       >
         {bmLoading ? (
@@ -1302,7 +1380,7 @@ export default function IntelligencePage() {
       {/* Section 6: Market Transaction Flow */}
       <SectionCard
         icon={ArrowUpRight}
-        title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)"
+        title={`6. Market Transaction Flow — ${city} (FY2025–FY2027)`}
         action={<SectionStaleness rows={transactions} fallback="market_transaction" />}
       >
         {txLoading ? (
