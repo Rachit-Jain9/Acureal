@@ -138,6 +138,39 @@ export default function CompsMap({
 
   const mapRef = useRef(null);
 
+  // Google Maps auth-failure capture. The Maps JS SDK emits its actual auth
+  // error code (RefererNotAllowedMapError, ApiNotActivatedMapError, etc.) via
+  // a global `gm_authFailure` callback — `useJsApiLoader.loadError` does NOT
+  // surface this detail, leaving the UI stuck on a generic "Could not load"
+  // message. We hook the global callback so the failure card can render the
+  // exact restriction that's failing, plus the host the SDK was rejected from.
+  const [authFailure, setAuthFailure] = useState(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    // Preserve any prior global hook so we don't trample on other consumers.
+    const prev = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      // Google calls this with no arguments; we capture the host so the
+      // operator sees exactly which referrer pattern needs allowlisting.
+      setAuthFailure({
+        host: window.location.host,
+        href: window.location.href,
+        timestamp: new Date().toISOString(),
+      });
+      // eslint-disable-next-line no-console
+      console.error(
+        '[CompsMap] Google Maps gm_authFailure fired — key restriction blocked the load.',
+        { host: window.location.host, href: window.location.href }
+      );
+      if (typeof prev === 'function') prev();
+    };
+    return () => {
+      // Restore previous hook on unmount so other map instances on the page
+      // don't lose their handler.
+      window.gm_authFailure = prev;
+    };
+  }, []);
+
   // Filter once for points with valid coordinates. Comps without geocode are
   // still listed in the table — they just don't appear on the map. Surfaced
   // in the legend's count below so the user understands the gap.
@@ -233,7 +266,10 @@ export default function CompsMap({
     );
   }
 
-  if (loadError) {
+  // Combine the synchronous loader error and the async auth-failure callback
+  // into one failure surface. The auth-failure path is the only one that
+  // tells us which exact host needs allowlisting — preserve it loudly.
+  if (loadError || authFailure) {
     return (
       <div
         className="relative bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial flex items-center justify-center"
@@ -248,6 +284,14 @@ export default function CompsMap({
           <p className="text-xs text-content-secondary leading-relaxed">
             Likely cause: HTTP referrer restriction on the API key. Open Google Cloud Console → Credentials →
             edit the key → add the current host to the allowed referrers and reload.
+          </p>
+          {authFailure?.host && (
+            <p className="mt-2 text-[11px] text-content-muted">
+              Rejected host: <code className="bg-bg-secondary px-1 py-0.5 rounded text-rose-700">{authFailure.host}</code>
+            </p>
+          )}
+          <p className="mt-2 text-[10px] text-content-muted leading-relaxed">
+            See the browser console for the exact <code className="bg-bg-secondary px-1 rounded">Google Maps JavaScript API error:</code> code.
           </p>
         </div>
       </div>
