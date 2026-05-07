@@ -1533,14 +1533,20 @@ export default function IntelligencePage() {
         </SectionCard>
       </div>
 
-      {/* Section 10: Bottom Line */}
-      {brief?.bottomLine && (
-        <div className="rounded-xl border border-hairline-strong bg-bg-primary px-6 py-4">
+      {/* Section 10: Bottom Line —
+          Was rendering an empty card in light theme: `text-white` on
+          `bg-bg-primary` produces white-on-white when the dashboard is
+          in light mode (bg-bg-primary maps to a near-white surface
+          there). Now uses semantic tokens so the text reads in both
+          themes; also `.trim()` the body so a backend-returned empty
+          string doesn't render an empty card. */}
+      {brief?.bottomLine?.trim() && (
+        <div className="rounded-xl border border-hairline-strong bg-bg-elevated px-6 py-4 shadow-editorial">
           <div className="flex items-start gap-3">
-            <Brain size={18} className="text-primary-400 flex-shrink-0 mt-0.5" />
+            <Brain size={18} className="text-primary-500 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-content-muted uppercase tracking-wide mb-1">10. Bottom Line</p>
-              <p className="text-sm text-white">{brief.bottomLine}</p>
+              <p className="text-sm text-content-primary leading-relaxed">{brief.bottomLine}</p>
             </div>
           </div>
         </div>
