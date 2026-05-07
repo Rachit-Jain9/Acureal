@@ -4,6 +4,33 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-07 (PM hotfix — IntelligencePage crash + theme-switch lag)
+
+User reported the Market Intelligence page rendering "Something went wrong on this page · useEffect is not defined" + a visible lag when toggling between light and dark theme. Two root causes, both shipped together because they surfaced from the same screenshot.
+
+**PR [#153](https://github.com/Rachit-Jain9/REDIP/pull/153)** — `fix(intelligence,theme): restore useEffect import + smooth theme switch via View Transitions`
+
+P0 — IntelligencePage crash:
+- PR #151 added a `useCityPreference` hook that calls `useEffect` for localStorage persistence, but `useEffect` was never added to the React imports on `IntelligencePage.jsx`. The page rendered the fallback error screen for ~30 minutes in production until this PR landed. One-line fix: add `useEffect` to the named imports.
+- Cross-checked CompsPage.jsx — its imports already included `useEffect` from PR #149, no other regression.
+
+Theme-switch lag:
+- Root cause was a CSS rule in `index.css` applying `transition-property: background-color, border-color, color, fill, stroke` for 180ms to **every element + pseudo-element on the page, always** (`*, *::before, *::after`). Hundreds-to-thousands of simultaneous animations on each theme flip; constant paint-cost overhead during normal interaction.
+- Two-strategy fix:
+  1. **View Transitions API** (Chromium 111+, Safari 18+) — `document.startViewTransition` wraps the data-theme flip; browser snapshots, swaps, and cross-fades in a single compositor pass. Zero per-element animation work. Tested in dev preview: ~50ms wall-clock.
+  2. **Fallback** — `html.theme-transitioning` class added for 220ms around the data-theme flip, removed via re-entrant timer. CSS rule gated on this class so the universal selector only runs during the brief switch window.
+- Plus `prefers-reduced-motion` override for instant flip.
+- Component-level Tailwind `transition-colors` / `transition-all` classes unaffected — those are scoped per-element and target hover/focus, not the theme variables.
+
+Net diff: +71 / −6 across 3 files. No new dependencies. CI all 7 checks green; merged.
+
+### Lesson logged for future sessions
+
+- **Always run a hook-import audit when adding hooks to existing files.** A pre-commit `grep` for any of `useEffect|useState|useMemo|useCallback|useRef|useLayoutEffect|useTransition|useId` against the import line on every changed file would have caught this in 2 seconds. Adding to memory.
+- **Universal `*` CSS transitions are a smell.** Anything that touches "every element on the page" should be gated behind a class that's only present during the actual transition.
+
+---
+
 ## 2026-05-07 (PM addendum — theme-aware map, sticky chrome, chip counts, multi-city)
 
 Follow-up session triggered by a user screenshot of the Comps page in dark theme. Four UX issues visible in the screenshot + the cheapest Tier 1 ship from the earlier roadmap (multi-city) all bundled into one PR.
