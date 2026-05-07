@@ -4,6 +4,67 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-07 (Comps + Intelligence subsystem polish — wire orphans, staleness, map view, AI router cleanup)
+
+Heavy bundle session. The starting point was an honest audit (in-chat) of every place LLMs are wired and the entire Comps + Market Intelligence subsystem. Audit found three categories of gap: orphaned features (similarity scorer + CSV export endpoint + AI disclaimer), invisible AI calls (two services bypassing the telemetry router), and visual debt on the user-facing surfaces. Three PRs landed in sequence to close the highest-leverage items.
+
+**PR [#147](https://github.com/Rachit-Jain9/REDIP/pull/147)** — `feat(comps,intelligence): wire orphaned similarity scorer + class-aware staleness badges + CSV export`
+
+- Deal Comps tab now consumes `/comps/ranked/:dealId` (the 6-factor similarity scorer that had been wired server-side for months but never surfaced in the UI). Each row carries a composite-score pill (toned by score, sparse-data honest); a small ⓘ-button opens a popover with each weighted factor (distance / asset_class / BHK / vintage / size / amenities) drawn as an animated 0→score bar plus the rate-vs-underwriting delta. `/comps/score/:dealId/:compId` hydrates the pinned-comp drawer.
+- New `frontend/src/utils/staleness.js` + `frontend/src/components/common/StalenessBadge.jsx` primitives. Per-class half-lives (residential listings 7d, IPC reports 90d, macro KPIs 60d, market transactions 30d). Stale rows pulse subtly via `motion-safe:animate-pulse` and collapse to instant on `prefers-reduced-motion`.
+- Aggregate worst-case staleness summary lands in every benchmark section header on IntelligencePage (Section 5 + 5a/b/c/d + Section 6 + Macro KPI strip). Per-row staleness badges land next to source pills on the top-nav Comps page.
+- The orphan `/exports/comps` CSV endpoint is now wired into the Comps page header with a date-stamped filename (`redip-comps-YYYY-MM-DD.csv`).
+- Closed the only hard-rule violation in the AI surfaces audit: the daily Claude brief on IntelligencePage now carries the mandated `AI-assisted · review before relying` chip per CLAUDE.md.
+- Net diff: +808 / −109 across 5 files. New StalenessBadge chunk is 1.58 KB gzipped. CI all green; merged.
+
+**PR [#148](https://github.com/Rachit-Jain9/REDIP/pull/148)** — `chore(ai): route export.insights + embeddings through aiRouter — close telemetry bypasses`
+
+- Two services were importing directly from `providerRegistry`, skipping `ai_call_logs`, the daily cost cap, and the routing-config table. PR closes both.
+- Added `runOpenAIEmbedding` wrapper to `aiRouter.js` (it was missing). `embeddings.service.js` swapped its import target. `export.insights.service.js` now uses `task: 'export_insights'` so the cost dashboard splits this column off from `'reasoning'`, and stamps `dealId` + `organizationId` into the `attach` payload for full lineage.
+- Test mock in `embeddings.service.test.js` updated to mock `aiRouter` instead of `providerRegistry` (the new module boundary).
+- 100% AI telemetry coverage restored. No user-visible change. Net diff: +58 / −12 across 4 files. CI all green; merged.
+
+**PR [#149](https://github.com/Rachit-Jain9/REDIP/pull/149)** — `feat(comps,intelligence): map view + bidirectional row↔marker select + editorial chrome polish`
+
+- Comps page gains a Map | Table view toggle (segmented, persisted in `localStorage`). Split mode renders a 2-column grid: filterable table left, leaflet map right with `CartoDB.Positron` tiles and markers colored by `data_type` (verified emerald · listing blue · IPC violet). Sticky map column so it stays in view while the table scrolls.
+- Bidirectional selection: click a row → map flies to marker (400ms leaflet ease, matches FRONTEND_GUIDELINES); click a marker → table jumps to that page + scrolls + highlights row.
+- Map carries a floating legend with source-mix counts and an "ungeocoded N rows" reminder when the table contains rows the map can't plot. Selected-comp inset card mirrors the row identity.
+- Map chunk lazy-loaded (`React.lazy` + Suspense) so the table-only default path doesn't pay leaflet's ~155 KB cost.
+- Editorial polish addressing standing "plain and boring" feedback: type pill swapped from saturated chip-soup to neutral chrome + accent dot; table headers tightened to `text-[10px] tracking-[0.08em]` muted; rows are click-targets with primary-tint + ring-inset selection; IntelligencePage AI Brief panel rebuilt with editorial chrome (neutral surface + 1px gradient accent stripe); SectionCard headers gained icon-in-tile pattern + hover:shadow-md lift.
+- Net diff: +430 / −26 across 3 files (1 new). CI green; pending merge as of session end.
+
+### Cumulative session totals
+
+- **3 PRs opened** (2 merged + 1 pending CI completion).
+- **No new dependencies** — no framer-motion add despite richer motion (used CSS transitions); no leaflet add (already there for MapPage).
+- **AI telemetry coverage**: 100% (was: missing `export_insights` and `embedding`).
+- **Orphan endpoints closed**: 3 (`/comps/ranked/:dealId`, `/comps/score/:dealId/:compId`, `/exports/comps`).
+- **Hard-rule violations closed**: 1 (AI disclaimer on Intelligence brief).
+
+### What's left to do
+
+Tier 0 (next 2-4 weeks):
+1. **Broker / IPC report Gemini extraction → review queue → comps commit pipeline**. The single biggest data-moat unlock. Reuse `extraction.service.js` machinery with new `broker_quote` + `ipc_report` doctypes. Email forwarding (`ingest@redip` → Postmark webhook) is the lower-friction first surface; WhatsApp Business API needs Meta verification + DPDP consent flow (4-6 weeks).
+2. **Reviewer queue UI** — split-pane source-PDF + editable structured fields, keyboard-driven approve/reject. Build before scaling ingestion (reviewer throughput is the real bottleneck).
+
+Tier 1 (4-10 weeks):
+3. **Multi-city activation** on IntelligencePage — replace hard-coded `Bengaluru` selector with a city dropdown. Schema is already multi-city-ready.
+4. **Plotted-development + villas + redevelopment + mixed-use schema + UX** with class-specific metrics (plot-rate vs. saleable-rate, FSI premium, society-consent %).
+5. **Post-hoc numerical verifier** — extract numbers from AI narratives, assert against deterministic snapshot, flag drift as review item.
+6. **Cross-document inconsistency detector** — sale-deed seller vs. EC seller, sanctioned-plan FAR vs. layout approval, RERA project status vs. on-site approvals. Writes to `ai_artifacts.risk_brief` (the type already exists, just unwired).
+
+Tier 2 (10-20 weeks):
+7. **Narrow Deal Q&A agent** — single-tool (`searchEvidence`), human-approved before action, mandatory citation to `evidence_facts.id`. Activates the dormant tool registry safely.
+8. **Risk synthesis + IC memo** writing to existing `ai_artifacts` types (`risk_brief`, `ic_memo`).
+9. **PPTX/PDF tear-sheet export of Intelligence dashboard** at city scope.
+10. **GPT-5.4 A/B harness** on parcel narrative + export insights with held-out 30-deal hallucination + tone-regression scoring before any wider model swap.
+
+### Operator actions required
+
+None for these PRs — they are all UI/code-only. The Q1 2026 benchmark migration was already applied in the prior session (2026-05-05).
+
+---
+
 ## 2026-05-05 (Q1 2026 Comps + Market Intelligence refresh — 4-asset-class expansion)
 
 Refreshed Comps and Market Intelligence end-to-end using verified Q1 2026 sources (99acres locality data, Cushman & Wakefield Bengaluru MarketBeat Q1 2026, JLL India Q4 2025, Knight Frank APAC Prime Office Q1 2026, Horwath HTL Hotel Market Review 2025, ICRA, Mordor Intelligence, CBRE India Market Monitor Q1 2026). Inputs: a `redip_bengaluru_micro_market_rates_v0_2_2026Q1.csv`/`.json` data pack and a long-form `COMPS_REDIP-Claude.docx` rate card.
