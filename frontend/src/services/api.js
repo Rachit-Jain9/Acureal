@@ -424,6 +424,8 @@ export const exportsAPI = {
   dealPdf: (dealId) => api.get(`/exports/deals/${dealId}/pdf`, { responseType: 'blob' }),
   dealPptx: (dealId) => api.get(`/exports/deals/${dealId}/pptx`, { responseType: 'blob' }),
   dealsXlsx: (params) => api.get('/exports/deals/xlsx', { params, responseType: 'blob' }),
+  intelligenceTearSheet: (params) =>
+    api.get('/exports/intelligence/tear-sheet', { params, responseType: 'blob' }),
 };
 
 // DD Items
