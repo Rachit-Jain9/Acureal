@@ -136,6 +136,23 @@ export default function CompsMap({
     libraries: GMAPS_LIBRARIES,
   });
 
+  // Surface the underlying loadError to the console + a state mirror so the
+  // failure UI can show the actual Error.message instead of a generic guess.
+  // Without this, useJsApiLoader.loadError sat invisible while the UI claimed
+  // it was a referrer issue — wasting an entire debug session chasing the
+  // wrong layer.
+  useEffect(() => {
+    if (!loadError) return;
+    // eslint-disable-next-line no-console
+    console.error('[CompsMap] useJsApiLoader.loadError:', loadError);
+    // eslint-disable-next-line no-console
+    console.error('[CompsMap] loadError.message:', loadError?.message);
+    // eslint-disable-next-line no-console
+    console.error('[CompsMap] loadError.stack:', loadError?.stack);
+    // eslint-disable-next-line no-console
+    console.error('[CompsMap] script src expected:', `https://maps.googleapis.com/maps/api/js?key=${(apiKey || '').slice(0, 10)}…&libraries=marker&v=weekly`);
+  }, [loadError, apiKey]);
+
   const mapRef = useRef(null);
 
   // Google Maps auth-failure capture. The Maps JS SDK emits its actual auth
@@ -267,31 +284,65 @@ export default function CompsMap({
   }
 
   // Combine the synchronous loader error and the async auth-failure callback
-  // into one failure surface. The auth-failure path is the only one that
-  // tells us which exact host needs allowlisting — preserve it loudly.
+  // into one failure surface. Three honest layers, in priority order:
+  //   1. authFailure   → Google rejected us (post-load): exact host shown
+  //   2. loadError     → script never loaded: real Error.message shown
+  //                       (most often: extension/adblocker, network, CSP)
+  //   3. fallback hint → referrer / API restriction
   if (loadError || authFailure) {
+    const realErrorMsg = loadError?.message || '';
+    // Heuristic: if loadError fires WITHOUT gm_authFailure, the script never
+    // reached Google (it would have run gm_authFailure if it did). That
+    // signals an upstream block — extension, network, or our own CSP.
+    const isLikelyClientBlock = !!loadError && !authFailure;
     return (
       <div
         className="relative bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial flex items-center justify-center"
         style={{ height }}
         role="status"
       >
-        <div className="text-center max-w-sm px-6">
+        <div className="text-center max-w-md px-6 py-5">
           <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-rose-50 border border-rose-200 mb-2.5">
             <AlertTriangle size={16} className="text-rose-600" />
           </span>
-          <p className="text-sm font-semibold text-content-primary mb-1">Could not load Google Maps</p>
-          <p className="text-xs text-content-secondary leading-relaxed">
-            Likely cause: HTTP referrer restriction on the API key. Open Google Cloud Console → Credentials →
-            edit the key → add the current host to the allowed referrers and reload.
-          </p>
+          <p className="text-sm font-semibold text-content-primary mb-1.5">Could not load Google Maps</p>
+
+          {realErrorMsg && (
+            <div className="mt-2 mb-2.5 text-left">
+              <p className="text-[10px] uppercase tracking-[0.1em] font-semibold text-content-muted mb-1">Error</p>
+              <pre className="bg-bg-secondary border border-hairline rounded px-2.5 py-1.5 text-[11px] text-rose-700 whitespace-pre-wrap leading-snug font-mono break-words">
+                {realErrorMsg}
+              </pre>
+            </div>
+          )}
+
           {authFailure?.host && (
-            <p className="mt-2 text-[11px] text-content-muted">
+            <p className="mb-2 text-[11px] text-content-muted">
               Rejected host: <code className="bg-bg-secondary px-1 py-0.5 rounded text-rose-700">{authFailure.host}</code>
             </p>
           )}
-          <p className="mt-2 text-[10px] text-content-muted leading-relaxed">
-            See the browser console for the exact <code className="bg-bg-secondary px-1 rounded">Google Maps JavaScript API error:</code> code.
+
+          {isLikelyClientBlock ? (
+            <div className="text-left text-xs text-content-secondary leading-relaxed space-y-1.5">
+              <p className="font-medium text-content-primary">Most likely causes (in order):</p>
+              <ol className="list-decimal pl-4 space-y-1">
+                <li>
+                  Browser extension blocking <code className="bg-bg-secondary px-1 rounded text-[10px]">maps.googleapis.com</code>
+                  {' '}(uBlock, Privacy Badger, DuckDuckGo, etc.). Try an incognito window with extensions off.
+                </li>
+                <li>Network/firewall block on Google Maps domains.</li>
+                <li>Stale browser cache from before the CSP fix — hard-refresh (Cmd/Ctrl+Shift+R).</li>
+              </ol>
+            </div>
+          ) : (
+            <p className="text-xs text-content-secondary leading-relaxed">
+              Open Google Cloud Console → Credentials → edit the key → add the current host to allowed
+              HTTP referrers and reload. Wait up to 5 min for propagation.
+            </p>
+          )}
+
+          <p className="mt-3 text-[10px] text-content-muted leading-relaxed">
+            Full diagnostic logs in the browser console (filter for <code className="bg-bg-secondary px-1 rounded">[CompsMap]</code>).
           </p>
         </div>
       </div>
