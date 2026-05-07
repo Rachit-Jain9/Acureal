@@ -4,6 +4,42 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-07 (PM addendum — theme-aware map, sticky chrome, chip counts, multi-city)
+
+Follow-up session triggered by a user screenshot of the Comps page in dark theme. Four UX issues visible in the screenshot + the cheapest Tier 1 ship from the earlier roadmap (multi-city) all bundled into one PR.
+
+**PR [#151](https://github.com/Rachit-Jain9/REDIP/pull/151)** — `feat(comps,intelligence): theme-aware map + sticky chrome + chip counts + multi-city selector`
+
+Direct fix list driven by the screenshot:
+- **Theme-aware map tiles**. CartoDB Positron stays for light theme; CartoDB Dark Matter ships when `html[data-theme="dark"]`. New `useTheme` hook subscribes to the data-theme attribute via MutationObserver so the TileLayer remounts on theme change without a page refresh. Markers also read theme to pick a contrasting selected-stroke (white on dark tiles, slate on light) so the pinned comp pops in either palette.
+- **Sticky Comps page header**. The Map | Table toggle, Export CSV, and Add Comp now stay pinned at the top while scrolling through long result sets. Backdrop-blur keeps the band readable over scrolling content. Previously the toggle scrolled away (clearly visible in the user's screenshot which had scrolled past the chrome).
+- **Asset-class chip counts fixed**. The "All asset classes 0" chip in the screenshot was the `allowAll` chip auto-summing `o.count || 0` across options that never received counts. Wired `projectTypeCounts` from rawRows; `DataToolbar.Chips` reduces the All chip's count automatically so the total is honest.
+- **Map empty-state overlay**. When the table has rows but none have coords (or the table is empty), the map area used to render as a blank pale rectangle. Now a centered overlay explains the gap with class-aware copy ("None of these comps are geocoded — N rows in the table; add latitude/longitude to make them visible here").
+- **Idle hint pill**. Bottom-center pill teaches the row↔marker gesture when nothing is pinned; vanishes once the user selects something.
+
+Plus the Tier 1 #10 ship — multi-city activation on Intelligence:
+- `CitySelector` segmented control in the page header (Bengaluru / Mumbai / NCR / Hyderabad). Persists to localStorage via `useCityPreference` hook.
+- All 7 benchmark hooks now take `{ city }` instead of hardcoded 'Bengaluru'. Backend already supported `?city=X` on every endpoint, so this was pure frontend wiring.
+- Section titles (Macro KPI strip, Section 5 residential, Section 6 transactions) interpolate `${city}` so labels stay correct.
+- Honest amber "preview" note when a non-Bengaluru city is selected — explains that the AI Brief / Deal of Day / Bengaluru-curated micro-market notes stay anchored on Bengaluru until verified feeds + admin notes are configured for that city. No silent stale-data delivery.
+
+Net diff: +222 / −27 across 4 files (1 new — `useTheme` hook, ~30 lines, reusable for any future asset-swap-on-theme need). No new dependencies. CI all green; merged.
+
+### Cumulative session totals (entire 2026-05-07)
+
+- **5 PRs merged** (#147, #148, #149, #150, #151).
+- **0 new dependencies** added across the day.
+- **AI telemetry coverage**: 100% (was: missing `export_insights` and `embedding`).
+- **Orphan endpoints closed**: 3 (`/comps/ranked/:dealId`, `/comps/score/:dealId/:compId`, `/exports/comps`).
+- **Hard-rule violations closed**: 1 (AI disclaimer on Intelligence brief).
+- **New design-system primitives**: 3 (`StalenessBadge`, `useTheme`, `CompsMap`).
+
+### Operator actions required
+
+None for #151 — it's UI/code-only.
+
+---
+
 ## 2026-05-07 (Comps + Intelligence subsystem polish — wire orphans, staleness, map view, AI router cleanup)
 
 Heavy bundle session. The starting point was an honest audit (in-chat) of every place LLMs are wired and the entire Comps + Market Intelligence subsystem. Audit found three categories of gap: orphaned features (similarity scorer + CSV export endpoint + AI disclaimer), invisible AI calls (two services bypassing the telemetry router), and visual debt on the user-facing surfaces. Three PRs landed in sequence to close the highest-leverage items.
