@@ -23,6 +23,20 @@
 
 BEGIN;
 
+-- Add a unique index on (project_name, city) so the ON CONFLICT clause below
+-- has a constraint to match. The schema previously had only a primary-key
+-- index on `id` plus regular B-tree indexes on `project_name` and `city`
+-- separately — neither of which enforces uniqueness, so PostgreSQL rejects
+-- ON CONFLICT (project_name, city) with `42P10: there is no unique or
+-- exclusion constraint matching the ON CONFLICT specification`.
+--
+-- IF NOT EXISTS makes this safe to re-run after the index already exists
+-- (the user partially applied an earlier version of this migration).
+-- Verified zero existing duplicates: SELECT project_name, city, COUNT(*)
+-- FROM comps GROUP BY 1,2 HAVING COUNT(*)>1  →  empty result on 2026-05-07.
+CREATE UNIQUE INDEX IF NOT EXISTS comps_project_name_city_unique
+  ON public.comps (project_name, city);
+
 INSERT INTO comps (
   organization_id, project_name, developer, city, locality,
   project_type, rate_per_sqft, rate_per_sqft_min, rate_per_sqft_max,
