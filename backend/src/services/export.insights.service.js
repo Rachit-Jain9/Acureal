@@ -1,9 +1,11 @@
 'use strict';
 
-const {
-  getProviderAvailability,
-  runClaudeReasoning,
-} = require('./ai/providerRegistry');
+// Provider availability flag stays on providerRegistry (it's an SDK-presence
+// check, not an LLM call). The reasoning call routes through aiRouter so it
+// lands in ai_call_logs and respects the daily cost cap — the only consumer
+// of Claude that previously bypassed the router.
+const { getProviderAvailability } = require('./ai/providerRegistry');
+const { runClaudeReasoning } = require('./ai/aiRouter');
 
 // Hard timeout so export routes never hang on a stalled model call.
 const MODEL_TIMEOUT_MS = 15000;
@@ -193,20 +195,22 @@ const generateDealInsights = async ({
 
   let raw;
   try {
-    // providerRegistry returns { result, raw } (post-2026-05-04 PR #152 —
-    // raw envelope surfaces cache_creation/cache_read tokens). Stable
-    // SYSTEM_PROMPT across exports → opt into ephemeral prompt cache.
-    const envelope = await withTimeout(
+    // aiRouter.runClaudeReasoning unwraps the providerRegistry envelope and
+    // returns the inner text directly. Stable SYSTEM_PROMPT across exports
+    // → opt into Anthropic prompt cache (0.1× input cost on cached portion).
+    raw = await withTimeout(
       runClaudeReasoning({
+        task: 'export_insights',
         systemPrompt: SYSTEM_PROMPT,
         cachePrompt: true,
         payload,
         maxTokens: 700,
+        attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+        metadata: { kind: 'ic_opinion' },
       }),
       MODEL_TIMEOUT_MS,
       'Claude deal-insights call'
     );
-    raw = envelope?.result ?? envelope;
   } catch (err) {
     return unavailable(`Model call failed: ${err.message}`);
   }

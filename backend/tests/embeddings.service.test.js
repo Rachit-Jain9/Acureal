@@ -8,12 +8,14 @@ jest.mock('../src/lib/logger', () => {
   return { child };
 });
 
-jest.mock('../src/services/ai/providerRegistry', () => ({
+// Embeddings now route through aiRouter so cost lands in ai_call_logs.
+// Mock the router at the module boundary the service imports from.
+jest.mock('../src/services/ai/aiRouter', () => ({
   runOpenAIEmbedding: jest.fn(),
 }));
 
 const { query } = require('../src/config/database');
-const { runOpenAIEmbedding } = require('../src/services/ai/providerRegistry');
+const { runOpenAIEmbedding } = require('../src/services/ai/aiRouter');
 const embeddings = require('../src/services/embeddings.service');
 
 beforeEach(() => {
