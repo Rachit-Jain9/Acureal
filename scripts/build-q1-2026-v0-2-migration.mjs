@@ -185,7 +185,13 @@ const midSegRows  = byClass.get('Mid-segment residential') || [];
 const ipcRows = [...highEndRows, ...midSegRows].filter((r) => r.metric === 'Capital value');
 
 out.push(`-- ── Micro-market: ${apartmentRows.length} listing-portal + ${ipcRows.length} IPC zone rows ──`);
-out.push(`DELETE FROM micro_market_benchmarks WHERE city='Bengaluru' AND data_type IN ('listing_q1_2026','ipc_q1_2026','listing_q1_2026_v0_2','ipc_q1_2026_v0_2');`);
+// IPC rows for High-end and Mid-segment residential share the SAME zone label
+// (Central, East, North, South, etc.) — the unique constraint
+// `(organization_id, city, micro_market, data_type)` would collide if both
+// sub-segments used the same data_type. We split: ipc_q1_2026_v0_2_high_end
+// vs. ipc_q1_2026_v0_2_mid_segment so each row is uniquely keyed AND the
+// frontend can filter / colour-code by segment if it wants.
+out.push(`DELETE FROM micro_market_benchmarks WHERE city='Bengaluru' AND data_type IN ('listing_q1_2026','ipc_q1_2026','listing_q1_2026_v0_2','ipc_q1_2026_v0_2','ipc_q1_2026_v0_2_high_end','ipc_q1_2026_v0_2_mid_segment');`);
 out.push(``);
 
 const insertMicro = (micro, anchor, low, high, qoqRaw, yoyRaw, source, sourceUrl, dataType, notes) => {
@@ -206,10 +212,17 @@ for (const r of apartmentRows) {
   );
 }
 for (const r of ipcRows) {
+  // High-end vs. Mid-segment share zone labels (Central, East, ...) so we
+  // namespace data_type by sub-segment to keep the unique constraint happy.
+  const subSegment = /high-end/i.test(r.asset_class)
+    ? 'high_end'
+    : /mid-segment/i.test(r.asset_class)
+    ? 'mid_segment'
+    : 'other';
   insertMicro(
     r.micro_market, r.zone_cluster, r.value_low, r.value_high,
     r.qoq_change, r.yoy_change, r.source, r.source_url,
-    'ipc_q1_2026_v0_2',
+    `ipc_q1_2026_v0_2_${subSegment}`,
     'IPC submarket benchmark (' + r.asset_class + ') — ' + (r.notes_for_redip || ''),
   );
 }
