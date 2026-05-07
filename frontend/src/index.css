@@ -122,7 +122,6 @@ html[data-theme='light'] {
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
     line-height: 1.5;
     min-height: 100vh;
-    transition: background-color 200ms ease, color 200ms ease;
   }
 
   /* Tabular numerals everywhere a number appears */
@@ -133,11 +132,32 @@ html[data-theme='light'] {
     font-feature-settings: var(--tnum);
   }
 
-  /* Cross-mode color transition */
-  *, *::before, *::after {
+  /* Cross-mode color transition — GATED.
+     Previously this rule applied a 180ms transition to background-color,
+     border-color, color, fill, stroke on EVERY element + pseudo-element on
+     the page, always. That made theme-switch lag visibly (hundreds of
+     simultaneous animations) AND added paint cost during normal interaction.
+     Now the transition only runs while `html.theme-transitioning` is set —
+     the themeStore adds it for ~220ms around the data-theme attribute flip,
+     then removes it. Component-level `transition-colors` Tailwind classes
+     keep their hover/focus animations unaffected. */
+  html.theme-transitioning,
+  html.theme-transitioning *,
+  html.theme-transitioning *::before,
+  html.theme-transitioning *::after {
     transition-property: background-color, border-color, color, fill, stroke;
     transition-duration: 180ms;
     transition-timing-function: ease;
+  }
+
+  /* Reduced-motion users get an instant theme flip — no cross-fade. */
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-transitioning,
+    html.theme-transitioning *,
+    html.theme-transitioning *::before,
+    html.theme-transitioning *::after {
+      transition-duration: 0ms !important;
+    }
   }
 
   :focus-visible {

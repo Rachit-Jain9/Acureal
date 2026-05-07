@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Brain,
   TrendingUp,
