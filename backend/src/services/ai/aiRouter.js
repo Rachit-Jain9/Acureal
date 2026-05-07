@@ -841,6 +841,42 @@ const runOpenAIReasoning = async (args = {}) => {
 };
 
 /**
+ * OpenAI embedding via the router. Default task is `embedding` so the cost
+ * dashboards split correctly. Returns the same `{ result, dimensions }` shape
+ * as `providerRegistry.runOpenAIEmbedding` so this is a drop-in swap for the
+ * existing embedding callers.
+ *
+ * Why route embeddings through aiRouter:
+ *   - Cost lands in `ai_call_logs` alongside reasoning/extraction calls so
+ *     the unified spend dashboard reflects the true token bill.
+ *   - Daily cost cap applies, so a runaway reindex can't blow the budget.
+ *   - Response cache is intentionally NOT consulted for embeddings — they're
+ *     deterministic per (model, input) but the inputs are typically unique
+ *     document chunks; the cache hit rate would be ~0 and not worth the
+ *     hashing overhead.
+ */
+const runOpenAIEmbedding = async (args = {}) => {
+  const { task = 'embedding', attach, metadata, retry, ...passthrough } = args;
+  const result = await runAIResult({
+    task,
+    provider: 'openai',
+    model: passthrough.model,
+    attach,
+    metadata,
+    retry,
+    run: async ({ providers, model }) =>
+      providers.runOpenAIEmbedding({ ...passthrough, model }),
+  });
+  // The router strips the envelope to just `result` (the embeddings array).
+  // We reconstruct the original embedding-call shape so callers don't have to
+  // change their destructuring; `dimensions` is recovered from the array.
+  return {
+    result,
+    dimensions: Array.isArray(result) && result[0] ? result[0].length : null,
+  };
+};
+
+/**
  * Zod-validated structured output. Wraps any `runAI`-compatible call and:
  *   1. Strips markdown code fences (Gemini and Claude both occasionally
  *      wrap JSON in ```json ... ``` despite "Return ONLY JSON" instruction).
@@ -960,6 +996,7 @@ module.exports = {
   runClaudeReasoningStream,
   runClaudeWithDocument,
   runOpenAIReasoning,
+  runOpenAIEmbedding,
   runAIWithSchema,
   StructuredOutputError,
   stripJsonFences,

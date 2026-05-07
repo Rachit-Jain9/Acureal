@@ -18,7 +18,10 @@
  */
 
 const { query } = require('../config/database');
-const { runOpenAIEmbedding } = require('./ai/providerRegistry');
+// Route through aiRouter (not providerRegistry directly) so embedding cost
+// + latency lands in `ai_call_logs` and the daily cost cap applies. See
+// aiRouter.runOpenAIEmbedding for why response caching is intentionally off.
+const { runOpenAIEmbedding } = require('./ai/aiRouter');
 const log = require('../lib/logger').child({ module: 'embeddings' });
 
 const DEFAULT_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
