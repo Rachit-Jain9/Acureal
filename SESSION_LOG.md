@@ -4,6 +4,41 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-07 (Evening — Comps page-state bug + Google Maps swap)
+
+User reported two issues from a screenshot of the Comps page after clicking a map marker: the table collapsed to "No comparables found" while the page header still showed "29 verified comparables in the database," and asked explicitly to swap the leaflet map for Google Maps ("I gave you GoogleMaps API, use that").
+
+**PR [#155](https://github.com/Rachit-Jain9/REDIP/pull/155)** — `fix(comps): close marker-click crash + swap CompsMap from leaflet to Google Maps`
+
+P0 — page-state collision bug:
+- Root cause: ambiguous use of `page` state in `CompsPage.jsx`. The same variable was used both as the API page (60-row chunks via `{ page, limit: pageSize * 4 }`) AND as the visible table page (15-row chunks via `sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)`).
+- `handleSelectComp` calculated `targetPage = floor(idx / pageSize) + 1` using the 15-row local pageSize, so clicking a marker for any comp at idx ≥ 15 set `page=2`. That triggered an API request for `page=2, limit=60` — fetching rows 61-120 from a database with only 29 rows total. Empty response collapsed `rawRows` to `[]`, every chip count fell to 0, table showed "No comparables found." But `totalCount = data.pagination.total` is set independently of which page returned data, so the header still read "29 in the database."
+- Fix: decouple API request from display pagination. API now always fetches `{ page: 1, limit: 200 }` (the API's max). `page` state is purely client-side display index over `sortedRows`. Comp dataset is small (≤200 even at 5x growth from today's 29). Server-side search/scroll is the right next step beyond 200 rows, not server pagination — server pagination would also break the map view (markers come from `sortedRows`, not `visible`; paginated server responses would drop markers as the user changes display page).
+
+Google Maps swap (Comps split-view only):
+- Installed `@react-google-maps/api` ^2.20.8. Adds ~80 KB gzipped to the CompsMap chunk; lazy-loaded so the table-only path on `/dashboard/comps` doesn't pay the cost.
+- Wrote a fresh `GoogleMap`-based component:
+  - Theme-aware: editorial dark Map style on dark theme (no pure blacks, restrained labels, hidden POIs/transit), default Roadmap on light.
+  - Custom OverlayView markers (CSS-styled dots) so palette + selected-state ping animation route through Tailwind, not Google's marker library.
+  - Tooltip on selected marker uses REDIP chrome (`bg-bg-elevated`, hairline border) instead of Google's white-shadow default.
+  - Three honest failure surfaces: missing API key → "Set `VITE_GOOGLE_MAPS_API_KEY`" hint; SDK load failure → "likely HTTP referrer restriction" hint with operator action; loading → shimmer skeleton.
+- Wired `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env.example` with the exact set of HTTP referrer restrictions the operator needs to allow in Google Cloud Console.
+- Backend `GOOGLE_MAPS_API_KEY` (Geocoding API, server-side) stays unchanged — different surface, stays behind the backend.
+- Leaflet stays in the bundle for `MapPage` and the deal Parcel/Site map (unchanged in this PR).
+
+Net diff: +342 / -160 across 5 files. New CompsMap chunk: 162.87 KB (37.36 KB gzipped) — same order as the existing leaflet chunk.
+
+### Operator action chain
+
+User rotated the Maps API key after this PR landed (old key `AIzaSyB37FP62rUZr9ah1SmkYFA7ucj2W-o6O6Y` → new key `AIzaSyCu5PmVe0kHoFg4n8JHSTV9OI25bIOnwpk`) and added it to Vercel as `GOOGLE_MAPS_API_KEY`. The frontend Maps JS won't see that until a `VITE_GOOGLE_MAPS_API_KEY` (with the same value) is also added to Vercel — Vite only exposes env vars prefixed with `VITE_` to the browser bundle. Local `frontend/.env` and `backend/.env` updated to the new key value (gitignored, not committed).
+
+### Lessons logged
+
+- **Decouple API and client-side concerns when client-side filter/sort/paginate are used.** A single `page` variable doing double duty for both ambient API requests and post-fetch display slicing is a guaranteed footgun; one will move and the other won't follow correctly.
+- **Browser-exposed Maps keys MUST have HTTP referrer restrictions before they hit production.** Without them, anyone can lift the key from the bundle and burn through quota on the user's bill.
+
+---
+
 ## 2026-05-07 (PM hotfix — IntelligencePage crash + theme-switch lag)
 
 User reported the Market Intelligence page rendering "Something went wrong on this page · useEffect is not defined" + a visible lag when toggling between light and dark theme. Two root causes, both shipped together because they surfaced from the same screenshot.
