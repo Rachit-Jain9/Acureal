@@ -1,38 +1,13 @@
-import { useEffect, useMemo, useRef } from 'react';
-import {
-  MapContainer,
-  TileLayer,
-  CircleMarker,
-  Popup,
-  Tooltip,
-  ZoomControl,
-  useMap,
-} from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import { Building2, MapPin, Layers, MousePointerClick } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
+import { Building2, MapPin, Layers, MousePointerClick, AlertTriangle } from 'lucide-react';
 import useTheme from '../../hooks/useTheme';
 
 // Bengaluru fallback center for the comps map. The seed data is residential
 // Bengaluru-only as of audit; this keeps the map oriented even before any
 // row is selected. When the comps span a wider bbox we fit to it.
-const BENGALURU_CENTER = [12.9716, 77.5946];
+const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
 const DEFAULT_ZOOM = 11;
-
-// Tile-layer URLs by theme. CartoDB ships matched Light (Positron) and Dark
-// (Dark Matter) styles — we swap based on the active dashboard theme so the
-// map stops looking like a pale rectangle inside a dark UI. The TileLayer's
-// `key` prop is forced to remount on theme change because react-leaflet
-// doesn't react to URL prop changes alone.
-const TILES_BY_THEME = {
-  dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap &copy; CartoDB',
-  },
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap &copy; CartoDB',
-  },
-};
 
 // Per-data-type marker palette. Mirrors the source-pill tones on the Comps
 // table so the visual mapping reads instantly: emerald = verified, blue =
@@ -50,44 +25,102 @@ const paletteFor = (comp) => {
   return DATA_TYPE_PALETTE[comp.data_type] || DEFAULT_PALETTE;
 };
 
-// Auto-fit the map to the comp set on first render, and fly to the selected
-// comp whenever the parent updates `selectedCompId`. Lives inside the
-// MapContainer because flyTo/fitBounds need the leaflet `useMap()` handle.
-function MapEffects({ comps, selectedComp }) {
-  const map = useMap();
-  const fittedRef = useRef(false);
-
-  // First-render fit: drop a tight bounding box around all rows that have
-  // coords. Skip if there are no coords or there's only one (keep default
-  // zoom in those cases — fitting to a single point overshoots).
-  useEffect(() => {
-    if (fittedRef.current) return;
-    const points = comps
-      .filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng))
-      .map((c) => [c.lat, c.lng]);
-    if (points.length < 2) return;
-    map.fitBounds(points, { padding: [40, 40], maxZoom: 14 });
-    fittedRef.current = true;
-  }, [map, comps]);
-
-  // Fly to selection. 400ms duration matches the FRONTEND_GUIDELINES
-  // map zoom/pan budget. Honors the leaflet default easing.
-  useEffect(() => {
-    if (!selectedComp) return;
-    if (!Number.isFinite(selectedComp.lat) || !Number.isFinite(selectedComp.lng)) return;
-    map.flyTo([selectedComp.lat, selectedComp.lng], Math.max(map.getZoom(), 14), {
-      duration: 0.4,
-    });
-  }, [map, selectedComp]);
-
-  return null;
-}
+// Dark-theme map style — desaturated, matches the editorial dashboard chrome.
+// Built from Google's Night-mode preset, tuned to REDIP's neutral palette
+// (fewer pure blacks, more navy-grey, restrained labels). Light theme uses
+// no override so the default Google "roadmap" style ships.
+const DARK_MAP_STYLES = [
+  { elementType: 'geometry',           stylers: [{ color: '#1f2937' }] },
+  { elementType: 'labels.text.fill',   stylers: [{ color: '#9ca3af' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#1f2937' }] },
+  { featureType: 'administrative',     elementType: 'geometry',         stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi',                stylers: [{ visibility: 'off' }] },
+  { featureType: 'road',               elementType: 'geometry',         stylers: [{ color: '#374151' }] },
+  { featureType: 'road',               elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+  { featureType: 'road.highway',       elementType: 'geometry',         stylers: [{ color: '#4b5563' }] },
+  { featureType: 'transit',            stylers: [{ visibility: 'off' }] },
+  { featureType: 'water',              elementType: 'geometry',         stylers: [{ color: '#0b1220' }] },
+  { featureType: 'water',              elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+];
 
 // Compact rate formatter so popups don't overflow on small screens.
 const formatRate = (value) => {
   if (value == null) return '—';
   return `₹${Number(value).toLocaleString('en-IN')}/sqft`;
 };
+
+// Custom marker — drawn as a small absolutely-positioned div (via
+// OverlayView) so we can use CSS for animation and theming. Cheaper than
+// rebuilding a Marker per render and lets the selected state animate
+// smoothly. Click handler stops propagation so the underlying map doesn't
+// receive a deselect.
+function MarkerDot({ comp, selected, onClick, theme }) {
+  const palette = paletteFor(comp);
+  const selStroke = theme === 'dark' ? '#ffffff' : '#0f172a';
+  const size = selected ? 22 : 14;
+  const ringSize = selected ? size + 8 : size;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      aria-label={`${comp.project_name} — ${formatRate(comp.rate_per_sqft)}`}
+      className="absolute group cursor-pointer transition-transform duration-150 ease-out hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 rounded-full"
+      style={{
+        // OverlayView renders us at a div whose origin matches lat/lng;
+        // subtract half the visual size so the geometric centre lands at
+        // the coord, not the top-left.
+        transform: `translate(-${ringSize / 2}px, -${ringSize / 2}px)`,
+        width: ringSize,
+        height: ringSize,
+      }}
+    >
+      {selected && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full motion-safe:animate-ping"
+          style={{ backgroundColor: palette.fill, opacity: 0.35 }}
+        />
+      )}
+      <span
+        className="absolute rounded-full shadow-md"
+        style={{
+          left: (ringSize - size) / 2,
+          top:  (ringSize - size) / 2,
+          width: size,
+          height: size,
+          backgroundColor: palette.fill,
+          border: `${selected ? 3 : 2}px solid ${selected ? selStroke : palette.stroke}`,
+        }}
+      />
+    </button>
+  );
+}
+
+// Inline tooltip rendered next to the selected marker — replaces the
+// leaflet popup with a custom overlay so the styling matches REDIP chrome
+// instead of Google's white-on-shadow default. Anchored above the marker
+// with a small gap.
+function MarkerTooltip({ comp }) {
+  return (
+    <div
+      className="absolute z-[10] -translate-x-1/2 -translate-y-full mb-2 pointer-events-none"
+      style={{ marginBottom: 18 }}
+    >
+      <div className="bg-bg-elevated border border-hairline-strong rounded-editorial shadow-lg px-3 py-2 min-w-[180px]">
+        <p className="text-sm font-semibold text-content-primary truncate">{comp.project_name}</p>
+        <p className="text-xs text-content-secondary tabular-nums">
+          {formatRate(comp.rate_per_sqft)}
+          {comp.locality && <span className="text-content-muted"> · {comp.locality}</span>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Stable libraries array — passing a new array reference on each render
+// makes useJsApiLoader emit a "LoadScript has been reloaded unintentionally"
+// warning and re-fetch the SDK. Hoisted here so identity stays stable.
+const GMAPS_LIBRARIES = ['marker'];
 
 export default function CompsMap({
   comps,
@@ -96,7 +129,15 @@ export default function CompsMap({
   height = 520,
 }) {
   const theme = useTheme();
-  const tile = TILES_BY_THEME[theme] || TILES_BY_THEME.dark;
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: apiKey || '',
+    libraries: GMAPS_LIBRARIES,
+  });
+
+  const mapRef = useRef(null);
+
   // Filter once for points with valid coordinates. Comps without geocode are
   // still listed in the table — they just don't appear on the map. Surfaced
   // in the legend's count below so the user understands the gap.
@@ -122,111 +163,147 @@ export default function CompsMap({
     return counts;
   }, [mappable]);
 
+  // Map options — restyle whenever theme changes, restrict zoom, kill the
+  // default UI noise. `gestureHandling: 'greedy'` matches leaflet's
+  // scrollWheelZoom default; without it Google insists on Cmd/Ctrl-scroll.
+  const mapOptions = useMemo(() => ({
+    disableDefaultUI: true,
+    zoomControl: true,
+    zoomControlOptions: {
+      position: typeof google !== 'undefined' ? google.maps.ControlPosition.RIGHT_BOTTOM : undefined,
+    },
+    gestureHandling: 'greedy',
+    minZoom: 4,
+    maxZoom: 19,
+    styles: theme === 'dark' ? DARK_MAP_STYLES : null,
+    backgroundColor: theme === 'dark' ? '#1f2937' : '#f3f4f6',
+  }), [theme]);
+
+  // Fit bounds to the comp set on first map load. Skip if there are <2
+  // points (fitting to a single point overshoots; default zoom is fine).
+  const fittedRef = useRef(false);
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current || fittedRef.current) return;
+    if (mappable.length < 2) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    for (const c of mappable) {
+      bounds.extend({ lat: Number(c.lat), lng: Number(c.lng) });
+    }
+    mapRef.current.fitBounds(bounds, 40);
+    fittedRef.current = true;
+  }, [isLoaded, mappable]);
+
+  // Pan to selection. 400ms native panTo matches the FRONTEND_GUIDELINES
+  // map zoom/pan budget. Re-fits zoom to at least 14 so users can see
+  // detail on the focused project.
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current || !selectedComp) return;
+    if (!Number.isFinite(Number(selectedComp.lat)) || !Number.isFinite(Number(selectedComp.lng))) return;
+    const map = mapRef.current;
+    map.panTo({ lat: Number(selectedComp.lat), lng: Number(selectedComp.lng) });
+    if ((map.getZoom?.() || 0) < 14) map.setZoom(14);
+  }, [isLoaded, selectedComp]);
+
+  // ── Failure modes ─────────────────────────────────────────────────────────
+  // Three honest failure surfaces, each with a clear action:
+  //   1. No API key configured → tell the operator what to set.
+  //   2. SDK failed to load (likely referrer-restriction failure) → tell them
+  //      to add HTTP referrer to Google Cloud Console.
+  //   3. SDK loading → skeleton shimmer.
+
+  if (!apiKey) {
+    return (
+      <div
+        className="relative bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial flex items-center justify-center"
+        style={{ height }}
+        role="status"
+      >
+        <div className="text-center max-w-sm px-6">
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-50 border border-amber-200 mb-2.5">
+            <AlertTriangle size={16} className="text-amber-600" />
+          </span>
+          <p className="text-sm font-semibold text-content-primary mb-1">Map key not configured</p>
+          <p className="text-xs text-content-secondary leading-relaxed">
+            Set <code className="text-[11px] bg-bg-secondary px-1 py-0.5 rounded">VITE_GOOGLE_MAPS_API_KEY</code> in
+            Vercel env (or <code className="text-[11px] bg-bg-secondary px-1 py-0.5 rounded">frontend/.env</code> for
+            local dev) and redeploy.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div
+        className="relative bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial flex items-center justify-center"
+        style={{ height }}
+        role="status"
+      >
+        <div className="text-center max-w-sm px-6">
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-rose-50 border border-rose-200 mb-2.5">
+            <AlertTriangle size={16} className="text-rose-600" />
+          </span>
+          <p className="text-sm font-semibold text-content-primary mb-1">Could not load Google Maps</p>
+          <p className="text-xs text-content-secondary leading-relaxed">
+            Likely cause: HTTP referrer restriction on the API key. Open Google Cloud Console → Credentials →
+            edit the key → add the current host to the allowed referrers and reload.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div
+        className="relative bg-bg-secondary rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial motion-safe:animate-pulse"
+        style={{ height }}
+        aria-busy="true"
+      />
+    );
+  }
+
   return (
     <div
       className="relative bg-bg-elevated rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial"
       style={{ height }}
     >
-      <MapContainer
+      <GoogleMap
         center={BENGALURU_CENTER}
         zoom={DEFAULT_ZOOM}
-        zoomControl={false}
-        scrollWheelZoom
-        className="h-full w-full"
-        // Subtle background so markers stand out against neutral terrain;
-        // tiles swap between Positron (light) and DarkMatter (dark) so the
-        // map blends into whichever theme is active.
+        options={mapOptions}
+        mapContainerStyle={{ width: '100%', height: '100%' }}
+        onLoad={(map) => { mapRef.current = map; }}
+        onUnmount={() => { mapRef.current = null; }}
       >
-        <TileLayer
-          // Force a remount on theme change so leaflet swaps tile providers.
-          key={theme}
-          attribution={tile.attribution}
-          url={tile.url}
-          subdomains={['a', 'b', 'c', 'd']}
-          maxZoom={19}
-        />
-        <ZoomControl position="bottomright" />
-        <MapEffects comps={mappable} selectedComp={selectedComp} />
         {mappable.map((comp) => {
-          const palette = paletteFor(comp);
           const isSel = comp.id === selectedCompId;
-          // Selected state: bigger radius + heavy stroke that contrasts with
-          // either theme. Uses the theme to pick a stroke that pops on dark
-          // tiles (white) vs. light tiles (deep slate).
-          const selStroke = theme === 'dark' ? '#ffffff' : '#0f172a';
           return (
-            <CircleMarker
+            <OverlayView
               key={comp.id}
-              center={[comp.lat, comp.lng]}
-              radius={isSel ? 12 : 8}
-              pathOptions={{
-                color: isSel ? selStroke : palette.stroke,
-                weight: isSel ? 3 : 2,
-                fillColor: palette.fill,
-                fillOpacity: isSel ? 1 : 0.92,
-              }}
-              eventHandlers={{
-                click: () => onSelectComp?.(comp.id),
-              }}
+              position={{ lat: Number(comp.lat), lng: Number(comp.lng) }}
+              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
             >
-              <Tooltip direction="top" offset={[0, -8]} opacity={1} sticky>
-                <div className="space-y-0.5">
-                  <p className="text-sm font-semibold">{comp.project_name}</p>
-                  <p className="text-xs">
-                    {formatRate(comp.rate_per_sqft)}
-                    {comp.locality && <span className="text-content-secondary"> · {comp.locality}</span>}
-                  </p>
-                </div>
-              </Tooltip>
-              <Popup minWidth={240}>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-sm font-semibold text-content-primary">{comp.project_name}</p>
-                    {comp.developer && (
-                      <p className="text-xs text-content-secondary">{comp.developer}</p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-content-muted">Rate</p>
-                      <p className="font-semibold tabular-nums">{formatRate(comp.rate_per_sqft)}</p>
-                    </div>
-                    {comp.bhk_config && (
-                      <div>
-                        <p className="text-content-muted">Config</p>
-                        <p className="font-semibold">{comp.bhk_config}</p>
-                      </div>
-                    )}
-                    {comp.launch_year && (
-                      <div>
-                        <p className="text-content-muted">Launch</p>
-                        <p className="font-semibold tabular-nums">{comp.launch_year}</p>
-                      </div>
-                    )}
-                    {comp.locality && (
-                      <div>
-                        <p className="text-content-muted">Locality</p>
-                        <p className="font-semibold truncate">{comp.locality}</p>
-                      </div>
-                    )}
-                  </div>
-                  {comp.source && (
-                    <p className="text-[10px] text-content-muted truncate" title={comp.source}>
-                      {comp.source}
-                    </p>
-                  )}
-                </div>
-              </Popup>
-            </CircleMarker>
+              <div className="relative">
+                <MarkerDot
+                  comp={comp}
+                  selected={isSel}
+                  onClick={() => onSelectComp?.(comp.id)}
+                  theme={theme}
+                />
+                {isSel && <MarkerTooltip comp={comp} />}
+              </div>
+            </OverlayView>
           );
         })}
-      </MapContainer>
+      </GoogleMap>
 
       {/* Legend — top-left overlay. Editorial chrome (no gradients), tabular
           nums for counts, hairline borders. Positioned absolute so it
-          floats over the leaflet canvas without affecting layout. */}
+          floats over the map canvas without affecting layout. */}
       <div
-        className="absolute top-3 left-3 z-[400] rounded-editorial border border-hairline-strong bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial"
+        className="absolute top-3 left-3 z-[5] rounded-editorial border border-hairline-strong bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial"
         role="region"
         aria-label="Map legend"
       >
@@ -264,7 +341,7 @@ export default function CompsMap({
           like one surface, not two views. */}
       {selectedComp && (
         <div
-          className="absolute bottom-3 left-3 z-[400] max-w-[260px] rounded-editorial border border-primary-200 bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial transition-all duration-150 ease-out"
+          className="absolute bottom-3 left-3 z-[5] max-w-[260px] rounded-editorial border border-primary-200 bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial transition-all duration-150 ease-out"
           role="status"
           aria-live="polite"
         >
@@ -287,7 +364,7 @@ export default function CompsMap({
           users discover the gesture. */}
       {!selectedComp && mappable.length > 0 && (
         <div
-          className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 z-[400] inline-flex items-center gap-1.5 rounded-full border border-hairline bg-bg-elevated/90 backdrop-blur px-2.5 py-1 shadow-editorial"
+          className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 z-[5] inline-flex items-center gap-1.5 rounded-full border border-hairline bg-bg-elevated/90 backdrop-blur px-2.5 py-1 shadow-editorial"
           aria-hidden="true"
         >
           <MousePointerClick size={11} className="text-content-muted" />
@@ -298,11 +375,10 @@ export default function CompsMap({
       )}
 
       {/* Empty-state overlay — when the table has rows but none have coords,
-          or when the table itself is empty. Avoids the "blank pale map" look
-          the user flagged in the screenshot. */}
+          or when the table itself is empty. Avoids the blank-map look. */}
       {mappable.length === 0 && (
         <div
-          className="pointer-events-none absolute inset-0 z-[300] flex items-center justify-center bg-bg-elevated/80 backdrop-blur-sm"
+          className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-bg-elevated/80 backdrop-blur-sm"
           role="status"
         >
           <div className="text-center max-w-[260px] px-4">
