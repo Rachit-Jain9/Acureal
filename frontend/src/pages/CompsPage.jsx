@@ -325,20 +325,31 @@ export default function CompsPage() {
 
   const pageSize = 15;
 
-  // Server-side filtering for cheap fields (search, city, projectType, rate).
-  // Source-type + sort + range happen client-side because they require richer
-  // data than the API exposes today (we have the full row already).
+  // API request — server-side filters only. We fetch the API's max page size
+  // (200) and rely on client-side pagination for the visible 15-row slice.
+  //
+  // Why one big fetch instead of paginated server requests:
+  //   - The comps table has ~29 rows today, low hundreds at scale. The API
+  //     limit caps at 200; below that, server pagination just adds latency.
+  //   - The map view needs ALL filtered rows simultaneously (markers come
+  //     from `sortedRows`, not `visible`). Server-paginating the table while
+  //     the map needs everything would either drop markers or double-fetch.
+  //   - Critical bug previously: `page` was sent to the API as `?page=N`
+  //     with `limit=60`, but `page` was simultaneously used for the 15-row
+  //     client-side slice. Click-to-jump on a marker for a row at idx ≥ 15
+  //     would set `page=2`, which fetched API rows 61-120 — empty when
+  //     totalCount < 60 — collapsing the table to "No comparables found"
+  //     while the header still showed "29 in the database." Fixed by
+  //     decoupling: API is always page=1, `page` state is display-only.
   const queryParams = useMemo(() => {
-    // Pull a wider page so client-side sort/filter is meaningful even when
-    // the user's source-type slice is small.
-    const params = { page, limit: pageSize * 4 };
+    const params = { page: 1, limit: 200 };
     if (search) params.search = search;
     if (filters.city) params.city = filters.city;
     if (filters.projectType) params.projectType = filters.projectType;
     if (filters.minRate) params.minRate = Number(filters.minRate);
     if (filters.maxRate) params.maxRate = Number(filters.maxRate);
     return params;
-  }, [filters.city, filters.maxRate, filters.minRate, filters.projectType, page, search]);
+  }, [filters.city, filters.maxRate, filters.minRate, filters.projectType, search]);
 
   const { data, isLoading } = useComps(queryParams);
   const createMutation = useCreateComp();
