@@ -18,7 +18,10 @@ import {
   ArrowUpRight,
   Building2,
   DollarSign,
+  Download,
+  Loader2,
 } from 'lucide-react';
+import { exportsAPI } from '../services/api';
 import {
   useDailyBrief,
   useMarketNotes,
@@ -1071,6 +1074,39 @@ export default function IntelligencePage() {
   // selected. Honesty over silently showing stale data.
   const isBengaluru = city === 'Bengaluru';
 
+  // Tear-sheet export — pulls a multi-page PDF snapshot of the current
+  // city's verified macro KPIs, residential / office / retail / industrial
+  // / hospitality benchmarks, and market transactions. Backend builds it
+  // off the same service functions the page renders, so the PDF ties out
+  // to the on-screen numbers exactly.
+  const [exportingTearSheet, setExportingTearSheet] = useState(false);
+  const handleExportTearSheet = useCallback(async () => {
+    if (exportingTearSheet) return;
+    setExportingTearSheet(true);
+    try {
+      const response = await exportsAPI.intelligenceTearSheet({ city });
+      const blob = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const stamp = new Date().toISOString().slice(0, 10);
+      link.download = `redip-${city.toLowerCase()}-market-tearsheet-${stamp}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      window.alert('Failed to generate tear-sheet PDF. Please try again.');
+      // eslint-disable-next-line no-console
+      console.error('Intelligence tear-sheet export failed:', err);
+    } finally {
+      setExportingTearSheet(false);
+    }
+  }, [exportingTearSheet, city]);
+
   // Skeleton: page header + 4 KPI tiles + 2 chart cards + briefing card. The
   // brief itself is a multi-section narrative, so the body skeleton is one
   // tall card to set expectation rather than fake the inner sections.
@@ -1112,6 +1148,19 @@ export default function IntelligencePage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <CitySelector value={city} onChange={setCity} options={SUPPORTED_CITIES} />
+            <button
+              onClick={handleExportTearSheet}
+              disabled={exportingTearSheet}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-primary-300 hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
+              title={`Download ${city} Q1 2026 tear-sheet PDF`}
+            >
+              {exportingTearSheet ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              {exportingTearSheet ? 'Generating…' : 'Tear-Sheet'}
+            </button>
             <button
               onClick={() => refetch()}
               disabled={isFetching}

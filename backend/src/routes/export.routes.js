@@ -8,6 +8,7 @@ const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getDealExportContext } = require('../services/dealExport.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
+const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
 
 const router = express.Router();
 
@@ -2372,6 +2373,39 @@ router.get(
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.send(pptxBuffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /exports/intelligence/tear-sheet?city=Bengaluru
+//
+// Single-shot multi-page PDF tear-sheet of the Market Intelligence
+// dashboard. Builds the same data the page renders (macro KPIs +
+// residential + office + retail + industrial + hospitality + transactions)
+// into a date-stamped, source-cited investor-grade PDF.
+//
+// Auth: any authenticated user can pull a tear-sheet (no admin-only gate
+// — the data inside is the same data they can see on the page itself,
+// so role escalation isn't a concern). Filename includes city + ISO date
+// so reviewers can keep multiple snapshots side-by-side without name
+// collisions.
+router.get(
+  '/intelligence/tear-sheet',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const city = (req.query.city || 'Bengaluru').toString().trim() || 'Bengaluru';
+      const generatedBy = req.user?.name || req.user?.email || 'Unknown user';
+      const { bytes, filename, sectionCounts } = await buildIntelligenceTearSheet({ city, generatedBy });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      // Section counts in a custom header so the FE can surface a toast
+      // ("8 macro KPIs, 38 residential, 39 office, ..." — operators want
+      // to know how thick the snapshot was without opening the PDF).
+      res.setHeader('X-Tearsheet-Sections', JSON.stringify(sectionCounts));
+      res.send(Buffer.from(bytes));
     } catch (error) {
       next(error);
     }
