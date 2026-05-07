@@ -35,9 +35,28 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
+import StalenessBadge from '../components/common/StalenessBadge';
 import { SkeletonKpi, SkeletonCard, Skeleton } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
+import { aggregateStaleness } from '../utils/staleness';
 import useAuthStore from '../store/authStore';
+
+// Aggregate-staleness summary for a benchmark section header. Returns the
+// worst-case StalenessBadge across all rows so reviewers see "is this
+// section current?" at a glance, with hover for details.
+function SectionStaleness({ rows, category, fallback }) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const summary = aggregateStaleness(rows, { fallback });
+  if (!summary.mostRecent) return null;
+  return (
+    <StalenessBadge
+      asOfDate={summary.mostRecent.toISOString()}
+      category={category}
+      fallback={fallback}
+      variant="compact"
+    />
+  );
+}
 
 // Helper: build cluster filter options from a row set with `cluster` field.
 const buildClusterOptions = (rows) => {
@@ -60,12 +79,13 @@ const matchesSearch = (row, term, keys) => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function SectionCard({ icon: Icon, title, children, className = '' }) {
+function SectionCard({ icon: Icon, title, children, action, className = '' }) {
   return (
     <div className={`bg-white rounded-xl border border-hairline-strong shadow-sm overflow-hidden ${className}`}>
       <div className="flex items-center gap-2 px-5 py-3 border-b border-hairline bg-bg-secondary">
-        <Icon size={16} className="text-content-secondary" />
-        <h3 className="text-sm font-semibold text-content-primary">{title}</h3>
+        <Icon size={16} className="text-content-secondary shrink-0" />
+        <h3 className="text-sm font-semibold text-content-primary min-w-0 truncate">{title}</h3>
+        {action && <div className="ml-auto shrink-0 flex items-center gap-2">{action}</div>}
       </div>
       <div className="px-5 py-4">{children}</div>
     </div>
@@ -1044,11 +1064,14 @@ export default function IntelligencePage() {
       {/* Bengaluru Macro KPI strip — Q1 2026 verified */}
       {macroKpis?.length > 0 && (
         <div>
-          <div className="flex items-baseline justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
               Bengaluru Q1 2026 — Verified Macro Indicators
             </p>
-            <p className="text-[10px] text-content-muted">{macroKpis.length} metrics</p>
+            <div className="flex items-center gap-2">
+              <SectionStaleness rows={macroKpis} fallback="macro_kpi" />
+              <p className="text-[10px] text-content-muted tabular-nums">{macroKpis.length} metrics</p>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
             {macroKpis.map((k) => <MacroKpiTile key={k.id} kpi={k} />)}
@@ -1056,12 +1079,16 @@ export default function IntelligencePage() {
         </div>
       )}
 
-      {/* Claude AI Brief */}
+      {/* Claude AI Brief — must carry the AI-assisted disclaimer per CLAUDE.md
+          hard rule on every AI-synthesised narrative, in both UI and exports. */}
       {brief?.claudeBrief && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-6 py-5">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mb-3">
             <Brain size={16} className="text-indigo-600" />
             <p className="text-sm font-semibold text-indigo-800">AI Brief — Claude</p>
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800">
+              AI-assisted · review before relying
+            </span>
             <span className="ml-auto text-xs text-indigo-400">Generated from internal pipeline data only</span>
           </div>
           <p className="text-sm text-indigo-900 whitespace-pre-line leading-relaxed">{brief.claudeBrief}</p>
@@ -1198,7 +1225,11 @@ export default function IntelligencePage() {
       </div>
 
       {/* Section 5: Residential Micro-Market Benchmark Summary */}
-      <SectionCard icon={DollarSign} title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026">
+      <SectionCard
+        icon={DollarSign}
+        title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026"
+        action={<SectionStaleness rows={benchmarks} fallback="micro_market_benchmark_listing" />}
+      >
         {bmLoading ? (
           <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
             <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
@@ -1214,34 +1245,54 @@ export default function IntelligencePage() {
 
       {/* Section 5a: Commercial Office — Vacancy + Rent (IPC zones + 30 submarkets) */}
       {officeBenchmarks?.length > 0 && (
-        <SectionCard icon={Building2} title="5a. Commercial Office — Vacancy + Rent, Q1 2026">
+        <SectionCard
+          icon={Building2}
+          title="5a. Commercial Office — Vacancy + Rent, Q1 2026"
+          action={<SectionStaleness rows={officeBenchmarks} fallback="office_ipc" />}
+        >
           <OfficeBenchmarksTable rows={officeBenchmarks} />
         </SectionCard>
       )}
 
       {/* Section 5b: Retail — High-street + Mall Grade A */}
       {retailBenchmarks?.length > 0 && (
-        <SectionCard icon={DollarSign} title="5b. Retail — High-Street + Mall Grade A, Q1 2026">
+        <SectionCard
+          icon={DollarSign}
+          title="5b. Retail — High-Street + Mall Grade A, Q1 2026"
+          action={<SectionStaleness rows={retailBenchmarks} fallback="retail_ipc" />}
+        >
           <RetailBenchmarksTable rows={retailBenchmarks} />
         </SectionCard>
       )}
 
       {/* Section 5c: Industrial / Warehouse — H2 2025 */}
       {industrialBenchmarks?.length > 0 && (
-        <SectionCard icon={Building2} title="5c. Industrial / Warehouse / Serviced Land — H2 2025">
+        <SectionCard
+          icon={Building2}
+          title="5c. Industrial / Warehouse / Serviced Land — H2 2025"
+          action={<SectionStaleness rows={industrialBenchmarks} fallback="industrial_ipc" />}
+        >
           <IndustrialBenchmarksTable rows={industrialBenchmarks} />
         </SectionCard>
       )}
 
       {/* Section 5d: Hospitality — ADR / Occupancy / RevPAR */}
       {hospitalityBenchmarks?.length > 0 && (
-        <SectionCard icon={Building2} title="5d. Hospitality — ADR / Occupancy / RevPAR">
+        <SectionCard
+          icon={Building2}
+          title="5d. Hospitality — ADR / Occupancy / RevPAR"
+          action={<SectionStaleness rows={hospitalityBenchmarks} fallback="hospitality_ipc" />}
+        >
           <HospitalityBenchmarksTable rows={hospitalityBenchmarks} />
         </SectionCard>
       )}
 
       {/* Section 6: Market Transaction Flow */}
-      <SectionCard icon={ArrowUpRight} title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)">
+      <SectionCard
+        icon={ArrowUpRight}
+        title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)"
+        action={<SectionStaleness rows={transactions} fallback="market_transaction" />}
+      >
         {txLoading ? (
           <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
             <RefreshCw size={14} className="animate-spin" /> Loading transactions…

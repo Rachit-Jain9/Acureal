@@ -6,6 +6,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
 import EmptyState from '../components/common/EmptyState';
@@ -13,8 +15,10 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
+import StalenessBadge from '../components/common/StalenessBadge';
 import { SkeletonList } from '../design-system';
 import { formatINR } from '../utils/format';
+import { exportsAPI } from '../services/api';
 
 const DATA_TYPE_LABEL = {
   internal_benchmark_apr_2026: { tone: 'success', label: 'Verified · Apr 2026' },
@@ -292,6 +296,7 @@ export default function CompsPage() {
   // is 'asc' | 'desc'. Default: newest first (created_at desc).
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' });
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
   const pageSize = 15;
 
@@ -361,6 +366,40 @@ export default function CompsPage() {
     deleteMutation.mutate(id);
   };
 
+  // CSV export of the org's comp library. Hits the existing /exports/comps
+  // route — the endpoint was wired server-side and orphaned in the UI; we just
+  // bring it forward. Triggers a browser download named with the export date
+  // so reviewers can keep multiple snapshots side-by-side.
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const response = await exportsAPI.comps();
+      const blob = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const stamp = new Date().toISOString().slice(0, 10);
+      link.download = `redip-comps-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // Use alert here rather than a toast to avoid wiring a separate UX
+      // surface for a single rare failure path. Users see a clear message,
+      // and the call is idempotent — they can just retry.
+      // eslint-disable-next-line no-alert
+      window.alert('Failed to export comps. Please try again.');
+      // eslint-disable-next-line no-console
+      console.error('Comps export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting]);
+
   const updateFilter = useCallback((patch) => {
     setFilters((prev) => ({ ...prev, ...patch }));
     setPage(1);
@@ -407,10 +446,25 @@ export default function CompsPage() {
         title="Comparables"
         description={`${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`}
         actions={
-          <button onClick={() => setShowModal(true)} className="btn btn-primary">
-            <Plus size={16} />
-            Add Comp
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              disabled={exporting || rawRows.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-primary-300 hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
+              title={rawRows.length === 0 ? 'Nothing to export' : 'Download all comps as CSV'}
+            >
+              {exporting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+            <button onClick={() => setShowModal(true)} className="btn btn-primary">
+              <Plus size={16} />
+              Add Comp
+            </button>
+          </div>
         }
       />
 
@@ -579,19 +633,28 @@ export default function CompsPage() {
                       </td>
                       <td className="px-4 py-3 text-center text-content-secondary">{comp.launch_year || '—'}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {comp.source_url ? (
-                          <a
-                            href={comp.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block"
-                            title={comp.source || 'Open source'}
-                          >
-                            <Badge tone={dt.tone} className="cursor-pointer hover:opacity-80">{dt.label}</Badge>
-                          </a>
-                        ) : (
-                          <Badge tone={dt.tone} title={comp.source || comp.data_type}>{dt.label}</Badge>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {comp.source_url ? (
+                            <a
+                              href={comp.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block transition-opacity duration-150 ease-out hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded-full"
+                              title={comp.source || 'Open source'}
+                            >
+                              <Badge tone={dt.tone}>{dt.label}</Badge>
+                            </a>
+                          ) : (
+                            <Badge tone={dt.tone} title={comp.source || comp.data_type}>{dt.label}</Badge>
+                          )}
+                          {comp.as_of_date && (
+                            <StalenessBadge
+                              asOfDate={comp.as_of_date}
+                              dataType={comp.data_type}
+                              fallback="residential_listing"
+                            />
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
