@@ -82,6 +82,18 @@ Data sources that REDIP would benefit from but cannot fabricate or assume availa
 - Add weighting inputs for confidence, recency, and source quality.
 - Keep internal seeded benchmarks under explicit provenance notes.
 
+### Asset classes from Q1 2026 v0.2 rate-pack that need new schema
+- Status: PARTIAL — data is curated and ready in the v0.2 rate-pack JSON; existing schema can't hold them.
+- Source: REDIP-COMPS folder (`redip_bengaluru_micro_market_rates_v0_2_2026Q1.json`); MagicBricks / Housing.com listings + IGR Karnataka.
+- Five asset classes from v0.2 not yet inserted, with row counts:
+  - **Builder floor apartments** (7 rows) — capital-value benchmarks per micro-market.
+  - **Plotted development / residential plot** (18 rows) — plot asking value INR/sqft per micro-market, with paired listing-portal range rows.
+  - **Land - residential plotted** (18 rows) — derived land value INR mn/acre, derived from plot INR/sqyd via the standard `INR/sqyd / 9 * 43,560 / 1,000,000` conversion.
+  - **Residential house / villa** (13 rows) — independent house asking capital value per micro-market.
+  - **Guidance value / circle rate** (11 rows) — placeholder rows for SROs that need IGR Karnataka PDF extraction; do NOT infer guidance value from listing prices.
+- Schema follow-up: add per-class benchmark tables OR consolidate into a `residential_segmented_benchmarks` table with `asset_class`, `metric`, `value_low/high/avg`, `unit` columns. Same provenance discipline (source, source_url, as_of_date, is_verified, notes).
+- The methodology document is explicit: "Create separate tabs/layers in the REDIP UI: Listing Benchmarks, IPC Benchmarks, Guidance Value, Internal Deals. Blending them silently will destroy credibility." Honor that when adding tables.
+
 ---
 
 ## Regulatory / Approval Status
