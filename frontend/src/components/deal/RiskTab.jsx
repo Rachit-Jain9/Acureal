@@ -11,6 +11,7 @@ import {
   useRiskBrief,
 } from '../../hooks/useRiskFlags';
 import Badge from '../common/Badge';
+import AiMarkdown from '../common/AiMarkdown';
 import { SectionHeader, SkeletonList, Card } from '../../design-system';
 import { useDealContext } from '../../hooks/useDealContext';
 
@@ -379,8 +380,8 @@ export default function RiskTab() {
             </span>
           </button>
           {briefExpanded && (
-            <div className="mt-3 pl-11 text-sm text-content-secondary whitespace-pre-line leading-relaxed">
-              {brief.contentMd}
+            <div className="mt-3 pl-11">
+              <AiMarkdown>{brief.contentMd}</AiMarkdown>
             </div>
           )}
           <p className="pl-11 mt-3 text-[11px] text-content-muted">

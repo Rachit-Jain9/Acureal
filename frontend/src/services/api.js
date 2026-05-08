@@ -416,6 +416,11 @@ export const intelligenceAPI = {
   // paint. Returns { promise, abort }; consumer wires onText into local state.
   streamDealAnalysis: (dealId, { onText, onDone } = {}) =>
     streamPost(`/intelligence/deal-analysis/${dealId}/stream`, { onText, onDone }),
+  // ── IC Memo (Tier-2 #13) — same trio as deal-analysis ──────────────────
+  getIcMemo:                (dealId) => api.post(`/intelligence/ic-memo/${dealId}`),
+  getCachedIcMemo:          (dealId) => api.get(`/intelligence/ic-memo/${dealId}/cached`),
+  streamIcMemo: (dealId, { onText, onDone } = {}) =>
+    streamPost(`/intelligence/ic-memo/${dealId}/stream`, { onText, onDone }),
 };
 
 // Exports

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { body } = require('express-validator');
 const intelligenceService = require('../services/intelligence.service');
+const icMemoService = require('../services/icMemo.service');
 const monitoring = require('../services/monitoring.supabase');
 const { computeInvestorPackage: invokeKernelHandler } = require('../engines/investorPackage.adapter');
 const { authenticate, requireRole } = require('../middleware/auth');
@@ -283,6 +284,115 @@ router.post(
             // Forward verifier output so the UI can render the
             // drift badge immediately after streaming completes,
             // without a follow-up GET to /cached.
+            numericalDrifts: final.numericalDrifts,
+            verifiedAt: final.verifiedAt,
+          });
+        }
+      } catch (err) {
+        if (!aborted) {
+          writeFrame({ type: 'error', message: err.message || 'Stream failed' });
+        }
+      } finally {
+        if (!res.writableEnded) res.end();
+      }
+      return undefined;
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+// ─── IC Memo (Tier-2 #13) ──────────────────────────────────────────────────
+// Same trio as deal-analysis (cached / generate / stream) but pulls
+// comprehensive context (risks, DD, approvals) and produces longer-form
+// structured markdown across 8 IC sections.
+
+// GET /intelligence/ic-memo/:dealId/cached — last persisted memo or null
+router.get(
+  '/ic-memo/:dealId/cached',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const cached = await icMemoService.getCached(req.params.dealId);
+      if (!cached) {
+        return res.json({ success: true, data: null });
+      }
+      return res.json({
+        success: true,
+        data: {
+          memo: cached.content_md,
+          generatedAt: cached.generated_at,
+          callId: cached.generated_by_call_id,
+          status: cached.status,
+          snapshotHash: cached.snapshot_hash,
+          numericalDrifts: cached.numerical_drifts,
+          verifiedAt: cached.verified_at,
+        },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+// POST /intelligence/ic-memo/:dealId — non-streaming generation (rare path,
+// kept for symmetry + automated callers)
+router.post(
+  '/ic-memo/:dealId',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const result = await icMemoService.generate(req.params.dealId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// POST /intelligence/ic-memo/:dealId/stream — SSE-streamed IC memo
+router.post(
+  '/ic-memo/:dealId/stream',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const stream = await icMemoService.stream(req.params.dealId);
+      if (stream.error) {
+        return res.status(stream.status || 500).json({ success: false, message: stream.error });
+      }
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+      const writeFrame = (obj) => {
+        if (res.writableEnded) return;
+        res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      };
+
+      let aborted = false;
+      req.on('close', () => {
+        if (!res.writableEnded) {
+          aborted = true;
+          stream.abort();
+        }
+      });
+
+      stream.onText((delta) => writeFrame({ type: 'text', text: delta }));
+
+      try {
+        const final = await stream.done();
+        if (!aborted) {
+          writeFrame({
+            type: 'done',
+            callId: final.callId,
+            dealName: final.dealName,
+            generatedAt: final.generatedAt,
+            snapshotHash: final.snapshotHash,
+            artifactId: final.artifactId,
             numericalDrifts: final.numericalDrifts,
             verifiedAt: final.verifiedAt,
           });
