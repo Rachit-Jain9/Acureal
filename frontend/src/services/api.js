@@ -535,9 +535,21 @@ export const compsReviewQueueAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  edit:           (id, payload, notes)        => api.patch(`/comps-review-queue/${id}`, { payload, notes }),
-  approve:        (id)                        => api.post(`/comps-review-queue/${id}/approve`),
-  reject:         (id, reason)                => api.post(`/comps-review-queue/${id}/reject`, { reason }),
+  // Send only the fields the reviewer actually populated. The backend
+  // tolerates null (since 2026-05-08 fix), but a clean body avoids
+  // future express-validator regressions and reads better in network tab.
+  edit: (id, payload, notes) => {
+    const body = {};
+    if (payload != null) body.payload = payload;
+    if (notes != null && notes !== '') body.notes = notes;
+    return api.patch(`/comps-review-queue/${id}`, body);
+  },
+  approve: (id) => api.post(`/comps-review-queue/${id}/approve`),
+  reject:  (id, reason) => {
+    const body = {};
+    if (reason != null && reason !== '') body.reason = reason;
+    return api.post(`/comps-review-queue/${id}/reject`, body);
+  },
 };
 
 // Document Extraction

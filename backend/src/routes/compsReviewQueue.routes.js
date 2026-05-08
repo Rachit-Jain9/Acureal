@@ -188,8 +188,12 @@ router.patch(
   requireRole('admin', 'analyst'),
   [
     param('id').isUUID(),
-    body('payload').optional().isObject(),
-    body('notes').optional().isString().isLength({ max: 4000 }),
+    // `optional({ values: 'null' })` skips validation when the field is
+    // explicitly null, not just undefined. Without this, a frontend
+    // sending `{ notes: null }` (the natural shape when no value is
+    // entered) hits .isString() and trips Validation failed.
+    body('payload').optional({ values: 'null' }).isObject(),
+    body('notes').optional({ values: 'null' }).isString().isLength({ max: 4000 }),
   ],
   handleValidation,
   async (req, res, next) => {
@@ -230,7 +234,11 @@ router.post(
   requireRole('admin', 'analyst'),
   [
     param('id').isUUID(),
-    body('reason').optional().isString().isLength({ max: 1000 }),
+    // `optional({ values: 'null' })` lets `null` through (the frontend
+    // sends `{ reason: null }` when the textarea is empty). Without it,
+    // .isString() trips on null and the reject button toasts
+    // "Validation failed".
+    body('reason').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
   ],
   handleValidation,
   async (req, res, next) => {
