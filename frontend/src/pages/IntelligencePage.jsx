@@ -79,40 +79,6 @@ function SectionCard({ icon: Icon, title, children, action, className = '' }) {
   );
 }
 
-function UnconfiguredNotice({ requirements }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-      <div className="flex items-start gap-3">
-        <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-amber-800">Internal pipeline data — external inventory feeds not yet configured</p>
-          <p className="text-xs text-amber-700 mt-1">
-            REDIP will not generate external absorption/inventory claims until verified live feeds are connected. Verified transaction data from public sources is displayed separately below.
-          </p>
-          {requirements?.length > 0 && (
-            <button
-              onClick={() => setOpen((o) => !o)}
-              className="mt-2 flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium"
-            >
-              <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-              {open ? 'Hide' : 'Show'} required sources
-            </button>
-          )}
-          {open && (
-            <ul className="mt-2 space-y-1">
-              {requirements.map((req) => (
-                <li key={req.key} className="text-xs text-amber-700">
-                  <span className="font-medium">{req.label}</span> — {req.purpose}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -1449,8 +1415,6 @@ export default function IntelligencePage() {
     );
   }
 
-  const notConfigured = brief?.mode === 'verified_data_required';
-
   return (
     <div className="space-y-5 max-w-6xl">
       <PageHeader
@@ -1484,7 +1448,11 @@ export default function IntelligencePage() {
         }
       />
 
-      {notConfigured && <UnconfiguredNotice requirements={brief?.verifiedSourceRequirements} />}
+      {/* "Internal pipeline data — external inventory feeds not yet configured"
+          banner intentionally removed (per 2026-05-08 cleanup). The page now
+          hides empty sections via section-level `notConfigured` checks rather
+          than carrying a top-of-page disclaimer. The verified KPI strip and
+          per-section copy already make data provenance clear. */}
 
       {/* Bengaluru Macro KPI strip — Q1 2026 verified */}
       {macroKpis?.length > 0 && (
@@ -1641,19 +1609,22 @@ export default function IntelligencePage() {
           )}
         </SectionCard>
 
-        <SectionCard icon={MapPin} title="4. Bengaluru Micro-Market Intelligence">
-          {brief?.bengaluruMicroMarketIntelligence?.length > 0 ? (
+        {/* Section 4 (Bengaluru Micro-Market Intelligence) was a 0-row admin-
+            notes surface gated on `market_notes WHERE section='micro_market'`
+            with no rows in production. The actual 38 rows of verified
+            micro-market data render below in Section 7 (Demand Heatmap).
+            Removed per the "hide empty sections cleanly" pattern from
+            PRs #173/#174 — only re-render this surface when admin notes
+            actually exist. */}
+        {brief?.bengaluruMicroMarketIntelligence?.length > 0 && (
+          <SectionCard icon={MapPin} title="4. Bengaluru Micro-Market Intelligence">
             <ul className="space-y-2">
               {brief.bengaluruMicroMarketIntelligence.map((item, i) => (
                 <li key={i} className="text-xs text-content-secondary border-l-2 border-primary-200 pl-3">{item}</li>
               ))}
             </ul>
-          ) : (
-            <p className="text-sm text-content-secondary">
-              Micro-market intelligence will appear here once admin notes are entered or verified external data sources are configured.
-            </p>
-          )}
-        </SectionCard>
+          </SectionCard>
+        )}
       </div>
 
       {/* Section 5: Residential Micro-Market Benchmark Summary.
