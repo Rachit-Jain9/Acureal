@@ -1,10 +1,21 @@
-import { Component } from 'react';
+import { Component, Fragment } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    // `resetKey` is bumped every time the user clicks "Try again". The
+    // children render inside a Fragment keyed by `resetKey`, so a bump
+    // forces React to unmount the failing subtree and mount a fresh
+    // instance — the only reliable way to recover from a render that
+    // crashed against a stale prop or one-off race condition.
+    //
+    // Without this, clicking "Try again" only flips `hasError` back to
+    // false and renders the SAME children with the SAME state that caused
+    // the original throw — so the boundary just catches the same error
+    // again and the user is stuck. The previous behaviour was effectively
+    // a no-op; users had to use the browser's hard refresh to recover.
+    this.state = { hasError: false, error: null, resetKey: 0 };
   }
 
   static getDerivedStateFromError(error) {
@@ -16,7 +27,11 @@ export class ErrorBoundary extends Component {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      resetKey: prev.resetKey + 1,
+    }));
   };
 
   render() {
@@ -42,7 +57,9 @@ export class ErrorBoundary extends Component {
         </div>
       );
     }
-    return this.props.children;
+    // Keyed Fragment forces the subtree to unmount + remount when
+    // `resetKey` changes, giving fresh component state on retry.
+    return <Fragment key={this.state.resetKey}>{this.props.children}</Fragment>;
   }
 }
 
