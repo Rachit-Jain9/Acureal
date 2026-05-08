@@ -4,6 +4,70 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-08 (Tier-0 data flywheel — email ingestion pipeline scaffolded end-to-end, 4 PRs)
+
+### What was worked on
+
+The full Tier-0 data flywheel from the 2026-05-08 strategic handoff. Until now REDIP ran on 81 hand-curated comps — a showcase, not a moat. This session builds the rail that turns forwarded broker emails and IPC quarterly PDFs into committed comps autonomously, with a human-in-the-loop reviewer to keep quality high.
+
+The architecture spans 4 layers:
+
+```
+email → /api/ingest/email/postmark webhook → storage + queue row
+queue row → cron worker (every 15 min) → Gemini extraction → pending_review
+analyst → reviewer UI → edits + approve → comps[] insert + committed status
+```
+
+Shipped as 4 logically separate PRs so each one is independently reviewable + revertable. Per the handoff's explicit guidance against shipping the whole pipeline in one PR.
+
+**PR #180 — comps_review_queue migration.** New staging table with a 7-state lifecycle (`pending_extraction → extracting → pending_review → approved/rejected → committed/failed`), 5 source taxonomies, JSONB structured_payload + reviewer_edits, partial unique on (org, raw_doc_sha256) for byte-identical-attachment dedupe, 5 purpose-built indexes (org+status queue list, org+source filter, email-thread roll-up, extraction-id worker join, dedupe lookup), 4 RLS policies. Idempotent — every operation guarded by `IF NOT EXISTS` / `DROP IF EXISTS`.
+
+**PR #181 — Postmark inbound webhook.** Auth supports both HMAC-SHA256 (preferred) and HTTP Basic (Postmark free-tier fallback). Sender-domain heuristic auto-classifies CW/JLL/Knight Frank/Colliers/CBRE etc. as `email_ipc_report`; subject keywords (`rate`, `quote`, `comp`) classify as `email_broker_quote`; everything else as `email_other`. 25 MB attachment cap, MIME allowlist (PDF / images / Office / CSV). Body preview truncated to 8 KB before storage. SHA-256 dedupe against the queue's partial unique index — 23505 errors transparently return the existing row, never fail the webhook (Postmark would retry on non-2xx). 24 unit tests cover HMAC verification, Basic-auth, sender-domain mapping, MIME rejection, dedupe-on-23505 path, body-only fallback.
+
+**PR #182 — Extraction worker + reviewer queue API + 2 new Gemini doctypes.** Two new prompts: `comps_rate_sheet` (broker multi-property rate sheets, one comp per row with `raw_row_text` for traceability) and `ipc_report` (JLL / CW / Knight Frank quarterly reports with `headline_kpis` + `comps[]` + `report_metadata`). CLASSIFY_PROMPT updated to disambiguate from single-property `broker_quote`. PROMPT_REGISTRY_VERSION bumped to `2026-05-15.1`. Queue service owns the lifecycle: `processQueueRow` runs Gemini with the source-mapped doctype and transitions to `pending_review`; `approveAndCommit` is transactional — maps each comp to the comps schema, inserts into the production table, records `committed_comp_ids[]` back on the queue row. Asset-class normalization is **deterministic JS** (per CLAUDE.md: never LLM for math): residential signals → `residential`, office/retail/hospitality/warehouse → `commercial`, mixed-use signals → `mixed_use`. REST API: list (status-priority sort), get, process (manual trigger), edit (save reviewer_edits without committing), approve, reject. Cron worker `/api/cron/comps-queue/process-pending` runs every 15 min via vercel.json. 28 unit tests (881 → 909 stacked count once merged sequentially). Worst-case 30-minute lag from email arrival to pending_review.
+
+**PR #183 — Split-pane reviewer UI.** New admin route at `/dashboard/admin/comps-queue` with two pages. List view: status filter pills (Pending review, Pending extraction, Failed, Rejected, Committed), source filter chips, item rows with status icon tile / sender / subject / attachment / confidence% (color-coded ≥80 / ≥50 / <50) / status badge / received-at timestamp. Live with 60s background refresh + refetch on focus. Detail view: split-pane (440 px source preview on the left — PDF iframe / image / body-only fallback — and editable comps table on the right with grouped columns Identity / Class / Areas / Pricing / Lifecycle / Provenance). Required fields highlighted in amber when missing. Bottom action bar: Save edits / Reject (with reason modal) / Approve & commit (button shows valid-row count). Keyboard shortcuts: `Esc` back, `Cmd/Ctrl+S` save, `A` approve, `R` reject. Per-field confidence panel below the editor for low-quality flag triage. Status-specific banners for committed (links to comps page) / failed (retry button) / rejected (reason). Sidebar gets a new Inbox-icon nav link in the Admin section.
+
+**Verification.** All 4 PRs:
+- 909/909 backend tests pass when stacked (52 new + 856 baseline)
+- Frontend builds clean — 26.6s, all chunks generated
+- Visual check via Vite dev server: list page renders filter pills + status sort + ErrorState; detail page renders split-pane + back link + keyboard hint row + ErrorState; sidebar shows the new nav link
+- Zero console errors, zero build warnings
+
+### PRs opened today (4)
+
+| PR | Title | Layer |
+|---|---|---|
+| **[#180](https://github.com/Rachit-Jain9/REDIP/pull/180)** | comps_review_queue table migration | DB |
+| **[#181](https://github.com/Rachit-Jain9/REDIP/pull/181)** | Postmark inbound webhook → comps_review_queue | Backend |
+| **[#182](https://github.com/Rachit-Jain9/REDIP/pull/182)** | extraction worker + reviewer queue API + new Gemini doctypes | Backend |
+| **[#183](https://github.com/Rachit-Jain9/REDIP/pull/183)** | split-pane reviewer UI under /dashboard/admin/comps-queue | Frontend |
+
+### Operator actions required to flip the flywheel on
+
+Merge PRs #180 → #181 → #182 → #183 in order, then:
+
+1. **Apply migration** `database/migrations/20260515_comps_review_queue.sql` via Supabase SQL editor (project `niamgjbxxgmmffggumvj`). Idempotent.
+2. **Set Vercel env vars:**
+   - `INGEST_WEBHOOK_HMAC_KEY` — generate via `openssl rand -hex 32`
+   - `DEFAULT_INGEST_ORGANIZATION_ID = d1218877-4d3a-4fe4-8d63-914fa8ffa94b` (single-tenant org)
+3. **Configure Postmark Inbound Stream** → POST URL `https://redip.vercel.app/api/ingest/email/postmark` with HMAC header `X-Webhook-Signature: sha256=<hex>`.
+4. **Smoke test:** forward a JLL/CW/broker email to the inbound address. Within 15 min the cron picks it up and `/dashboard/admin/comps-queue` shows the row in `pending_review`. Click in, review, edit, approve. Verify the comps appear in `/dashboard/comps`.
+
+### What's next (Tier 1)
+
+Per the 2026-05-08 handoff, with the flywheel rail laid down:
+
+1. **Post-hoc numerical verifier** — extract numbers from AI narratives, assert against deterministic snapshot, flag drifts (don't auto-correct)
+2. **Cross-document inconsistency detector** — Claude pass over Gemini extractions writing to `ai_artifacts.risk_brief`
+3. **Karnataka IGR SRO PDF extraction** for the 11 guidance-value placeholders in TODO_DATA.md
+4. **Co-working / managed office benchmarks** + **Student housing** + **Senior living** + **Data center detailed comps** — new schemas + UI sections
+5. **Project-precise geocoding** — replace locality centroids with Google Geocoding API per project name
+
+Then Tier 2 (narrow Deal Q&A agent, risk synthesis writing to ai_artifacts, IC memo drafting, GPT-5.4 A/B harness on parcel narrative) once the flywheel has spun for a couple weeks and we have meaningful corpus growth.
+
+---
+
 ## 2026-05-08 (Q1 2026 v0.2 + GBA Q4 2025 comprehensive load — 12 PRs landed)
 
 ### What was worked on
