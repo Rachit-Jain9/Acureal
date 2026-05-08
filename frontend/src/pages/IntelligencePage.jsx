@@ -351,17 +351,43 @@ function TransactionTable({ rows }) {
 
 // ─── Micro-Market Benchmarks Table ────────────────────────────────────────────
 
+// Classify a row's data_type into one of three top-level layers per the
+// methodology doc: "Create separate tabs/layers in the REDIP UI: Listing
+// Benchmarks, IPC Benchmarks, Guidance Value, Internal Deals." Tagging
+// rows by prefix means new v0.x cohorts auto-roll up without a code edit.
+const layerForDataType = (dt) => {
+  if (!dt) return 'other';
+  if (dt.startsWith('listing_'))               return 'listing';
+  if (dt.startsWith('ipc_'))                   return 'ipc';
+  if (dt.startsWith('internal_') ||
+      dt.startsWith('verified_'))              return 'internal';
+  return 'other';
+};
+
+// Per-row pill label. Walks the prefix table so v0.2 sub-segments
+// (high_end, mid_segment) get their own readable badge instead of an
+// opaque slug.
+const dataTypeBadge = (dt) => {
+  if (!dt) return { tone: 'neutral', label: '—' };
+  if (dt === 'listing_q1_2026' || dt === 'listing_q1_2026_v0_2') return { tone: 'info',    label: 'Listing Q1 2026' };
+  if (dt === 'ipc_q1_2026'     || dt === 'ipc_q1_2026_v0_2')     return { tone: 'premium', label: 'IPC Q1 2026' };
+  if (dt === 'ipc_q1_2026_v0_2_high_end')                        return { tone: 'premium', label: 'IPC · High-end' };
+  if (dt === 'ipc_q1_2026_v0_2_mid_segment')                     return { tone: 'premium', label: 'IPC · Mid-segment' };
+  if (dt.startsWith('internal_benchmark'))                       return { tone: 'success', label: 'Internal · Verified' };
+  return { tone: 'neutral', label: dt };
+};
+
 function BenchmarksTable({ rows }) {
   const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all'); // all | listing | ipc
+  const [filter, setFilter] = useState('all'); // all | listing | ipc | internal
   const [sort, setSort] = useState({ key: 'avg_price_max_per_sqft', dir: 'desc' });
 
   const onSort = useCallback((k) => setSort((p) => cycleSort(k, p)), []);
 
   const filteredRows = useMemo(() => rows.filter((r) => {
-    if (filter === 'listing' && r.data_type !== 'listing_q1_2026') return false;
-    if (filter === 'ipc'     && r.data_type !== 'ipc_q1_2026')     return false;
+    const layer = layerForDataType(r.data_type);
+    if (filter !== 'all' && layer !== filter) return false;
     return matchesSearch(r, search, ['micro_market', 'anchor_hub', 'data_period']);
   }), [rows, filter, search]);
 
@@ -376,10 +402,13 @@ function BenchmarksTable({ rows }) {
   const visible = showAll ? sortedRows : sortedRows.slice(0, 12);
   const maxPrice = Math.max(...sortedRows.map((r) => r.avg_price_max_per_sqft || 0));
 
-  const dataTypeLabel = {
-    listing_q1_2026: { tone: 'info',    label: 'Listing Q1 2026' },
-    ipc_q1_2026:     { tone: 'premium', label: 'IPC Q1 2026' },
-  };
+  // Live counts for the layer chips. Rebuilds whenever rows change so the
+  // UI never lies about cohort sizes.
+  const layerCounts = useMemo(() => {
+    const c = { listing: 0, ipc: 0, internal: 0, other: 0 };
+    for (const r of rows) c[layerForDataType(r.data_type)] += 1;
+    return c;
+  }, [rows]);
 
   return (
     <div>
@@ -390,13 +419,19 @@ function BenchmarksTable({ rows }) {
           placeholder="Search micro-market or anchor hub…"
           ariaLabel="Search residential micro-markets"
         />
+        {/* Source-layer toggle. Listing (99acres/MagicBricks asking-prices)
+            vs. IPC (C&W/JLL/KF benchmarks) vs. Internal (REDIP-verified
+            comps). Methodology doc explicitly demands this separation;
+            blending them silently destroys credibility. Hide a chip if
+            its count is zero so the UI doesn't surface empty buckets. */}
         <DataToolbar.Chips
           value={filter === 'all' ? null : filter}
           onChange={(v) => { setFilter(v || 'all'); setShowAll(false); }}
           options={[
-            { value: 'listing', label: '99acres listings', count: rows.filter((r) => r.data_type === 'listing_q1_2026').length },
-            { value: 'ipc',     label: 'C&W IPC',          count: rows.filter((r) => r.data_type === 'ipc_q1_2026').length },
-          ]}
+            layerCounts.listing  > 0 && { value: 'listing',  label: 'Listing portals', count: layerCounts.listing },
+            layerCounts.ipc      > 0 && { value: 'ipc',      label: 'IPC benchmarks',  count: layerCounts.ipc },
+            layerCounts.internal > 0 && { value: 'internal', label: 'Internal',        count: layerCounts.internal },
+          ].filter(Boolean)}
           allowAll
           allLabel="All sources"
         />
@@ -428,7 +463,7 @@ function BenchmarksTable({ rows }) {
                 : growthVal >= 5 ? 'text-blue-600 font-medium'
                 : growthVal < 0 ? 'text-red-500 font-medium'
                 : 'text-content-secondary';
-              const dt = dataTypeLabel[row.data_type] || { tone: 'neutral', label: row.data_type || '—' };
+              const dt = dataTypeBadge(row.data_type);
 
               return (
                 <tr key={row.id || i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
