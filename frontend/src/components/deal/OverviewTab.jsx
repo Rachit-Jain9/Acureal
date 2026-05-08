@@ -11,6 +11,9 @@ import {
   Layers,
   MapPin,
   X,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
@@ -119,6 +122,10 @@ export default function OverviewTab() {
   // holds the active stream's `abort()` so the user can cancel mid-flight.
   const [aiText, setAiText] = useState('');
   const [aiMeta, setAiMeta] = useState(null);
+  // Tier-1 #3 — drifts flagged by the post-hoc numerical verifier.
+  // null = verifier hasn't run; [] = ran clean; non-empty = review needed.
+  const [aiDrifts, setAiDrifts] = useState(null);
+  const [driftsExpanded, setDriftsExpanded] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [aiCached, setAiCached] = useState(false);
@@ -136,6 +143,7 @@ export default function OverviewTab() {
         if (cancelled || !cached) return;
         setAiText(cached.analysis || '');
         setAiMeta({ generatedAt: cached.generatedAt, callId: cached.callId });
+        setAiDrifts(cached.numericalDrifts ?? null);
         setAiCached(true);
       } catch {
         // Cache fetch is best-effort — silent on failure. User can still
@@ -151,11 +159,18 @@ export default function OverviewTab() {
     setAiError(null);
     setAiText('');
     setAiMeta(null);
+    setAiDrifts(null);
+    setDriftsExpanded(false);
     setAiCached(false);
 
     const stream = intelligenceAPI.streamDealAnalysis(dealId, {
       onText: (delta) => setAiText((t) => t + delta),
-      onDone: (meta) => setAiMeta(meta),
+      onDone: (meta) => {
+        setAiMeta(meta);
+        if (meta?.numericalDrifts !== undefined) {
+          setAiDrifts(meta.numericalDrifts);
+        }
+      },
     });
     streamCtrl.current = stream;
 
@@ -446,8 +461,78 @@ export default function OverviewTab() {
                 />
               )}
             </p>
+
+            {/* Numerical drift surface (Tier-1 #3 — post-hoc verifier).
+                Only renders when drifts > 0; clean narratives render
+                nothing to keep the page tight. */}
+            {!aiLoading && Array.isArray(aiDrifts) && aiDrifts.length > 0 && (() => {
+              const highCount   = aiDrifts.filter((d) => d.severity === 'high').length;
+              const mediumCount = aiDrifts.filter((d) => d.severity === 'medium').length;
+              const tone =
+                highCount > 0 ? 'danger' : mediumCount > 0 ? 'warn' : 'info';
+              const palette =
+                tone === 'danger'
+                  ? { bg: 'bg-rose-50',  border: 'border-rose-200',  text: 'text-rose-900',  icon: 'text-rose-600' }
+                  : tone === 'warn'
+                  ? { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-900', icon: 'text-amber-600' }
+                  : { bg: 'bg-sky-50',   border: 'border-sky-200',   text: 'text-sky-900',   icon: 'text-sky-600' };
+              return (
+                <div className={clsx('mt-3 border rounded-md', palette.bg, palette.border)}>
+                  <button
+                    type="button"
+                    onClick={() => setDriftsExpanded((v) => !v)}
+                    className={clsx(
+                      'w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium',
+                      palette.text,
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-md'
+                    )}
+                    aria-expanded={driftsExpanded}
+                  >
+                    <AlertTriangle size={13} className={clsx('shrink-0', palette.icon)} />
+                    <span className="flex-1">
+                      {aiDrifts.length} numerical claim{aiDrifts.length === 1 ? '' : 's'} flagged
+                      {highCount > 0 && <span> · {highCount} high</span>}
+                      {mediumCount > 0 && <span> · {mediumCount} medium</span>}
+                    </span>
+                    {driftsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
+                  {driftsExpanded && (
+                    <div className="px-3 pb-3 pt-0 space-y-2 text-xs">
+                      {aiDrifts.map((d, i) => (
+                        <div key={i} className={clsx('pt-2 border-t', palette.border)}>
+                          <div className="flex items-baseline justify-between gap-2 tabular-nums">
+                            <span className={clsx('font-medium', palette.text)}>{d.label || d.field}</span>
+                            <span className={palette.text}>
+                              claimed <strong>{d.claimed}{d.unit ? ` ${d.unit}` : ''}</strong>
+                              {d.snapshot != null && (
+                                <> · model says <strong>{d.snapshot}{d.unit ? ` ${d.unit}` : ''}</strong></>
+                              )}
+                              {d.delta_pct != null && <> · {d.delta_pct.toFixed(1)}% drift</>}
+                              {d.reason === 'no_snapshot_value' && <> · no model baseline to compare</>}
+                            </span>
+                          </div>
+                          {d.claim_context && (
+                            <p className={clsx('mt-1 italic text-[11px] opacity-80', palette.text)}>
+                              "…{d.claim_context}…"
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* AI-assisted disclaimer — required by CLAUDE.md hard rule
+                for every AI-synthesized narrative. */}
+            <p className="mt-2 text-[11px] text-content-muted">
+              AI-assisted — requires human review. Numbers are validated against the
+              underlying financial model; flagged drifts (if any) appear above.
+            </p>
+
             {aiMeta && (
-              <p className="text-xs text-content-muted mt-2">
+              <p className="text-xs text-content-muted">
                 Generated {new Date(aiMeta.generatedAt).toLocaleString('en-IN')} · Cross-referenced
                 against internal pipeline, market benchmarks, and verified comps
               </p>

@@ -197,6 +197,11 @@ router.get(
           callId: cached.generated_by_call_id,
           status: cached.status,
           snapshotHash: cached.snapshot_hash,
+          // Tier-1 #3 — post-hoc numerical verifier output. Surfaced
+          // alongside the narrative so the UI can render a "claims
+          // flagged" badge next to the AI-assisted disclaimer.
+          numericalDrifts: cached.numerical_drifts,
+          verifiedAt: cached.verified_at,
         },
       });
     } catch (error) {
@@ -275,6 +280,11 @@ router.post(
             callId: final.callId,
             dealName: final.dealName,
             generatedAt: final.generatedAt,
+            // Forward verifier output so the UI can render the
+            // drift badge immediately after streaming completes,
+            // without a follow-up GET to /cached.
+            numericalDrifts: final.numericalDrifts,
+            verifiedAt: final.verifiedAt,
           });
         }
       } catch (err) {

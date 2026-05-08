@@ -52,6 +52,17 @@ const isMissingTableError = (err) => {
   return /relation .* does not exist/i.test(msg);
 };
 
+// Postgres "undefined_column" SQLSTATE (42703). Hit when a deploy goes
+// out before the corresponding migration has been applied — saveArtifact
+// references columns the live DB doesn't have yet. Treated like a
+// missing-table error: log and no-op rather than blowing up the caller.
+const isMissingColumnError = (err) => {
+  const code = err?.code || err?.original?.code;
+  if (code === '42703') return true;
+  const msg = String(err?.message || '');
+  return /column .* does not exist/i.test(msg);
+};
+
 // SELECT the most recent artifact matching (deal_id, artifact_type). If
 // `snapshotHash` is provided, only return a row with that exact hash —
 // anything else is a "stale" miss from the caller's POV. If snapshotHash is
@@ -63,7 +74,8 @@ const getLatestArtifact = async ({ dealId, artifactType, snapshotHash = null }) 
     const sql = snapshotHash
       ? `SELECT id, deal_id, artifact_type, content_md, content_jsonb,
                 snapshot_hash, generated_by_call_id, status,
-                generated_at, approved_by, approved_at
+                generated_at, approved_by, approved_at,
+                numerical_drifts, verified_at
            FROM public.ai_artifacts
           WHERE deal_id = $1
             AND artifact_type = $2
@@ -72,7 +84,8 @@ const getLatestArtifact = async ({ dealId, artifactType, snapshotHash = null }) 
           LIMIT 1`
       : `SELECT id, deal_id, artifact_type, content_md, content_jsonb,
                 snapshot_hash, generated_by_call_id, status,
-                generated_at, approved_by, approved_at
+                generated_at, approved_by, approved_at,
+                numerical_drifts, verified_at
            FROM public.ai_artifacts
           WHERE deal_id = $1
             AND artifact_type = $2
@@ -82,11 +95,17 @@ const getLatestArtifact = async ({ dealId, artifactType, snapshotHash = null }) 
     const result = await query(sql, params);
     return result.rows[0] || null;
   } catch (err) {
-    if (isMissingTableError(err)) {
-      // Pre-migration deploy — feature degrades to "always regenerate".
-      // Logged once at info level so the operator sees a clear signal in
-      // Vercel logs that the table needs to be created.
-      log.info('ai_artifacts_table_missing_fail_open', { deal_id: dealId, artifact_type: artifactType });
+    if (isMissingTableError(err) || isMissingColumnError(err)) {
+      // Pre-migration deploy — either the table itself is missing or
+      // the numerical_drifts / verified_at columns haven't been
+      // applied yet. Feature degrades to "always regenerate". Logged
+      // at info level so the operator sees a clear signal in Vercel
+      // logs that a migration needs to be applied.
+      log.info('ai_artifacts_lookup_skipped_schema_drift', {
+        deal_id: dealId,
+        artifact_type: artifactType,
+        error: err.message,
+      });
       return null;
     }
     log.warn('ai_artifacts_lookup_failed', { error: err.message, deal_id: dealId });
@@ -106,16 +125,22 @@ const saveArtifact = async ({
   snapshotHash = null,
   generatedByCallId = null,
   status = 'draft',
+  // Tier-1 #3 — post-hoc numerical verifier output. Pass an array
+  // (possibly empty) to record that verification ran. Pass null /
+  // undefined to indicate the verifier has not run yet.
+  numericalDrifts = undefined,
+  verifiedAt = undefined,
 }) => {
   if (!organizationId || !SUPPORTED_ARTIFACT_TYPES.has(artifactType) || !contentMd) return null;
   try {
     const result = await query(
       `INSERT INTO public.ai_artifacts (
          organization_id, deal_id, artifact_type, content_md, content_jsonb,
-         snapshot_hash, generated_by_call_id, status
+         snapshot_hash, generated_by_call_id, status,
+         numerical_drifts, verified_at
        )
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
-       RETURNING id, generated_at`,
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10)
+       RETURNING id, generated_at, numerical_drifts, verified_at`,
       [
         organizationId,
         dealId || null,
@@ -125,12 +150,22 @@ const saveArtifact = async ({
         snapshotHash,
         generatedByCallId,
         status,
+        numericalDrifts === undefined ? null : JSON.stringify(numericalDrifts),
+        verifiedAt || null,
       ],
     );
     return result.rows[0] || null;
   } catch (err) {
-    if (isMissingTableError(err)) {
-      log.info('ai_artifacts_save_skipped_table_missing', { deal_id: dealId, artifact_type: artifactType });
+    if (isMissingTableError(err) || isMissingColumnError(err)) {
+      // Either the table itself is missing (pre-#180) or the
+      // numerical_drifts / verified_at columns haven't been applied
+      // yet (pre-#190). Persistence is best-effort — the live
+      // narrative still reaches the user even if cache writes fail.
+      log.info('ai_artifacts_save_skipped_schema_drift', {
+        deal_id: dealId,
+        artifact_type: artifactType,
+        error: err.message,
+      });
       return null;
     }
     log.warn('ai_artifacts_save_failed', { error: err.message, deal_id: dealId });
