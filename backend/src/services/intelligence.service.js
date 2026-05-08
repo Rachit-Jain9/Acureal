@@ -691,6 +691,41 @@ const getIndustrialBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => 
   return result.rows;
 };
 
+/**
+ * Residential segmented benchmarks — builder floor, plotted dev, land plotted,
+ * villa/house, guidance value. These are the 5 asset classes from the v0.2
+ * rate-pack that don't fit micro_market_benchmarks (different units / metric).
+ *
+ * Filters:
+ *   - city          (default Bengaluru)
+ *   - assetClass    e.g. 'builder_floor' | 'plotted_development' | …
+ *   - dataType      e.g. 'listing_q1_2026_v0_2' | 'guidance_q1_2026_v0_2_pending'
+ *
+ * Order: asset_class first (groups together in UI), then value_avg DESC so
+ * premium markets sit at the top of each group.
+ */
+const getResidentialSegmentedBenchmarks = async ({ city = 'Bengaluru', assetClass, dataType } = {}) => {
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (assetClass) {
+    params.push(assetClass);
+    where += ` AND asset_class = $${params.length}`;
+  }
+  if (dataType) {
+    params.push(dataType);
+    where += ` AND data_type = $${params.length}`;
+  }
+  const result = await query(
+    `SELECT * FROM residential_segmented_benchmarks
+     WHERE ${where}
+     ORDER BY asset_class ASC,
+              COALESCE(value_avg, value_high, value_low) DESC NULLS LAST,
+              micro_market ASC`,
+    params
+  );
+  return result.rows;
+};
+
 const getHospitalityBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => {
   const params = [city];
   let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
@@ -741,6 +776,7 @@ module.exports = {
   getRetailBenchmarks,
   getIndustrialBenchmarks,
   getHospitalityBenchmarks,
+  getResidentialSegmentedBenchmarks,
   getMacroKpis,
   getDealAnalysis,
   streamDealAnalysis,

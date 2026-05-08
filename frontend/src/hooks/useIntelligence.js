@@ -73,6 +73,14 @@ export function useHospitalityBenchmarks(params) {
   });
 }
 
+export function useResidentialSegmentedBenchmarks(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'residential-segmented-benchmarks', params],
+    queryFn: () => intelligenceAPI.getResidentialSegmentedBenchmarks(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useMacroKpis(params) {
   return useQuery({
     queryKey: ['intelligence', 'macro-kpis', params],
