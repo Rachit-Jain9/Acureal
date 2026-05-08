@@ -130,6 +130,20 @@ const getDashboardStats = async (userId) => {
      LIMIT 8`
   );
 
+  // Comps review queue counts — surfaced on the dashboard's "Action items"
+  // row so reviewers see pending work as soon as they land. RLS scopes
+  // to the current org automatically. Aggregate in one pass — three
+  // FILTER clauses, one row, one round trip.
+  const queueCountsResult = await query(
+    `SELECT
+       COUNT(*) FILTER (WHERE status = 'pending_review')     AS pending_review,
+       COUNT(*) FILTER (WHERE status = 'pending_extraction') AS pending_extraction,
+       COUNT(*) FILTER (WHERE status = 'failed')             AS failed
+     FROM comps_review_queue
+     WHERE organization_id = current_organization_id()`
+  );
+  const queueCounts = queueCountsResult.rows[0] || {};
+
   return {
     stats: {
       total_deals: parseInt(dealsStats.total_deals, 10),
@@ -140,6 +154,12 @@ const getDashboardStats = async (userId) => {
       total_pipeline_value_cr: parseFloat(dealsStats.total_pipeline_value_cr) || 0,
       avg_irr_pct: dealsStats.avg_irr_pct ? parseFloat(dealsStats.avg_irr_pct) : null,
       total_properties: totalProperties,
+      // Tier-0 ingestion queue surface — feeds the dashboard's "Action items"
+      // row that links straight to the reviewer. Numbers are 0 for orgs
+      // without any queue activity yet, so the tile hides cleanly.
+      comps_queue_pending_review:     parseInt(queueCounts.pending_review, 10)     || 0,
+      comps_queue_pending_extraction: parseInt(queueCounts.pending_extraction, 10) || 0,
+      comps_queue_failed:             parseInt(queueCounts.failed, 10)             || 0,
     },
     deals_by_stage: dealsByStage,
     stage_distribution: stageDistribution,

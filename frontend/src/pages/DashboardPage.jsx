@@ -18,9 +18,13 @@ import {
   ArrowRight,
   AlertTriangle,
   Clock,
+  Inbox,
+  Hourglass,
 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
+import useAuthStore from '../store/authStore';
+import { roleSatisfies } from '../utils/roles';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { Card, SectionHeader, MetricTile, SkeletonKpi, SkeletonCard } from '../design-system';
@@ -80,6 +84,7 @@ export default function DashboardPage() {
   const chartPalette = useChartPalette();
   const tooltipStyle = useTooltipStyle();
   const accentBarFill = chartPalette[0];
+  const userRole = useAuthStore((s) => s.user?.role);
 
   // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
   // so the layout doesn't reflow when data lands. Per FRONTEND_GUIDELINES §2:
@@ -133,6 +138,15 @@ export default function DashboardPage() {
   const avgIrr          = stats.avg_irr_pct          || 0;
   const icReadyDeals    = stats.ic_ready_count        || 0;
   const dealsWithRisk   = stats.deals_with_open_risks || 0;
+
+  // Tier-0 ingestion queue — surfaced as an "Action items" row that only
+  // renders when there's actually work to do. Editor+ only (matches the
+  // sidebar's role gate for the admin section).
+  const queuePendingReview     = stats.comps_queue_pending_review     || 0;
+  const queuePendingExtraction = stats.comps_queue_pending_extraction || 0;
+  const queueFailed            = stats.comps_queue_failed             || 0;
+  const queueAttention         = queuePendingReview + queuePendingExtraction + queueFailed;
+  const showQueueRow           = roleSatisfies(userRole, ['editor']) && queueAttention > 0;
 
   // Pipeline bar chart data — filter out stages with 0 deals
   const pipelineChartData = stage_distribution
@@ -197,6 +211,57 @@ export default function DashboardPage() {
           tone={icReadyDeals > 0 ? 'up' : 'neutral'}
         />
       </div>
+
+      {/* ── Action items — Tier-0 ingestion queue. Only renders for editor+
+            roles when there's actually work to do, so non-curator users
+            see a clean dashboard. ─────────────────────────────────────── */}
+      {showQueueRow && (
+        <Card className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="shrink-0 w-9 h-9 rounded-md bg-amber-50 text-amber-700 flex items-center justify-center">
+              <Inbox size={16} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-eyebrow uppercase text-content-muted font-medium">
+                Comps review queue
+              </div>
+              <div className="text-sm text-content-primary font-medium tabular-nums">
+                {queuePendingReview > 0 && (
+                  <>
+                    <span className="text-amber-600">{queuePendingReview}</span> pending review
+                  </>
+                )}
+                {queuePendingReview === 0 && queuePendingExtraction > 0 && (
+                  <span className="inline-flex items-center gap-1 text-content-secondary">
+                    <Hourglass size={12} />
+                    {queuePendingExtraction} pending extraction
+                  </span>
+                )}
+                {queuePendingReview === 0 && queuePendingExtraction === 0 && queueFailed > 0 && (
+                  <span className="text-data-negative">{queueFailed} failed extractions</span>
+                )}
+                {queuePendingReview > 0 && (queuePendingExtraction > 0 || queueFailed > 0) && (
+                  <span className="text-content-muted ml-2 text-xs font-normal">
+                    {queuePendingExtraction > 0 && (
+                      <span>· {queuePendingExtraction} extracting</span>
+                    )}
+                    {queueFailed > 0 && (
+                      <span className="text-data-negative ml-1">· {queueFailed} failed</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <Link
+            to="/dashboard/admin/comps-queue"
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            Open queue
+            <ArrowRight size={13} />
+          </Link>
+        </Card>
+      )}
 
       {/* ── Charts row ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
