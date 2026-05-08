@@ -45,6 +45,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
 const ParcelIntelligenceAdminPage = lazy(() => import('./pages/ParcelIntelligenceAdminPage'));
+const CompsQueuePage = lazy(() => import('./pages/CompsQueuePage'));
+const CompsQueueDetailPage = lazy(() => import('./pages/CompsQueueDetailPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
@@ -144,6 +146,8 @@ export default function App() {
               existing bookmarks don't break. */}
           <Route path="admin/master-plan" element={withSuspense(<MasterPlanAdminPage />)} />
           <Route path="admin/parcel-intelligence" element={withSuspense(<ParcelIntelligenceAdminPage />)} />
+          <Route path="admin/comps-queue" element={withSuspense(<CompsQueuePage />)} />
+          <Route path="admin/comps-queue/:id" element={withSuspense(<CompsQueueDetailPage />)} />
           <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
           <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}

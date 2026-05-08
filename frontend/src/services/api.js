@@ -512,6 +512,17 @@ export const compSimilarityAPI = {
   score:  (dealId, compId) => api.get(`/comps/score/${dealId}/${compId}`),
 };
 
+// Comps Review Queue (Tier-0 ingestion flywheel)
+// Mirrors backend/src/routes/compsReviewQueue.routes.js
+export const compsReviewQueueAPI = {
+  list:    (params)                    => api.get('/comps-review-queue', { params }),
+  get:     (id)                        => api.get(`/comps-review-queue/${id}`),
+  process: (id)                        => api.post(`/comps-review-queue/${id}/process`),
+  edit:    (id, payload, notes)        => api.patch(`/comps-review-queue/${id}`, { payload, notes }),
+  approve: (id)                        => api.post(`/comps-review-queue/${id}/approve`),
+  reject:  (id, reason)                => api.post(`/comps-review-queue/${id}/reject`, { reason }),
+};
+
 // Document Extraction
 export const extractionAPI = {
   extract:          (documentId, data)                            => api.post(`/documents/${documentId}/extract`, data),
