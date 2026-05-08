@@ -117,6 +117,122 @@ function MarkerTooltip({ comp }) {
   );
 }
 
+// Cluster marker — drawn when multiple comps share the same locality
+// centroid (which is the common case after the centroid-geocoding migration:
+// 15+ Whitefield comps all sit at exactly 12.9698, 77.7499). Without this,
+// they stack invisibly into one indistinguishable blob.
+//
+// Uses the dominant data_type colour for the cluster fill, with an interior
+// count badge. Click expands a list popup so the user can pick a specific
+// project.
+function ClusterMarker({ count, dominantPalette, expanded, onClick, theme }) {
+  const selStroke = theme === 'dark' ? '#ffffff' : '#0f172a';
+  const size = expanded ? 38 : 32;
+  const ringSize = size + 8;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      aria-label={`${count} comparables at this location`}
+      aria-expanded={expanded}
+      className="absolute group cursor-pointer transition-transform duration-200 ease-out hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 rounded-full"
+      style={{
+        transform: `translate(-${ringSize / 2}px, -${ringSize / 2}px)`,
+        width: ringSize,
+        height: ringSize,
+      }}
+    >
+      {expanded && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full motion-safe:animate-ping"
+          style={{ backgroundColor: dominantPalette.fill, opacity: 0.3 }}
+        />
+      )}
+      <span
+        className="absolute rounded-full shadow-md flex items-center justify-center text-white font-semibold tabular-nums"
+        style={{
+          left: (ringSize - size) / 2,
+          top:  (ringSize - size) / 2,
+          width: size,
+          height: size,
+          fontSize: count >= 100 ? 11 : 13,
+          backgroundColor: dominantPalette.fill,
+          border: `${expanded ? 3 : 2}px solid ${expanded ? selStroke : dominantPalette.stroke}`,
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+// Expanded cluster list popup — appears when the user clicks a cluster
+// marker. Lists every comp at that location with rate + verified flag so
+// the user can pick a specific project. Clicking a row dismisses the list
+// and selects that comp in the table.
+function ClusterListPopup({ comps, onSelect, onClose }) {
+  return (
+    <div
+      className="absolute z-[20] -translate-x-1/2 pointer-events-auto"
+      style={{ marginTop: 8, top: 8 }}
+      role="dialog"
+      aria-label={`${comps.length} comparables at this location`}
+    >
+      <div className="bg-bg-elevated border border-hairline-strong rounded-editorial shadow-xl min-w-[260px] max-w-[320px] overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-hairline bg-bg-secondary/60">
+          <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
+            {comps.length} comparable{comps.length === 1 ? '' : 's'} here
+          </p>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            className="text-content-muted hover:text-content-primary transition-colors text-xs leading-none px-1"
+            aria-label="Close list"
+          >
+            ✕
+          </button>
+        </div>
+        <ul className="max-h-[280px] overflow-y-auto divide-y divide-hairline">
+          {comps.map((comp) => {
+            const palette = paletteFor(comp);
+            return (
+              <li key={comp.id}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onSelect(comp.id); }}
+                  className="w-full text-left px-3 py-2 hover:bg-bg-secondary transition-colors flex items-start gap-2"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mt-1.5 inline-block rounded-full shrink-0"
+                    style={{
+                      width: 8, height: 8,
+                      backgroundColor: palette.fill,
+                      border: `1px solid ${palette.stroke}`,
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-content-primary truncate">
+                      {comp.project_name || '(unnamed)'}
+                    </p>
+                    <p className="text-xs text-content-secondary tabular-nums">
+                      {formatRate(comp.rate_per_sqft)}
+                      {comp.developer && (
+                        <span className="text-content-muted"> · {comp.developer}</span>
+                      )}
+                    </p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 // Stable libraries array — passing a new array reference on each render
 // makes useJsApiLoader emit a "LoadScript has been reloaded unintentionally"
 // warning and re-fetch the SDK. Hoisted here so identity stays stable.
@@ -199,6 +315,63 @@ export default function CompsMap({
     () => mappable.find((c) => c.id === selectedCompId) || null,
     [mappable, selectedCompId],
   );
+
+  // Group comps that share (almost) the same coordinate. After the bulk
+  // locality-centroid geocoding migration most comps in the same locality
+  // sit at identical coords — without grouping they stack invisibly into
+  // one marker and the user can't see/click individuals. We round to 4
+  // decimals (~11m precision) so genuine project-precise coords still
+  // separate but identical-centroid stacks collapse cleanly.
+  //
+  // For each group we pick the dominant palette (verified > listing > IPC)
+  // for the cluster marker fill, so a cluster of mostly-verified comps
+  // reads emerald at a glance.
+  const markerGroups = useMemo(() => {
+    const groups = new Map();
+    for (const c of mappable) {
+      const key = `${Number(c.lat).toFixed(4)},${Number(c.lng).toFixed(4)}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          lat: Number(c.lat),
+          lng: Number(c.lng),
+          comps: [],
+        });
+      }
+      groups.get(key).comps.push(c);
+    }
+    // Decide a dominant palette per group — verified beats listing beats IPC.
+    for (const g of groups.values()) {
+      const ranks = { internal_benchmark_apr_2026: 0, ipc_q1_2026: 0, listing_q1_2026: 0, other: 0 };
+      for (const c of g.comps) {
+        if (c.is_verified) ranks.internal_benchmark_apr_2026 += 3;
+        else if (c.data_type === 'ipc_q1_2026') ranks.ipc_q1_2026 += 2;
+        else if (c.data_type === 'listing_q1_2026') ranks.listing_q1_2026 += 1;
+        else ranks.other += 1;
+      }
+      const top = Object.entries(ranks).sort((a, b) => b[1] - a[1])[0][0];
+      g.dominantPalette = DATA_TYPE_PALETTE[top] || DEFAULT_PALETTE;
+    }
+    return Array.from(groups.values());
+  }, [mappable]);
+
+  // Which cluster, if any, is showing its expanded list popup. Tracked by
+  // the group key (lat,lng-rounded) so it's stable across re-renders.
+  const [expandedClusterKey, setExpandedClusterKey] = useState(null);
+
+  // Auto-expand the cluster that contains the currently-selected comp,
+  // so when the user clicks a row in the table or a marker, the relevant
+  // cluster's list opens to show context. Doesn't auto-close on deselect
+  // (user can explicitly close via X or by selecting another).
+  useEffect(() => {
+    if (!selectedCompId) return;
+    const group = markerGroups.find((g) =>
+      g.comps.some((c) => c.id === selectedCompId)
+    );
+    if (group && group.comps.length > 1 && expandedClusterKey !== group.key) {
+      setExpandedClusterKey(group.key);
+    }
+  }, [selectedCompId, markerGroups, expandedClusterKey]);
   const ungeocodedCount = (comps?.length || 0) - mappable.length;
 
   // Palette breakdown for the legend. Counts give the user a sense of source
@@ -394,22 +567,61 @@ export default function CompsMap({
         onLoad={(map) => { mapRef.current = map; }}
         onUnmount={() => { mapRef.current = null; }}
       >
-        {mappable.map((comp) => {
-          const isSel = comp.id === selectedCompId;
+        {markerGroups.map((group) => {
+          const isCluster = group.comps.length > 1;
+          const expanded  = expandedClusterKey === group.key;
+          if (!isCluster) {
+            // Single-comp group renders the same way it always did — the
+            // existing MarkerDot + tooltip pattern. No regression.
+            const comp = group.comps[0];
+            const isSel = comp.id === selectedCompId;
+            return (
+              <OverlayView
+                key={group.key}
+                position={{ lat: group.lat, lng: group.lng }}
+                mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+              >
+                <div className="relative">
+                  <MarkerDot
+                    comp={comp}
+                    selected={isSel}
+                    onClick={() => {
+                      setExpandedClusterKey(null);
+                      onSelectComp?.(comp.id);
+                    }}
+                    theme={theme}
+                  />
+                  {isSel && <MarkerTooltip comp={comp} />}
+                </div>
+              </OverlayView>
+            );
+          }
+          // Multi-comp cluster — show count badge + optional list popup.
           return (
             <OverlayView
-              key={comp.id}
-              position={{ lat: Number(comp.lat), lng: Number(comp.lng) }}
+              key={group.key}
+              position={{ lat: group.lat, lng: group.lng }}
               mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
             >
               <div className="relative">
-                <MarkerDot
-                  comp={comp}
-                  selected={isSel}
-                  onClick={() => onSelectComp?.(comp.id)}
+                <ClusterMarker
+                  count={group.comps.length}
+                  dominantPalette={group.dominantPalette}
+                  expanded={expanded}
+                  onClick={() => setExpandedClusterKey(expanded ? null : group.key)}
                   theme={theme}
                 />
-                {isSel && <MarkerTooltip comp={comp} />}
+                {expanded && (
+                  <ClusterListPopup
+                    comps={group.comps}
+                    onSelect={(id) => {
+                      onSelectComp?.(id);
+                      // Keep the popup open so the user can pick another
+                      // adjacent project without re-clicking the cluster.
+                    }}
+                    onClose={() => setExpandedClusterKey(null)}
+                  />
+                )}
               </div>
             </OverlayView>
           );

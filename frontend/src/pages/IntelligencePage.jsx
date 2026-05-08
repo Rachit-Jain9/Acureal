@@ -1062,11 +1062,98 @@ const SEGMENTED_DATA_TYPE_BADGE = {
   guidance_q1_2026_v0_2_pending:  { tone: 'neutral',  label: 'Guidance · SRO pending' },
 };
 
+// Per-asset-class summary tile shown above the segmented-benchmarks table.
+// Bloomberg-style: count + min/max range + active-state ring. Click to
+// toggle the chip filter for that class. Lets users see at a glance which
+// asset class has the widest spread and where to drill in.
+function AssetClassSummaryTile({ assetClassKey, summary, active, onClick }) {
+  const meta = ASSET_CLASS_META[assetClassKey] || { label: assetClassKey, tone: 'neutral' };
+  const TONE_RING = {
+    info:    'ring-blue-400/40',
+    warn:    'ring-amber-400/40',
+    success: 'ring-emerald-400/40',
+    neutral: 'ring-slate-400/40',
+    premium: 'ring-violet-400/40',
+  };
+  const TONE_DOT = {
+    info:    'bg-blue-500',
+    warn:    'bg-amber-500',
+    success: 'bg-emerald-500',
+    neutral: 'bg-slate-500',
+    premium: 'bg-violet-500',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        'group relative flex flex-col items-start text-left px-3 py-2.5 rounded-editorial border transition-all duration-200 ease-out',
+        'hover:border-content-primary/30 hover:-translate-y-px',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60',
+        active
+          ? `bg-bg-elevated border-content-primary/30 shadow-editorial ring-2 ${TONE_RING[meta.tone] || TONE_RING.neutral}`
+          : 'bg-bg-secondary/60 border-hairline',
+      ].join(' ')}
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        <span aria-hidden="true" className={`inline-block w-1.5 h-1.5 rounded-full ${TONE_DOT[meta.tone] || TONE_DOT.neutral}`} />
+        <span className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
+          {meta.label}
+        </span>
+      </div>
+      <p className="text-base font-semibold text-content-primary tabular-nums leading-tight">
+        {summary.count}
+        <span className="ml-1 text-[10px] font-medium text-content-muted normal-case tracking-normal">
+          {summary.count === 1 ? 'micro-market' : 'micro-markets'}
+        </span>
+      </p>
+      <p className="mt-1 text-[11px] text-content-secondary tabular-nums whitespace-nowrap">
+        {summary.range}
+      </p>
+    </button>
+  );
+}
+
 function ResidentialSegmentedBenchmarksTable({ rows }) {
   const [search, setSearch] = useState('');
   const [assetClass, setAssetClass] = useState(null);
   const [sort, setSort] = useState({ key: 'value_avg', dir: 'desc' });
   const onSort = useCallback((k) => setSort((p) => cycleSort(k, p)), []);
+
+  // Per-asset-class summary — count + min/max value range. Reused by the
+  // summary tile strip and (potentially) by the export. Skips rows whose
+  // numeric value is null (e.g. guidance placeholders) so the range is
+  // honest about what's actually quantified.
+  const assetClassSummary = useMemo(() => {
+    const out = {};
+    for (const r of rows) {
+      const key = r.asset_class;
+      if (!out[key]) out[key] = { count: 0, values: [], unit: r.unit };
+      out[key].count += 1;
+      const v = r.value_avg ?? r.value_high ?? r.value_low;
+      if (v != null && Number.isFinite(Number(v))) out[key].values.push(Number(v));
+    }
+    for (const key of Object.keys(out)) {
+      const s = out[key];
+      if (key === 'guidance_value') {
+        s.range = `${s.count} SRO file${s.count === 1 ? '' : 's'} pending`;
+        continue;
+      }
+      if (s.values.length === 0) {
+        s.range = '—';
+        continue;
+      }
+      const min = Math.min(...s.values);
+      const max = Math.max(...s.values);
+      const isAcre = (s.unit || '').toLowerCase().includes('acre');
+      const fmt = (n) => isAcre
+        ? `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })} mn/ac`
+        : `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}/sqft`;
+      s.range = min === max ? fmt(min) : `${fmt(min).replace(/(₹[\d,]+)/, '$1')} – ${fmt(max)}`;
+    }
+    return out;
+  }, [rows]);
 
   const filtered = useMemo(() => rows.filter((r) =>
     matchesSearch(r, search, ['micro_market', 'zone_cluster', 'metric', 'notes', 'source']) &&
@@ -1112,6 +1199,26 @@ function ResidentialSegmentedBenchmarksTable({ rows }) {
 
   return (
     <div>
+      {/* Summary tile strip — one per asset class. Click toggles the chip
+          filter. Gives users a Bloomberg-style "what's here at a glance"
+          before they dive into the table. */}
+      {assetClassOptions.length > 0 && (
+        <div
+          className="grid gap-2 mb-4"
+          style={{ gridTemplateColumns: `repeat(auto-fit, minmax(170px, 1fr))` }}
+        >
+          {assetClassOptions.map((opt) => (
+            <AssetClassSummaryTile
+              key={opt.value}
+              assetClassKey={opt.value}
+              summary={assetClassSummary[opt.value] || { count: opt.count, range: '—' }}
+              active={assetClass === opt.value}
+              onClick={() => setAssetClass((cur) => (cur === opt.value ? null : opt.value))}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-3 flex-wrap mb-3">
         <DataToolbar.Search
           value={search}
