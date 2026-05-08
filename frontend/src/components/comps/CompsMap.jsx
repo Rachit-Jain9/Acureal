@@ -216,18 +216,40 @@ export default function CompsMap({
   // Map options — restyle whenever theme changes, restrict zoom, kill the
   // default UI noise. `gestureHandling: 'greedy'` matches leaflet's
   // scrollWheelZoom default; without it Google insists on Cmd/Ctrl-scroll.
-  const mapOptions = useMemo(() => ({
-    disableDefaultUI: true,
-    zoomControl: true,
-    zoomControlOptions: {
-      position: typeof google !== 'undefined' ? google.maps.ControlPosition.RIGHT_BOTTOM : undefined,
-    },
-    gestureHandling: 'greedy',
-    minZoom: 4,
-    maxZoom: 19,
-    styles: theme === 'dark' ? DARK_MAP_STYLES : null,
-    backgroundColor: theme === 'dark' ? '#1f2937' : '#f3f4f6',
-  }), [theme]);
+  //
+  // CRITICAL: `google.maps.ControlPosition` lives on the SDK's namespace,
+  // which only exists AFTER `useJsApiLoader` has populated `window.google.maps`.
+  // The previous guard `typeof google !== 'undefined'` was insufficient: the
+  // SDK creates `window.google` (the empty namespace shell) very early, then
+  // populates `.maps` later. So on first SPA mount before the SDK script
+  // finished downloading, the guard passed but `google.maps` was still
+  // undefined → reading `.ControlPosition` threw and the entire page
+  // crashed with "Cannot read properties of undefined (reading
+  // 'ControlPosition')". Browser refresh "fixed" it because the SDK script
+  // was then served from disk cache and `.maps` populated synchronously.
+  //
+  // Fix: gate the zoomControlOptions on `isLoaded` AND a real namespace
+  // check, AND include isLoaded in the useMemo deps so the option is
+  // backfilled the moment the SDK becomes ready.
+  const mapOptions = useMemo(() => {
+    const opts = {
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: 'greedy',
+      minZoom: 4,
+      maxZoom: 19,
+      styles: theme === 'dark' ? DARK_MAP_STYLES : null,
+      backgroundColor: theme === 'dark' ? '#1f2937' : '#f3f4f6',
+    };
+    if (
+      isLoaded
+      && typeof google !== 'undefined'
+      && google?.maps?.ControlPosition
+    ) {
+      opts.zoomControlOptions = { position: google.maps.ControlPosition.RIGHT_BOTTOM };
+    }
+    return opts;
+  }, [theme, isLoaded]);
 
   // Fit bounds to the comp set on first map load. Skip if there are <2
   // points (fitting to a single point overshoots; default zoom is fine).
