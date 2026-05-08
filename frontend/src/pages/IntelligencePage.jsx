@@ -1655,8 +1655,10 @@ export default function IntelligencePage() {
         </SectionCard>
       </div>
 
-      {/* Section 5: Residential Micro-Market Benchmark Summary */}
-      {showSection('residential') && (
+      {/* Section 5: Residential Micro-Market Benchmark Summary.
+          Hidden entirely when empty — same as Sections 5a–5e — so users
+          never see the operator-y "apply migration X.sql" empty state. */}
+      {showSection('residential') && (bmLoading || benchmarks?.length > 0) && (
         <SectionCard
           icon={DollarSign}
           title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026"
@@ -1665,12 +1667,8 @@ export default function IntelligencePage() {
             <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
               <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
             </div>
-          ) : benchmarks?.length > 0 ? (
-            <BenchmarksTable rows={benchmarks} />
           ) : (
-            <p className="text-sm text-content-secondary">
-              Apply migration <code className="text-xs bg-bg-secondary px-1 rounded">20260505_market_data_q1_2026_refresh.sql</code> to load Q1 2026 benchmarks.
-            </p>
+            <BenchmarksTable rows={benchmarks} />
           )}
         </SectionCard>
       )}
@@ -1732,26 +1730,23 @@ export default function IntelligencePage() {
       )}
 
       {/* Section 6: Market Transaction Flow.
-          Always visible — transactions don't carry per-row `asset_class`
-          (only `deal_type` like "Land deal"/"Equity investment"/"Debt"),
-          so we render the full transaction stream regardless of asset-class
-          filter. It's a useful cross-asset view on its own merit. */}
-      <SectionCard
-        icon={ArrowUpRight}
-        title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)"
-      >
-        {txLoading ? (
-          <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
-            <RefreshCw size={14} className="animate-spin" /> Loading transactions…
-          </div>
-        ) : transactions?.length > 0 ? (
-          <TransactionTable rows={transactions} />
-        ) : (
-          <p className="text-sm text-content-secondary">
-            Run the migration <code className="text-xs bg-bg-secondary px-1 rounded">20260404_market_data.sql</code> in Supabase to load transaction data.
-          </p>
-        )}
-      </SectionCard>
+          Always visible regardless of asset-class filter (transactions
+          don't carry per-row `asset_class`, only `deal_type`), but
+          hidden entirely when empty — no operator-y migration prompts. */}
+      {(txLoading || transactions?.length > 0) && (
+        <SectionCard
+          icon={ArrowUpRight}
+          title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)"
+        >
+          {txLoading ? (
+            <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
+              <RefreshCw size={14} className="animate-spin" /> Loading transactions…
+            </div>
+          ) : (
+            <TransactionTable rows={transactions} />
+          )}
+        </SectionCard>
+      )}
 
       {/* Section 7: Demand Heatmap — Bengaluru micro-markets are residential-
           focused. Hide in non-residential filters (office/retail/etc). */}
