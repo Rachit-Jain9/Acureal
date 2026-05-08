@@ -64,6 +64,31 @@ router.get(
   }
 );
 
+// POST /api/comps-review-queue/process-pending — batch trigger for the
+// reviewer to process the entire pending_extraction backlog in one click.
+// Crucial on Vercel Hobby where the daily cron's worst-case lag is 24h;
+// without this, freshly-ingested rows would block the reviewer until the
+// next 03:50 UTC sweep.
+//
+// Registered BEFORE /:id so the literal path matches first (Express
+// matches in registration order).
+router.post(
+  '/process-pending',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [qv('limit').optional().isInt({ min: 1, max: 50 })],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit, 10) : 25;
+      const summary = await queueService.processPendingBatch({ limit });
+      res.json({ success: true, data: summary });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // GET /api/comps-review-queue/:id — full row with structured payload + edits
 router.get(
   '/:id',

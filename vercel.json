@@ -26,7 +26,7 @@
     },
     {
       "path": "/api/cron/comps-queue/process-pending",
-      "schedule": "*/15 * * * *"
+      "schedule": "50 3 * * *"
     }
   ],
   "headers": [
