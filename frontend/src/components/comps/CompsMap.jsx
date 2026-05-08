@@ -169,13 +169,31 @@ function ClusterMarker({ count, dominantPalette, expanded, onClick, theme }) {
 
 // Expanded cluster list popup — appears when the user clicks a cluster
 // marker. Lists every comp at that location with rate + verified flag so
-// the user can pick a specific project. Clicking a row dismisses the list
-// and selects that comp in the table.
-function ClusterListPopup({ comps, onSelect, onClose }) {
+// the user can pick a specific project. Clicking a row selects that comp
+// in the table without dismissing, so adjacent projects can be browsed.
+//
+// Positioning: anchored ABOVE the cluster pin (translate-y-full) so the
+// popup grows upward and doesn't collide with the bottom-left "Selected"
+// inset or bottom-right zoom controls. Cluster pins after fitBounds tend
+// to sit in the center of the map, leaving plenty of room above.
+//
+// Z-index: 25 — sits above the bottom-left Selected inset (z-5) and the
+// top-left legend (z-5). Only the cluster popup gets this elevated layer.
+function ClusterListPopup({ comps, selectedCompId, onSelect, onClose }) {
+  // Put the selected comp first so it's the first thing the user sees
+  // when the popup auto-opens after a table click. Otherwise the user
+  // has to scan a list of 25 to find what they just clicked.
+  const sortedComps = useMemo(() => {
+    if (!selectedCompId) return comps;
+    const sel = comps.find((c) => c.id === selectedCompId);
+    if (!sel) return comps;
+    return [sel, ...comps.filter((c) => c.id !== selectedCompId)];
+  }, [comps, selectedCompId]);
+
   return (
     <div
-      className="absolute z-[20] -translate-x-1/2 pointer-events-auto"
-      style={{ marginTop: 8, top: 8 }}
+      className="absolute z-[25] -translate-x-1/2 -translate-y-full pointer-events-auto"
+      style={{ bottom: 22 }}
       role="dialog"
       aria-label={`${comps.length} comparables at this location`}
     >
@@ -193,27 +211,36 @@ function ClusterListPopup({ comps, onSelect, onClose }) {
             ✕
           </button>
         </div>
-        <ul className="max-h-[280px] overflow-y-auto divide-y divide-hairline">
-          {comps.map((comp) => {
+        <ul className="max-h-[220px] overflow-y-auto divide-y divide-hairline">
+          {sortedComps.map((comp) => {
             const palette = paletteFor(comp);
+            const isSel = comp.id === selectedCompId;
             return (
               <li key={comp.id}>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onSelect(comp.id); }}
-                  className="w-full text-left px-3 py-2 hover:bg-bg-secondary transition-colors flex items-start gap-2"
+                  aria-current={isSel ? 'true' : undefined}
+                  className={[
+                    'w-full text-left px-3 py-2 transition-colors flex items-start gap-2',
+                    isSel
+                      ? 'bg-primary-50/60 hover:bg-primary-50 ring-1 ring-inset ring-primary-300/40'
+                      : 'hover:bg-bg-secondary',
+                  ].join(' ')}
                 >
                   <span
                     aria-hidden="true"
                     className="mt-1.5 inline-block rounded-full shrink-0"
                     style={{
-                      width: 8, height: 8,
+                      width: isSel ? 10 : 8,
+                      height: isSel ? 10 : 8,
                       backgroundColor: palette.fill,
                       border: `1px solid ${palette.stroke}`,
+                      boxShadow: isSel ? `0 0 0 3px ${palette.fill}33` : undefined,
                     }}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-content-primary truncate">
+                    <p className={`text-sm truncate ${isSel ? 'font-semibold text-content-primary' : 'font-medium text-content-primary'}`}>
                       {comp.project_name || '(unnamed)'}
                     </p>
                     <p className="text-xs text-content-secondary tabular-nums">
@@ -614,6 +641,7 @@ export default function CompsMap({
                 {expanded && (
                   <ClusterListPopup
                     comps={group.comps}
+                    selectedCompId={selectedCompId}
                     onSelect={(id) => {
                       onSelectComp?.(id);
                       // Keep the popup open so the user can pick another
@@ -666,9 +694,11 @@ export default function CompsMap({
       </div>
 
       {/* Selected-comp inset — bottom-left. Renders only when a row/marker is
-          pinned. Mirrors the table row's identity so the map and table feel
-          like one surface, not two views. */}
-      {selectedComp && (
+          pinned AND no cluster popup is open. The cluster popup already
+          highlights the selected row at its top, so showing this inset on
+          top of an open popup creates redundant duplicate "you picked X"
+          UI that visually collides with the popup body. */}
+      {selectedComp && !expandedClusterKey && (
         <div
           className="absolute bottom-3 left-3 z-[5] max-w-[260px] rounded-editorial border border-primary-200 bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial transition-all duration-150 ease-out"
           role="status"
