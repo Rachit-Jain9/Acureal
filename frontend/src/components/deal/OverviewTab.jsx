@@ -22,6 +22,7 @@ import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
 import { SectionHeader } from '../../design-system';
 import BuildabilitySummary from './BuildabilitySummary';
+import IcMemoPanel from './IcMemoPanel';
 import {
   formatCrores,
   formatPct,
@@ -547,6 +548,12 @@ export default function OverviewTab() {
           )
         )}
       </div>
+
+      {/* Tier-2 #13 — IC Memo. Long-form structured markdown across 8 IC
+          sections, synthesised from financials + risk_flags + dd_items +
+          approval_items. Self-contained component because it carries its
+          own state machine for cached-on-mount + streaming generate. */}
+      <IcMemoPanel dealId={dealId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stage History */}
