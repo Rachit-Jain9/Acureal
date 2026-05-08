@@ -457,14 +457,22 @@ const approveAndCommit = async (id, userId) => {
         continue;
       }
 
+      // Reviewer-set lat/lng → geocode_quality='manual'. The standalone
+      // upgrade script (scripts/upgrade-comps-geocoding.mjs) skips
+      // 'manual' rows because the reviewer's pin is more authoritative
+      // than any API guess. Rows committed without coordinates land
+      // with geocode_quality=NULL until someone backfills them.
+      const geocodeQuality =
+        compRow.lat != null && compRow.lng != null ? 'manual' : null;
+
       const insertResult = await client.query(
         `INSERT INTO comps (
            organization_id, project_name, developer, city, locality, lat, lng,
            project_type, bhk_config, carpet_area_sqft, super_builtup_area_sqft,
            rate_per_sqft, rate_per_sqft_min, rate_per_sqft_max,
            total_units, launch_year, possession_year, rera_number, amenities,
-           source, is_verified, created_by
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+           source, is_verified, created_by, geocode_quality
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
          RETURNING id`,
         [
           compRow.organization_id, compRow.project_name, compRow.developer,
@@ -474,7 +482,7 @@ const approveAndCommit = async (id, userId) => {
           compRow.rate_per_sqft_min, compRow.rate_per_sqft_max,
           compRow.total_units, compRow.launch_year, compRow.possession_year,
           compRow.rera_number, compRow.amenities, compRow.source,
-          compRow.is_verified, userId || null,
+          compRow.is_verified, userId || null, geocodeQuality,
         ]
       );
       compIds.push(insertResult.rows[0].id);
