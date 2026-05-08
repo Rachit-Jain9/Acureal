@@ -144,6 +144,23 @@ router.get('/hospitality-benchmarks', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /intelligence/residential-segmented-benchmarks
+// Asset classes loaded here: builder_floor, plotted_development,
+// land_residential_plotted, villa_house, guidance_value.
+// Source: v0.2 rate-pack flagged in TODO_DATA.md as schema follow-up.
+router.get('/residential-segmented-benchmarks', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getResidentialSegmentedBenchmarks({
+      city: req.query.city,
+      assetClass: req.query.assetClass,
+      dataType: req.query.dataType,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /intelligence/macro-kpis
 router.get('/macro-kpis', authenticate, async (req, res, next) => {
   try {

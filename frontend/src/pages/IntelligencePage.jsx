@@ -32,6 +32,7 @@ import {
   useRetailBenchmarks,
   useIndustrialBenchmarks,
   useHospitalityBenchmarks,
+  useResidentialSegmentedBenchmarks,
   useMacroKpis,
 } from '../hooks/useIntelligence';
 import PageHeader from '../components/common/PageHeader';
@@ -1034,6 +1035,145 @@ function HospitalityBenchmarksTable({ rows }) {
   );
 }
 
+// ─── Residential Segmented Benchmarks (builder floor / plotted / land / villa / guidance) ───
+//
+// These five asset classes were flagged in TODO_DATA.md as "schema follow-up"
+// from the v0.2 rate-pack. They share shape (micro-market × metric × value)
+// but mix units (INR/sqft, INR mn/acre, SRO PDF placeholder), which is why
+// they live in their own table rather than being shoehorned into
+// `micro_market_benchmarks`.
+//
+// Methodology rule (TODO_DATA.md):
+//   "Create separate tabs/layers in the REDIP UI: Listing Benchmarks, IPC
+//    Benchmarks, Guidance Value, Internal Deals."
+// Honored here via the asset-class chip group + per-row data_type badge.
+
+const ASSET_CLASS_META = {
+  builder_floor:            { label: 'Builder floor',         tone: 'info',     order: 1 },
+  plotted_development:      { label: 'Plotted development',   tone: 'info',     order: 2 },
+  land_residential_plotted: { label: 'Land (plotted)',         tone: 'warn',     order: 3 },
+  villa_house:              { label: 'Villa / house',          tone: 'info',     order: 4 },
+  guidance_value:           { label: 'Guidance value',         tone: 'neutral',  order: 5 },
+};
+
+const SEGMENTED_DATA_TYPE_BADGE = {
+  listing_q1_2026_v0_2:           { tone: 'info',     label: 'Listing Q1 2026' },
+  listing_q1_2026_v0_2_derived:   { tone: 'warn',     label: 'Listing · Derived' },
+  guidance_q1_2026_v0_2_pending:  { tone: 'neutral',  label: 'Guidance · SRO pending' },
+};
+
+function ResidentialSegmentedBenchmarksTable({ rows }) {
+  const [search, setSearch] = useState('');
+  const [assetClass, setAssetClass] = useState(null);
+  const [sort, setSort] = useState({ key: 'value_avg', dir: 'desc' });
+  const onSort = useCallback((k) => setSort((p) => cycleSort(k, p)), []);
+
+  const filtered = useMemo(() => rows.filter((r) =>
+    matchesSearch(r, search, ['micro_market', 'zone_cluster', 'metric', 'notes', 'source']) &&
+    (!assetClass || r.asset_class === assetClass)
+  ), [rows, search, assetClass]);
+
+  const sorted = useMemo(() => applySort(filtered, sort, {
+    asset_class: (r) => ASSET_CLASS_META[r.asset_class]?.order ?? 99,
+    micro_market: (r) => r.micro_market || '',
+    value_avg: (r) => Number(r.value_avg ?? r.value_high ?? r.value_low ?? 0),
+    value_low: (r) => Number(r.value_low ?? r.value_avg ?? 0),
+    value_high: (r) => Number(r.value_high ?? r.value_avg ?? 0),
+  }), [filtered, sort]);
+
+  const assetClassOptions = useMemo(() => {
+    const counts = {};
+    for (const r of rows) counts[r.asset_class] = (counts[r.asset_class] || 0) + 1;
+    return Object.entries(counts)
+      .sort((a, b) => (ASSET_CLASS_META[a[0]]?.order ?? 99) - (ASSET_CLASS_META[b[0]]?.order ?? 99))
+      .map(([value, count]) => ({
+        value,
+        label: ASSET_CLASS_META[value]?.label || value,
+        count,
+      }));
+  }, [rows]);
+
+  const formatValue = (r) => {
+    if (r.asset_class === 'guidance_value') {
+      return <span className="text-xs italic text-content-muted">SRO PDF pending</span>;
+    }
+    const v = r.value_avg ?? r.value_high ?? r.value_low;
+    if (v == null) return '—';
+    const isAcre = r.unit?.toLowerCase().includes('acre');
+    if (r.value_low != null && r.value_high != null && r.value_low !== r.value_high) {
+      return isAcre
+        ? `₹${Number(r.value_low).toLocaleString('en-IN')}–${Number(r.value_high).toLocaleString('en-IN')} mn/ac`
+        : `₹${Number(r.value_low).toLocaleString('en-IN')}–${Number(r.value_high).toLocaleString('en-IN')}/sqft`;
+    }
+    return isAcre
+      ? `₹${Number(v).toLocaleString('en-IN')} mn/ac`
+      : `₹${Number(v).toLocaleString('en-IN')}/sqft`;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 flex-wrap mb-3">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search micro-market, metric, source…"
+          ariaLabel="Search residential segmented benchmarks"
+        />
+        <DataToolbar.Chips
+          label="Asset class"
+          value={assetClass}
+          onChange={setAssetClass}
+          options={assetClassOptions}
+          allowAll
+          allLabel="All classes"
+        />
+      </div>
+      <div className="overflow-x-auto -mx-5">
+        <table className="w-full text-xs border-collapse min-w-[760px]">
+          <thead>
+            <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+              <SortableHeader sortKey="asset_class" sort={sort} onSort={onSort} className="py-2 px-3">Asset class</SortableHeader>
+              <SortableHeader sortKey="micro_market" sort={sort} onSort={onSort} className="py-2 px-3">Micro-market</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Metric</th>
+              <SortableHeader sortKey="value_avg" sort={sort} onSort={onSort} align="right" className="py-2 px-3">Value</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Layer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => {
+              const acMeta = ASSET_CLASS_META[r.asset_class] || { label: r.asset_class, tone: 'neutral' };
+              const dtMeta = SEGMENTED_DATA_TYPE_BADGE[r.data_type] || { tone: 'neutral', label: r.data_type };
+              return (
+                <tr key={r.id} className="border-b border-hairline transition-colors duration-150 ease-out hover:bg-bg-secondary">
+                  <td className="py-2 px-3">
+                    <Badge tone={acMeta.tone} variant="soft">{acMeta.label}</Badge>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="font-medium text-content-primary">{r.micro_market}</div>
+                    {r.zone_cluster && (
+                      <div className="text-[10px] text-content-muted">{r.zone_cluster}</div>
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-content-secondary">{r.metric}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                    {formatValue(r)}
+                  </td>
+                  <td className="py-2 px-3">
+                    <Badge tone={dtMeta.tone} variant="soft">{dtMeta.label}</Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-content-muted">
+        Listing-portal benchmarks (MagicBricks / Housing.com asking prices) are NOT transaction-verified — treat as supply-side signal only. Derived land values use the standard sqyd→acre conversion. Guidance-value rows are SRO-file placeholders — exact rates require Karnataka IGR PDF extraction.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 // City selector — schema is multi-city ready (every benchmark table has a
@@ -1101,6 +1241,7 @@ export default function IntelligencePage() {
   const { data: retailBenchmarks } = useRetailBenchmarks({ city });
   const { data: industrialBenchmarks } = useIndustrialBenchmarks({ city });
   const { data: hospitalityBenchmarks } = useHospitalityBenchmarks({ city });
+  const { data: residentialSegmented } = useResidentialSegmentedBenchmarks({ city });
   const { data: macroKpis } = useMacroKpis({ city });
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
@@ -1458,6 +1599,17 @@ export default function IntelligencePage() {
           action={<SectionStaleness rows={hospitalityBenchmarks} fallback="hospitality_ipc" />}
         >
           <HospitalityBenchmarksTable rows={hospitalityBenchmarks} />
+        </SectionCard>
+      )}
+
+      {/* Section 5e: Residential segmented — Builder floor / Plotted dev / Land plotted / Villa-house / Guidance value */}
+      {residentialSegmented?.length > 0 && (
+        <SectionCard
+          icon={DollarSign}
+          title={`5e. Residential by Asset Class — Builder Floor · Plotted · Land · Villa · Guidance — ${city} Q1 2026`}
+          action={<SectionStaleness rows={residentialSegmented} fallback="residential_segmented" />}
+        >
+          <ResidentialSegmentedBenchmarksTable rows={residentialSegmented} />
         </SectionCard>
       )}
 
