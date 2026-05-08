@@ -480,14 +480,45 @@ export default function CompsQueuePage() {
         )}
 
         {!isLoading && !isError && rows.length === 0 && (
-          <div className="p-12 text-center">
-            <Inbox size={32} className="mx-auto text-content-muted mb-3" />
-            <p className="text-sm font-medium text-content-primary">Nothing here yet</p>
-            <p className="text-xs text-content-muted mt-1 max-w-md mx-auto">
+          <div className="p-10 text-center">
+            <Inbox size={28} className="mx-auto text-content-muted mb-3" />
+            <p className="text-sm font-medium text-content-primary">
               {statusFilter === 'pending_review'
-                ? 'No items are waiting on a reviewer. Forward a broker quote or market report to the inbound address to get started.'
-                : 'No items in this status.'}
+                ? 'No items waiting on a reviewer'
+                : statusFilter === 'pending_extraction'
+                ? 'No items waiting on extraction'
+                : statusFilter === 'failed'
+                ? 'No failed extractions'
+                : statusFilter === 'rejected'
+                ? 'Nothing rejected yet'
+                : statusFilter === 'committed'
+                ? 'No committed batches yet'
+                : 'Queue is empty'}
             </p>
+            {statusFilter === 'pending_review' ? (
+              <>
+                <p className="text-xs text-content-muted mt-1 max-w-md mx-auto leading-relaxed">
+                  Drag a broker quote, IPC report, or rate-card PDF in to start. The AI extracts the comps; you review and approve before they hit the database.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setUploadOpen(true)}
+                  className="mt-4 inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md bg-accent text-white hover:bg-accent/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  <Upload size={14} />
+                  Upload your first file
+                </button>
+                <p className="text-[11px] text-content-muted mt-3">
+                  Or forward emails to your Postmark inbound address (configured in admin)
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-content-muted mt-1 max-w-md mx-auto">
+                {statusFilter === 'failed'
+                  ? 'Healthy state. Extractions that error out land here for retry.'
+                  : 'Nothing in this status right now.'}
+              </p>
+            )}
           </div>
         )}
 
