@@ -24,11 +24,33 @@
  * because RLS enforces it at the DB layer too.
  */
 
+const crypto = require('crypto');
 const { query, transaction } = require('../config/database');
 const { runWithRequestContext, getRequestContext } = require('../lib/requestContext');
 const { createError } = require('../middleware/errorHandler');
+const { uploadFile } = require('../config/storage');
 const extractionService = require('./extraction.service');
 const log = require('../lib/logger').child({ module: 'compsReviewQueue' });
+
+// MIME allowlist for manual uploads. Tighter than the multer middleware's
+// generic doc allowlist — only the formats the queue's extraction prompts
+// (comps_rate_sheet / ipc_report / broker_quote) actually understand.
+const MANUAL_UPLOAD_ALLOWED_MIMES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/tiff',
+  'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+]);
+
+const sanitizeFileName = (name) =>
+  (name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 200);
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants
@@ -546,6 +568,123 @@ const processPendingBatchAcrossOrgs = async ({ limitPerOrg = 5 } = {}) => {
   return { orgs_processed: orgsResult.rows.length, summaries };
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Manual upload — analyst-driven path (no email needed)
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Persist a file uploaded directly through the reviewer UI as a queue
+ * row with source='manual_upload'. Mirrors the email-ingestion flow
+ * (sha256 dedupe, signed-URL storage, queue insert) but skips the
+ * Postmark dependency entirely so the flywheel works pre-domain.
+ *
+ * Required when the analyst already has the source PDF in hand and
+ * doesn't want to wait for the email round-trip. Also useful during
+ * Postmark outages.
+ *
+ * Args:
+ *   buffer       — file bytes (multer's req.file.buffer)
+ *   fileName     — original filename
+ *   mimeType     — MIME type (multer pre-validated)
+ *   organizationId — usually req.user.organization_id
+ *   userId       — uploader's user id (recorded in source_meta)
+ *   metadata     — optional { sender, subject, notes } captured in the
+ *                  upload modal
+ *
+ * Returns: { row, deduplicated }
+ *   • deduplicated=true means the same byte-identical file was already
+ *     ingested; the existing row is returned (no error).
+ */
+async function manualUpload({
+  buffer,
+  fileName,
+  mimeType,
+  organizationId,
+  userId,
+  metadata = {},
+}) {
+  if (!buffer || !buffer.length) {
+    throw createError('File is empty.', 400);
+  }
+  if (!organizationId) {
+    throw createError('Organization context is required.', 400);
+  }
+  if (!MANUAL_UPLOAD_ALLOWED_MIMES.has(mimeType)) {
+    throw createError(
+      `Unsupported file type "${mimeType}". Allowed: PDF, images, Office docs, CSV.`,
+      400,
+    );
+  }
+
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  const safeName = sanitizeFileName(fileName);
+
+  // Synthetic path key — manual uploads don't belong to a deal, so we
+  // namespace them under `comps-queue-manual-<random>` to keep them
+  // separate from email and direct-upload deal documents.
+  const pathKey = `comps-queue-manual-${crypto.randomUUID().slice(0, 12)}`;
+
+  let storageUrl;
+  try {
+    const result = await uploadFile(buffer, safeName, mimeType, pathKey, organizationId);
+    storageUrl = result.url;
+  } catch (uploadErr) {
+    log.warn('comps_queue_manual_upload_storage_failed', {
+      fileName: safeName,
+      error: uploadErr.message,
+    });
+    throw createError('Storage upload failed. Please retry.', 500);
+  }
+
+  const sourceMeta = {
+    uploaded_by_user_id: userId || null,
+    uploaded_at: new Date().toISOString(),
+    attachment_name: safeName,
+    sender: cleanString(metadata.sender),
+    subject: cleanString(metadata.subject),
+    notes: cleanString(metadata.notes),
+  };
+
+  try {
+    const result = await query(
+      `INSERT INTO comps_review_queue
+         (organization_id, source, source_meta, raw_doc_url, raw_doc_mime,
+          raw_doc_size_bytes, raw_doc_sha256, status)
+       VALUES ($1, 'manual_upload', $2, $3, $4, $5, $6, 'pending_extraction')
+       RETURNING *`,
+      [
+        organizationId,
+        JSON.stringify(sourceMeta),
+        storageUrl,
+        mimeType,
+        buffer.length,
+        sha256,
+      ],
+    );
+    return { row: result.rows[0], deduplicated: false };
+  } catch (err) {
+    if (err && err.code === '23505') {
+      // Same byte-identical file was already ingested for this org —
+      // surface the existing row so the analyst can jump to it instead
+      // of getting a confusing duplicate error.
+      const existing = await query(
+        `SELECT * FROM comps_review_queue
+          WHERE organization_id = $1 AND raw_doc_sha256 = $2
+          LIMIT 1`,
+        [organizationId, sha256],
+      );
+      return { row: existing.rows[0], deduplicated: true };
+    }
+    throw err;
+  }
+}
+
+const cleanString = (s) => {
+  if (s == null) return null;
+  const trimmed = String(s).trim().slice(0, 1000);
+  return trimmed || null;
+};
+
 module.exports = {
   // List / get
   listQueue,
@@ -558,6 +697,9 @@ module.exports = {
   applyReviewerEdits,
   approveAndCommit,
   reject,
+  // Manual upload
+  manualUpload,
+  MANUAL_UPLOAD_ALLOWED_MIMES,
   // Helpers — exported for tests
   normalizeProjectType,
   mapToCompsRow,

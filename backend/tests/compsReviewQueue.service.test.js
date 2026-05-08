@@ -7,9 +7,13 @@ jest.mock('../src/config/database', () => ({
 jest.mock('../src/services/extraction.service', () => ({
   extractStoredFileFields: jest.fn(),
 }));
+jest.mock('../src/config/storage', () => ({
+  uploadFile: jest.fn(),
+}));
 
 const { query, transaction } = require('../src/config/database');
 const extraction = require('../src/services/extraction.service');
+const { uploadFile } = require('../src/config/storage');
 const queue = require('../src/services/compsReviewQueue.service');
 
 beforeEach(() => {
@@ -344,5 +348,125 @@ describe('reject', () => {
     const updated = await queue.reject('r1', 'low quality', 'user-1');
     expect(updated.status).toBe('rejected');
     expect(updated.rejection_reason).toBe('low quality');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// manualUpload — analyst-driven path (no email needed)
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('manualUpload', () => {
+  const ORG = '00000000-0000-0000-0000-000000000abc';
+  const USER = '00000000-0000-0000-0000-000000000def';
+
+  test('rejects empty buffer', async () => {
+    await expect(
+      queue.manualUpload({
+        buffer: Buffer.alloc(0),
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+        organizationId: ORG,
+        userId: USER,
+      })
+    ).rejects.toThrow(/empty/);
+  });
+
+  test('rejects missing organizationId', async () => {
+    await expect(
+      queue.manualUpload({
+        buffer: Buffer.from('x'),
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+        userId: USER,
+      })
+    ).rejects.toThrow(/Organization context/);
+  });
+
+  test('rejects disallowed MIME type', async () => {
+    await expect(
+      queue.manualUpload({
+        buffer: Buffer.from('x'),
+        fileName: 'evil.exe',
+        mimeType: 'application/x-msdownload',
+        organizationId: ORG,
+        userId: USER,
+      })
+    ).rejects.toThrow(/Unsupported file type/);
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('happy path: uploads, inserts row, returns deduplicated=false', async () => {
+    uploadFile.mockResolvedValueOnce({ url: 'https://blob/path.pdf', isBlob: true });
+    query.mockResolvedValueOnce({
+      rows: [{ id: 'q-new', status: 'pending_extraction' }],
+    });
+
+    const buffer = Buffer.from('hello-pdf-bytes');
+    const result = await queue.manualUpload({
+      buffer,
+      fileName: 'JLL-Q1.pdf',
+      mimeType: 'application/pdf',
+      organizationId: ORG,
+      userId: USER,
+      metadata: { sender: 'analyst@jll.com', subject: 'Q1 office' },
+    });
+
+    expect(result.deduplicated).toBe(false);
+    expect(result.row.id).toBe('q-new');
+
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+    const [bufArg, nameArg, mimeArg, , orgArg] = uploadFile.mock.calls[0];
+    expect(bufArg).toBe(buffer);
+    expect(nameArg).toBe('JLL-Q1.pdf');
+    expect(mimeArg).toBe('application/pdf');
+    expect(orgArg).toBe(ORG);
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const [, params] = query.mock.calls[0];
+    expect(params[0]).toBe(ORG);
+    const sourceMeta = JSON.parse(params[1]);
+    expect(sourceMeta.uploaded_by_user_id).toBe(USER);
+    expect(sourceMeta.attachment_name).toBe('JLL-Q1.pdf');
+    expect(sourceMeta.sender).toBe('analyst@jll.com');
+    expect(sourceMeta.subject).toBe('Q1 office');
+    expect(params[2]).toBe('https://blob/path.pdf');
+    expect(params[3]).toBe('application/pdf');
+    expect(params[4]).toBe(buffer.length);
+    expect(params[5]).toMatch(/^[a-f0-9]{64}$/); // sha256 hex
+  });
+
+  test('treats 23505 as dedupe and surfaces existing row', async () => {
+    uploadFile.mockResolvedValueOnce({ url: 'https://blob/path.pdf', isBlob: true });
+    const dupErr = Object.assign(new Error('duplicate'), { code: '23505' });
+    query
+      .mockRejectedValueOnce(dupErr) // INSERT throws 23505
+      .mockResolvedValueOnce({ rows: [{ id: 'q-existing', status: 'pending_review' }] }); // lookup
+
+    const result = await queue.manualUpload({
+      buffer: Buffer.from('dup-bytes'),
+      fileName: 'r.pdf',
+      mimeType: 'application/pdf',
+      organizationId: ORG,
+      userId: USER,
+    });
+
+    expect(result.deduplicated).toBe(true);
+    expect(result.row.id).toBe('q-existing');
+  });
+
+  test('storage failure surfaces clearly without inserting a row', async () => {
+    uploadFile.mockRejectedValueOnce(new Error('S3 down'));
+
+    await expect(
+      queue.manualUpload({
+        buffer: Buffer.from('x'),
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+        organizationId: ORG,
+        userId: USER,
+      })
+    ).rejects.toThrow(/Storage upload failed/);
+    expect(query).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw } from 'lucide-react';
+import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { Card, SectionHeader, SkeletonList, ErrorState } from '../design-system';
-import { useCompsReviewQueueList, useProcessPendingBatch } from '../hooks/useCompsReviewQueue';
+import { useCompsReviewQueueList, useProcessPendingBatch, useManualUpload } from '../hooks/useCompsReviewQueue';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -162,6 +162,165 @@ const QueueRow = ({ row }) => {
 const sourceCount = (rows, sourceId) =>
   sourceId ? rows.filter((r) => r.source === sourceId).length : rows.length;
 
+const ACCEPT_MIME =
+  '.pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*';
+
+// Lightweight upload modal — file picker + optional metadata fields.
+// Reuses page-level styling tokens; no decorative chrome.
+function UploadModal({ open, onClose, onUploaded }) {
+  const fileInputRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [sender, setSender] = useState('');
+  const [subject, setSubject] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const upload = useManualUpload();
+
+  if (!open) return null;
+
+  const reset = () => {
+    setFile(null);
+    setSender('');
+    setSubject('');
+    setNotes('');
+  };
+
+  const close = () => {
+    if (upload.isPending) return; // don't allow close mid-upload
+    reset();
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!file) return;
+    try {
+      const result = await upload.mutateAsync({ file, sender, subject, notes });
+      reset();
+      onClose();
+      if (result?.id) {
+        onUploaded?.(result.id);
+      }
+    } catch {
+      // error toast handled in the hook; keep the modal open so the
+      // user can retry without re-entering metadata
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={close}
+    >
+      <div
+        className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-lg mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+          <h3 className="font-display text-base font-semibold text-content-primary">
+            Upload to review queue
+          </h3>
+          <button
+            type="button"
+            onClick={close}
+            disabled={upload.isPending}
+            className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-content-muted">
+            Drop a broker quote, IPC report, or rate sheet (PDF / image / Office / CSV, up to 50 MB).
+            It lands as <span className="font-mono">pending_extraction</span> — click <span className="font-medium">Process pending now</span> on the queue to extract.
+          </p>
+
+          {/* File picker */}
+          <div>
+            <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+              File <span className="text-amber-600">*</span>
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT_MIME}
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-content-primary file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-hairline file:bg-bg-secondary file:text-content-primary file:text-xs hover:file:bg-bg-elevated cursor-pointer"
+            />
+            {file && (
+              <div className="text-xs text-content-muted mt-1.5 tabular-nums">
+                {file.name} · {Math.round(file.size / 1024)} KB
+              </div>
+            )}
+          </div>
+
+          {/* Optional metadata — keeps the source_meta useful even without an email */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                Sender <span className="text-content-muted normal-case tracking-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={sender}
+                onChange={(e) => setSender(e.target.value)}
+                placeholder="e.g. analyst@jll.com"
+                className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                Subject <span className="text-content-muted normal-case tracking-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g. Q1 2026 Bengaluru office"
+                className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+              Notes <span className="text-content-muted normal-case tracking-normal">(optional)</span>
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Context for the reviewer — provenance, follow-ups, quality flags"
+              className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+          <button
+            type="button"
+            onClick={close}
+            disabled={upload.isPending}
+            className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={upload.isPending || !file}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <Upload size={13} />
+            {upload.isPending ? 'Uploading…' : 'Upload'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CompsQueuePage() {
   const [statusFilter, setStatusFilter] = useState('pending_review');
   const [sourceFilter, setSourceFilter] = useState(null);
@@ -182,6 +341,7 @@ export default function CompsQueuePage() {
   const pendingTotal = pendingData?.pagination?.total ?? 0;
 
   const processBatch = useProcessPendingBatch();
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const rows = data?.data || [];
   const total = data?.pagination?.total ?? 0;
@@ -203,7 +363,17 @@ export default function CompsQueuePage() {
         title="Comps review queue"
         description="Forwarded broker quotes and IPC reports land here for human review before committing to the comps database. Approve, edit, or reject each batch."
         actions={
-          <button
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              title="Drop a PDF or image directly into the queue (no email needed)"
+            >
+              <Upload size={14} />
+              Upload file
+            </button>
+            <button
             type="button"
             onClick={() => processBatch.mutate(25)}
             disabled={processBatch.isPending || pendingTotal === 0}
@@ -228,6 +398,7 @@ export default function CompsQueuePage() {
               : 'No pending items'
             }
           </button>
+          </div>
         }
       />
 
@@ -326,6 +497,8 @@ export default function CompsQueuePage() {
           </div>
         )}
       </Card>
+
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </div>
   );
 }

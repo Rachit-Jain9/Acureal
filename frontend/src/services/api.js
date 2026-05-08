@@ -522,6 +522,19 @@ export const compsReviewQueueAPI = {
   // backlog. Surfaced as the "Process pending now" button on the queue list
   // because Vercel Hobby caps the cron at once-daily.
   processPending: (limit = 25)                => api.post('/comps-review-queue/process-pending', null, { params: { limit } }),
+  // Analyst-driven upload — multipart/form-data with a `file` field plus
+  // optional sender/subject/notes. Used while waiting on a custom domain
+  // for Postmark or whenever the analyst already has the source PDF.
+  manualUpload: (file, metadata = {}) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (metadata.sender)  fd.append('sender',  metadata.sender);
+    if (metadata.subject) fd.append('subject', metadata.subject);
+    if (metadata.notes)   fd.append('notes',   metadata.notes);
+    return api.post('/comps-review-queue/manual-upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   edit:           (id, payload, notes)        => api.patch(`/comps-review-queue/${id}`, { payload, notes }),
   approve:        (id)                        => api.post(`/comps-review-queue/${id}/approve`),
   reject:         (id, reason)                => api.post(`/comps-review-queue/${id}/reject`, { reason }),
