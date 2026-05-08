@@ -466,6 +466,51 @@ const buildDeck = async (pdfDoc, fonts, payload, opts) => {
     sourceText: 'Sources: Horwath HTL India Hotel Market Review 2025; ICRA FY25-26 hospitality outlook.',
   });
 
+  // ─── Section 5e — Residential by Asset Class (segmented benchmarks) ─────
+  // Builder floor / Plotted dev / Land plotted / Villa / Guidance value.
+  // These rows ride the same shape as the rest (micro-market × value × source)
+  // so they slot into the same renderBenchmarkSection pattern. Unit varies per
+  // asset_class (INR/sqft vs INR mn/acre vs PDF placeholder), so the value
+  // column carries explicit units in the formatter rather than a header label.
+  const ASSET_CLASS_PDF_LABEL = {
+    builder_floor:            'Builder floor',
+    plotted_development:      'Plotted dev',
+    land_residential_plotted: 'Land (plotted)',
+    villa_house:              'Villa / house',
+    guidance_value:           'Guidance value',
+  };
+  renderBenchmarkSection({
+    headerEyebrow: 'Section 5e',
+    headerTitle: 'Residential by Asset Class - Builder / Plotted / Land / Villa / Guidance',
+    headerSub: `${city} Q1 2026 - listing-portal benchmarks + SRO guidance placeholders`,
+    columnsDef: [
+      { key: 'asset_class',  label: 'Asset class', weight: 1.4, align: 'left',
+        format: (v) => ASSET_CLASS_PDF_LABEL[v] || v },
+      { key: 'micro_market', label: 'Micro-market', weight: 1.8, align: 'left' },
+      { key: 'metric',       label: 'Metric',       weight: 2.4, align: 'left' },
+      { key: 'value_avg',    label: 'Value',        weight: 1.6, align: 'right',
+        format: (v, row) => {
+          if (row?.asset_class === 'guidance_value') return 'SRO PDF pending';
+          if (v == null) return '-';
+          const isAcre = row?.unit?.toLowerCase().includes('acre');
+          return isAcre
+            ? `INR ${fmtNum(v, 1)} mn/ac`
+            : `INR ${fmtNum(v, 0)}/sqft`;
+        }
+      },
+      { key: 'data_type',    label: 'Layer',        weight: 1.6, align: 'left',
+        format: (v) => {
+          if (v === 'listing_q1_2026_v0_2')          return 'Listing Q1 2026';
+          if (v === 'listing_q1_2026_v0_2_derived')  return 'Listing - Derived';
+          if (v === 'guidance_q1_2026_v0_2_pending') return 'Guidance - SRO pending';
+          return v || '-';
+        }
+      },
+    ],
+    rows: payload.residentialSegmentedBenchmarks || [],
+    sourceText: 'Sources: MagicBricks / Housing.com asking-price benchmarks (NOT transaction-verified); Karnataka IGR for guidance-value SRO placeholders. Land values derived from plot INR/sqyd via standard sqyd-to-acre conversion.',
+  });
+
   // ─── Section 6 — Market Transactions ────────────────────────────────────
   renderBenchmarkSection({
     headerEyebrow: 'Section 6',
@@ -499,7 +544,7 @@ const buildIntelligenceTearSheet = async ({ city = 'Bengaluru', generatedBy = 'U
   // read, no need to serialise.
   const [
     macroKpis, residentialBenchmarks, officeBenchmarks, retailBenchmarks,
-    industrialBenchmarks, hospitalityBenchmarks, transactions,
+    industrialBenchmarks, hospitalityBenchmarks, residentialSegmentedBenchmarks, transactions,
   ] = await Promise.all([
     intelligenceService.getMacroKpis({ city }),
     intelligenceService.getMicroMarketBenchmarks({ city }),
@@ -507,6 +552,7 @@ const buildIntelligenceTearSheet = async ({ city = 'Bengaluru', generatedBy = 'U
     intelligenceService.getRetailBenchmarks({ city }),
     intelligenceService.getIndustrialBenchmarks({ city }),
     intelligenceService.getHospitalityBenchmarks({ city }),
+    intelligenceService.getResidentialSegmentedBenchmarks({ city }),
     intelligenceService.getMarketTransactions({ city }),
   ]);
 
@@ -522,20 +568,21 @@ const buildIntelligenceTearSheet = async ({ city = 'Bengaluru', generatedBy = 'U
 
   await buildDeck(pdfDoc, fonts, {
     macroKpis, residentialBenchmarks, officeBenchmarks, retailBenchmarks,
-    industrialBenchmarks, hospitalityBenchmarks, transactions,
+    industrialBenchmarks, hospitalityBenchmarks, residentialSegmentedBenchmarks, transactions,
   }, { city, generatedBy });
 
   return {
     bytes: await pdfDoc.save(),
     filename: `redip-${city.toLowerCase()}-market-tearsheet-${new Date().toISOString().slice(0, 10)}.pdf`,
     sectionCounts: {
-      macro_kpis:     macroKpis.length,
-      residential:    residentialBenchmarks.length,
-      office:         officeBenchmarks.length,
-      retail:         retailBenchmarks.length,
-      industrial:     industrialBenchmarks.length,
-      hospitality:    hospitalityBenchmarks.length,
-      transactions:   transactions.length,
+      macro_kpis:               macroKpis.length,
+      residential:              residentialBenchmarks.length,
+      office:                   officeBenchmarks.length,
+      retail:                   retailBenchmarks.length,
+      industrial:               industrialBenchmarks.length,
+      hospitality:              hospitalityBenchmarks.length,
+      residential_segmented:    residentialSegmentedBenchmarks.length,
+      transactions:             transactions.length,
     },
   };
 };

@@ -4,6 +4,44 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-08 (Q1 2026 v0.2 residential coverage — Tier 0.2 toggle + Tier 1.1 baskets + segmented schema)
+
+### What was worked on
+
+Closed three gaps from the deep-dive analysis of the v0.2 rate-pack and the GBA Comps Report:
+
+1. **Section 5 chip toggle was silently broken after v0.2 landed.** The chip group on `/intelligence` Section 5 was hardcoded to match `data_type === 'listing_q1_2026'` / `'ipc_q1_2026'`, so the new sub-segments (`ipc_q1_2026_v0_2_high_end`, `ipc_q1_2026_v0_2_mid_segment`, `listing_q1_2026_v0_2`) didn't roll up. Replaced with prefix-based `layerForDataType()` + live count memo + zero-count chip suppression.
+2. **GBA Report Table 3 (27 named residential apartment locality baskets) was never loaded.** Prestige Park Grove, Brigade Insignia, Embassy Lake Terraces, Sobha City, Brigade Gateway, etc. — each with a rate range INR/sqft, average rate, units, and launch year. Built a generator script (`scripts/build-residential-baskets-migration.mjs`) and a migration file. Tagged `data_type='ipc_q1_2026_v0_2_locality_basket'`.
+3. **Five residential asset classes from v0.2 had no schema to live in.** TODO_DATA.md flagged builder floor (7 rows), plotted dev (18), land-residential-plotted (18), villa/house (13), and guidance-value placeholders (11) as schema follow-up because the existing benchmark tables can't hold them — different units (INR/sqft vs INR mn/acre vs SRO PDF placeholder). Built one consolidated table `residential_segmented_benchmarks` with `asset_class` enum + `unit` column, RLS-scoped, idempotent on (org, city, micro_market, asset_class, metric, data_type). Loaded all 67 rows from the v0.2 JSON. Wired backend service + route + frontend hook + new "Section 5e" UI with asset-class chip filter and per-row data-layer badge.
+
+### PRs opened/merged
+
+| PR | Title |
+|---|---|
+| **[#165](https://github.com/Rachit-Jain9/REDIP/pull/165)** | `feat(intelligence): residential layer toggle + 27 GBA Table 3 baskets` |
+| **[#166](https://github.com/Rachit-Jain9/REDIP/pull/166)** | `feat(intelligence): residential_segmented_benchmarks — 5 missing asset classes (67 rows)` |
+
+### Operator actions required
+
+Apply these three migration files in order via Supabase SQL editor:
+
+1. `database/migrations/20260508_residential_apartment_baskets_q1_2026.sql` (PR #165) — 27 INSERTs into `comps`. Idempotent via the unique index on `(project_name, city)` from PR #164.
+2. `database/migrations/20260508_residential_segmented_benchmarks_schema.sql` (PR #166) — `CREATE TABLE` + 4 indexes + 2 RLS policies. Idempotent (`IF NOT EXISTS`).
+3. `database/migrations/20260508_residential_segmented_benchmarks_data.sql` (PR #166) — 67 INSERTs. Idempotent (`ON CONFLICT DO NOTHING`).
+
+Verify after applying:
+- Section 5 chip toggle on `/intelligence` shows live counts for Listing portals / IPC benchmarks / Internal — and hides zero-count buckets.
+- Section 5 search for "Prestige Park Grove" / "Embassy Lake Terraces" / "Sobha City" returns the 27 named baskets with the "IPC · Locality basket" badge.
+- New "Section 5e — Residential by Asset Class" appears between hospitality and transactions, with 5 asset-class chips and a layer badge column. "Land (plotted)" filter shows 18 rows in INR mn/ac formatting; "Guidance value" filter shows 11 italic "SRO PDF pending" rows (no fake numbers).
+
+### What's left to do
+
+1. **Karnataka IGR guidance-value SRO PDF extraction** (11 placeholder rows currently tagged `guidance_q1_2026_v0_2_pending`) — manual Gemini PDF extraction → fill in `value_low/high/avg`, flip `is_verified=TRUE`. Recorded in TODO_DATA.md.
+2. **Geocoding existing comps** — most rows in the `comps` table still have `lat/lng` NULL, so they don't appear on the Comps page map. Bulk geocode via a backend script + the existing Google Geocoding API key.
+3. **Section 5e PDF tear-sheet integration** — the existing Q1 2026 tear-sheet export (PR #160) doesn't yet include the new segmented-benchmarks section. Single-line addition to `intelligenceExport.service.js`.
+
+---
+
 ## 2026-05-07 (Evening — Comps page-state bug + Google Maps swap)
 
 User reported two issues from a screenshot of the Comps page after clicking a map marker: the table collapsed to "No comparables found" while the page header still showed "29 verified comparables in the database," and asked explicitly to swap the leaflet map for Google Maps ("I gave you GoogleMaps API, use that").
