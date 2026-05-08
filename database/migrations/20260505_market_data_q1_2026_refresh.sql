@@ -446,18 +446,44 @@ BEGIN
    (v_org,'Bengaluru','capital_markets','capital_inflows_q1_2026','Q1 2026 India RE Capital Inflows','USD 5.1 bn (record)',5.1,'USD bn',72,NULL,'up','CBRE India Market Monitor Q1 2026','https://www.cbre.co.in','2026-01-01',510);
 
   -- 3g. MARKET TRANSACTIONS — Q1 2026 additions ────────────────────
-  INSERT INTO market_transactions
-    (organization_id, fiscal_year, quarter, deal_type, buyer, seller, investor_lender,
-     quantum_inr_mn, land_size_acres, project_size_note, locality, notes,
-     source_reference, source_url, city, as_of_date)
-  VALUES
-   (v_org,'FY2026','Q4','Equity investment','Embassy Office Parks REIT','Not disclosed (third-party seller)',NULL,8520,NULL,'0.3 mn sf','Embassy GolfLinks',
-    'Acquisition cost (~₹852 Cr); 0.3 msf at Embassy GolfLinks. Restated under 2026 reporting.',
-    'Embassy REIT press release + Business Standard (Dec 2025)','https://www.embassyofficeparks.com','Bengaluru','2026-01-15'),
-   (v_org,'FY2027','Q1','Capital markets','Bengaluru market (multiple buyers)',NULL,NULL,425000,NULL,'India total — Bengaluru largest share',
-    'India total','Q1 2026 capital inflows into Indian real estate hit USD 5.1 bn (₹42,500 Cr) — record (+72% YoY); Bengaluru captured the largest share alongside Mumbai and Delhi-NCR.',
-    'CBRE India Market Monitor Q1 2026','https://www.cbre.co.in','Bengaluru','2026-04-01')
-  ON CONFLICT (fiscal_year, quarter, quantum_inr_mn, LOWER(COALESCE(buyer, ''))) DO NOTHING;
+  -- Idempotent via explicit NOT EXISTS guards. The earlier ON CONFLICT
+  -- (fiscal_year, quarter, quantum_inr_mn, LOWER(COALESCE(buyer, '')))
+  -- can't work because Postgres only honours ON CONFLICT against an
+  -- existing unique constraint or expression-based unique index, and
+  -- market_transactions has neither. Adding such an index post-hoc
+  -- would fail if pre-existing rows happen to collide on the natural
+  -- key. PL/pgSQL guards work everywhere and require no schema change.
+  IF NOT EXISTS (
+    SELECT 1 FROM market_transactions
+    WHERE fiscal_year = 'FY2026' AND quarter = 'Q4'
+      AND quantum_inr_mn = 8520
+      AND LOWER(COALESCE(buyer, '')) = LOWER('Embassy Office Parks REIT')
+  ) THEN
+    INSERT INTO market_transactions
+      (organization_id, fiscal_year, quarter, deal_type, buyer, seller, investor_lender,
+       quantum_inr_mn, land_size_acres, project_size_note, locality, notes,
+       source_reference, source_url, city, as_of_date)
+    VALUES
+     (v_org,'FY2026','Q4','Equity investment','Embassy Office Parks REIT','Not disclosed (third-party seller)',NULL,8520,NULL,'0.3 mn sf','Embassy GolfLinks',
+      'Acquisition cost (~₹852 Cr); 0.3 msf at Embassy GolfLinks. Restated under 2026 reporting.',
+      'Embassy REIT press release + Business Standard (Dec 2025)','https://www.embassyofficeparks.com','Bengaluru','2026-01-15');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM market_transactions
+    WHERE fiscal_year = 'FY2027' AND quarter = 'Q1'
+      AND quantum_inr_mn = 425000
+      AND LOWER(COALESCE(buyer, '')) = LOWER('Bengaluru market (multiple buyers)')
+  ) THEN
+    INSERT INTO market_transactions
+      (organization_id, fiscal_year, quarter, deal_type, buyer, seller, investor_lender,
+       quantum_inr_mn, land_size_acres, project_size_note, locality, notes,
+       source_reference, source_url, city, as_of_date)
+    VALUES
+     (v_org,'FY2027','Q1','Capital markets','Bengaluru market (multiple buyers)',NULL,NULL,425000,NULL,'India total — Bengaluru largest share',
+      'India total','Q1 2026 capital inflows into Indian real estate hit USD 5.1 bn (₹42,500 Cr) — record (+72% YoY); Bengaluru captured the largest share alongside Mumbai and Delhi-NCR.',
+      'CBRE India Market Monitor Q1 2026','https://www.cbre.co.in','Bengaluru','2026-04-01');
+  END IF;
 
   -- 3h. UPDATE EXISTING COMPS WITH SOURCE METADATA ───────────────────
   UPDATE comps
