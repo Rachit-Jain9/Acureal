@@ -4,41 +4,84 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
-## 2026-05-08 (Q1 2026 v0.2 residential coverage — Tier 0.2 toggle + Tier 1.1 baskets + segmented schema)
+## 2026-05-08 (Q1 2026 v0.2 + GBA Q4 2025 comprehensive load — 12 PRs landed)
 
 ### What was worked on
 
-Closed three gaps from the deep-dive analysis of the v0.2 rate-pack and the GBA Comps Report:
+A heavy, multi-phase day. Three themes:
 
-1. **Section 5 chip toggle was silently broken after v0.2 landed.** The chip group on `/intelligence` Section 5 was hardcoded to match `data_type === 'listing_q1_2026'` / `'ipc_q1_2026'`, so the new sub-segments (`ipc_q1_2026_v0_2_high_end`, `ipc_q1_2026_v0_2_mid_segment`, `listing_q1_2026_v0_2`) didn't roll up. Replaced with prefix-based `layerForDataType()` + live count memo + zero-count chip suppression.
-2. **GBA Report Table 3 (27 named residential apartment locality baskets) was never loaded.** Prestige Park Grove, Brigade Insignia, Embassy Lake Terraces, Sobha City, Brigade Gateway, etc. — each with a rate range INR/sqft, average rate, units, and launch year. Built a generator script (`scripts/build-residential-baskets-migration.mjs`) and a migration file. Tagged `data_type='ipc_q1_2026_v0_2_locality_basket'`.
-3. **Five residential asset classes from v0.2 had no schema to live in.** TODO_DATA.md flagged builder floor (7 rows), plotted dev (18), land-residential-plotted (18), villa/house (13), and guidance-value placeholders (11) as schema follow-up because the existing benchmark tables can't hold them — different units (INR/sqft vs INR mn/acre vs SRO PDF placeholder). Built one consolidated table `residential_segmented_benchmarks` with `asset_class` enum + `unit` column, RLS-scoped, idempotent on (org, city, micro_market, asset_class, metric, data_type). Loaded all 67 rows from the v0.2 JSON. Wired backend service + route + frontend hook + new "Section 5e" UI with asset-class chip filter and per-row data-layer badge.
+**Phase A — Q1 2026 v0.2 residential coverage (PRs #165–#167).** Closed three gaps from the deep-dive analysis of the v0.2 rate-pack and the GBA Comps Report:
 
-### PRs opened/merged
+1. **Section 5 chip toggle was silently broken after v0.2 landed.** The chip group on `/intelligence` Section 5 was hardcoded to match `data_type === 'listing_q1_2026'` / `'ipc_q1_2026'`, so the v0.2 sub-segments (`ipc_q1_2026_v0_2_high_end`, `ipc_q1_2026_v0_2_mid_segment`, `listing_q1_2026_v0_2`) didn't roll up. Replaced with prefix-based `layerForDataType()` + live count memo + zero-count chip suppression.
+2. **GBA Report Table 3 (27 named residential apartment locality baskets) was never loaded.** Prestige Park Grove, Brigade Insignia, Embassy Lake Terraces, Sobha City, Brigade Gateway, etc. — each with rate range, average, units, launch year. Built a generator script (`scripts/build-residential-baskets-migration.mjs`) and a migration. Tagged `data_type='ipc_q1_2026_v0_2_locality_basket'`.
+3. **Five residential asset classes from v0.2 had no schema to live in.** TODO_DATA.md flagged builder floor (7), plotted dev (18), land-residential-plotted (18), villa/house (13), guidance-value (11) as schema follow-up — different units (INR/sqft vs INR mn/acre vs SRO PDF placeholder). Built `residential_segmented_benchmarks` with `asset_class` enum + `unit` column, RLS-scoped, composite-unique. Loaded all 67 rows. Wired backend service + route + frontend hook + new "Section 5e" UI with asset-class chip filter and per-row data-layer badge.
 
-| PR | Title |
-|---|---|
-| **[#165](https://github.com/Rachit-Jain9/REDIP/pull/165)** | `feat(intelligence): residential layer toggle + 27 GBA Table 3 baskets` |
-| **[#166](https://github.com/Rachit-Jain9/REDIP/pull/166)** | `feat(intelligence): residential_segmented_benchmarks — 5 missing asset classes (67 rows)` |
+Plus tear-sheet PDF integration (Section 5e renders in the export) and a bulk locality-centroid geocoding migration so the 30 named premium comps from PR #163 + 27 GBA baskets from PR #165 actually appear as map pins on the Comps page (65 Bengaluru localities mapped in one VALUES join).
+
+**Phase B — Comps map UX + Intelligence page polish (PRs #168–#174).** User reported that the Comps page crashed on first SPA mount with "Cannot read properties of undefined (reading 'ControlPosition')" and the "Try again" button didn't work. Fixed:
+
+- **CompsMap cold-mount race** — `google.maps.ControlPosition` was being read in a `useMemo` before the SDK had populated the `.maps` namespace. The previous guard `typeof google !== 'undefined'` was insufficient because Google's loader creates the `window.google` shell early but populates `.maps` later. Gated zoomControlOptions on both `isLoaded` AND `google?.maps?.ControlPosition`, with `isLoaded` in the deps so options backfill the moment the SDK is ready.
+- **Try Again button was a no-op** — ErrorBoundary's reset handler just flipped `hasError` back to false, re-rendering the SAME children with the SAME state that caused the original throw. Now tracks a `resetKey` counter and renders children inside a Fragment keyed by it; bumping the key forces React to unmount + remount the failing subtree.
+- **Cluster markers** — after the geocoding migration, 15+ Whitefield comps stacked invisibly at one centroid. Added grouping by `(lat, lng)` rounded to 4 decimals. Multi-comp groups render a count-stamped circle with dominant-data-type colour + click-to-expand list popup. Auto-syncs with table selection.
+- **Cluster popup overlap** — popup repositioned above the pin (was extending downward into bottom UI). The bottom-left "Selected" inset now hides while a cluster popup is open (they were saying the same thing twice). Selected comp gets pinned to the top of the cluster list with a primary-tinted highlight.
+- **Section 5e summary tiles** — Bloomberg-style tile strip above the segmented-benchmarks table. One per asset class with count + min/max range. Click to toggle filter.
+- **Removed defensive UI** — the "Fresh · 4d" / "Stale · 32d" pills (345 lines deleted: StalenessBadge component + utility), the "10. Bottom Line — REDIP is correctly withholding..." card, and the "Apply migration X.sql" empty-state copy on Sections 5 and 6 (they now hide entirely when empty, like 5a–5e already did).
+- **Multi-city switcher → asset-class switcher** — biggest information-architecture change of the day. The Bengaluru / Mumbai / NCR / Hyderabad pills were misleading because only Bengaluru has data; the other cities shipped empty-state disclaimers. Replaced with a 5-bucket asset-class filter (+ All): Residential / Land & Plotted / Office / Retail & Hospitality / Industrial & Warehouse. Each filter shows only the sections relevant to that asset class. Section 5e dynamically subsets its rows when residential or land filter is active. Choice persists to localStorage.
+
+**Phase C — Comprehensive GBA Q4 2025 rate-card load (PRs #175 + #176).** User flagged that I'd loaded the v0.2 JSON (172 records) but missed the entire GBA Q4 2025 / Q1 2026 Rate Card source (`COMPS_REDIP-Claude.docx`). They were right. One migration loads 98 rows across 5 tables:
+
+- 38 hospitality ADR cells (10 submarkets × 4 categories: luxury / upper_upscale / upscale_upper_mid / midscale_economy). Was just 2 rows.
+- 10 plotted-development corridors with named representative projects (Sarjapur Rd → Purva Tranquility, Godrej Woodland; Devanahalli → Godrej Reserve, Birla Trimaya, etc.).
+- 8 land-rate zones (urban core → peripheral + KIADB premium + KIADB outer).
+- 12 retail mall Grade A rents (Phoenix Mall of Asia ₹250–600/sqft city's highest, Phoenix Marketcity Whitefield, Orion Mall, Mantri Square, Vega City, RMZ Galleria, M5 Ecity).
+- 30 office detailed submarkets (Whitefield Grade A ₹65–140, Bellandur ₹95–150, etc.) layered alongside the 9 v0.2 IPC zones.
+
+Then PR #176 fixed an `ON CONFLICT (..., LOWER(COALESCE(buyer, '')))` bug in the original `20260505_market_data_q1_2026_refresh.sql` — function expressions on ON CONFLICT need an expression-based unique index that didn't exist. Replaced with explicit `IF NOT EXISTS` PL/pgSQL guards (we're already inside a `DO $$` block so conditionals work freely).
+
+### PRs opened/merged today (12)
+
+| PR | Title | Phase |
+|---|---|---|
+| **[#165](https://github.com/Rachit-Jain9/REDIP/pull/165)** | residential layer toggle + 27 GBA Table 3 baskets | A |
+| **[#166](https://github.com/Rachit-Jain9/REDIP/pull/166)** | residential_segmented_benchmarks — 5 missing asset classes (67 rows) | A |
+| **[#167](https://github.com/Rachit-Jain9/REDIP/pull/167)** | tear-sheet Section 5e + bulk locality-centroid geocoding | A |
+| **[#168](https://github.com/Rachit-Jain9/REDIP/pull/168)** | Comps cold-mount crash fix + Try Again actually retries | B |
+| **[#169](https://github.com/Rachit-Jain9/REDIP/pull/169)** | cluster markers at shared centroids + Section 5e summary tiles | B |
+| **[#170](https://github.com/Rachit-Jain9/REDIP/pull/170)** | cluster popup repositioned + dedupe with Selected inset | B |
+| **[#171](https://github.com/Rachit-Jain9/REDIP/pull/171)** | remove Fresh/Stale freshness pills (−345 lines) | B |
+| **[#172](https://github.com/Rachit-Jain9/REDIP/pull/172)** | replace multi-city switcher with 5-bucket asset-class filter | B |
+| **[#173](https://github.com/Rachit-Jain9/REDIP/pull/173)** | remove Section 10 "Bottom Line" defensive disclaimer | B |
+| **[#174](https://github.com/Rachit-Jain9/REDIP/pull/174)** | hide Sections 5 + 6 when empty (no migration filenames in copy) | B |
+| **[#175](https://github.com/Rachit-Jain9/REDIP/pull/175)** | comprehensive GBA Q4 2025 rate-card load — 98 rows across 5 tables | C |
+| **[#176](https://github.com/Rachit-Jain9/REDIP/pull/176)** | fix ON CONFLICT bug in 20260505 baseline migration | C |
 
 ### Operator actions required
 
-Apply these three migration files in order via Supabase SQL editor:
+Apply these migration files in order via Supabase SQL editor:
 
-1. `database/migrations/20260508_residential_apartment_baskets_q1_2026.sql` (PR #165) — 27 INSERTs into `comps`. Idempotent via the unique index on `(project_name, city)` from PR #164.
-2. `database/migrations/20260508_residential_segmented_benchmarks_schema.sql` (PR #166) — `CREATE TABLE` + 4 indexes + 2 RLS policies. Idempotent (`IF NOT EXISTS`).
-3. `database/migrations/20260508_residential_segmented_benchmarks_data.sql` (PR #166) — 67 INSERTs. Idempotent (`ON CONFLICT DO NOTHING`).
+1. `database/migrations/20260505_market_data_q1_2026_refresh.sql` — original Q1 2026 baseline (50 residential micro-market rows, 9 IPC office zones + 30 detailed office submarkets, 12 high-street retail + 9 mall rows, industrial/warehouse/serviced land, hospitality citywide+airport+CBD-luxury, 18 macro KPI rows, 2 transactions). PR #176 fixed the previously-failing ON CONFLICT clause.
+2. `database/migrations/20260508_residential_apartment_baskets_q1_2026.sql` — 27 INSERTs into `comps` (PR #165). Idempotent.
+3. `database/migrations/20260508_residential_segmented_benchmarks_schema.sql` — CREATE TABLE + 4 indexes + 2 RLS policies (PR #166). Idempotent.
+4. `database/migrations/20260508_residential_segmented_benchmarks_data.sql` — 67 INSERTs (PR #166). Idempotent.
+5. `database/migrations/20260508_geocode_unmapped_comps.sql` — UPDATE 65 Bengaluru localities (PR #167). Idempotent.
+6. `database/migrations/20260508_gba_rate_card_comprehensive_load.sql` — 98 INSERTs across 5 tables (PR #175). Idempotent.
 
 Verify after applying:
-- Section 5 chip toggle on `/intelligence` shows live counts for Listing portals / IPC benchmarks / Internal — and hides zero-count buckets.
-- Section 5 search for "Prestige Park Grove" / "Embassy Lake Terraces" / "Sobha City" returns the 27 named baskets with the "IPC · Locality basket" badge.
-- New "Section 5e — Residential by Asset Class" appears between hospitality and transactions, with 5 asset-class chips and a layer badge column. "Land (plotted)" filter shows 18 rows in INR mn/ac formatting; "Guidance value" filter shows 11 italic "SRO PDF pending" rows (no fake numbers).
+- `/intelligence` page header shows "Bengaluru real estate intelligence — DATE" with asset-class pills (no city pills).
+- All / Residential / Land & Plotted / Office / Retail & Hospitality / Industrial & Warehouse filters all populate appropriate sections.
+- Section 5d Hospitality has 40+ rows (was 2). Segment chips for Luxury / Upper Upscale / Upscale-Upper Mid / Midscale-Economy all populate.
+- Section 5e Residential by Asset Class shows summary tiles at top + filter chips.
+- Section 5b Retail Format chip flips to "Mall Grade A" → Phoenix Mall of Asia, Orion, Mantri etc visible.
+- `/comps` map shows cluster pins with counts at Whitefield, Hebbal, Indiranagar centroids; click expands list popup with selected comp pinned to top.
 
 ### What's left to do
 
-1. **Karnataka IGR guidance-value SRO PDF extraction** (11 placeholder rows currently tagged `guidance_q1_2026_v0_2_pending`) — manual Gemini PDF extraction → fill in `value_low/high/avg`, flip `is_verified=TRUE`. Recorded in TODO_DATA.md.
-2. **Geocoding existing comps** — most rows in the `comps` table still have `lat/lng` NULL, so they don't appear on the Comps page map. Bulk geocode via a backend script + the existing Google Geocoding API key.
-3. **Section 5e PDF tear-sheet integration** — the existing Q1 2026 tear-sheet export (PR #160) doesn't yet include the new segmented-benchmarks section. Single-line addition to `intelligenceExport.service.js`.
+1. **Karnataka IGR guidance-value SRO PDF extraction** (11 placeholder rows tagged `guidance_q1_2026_v0_2_pending`) — manual Gemini PDF extraction → fill in `value_low/high/avg`, flip `is_verified=TRUE`. Recorded in TODO_DATA.md.
+2. **Co-working / managed office benchmarks** — Section 9.2 of `comps_claude_text.txt` has per-seat all-inclusive pricing (CBD ₹15K–50K, ORR/Whitefield ₹6.5K–15K, etc.). Needs new schema + table.
+3. **Student housing & co-living** — Section 9.3, per-bed monthly rates by neighborhood. New schema needed.
+4. **Senior living** — Section 9.4, entry capital values + monthly licence fees. New schema.
+5. **Data center detailed comps** — Section 9.1 has NTT Bengaluru-4 detail (8.5 acres, 100 MW total, 67.2 MW critical IT load, ₹4,100 cr NTT cumulative Karnataka investment) plus operator list (Sify, ESDS, STT GDC, CapitaLand/Yondr, Nxtra, CtrlS, Equinix). Needs new asset table.
+6. **Project-precise geocoding** — current locality-centroid migration causes Whitefield's 15+ comps to stack at one pin (mitigated by cluster markers). Future: backend script using Google Geocoding API per project name to spread markers naturally.
 
 ---
 
