@@ -338,10 +338,17 @@ export default function CompsMap({
     () => (comps || []).filter((c) => Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lng))),
     [comps],
   );
+  // Selected comp can be EITHER mappable or unmapped. We look up against the
+  // full `comps` list so the bottom-left "Selected" inset still renders for
+  // unmapped rows (with an off-map flag), instead of disappearing entirely
+  // and leaving the user staring at the previous selection's map state.
   const selectedComp = useMemo(
-    () => mappable.find((c) => c.id === selectedCompId) || null,
-    [mappable, selectedCompId],
+    () => (comps || []).find((c) => c.id === selectedCompId) || null,
+    [comps, selectedCompId],
   );
+  const selectedCompIsMapped = !!selectedComp
+    && Number.isFinite(Number(selectedComp.lat))
+    && Number.isFinite(Number(selectedComp.lng));
 
   // Group comps that share (almost) the same coordinate. After the bulk
   // locality-centroid geocoding migration most comps in the same locality
@@ -453,6 +460,12 @@ export default function CompsMap({
 
   // Fit bounds to the comp set on first map load. Skip if there are <2
   // points (fitting to a single point overshoots; default zoom is fine).
+  //
+  // After fitBounds, CAP the zoom at 13 if Google overshot to a higher
+  // level — happens when many comps share a single locality centroid and
+  // the resulting bounds rectangle is near-zero, so Google zooms to ~22
+  // (max). At that zoom Bengaluru tiles are sparse and the view looks
+  // almost like ocean. Capping at 13 keeps the city visible.
   const fittedRef = useRef(false);
   useEffect(() => {
     if (!isLoaded || !mapRef.current || fittedRef.current) return;
@@ -461,16 +474,40 @@ export default function CompsMap({
     for (const c of mappable) {
       bounds.extend({ lat: Number(c.lat), lng: Number(c.lng) });
     }
-    mapRef.current.fitBounds(bounds, 40);
+    const map = mapRef.current;
+    map.fitBounds(bounds, 40);
+    // Google fires `idle` once after fitBounds settles. Use a small
+    // setTimeout instead of an `idle` listener so we don't pin a
+    // listener that fires on every subsequent pan/zoom.
+    setTimeout(() => {
+      if (mapRef.current && (mapRef.current.getZoom?.() || 0) > 13) {
+        mapRef.current.setZoom(13);
+      }
+    }, 250);
     fittedRef.current = true;
   }, [isLoaded, mappable]);
 
   // Pan to selection. 400ms native panTo matches the FRONTEND_GUIDELINES
   // map zoom/pan budget. Re-fits zoom to at least 14 so users can see
   // detail on the focused project.
+  //
+  // If the selected comp has NULL coords (unmapped basket / premium comp
+  // that didn't match the geocode lookup), DON'T pan — the map stays in
+  // its current position and the cluster popup state is reset so the
+  // user isn't shown stale UI from a previous selection. Without this,
+  // the map appears stuck on a previous locality with no visible link
+  // to the row the user just clicked.
   useEffect(() => {
     if (!isLoaded || !mapRef.current || !selectedComp) return;
-    if (!Number.isFinite(Number(selectedComp.lat)) || !Number.isFinite(Number(selectedComp.lng))) return;
+    const hasCoords = Number.isFinite(Number(selectedComp.lat))
+                   && Number.isFinite(Number(selectedComp.lng));
+    if (!hasCoords) {
+      // Reset cluster popup so the user doesn't see leftover UI from a
+      // previous comp's cluster. The map itself stays where it is — no
+      // useful pan target exists for an ungeocoded row.
+      setExpandedClusterKey(null);
+      return;
+    }
     const map = mapRef.current;
     map.panTo({ lat: Number(selectedComp.lat), lng: Number(selectedComp.lng) });
     if ((map.getZoom?.() || 0) < 14) map.setZoom(14);
@@ -693,20 +730,32 @@ export default function CompsMap({
         )}
       </div>
 
-      {/* Selected-comp inset — bottom-left. Renders only when a row/marker is
-          pinned AND no cluster popup is open. The cluster popup already
-          highlights the selected row at its top, so showing this inset on
-          top of an open popup creates redundant duplicate "you picked X"
-          UI that visually collides with the popup body. */}
+      {/* Selected-comp inset — bottom-left. Renders whenever a row/marker is
+          pinned AND no cluster popup is open. For UNMAPPED comps (no
+          coords), shows an "off-map" amber pill instead of the normal
+          primary-tinted "Selected" pill — so the user knows the row they
+          clicked exists in the dataset but doesn't have a geocoded
+          location yet, instead of being confused by an unchanged map.
+          Hidden while a cluster popup is open to avoid duplicate "you
+          picked X" UI. */}
       {selectedComp && !expandedClusterKey && (
         <div
-          className="absolute bottom-3 left-3 z-[5] max-w-[260px] rounded-editorial border border-primary-200 bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial transition-all duration-150 ease-out"
+          className={[
+            'absolute bottom-3 left-3 z-[5] max-w-[260px] rounded-editorial border bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial transition-all duration-150 ease-out',
+            selectedCompIsMapped ? 'border-primary-200' : 'border-amber-200',
+          ].join(' ')}
           role="status"
           aria-live="polite"
         >
           <div className="flex items-center gap-1.5 mb-1">
-            <Building2 size={12} className="text-primary-600" />
-            <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-primary-700">Selected</p>
+            {selectedCompIsMapped ? (
+              <Building2 size={12} className="text-primary-600" />
+            ) : (
+              <AlertTriangle size={12} className="text-amber-600" />
+            )}
+            <p className={`text-[10px] uppercase tracking-[0.12em] font-semibold ${selectedCompIsMapped ? 'text-primary-700' : 'text-amber-700'}`}>
+              {selectedCompIsMapped ? 'Selected' : 'Selected · off-map'}
+            </p>
           </div>
           <p className="text-sm font-semibold text-content-primary truncate" title={selectedComp.project_name}>
             {selectedComp.project_name}
@@ -715,6 +764,11 @@ export default function CompsMap({
             {formatRate(selectedComp.rate_per_sqft)}
             {selectedComp.locality && <span> · {selectedComp.locality}</span>}
           </p>
+          {!selectedCompIsMapped && (
+            <p className="mt-1 pt-1 border-t border-amber-100 text-[10px] text-amber-700 leading-snug">
+              No coordinates on file for this row — it appears in the table but not on the map.
+            </p>
+          )}
         </div>
       )}
 
