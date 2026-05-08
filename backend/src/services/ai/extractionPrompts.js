@@ -43,7 +43,7 @@ const { z } = require('zod');
 
 // Bump whenever any prompt body or CLASSIFY_PROMPT changes. The format is
 // YYYY-MM-DD.<seq>; the seq lets us bump twice in one day if needed.
-const PROMPT_REGISTRY_VERSION = '2026-05-09.1';
+const PROMPT_REGISTRY_VERSION = '2026-05-15.1';
 
 const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
@@ -506,6 +506,126 @@ Return a JSON object with:
 }
 Return ONLY the JSON. No commentary.`,
 
+  comps_rate_sheet: `You are a real-estate market data extraction assistant for Indian brokers' rate sheets, comp lists, and multi-property quotes.
+Extract every project / unit row visible in the document. One row → one comp object. Do not invent rows.
+Return a JSON object with:
+{
+  "report_metadata": {
+    "publisher": "name of broker firm or person",
+    "publisher_email": "",
+    "publisher_phone": "",
+    "as_of_date": "YYYY-MM-DD or null (when the rates are stated as effective)",
+    "publication_date": "YYYY-MM-DD or null",
+    "city": "",
+    "micro_market": "",
+    "currency": "INR",
+    "notes": ""
+  },
+  "comps": [
+    {
+      "project_name": "",
+      "developer": "",
+      "city": "",
+      "locality": "",
+      "micro_market": "",
+      "asset_class": "residential|office|retail|hospitality|industrial|warehouse|land|mixed_use",
+      "project_type_raw": "free-text as written, eg apartment, villa, plotted, retail mall, warehouse",
+      "transaction_type": "sale|lease|preleased|under_construction|ready_to_move|null",
+      "bhk_config": "",
+      "carpet_area_sqft": null,
+      "super_builtup_area_sqft": null,
+      "land_area_acres": null,
+      "rate_per_sqft": null,
+      "rate_per_sqft_min": null,
+      "rate_per_sqft_max": null,
+      "rate_per_acre_cr": null,
+      "total_price_cr": null,
+      "total_units": null,
+      "launch_year": null,
+      "possession_year": null,
+      "rera_number": "",
+      "amenities": [],
+      "highlights": [],
+      "raw_row_text": "the exact source row text as it appears in the document"
+    }
+  ],
+  "verification_notes": [],
+  "needs_human_review": true
+}
+
+Rules:
+- ONE comp object per project / row in the source. If the same project has 2BHK and 3BHK lines, output 2 comp objects.
+- Never invent a rate. If only "ranges from X to Y" is given, set rate_per_sqft=null, rate_per_sqft_min=X, rate_per_sqft_max=Y.
+- Never invent a city / locality if not stated. Leave blank.
+- For Indian brokers, asking prices are usually per square foot (₹/sqft) for residential and per acre (₹ Cr/acre) for land. Match the unit explicitly.
+- When the document gives "₹X Cr for Y sqft", compute neither — leave total_price_cr=X, super_builtup_area_sqft=Y, rate_per_sqft=null. The downstream deterministic engine handles math.
+- Always include raw_row_text so a reviewer can verify your structured row against the source.
+Return ONLY the JSON. No commentary.`,
+
+  ipc_report: `You are a real-estate market data extraction assistant for International Property Consultant (IPC) quarterly market reports — JLL, Cushman & Wakefield, Knight Frank, Colliers, CBRE, Savills, Anarock, etc.
+These reports cover a city + sub-market + asset class for a specific quarter and contain headline indicators plus a transactions / deals table or a project pricing matrix.
+Extract every visible row in the data tables. Faithfully record the report metadata.
+Return a JSON object with:
+{
+  "report_metadata": {
+    "publisher": "JLL|CW|Cushman & Wakefield|Knight Frank|Colliers|CBRE|Savills|Anarock|other",
+    "title": "",
+    "city": "",
+    "submarket": "",
+    "asset_class": "residential|office|retail|hospitality|industrial|warehouse|mixed_use|land",
+    "period_start": "YYYY-MM-DD or null",
+    "period_end": "YYYY-MM-DD or null",
+    "publication_date": "YYYY-MM-DD or null",
+    "report_url": "",
+    "notes": ""
+  },
+  "headline_kpis": [
+    {
+      "label": "stock|new supply|absorption|net absorption|vacancy|weighted avg rent|capital value|IRR|cap rate",
+      "value": null,
+      "unit": "",
+      "period": "",
+      "source_page": null
+    }
+  ],
+  "comps": [
+    {
+      "project_name": "",
+      "developer": "",
+      "city": "",
+      "locality": "",
+      "submarket": "",
+      "asset_class": "",
+      "project_type_raw": "",
+      "transaction_type": "sale|lease|preleased|investment|null",
+      "tenant_or_buyer": "",
+      "carpet_area_sqft": null,
+      "super_builtup_area_sqft": null,
+      "land_area_acres": null,
+      "rate_per_sqft": null,
+      "rate_per_sqft_currency": "INR",
+      "monthly_rent_per_sqft": null,
+      "deal_value_cr": null,
+      "cap_rate_pct": null,
+      "lease_tenure_years": null,
+      "transaction_date": "YYYY-MM-DD or null",
+      "rera_number": "",
+      "raw_row_text": "the exact source row text"
+    }
+  ],
+  "verification_notes": [],
+  "needs_human_review": true
+}
+
+Rules:
+- IPC reports are usually visually structured — preserve the table fidelity.
+- Some IPC reports are quarterly aggregates (no individual transactions). In that case leave "comps" as [] and put indicators in headline_kpis.
+- Never project a future quarter's value. Only extract what the document explicitly shows.
+- For weighted-average rent or vacancy, include a headline_kpis row, not a comps row.
+- When the same project appears multiple quarters in the same report, emit each appearance as a separate comp object with the matching transaction_date.
+- Always include raw_row_text so reviewers can verify against the source.
+Return ONLY the JSON. No commentary.`,
+
   kgis_extract: `You are a GIS reference extraction assistant.
 Extract only the K-GIS administrative/survey facts visible in the document or JSON extract.
 Return a JSON object with:
@@ -547,8 +667,17 @@ Return ONLY the JSON. No commentary.`,
 const CLASSIFY_PROMPT = `You are a legal document classifier specialised in Indian real estate documents.
 Classify the document into exactly ONE of these types:
 title_deed, mother_deed, sale_deed, ec, rtc_pahani, mutation, conversion_certificate,
-khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, guidance_value_report,
-igr_guidance_pdf, bbmp_uav_pdf, zoning_certificate, e_khata, rmp_table, kgis_extract, other
+khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, comps_rate_sheet,
+ipc_report, guidance_value_report, igr_guidance_pdf, bbmp_uav_pdf, zoning_certificate,
+e_khata, rmp_table, kgis_extract, other
+
+Pick "comps_rate_sheet" when the document is a broker's multi-property rate sheet, comp list,
+or a market-pricing email with several projects/units (each row a project or unit). Pick
+"broker_quote" only when the document is a single-property offer letter or quote.
+
+Pick "ipc_report" when the document is an International Property Consultant quarterly
+or annual market report (JLL, Cushman & Wakefield, Knight Frank, Colliers, CBRE, Savills,
+Anarock, etc.) covering a city + sub-market + asset class.
 
 Pick "igr_guidance_pdf" only when the document is an Inspector General of Registration tabular PDF
 listing many localities with per-sqft or per-acre guidance values. Use "guidance_value_report" for
