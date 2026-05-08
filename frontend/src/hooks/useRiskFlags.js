@@ -59,3 +59,41 @@ export function useDeleteRiskFlag() {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove risk flag'),
   });
 }
+
+// Tier-1 #4 — runs the cross-document inconsistency detector for a deal.
+// On success the user-facing flags list is re-fetched; AI-detected ones
+// are tagged via `source === 'ai_detector'` and rendered with a small
+// "AI" badge per row.
+export function useRunInconsistencyCheck() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dealId) => riskAPI.runInconsistencyCheck(dealId).then((r) => r.data.data),
+    onSuccess: (data, dealId) => {
+      qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
+      qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['risk-brief', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      const flagged = data?.persisted_flag_ids?.length ?? 0;
+      const dedup = data?.deduplicated_count ?? 0;
+      const total = (data?.findings?.length ?? 0);
+      if (total === 0) {
+        toast.success('No inconsistencies detected — documents agree.');
+      } else if (flagged === 0 && dedup > 0) {
+        toast.success(`Re-ran detector — ${dedup} finding${dedup === 1 ? '' : 's'} already on the board.`);
+      } else {
+        toast.success(`Detector flagged ${flagged} new issue${flagged === 1 ? '' : 's'}${dedup ? ` (${dedup} duplicate)` : ''}.`);
+      }
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Inconsistency check failed'),
+  });
+}
+
+// Returns the most recent risk_brief artifact, or null on miss.
+export function useRiskBrief(dealId) {
+  return useQuery({
+    queryKey: ['risk-brief', dealId],
+    queryFn: () => riskAPI.getRiskBrief(dealId).then((r) => r.data.data),
+    enabled: !!dealId,
+    staleTime: 60_000,
+  });
+}

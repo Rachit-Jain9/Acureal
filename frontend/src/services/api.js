@@ -456,6 +456,12 @@ export const riskAPI = {
   update: (dealId, id, data) => api.put(`/deals/${dealId}/risk/${id}`, data),
   delete: (dealId, id)       => api.delete(`/deals/${dealId}/risk/${id}`),
   score:  (dealId)           => api.get(`/deals/${dealId}/risk/score`),
+  // Tier-1 #4 — cross-document inconsistency detector. Runs deterministic
+  // comparators across the deal's Gemini extractions, persists findings
+  // as risk_flags with source='ai_detector', and synthesises a risk_brief
+  // narrative via Claude.
+  runInconsistencyCheck: (dealId) => api.post(`/deals/${dealId}/risk/ai/inconsistency-check`),
+  getRiskBrief:          (dealId) => api.get(`/deals/${dealId}/risk/ai/brief`),
 };
 
 // Master Plan (regulatory zones)
