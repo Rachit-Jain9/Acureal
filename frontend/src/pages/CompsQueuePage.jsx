@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass } from 'lucide-react';
+import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { Card, SectionHeader, SkeletonList, ErrorState } from '../design-system';
-import { useCompsReviewQueueList } from '../hooks/useCompsReviewQueue';
+import { useCompsReviewQueueList, useProcessPendingBatch } from '../hooks/useCompsReviewQueue';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -172,6 +172,17 @@ export default function CompsQueuePage() {
     limit: 100,
   });
 
+  // Standalone fetch of the pending_extraction count so the "Process pending
+  // now" button can show a live count even when a different status filter
+  // is active.
+  const { data: pendingData } = useCompsReviewQueueList({
+    status: 'pending_extraction',
+    limit: 1,
+  });
+  const pendingTotal = pendingData?.pagination?.total ?? 0;
+
+  const processBatch = useProcessPendingBatch();
+
   const rows = data?.data || [];
   const total = data?.pagination?.total ?? 0;
 
@@ -191,6 +202,33 @@ export default function CompsQueuePage() {
         eyebrow="Tier-0 ingestion"
         title="Comps review queue"
         description="Forwarded broker quotes and IPC reports land here for human review before committing to the comps database. Approve, edit, or reject each batch."
+        actions={
+          <button
+            type="button"
+            onClick={() => processBatch.mutate(25)}
+            disabled={processBatch.isPending || pendingTotal === 0}
+            className={clsx(
+              'inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md transition-colors',
+              'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              pendingTotal > 0
+                ? 'bg-accent text-white border-accent hover:bg-accent/90'
+                : 'bg-bg-elevated text-content-muted border-hairline cursor-not-allowed',
+              'disabled:opacity-60'
+            )}
+            title={pendingTotal === 0
+              ? 'No pending items'
+              : `Run extraction on the ${pendingTotal} pending item${pendingTotal === 1 ? '' : 's'} now`
+            }
+          >
+            <RefreshCw size={14} className={processBatch.isPending ? 'animate-spin' : ''} />
+            {processBatch.isPending
+              ? 'Processing…'
+              : pendingTotal > 0
+              ? `Process pending now (${pendingTotal})`
+              : 'No pending items'
+            }
+          </button>
+        }
       />
 
       {/* Filter bar */}

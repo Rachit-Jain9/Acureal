@@ -51,6 +51,30 @@ export function useProcessQueueRow() {
   });
 }
 
+// Manual batch trigger for the entire pending_extraction backlog.
+// The cron worker only runs once-daily on Vercel Hobby, so this button
+// is the reviewer's escape hatch when fresh items have just landed.
+export function useProcessPendingBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (limit = 25) =>
+      compsReviewQueueAPI.processPending(limit).then((r) => r.data.data),
+    onSuccess: (summary) => {
+      qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
+      const { picked = 0, processed = 0, failed = 0, skipped = 0 } = summary || {};
+      if (picked === 0) {
+        toast.success('No pending items to process');
+      } else {
+        const parts = [`${processed} extracted`];
+        if (failed) parts.push(`${failed} failed`);
+        if (skipped) parts.push(`${skipped} skipped`);
+        toast.success(`Processed ${picked} item${picked === 1 ? '' : 's'} — ${parts.join(', ')}`);
+      }
+    },
+    onError: (err) => toast.error(errMessage(err, 'Batch process failed')),
+  });
+}
+
 export function useSaveReviewerEdits() {
   const qc = useQueryClient();
   return useMutation({

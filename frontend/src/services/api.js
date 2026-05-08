@@ -515,12 +515,16 @@ export const compSimilarityAPI = {
 // Comps Review Queue (Tier-0 ingestion flywheel)
 // Mirrors backend/src/routes/compsReviewQueue.routes.js
 export const compsReviewQueueAPI = {
-  list:    (params)                    => api.get('/comps-review-queue', { params }),
-  get:     (id)                        => api.get(`/comps-review-queue/${id}`),
-  process: (id)                        => api.post(`/comps-review-queue/${id}/process`),
-  edit:    (id, payload, notes)        => api.patch(`/comps-review-queue/${id}`, { payload, notes }),
-  approve: (id)                        => api.post(`/comps-review-queue/${id}/approve`),
-  reject:  (id, reason)                => api.post(`/comps-review-queue/${id}/reject`, { reason }),
+  list:           (params)                    => api.get('/comps-review-queue', { params }),
+  get:            (id)                        => api.get(`/comps-review-queue/${id}`),
+  process:        (id)                        => api.post(`/comps-review-queue/${id}/process`),
+  // Manual batch trigger — runs extraction on the entire pending_extraction
+  // backlog. Surfaced as the "Process pending now" button on the queue list
+  // because Vercel Hobby caps the cron at once-daily.
+  processPending: (limit = 25)                => api.post('/comps-review-queue/process-pending', null, { params: { limit } }),
+  edit:           (id, payload, notes)        => api.patch(`/comps-review-queue/${id}`, { payload, notes }),
+  approve:        (id)                        => api.post(`/comps-review-queue/${id}/approve`),
+  reject:         (id, reason)                => api.post(`/comps-review-queue/${id}/reject`, { reason }),
 };
 
 // Document Extraction
