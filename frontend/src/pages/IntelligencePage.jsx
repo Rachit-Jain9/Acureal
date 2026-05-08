@@ -1041,6 +1041,7 @@ const SEGMENTED_DATA_TYPE_BADGE = {
   listing_q1_2026_v0_2:           { tone: 'info',     label: 'Listing Q1 2026' },
   listing_q1_2026_v0_2_derived:   { tone: 'warn',     label: 'Listing · Derived' },
   guidance_q1_2026_v0_2_pending:  { tone: 'neutral',  label: 'Guidance · SRO pending' },
+  ipc_q4_2025_gba_report:         { tone: 'premium',  label: 'IPC · GBA Q4 2025' },
 };
 
 // Per-asset-class summary tile shown above the segmented-benchmarks table.
