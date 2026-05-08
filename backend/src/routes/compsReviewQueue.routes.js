@@ -14,6 +14,7 @@
 const express = require('express');
 const { body, param, query: qv } = require('express-validator');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { uploadSingle } = require('../middleware/upload');
 const { handleValidation } = require('../middleware/validate');
 const queueService = require('../services/compsReviewQueue.service');
 
@@ -58,6 +59,58 @@ router.get(
         offset: req.query.offset ? parseInt(req.query.offset, 10) : 0,
       });
       res.json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/comps-review-queue/manual-upload — analyst-driven ingestion
+// path. Accepts a single multipart file ("file" field) plus optional
+// metadata (sender / subject / notes) and creates a queue row with
+// source='manual_upload'. Used while waiting on a custom domain for
+// Postmark or whenever the analyst already has the source PDF in hand.
+//
+// Registered BEFORE /:id so the literal path matches first.
+router.post(
+  '/manual-upload',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  uploadSingle('file'),
+  [
+    body('sender').optional().isString().isLength({ max: 1000 }),
+    body('subject').optional().isString().isLength({ max: 1000 }),
+    body('notes').optional().isString().isLength({ max: 4000 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({
+          success: false,
+          message: 'No file received. Send the file under the "file" field as multipart/form-data.',
+        });
+      }
+      const result = await queueService.manualUpload({
+        buffer: req.file.buffer,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        organizationId: req.user.organization_id,
+        userId: req.user.id,
+        metadata: {
+          sender: req.body.sender,
+          subject: req.body.subject,
+          notes: req.body.notes,
+        },
+      });
+      res.status(result.deduplicated ? 200 : 201).json({
+        success: true,
+        data: {
+          id: result.row.id,
+          status: result.row.status,
+          deduplicated: result.deduplicated,
+        },
+      });
     } catch (err) {
       next(err);
     }

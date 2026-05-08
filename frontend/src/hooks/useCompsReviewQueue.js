@@ -119,3 +119,25 @@ export function useRejectQueueRow() {
     onError: (err) => toast.error(errMessage(err, 'Reject failed')),
   });
 }
+
+// Analyst-driven upload — drops a PDF / image / spreadsheet directly into
+// the queue without going through email. Useful pre-domain or whenever
+// the analyst already has the source document in hand.
+export function useManualUpload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, sender, subject, notes }) =>
+      compsReviewQueueAPI
+        .manualUpload(file, { sender, subject, notes })
+        .then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
+      if (data?.deduplicated) {
+        toast.success('Already in the queue — same file was uploaded earlier');
+      } else {
+        toast.success('Uploaded — pending extraction');
+      }
+    },
+    onError: (err) => toast.error(errMessage(err, 'Upload failed')),
+  });
+}
