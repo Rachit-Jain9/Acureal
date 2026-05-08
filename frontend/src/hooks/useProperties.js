@@ -111,13 +111,32 @@ export function useRefreshParcelIntelligence() {
 // AI augmentation — Claude-generated parcel verdict narrative.
 // Carries an explicit "AI-assisted — requires human review" disclaimer.
 export function useGenerateParcelNarrative() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ propertyId, dealId }) =>
       propertiesAPI
         .parcelNarrative(propertyId, dealId ? { deal_id: dealId } : {})
         .then((r) => r.data.data),
+    onSuccess: (_, { propertyId, dealId }) => {
+      // Invalidate the cached fetch so the new narrative replaces any
+      // older one without a manual refresh.
+      qc.invalidateQueries({ queryKey: ['property', propertyId, 'parcel-narrative-cached', dealId] });
+    },
     onError: (err) =>
       toast.error(err.response?.data?.message || 'Narrative generation failed'),
+  });
+}
+
+// Returns the most recent persisted parcel_narrative artifact, or null
+// on miss. Used by ParcelTab on mount so the user sees the last
+// generated narrative without re-running Claude.
+export function useCachedParcelNarrative({ propertyId, dealId }) {
+  return useQuery({
+    queryKey: ['property', propertyId, 'parcel-narrative-cached', dealId],
+    queryFn: () =>
+      propertiesAPI.parcelNarrativeCached(propertyId, dealId).then((r) => r.data.data),
+    enabled: !!propertyId && !!dealId,
+    staleTime: 60_000,
   });
 }
 

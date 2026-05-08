@@ -6,12 +6,16 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Copy,
+  Check,
+  Download,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { intelligenceAPI } from '../../services/api';
 import Badge from '../common/Badge';
 import { SectionHeader } from '../../design-system';
 import AiMarkdown from '../common/AiMarkdown';
+import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
 
 /**
  * IC Memo panel (Tier-2 #13).
@@ -31,7 +35,7 @@ import AiMarkdown from '../common/AiMarkdown';
  *     same shape as the deal_analysis drift surface.
  *   - "AI-assisted — requires human review" disclaimer per CLAUDE.md.
  */
-export default function IcMemoPanel({ dealId }) {
+export default function IcMemoPanel({ dealId, dealName }) {
   const [text, setText] = useState('');
   const [meta, setMeta] = useState(null);
   const [drifts, setDrifts] = useState(null);
@@ -39,7 +43,22 @@ export default function IcMemoPanel({ dealId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [cached, setCached] = useState(false);
+  const [copied, setCopied] = useState(false);
   const streamCtrl = useRef(null);
+
+  const handleCopy = async () => {
+    if (!text) return;
+    const ok = await copyMarkdownToClipboard(text);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!text) return;
+    downloadMarkdown(text, buildArtifactFilename(dealName, 'ic-memo'));
+  };
 
   // On mount, fetch the last persisted memo. If one exists, render it
   // immediately so repeat visits don't re-run Claude.
@@ -115,6 +134,31 @@ export default function IcMemoPanel({ dealId }) {
         }
         action={
           <div className="flex items-center gap-2">
+            {/* Copy + Download .md — shown only when there's content to
+                share. Analysts paste into IC decks / emails without
+                losing the markdown structure. */}
+            {text && !loading && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-bg-elevated px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  title="Copy markdown to clipboard"
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-bg-elevated px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  title="Download as a .md file (renders cleanly in Word, Google Docs, Obsidian)"
+                >
+                  <Download size={12} />
+                  Download
+                </button>
+              </>
+            )}
             {loading && (
               <button
                 onClick={handleCancel}

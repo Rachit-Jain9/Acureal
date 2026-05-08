@@ -553,7 +553,7 @@ export default function OverviewTab() {
           sections, synthesised from financials + risk_flags + dd_items +
           approval_items. Self-contained component because it carries its
           own state machine for cached-on-mount + streaming generate. */}
-      <IcMemoPanel dealId={dealId} />
+      <IcMemoPanel dealId={dealId} dealName={deal?.name} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stage History */}
