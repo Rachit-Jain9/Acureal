@@ -39,28 +39,9 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
-import StalenessBadge from '../components/common/StalenessBadge';
 import { SkeletonKpi, SkeletonCard, Skeleton } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
-import { aggregateStaleness } from '../utils/staleness';
 import useAuthStore from '../store/authStore';
-
-// Aggregate-staleness summary for a benchmark section header. Returns the
-// worst-case StalenessBadge across all rows so reviewers see "is this
-// section current?" at a glance, with hover for details.
-function SectionStaleness({ rows, category, fallback }) {
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-  const summary = aggregateStaleness(rows, { fallback });
-  if (!summary.mostRecent) return null;
-  return (
-    <StalenessBadge
-      asOfDate={summary.mostRecent.toISOString()}
-      category={category}
-      fallback={fallback}
-      variant="compact"
-    />
-  );
-}
 
 // Helper: build cluster filter options from a row set with `cluster` field.
 const buildClusterOptions = (rows) => {
@@ -1480,10 +1461,7 @@ export default function IntelligencePage() {
             <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
               {city} Q1 2026 — Verified Macro Indicators
             </p>
-            <div className="flex items-center gap-2">
-              <SectionStaleness rows={macroKpis} fallback="macro_kpi" />
-              <p className="text-[10px] text-content-muted tabular-nums">{macroKpis.length} metrics</p>
-            </div>
+            <p className="text-[10px] text-content-muted tabular-nums">{macroKpis.length} metrics</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
             {macroKpis.map((k) => <MacroKpiTile key={k.id} kpi={k} />)}
@@ -1650,7 +1628,6 @@ export default function IntelligencePage() {
       <SectionCard
         icon={DollarSign}
         title={`5. Residential Micro-Market Benchmarks — ${city} Q1 2026`}
-        action={<SectionStaleness rows={benchmarks} fallback="micro_market_benchmark_listing" />}
       >
         {bmLoading ? (
           <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
@@ -1670,7 +1647,6 @@ export default function IntelligencePage() {
         <SectionCard
           icon={Building2}
           title="5a. Commercial Office — Vacancy + Rent, Q1 2026"
-          action={<SectionStaleness rows={officeBenchmarks} fallback="office_ipc" />}
         >
           <OfficeBenchmarksTable rows={officeBenchmarks} />
         </SectionCard>
@@ -1681,7 +1657,6 @@ export default function IntelligencePage() {
         <SectionCard
           icon={DollarSign}
           title="5b. Retail — High-Street + Mall Grade A, Q1 2026"
-          action={<SectionStaleness rows={retailBenchmarks} fallback="retail_ipc" />}
         >
           <RetailBenchmarksTable rows={retailBenchmarks} />
         </SectionCard>
@@ -1692,7 +1667,6 @@ export default function IntelligencePage() {
         <SectionCard
           icon={Building2}
           title="5c. Industrial / Warehouse / Serviced Land — H2 2025"
-          action={<SectionStaleness rows={industrialBenchmarks} fallback="industrial_ipc" />}
         >
           <IndustrialBenchmarksTable rows={industrialBenchmarks} />
         </SectionCard>
@@ -1703,7 +1677,6 @@ export default function IntelligencePage() {
         <SectionCard
           icon={Building2}
           title="5d. Hospitality — ADR / Occupancy / RevPAR"
-          action={<SectionStaleness rows={hospitalityBenchmarks} fallback="hospitality_ipc" />}
         >
           <HospitalityBenchmarksTable rows={hospitalityBenchmarks} />
         </SectionCard>
@@ -1714,7 +1687,6 @@ export default function IntelligencePage() {
         <SectionCard
           icon={DollarSign}
           title={`5e. Residential by Asset Class — Builder Floor · Plotted · Land · Villa · Guidance — ${city} Q1 2026`}
-          action={<SectionStaleness rows={residentialSegmented} fallback="residential_segmented" />}
         >
           <ResidentialSegmentedBenchmarksTable rows={residentialSegmented} />
         </SectionCard>
@@ -1724,7 +1696,6 @@ export default function IntelligencePage() {
       <SectionCard
         icon={ArrowUpRight}
         title={`6. Market Transaction Flow — ${city} (FY2025–FY2027)`}
-        action={<SectionStaleness rows={transactions} fallback="market_transaction" />}
       >
         {txLoading ? (
           <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
