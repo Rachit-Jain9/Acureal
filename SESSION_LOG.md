@@ -4,7 +4,72 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
-## 2026-05-08 (Tier-0 data flywheel — email ingestion pipeline scaffolded end-to-end, 4 PRs)
+## 2026-05-08 (afternoon) — Tier-1 progress + cross-doc inconsistency detector — 11 PRs
+
+Continuation of the same calendar day after the Tier-0 ingestion sequence (#180–#186) shipped earlier. Whole afternoon spent stacking Tier-1 items, polish, and one big new capability — a cross-document AI risk detector that's the first piece of REDIP that actually *reasons across documents* rather than just storing them.
+
+### What was worked on
+
+**Phase A — Validation hotfix.** First production smoke-test of the comps queue surfaced a confusing `Validation failed` toast when the analyst pressed `R` to reject a row without typing a reason. Frontend was sending `{ reason: null }` (after `.trim() || null`) and `body('reason').optional().isString()` only treats `undefined` as "skip validation" — null flowed through to `.isString()` and tripped the validator. Fix landed defense-in-depth: backend `.optional({ values: 'null' })` AND frontend now omits null fields entirely from request bodies. Same fix preemptively applied to the PATCH endpoint's `payload` and `notes` fields. 8 new regression tests cover the null-tolerance behavior so a future refactor can't silently regress it. While writing tests caught a bonus bug — fixture used `00000000-0000-0000-0000-000000000001` which `isUUID()` rejects (the version digit `1` doesn't match any valid UUID version). Fixed to a proper UUIDv4. **PR #187.**
+
+**Phase B — Tier-0 polish: dashboard pending-review tile + queue empty-state CTA.** Closes the engagement loop on the flywheel. Dashboard now greets editor+ users with a compact "Comps review queue · N pending review" card between KPIs and charts when there's work to do (hides cleanly when idle). Queue empty-state replaces the generic "Nothing here yet" with a primary "Upload your first file" CTA on the pending_review filter. **PR #188.**
+
+**Phase C — Tier-1 #10 (project-precise geocoding).** Up till now every Whitefield comp stacked at one (12.97, 77.75) point — PR #169's cluster pins were a workaround. Migration `20260516_comps_geocode_quality.sql` adds a `geocode_quality` column with the 6-value enum (rooftop / range_interpolated / geometric_center / approximate / locality_centroid / manual) + partial index + queue-side capture. Standalone Google API script `scripts/upgrade-comps-geocoding.mjs` walks upgradable rows with 5 km drift guard. Operator-runnable. **PR #189.**
+
+**Phase D — Tier-1 #3 (post-hoc numerical verifier).** Closes the "system prompts forbid invention but nothing checks" gap. Migration `20260517_ai_artifacts_numerical_drifts.sql` adds `numerical_drifts JSONB` + `verified_at` columns to `ai_artifacts`. New `numericalVerifier.service.js` extracts numbers (IRR%, ₹ Cr revenue/cost, sqft/acres land area) from Claude-generated narratives via deterministic regex extractors with keyword-anchored matching, compares against the deterministic snapshot from the same DB rows that fed Claude, and flags drifts in 3 severity bands (high >10%, medium 5–10%, low 1–5%). Wired into `intelligence.service.js#streamDealAnalysis`; the SSE 'done' frame forwards drifts inline so the UI badge shows immediately after streaming completes. UI: severity-toned banner on the Overview tab with expandable per-claim diff (claimed value vs model value vs drift % vs context snippet), plus the missing "AI-assisted — requires human review" disclaimer per CLAUDE.md hard rule. 31 new unit tests. **PR #190.**
+
+**Phase E — Geocoding bulk run + helpers (Tier-1 #10 finish).** Two helper scripts to actually upgrade the 81 production comps. First Nominatim attempt got 8 upgrades (free, no key, but limited POI coverage for Indian named developers — 14% hit rate). User then created a dedicated server-side Google Maps API key (Application restrictions = None, API = Geocoding only) and pasted it. Second pass via Google: 61 of 73 remaining upgraded. Final state: 25 rooftop · 31 geometric_center · 13 approximate · 12 drift-rejected (correctly kept at locality_centroid — Google matched same-named places > 5 km away for Devanahalli + Yelahanka projects). All 69 upgrades applied via Supabase MCP execute_sql since local `backend/.env` was still pointing at the deprecated Tokyo project. **PRs #191 (Nominatim helper) + #193 (Google helper)**.
+
+**Phase F — UI cleanup + .env to Mumbai.** Removed the "Internal pipeline data — external inventory feeds not yet configured" amber banner from `/dashboard/intelligence` (32 LOC of dead `UnconfiguredNotice` component code deleted). Section 4 "Bengaluru Micro-Market Intelligence" was rendering an apologetic placeholder for every user (sourced from `market_notes WHERE section='micro_market'` with 0 rows in production); now hides cleanly when empty — the actual 38 verified rows of `micro_market_benchmarks` continue to power Section 7's Demand Heatmap below. `backend/.env` swapped from Tokyo (`lsbhrbvuynzqhdtzczco`, `ap-northeast-1`) to Mumbai (`niamgjbxxgmmffggumvj`, `ap-south-1`) for ~120 ms latency improvement on local dev. **PR #192.**
+
+**Phase G — Tier-1 #4 + Tier-2 #12 (cross-document inconsistency detector + risk_brief artifact).** The biggest piece of the day. Closes the catastrophic-blind-spot gap CLAUDE.md flagged. New `inconsistencyDetector.service.js` reads the deal's Gemini extractions and runs five **pure deterministic** comparators (zero LLM in the detection path):
+1. Seller / EC mismatch — Sale Deed grantor vs latest EC transaction party_1, with token-overlap name similarity that handles Indian name reorderings + middle initials
+2. Consideration drift — Sale Deed vs matched EC, linked by document_number when present, by amount-similarity (5%) otherwise. Stamp-duty exposure flag.
+3. FSI conflict — Sanctioned Plan fsi_proposed vs Zoning Certificate permissible_fsi. Critical when overshoot > 10%, regulatory blocker.
+4. Area drift — Sale Deed vs Sanctioned Plan vs Layout Approval, all-pairs comparison with acres↔sqft normalization (43,560 multiplier).
+5. RERA gap — Sanctioned plan present but no document carries a valid RERA registration. High-severity hard blocker.
+
+Each comparator returns Findings → persisted as risk_flags with `source='ai_detector'`. Claude is invoked exactly once at the end to stitch findings into a counsel-grade markdown narrative that lands in `ai_artifacts.risk_brief` (Tier-2 #12 — was declared in the migration but had no service writing to it until now). Two endpoints: `POST /risk/ai/inconsistency-check` (idempotent — dedupes by finding title) and `GET /risk/ai/brief`. Frontend: "Run AI inconsistency check" button on RiskTab next to "Add Risk Flag", small "AI" badge on each AI-detected flag row, collapsible Risk Brief panel below the action bar with the synthesized narrative + the required "AI-assisted — requires human review" disclaimer. 31 unit tests. **PR #194.**
+
+### PRs opened/merged today (afternoon batch — 8 production)
+
+| PR | Title | Phase |
+|---|---|---|
+| **[#187](https://github.com/Rachit-Jain9/REDIP/pull/187)** | fix(comps-queue): "Validation failed" toast on reject without reason | A |
+| **[#188](https://github.com/Rachit-Jain9/REDIP/pull/188)** | feat(dashboard): pending-review tile + queue empty-state CTA | B |
+| **[#189](https://github.com/Rachit-Jain9/REDIP/pull/189)** | feat(comps): project-precise geocoding (Tier-1 #10) | C |
+| **[#190](https://github.com/Rachit-Jain9/REDIP/pull/190)** | feat(ai-trust): post-hoc numerical verifier (Tier-1 #3) | D |
+| **[#191](https://github.com/Rachit-Jain9/REDIP/pull/191)** | chore(geocoding): Nominatim fallback batch helper | E |
+| **[#192](https://github.com/Rachit-Jain9/REDIP/pull/192)** | chore(intelligence): remove "Internal pipeline data" banner + Section 4 empty state | F |
+| **[#193](https://github.com/Rachit-Jain9/REDIP/pull/193)** | chore(geocoding): Google batch helper + 61 comp upgrades applied | E |
+| **[#194](https://github.com/Rachit-Jain9/REDIP/pull/194)** | feat(risk): cross-document inconsistency detector + risk_brief (Tier-1 #4 + Tier-2 #12) | G |
+
+### Operator actions taken during the session
+- Applied migration `20260515_comps_review_queue.sql` (Tier-0 #1 follow-up from morning) ✅
+- Applied migration `20260516_comps_geocode_quality.sql` (Tier-1 #10) ✅
+- Applied migration `20260517_ai_artifacts_numerical_drifts.sql` (Tier-1 #3) ✅
+- Created dedicated server-side Google Maps API key in GCP (Application restrictions = None, API = Geocoding only) — billing-only, never sent to frontend ✅
+- 61 production comps geocoded via Supabase MCP (~$0.40 of Google API spend) ✅
+
+### Tier-1 progress checkpoint
+| # | Item | State |
+|---|---|---|
+| ✅ 3 | Post-hoc numerical verifier | shipped (#190) |
+| ✅ 4 | Cross-document inconsistency detector | shipped (#194) — biggest Tier-1 item |
+| 5 | Karnataka IGR SRO PDF extraction | manual blocker — operator needs to download from `igr.karnataka.gov.in` |
+| ✗ 6-9 | Co-working / Student housing / Senior living / Data center | skipped per user direction |
+| ✅ 10 | Project-precise geocoding | shipped (#189, #191, #193) — 69/81 upgraded |
+
+**Six of six in-scope Tier-1 items shipped.** The only remaining one is #5 which requires manual PDF acquisition.
+
+### What's left to do next
+- **Tier-1 #5** (Karnataka IGR SRO PDF extraction) — once user downloads sample PDFs from `igr.karnataka.gov.in`, we can wire Gemini extraction for the 11 guidance-value placeholders in TODO_DATA.md
+- **Tier-2 items** — narrow Deal Q&A agent, IC memo drafting (#13), GPT-5.4 A/B harness on parcel narrative (#14)
+- **Source-identity verification for broker reports** (Tier-3) — once the comps queue accumulates enough reviewed corpus
+
+---
+
+## 2026-05-08 (morning) — Tier-0 data flywheel — email ingestion pipeline scaffolded end-to-end, 4 PRs
 
 ### What was worked on
 
