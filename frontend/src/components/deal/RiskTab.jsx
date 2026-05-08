@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldAlert, Plus, Trash2, AlertCircle, Loader2, Edit2, X, Check } from 'lucide-react';
+import { ShieldAlert, Plus, Trash2, AlertCircle, Loader2, Edit2, X, Check, Sparkles, Brain } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   useRiskFlags,
@@ -7,9 +7,11 @@ import {
   useCreateRiskFlag,
   useUpdateRiskFlag,
   useDeleteRiskFlag,
+  useRunInconsistencyCheck,
+  useRiskBrief,
 } from '../../hooks/useRiskFlags';
 import Badge from '../common/Badge';
-import { SectionHeader, SkeletonList } from '../../design-system';
+import { SectionHeader, SkeletonList, Card } from '../../design-system';
 import { useDealContext } from '../../hooks/useDealContext';
 
 const RISK_CATEGORIES = [
@@ -208,6 +210,15 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               <Badge>
                 {RISK_CATEGORIES.find((item) => item.value === flag.category)?.label || flag.category}
               </Badge>
+              {flag.source === 'ai_detector' && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded bg-accent-soft text-accent border border-accent/20"
+                  title="Detected by the cross-document inconsistency detector"
+                >
+                  <Sparkles size={9} />
+                  AI
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
@@ -248,6 +259,10 @@ export default function RiskTab() {
   const createFlag = useCreateRiskFlag();
   const updateFlag = useUpdateRiskFlag();
   const deleteFlag = useDeleteRiskFlag();
+  // Tier-1 #4 — cross-document inconsistency detector hooks.
+  const runInconsistencyCheck = useRunInconsistencyCheck();
+  const { data: brief } = useRiskBrief(dealId);
+  const [briefExpanded, setBriefExpanded] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(buildForm());
@@ -305,15 +320,74 @@ export default function RiskTab() {
         size="sm"
         title="Risk Flags"
         action={
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="btn btn-primary text-sm flex items-center gap-1.5"
-          >
-            <Plus size={14} />
-            Add Risk Flag
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => runInconsistencyCheck.mutate(dealId)}
+              disabled={runInconsistencyCheck.isPending}
+              className={clsx(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md',
+                'border border-hairline bg-bg-elevated text-content-primary',
+                'hover:bg-bg-secondary transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                'disabled:opacity-50',
+              )}
+              title="Scan all uploaded extractions for cross-document contradictions and flag them as risks"
+            >
+              {runInconsistencyCheck.isPending ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} className="text-accent" />
+              )}
+              {runInconsistencyCheck.isPending ? 'Scanning…' : 'Run AI inconsistency check'}
+            </button>
+            <button
+              onClick={() => setShowForm((v) => !v)}
+              className="btn btn-primary text-sm flex items-center gap-1.5"
+            >
+              <Plus size={14} />
+              Add Risk Flag
+            </button>
+          </div>
         }
       />
+
+      {/* AI risk brief — most recent narrative synthesised by Claude
+          from the deterministic findings. Only renders when an artifact
+          exists. Expandable so the page stays tight when collapsed. */}
+      {brief?.contentMd && (
+        <Card className="p-4 border-accent/20 bg-accent-soft/30">
+          <button
+            type="button"
+            onClick={() => setBriefExpanded((v) => !v)}
+            className="w-full flex items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+            aria-expanded={briefExpanded}
+          >
+            <div className="shrink-0 w-8 h-8 rounded-md bg-accent text-white flex items-center justify-center mt-0.5">
+              <Brain size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-eyebrow uppercase text-content-muted mb-0.5 font-medium">
+                AI Risk Brief
+              </div>
+              <div className="text-sm font-medium text-content-primary">
+                Cross-document inconsistencies — {new Date(brief.generatedAt).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <span className="shrink-0 text-xs text-content-muted">
+              {briefExpanded ? 'Hide' : 'Show'}
+            </span>
+          </button>
+          {briefExpanded && (
+            <div className="mt-3 pl-11 text-sm text-content-secondary whitespace-pre-line leading-relaxed">
+              {brief.contentMd}
+            </div>
+          )}
+          <p className="pl-11 mt-3 text-[11px] text-content-muted">
+            AI-assisted — requires human review. Findings above are sourced from deterministic comparators; the narrative synthesis is generated by Claude.
+          </p>
+        </Card>
+      )}
 
       {showForm && (
         <div className="card-editorial border-red-100 bg-red-50/20">
