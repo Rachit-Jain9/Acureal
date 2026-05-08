@@ -1264,54 +1264,82 @@ function ResidentialSegmentedBenchmarksTable({ rows }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
-// City selector — schema is multi-city ready (every benchmark table has a
-// `city` column and every backend endpoint accepts ?city=X), but Bengaluru
-// is the only city with seeded data today. The other tier-1 metros render
-// honest "no data yet" empty states per section. Order intentional:
-// Bengaluru (full coverage) → Mumbai/NCR/Hyderabad (next ingestion targets).
-const SUPPORTED_CITIES = ['Bengaluru', 'Mumbai', 'NCR', 'Hyderabad'];
+// Asset-class filter — Bengaluru is the only city we have data for, so the
+// page is locked to Bengaluru. The top-right toggle filters benchmark
+// sections by asset class instead, which matches how a Bengaluru deal
+// professional actually thinks: "show me the office market" or "show me
+// land prices", not "show me Hyderabad".
+//
+// 5 buckets + an All view, chosen to match institutional deal taxonomy:
+//   - Residential       — apartments, builder floor, villa/house. The thickest
+//                         dataset; everything where a homebuyer is the end-tenant.
+//   - Land & Plotted    — plotted dev, raw residential land, guidance/circle
+//                         rate. Different deal type from apartment underwriting.
+//   - Office            — commercial Grade A by submarket. The deepest
+//                         institutional-asset dataset.
+//   - Retail & Hospitality — high-street vanilla retail + hotels. Both consumer-
+//                         demand correlated; hospitality alone is too thin (5 rows)
+//                         to deserve a separate pill.
+//   - Industrial & Warehouse — manufacturing + logistics + serviced industrial
+//                         land. Logistics-led demand, distinct underwriting.
+const ASSET_CLASS_FILTERS = [
+  { value: 'all',            label: 'All' },
+  { value: 'residential',    label: 'Residential' },
+  { value: 'land',           label: 'Land & Plotted' },
+  { value: 'office',         label: 'Office' },
+  { value: 'retail_hosp',    label: 'Retail & Hospitality' },
+  { value: 'industrial',     label: 'Industrial & Warehouse' },
+];
+const ASSET_CLASS_VALUES = ASSET_CLASS_FILTERS.map((f) => f.value);
 
-const useCityPreference = () => {
-  const [city, setCity] = useState(() => {
-    if (typeof window === 'undefined') return 'Bengaluru';
-    const stored = window.localStorage.getItem('intelligence:city');
-    return SUPPORTED_CITIES.includes(stored) ? stored : 'Bengaluru';
+// Maps an asset-class filter to the segmented-benchmarks rows it includes.
+// Used by Section 5e to subset its row list when a residential or land
+// filter is active.
+const SEGMENTED_ASSET_CLASS_BUCKETS = {
+  residential: new Set(['builder_floor', 'villa_house']),
+  land:        new Set(['plotted_development', 'land_residential_plotted', 'guidance_value']),
+};
+
+const useAssetClassPreference = () => {
+  const [assetClass, setAssetClass] = useState(() => {
+    if (typeof window === 'undefined') return 'all';
+    const stored = window.localStorage.getItem('intelligence:assetClass');
+    return ASSET_CLASS_VALUES.includes(stored) ? stored : 'all';
   });
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('intelligence:city', city);
+      window.localStorage.setItem('intelligence:assetClass', assetClass);
     }
-  }, [city]);
-  return [city, setCity];
+  }, [assetClass]);
+  return [assetClass, setAssetClass];
 };
 
-// Compact city selector — segmented chips when ≤4 cities, falls back to a
-// dropdown when the supported list grows. Mirrors the View toggle on the
-// Comps page so the visual register stays consistent across the dashboard.
-function CitySelector({ value, onChange, options }) {
+// Compact asset-class selector — segmented chips. Mirrors the View toggle
+// on the Comps page so the visual register stays consistent.
+function AssetClassSelector({ value, onChange, options }) {
   return (
     <div
       className="inline-flex items-center rounded-lg border border-hairline-strong bg-bg-elevated p-0.5"
       role="group"
-      aria-label="City"
+      aria-label="Asset class"
     >
-      {options.map((city) => {
-        const active = value === city;
+      {options.map((opt) => {
+        const active = value === opt.value;
         return (
           <button
-            key={city}
+            key={opt.value}
             type="button"
             aria-pressed={active}
-            onClick={() => onChange(city)}
+            onClick={() => onChange(opt.value)}
             className={
-              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ease-out ' +
+              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ease-out whitespace-nowrap ' +
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ' +
               (active
                 ? 'bg-primary-50 text-primary-700 shadow-sm'
                 : 'text-content-secondary hover:bg-bg-secondary hover:text-content-primary')
             }
           >
-            {city}
+            {opt.label}
           </button>
         );
       })}
@@ -1321,7 +1349,11 @@ function CitySelector({ value, onChange, options }) {
 
 export default function IntelligencePage() {
   const today = new Date().toISOString().slice(0, 10);
-  const [city, setCity] = useCityPreference();
+  // Bengaluru-locked: REDIP is Bengaluru-priority and Bengaluru is the only
+  // city with seeded data. Multi-city navigation was removed — see asset-
+  // class filter below for the replacement.
+  const city = 'Bengaluru';
+  const [assetClass, setAssetClass] = useAssetClassPreference();
   const { data: brief, isLoading, isError, refetch, isFetching } = useDailyBrief();
   const { data: transactions, isLoading: txLoading } = useMarketTransactions({ city });
   const { data: benchmarks, isLoading: bmLoading } = useMicroMarketBenchmarks({ city });
@@ -1333,10 +1365,24 @@ export default function IntelligencePage() {
   const { data: macroKpis } = useMacroKpis({ city });
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
-  // Anything Bengaluru-only at the backend (daily brief, micro-market notes)
-  // gets a small "Bengaluru-anchored" annotation when a different city is
-  // selected. Honesty over silently showing stale data.
-  const isBengaluru = city === 'Bengaluru';
+
+  // Section visibility per asset-class filter.
+  const showSection = useCallback((bucket) => {
+    if (assetClass === 'all') return true;
+    return bucket === assetClass;
+  }, [assetClass]);
+
+  // Subset Section 5e rows based on which residential/land sub-classes
+  // belong to the active filter. "All" shows everything; "Residential"
+  // shows builder_floor + villa_house; "Land & Plotted" shows plotted_dev
+  // + land_residential_plotted + guidance_value.
+  const segmentedRowsForFilter = useMemo(() => {
+    if (!Array.isArray(residentialSegmented)) return [];
+    if (assetClass === 'all') return residentialSegmented;
+    const allowed = SEGMENTED_ASSET_CLASS_BUCKETS[assetClass];
+    if (!allowed) return [];
+    return residentialSegmented.filter((r) => allowed.has(r.asset_class));
+  }, [residentialSegmented, assetClass]);
 
   // Tear-sheet export — pulls a multi-page PDF snapshot of the current
   // city's verified macro KPIs, residential / office / retail / industrial
@@ -1408,15 +1454,15 @@ export default function IntelligencePage() {
     <div className="space-y-5 max-w-6xl">
       <PageHeader
         title="Market Intelligence"
-        description={`${city} real estate intelligence — ${today}`}
+        description={`Bengaluru real estate intelligence — ${today}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <CitySelector value={city} onChange={setCity} options={SUPPORTED_CITIES} />
+            <AssetClassSelector value={assetClass} onChange={setAssetClass} options={ASSET_CLASS_FILTERS} />
             <button
               onClick={handleExportTearSheet}
               disabled={exportingTearSheet}
               className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-primary-300 hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
-              title={`Download ${city} Q1 2026 tear-sheet PDF`}
+              title="Download Bengaluru Q1 2026 tear-sheet PDF"
             >
               {exportingTearSheet ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -1437,21 +1483,6 @@ export default function IntelligencePage() {
         }
       />
 
-      {/* Honest-data note — surfaces when the user picks a non-Bengaluru
-          city. The daily brief synthesis and admin notes are Bengaluru-
-          anchored at the backend; we tell the user rather than silently
-          serving Bengaluru data under a Mumbai header. The benchmark
-          tables themselves render real per-city results (or empty states)
-          via the city-scoped hooks above. */}
-      {!isBengaluru && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
-          <span className="font-semibold">{city} preview · </span>
-          Benchmark tables below render any seeded {city} data; the AI Brief, Deal of the Day,
-          Market Signals, and Bengaluru-curated micro-market notes stay anchored on Bengaluru
-          until verified {city} feeds + admin notes are configured.
-        </div>
-      )}
-
       {notConfigured && <UnconfiguredNotice requirements={brief?.verifiedSourceRequirements} />}
 
       {/* Bengaluru Macro KPI strip — Q1 2026 verified */}
@@ -1459,7 +1490,7 @@ export default function IntelligencePage() {
         <div>
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
-              {city} Q1 2026 — Verified Macro Indicators
+              Bengaluru Q1 2026 — Verified Macro Indicators
             </p>
             <p className="text-[10px] text-content-muted tabular-nums">{macroKpis.length} metrics</p>
           </div>
@@ -1625,25 +1656,27 @@ export default function IntelligencePage() {
       </div>
 
       {/* Section 5: Residential Micro-Market Benchmark Summary */}
-      <SectionCard
-        icon={DollarSign}
-        title={`5. Residential Micro-Market Benchmarks — ${city} Q1 2026`}
-      >
-        {bmLoading ? (
-          <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
-            <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
-          </div>
-        ) : benchmarks?.length > 0 ? (
-          <BenchmarksTable rows={benchmarks} />
-        ) : (
-          <p className="text-sm text-content-secondary">
-            Apply migration <code className="text-xs bg-bg-secondary px-1 rounded">20260505_market_data_q1_2026_refresh.sql</code> to load Q1 2026 benchmarks.
-          </p>
-        )}
-      </SectionCard>
+      {showSection('residential') && (
+        <SectionCard
+          icon={DollarSign}
+          title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026"
+        >
+          {bmLoading ? (
+            <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
+              <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
+            </div>
+          ) : benchmarks?.length > 0 ? (
+            <BenchmarksTable rows={benchmarks} />
+          ) : (
+            <p className="text-sm text-content-secondary">
+              Apply migration <code className="text-xs bg-bg-secondary px-1 rounded">20260505_market_data_q1_2026_refresh.sql</code> to load Q1 2026 benchmarks.
+            </p>
+          )}
+        </SectionCard>
+      )}
 
       {/* Section 5a: Commercial Office — Vacancy + Rent (IPC zones + 30 submarkets) */}
-      {officeBenchmarks?.length > 0 && (
+      {showSection('office') && officeBenchmarks?.length > 0 && (
         <SectionCard
           icon={Building2}
           title="5a. Commercial Office — Vacancy + Rent, Q1 2026"
@@ -1653,7 +1686,7 @@ export default function IntelligencePage() {
       )}
 
       {/* Section 5b: Retail — High-street + Mall Grade A */}
-      {retailBenchmarks?.length > 0 && (
+      {showSection('retail_hosp') && retailBenchmarks?.length > 0 && (
         <SectionCard
           icon={DollarSign}
           title="5b. Retail — High-Street + Mall Grade A, Q1 2026"
@@ -1663,7 +1696,7 @@ export default function IntelligencePage() {
       )}
 
       {/* Section 5c: Industrial / Warehouse — H2 2025 */}
-      {industrialBenchmarks?.length > 0 && (
+      {showSection('industrial') && industrialBenchmarks?.length > 0 && (
         <SectionCard
           icon={Building2}
           title="5c. Industrial / Warehouse / Serviced Land — H2 2025"
@@ -1673,7 +1706,7 @@ export default function IntelligencePage() {
       )}
 
       {/* Section 5d: Hospitality — ADR / Occupancy / RevPAR */}
-      {hospitalityBenchmarks?.length > 0 && (
+      {showSection('retail_hosp') && hospitalityBenchmarks?.length > 0 && (
         <SectionCard
           icon={Building2}
           title="5d. Hospitality — ADR / Occupancy / RevPAR"
@@ -1683,19 +1716,29 @@ export default function IntelligencePage() {
       )}
 
       {/* Section 5e: Residential segmented — Builder floor / Plotted dev / Land plotted / Villa-house / Guidance value */}
-      {residentialSegmented?.length > 0 && (
+      {(showSection('residential') || showSection('land')) && segmentedRowsForFilter.length > 0 && (
         <SectionCard
           icon={DollarSign}
-          title={`5e. Residential by Asset Class — Builder Floor · Plotted · Land · Villa · Guidance — ${city} Q1 2026`}
+          title={
+            assetClass === 'land'
+              ? '5e. Plotted Development · Land · Guidance Value — Bengaluru Q1 2026'
+              : assetClass === 'residential'
+              ? '5e. Builder Floor · Villa / House — Bengaluru Q1 2026'
+              : '5e. Residential by Asset Class — Builder Floor · Plotted · Land · Villa · Guidance — Bengaluru Q1 2026'
+          }
         >
-          <ResidentialSegmentedBenchmarksTable rows={residentialSegmented} />
+          <ResidentialSegmentedBenchmarksTable rows={segmentedRowsForFilter} />
         </SectionCard>
       )}
 
-      {/* Section 6: Market Transaction Flow */}
+      {/* Section 6: Market Transaction Flow.
+          Always visible — transactions don't carry per-row `asset_class`
+          (only `deal_type` like "Land deal"/"Equity investment"/"Debt"),
+          so we render the full transaction stream regardless of asset-class
+          filter. It's a useful cross-asset view on its own merit. */}
       <SectionCard
         icon={ArrowUpRight}
-        title={`6. Market Transaction Flow — ${city} (FY2025–FY2027)`}
+        title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)"
       >
         {txLoading ? (
           <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
@@ -1710,8 +1753,9 @@ export default function IntelligencePage() {
         )}
       </SectionCard>
 
-      {/* Section 7: Demand Heatmap */}
-      {brief?.bengaluruDemandHeatmap?.length > 0 && (
+      {/* Section 7: Demand Heatmap — Bengaluru micro-markets are residential-
+          focused. Hide in non-residential filters (office/retail/etc). */}
+      {showSection('residential') && brief?.bengaluruDemandHeatmap?.length > 0 && (
         <SectionCard icon={BarChart2} title="7. Demand Heatmap — Bengaluru Micro-Markets">
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-xs border-collapse min-w-[700px]">
