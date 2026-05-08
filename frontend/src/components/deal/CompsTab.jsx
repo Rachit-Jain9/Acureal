@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { compsAPI, compSimilarityAPI } from '../../services/api';
 import { SectionHeader, ErrorState, SkeletonList } from '../../design-system';
-import StalenessBadge from '../common/StalenessBadge';
 import { useDealRecord } from '../../hooks/useDealContext';
 
 // ─── Formatting ────────────────────────────────────────────────────────────
@@ -268,19 +267,9 @@ function RankedCompsTable({ ranked, onPin, pinnedCompId, similarity }) {
                   </span>
                 </td>
                 <td className="px-3 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-content-secondary truncate max-w-[140px]" title={comp.source}>
-                      {comp.source || '—'}
-                    </span>
-                    {comp.as_of_date && (
-                      <StalenessBadge
-                        asOfDate={comp.as_of_date}
-                        dataType={comp.data_type}
-                        fallback="residential_listing"
-                        variant="minimal"
-                      />
-                    )}
-                  </div>
+                  <span className="text-[11px] text-content-secondary truncate max-w-[140px] inline-block" title={comp.source}>
+                    {comp.source || '—'}
+                  </span>
                 </td>
                 <td className="px-3 py-3 text-center relative">
                   <button
@@ -315,11 +304,9 @@ function RankedCompsTable({ ranked, onPin, pinnedCompId, similarity }) {
   );
 }
 
-// ─── Benchmark card — kept from the previous implementation but extended ────
-// with a worst-case staleness summary so reviewers see the "is this current?"
-// signal next to the rolled-up rates. ──────────────────────────────────────
+// ─── Benchmark card — rolled-up rates from the surrounding comp set ─────────
 
-function BenchmarkCard({ benchmark, city, ranked }) {
+function BenchmarkCard({ benchmark, city }) {
   if (!benchmark) return null;
 
   if (benchmark.found === false) {
@@ -349,17 +336,6 @@ function BenchmarkCard({ benchmark, city, ranked }) {
     { label: '75th Pctile',  value: formatRate(b.p75_rate_per_sqft) },
   ];
 
-  // Worst-case freshness across the comp set the benchmark was built from.
-  // If most recent comp is stale, the rolled-up rates are themselves stale.
-  const newestAsOf = useMemo(() => {
-    if (!Array.isArray(ranked) || ranked.length === 0) return null;
-    const dates = ranked
-      .map((c) => (c.as_of_date ? new Date(c.as_of_date).getTime() : null))
-      .filter((t) => Number.isFinite(t));
-    if (dates.length === 0) return null;
-    return new Date(Math.max(...dates)).toISOString();
-  }, [ranked]);
-
   return (
     <div className="card-editorial">
       <SectionHeader
@@ -367,18 +343,9 @@ function BenchmarkCard({ benchmark, city, ranked }) {
         icon={TrendingUp}
         title={`Market Benchmark — ${city || 'Location'}`}
         action={
-          <div className="flex items-center gap-2">
-            {newestAsOf && (
-              <StalenessBadge
-                asOfDate={newestAsOf}
-                category="micro_market_benchmark_listing"
-                variant="compact"
-              />
-            )}
-            <span className="text-xs text-content-muted bg-bg-secondary px-1.5 py-0.5 rounded tabular-nums">
-              {benchmark.count} comps · {benchmark.radius_km} km
-            </span>
-          </div>
+          <span className="text-xs text-content-muted bg-bg-secondary px-1.5 py-0.5 rounded tabular-nums">
+            {benchmark.count} comps · {benchmark.radius_km} km
+          </span>
         }
         className="mb-4"
       />
@@ -484,7 +451,7 @@ export default function CompsTab() {
             <button onClick={refetchBenchmark} className="btn btn-secondary text-sm">Retry</button>
           </div>
         ) : (
-          <BenchmarkCard benchmark={benchmarkData} city={city} ranked={ranked} />
+          <BenchmarkCard benchmark={benchmarkData} city={city} />
         )
       )}
 

@@ -17,7 +17,6 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
-import StalenessBadge from '../components/common/StalenessBadge';
 import { SkeletonList } from '../design-system';
 import { formatINR } from '../utils/format';
 import { exportsAPI } from '../services/api';
@@ -809,13 +808,6 @@ export default function CompsPage() {
                             </a>
                           ) : (
                             <Badge tone={dt.tone} title={comp.source || comp.data_type}>{dt.label}</Badge>
-                          )}
-                          {comp.as_of_date && (
-                            <StalenessBadge
-                              asOfDate={comp.as_of_date}
-                              dataType={comp.data_type}
-                              fallback="residential_listing"
-                            />
                           )}
                         </div>
                       </td>
