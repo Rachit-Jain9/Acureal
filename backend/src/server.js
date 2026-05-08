@@ -40,6 +40,7 @@ const parcelIntelligenceRoutes = require('./routes/parcelIntelligence.routes');
 const evidenceLinksRoutes = require('./routes/evidenceLinks.routes');
 const legalRoutes = require('./routes/legal.routes');
 const compsReviewQueueRoutes = require('./routes/compsReviewQueue.routes');
+const ingestRoutes = require('./routes/ingest.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -183,6 +184,7 @@ app.use('/api/parcel-intelligence', parcelIntelligenceRoutes);
 app.use('/api', evidenceLinksRoutes);
 app.use('/api/legal', legalRoutes);
 app.use('/api/comps-review-queue', compsReviewQueueRoutes);
+app.use('/api/ingest', ingestRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
