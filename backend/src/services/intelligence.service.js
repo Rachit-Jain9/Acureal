@@ -4,6 +4,7 @@ const { query } = require('../config/database');
 const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runClaudeReasoningStream } = require('./ai/aiRouter');
 const aiArtifacts = require('./aiArtifacts.service');
+const numericalVerifier = require('./numericalVerifier.service');
 const { getRequestContext } = require('../lib/requestContext');
 const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
@@ -528,7 +529,30 @@ const streamDealAnalysis = async (dealId) => {
       const ctx = getRequestContext();
       const organizationId = ctx?.organizationId || null;
       let artifactId = null;
+      let numericalDrifts = null;
+      let verifiedAt = null;
       if (organizationId && final?.result) {
+        // Tier-1 #3 — post-hoc numerical verifier. Builds a snapshot
+        // from the same input the LLM saw, scans the narrative for
+        // claimed numbers, flags drifts > 1%. Pure deterministic JS
+        // (per CLAUDE.md AI-routing rule). Never auto-corrects; only
+        // surfaces a list of mismatches the reviewer should look at.
+        try {
+          const snapshot = numericalVerifier.snapshotFromDealAnalysisInput(input);
+          const verification = numericalVerifier.verifyDealAnalysis({
+            contentMd: final.result,
+            snapshot,
+          });
+          numericalDrifts = verification.drifts;
+          verifiedAt = verification.verifiedAt;
+        } catch (verifyErr) {
+          // Verifier shouldn't ever throw, but if it does, log and
+          // don't block persistence — the live narrative still ships.
+          log.warn('numerical_verifier_failed', {
+            error: verifyErr.message,
+            deal_id: dealId,
+          });
+        }
         const saved = await aiArtifacts.saveArtifact({
           organizationId,
           dealId,
@@ -537,6 +561,8 @@ const streamDealAnalysis = async (dealId) => {
           snapshotHash,
           generatedByCallId: final.callId,
           status: 'draft',
+          numericalDrifts,
+          verifiedAt,
         });
         artifactId = saved?.id || null;
       }
@@ -546,6 +572,8 @@ const streamDealAnalysis = async (dealId) => {
         generatedAt: new Date().toISOString(),
         artifactId,
         snapshotHash,
+        numericalDrifts,
+        verifiedAt,
       };
     },
   };
