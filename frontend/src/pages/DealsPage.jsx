@@ -2,11 +2,13 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
-  MoreVertical, Presentation, Share2, Trash2, Loader2,
+  MoreVertical, Presentation, Share2, Trash2, Loader2, User,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDeals, useCreateDeal, useDeleteDeal } from '../hooks/useDeals';
 import { useProperties } from '../hooks/useProperties';
+import { useSavedDealViews } from '../hooks/useSavedDealViews';
+import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 import useAuthStore from '../store/authStore';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
@@ -76,7 +78,14 @@ export default function DealsPage() {
   const [stageFilter, setStageFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [assignedToMe, setAssignedToMe] = useState(false);
   const [page, setPage] = useState(1);
+  const currentUser = useAuthStore((s) => s.user);
+
+  // Saved-views store (per-device localStorage). Captures the current
+  // filter combination under a name so an analyst can recall "My active
+  // sourcing", "Bengaluru office", etc. with one click.
+  const savedViews = useSavedDealViews();
 
   // Sync search param from header navigation
   useEffect(() => {
@@ -94,8 +103,37 @@ export default function DealsPage() {
     if (stageFilter) p.stage = stageFilter;
     if (typeFilter) p.dealType = typeFilter;
     if (priorityFilter) p.priority = priorityFilter;
+    if (assignedToMe) p.assignedToMe = true;
     return p;
-  }, [search, stageFilter, typeFilter, priorityFilter, page]);
+  }, [search, stageFilter, typeFilter, priorityFilter, assignedToMe, page]);
+
+  // Snapshot of the user-controlled filter state — this is what
+  // saved views capture and recall. Page intentionally NOT included
+  // (a saved view should land you on page 1).
+  const currentFilters = useMemo(
+    () => ({
+      search: search || '',
+      stage: stageFilter || '',
+      dealType: typeFilter || '',
+      priority: priorityFilter || '',
+      assignedToMe: !!assignedToMe,
+    }),
+    [search, stageFilter, typeFilter, priorityFilter, assignedToMe],
+  );
+
+  const applySavedView = (view) => {
+    const f = view?.filters || {};
+    setSearch(f.search || '');
+    setStageFilter(f.stage || '');
+    setTypeFilter(f.dealType || '');
+    setPriorityFilter(f.priority || '');
+    setAssignedToMe(!!f.assignedToMe);
+    setPage(1);
+  };
+
+  const activeView = savedViews.findActive(currentFilters);
+  const canSaveCurrentView =
+    !!(search || stageFilter || typeFilter || priorityFilter || assignedToMe);
 
   const { data, isLoading, isError } = useDeals(params);
   const { data: propertiesData } = useProperties({ limit: 200 });
@@ -119,10 +157,11 @@ export default function DealsPage() {
     setStageFilter('');
     setTypeFilter('');
     setPriorityFilter('');
+    setAssignedToMe(false);
     setPage(1);
   };
 
-  const hasFilters = search || stageFilter || typeFilter || priorityFilter;
+  const hasFilters = search || stageFilter || typeFilter || priorityFilter || assignedToMe;
 
   const handleOpenModal = () => {
     setForm(INITIAL_FORM);
@@ -248,6 +287,40 @@ export default function DealsPage() {
             <option key={key} value={key}>{cfg.label}</option>
           ))}
         </select>
+
+        {/* "My Deals" pill — scopes the listing to deals where
+            assigned_to = current user. Sits between the dropdown
+            filters and the Clear / Saved-views actions because it's
+            the most-used filter for any analyst with their own
+            book. Disabled until the user record loads (rare). */}
+        <button
+          type="button"
+          onClick={() => { setAssignedToMe((v) => !v); setPage(1); }}
+          disabled={!currentUser?.id}
+          className={clsx(
+            'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors',
+            'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            'disabled:opacity-50',
+            assignedToMe
+              ? 'bg-accent text-white border-accent'
+              : 'bg-bg-elevated text-content-secondary border-hairline hover:border-content-muted hover:text-content-primary',
+          )}
+          title="Show only deals assigned to me"
+          aria-pressed={assignedToMe}
+        >
+          <User size={13} />
+          My Deals
+        </button>
+
+        <SavedViewsMenu
+          views={savedViews.views}
+          activeView={activeView}
+          currentFilters={currentFilters}
+          onApply={applySavedView}
+          onSave={savedViews.save}
+          onRemove={savedViews.remove}
+          canSave={canSaveCurrentView}
+        />
 
         {hasFilters && (
           <button onClick={handleFilterReset} className="text-sm text-content-secondary hover:text-content-secondary flex items-center gap-1">
