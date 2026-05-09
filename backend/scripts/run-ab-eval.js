@@ -1,0 +1,185 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * Tier-2 #14 — A/B eval runner CLI.
+ *
+ * Spawns N candidates against the held-out fixture set, scores every
+ * (candidate, fixture) pair, and writes a Markdown comparison report
+ * to `backend/tests/fixtures/ab-eval-report-<task>-<timestamp>.md`.
+ *
+ * Cost-aware:
+ *   - Estimates the bill before any LLM call ($-tag in stdout).
+ *   - Refuses to launch > 50 calls without an explicit `--confirm` flag.
+ *   - Daily-cost-cap (in aiRouter) still applies — this script doesn't
+ *     bypass it. If your org cap trips mid-run, the affected fixtures
+ *     show up in the report as `error`.
+ *
+ * Usage:
+ *   node backend/scripts/run-ab-eval.js \
+ *       --task=parcel_narrative \
+ *       --candidates=claude:claude-sonnet-4-6,openai:gpt-5.4-mini \
+ *       --fixtures=backend/tests/fixtures/ab-eval-deals.json \
+ *       --limit=10 \
+ *       --confirm
+ *
+ * Flags:
+ *   --task        parcel_narrative | export_insights        (default: parcel_narrative)
+ *   --candidates  comma-separated provider:model list       (default: claude default vs openai default)
+ *   --fixtures    path to fixtures JSON                     (default: backend/tests/fixtures/ab-eval-deals.json)
+ *   --limit       cap fixtures processed (handy for smoke)  (default: all)
+ *   --confirm     required if total calls > 50
+ *   --out         report output path                        (default: auto-named under fixtures dir)
+ */
+
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
+const fs = require('fs');
+const path = require('path');
+const { runEval, resolveRunner } = require('../src/services/ai/abEvalHarness.service');
+
+const DEFAULT_FIXTURES = path.join(__dirname, '..', 'tests', 'fixtures', 'ab-eval-deals.json');
+const COST_THRESHOLD_CALLS = 50;
+
+const parseArgs = () => {
+  const args = {};
+  for (const raw of process.argv.slice(2)) {
+    if (!raw.startsWith('--')) continue;
+    const [k, v] = raw.slice(2).split('=');
+    args[k] = v === undefined ? true : v;
+  }
+  return args;
+};
+
+const formatTable = (results) => {
+  const rows = Object.values(results).map((r) => ({
+    candidate: r.candidate_id,
+    fixtures: r.summary.fixtures,
+    avg_overall: r.summary.avg_overall,
+    avg_halluc: r.summary.avg_hallucination,
+    avg_tone: r.summary.avg_tone,
+    fab_nums: r.summary.total_fabricated_numbers,
+    fab_strs: r.summary.total_fabricated_strings,
+    tone_violations: r.summary.total_tone_violations,
+    failed: r.summary.failed,
+  }));
+  const cols = ['candidate', 'fixtures', 'avg_overall', 'avg_halluc', 'avg_tone', 'fab_nums', 'fab_strs', 'tone_violations', 'failed'];
+  const widths = cols.map((c) => Math.max(c.length, ...rows.map((r) => String(r[c] ?? '-').length)));
+  const fmt = (vals) => vals.map((v, i) => String(v ?? '-').padEnd(widths[i])).join('  ');
+  const out = [fmt(cols), widths.map((w) => '-'.repeat(w)).join('  ')];
+  for (const r of rows) out.push(fmt(cols.map((c) => r[c])));
+  return out.join('\n');
+};
+
+const buildMarkdownReport = ({ task, results, deltas, candidate_ids, generated_at }) => {
+  const lines = [];
+  lines.push(`# A/B Eval Report — ${task}`);
+  lines.push('');
+  lines.push(`Generated ${generated_at}.`);
+  lines.push('');
+  lines.push('## Summary');
+  lines.push('');
+  lines.push('| Candidate | Fixtures | Overall | Hallucination | Tone | Fab #s | Fab strs | Tone v | Failed |');
+  lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|');
+  for (const c of candidate_ids) {
+    const r = results[c];
+    lines.push(`| \`${c}\` | ${r.summary.fixtures} | ${r.summary.avg_overall} | ${r.summary.avg_hallucination} | ${r.summary.avg_tone} | ${r.summary.total_fabricated_numbers} | ${r.summary.total_fabricated_strings} | ${r.summary.total_tone_violations} | ${r.summary.failed} |`);
+  }
+  lines.push('');
+  lines.push('## Head-to-head deltas');
+  lines.push('');
+  for (const d of deltas) {
+    lines.push(`- \`${d.a}\` − \`${d.b}\`: overall ${d.avg_overall_diff >= 0 ? '+' : ''}${d.avg_overall_diff} · hallucination ${d.avg_hallucination_diff >= 0 ? '+' : ''}${d.avg_hallucination_diff} · tone ${d.avg_tone_diff >= 0 ? '+' : ''}${d.avg_tone_diff}`);
+  }
+  lines.push('');
+  lines.push('## Worst fixtures per candidate');
+  lines.push('');
+  for (const c of candidate_ids) {
+    const r = results[c];
+    const sorted = [...r.per_fixture]
+      .filter((f) => f.score && !f.error)
+      .sort((a, b) => a.score.overall - b.score.overall)
+      .slice(0, 3);
+    lines.push(`### \`${c}\``);
+    for (const f of sorted) {
+      const fab = f.score.hallucination.fabricated_numbers.length;
+      const tone = f.score.tone.violations.length;
+      lines.push(`- **${f.fixture_id}** — overall ${f.score.overall} (halluc ${f.score.hallucination.score}, tone ${f.score.tone.score}). Fabricated #s: ${fab}, tone violations: ${tone}.`);
+    }
+    lines.push('');
+  }
+  lines.push('---');
+  lines.push('');
+  lines.push('Generated by `backend/scripts/run-ab-eval.js`. Re-run anytime to refresh.');
+  return lines.join('\n');
+};
+
+const main = async () => {
+  const args = parseArgs();
+  const task = args.task || 'parcel_narrative';
+  const fixturesPath = args.fixtures || DEFAULT_FIXTURES;
+  const candidateSpecs = (args.candidates || 'claude:,openai:').split(',').map((s) => s.trim()).filter(Boolean);
+  const limit = args.limit ? Number(args.limit) : null;
+  const confirm = !!args.confirm;
+
+  if (!fs.existsSync(fixturesPath)) {
+    console.error(`Fixtures file not found: ${fixturesPath}`);
+    console.error(`Generate them first: node backend/scripts/generate-ab-eval-fixtures.js`);
+    process.exit(1);
+  }
+
+  const fixtures = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
+  const slice = limit ? fixtures.slice(0, limit) : fixtures;
+
+  if (candidateSpecs.length < 2) {
+    console.error('At least 2 candidates required (use --candidates=claude:claude-sonnet-4-6,openai:gpt-5.4-mini).');
+    process.exit(1);
+  }
+
+  const candidates = candidateSpecs.map((spec) => {
+    const [provider, model] = spec.split(':');
+    const id = model || `${provider}:default`;
+    return { id: spec.includes(':') ? spec : `${provider}:default`, runner: resolveRunner(spec) };
+  });
+
+  const totalCalls = candidates.length * slice.length;
+  console.log(`Running ${task} eval: ${candidates.length} candidates × ${slice.length} fixtures = ${totalCalls} LLM calls.`);
+  console.log(`Estimated cost: ~$${(totalCalls * 0.012).toFixed(2)} (heuristic — depends on cache hits).`);
+
+  if (totalCalls > COST_THRESHOLD_CALLS && !confirm) {
+    console.error(`> ${COST_THRESHOLD_CALLS} calls — re-run with --confirm to proceed.`);
+    process.exit(2);
+  }
+
+  const result = await runEval({
+    task,
+    fixtures: slice,
+    candidates,
+    onProgress: ({ candidate, fixture }) => {
+      const status = fixture.error ? `ERR ${fixture.error.slice(0, 60)}` : `score ${fixture.score?.overall ?? '-'}`;
+      console.log(`[${candidate}] ${fixture.fixture_id}  ${status}  (${fixture.latency_ms}ms)`);
+    },
+  });
+
+  console.log('\n' + formatTable(result.results));
+  console.log('\nHead-to-head deltas (positive = first beats second):');
+  for (const d of result.deltas) {
+    console.log(`  ${d.a} − ${d.b}: overall ${d.avg_overall_diff >= 0 ? '+' : ''}${d.avg_overall_diff}`);
+  }
+
+  const outPath = args.out || path.join(
+    path.dirname(fixturesPath),
+    `ab-eval-report-${task}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.md`,
+  );
+  fs.writeFileSync(outPath, buildMarkdownReport(result), 'utf8');
+  console.log(`\nReport written to ${outPath}`);
+};
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { main };

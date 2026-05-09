@@ -287,4 +287,7 @@ const getCachedNarrative = async ({ dealId = null, propertyId = null } = {}) => 
 module.exports = {
   generateNarrative,
   getCachedNarrative,
+  // Internal exports — used by the Tier-2 #14 A/B eval harness.
+  SYSTEM_PROMPT,
+  buildPayload,
 };

@@ -1,0 +1,110 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+// Tier-1 #4 — RiskTab. Focused on the AI risk-brief panel: cached
+// renders, Copy + Download buttons, expand/collapse. We only stub the
+// hooks the brief surface depends on.
+
+const useRiskFlagsFn = vi.fn();
+const useRiskScoreFn = vi.fn();
+const useCreateRiskFlagFn = vi.fn(() => ({ mutateAsync: vi.fn() }));
+const useUpdateRiskFlagFn = vi.fn(() => ({ mutateAsync: vi.fn() }));
+const useDeleteRiskFlagFn = vi.fn(() => ({ mutate: vi.fn() }));
+const useRunInconsistencyCheckFn = vi.fn(() => ({ mutate: vi.fn(), isPending: false }));
+const useRiskBriefFn = vi.fn();
+
+const downloadMarkdownFn = vi.fn();
+const copyToClipboardFn = vi.fn();
+const buildArtifactFilenameFn = vi.fn(() => 'whitefield-plot-22-risk-brief-2026-05-09.md');
+
+vi.mock('../../../hooks/useRiskFlags', () => ({
+  useRiskFlags: (...args) => useRiskFlagsFn(...args),
+  useRiskScore: (...args) => useRiskScoreFn(...args),
+  useCreateRiskFlag: (...args) => useCreateRiskFlagFn(...args),
+  useUpdateRiskFlag: (...args) => useUpdateRiskFlagFn(...args),
+  useDeleteRiskFlag: (...args) => useDeleteRiskFlagFn(...args),
+  useRunInconsistencyCheck: (...args) => useRunInconsistencyCheckFn(...args),
+  useRiskBrief: (...args) => useRiskBriefFn(...args),
+}));
+
+vi.mock('../../../hooks/useDealContext', () => ({
+  useDealContext: () => ({ dealId: 'd-1' }),
+  useDealRecord: () => ({ name: 'Whitefield Plot 22' }),
+}));
+
+vi.mock('../../../utils/downloadMarkdown', () => ({
+  downloadMarkdown: (...args) => downloadMarkdownFn(...args),
+  copyMarkdownToClipboard: (...args) => copyToClipboardFn(...args),
+  buildArtifactFilename: (...args) => buildArtifactFilenameFn(...args),
+}));
+
+import RiskTab from '../RiskTab';
+
+beforeEach(() => {
+  downloadMarkdownFn.mockReset();
+  copyToClipboardFn.mockReset();
+  copyToClipboardFn.mockResolvedValue(true);
+  useRiskFlagsFn.mockReturnValue({ data: [], isLoading: false, isError: false, refetch: vi.fn() });
+  useRiskScoreFn.mockReturnValue({ data: null });
+  useRiskBriefFn.mockReturnValue({ data: null });
+});
+
+describe('RiskTab — AI Risk Brief panel', () => {
+  it('does not render the brief panel when no artifact exists', () => {
+    render(<RiskTab />);
+    expect(screen.queryByText(/AI Risk Brief/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the brief panel with body when an artifact is present', () => {
+    useRiskBriefFn.mockReturnValueOnce({ data: {
+      contentMd: '## Cross-document inconsistencies\n\n- Seller name mismatch on EC',
+      generatedAt: '2026-05-09T10:00:00Z',
+    } });
+    render(<RiskTab />);
+    expect(screen.getByText(/AI Risk Brief/i)).toBeInTheDocument();
+    expect(screen.getByText(/Seller name mismatch on EC/)).toBeInTheDocument();
+  });
+
+  it('Copy button on the brief calls copyMarkdownToClipboard', async () => {
+    useRiskBriefFn.mockReturnValueOnce({ data: {
+      contentMd: '## Brief body',
+      generatedAt: '2026-05-09T10:00:00Z',
+    } });
+    render(<RiskTab />);
+    const copyBtn = await screen.findByRole('button', { name: /^Copied|^Copy$/ });
+    fireEvent.click(copyBtn);
+    await waitFor(() => expect(copyToClipboardFn).toHaveBeenCalledWith('## Brief body'));
+  });
+
+  it('Download button on the brief writes a .md with the deal-name filename', async () => {
+    useRiskBriefFn.mockReturnValueOnce({ data: {
+      contentMd: '## Brief body',
+      generatedAt: '2026-05-09T10:00:00Z',
+    } });
+    render(<RiskTab />);
+    const downloadBtn = await screen.findByRole('button', { name: /^Download$/ });
+    fireEvent.click(downloadBtn);
+    expect(downloadMarkdownFn).toHaveBeenCalled();
+    expect(buildArtifactFilenameFn).toHaveBeenCalledWith('Whitefield Plot 22', 'risk-brief');
+  });
+
+  it('renders the AI-assisted disclaimer beneath the brief', () => {
+    useRiskBriefFn.mockReturnValueOnce({ data: {
+      contentMd: '## Brief',
+      generatedAt: '2026-05-09T10:00:00Z',
+    } });
+    render(<RiskTab />);
+    expect(screen.getByText(/AI-assisted — requires human review/i)).toBeInTheDocument();
+  });
+
+  it('hides the brief body when collapsed', () => {
+    useRiskBriefFn.mockReturnValueOnce({ data: {
+      contentMd: '## Brief body',
+      generatedAt: '2026-05-09T10:00:00Z',
+    } });
+    render(<RiskTab />);
+    // Click the header to collapse
+    fireEvent.click(screen.getByRole('button', { expanded: true }));
+    expect(screen.queryByText(/Brief body/)).not.toBeInTheDocument();
+  });
+});

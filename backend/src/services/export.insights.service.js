@@ -248,4 +248,7 @@ const generateDealInsights = async ({
 
 module.exports = {
   generateDealInsights,
+  // Internal exports — used by the Tier-2 #14 A/B eval harness.
+  SYSTEM_PROMPT,
+  buildPayload,
 };
