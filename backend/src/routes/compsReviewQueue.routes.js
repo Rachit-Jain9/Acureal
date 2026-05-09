@@ -73,6 +73,90 @@ router.get(
   }
 );
 
+// GET /api/comps-review-queue/export.csv — filtered queue as CSV.
+//
+// Accepts the same query params as the list endpoint (status, source,
+// assignedToMe). The export respects the page's current filter
+// combination so analysts can save a queue view, click Export, and
+// get a file with exactly those rows. Org-scoped via RLS on the
+// query; the route also passes req.user.id for the assignedToMe
+// path the same way the list endpoint does.
+//
+// Filename uses `.csv` extension (not the dotted `.export.csv`) so
+// downloads land cleanly in OS file pickers; the path uses the
+// dotted form to keep the colon-delimited literal route stable.
+router.get(
+  '/export.csv',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    qv('status').optional().isIn(QUEUE_STATUSES),
+    qv('source').optional().isIn(QUEUE_SOURCES),
+    qv('assignedToMe').optional().isBoolean(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const assignedToMe =
+        req.query.assignedToMe === 'true' || req.query.assignedToMe === '1';
+      const rows = await queueService.queryQueueForExport(
+        {
+          status: req.query.status,
+          source: req.query.source,
+          assignedToMe,
+          currentUserId: req.user.id,
+        },
+        { maxRows: 5000 },
+      );
+
+      const escape = (value) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      const toRow = (fields) => fields.map(escape).join(',');
+      const fmtDate = (d) => {
+        if (!d) return '';
+        try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; }
+      };
+
+      const headers = [
+        'Subject', 'Source', 'Status', 'From', 'Attachment',
+        'Assignee', 'Confidence', 'Committed Comps',
+        'Reviewed', 'Committed', 'Created',
+      ];
+      const lines = [toRow(headers)];
+      for (const r of rows) {
+        const meta = r.source_meta || {};
+        const subject = meta.subject || meta.attachment_name || '(no subject)';
+        const from = meta.from || meta.from_name || meta.sender || '';
+        const attachment = meta.attachment_name || '';
+        const overall = r.confidence_scores?._overall;
+        const overallPct = typeof overall === 'number' ? `${Math.round(overall * 100)}%` : '';
+        const committed = Array.isArray(r.committed_comp_ids) ? r.committed_comp_ids.length : 0;
+        const assignee = r.assignee?.name || r.assignee?.email || '';
+        lines.push(toRow([
+          subject, r.source, r.status, from, attachment,
+          assignee, overallPct, committed,
+          fmtDate(r.reviewed_at), fmtDate(r.committed_at),
+          fmtDate(r.created_at),
+        ]));
+      }
+      const csv = lines.join('\n');
+      const today = new Date().toISOString().slice(0, 10);
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="redip-comps-queue-${today}.csv"`);
+      res.send(csv);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /api/comps-review-queue/manual-upload — analyst-driven ingestion
 // path. Accepts a single multipart file ("file" field) plus optional
 // metadata (sender / subject / notes) and creates a queue row with

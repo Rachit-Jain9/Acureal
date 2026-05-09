@@ -431,7 +431,10 @@ export const intelligenceAPI = {
 
 // Exports
 export const exportsAPI = {
-  comps: () => api.get('/exports/comps', { responseType: 'blob' }),
+  // Verified-comps CSV. Filter passthrough mirrors GET /comps so the
+  // download respects whatever filters the analyst applied on the
+  // Comps page.
+  comps: (params = {}) => api.get('/exports/comps', { params, responseType: 'blob' }),
   dealXlsx: (dealId) => api.get(`/exports/deals/${dealId}/xlsx`, { responseType: 'blob' }),
   dealPdf: (dealId) => api.get(`/exports/deals/${dealId}/pdf`, { responseType: 'blob' }),
   dealPptx: (dealId) => api.get(`/exports/deals/${dealId}/pptx`, { responseType: 'blob' }),
@@ -607,6 +610,11 @@ export const compsReviewQueueAPI = {
   // been applied yet — the toast will tell the operator what to do.
   bulkReassign: (ids, assignedTo) =>
     api.post('/comps-review-queue/bulk/reassign', { ids, assignedTo: assignedTo || null }),
+  // CSV export of the queue. Accepts the same filter params as the
+  // list endpoint — status / source / assignedToMe — so the export
+  // matches whatever the queue page currently shows.
+  exportCsv: (params) =>
+    api.get('/comps-review-queue/export.csv', { params, responseType: 'blob' }),
 };
 
 // Admin / operator endpoints. Mounted at /api/admin on the backend.

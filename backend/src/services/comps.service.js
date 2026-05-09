@@ -48,7 +48,11 @@ const addComp = async (data, userId = null) => {
   return result.rows[0];
 };
 
-const getComps = async (filters = {}, pagination = {}) => {
+// Build the parameterised WHERE clause shared by `getComps` and
+// `getCompsForExport`. Returns { conditions, values, paramCount } so
+// each caller can append its own pagination clause without duplicating
+// the filter logic.
+const buildCompsWhere = (filters = {}) => {
   const conditions = ['organization_id = current_organization_id()'];
   const values = [];
   let paramCount = 1;
@@ -58,42 +62,42 @@ const getComps = async (filters = {}, pagination = {}) => {
     values.push(filters.city);
     paramCount++;
   }
-
   if (filters.locality) {
     conditions.push(`LOWER(locality) ILIKE $${paramCount}`);
     values.push(`%${filters.locality}%`);
     paramCount++;
   }
-
   if (filters.projectType) {
     conditions.push(`project_type = $${paramCount}`);
     values.push(filters.projectType);
     paramCount++;
   }
-
   if (filters.minRate) {
     conditions.push(`rate_per_sqft >= $${paramCount}`);
     values.push(filters.minRate);
     paramCount++;
   }
-
   if (filters.maxRate) {
     conditions.push(`rate_per_sqft <= $${paramCount}`);
     values.push(filters.maxRate);
     paramCount++;
   }
-
   if (filters.launchYear) {
     conditions.push(`launch_year = $${paramCount}`);
     values.push(filters.launchYear);
     paramCount++;
   }
-
   if (filters.search) {
     conditions.push(`(project_name ILIKE $${paramCount} OR developer ILIKE $${paramCount})`);
     values.push(`%${filters.search}%`);
     paramCount++;
   }
+  return { conditions, values, paramCount };
+};
+
+const getComps = async (filters = {}, pagination = {}) => {
+  const { conditions, values, paramCount: nextParam } = buildCompsWhere(filters);
+  let paramCount = nextParam;
 
   const page = parseInt(pagination.page, 10) || 1;
   const limit = Math.min(parseInt(pagination.limit, 10) || 50, 200);
@@ -353,9 +357,29 @@ const scoreSubjectAgainstComp = async (dealId, compId) => {
   };
 };
 
+/**
+ * Filtered comps fetch for the CSV export endpoint. Same filter shape
+ * as `getComps` but returns up to `maxRows` rows in one shot so the
+ * export endpoint doesn't have to paginate over potentially-thousands
+ * of rows. Hard-capped to keep memory + response size predictable.
+ */
+const getCompsForExport = async (filters = {}, { maxRows = 5000 } = {}) => {
+  const cappedMax = Math.min(Math.max(parseInt(maxRows, 10) || 5000, 1), 10000);
+  const { conditions, values, paramCount } = buildCompsWhere(filters);
+  const whereClause = conditions.join(' AND ');
+  const result = await query(
+    `SELECT * FROM comps WHERE ${whereClause}
+     ORDER BY city, rate_per_sqft DESC
+     LIMIT $${paramCount}`,
+    [...values, cappedMax],
+  );
+  return result.rows;
+};
+
 module.exports = {
   addComp,
   getComps,
+  getCompsForExport,
   getCompsNearLocation,
   getPricingBenchmarks,
   deleteComp,

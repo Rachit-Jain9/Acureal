@@ -711,6 +711,79 @@ const bulkReject = async (ids, reason, userId) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// Filtered fetch for the CSV export endpoint. Same filter shape as
+// `listQueue` but returns the full filtered set (capped at maxRows)
+// in one shot — no pagination, no count round-trip. The export always
+// runs against current_organization_id() via RLS so the file matches
+// what the analyst sees on the queue page.
+// ──────────────────────────────────────────────────────────────────────────
+
+const queryQueueForExport = async (
+  { status, source, assignedToMe = false, currentUserId = null } = {},
+  { maxRows = 5000 } = {},
+) => {
+  const cappedMax = Math.min(Math.max(parseInt(maxRows, 10) || 5000, 1), 10000);
+  const conditions = ['organization_id = current_organization_id()'];
+  const values = [];
+  let idx = 1;
+  if (status) { conditions.push(`status = $${idx++}`); values.push(status); }
+  if (source) { conditions.push(`source = $${idx++}`); values.push(source); }
+  if (assignedToMe && currentUserId) {
+    conditions.push(`assigned_to = $${idx++}`);
+    values.push(currentUserId);
+  }
+  const where = conditions.join(' AND ');
+
+  // Same dual-projection fallback as listQueue for orgs that haven't
+  // applied the assignment migration yet — the export shouldn't 500
+  // on those orgs even though the assignedToMe filter wouldn't have
+  // mattered (no assignee column = no rows to filter on).
+  try {
+    const result = await query(
+      `SELECT id, source, source_meta, raw_doc_url, status, confidence_scores,
+              committed_comp_ids, reviewed_at, committed_at,
+              created_at, updated_at,
+              assigned_to, assigned_at
+         FROM comps_review_queue
+         WHERE ${where}
+         ORDER BY created_at DESC
+         LIMIT $${idx}`,
+      [...values, cappedMax],
+    );
+    // Hydrate assignee names in one bulk lookup so the CSV "Assigned To"
+    // column is human-readable.
+    const assigneeIds = [...new Set(result.rows.map((r) => r.assigned_to).filter(Boolean))];
+    let assigneeMap = new Map();
+    if (assigneeIds.length > 0) {
+      const usersResult = await query(
+        `SELECT id, name, email FROM users WHERE id = ANY($1::uuid[])`,
+        [assigneeIds],
+      );
+      assigneeMap = new Map(usersResult.rows.map((u) => [u.id, u]));
+    }
+    return result.rows.map((row) => ({
+      ...row,
+      assignee: row.assigned_to ? assigneeMap.get(row.assigned_to) || null : null,
+    }));
+  } catch (err) {
+    if (err?.code === '42703' || /column .*assigned_(to|at|by).* does not exist/i.test(err?.message || '')) {
+      const legacyResult = await query(
+        `SELECT id, source, source_meta, raw_doc_url, status, confidence_scores,
+                committed_comp_ids, reviewed_at, committed_at,
+                created_at, updated_at
+           FROM comps_review_queue
+           WHERE ${where}
+           ORDER BY created_at DESC
+           LIMIT $${idx}`,
+        [...values, cappedMax],
+      );
+      return legacyResult.rows;
+    }
+    throw err;
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────
 // Bulk reassign (PR with migration 20260520_comps_queue_assignment)
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -978,6 +1051,8 @@ module.exports = {
   bulkApprove,
   bulkReject,
   bulkReassign,
+  // Export
+  queryQueueForExport,
   // Manual upload
   manualUpload,
   MANUAL_UPLOAD_ALLOWED_MIMES,
