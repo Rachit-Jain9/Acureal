@@ -211,13 +211,19 @@ const recordEvent = async ({
 
 // ── Event reads ──────────────────────────────────────────────────────────────
 
-const listEvents = async (dealId, { limit = 50 } = {}) => {
+const listEvents = async (dealId, { limit = 50, includeOutputs = false } = {}) => {
   const clampedLimit = Math.max(1, Math.min(Number(limit) || 50, 500));
+  // The Audit tab on the deal page diffs consecutive events to surface
+  // which KPIs changed (IRR, revenue, cost, etc.). Doing that on the
+  // backend is cheap (one extra column), and avoids 50× round-trips
+  // from the UI to fetch each event's outputs separately. Default OFF
+  // so existing callers don't pay for the larger payload.
+  const outputsCol = includeOutputs ? ', outputs_json' : '';
   const result = await query(
     `SELECT id, deal_id, organization_id, actor_id,
             event_type, engine_version, asset_class,
             inputs_hash, outputs_hash, signature,
-            metadata, created_at
+            metadata, created_at${outputsCol}
        FROM deal_events
       WHERE deal_id = $1
       ORDER BY created_at DESC
@@ -225,6 +231,37 @@ const listEvents = async (dealId, { limit = 50 } = {}) => {
     [dealId, clampedLimit],
   );
   return result.rows;
+};
+
+/**
+ * Pull a small set of KPI fields out of `outputs_json` for the audit-tab
+ * timeline. Lives in the audit service (not the UI) so the diff math
+ * stays deterministic JS per CLAUDE.md hard rule.
+ *
+ * Returns null when the row didn't carry an outputs_json (legacy event)
+ * or when none of the expected fields were present.
+ */
+const summarizeEventOutputs = (outputs) => {
+  if (!outputs || typeof outputs !== 'object') return null;
+  const num = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const summary = {
+    irr_pct:           num(outputs.irr_pct ?? outputs.irr),
+    npv_cr:            num(outputs.npv_cr ?? outputs.npv),
+    total_revenue_cr:  num(outputs.total_revenue_cr ?? outputs.totalRevenueCr ?? outputs.total_revenue),
+    total_cost_cr:     num(outputs.total_cost_cr ?? outputs.totalCostCr ?? outputs.total_cost),
+    gross_profit_cr:   num(outputs.gross_profit_cr ?? outputs.grossProfitCr),
+    gross_margin_pct:  num(outputs.gross_margin_pct ?? outputs.grossMarginPct),
+    equity_multiple:   num(outputs.equity_multiple ?? outputs.equityMultiple),
+    residual_land_value_cr: num(outputs.residual_land_value_cr ?? outputs.residualLandValueCr),
+  };
+  // If literally nothing came through, return null so the UI knows there's
+  // no comparable summary for this row.
+  const hasAny = Object.values(summary).some((v) => v !== null);
+  return hasAny ? summary : null;
 };
 
 const getEvent = async (eventId) => {
@@ -372,6 +409,7 @@ module.exports = {
   verifyEvent,
   replayEvent,
   flattenOutputsForAudit,
+  summarizeEventOutputs,
   // Exported for unit tests + other services that need identical hashing.
   _internal: {
     stableStringify,

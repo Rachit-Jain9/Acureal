@@ -470,3 +470,98 @@ describe('manualUpload', () => {
     expect(query).not.toHaveBeenCalled();
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// bulkApprove / bulkReject — multi-row aggregation
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('bulkApprove', () => {
+  test('rejects empty array with 400', async () => {
+    await expect(queue.bulkApprove([], 'u')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('rejects non-array with 400', async () => {
+    await expect(queue.bulkApprove('not-an-array', 'u')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('caps at 50 ids per request', async () => {
+    const ids = Array.from({ length: 51 }, (_, i) => `id-${i}`);
+    await expect(queue.bulkApprove(ids, 'u')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('de-duplicates ids', async () => {
+    // Two duplicate ids → only one approveAndCommit call.
+    query
+      .mockResolvedValueOnce({ rows: [] }); // getQueueRow returns nothing → 404 path
+    const result = await queue.bulkApprove(['id-1', 'id-1'], 'u');
+    expect(result.requested).toBe(1);
+  });
+
+  test('aggregates per-id successes and failures into one response', async () => {
+    // First id: getQueueRow returns pending_review → transaction succeeds.
+    // Second id: getQueueRow returns committed → throws (409).
+    query
+      .mockResolvedValueOnce({ rows: [{
+        id: 'good',
+        status: 'pending_review',
+        organization_id: 'org',
+        structured_payload: {
+          comps: [{ project_name: 'Comp A', city: 'Bengaluru', rate_per_sqft: 8500 }],
+        },
+        reviewer_edits: {},
+      }] })
+      // bad row in 'committed' state
+      .mockResolvedValueOnce({ rows: [{
+        id: 'bad',
+        status: 'committed',
+        organization_id: 'org',
+      }] });
+    transaction.mockImplementationOnce(async (cb) => {
+      const client = {
+        query: jest
+          .fn()
+          .mockResolvedValueOnce({ rows: [{ id: 'comp-1' }] })
+          .mockResolvedValueOnce({ rows: [] }),
+      };
+      return cb(client);
+    });
+
+    const result = await queue.bulkApprove(['good', 'bad'], 'user-1');
+    expect(result.requested).toBe(2);
+    expect(result.succeeded_count).toBe(1);
+    expect(result.failed_count).toBe(1);
+    expect(result.succeeded[0]).toMatchObject({ id: 'good', committed_count: 1 });
+    expect(result.failed[0]).toMatchObject({ id: 'bad' });
+    expect(result.failed[0].error).toMatch(/Cannot approve/);
+  });
+});
+
+describe('bulkReject', () => {
+  test('rejects empty array with 400', async () => {
+    await expect(queue.bulkReject([], 'reason', 'u')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('rejects ids one by one and aggregates results', async () => {
+    // First id: pending_review → reject UPDATE returns row.
+    // Second id: committed → throws.
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', status: 'pending_review', organization_id: 'org' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', status: 'rejected' }] }) // UPDATE result
+      .mockResolvedValueOnce({ rows: [{ id: 'r2', status: 'committed', organization_id: 'org' }] });
+
+    const result = await queue.bulkReject(['r1', 'r2'], 'duplicate batch', 'user-1');
+    expect(result.succeeded_count).toBe(1);
+    expect(result.failed_count).toBe(1);
+    expect(result.succeeded[0]).toMatchObject({ id: 'r1', status: 'rejected' });
+    expect(result.failed[0].error).toMatch(/already committed/);
+  });
+
+  test('treats null reason as no-reason (passes null through to single-row reject)', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', status: 'pending_review', organization_id: 'org' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', status: 'rejected' }] });
+
+    const result = await queue.bulkReject(['r1'], null, 'user-1');
+    expect(result.succeeded_count).toBe(1);
+  });
+});

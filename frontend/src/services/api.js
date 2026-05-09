@@ -586,6 +586,26 @@ export const compsReviewQueueAPI = {
     if (reason != null && reason !== '') body.reason = reason;
     return api.post(`/comps-review-queue/${id}/reject`, body);
   },
+  // Bulk operations — multi-select on the queue page. Each request accepts
+  // up to 50 ids; per-id failures come back in the response payload (the
+  // HTTP call itself always succeeds when the body validates). Reject
+  // optionally accepts a single shared `reason` applied to every row.
+  bulkApprove: (ids) => api.post('/comps-review-queue/bulk/approve', { ids }),
+  bulkReject:  (ids, reason) => {
+    const body = { ids };
+    if (reason != null && reason !== '') body.reason = reason;
+    return api.post('/comps-review-queue/bulk/reject', body);
+  },
+};
+
+// Deal events — investor-grade audit trail backed by the `deal_events`
+// table (HMAC-signed, append-only via RLS). The Audit tab on the deal
+// detail page renders a timeline; ?include_outputs_summary=true returns
+// a curated KPI projection so the UI can compute deltas without N+1.
+export const dealEventsAPI = {
+  list:    (dealId, params)            => api.get(`/financials/${dealId}/events`, { params }),
+  verify:  (dealId, eventId)           => api.get(`/financials/${dealId}/events/${eventId}/verify`),
+  replay:  (dealId, eventId)           => api.post(`/financials/${dealId}/events/${eventId}/replay`),
 };
 
 // Document Extraction

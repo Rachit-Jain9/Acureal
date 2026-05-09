@@ -357,7 +357,17 @@ router.get('/:dealId/financial-graph', authenticate, async (req, res, next) => {
 router.get('/:dealId/events', authenticate, async (req, res, next) => {
   try {
     const limit = Number.parseInt(req.query.limit, 10) || 50;
-    const events = await financialService.listDealEvents(req.params.dealId, { limit });
+    // Audit tab on the deal page passes ?include_outputs_summary=true
+    // so it can render KPI deltas between consecutive events without
+    // N round-trips. Other callers (programmatic / verify-only flows)
+    // get the lighter projection by default.
+    const includeOutputsSummary =
+      req.query.include_outputs_summary === 'true' ||
+      req.query.include_outputs_summary === '1';
+    const events = await financialService.listDealEvents(req.params.dealId, {
+      limit,
+      includeOutputsSummary,
+    });
     res.json({ success: true, data: events });
   } catch (error) {
     next(error);

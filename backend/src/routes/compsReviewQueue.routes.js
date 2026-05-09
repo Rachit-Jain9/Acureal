@@ -210,6 +210,59 @@ router.patch(
   }
 );
 
+// ──────────────────────────────────────────────────────────────────────────
+// Bulk operations — multi-row approve / reject from the queue page
+//
+// Body shape:
+//   { ids: ["<uuid>", "<uuid>", ...], reason?: "..." }
+//
+// Per-id partial failures are collected and returned in the response —
+// the request itself always succeeds with HTTP 200 unless the body is
+// invalid. The UI shows a per-row breakdown so the analyst can retry
+// only the failed ids without re-sending the whole batch.
+// ──────────────────────────────────────────────────────────────────────────
+
+// POST /api/comps-review-queue/bulk/approve { ids: [...] }
+router.post(
+  '/bulk/approve',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [body('ids').isArray({ min: 1, max: 50 })],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await queueService.bulkApprove(req.body.ids, req.user.id);
+      res.status(200).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/comps-review-queue/bulk/reject { ids: [...], reason?: "..." }
+router.post(
+  '/bulk/reject',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    body('ids').isArray({ min: 1, max: 50 }),
+    body('reason').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await queueService.bulkReject(
+        req.body.ids,
+        req.body.reason || null,
+        req.user.id,
+      );
+      res.status(200).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /api/comps-review-queue/:id/approve — commit edits → comps[]
 router.post(
   '/:id/approve',

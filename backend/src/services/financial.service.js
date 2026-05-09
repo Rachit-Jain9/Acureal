@@ -398,19 +398,53 @@ const getFinancialGraph = async (dealId) => {
  * the UI can render a pass/fail indicator per event without a second round
  * trip. `getFinancials` is called first to enforce the deal visibility
  * policy — if the caller can't read the deal, they can't read its events.
+ *
+ * When `includeOutputsSummary` is true (default for the Audit tab on the
+ * deal page), each row includes a `outputs_summary` projection of
+ * common KPIs so the UI can compute deltas between consecutive events
+ * without N round-trips. The actor's display name is hydrated via a
+ * single bulk users lookup.
  */
-const listDealEvents = async (dealId, { limit = 50 } = {}) => {
+const listDealEvents = async (dealId, { limit = 50, includeOutputsSummary = false } = {}) => {
   await getFinancials(dealId); // visibility gate
-  const rows = await auditService.listEvents(dealId, { limit });
-  return rows.map((row) => ({
-    ...row,
-    // Verification must hit the full row (inputs_json / outputs_json), so
-    // re-fetch by id only if the caller asked for a specific event's replay.
-    // The list-level endpoint reports cryptographic freshness only.
-    verification: {
-      note: 'Call GET /financials/:dealId/events/:eventId/verify for full hash + HMAC check.',
-    },
-  }));
+  const rows = await auditService.listEvents(dealId, {
+    limit,
+    includeOutputs: !!includeOutputsSummary,
+  });
+
+  // Bulk-resolve actor display names so the timeline can show "Rachit Jain"
+  // instead of an opaque UUID. One round-trip regardless of event count.
+  let actorMap = new Map();
+  const actorIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean))];
+  if (actorIds.length > 0) {
+    try {
+      const actorsResult = await query(
+        `SELECT id, name, email FROM users WHERE id = ANY($1::uuid[])`,
+        [actorIds],
+      );
+      actorMap = new Map(actorsResult.rows.map((u) => [u.id, u]));
+    } catch {
+      // Fail open — UI will fall back to actor_id display.
+    }
+  }
+
+  return rows.map((row) => {
+    const summary = includeOutputsSummary
+      ? auditService.summarizeEventOutputs(row.outputs_json)
+      : null;
+    const actor = row.actor_id ? actorMap.get(row.actor_id) || null : null;
+    // Strip the heavy outputs_json from the response — the summary is the
+    // only thing the UI needs. Replay endpoint hands back the full payload.
+    const { outputs_json: _drop, ...restRow } = row;
+    return {
+      ...restRow,
+      actor: actor ? { id: actor.id, name: actor.name, email: actor.email } : null,
+      outputs_summary: summary,
+      verification: {
+        note: 'Call GET /financials/:dealId/events/:eventId/verify for full hash + HMAC check.',
+      },
+    };
+  });
 };
 
 const verifyDealEvent = async (dealId, eventId) => {
