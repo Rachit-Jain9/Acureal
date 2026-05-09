@@ -21,6 +21,8 @@
 
 const { query } = require('../config/database');
 const log = require('../lib/logger').child({ module: 'ai.usage' });
+const costGuard = require('../lib/costGuard');
+const { getRequestContext } = require('../lib/requestContext');
 
 const DEFAULT_DAYS = 30;
 
@@ -213,14 +215,64 @@ const getTopCostCalls = async ({ days = DEFAULT_DAYS, limit = 20 } = {}) => {
   }));
 };
 
+/**
+ * Snapshot the daily AI cost cap for the caller's organization. Returns
+ * the configured `AI_DAILY_COST_CAP_USD`, today's UTC-midnight spend
+ * sum, and the % of cap consumed. When the cap is unset (dev / staging
+ * default), returns `cap_usd: null` and `enabled: false` so the UI can
+ * surface "no cap configured" rather than a spurious 0% progress bar.
+ *
+ * Org scoping: pulls organization_id from the request context. When
+ * absent (cron / curator) it sums the NULL-org bucket against the 2x
+ * platform cap, matching what costGuard.assertWithinDailyCap actually
+ * enforces.
+ */
+const getCostCapStatus = async () => {
+  try {
+    const ctx = getRequestContext();
+    const organizationId = ctx?.organizationId || null;
+    const capUsd = costGuard.getDailyCap();
+    const spentUsd = await costGuard.sumDailySpend({ organizationId });
+    const effectiveCap = capUsd != null
+      ? (organizationId ? capUsd : capUsd * 2)
+      : null;
+    const pctOfCap = effectiveCap != null && effectiveCap > 0
+      ? Math.round((spentUsd / effectiveCap) * 1000) / 10
+      : null;
+    return {
+      enabled: capUsd != null,
+      cap_usd: effectiveCap,
+      base_cap_usd: capUsd,
+      spent_today_usd: Math.round(spentUsd * 10000) / 10000,
+      pct_of_cap: pctOfCap,
+      organization_id: organizationId,
+      // The caller blocks new AI calls once spend ≥ effective cap. Surface
+      // the boolean so the UI can paint the bar in the negative tone.
+      blocked: capUsd != null && spentUsd >= effectiveCap,
+    };
+  } catch (err) {
+    log.warn('cost_cap_status_failed', { error: err.message });
+    return {
+      enabled: false,
+      cap_usd: null,
+      base_cap_usd: null,
+      spent_today_usd: 0,
+      pct_of_cap: null,
+      organization_id: null,
+      blocked: false,
+    };
+  }
+};
+
 const getUsageDashboard = async ({ days = DEFAULT_DAYS } = {}) => {
   const safeDays = Math.min(Math.max(parseInt(days, 10) || DEFAULT_DAYS, 1), 365);
-  const [summary, dailySeries, byTaskProvider, byDoctype, topCostCalls] = await Promise.all([
+  const [summary, dailySeries, byTaskProvider, byDoctype, topCostCalls, costCap] = await Promise.all([
     getSummary({ days: safeDays }),
     getDailySeries({ days: safeDays }),
     getByTaskProvider({ days: safeDays }),
     getByDoctype({ days: safeDays }),
     getTopCostCalls({ days: safeDays, limit: 20 }),
+    getCostCapStatus(),
   ]);
   return {
     summary,
@@ -228,6 +280,7 @@ const getUsageDashboard = async ({ days = DEFAULT_DAYS } = {}) => {
     by_task_provider: byTaskProvider,
     by_doctype: byDoctype,
     top_cost_calls: topCostCalls,
+    cost_cap: costCap,
     generated_at: new Date().toISOString(),
   };
 };
@@ -240,4 +293,5 @@ module.exports = {
   getByTaskProvider,
   getByDoctype,
   getTopCostCalls,
+  getCostCapStatus,
 };

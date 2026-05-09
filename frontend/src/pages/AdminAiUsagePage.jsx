@@ -83,6 +83,81 @@ const STATUS_TONE = {
   skipped:    'neutral',
 };
 
+// ── Daily cost-cap progress ────────────────────────────────────────────────
+// Surfaces the server-enforced AI_DAILY_COST_CAP_USD ceiling so the operator
+// knows how close they are before calls start being blocked with HTTP 429.
+// Tone shifts as utilization climbs: success → warn (≥75%) → danger (≥90%
+// or already blocked).
+function CostCapBar({ costCap }) {
+  if (!costCap) return null;
+  if (!costCap.enabled) {
+    return (
+      <Card className="p-3 border-dashed">
+        <div className="flex items-center gap-2 text-xs text-content-muted">
+          <AlertTriangle size={12} />
+          <span>
+            <span className="font-medium text-content-secondary">No daily cost cap configured.</span>
+            {' '}Set <span className="font-mono text-[11px]">AI_DAILY_COST_CAP_USD</span> on the backend to enforce a per-org spend ceiling. Calls aren't blocked until this is set.
+          </span>
+        </div>
+      </Card>
+    );
+  }
+  const pct = Math.max(0, Math.min(100, costCap.pct_of_cap || 0));
+  const blocked = costCap.blocked;
+  const tone = blocked || pct >= 90 ? 'danger' : pct >= 75 ? 'warn' : 'success';
+  const palette =
+    tone === 'danger'
+      ? { bg: 'bg-rose-50',  border: 'border-rose-200',  bar: 'bg-rose-500',    text: 'text-rose-900',   label: 'text-rose-700' }
+      : tone === 'warn'
+        ? { bg: 'bg-amber-50', border: 'border-amber-200', bar: 'bg-amber-500',  text: 'text-amber-900', label: 'text-amber-700' }
+        : { bg: 'bg-bg-elevated', border: 'border-hairline', bar: 'bg-data-positive', text: 'text-content-primary', label: 'text-content-muted' };
+  return (
+    <div className={clsx('border rounded-editorial p-4', palette.bg, palette.border)}>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Zap size={14} className={palette.label} />
+          <span className={clsx('text-eyebrow uppercase tracking-wider text-[10px] font-medium', palette.label)}>
+            Daily AI cost cap
+          </span>
+          {blocked && (
+            <Badge tone="danger" className="text-[10px]">
+              BLOCKED — calls returning 429 until UTC midnight
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-baseline gap-1.5 text-sm tabular-nums">
+          <span className={clsx('font-semibold', palette.text)}>
+            {fmtUsd(costCap.spent_today_usd)}
+          </span>
+          <span className={palette.label}>of</span>
+          <span className={clsx('font-semibold', palette.text)}>
+            {fmtUsd(costCap.cap_usd)}
+          </span>
+          <span className={palette.label}>· {pct.toFixed(1)}%</span>
+        </div>
+      </div>
+      <div className={clsx('h-2 rounded-full overflow-hidden', tone === 'success' ? 'bg-bg-secondary' : 'bg-white/60')}>
+        <div
+          className={clsx('h-full transition-[width] duration-500', palette.bar)}
+          style={{ width: `${Math.max(2, pct)}%` }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Daily AI cost cap utilization"
+        />
+      </div>
+      <p className={clsx('mt-2 text-[10px]', palette.label)}>
+        Resets at UTC midnight · Cap = <span className="font-mono">AI_DAILY_COST_CAP_USD</span>
+        {costCap.organization_id == null && costCap.base_cap_usd != null && (
+          <> (platform / NULL-org calls run against 2× the per-org cap)</>
+        )}
+      </p>
+    </div>
+  );
+}
+
 // ── KPI tile ───────────────────────────────────────────────────────────────
 function KpiTile({ icon: Icon, label, value, sub, tone = 'default' }) {
   return (
@@ -333,6 +408,13 @@ export default function AdminAiUsagePage() {
 
       {!isLoading && !isError && summary && (
         <>
+          {/* Daily cost-cap progress — surfaces the AI_DAILY_COST_CAP_USD
+              ceiling enforced server-side. Renders only when the cap is
+              configured; otherwise an unobtrusive note explaining the
+              env var. Tracks today's UTC-midnight spend (matches what
+              the backend blocker actually checks). */}
+          <CostCapBar costCap={data?.cost_cap} />
+
           {/* KPI strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiTile

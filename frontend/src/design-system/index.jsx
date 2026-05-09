@@ -19,6 +19,9 @@ export {
 // Virtualized list — auto-windows long lists (>= threshold rows).
 export { default as VirtualizedList } from './VirtualizedList';
 
+// Collapsible section card — editorial chrome + persistent expand/collapse.
+export { CollapsibleCard } from './CollapsibleCard';
+
 import clsx from 'clsx';
 import { AlertTriangle, Info } from 'lucide-react';
 import useCountUp from '../hooks/useCountUp';

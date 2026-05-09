@@ -7,12 +7,18 @@ import {
   IndianRupee,
   Layers,
   MapPin,
+  Activity,
+  ShieldAlert,
+  ListChecks,
+  StickyNote,
+  History,
+  Gauge,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
-import { SectionHeader } from '../../design-system';
+import { SectionHeader, CollapsibleCard } from '../../design-system';
 import BuildabilitySummary from './BuildabilitySummary';
 import AiSynthesisPanel from './AiSynthesisPanel';
 import DealQaBox from './DealQaBox';
@@ -198,91 +204,60 @@ export default function OverviewTab() {
         </div>
       </div>
 
-      {propertyForBuildability && (
-        <BuildabilitySummary
-          property={propertyForBuildability}
-          assetClass={deal.asset_class}
-          title="Buildable envelope"
-        />
-      )}
-
+      {/* ── Deal Pulse ────────────────────────────────────────────────────
+          Compact "what's the state of this deal" ribbon — readiness %,
+          DD %, approvals %, open risks count, top deal-breaker callout.
+          Replaces the previous full-card Readiness section that was
+          stacking 5 large tiles + key-risk pills. The full breakdown
+          moved into a collapsible block lower on the page. */}
       {readiness && (
-        <div className="card-editorial">
-          <SectionHeader
-            size="sm"
-            title="Deal Readiness"
-            sub="Deterministic readiness based on DD completion, approvals, document coverage, and open risks."
-            action={
-              <Badge
-                tone={
-                  readiness.status === 'ic_ready'
-                    ? 'success'
-                    : readiness.status === 'work_in_progress'
-                      ? 'warn'
-                      : 'danger'
-                }
-              >
-                {readiness.status === 'ic_ready'
-                  ? 'Investor-Grade'
-                  : readiness.status === 'work_in_progress'
-                    ? 'In Progress'
-                    : 'Not Ready'}
-              </Badge>
-            }
-          />
-
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {[
-              { label: 'Readiness', value: `${readiness.readiness_pct || 0}%` },
-              { label: 'DD Complete', value: `${readiness.dd_completion_pct || 0}%` },
-              { label: 'Approvals Validated', value: `${readiness.approval_completion_pct || 0}%` },
-              { label: 'Open Risk Score', value: `${readiness.risk_score || 0}` },
-              { label: 'Documents', value: `${readiness.document_count || 0}` },
-            ].map((item) => (
-              <div key={item.label} className="bg-bg-secondary rounded-lg p-3">
-                <p className="text-xs text-content-muted mb-1">{item.label}</p>
-                <p className="text-base font-bold text-content-primary">{item.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {(keyRisks.length > 0 || readiness.pending_deal_breakers > 0) && (
-            <div className="mt-4 space-y-2">
-              {readiness.pending_deal_breakers > 0 && (
-                <p className="text-sm text-data-negative">
-                  {readiness.pending_deal_breakers} deal-breaker DD item
-                  {readiness.pending_deal_breakers === 1 ? '' : 's'} remain unresolved.
-                </p>
-              )}
-              {keyRisks.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {keyRisks.map((risk) => (
-                    <Badge key={risk} tone="danger">{risk}</Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <DealPulseRibbon readiness={readiness} keyRisks={keyRisks} />
       )}
+
+      {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
+          single bordered card with tabs. The tabbed container preserves
+          state for whichever tab is inactive so toggling doesn't cost
+          another generation. */}
+      <AiSynthesisPanel dealId={dealId} dealName={deal?.name} />
+
+      {/* Tier-2 #11 — Deal Q&A agent. Single-shot synchronous Q&A on the
+          deal: pgvector retrieves relevant document chunks, Claude
+          answers with mandatory citations back to source. Self-contained
+          component with its own state machine + history. */}
+      <DealQaBox dealId={dealId} />
+
+      {/* ── Below the fold ──────────────────────────────────────────────
+          Everything beneath this point is wrapped in a CollapsibleCard
+          so the analyst can fold the page down to just the high-leverage
+          surfaces (KPIs / pulse / synthesis / Q&A). Expand state is
+          persisted to localStorage per-section so the analyst's choice
+          sticks across sessions.
+
+          Default-expanded sections: Financial Summary, Buildability,
+          Next Steps, Notes (the things you want to see fast on most
+          deals).
+          Default-collapsed: Readiness deep-dive, Stage History, Recent
+          Activities (longer, lower-priority). */}
 
       {/* Financial Summary */}
       {financials && (
-        <div className="card-editorial">
-          <SectionHeader
-            size="sm"
-            icon={IndianRupee}
-            title="Financial Summary"
-            action={
-              <Link
-                to={`/dashboard/financials/${dealId}`}
-                className="text-sm text-accent hover:opacity-80 flex items-center gap-1"
-              >
-                Full Model <ArrowRight size={14} />
-              </Link>
-            }
-          />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <CollapsibleCard
+          id="overview-financial-summary"
+          icon={IndianRupee}
+          title="Financial Summary"
+          sub="Snapshot from the latest computed model. Open the full model for the deterministic graph + sensitivities."
+          meta={
+            <Link
+              to={`/dashboard/financials/${dealId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-accent hover:opacity-80 flex items-center gap-1"
+            >
+              Full Model <ArrowRight size={12} />
+            </Link>
+          }
+          defaultExpanded
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">
             {[
               { label: 'Total Cost', value: formatCrores(financials.total_cost_cr) },
               { label: 'Total Revenue', value: formatCrores(financials.total_revenue_cr) },
@@ -311,7 +286,7 @@ export default function OverviewTab() {
                 <p className="text-xs text-content-muted mb-1">{label}</p>
                 <p
                   className={clsx(
-                    'text-base font-bold',
+                    'text-base font-bold tabular-nums',
                     highlight ? 'text-data-positive' : 'text-content-primary'
                   )}
                 >
@@ -320,100 +295,196 @@ export default function OverviewTab() {
               </div>
             ))}
           </div>
-        </div>
+        </CollapsibleCard>
       )}
 
-      {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
-          single bordered card with tabs. The tabbed container preserves
-          state for whichever tab is inactive so toggling doesn't cost
-          another generation. */}
-      <AiSynthesisPanel dealId={dealId} dealName={deal?.name} />
-
-      {/* Tier-2 #11 — Deal Q&A agent. Single-shot synchronous Q&A on the
-          deal: pgvector retrieves relevant document chunks, Claude
-          answers with mandatory citations back to source. Self-contained
-          component with its own state machine + history. */}
-      <DealQaBox dealId={dealId} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Stage History */}
-        {stageHistory.length > 0 && (
-          <div className="card-editorial">
-            <SectionHeader size="sm" icon={Clock} title="Stage History" />
-            <div className="relative">
-              <div className="absolute left-3 top-2 bottom-2 w-px bg-hairline" />
-              <ul className="space-y-4">
-                {stageHistory.map((entry, index) => {
-                  const toConfig = STAGE_CONFIG[entry.to_stage] || STAGE_CONFIG.screening;
-                  return (
-                    <li key={entry.id || index} className="relative pl-8">
-                      <div
-                        className={clsx(
-                          'absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-bg-elevated',
-                          index === stageHistory.length - 1 ? 'bg-accent' : 'bg-hairline-strong'
-                        )}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {entry.from_stage && (
-                            <>
-                              <Badge
-                                tone={(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).tone}
-                              >
-                                {(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).label}
-                              </Badge>
-                              <ArrowRight size={12} className="text-content-muted" />
-                            </>
-                          )}
-                          <Badge tone={toConfig.tone}>{toConfig.label}</Badge>
-                        </div>
-                        <p className="text-xs text-content-secondary mt-1">
-                          {entry.changed_by_name} · {formatDate(entry.changed_at)}
-                        </p>
-                        {entry.notes && (
-                          <p className="text-xs text-content-muted mt-0.5 italic">{entry.notes}</p>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+      {propertyForBuildability && (
+        <CollapsibleCard
+          id="overview-buildability"
+          icon={Gauge}
+          title="Buildable envelope"
+          sub="Deterministic FAR / setback / coverage from the Bengaluru rule engine."
+          defaultExpanded
+        >
+          <div className="pt-3 -mx-4 -mb-4">
+            <BuildabilitySummary
+              property={propertyForBuildability}
+              assetClass={deal.asset_class}
+              title="Buildable envelope"
+            />
           </div>
-        )}
+        </CollapsibleCard>
+      )}
 
-        {/* Next Steps */}
-        {nextStepGroups.length > 0 && (
-          <div className="card-editorial">
-            <SectionHeader size="sm" icon={CheckCircle2} title="Next Steps" />
-            <div className="space-y-4">
-              {nextStepGroups.map((group) => (
-                <div key={group.group}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary mb-2">
-                    {group.group}
-                  </p>
-                  <ul className="space-y-2">
-                    {group.items.map((step, index) => (
-                      <li key={`${group.group}-${index}`} className="flex items-start gap-2 text-sm text-content-secondary">
-                        <span className="mt-0.5 w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center text-xs font-medium flex-shrink-0">
-                          {index + 1}
-                        </span>
-                        {step}
-                      </li>
-                    ))}
-                  </ul>
+      {/* Readiness deep-dive — full breakdown lives here; the compact
+          version is in the pulse ribbon above the fold. */}
+      {readiness && (
+        <CollapsibleCard
+          id="overview-readiness-detail"
+          icon={Activity}
+          title="Readiness breakdown"
+          sub="Per-axis scoring underlying the readiness ribbon. Surfaces the deal-breakers and key-risk callouts."
+          defaultExpanded={false}
+          meta={
+            <Badge
+              tone={
+                readiness.status === 'ic_ready'
+                  ? 'success'
+                  : readiness.status === 'work_in_progress'
+                    ? 'warn'
+                    : 'danger'
+              }
+            >
+              {readiness.status === 'ic_ready'
+                ? 'Investor-Grade'
+                : readiness.status === 'work_in_progress'
+                  ? 'In Progress'
+                  : 'Not Ready'}
+            </Badge>
+          }
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 pt-3">
+            {[
+              { label: 'Readiness', value: `${readiness.readiness_pct || 0}%` },
+              { label: 'DD Complete', value: `${readiness.dd_completion_pct || 0}%` },
+              { label: 'Approvals Validated', value: `${readiness.approval_completion_pct || 0}%` },
+              { label: 'Open Risk Score', value: `${readiness.risk_score || 0}` },
+              { label: 'Documents', value: `${readiness.document_count || 0}` },
+            ].map((item) => (
+              <div key={item.label} className="bg-bg-secondary rounded-lg p-3">
+                <p className="text-xs text-content-muted mb-1">{item.label}</p>
+                <p className="text-base font-bold text-content-primary tabular-nums">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          {(keyRisks.length > 0 || readiness.pending_deal_breakers > 0) && (
+            <div className="mt-4 space-y-2">
+              {readiness.pending_deal_breakers > 0 && (
+                <p className="text-sm text-data-negative">
+                  {readiness.pending_deal_breakers} deal-breaker DD item
+                  {readiness.pending_deal_breakers === 1 ? '' : 's'} remain unresolved.
+                </p>
+              )}
+              {keyRisks.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {keyRisks.map((risk) => (
+                    <Badge key={risk} tone="danger">{risk}</Badge>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </CollapsibleCard>
+      )}
 
-      {/* Recent Activities */}
+      {/* Next Steps */}
+      {nextStepGroups.length > 0 && (
+        <CollapsibleCard
+          id="overview-next-steps"
+          icon={ListChecks}
+          title="Next Steps"
+          sub="Stage-aware playbook. Refreshed when the workspace recomputes the deal snapshot."
+          defaultExpanded
+          meta={
+            <span className="text-xs text-content-muted tabular-nums">
+              {nextStepGroups.reduce((s, g) => s + (g.items?.length || 0), 0)} actions
+            </span>
+          }
+        >
+          <div className="space-y-4 pt-3">
+            {nextStepGroups.map((group) => (
+              <div key={group.group}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary mb-2">
+                  {group.group}
+                </p>
+                <ul className="space-y-2">
+                  {group.items.map((step, index) => (
+                    <li key={`${group.group}-${index}`} className="flex items-start gap-2 text-sm text-content-secondary">
+                      <span className="mt-0.5 w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center text-xs font-medium flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </CollapsibleCard>
+      )}
+
+      {/* Stage History — usually long; default-collapsed. */}
+      {stageHistory.length > 0 && (
+        <CollapsibleCard
+          id="overview-stage-history"
+          icon={History}
+          title="Stage History"
+          sub="Every stage transition with actor + timestamp. Append-only."
+          defaultExpanded={false}
+          meta={
+            <span className="text-xs text-content-muted tabular-nums">
+              {stageHistory.length} {stageHistory.length === 1 ? 'transition' : 'transitions'}
+            </span>
+          }
+        >
+          <div className="relative pt-3">
+            <div className="absolute left-3 top-5 bottom-2 w-px bg-hairline" />
+            <ul className="space-y-4">
+              {stageHistory.map((entry, index) => {
+                const toConfig = STAGE_CONFIG[entry.to_stage] || STAGE_CONFIG.screening;
+                return (
+                  <li key={entry.id || index} className="relative pl-8">
+                    <div
+                      className={clsx(
+                        'absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-bg-elevated',
+                        index === stageHistory.length - 1 ? 'bg-accent' : 'bg-hairline-strong'
+                      )}
+                    />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {entry.from_stage && (
+                          <>
+                            <Badge
+                              tone={(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).tone}
+                            >
+                              {(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).label}
+                            </Badge>
+                            <ArrowRight size={12} className="text-content-muted" />
+                          </>
+                        )}
+                        <Badge tone={toConfig.tone}>{toConfig.label}</Badge>
+                      </div>
+                      <p className="text-xs text-content-secondary mt-1">
+                        {entry.changed_by_name} · {formatDate(entry.changed_at)}
+                      </p>
+                      {entry.notes && (
+                        <p className="text-xs text-content-muted mt-0.5 italic">{entry.notes}</p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </CollapsibleCard>
+      )}
+
+      {/* Recent Activities — default-collapsed; full Activity tab has the
+          authoritative view. */}
       {recentActivities.length > 0 && (
-        <div className="card-editorial">
-          <SectionHeader size="sm" title="Recent Activities" />
-          <ul className="divide-y divide-hairline-soft">
+        <CollapsibleCard
+          id="overview-recent-activities"
+          icon={Clock}
+          title="Recent Activities"
+          sub="Last five entries. Open the Activity tab for the full timeline."
+          defaultExpanded={false}
+          meta={
+            <span className="text-xs text-content-muted tabular-nums">
+              {recentActivities.length} on file
+            </span>
+          }
+        >
+          <ul className="divide-y divide-hairline-soft pt-3">
             {recentActivities.slice(0, 5).map((activity) => {
               const statusCfg =
                 ACTIVITY_STATUS_CONFIG[activity.status] || ACTIVITY_STATUS_CONFIG.open;
@@ -439,16 +510,95 @@ export default function OverviewTab() {
               );
             })}
           </ul>
-        </div>
+        </CollapsibleCard>
       )}
 
-      {/* Deal Notes */}
+      {/* Deal Notes — surfaced last; default expanded only when present. */}
       {deal.notes && (
-        <div className="card-editorial">
-          <SectionHeader size="sm" title="Notes" />
-          <p className="text-sm text-content-secondary whitespace-pre-line leading-relaxed">{deal.notes}</p>
+        <CollapsibleCard
+          id="overview-notes"
+          icon={StickyNote}
+          title="Notes"
+          sub="Free-text notes on this deal."
+          defaultExpanded
+        >
+          <p className="text-sm text-content-secondary whitespace-pre-line leading-relaxed pt-3">{deal.notes}</p>
+        </CollapsibleCard>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Compact above-the-fold readiness ribbon — replaces the full Readiness
+ * card. Surfaces the four numbers an analyst checks first ("am I close
+ * to IC-ready?") plus an inline list of the top open risks. The full
+ * per-axis breakdown lives in a CollapsibleCard lower on the page.
+ */
+function DealPulseRibbon({ readiness, keyRisks }) {
+  const statusTone =
+    readiness.status === 'ic_ready'
+      ? 'success'
+      : readiness.status === 'work_in_progress'
+        ? 'warn'
+        : 'danger';
+  const statusLabel =
+    readiness.status === 'ic_ready'
+      ? 'Investor-Grade'
+      : readiness.status === 'work_in_progress'
+        ? 'In Progress'
+        : 'Not Ready';
+  const dealBreakers = Number(readiness.pending_deal_breakers || 0);
+  return (
+    <div className="bg-bg-elevated border border-hairline rounded-editorial p-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <Activity size={16} className="text-content-muted shrink-0" />
+          <div className="text-eyebrow uppercase text-content-muted font-medium tracking-wider text-[10px]">
+            Deal Pulse
+          </div>
+          <Badge tone={statusTone}>{statusLabel}</Badge>
+        </div>
+        <div className="flex items-center gap-5 flex-wrap text-xs">
+          <PulseMetric label="Readiness" value={`${readiness.readiness_pct || 0}%`} />
+          <PulseMetric label="DD" value={`${readiness.dd_completion_pct || 0}%`} />
+          <PulseMetric label="Approvals" value={`${readiness.approval_completion_pct || 0}%`} />
+          <PulseMetric label="Risk score" value={`${readiness.risk_score || 0}`} />
+        </div>
+      </div>
+      {(dealBreakers > 0 || keyRisks.length > 0) && (
+        <div className="mt-3 pt-3 border-t border-hairline-soft flex items-start gap-3 flex-wrap">
+          <ShieldAlert size={13} className="text-data-negative shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-1">
+            {dealBreakers > 0 && (
+              <p className="text-sm text-data-negative">
+                {dealBreakers} deal-breaker{dealBreakers === 1 ? '' : 's'} unresolved.
+              </p>
+            )}
+            {keyRisks.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {keyRisks.slice(0, 5).map((risk) => (
+                  <Badge key={risk} tone="danger">{risk}</Badge>
+                ))}
+                {keyRisks.length > 5 && (
+                  <span className="text-[10px] text-content-muted self-center">
+                    +{keyRisks.length - 5} more
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PulseMetric({ label, value }) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-content-muted">{label}</span>
+      <span className="text-base font-semibold text-content-primary tabular-nums">{value}</span>
     </div>
   );
 }

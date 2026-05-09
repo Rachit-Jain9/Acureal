@@ -70,6 +70,15 @@ const samplePayload = {
       created_at: new Date(Date.now() - 60_000).toISOString(),
     },
   ],
+  cost_cap: {
+    enabled: true,
+    cap_usd: 50,
+    base_cap_usd: 50,
+    spent_today_usd: 12.5,
+    pct_of_cap: 25,
+    organization_id: 'org-1',
+    blocked: false,
+  },
   generated_at: new Date().toISOString(),
 };
 
@@ -145,5 +154,32 @@ describe('AdminAiUsagePage', () => {
     renderPage();
     expect(screen.getByText(/Couldn't load AI usage/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Try again/i })).toBeInTheDocument();
+  });
+
+  it('renders the cost-cap progress bar with utilization %', () => {
+    renderPage();
+    expect(screen.getByText(/Daily AI cost cap/i)).toBeInTheDocument();
+    // Utilization label "12.5 of 50" → percent shown as "25.0%"
+    expect(screen.getByText(/25\.0%/)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
+  });
+
+  it('renders BLOCKED chip when costCap.blocked is true', () => {
+    usageState = {
+      data: { ...samplePayload, cost_cap: { ...samplePayload.cost_cap, blocked: true, pct_of_cap: 110 } },
+      isLoading: false, isError: false, refetch: vi.fn(), isFetching: false,
+    };
+    renderPage();
+    expect(screen.getByText(/BLOCKED/i)).toBeInTheDocument();
+  });
+
+  it('renders the no-cap-configured note when cost_cap.enabled=false', () => {
+    usageState = {
+      data: { ...samplePayload, cost_cap: { enabled: false, cap_usd: null, spent_today_usd: 0, pct_of_cap: null, blocked: false } },
+      isLoading: false, isError: false, refetch: vi.fn(), isFetching: false,
+    };
+    renderPage();
+    expect(screen.getByText(/No daily cost cap configured/i)).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 });
