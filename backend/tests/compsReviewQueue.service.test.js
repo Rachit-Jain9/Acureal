@@ -536,6 +536,65 @@ describe('bulkApprove', () => {
   });
 });
 
+describe('bulkReassign', () => {
+  test('rejects empty array with 400', async () => {
+    await expect(queue.bulkReassign([], 'user-1', 'actor-1')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('caps at 50 ids per request', async () => {
+    const ids = Array.from({ length: 51 }, (_, i) => `id-${i}`);
+    await expect(queue.bulkReassign(ids, 'user-1', 'actor-1')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('rejects with 400 when target user is not in the org', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // target user lookup miss
+    await expect(
+      queue.bulkReassign(['r-1'], 'phantom-user', 'actor-1'),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('happy path: UPDATE returns succeeded rows; missing ids land in failed[]', async () => {
+    // First call: target user lookup → exists.
+    // Second call: UPDATE returns one row (r-1) of two requested.
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'user-1', name: 'Rachit', email: 'r@x.io' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'r-1', status: 'pending_review', assigned_to: 'user-1' }] });
+
+    const result = await queue.bulkReassign(['r-1', 'r-2'], 'user-1', 'actor-1');
+    expect(result.requested).toBe(2);
+    expect(result.succeeded_count).toBe(1);
+    expect(result.failed_count).toBe(1);
+    expect(result.target_user_id).toBe('user-1');
+    expect(result.succeeded[0]).toMatchObject({ id: 'r-1', assigned_to: 'user-1' });
+    expect(result.failed[0]).toMatchObject({ id: 'r-2' });
+  });
+
+  test('null target = unassign; skips the user lookup round-trip', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ id: 'r-1', status: 'pending_review', assigned_to: null }],
+    });
+    const result = await queue.bulkReassign(['r-1'], null, 'actor-1');
+    expect(result.target_user_id).toBeNull();
+    expect(result.succeeded_count).toBe(1);
+    // Only one query — the user-lookup was skipped because target is null.
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('surfaces 503 with operator instructions when assignment column is missing', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'user-1' }] }); // user lookup ok
+    const err = Object.assign(new Error('column "assigned_to" does not exist'), { code: '42703' });
+    query.mockRejectedValueOnce(err); // UPDATE fails
+
+    await expect(
+      queue.bulkReassign(['r-1'], 'user-1', 'actor-1'),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'queue_assignment_column_missing',
+      message: expect.stringMatching(/comps_review_queue assignment migration/i),
+    });
+  });
+});
+
 describe('bulkReject', () => {
   test('rejects empty array with 400', async () => {
     await expect(queue.bulkReject([], 'reason', 'u')).rejects.toMatchObject({ statusCode: 400 });

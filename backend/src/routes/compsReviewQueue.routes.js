@@ -263,6 +263,43 @@ router.post(
   },
 );
 
+// POST /api/comps-review-queue/bulk/reassign { ids: [...], assignedTo?: "<uuid>|null" }
+//
+// Sets assigned_to on each row. `assignedTo: null` is "unassign". Refuses
+// terminal rows (committed/rejected). Returns 503 with operator
+// instructions if the assignment migration hasn't been applied yet.
+router.post(
+  '/bulk/reassign',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    body('ids').isArray({ min: 1, max: 50 }),
+    // `assignedTo` is the new owner. Accept null/undefined for the
+    // "unassign everything" case; otherwise must be a UUID.
+    body('assignedTo').optional({ values: 'null' }).isUUID(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await queueService.bulkReassign(
+        req.body.ids,
+        req.body.assignedTo || null,
+        req.user.id,
+      );
+      res.status(200).json({ success: true, data: result });
+    } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({
+          success: false,
+          message: err.message,
+          code: err.code || undefined,
+        });
+      }
+      return next(err);
+    }
+  },
+);
+
 // POST /api/comps-review-queue/:id/approve — commit edits → comps[]
 router.post(
   '/:id/approve',

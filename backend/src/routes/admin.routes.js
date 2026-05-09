@@ -16,8 +16,32 @@ const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const aiUsageService = require('../services/aiUsage.service');
 const routingConfigService = require('../services/ai/routingConfig');
+const { query } = require('../config/database');
 
 const router = express.Router();
+
+// GET /api/admin/users
+//
+// Org-scoped list of active users — used by the Comps Review Queue's
+// bulk-reassign user-picker modal. Returns only the public fields the
+// picker needs (id / name / email / role); password hashes etc. never
+// leave the server.
+router.get('/users', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id, name, email, role
+         FROM users
+        WHERE organization_id = current_organization_id()
+          AND COALESCE(is_active, true) = true
+        ORDER BY name ASC, email ASC
+        LIMIT 200`,
+      [],
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // GET /api/admin/ai-usage?days=30
 //

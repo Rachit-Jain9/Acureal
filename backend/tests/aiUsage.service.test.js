@@ -99,13 +99,73 @@ describe('aiUsage.getByTaskProvider', () => {
   });
 });
 
+describe('aiUsage.getTopCostCalls', () => {
+  test('returns rows ordered by cost desc with safe defaults', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'call-1',
+          task: 'reasoning',
+          provider: 'claude',
+          model: 'claude-sonnet-4-6',
+          status: 'success',
+          cost_usd: '0.42',
+          latency_ms: '4200',
+          total_tokens: '15000',
+          deal_id: 'deal-1',
+          document_id: null,
+          created_at: new Date('2026-05-09T10:00:00Z'),
+        },
+      ],
+    });
+    const rows = await aiUsage.getTopCostCalls({ days: 7, limit: 10 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: 'call-1',
+      cost_usd: 0.42,
+      total_tokens: 15000,
+      created_at: '2026-05-09T10:00:00.000Z',
+    });
+  });
+
+  test('caps the limit to 100 even when caller asks for more', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await aiUsage.getTopCostCalls({ limit: 500 });
+    // Inspect the LIMIT param — second positional arg.
+    const sqlArgs = query.mock.calls[0][1];
+    expect(sqlArgs[1]).toBe(100);
+  });
+
+  test('fails open: query error returns []', async () => {
+    query.mockRejectedValueOnce(new Error('boom'));
+    const rows = await aiUsage.getTopCostCalls({});
+    expect(rows).toEqual([]);
+  });
+});
+
+describe('aiUsage.getSummary p50', () => {
+  test('exposes p50 alongside p95 latency', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        total_calls: 100, total_cost_usd: 5, total_tokens: 50000,
+        cache_hits: 10, successes: 90, errors: 5, cost_capped: 0,
+        recovered_via_retry: 2, prompt_cache_used: 8,
+        avg_latency_ms: 800, p50_latency_ms: 600, p95_latency_ms: 2400,
+      }],
+    });
+    const out = await aiUsage.getSummary({ days: 30 });
+    expect(out.p50_latency_ms).toBe(600);
+    expect(out.p95_latency_ms).toBe(2400);
+  });
+});
+
 describe('aiUsage.getUsageDashboard', () => {
   test('clamps days to [1, 365] and parallelizes child queries', async () => {
     query.mockResolvedValue({ rows: [{}] });
     const out = await aiUsage.getUsageDashboard({ days: 9999 });
     expect(out.summary.window_days).toBe(365);
-    // 4 parallel queries: summary, daily, by_task_provider, by_doctype
-    expect(query).toHaveBeenCalledTimes(4);
+    // 5 parallel queries: summary, daily, by_task_provider, by_doctype, top_cost_calls
+    expect(query).toHaveBeenCalledTimes(5);
   });
 
   test('defaults to 30-day window when days is missing', async () => {

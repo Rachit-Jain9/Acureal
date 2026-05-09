@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2, UserPlus } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
@@ -11,7 +12,9 @@ import {
   useManualUpload,
   useBulkApproveQueue,
   useBulkRejectQueue,
+  useBulkReassignQueue,
 } from '../hooks/useCompsReviewQueue';
+import { adminAPI } from '../services/api';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -360,6 +363,8 @@ export default function CompsQueuePage() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassignTargetId, setReassignTargetId] = useState('');
 
   // Bulk operations only make sense when the status filter is
   // pending_review. Other statuses (committed / rejected) are terminal;
@@ -370,10 +375,23 @@ export default function CompsQueuePage() {
     setSelectedIds(new Set());
     setRejectModalOpen(false);
     setRejectReason('');
+    setReassignModalOpen(false);
+    setReassignTargetId('');
   }, [statusFilter, sourceFilter]);
 
   const bulkApprove = useBulkApproveQueue();
   const bulkReject = useBulkRejectQueue();
+  const bulkReassign = useBulkReassignQueue();
+
+  // Org users for the reassign user-picker. Only fetched when the modal
+  // opens (enabled flag) so the page-load doesn't pay for it. 5-minute
+  // staleTime — the org user list barely changes during a session.
+  const usersQuery = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => adminAPI.listUsers().then((r) => r.data.data),
+    enabled: reassignModalOpen,
+    staleTime: 5 * 60_000,
+  });
 
   const { data, isLoading, isError, error, refetch } = useCompsReviewQueueList({
     status: statusFilter,
@@ -456,6 +474,27 @@ export default function CompsQueuePage() {
       setRejectReason('');
     } catch {
       // hook surfaces toast — keep modal open so user can retry
+    }
+  };
+
+  const openBulkReassign = () => {
+    if (!someSelected) return;
+    setReassignTargetId('');
+    setReassignModalOpen(true);
+  };
+
+  const handleBulkReassignConfirm = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    // Empty string in the picker means "unassign" — surface as null.
+    const assignedTo = reassignTargetId || null;
+    try {
+      await bulkReassign.mutateAsync({ ids, assignedTo });
+      setSelectedIds(new Set());
+      setReassignModalOpen(false);
+      setReassignTargetId('');
+    } catch {
+      // toast surfaced by hook
     }
   };
 
@@ -694,7 +733,7 @@ export default function CompsQueuePage() {
           <button
             type="button"
             onClick={openBulkReject}
-            disabled={bulkApprove.isPending || bulkReject.isPending}
+            disabled={bulkApprove.isPending || bulkReject.isPending || bulkReassign.isPending}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <XCircle size={13} />
@@ -702,8 +741,17 @@ export default function CompsQueuePage() {
           </button>
           <button
             type="button"
+            onClick={openBulkReassign}
+            disabled={bulkApprove.isPending || bulkReject.isPending || bulkReassign.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <UserPlus size={13} />
+            Reassign
+          </button>
+          <button
+            type="button"
             onClick={() => setSelectedIds(new Set())}
-            disabled={bulkApprove.isPending || bulkReject.isPending}
+            disabled={bulkApprove.isPending || bulkReject.isPending || bulkReassign.isPending}
             className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-content-muted hover:text-content-primary transition-colors disabled:opacity-60"
             aria-label="Clear selection"
           >
@@ -773,6 +821,88 @@ export default function CompsQueuePage() {
               >
                 {bulkReject.isPending ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
                 {bulkReject.isPending ? 'Rejecting…' : `Reject ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk reassign — picker for the new owner. Empty selection means
+          "unassign". Shows a fail-graceful state when the migration
+          isn't applied yet (the toast carries the operator instruction). */}
+      {reassignModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !bulkReassign.isPending && setReassignModalOpen(false)}
+        >
+          <div
+            className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h3 className="font-display text-base font-semibold text-content-primary">
+                Reassign {selectedIds.size} item{selectedIds.size === 1 ? '' : 's'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReassignModalOpen(false)}
+                disabled={bulkReassign.isPending}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-content-muted">
+                Pick a new owner. Choose <span className="font-medium">Unassign</span> to clear ownership. Terminal rows (committed / rejected) are skipped automatically.
+              </p>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Assign to
+                </label>
+                {usersQuery.isLoading ? (
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                ) : usersQuery.isError ? (
+                  <p className="text-sm text-data-negative">Couldn't load users — try closing and re-opening this dialog.</p>
+                ) : (
+                  <select
+                    value={reassignTargetId}
+                    onChange={(e) => setReassignTargetId(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+                  >
+                    <option value="">— Unassign —</option>
+                    {(usersQuery.data || []).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name || u.email}{u.role ? ` · ${u.role}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+              <button
+                type="button"
+                onClick={() => setReassignModalOpen(false)}
+                disabled={bulkReassign.isPending}
+                className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkReassignConfirm}
+                disabled={bulkReassign.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                {bulkReassign.isPending ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                {bulkReassign.isPending
+                  ? 'Reassigning…'
+                  : reassignTargetId
+                  ? `Reassign ${selectedIds.size}`
+                  : `Unassign ${selectedIds.size}`
+                }
               </button>
             </div>
           </div>

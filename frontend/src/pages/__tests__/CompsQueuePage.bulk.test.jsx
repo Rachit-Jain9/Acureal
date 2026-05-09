@@ -10,6 +10,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const bulkApproveMutateAsync = vi.fn();
 const bulkRejectMutateAsync = vi.fn();
+const bulkReassignMutateAsync = vi.fn();
+const listUsersFn = vi.fn();
 const useCompsReviewQueueListMock = vi.fn();
 const useProcessPendingBatchMock = vi.fn(() => ({ mutate: vi.fn(), isPending: false }));
 const useManualUploadMock = vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false }));
@@ -21,6 +23,10 @@ const useBulkRejectQueueMock = vi.fn(() => ({
   mutateAsync: bulkRejectMutateAsync,
   isPending: false,
 }));
+const useBulkReassignQueueMock = vi.fn(() => ({
+  mutateAsync: bulkReassignMutateAsync,
+  isPending: false,
+}));
 
 vi.mock('../../hooks/useCompsReviewQueue', () => ({
   useCompsReviewQueueList: (...args) => useCompsReviewQueueListMock(...args),
@@ -28,6 +34,13 @@ vi.mock('../../hooks/useCompsReviewQueue', () => ({
   useManualUpload: (...args) => useManualUploadMock(...args),
   useBulkApproveQueue: (...args) => useBulkApproveQueueMock(...args),
   useBulkRejectQueue: (...args) => useBulkRejectQueueMock(...args),
+  useBulkReassignQueue: (...args) => useBulkReassignQueueMock(...args),
+}));
+
+vi.mock('../../services/api', () => ({
+  adminAPI: {
+    listUsers: (...args) => listUsersFn(...args),
+  },
 }));
 
 import CompsQueuePage from '../CompsQueuePage';
@@ -54,6 +67,13 @@ beforeEach(() => {
   bulkApproveMutateAsync.mockResolvedValue({ succeeded_count: 2, failed_count: 0 });
   bulkRejectMutateAsync.mockReset();
   bulkRejectMutateAsync.mockResolvedValue({ succeeded_count: 1, failed_count: 0 });
+  bulkReassignMutateAsync.mockReset();
+  bulkReassignMutateAsync.mockResolvedValue({ succeeded_count: 1, failed_count: 0, target_user_id: 'user-1' });
+  listUsersFn.mockReset();
+  listUsersFn.mockResolvedValue({ data: { data: [
+    { id: 'user-1', name: 'Rachit Jain', email: 'r@x.io', role: 'admin' },
+    { id: 'user-2', name: 'Asha Rao',    email: 'a@x.io', role: 'analyst' },
+  ] } });
   // Two list hooks are mounted on the page — pending_review (the visible
   // filter) and pending_extraction (used for the "Process pending now"
   // button count). Return the same mock for both to keep things simple.
@@ -133,6 +153,39 @@ describe('CompsQueuePage — bulk actions', () => {
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
     expect(bulkApproveMutateAsync).not.toHaveBeenCalled();
     expect(bulkRejectMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('Reassign opens picker modal; submit calls bulkReassign with selected ids + target user', async () => {
+    renderPage();
+    const checkboxes = screen.getAllByRole('button', { name: /Select row/i });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Reassign/i }));
+    // Modal renders with the user-picker dropdown.
+    const heading = await screen.findByText(/Reassign 1 item/i);
+    expect(heading).toBeInTheDocument();
+    // Wait for the users hook to populate the select.
+    const select = await screen.findByRole('combobox');
+    fireEvent.change(select, { target: { value: 'user-1' } });
+    // Click the confirm button (label changes to "Reassign 1" once a user is picked).
+    const confirmBtn = screen.getByRole('button', { name: /^Reassign 1$/ });
+    fireEvent.click(confirmBtn);
+    await waitFor(() =>
+      expect(bulkReassignMutateAsync).toHaveBeenCalledWith({ ids: ['r-1'], assignedTo: 'user-1' }),
+    );
+  });
+
+  it('Unassign path: empty target user means assignedTo=null', async () => {
+    renderPage();
+    const checkboxes = screen.getAllByRole('button', { name: /Select row/i });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Reassign/i }));
+    await screen.findByRole('combobox');
+    // Don't change the value — default is empty string ("Unassign").
+    const confirmBtn = screen.getByRole('button', { name: /^Unassign 1$/ });
+    fireEvent.click(confirmBtn);
+    await waitFor(() =>
+      expect(bulkReassignMutateAsync).toHaveBeenCalledWith({ ids: ['r-1'], assignedTo: null }),
+    );
   });
 
   it('switching the status filter clears the selection', () => {
