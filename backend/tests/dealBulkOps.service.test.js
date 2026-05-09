@@ -111,6 +111,48 @@ describe('bulkReassignDeals', () => {
   });
 });
 
+// ── bulkDeleteDeals ───────────────────────────────────────────────────────
+
+describe('bulkDeleteDeals', () => {
+  test('rejects empty array with 400', async () => {
+    await expect(dealService.bulkDeleteDeals([]))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('caps at 50 ids per request', async () => {
+    const ids = Array.from({ length: 51 }, (_, i) => `id-${i}`);
+    await expect(dealService.bulkDeleteDeals(ids))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('aggregates per-id success + failure', async () => {
+    // First id: deleteDeal succeeds via transaction mock
+    transaction.mockImplementationOnce(async (cb) => {
+      const client = {
+        query: jest
+          .fn()
+          // Initial deal SELECT
+          .mockResolvedValueOnce({ rows: [{ id: 'good', stage: 'screening', is_archived: false, property_id: null }] })
+          // documents SELECT (no docs to clean up)
+          .mockResolvedValueOnce({ rows: [] })
+          // DELETE returns the id
+          .mockResolvedValueOnce({ rows: [{ id: 'good' }] }),
+      };
+      return cb(client);
+    });
+    // Second id: SELECT returns nothing → throws 404
+    transaction.mockImplementationOnce(async (cb) => {
+      const client = { query: jest.fn().mockResolvedValueOnce({ rows: [] }) };
+      return cb(client);
+    });
+
+    const result = await dealService.bulkDeleteDeals(['good', 'missing']);
+    expect(result.requested).toBe(2);
+    expect(result.succeeded_count + result.failed_count).toBe(2);
+    expect(result.failed.find((f) => f.id === 'missing')).toBeDefined();
+  });
+});
+
 // ── bulkTransitionStage ───────────────────────────────────────────────────
 
 describe('bulkTransitionStage', () => {

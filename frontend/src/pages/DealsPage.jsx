@@ -13,6 +13,7 @@ import {
   useBulkArchiveDeals,
   useBulkReassignDeals,
   useBulkTransitionDeals,
+  useBulkDeleteDeals,
 } from '../hooks/useDeals';
 import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
@@ -172,21 +173,27 @@ export default function DealsPage() {
   const [stageModalOpen, setStageModalOpen] = useState(false);
   const [stageTarget, setStageTarget] = useState('');
   const [stageNotes, setStageNotes] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
 
   useEffect(() => {
     setSelectedIds(new Set());
     setArchiveModalOpen(false);
     setReassignModalOpen(false);
     setStageModalOpen(false);
+    setDeleteModalOpen(false);
     setArchiveReason('');
     setReassignTargetId('');
     setStageTarget('');
     setStageNotes('');
+    setDeleteConfirmText('');
   }, [search, stageFilter, typeFilter, priorityFilter, assignedToMe]);
 
   const bulkArchive = useBulkArchiveDeals();
   const bulkReassign = useBulkReassignDeals();
   const bulkTransition = useBulkTransitionDeals();
+  const bulkDelete = useBulkDeleteDeals();
   const usersQuery = useQuery({
     queryKey: ['admin-users'],
     queryFn: () => adminAPI.listUsers().then((r) => r.data.data),
@@ -204,7 +211,11 @@ export default function DealsPage() {
     });
   };
   const clearSelection = () => setSelectedIds(new Set());
-  const bulkBusy = bulkArchive.isPending || bulkReassign.isPending || bulkTransition.isPending;
+  const bulkBusy =
+    bulkArchive.isPending
+    || bulkReassign.isPending
+    || bulkTransition.isPending
+    || bulkDelete.isPending;
 
   const handleConfirmArchive = async () => {
     const ids = [...selectedIds];
@@ -241,6 +252,25 @@ export default function DealsPage() {
       setStageModalOpen(false);
       setStageTarget('');
       setStageNotes('');
+    } catch {
+      // toast surfaced by hook
+    }
+  };
+
+  // Bulk delete is the most destructive surface we expose. The
+  // "type DELETE to confirm" pattern is a deliberate friction gate —
+  // clicking through a generic confirm() once was the muscle memory
+  // for archive; deletion has to feel different.
+  const deleteConfirmReady = deleteConfirmText.trim().toUpperCase() === 'DELETE';
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmReady) return;
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await bulkDelete.mutateAsync(ids);
+      clearSelection();
+      setDeleteModalOpen(false);
+      setDeleteConfirmText('');
     } catch {
       // toast surfaced by hook
     }
@@ -564,6 +594,22 @@ export default function DealsPage() {
             <Archive size={13} />
             Archive
           </button>
+          {/* Bulk delete — admin-only. Visible only to owner/admin so
+              analyst seats can't fat-finger a destructive batch op.
+              The single-deal Delete on each card is also admin-gated
+              (DealCard renders the menu item conditionally). */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setDeleteModalOpen(true)}
+              disabled={bulkBusy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+              title="Hard-delete the selected deals — irreversible"
+            >
+              <Trash2 size={13} />
+              Delete
+            </button>
+          )}
           <button
             type="button"
             onClick={clearSelection}
@@ -797,6 +843,81 @@ export default function DealsPage() {
               >
                 {bulkTransition.isPending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
                 {bulkTransition.isPending ? 'Moving…' : `Move ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk delete — type-DELETE-to-confirm. Most destructive
+          surface we expose; the friction gate is deliberate. The
+          confirm input is autoFocused so the keyboard flow is just
+          tab → type → Enter. */}
+      {deleteModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !bulkBusy && setDeleteModalOpen(false)}
+        >
+          <div
+            className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h3 className="font-display text-base font-semibold text-rose-800 flex items-center gap-2">
+                <Trash2 size={15} className="text-rose-600" />
+                Delete {selectedIds.size} deal{selectedIds.size === 1 ? '' : 's'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={bulkBusy}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-900">
+                <p className="font-medium">This is irreversible.</p>
+                <p className="mt-1">
+                  Each deal's documents, financials, scenarios, audit events, and DD/risk records will be hard-deleted along with the deal itself. To remove deals from active views without deleting them, use <span className="font-semibold">Archive</span> instead.
+                </p>
+              </div>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Type <span className="font-mono text-rose-700">DELETE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && deleteConfirmReady) handleConfirmDelete();
+                  }}
+                  autoFocus
+                  placeholder="DELETE"
+                  className="w-full px-2.5 py-1.5 text-sm font-mono border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-rose-500"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={bulkBusy}
+                className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={bulkBusy || !deleteConfirmReady}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+              >
+                {bulkDelete.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                {bulkDelete.isPending ? 'Deleting…' : `Delete ${selectedIds.size}`}
               </button>
             </div>
           </div>

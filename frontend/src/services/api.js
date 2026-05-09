@@ -206,6 +206,10 @@ export const dealsAPI = {
     if (notes != null && notes !== '') body.notes = notes;
     return api.post('/deals/bulk/stage', body);
   },
+  // Admin-only. Hard-deletes the supplied deals. Each deletion runs
+  // through the standard `deleteDeal` path so storage cleanup + the
+  // property cascade stay consistent.
+  bulkDelete: (ids) => api.post('/deals/bulk/delete', { ids }),
   getPipeline: () => api.get('/deals/pipeline'),
   getSummary: () => api.get('/deals/summary'),
   // Sharing

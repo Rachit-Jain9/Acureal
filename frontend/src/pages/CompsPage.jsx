@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useSavedViews } from '../hooks/useSavedViews';
+import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 import {
   Plus,
   Trash2,
@@ -459,6 +461,43 @@ export default function CompsPage() {
     setPage(1);
   }, []);
 
+  // Saved views — closes the saved-views matrix across every primary
+  // list. Same hook + dropdown component used by Deals (PR #209) and
+  // the Comps Review Queue (PR #210), pointed at a comps-specific
+  // localStorage key so the three pages don't share each other's
+  // saved combos.
+  const savedViews = useSavedViews({ storageKey: 'redip.comps.savedViews' });
+
+  // Snapshot of the user-controlled filter state — what saved views
+  // capture and recall. Pagination + sort are NOT included; a saved
+  // view should land you on page 1 of the user's preferred sort.
+  const currentFilters = useMemo(
+    () => ({
+      search: search || '',
+      city: filters.city || '',
+      projectType: filters.projectType || '',
+      sourceType: filters.sourceType || '',
+      minRate: filters.minRate || '',
+      maxRate: filters.maxRate || '',
+    }),
+    [search, filters.city, filters.projectType, filters.sourceType, filters.minRate, filters.maxRate],
+  );
+
+  const applySavedView = (view) => {
+    const f = view?.filters || {};
+    setSearch(f.search || '');
+    setFilters({
+      city: f.city || '',
+      projectType: f.projectType || '',
+      sourceType: f.sourceType || null,
+      minRate: f.minRate || '',
+      maxRate: f.maxRate || '',
+    });
+    setPage(1);
+  };
+
+  const activeView = savedViews.findActive(currentFilters);
+
   const clearFilters = useCallback(() => {
     setFilters({ city: '', projectType: '', sourceType: null, minRate: '', maxRate: '' });
     setSearch('');
@@ -599,6 +638,18 @@ export default function CompsPage() {
             onChange={(v) => { setSearch(v); setPage(1); }}
             placeholder="Search project, developer, RERA…"
             ariaLabel="Search comparables"
+          />
+          {/* Saved views — same dropdown the Deals list and Comps
+              Review Queue use. Backed by `redip.comps.savedViews` so
+              the three lists keep separate libraries. */}
+          <SavedViewsMenu
+            views={savedViews.views}
+            activeView={activeView}
+            currentFilters={currentFilters}
+            onApply={applySavedView}
+            onSave={savedViews.save}
+            onRemove={savedViews.remove}
+            canSave
           />
           <input
             value={filters.city}
