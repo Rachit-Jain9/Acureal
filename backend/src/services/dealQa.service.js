@@ -228,28 +228,53 @@ async function assembleContext({ dealId, question, topK = DEFAULT_TOP_K, deal: d
 // Prompt + Claude call
 // ──────────────────────────────────────────────────────────────────────────
 
+// Synthetic source ids the model is allowed to cite when grounding a
+// claim in non-document context (the deal snapshot, comps table, or
+// risk flags). These are NOT document chunks — they're the structured
+// fields the prompt already supplies as context. Without these the
+// validator rejects answers grounded in deal-level facts whenever the
+// deal has no uploaded documents (a common case).
+const SYNTHETIC_CITATION_IDS = new Set([
+  'deal_snapshot',  // financials + property + ask price + locality
+  'risk_flags',     // open risk_flags rows
+  'comps',          // top-N comparable transactions
+  'financials',     // alias often surfaced by the model
+]);
+
+// Display labels for synthetic citations — surfaced in the citation
+// chip so the UI doesn't show a raw token like "deal_snapshot".
+const SYNTHETIC_CITATION_LABELS = {
+  deal_snapshot: 'Deal snapshot',
+  risk_flags:    'Open risk flags',
+  comps:         'Comparable transactions',
+  financials:    'Financial model',
+};
+
 const SYSTEM_PROMPT = `You are a senior Indian real-estate analyst answering a colleague's question about a specific deal at a Bengaluru private-equity fund.
 
 Hard rules:
 1. ONLY use facts that appear in the supplied "deal_snapshot", "risk_flags", "comps", or "retrieved_chunks". Never invent a number, name, date, RERA reference, or zoning code.
-2. Every claim that depends on a document MUST cite an entry in retrieved_chunks via its embedding_id. If retrieved_chunks is empty, restrict yourself to facts from deal_snapshot / risk_flags / comps and cite "deal_snapshot" or similar in why_relevant.
-3. Output STRICTLY this JSON shape — no markdown fence, no preamble:
+2. Every factual claim MUST be backed by a citation. Citations work in TWO modes:
+   • **Document-grounded** — when the claim comes from an uploaded document, the embedding_id MUST match an entry in retrieved_chunks exactly.
+   • **Snapshot-grounded** — when the claim comes from the deal_snapshot / risk_flags / comps fields (NOT from a document), use one of these literal embedding_id values: "deal_snapshot", "risk_flags", "comps", "financials". Pick whichever non-document section the claim came from.
+3. Do not put document chunk ids in why_relevant; put them in embedding_id. why_relevant is a one-phrase note about why the cited evidence supports the claim.
+4. Output STRICTLY this JSON shape — no markdown fence, no preamble:
    {
      "answer": "<3-6 sentences, plain Indian English, investor-grade>",
      "citations": [
        {
-         "embedding_id": "<exact id from retrieved_chunks>",
-         "excerpt": "<the specific sentence or fragment from chunk_text that supports the answer>",
+         "embedding_id": "<retrieved chunk id, OR one of: deal_snapshot, risk_flags, comps, financials>",
+         "excerpt": "<the specific sentence or fragment that supports the answer; for snapshot-grounded citations, paraphrase the relevant deal field>",
          "why_relevant": "<one short phrase>"
        }
      ],
      "confidence": "high|medium|low"
    }
-4. citations array MUST contain at least one entry whenever the answer makes any factual claim.
-5. If the question cannot be answered from the supplied context, set confidence="low" and explain in answer what's missing — but you still need at least one citation pointing at the closest evidence.
-6. Do not produce legal opinions on title, RERA compliance, or zoning. Surface what the documents say; flag where independent verification is needed.
+5. citations array MUST contain at least one entry whenever the answer makes any factual claim.
+6. If retrieved_chunks is empty AND the deal_snapshot is sparse, set confidence="low" and explain in answer what's missing — still cite the closest source (e.g. "deal_snapshot" with a note that documents haven't been uploaded yet).
+7. Do not produce legal opinions on title, RERA compliance, or zoning. Surface what the supplied facts say; flag where independent verification is needed.
 
-The system layer post-validates that every embedding_id you cite actually exists in retrieved_chunks. Hallucinated chunk ids are rejected and the answer is discarded.`;
+The system layer post-validates that every embedding_id you cite is either a real retrieved chunk OR one of the four synthetic ids above. Anything else is rejected and the answer is discarded.`;
 
 /**
  * Compose the user-facing prompt payload. The assembled context is
@@ -267,14 +292,21 @@ function buildPromptPayload({ question, context }) {
 }
 
 /**
- * Validate that every citation's embedding_id is present in the
- * retrieval set. Returns { valid: bool, invalid_ids: [...] }.
+ * Validate that every citation's embedding_id is either a real retrieved
+ * chunk id OR one of the synthetic non-document ids (deal_snapshot /
+ * risk_flags / comps / financials). The latter let the model ground a
+ * claim in deal-level fields when no document chunks were retrieved —
+ * which is the common case for sourcing-stage deals with no uploaded
+ * documents yet. Returns { valid: bool, invalid_ids: [...] }.
  */
 function validateCitations(citations, retrievedChunks) {
-  const valid = new Set(retrievedChunks.map((c) => c.embedding_id));
+  const documentIds = new Set(retrievedChunks.map((c) => c.embedding_id));
   const invalid = [];
   for (const c of citations || []) {
-    if (!valid.has(c.embedding_id)) invalid.push(c.embedding_id);
+    const id = c.embedding_id;
+    if (documentIds.has(id)) continue;
+    if (SYNTHETIC_CITATION_IDS.has(id)) continue;
+    invalid.push(id);
   }
   return { valid: invalid.length === 0, invalid_ids: invalid };
 }
@@ -282,14 +314,30 @@ function validateCitations(citations, retrievedChunks) {
 /**
  * Hydrate the model-supplied citations with full metadata from the
  * retrieval set so the UI can render document name, page, similarity
- * without a second round-trip.
+ * without a second round-trip. Synthetic citations (deal_snapshot etc.)
+ * get a friendly display label and a `kind: 'synthetic'` flag so the
+ * UI can differentiate them from document-backed citations.
  */
 function hydrateCitations(modelCitations, retrievedChunks) {
   const byId = new Map(retrievedChunks.map((c) => [c.embedding_id, c]));
   return (modelCitations || []).map((c) => {
+    if (SYNTHETIC_CITATION_IDS.has(c.embedding_id)) {
+      return {
+        embedding_id: c.embedding_id,
+        kind: 'synthetic',
+        document_id: null,
+        document_name: SYNTHETIC_CITATION_LABELS[c.embedding_id] || c.embedding_id,
+        page_number: null,
+        similarity: null,
+        excerpt: c.excerpt,
+        why_relevant: c.why_relevant || null,
+        chunk_text: null,
+      };
+    }
     const chunk = byId.get(c.embedding_id);
     return {
       embedding_id: c.embedding_id,
+      kind: 'document',
       document_id: chunk?.document_id || null,
       document_name: chunk?.document_name || null,
       page_number: chunk?.page_number || null,

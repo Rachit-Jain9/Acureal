@@ -79,6 +79,47 @@ describe('validateCitations', () => {
     // Schema enforces >= 1 citation; this is just defensive.
     expect(dealQa.validateCitations([], [makeChunk('a')]).valid).toBe(true);
   });
+
+  // Synthetic citations let the model ground a claim in a non-document
+  // source (deal_snapshot / risk_flags / comps / financials) when no
+  // document chunks have been retrieved. This is the common case for
+  // sourcing-stage deals before any documents are uploaded.
+  test('accepts synthetic citation ids (deal_snapshot / risk_flags / comps / financials)', () => {
+    const result = dealQa.validateCitations(
+      [
+        { embedding_id: 'deal_snapshot', excerpt: 'IRR 22.4%' },
+        { embedding_id: 'risk_flags', excerpt: 'EC mismatch' },
+        { embedding_id: 'comps', excerpt: 'Whitefield comps INR 8500/sqft' },
+        { embedding_id: 'financials', excerpt: 'Total cost INR 42 Cr' },
+      ],
+      [], // no retrieved chunks — pure synthetic case
+    );
+    expect(result.valid).toBe(true);
+    expect(result.invalid_ids).toEqual([]);
+  });
+
+  test('mixes synthetic + document citations cleanly', () => {
+    const result = dealQa.validateCitations(
+      [
+        { embedding_id: 'deal_snapshot', excerpt: 'IRR' },
+        { embedding_id: 'a', excerpt: 'doc text' },
+      ],
+      [makeChunk('a')],
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  test('still rejects unknown ids when mixed with synthetic ones', () => {
+    const result = dealQa.validateCitations(
+      [
+        { embedding_id: 'deal_snapshot', excerpt: 'IRR' },
+        { embedding_id: 'phantom-xyz', excerpt: 'wrong' },
+      ],
+      [],
+    );
+    expect(result.valid).toBe(false);
+    expect(result.invalid_ids).toEqual(['phantom-xyz']);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -95,6 +136,7 @@ describe('hydrateCitations', () => {
     expect(out).toEqual([
       {
         embedding_id: 'a',
+        kind: 'document',
         document_id: 'doc-1',
         document_name: 'doc-1.pdf',
         page_number: 3,
@@ -123,6 +165,21 @@ describe('hydrateCitations', () => {
     );
     expect(out[0].document_id).toBeNull();
     expect(out[0].document_name).toBeNull();
+  });
+
+  test('synthetic citations get a friendly display label + kind=synthetic', () => {
+    const out = dealQa.hydrateCitations(
+      [
+        { embedding_id: 'deal_snapshot', excerpt: 'IRR is 22.4%', why_relevant: 'IRR claim' },
+        { embedding_id: 'risk_flags',    excerpt: 'EC mismatch open' },
+      ],
+      [],
+    );
+    expect(out[0].kind).toBe('synthetic');
+    expect(out[0].document_name).toBe('Deal snapshot');
+    expect(out[0].excerpt).toBe('IRR is 22.4%');
+    expect(out[0].chunk_text).toBeNull();
+    expect(out[1].document_name).toBe('Open risk flags');
   });
 });
 

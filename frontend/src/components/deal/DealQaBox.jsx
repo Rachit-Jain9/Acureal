@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Database,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, SectionHeader } from '../../design-system';
@@ -48,8 +49,15 @@ const SUGGESTED_QUESTIONS = [
 
 function CitationChip({ citation }) {
   const [open, setOpen] = useState(false);
+  // Synthetic citations are non-document — they reference deal_snapshot,
+  // risk_flags, comps, or financials (the structured fields the prompt
+  // already supplies as context). We swap the icon and tone so the
+  // analyst can tell at a glance "this came from a doc" vs "this came
+  // from the deal model".
+  const isSynthetic = citation.kind === 'synthetic';
   const label = citation.document_name || citation.embedding_id?.slice(0, 8) || 'source';
   const pageBit = citation.page_number != null ? ` · p.${citation.page_number}` : '';
+  const Icon = isSynthetic ? Database : FileText;
   return (
     <span className="relative inline-block">
       <button
@@ -57,14 +65,16 @@ function CitationChip({ citation }) {
         onClick={() => setOpen((v) => !v)}
         className={clsx(
           'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tabular-nums',
-          'bg-bg-secondary border border-hairline text-content-secondary',
-          'hover:border-accent/50 hover:text-content-primary transition-colors',
+          'border transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+          isSynthetic
+            ? 'bg-accent-soft/40 border-accent/30 text-accent hover:border-accent/50'
+            : 'bg-bg-secondary border-hairline text-content-secondary hover:border-accent/50 hover:text-content-primary',
         )}
-        title="Click to see the cited excerpt"
+        title={isSynthetic ? 'Source: structured deal data (not a document)' : 'Click to see the cited excerpt'}
         aria-expanded={open}
       >
-        <FileText size={9} />
+        <Icon size={9} />
         <span className="truncate max-w-[160px]">{label}</span>
         <span className="text-content-muted">{pageBit}</span>
       </button>
@@ -72,16 +82,25 @@ function CitationChip({ citation }) {
         <div className="absolute z-20 left-0 mt-1 w-80 max-w-[80vw] p-3 rounded-md border border-hairline bg-bg-elevated shadow-editorial text-xs text-content-secondary">
           <div className="flex items-baseline justify-between gap-2 mb-1">
             <span className="font-medium text-content-primary">{label}</span>
-            {typeof citation.similarity === 'number' && (
+            {isSynthetic ? (
+              <span className="text-content-muted text-[10px] uppercase tracking-wider">
+                Deal data
+              </span>
+            ) : typeof citation.similarity === 'number' ? (
               <span className="text-content-muted tabular-nums">
                 {Math.round(citation.similarity * 100)}% match
               </span>
-            )}
+            ) : null}
           </div>
           <p className="italic leading-relaxed">"{citation.excerpt}"</p>
           {citation.why_relevant && (
             <p className="mt-2 text-[11px] text-content-muted">
               Why relevant: {citation.why_relevant}
+            </p>
+          )}
+          {isSynthetic && (
+            <p className="mt-2 text-[10px] text-content-muted">
+              This claim comes from the deal's structured fields, not an uploaded document. Upload source documents (sale deed, EC, sanctioned plan) to ground future answers in primary evidence.
             </p>
           )}
         </div>

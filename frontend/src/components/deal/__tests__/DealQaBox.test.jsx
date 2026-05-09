@@ -109,7 +109,7 @@ describe('DealQaBox', () => {
         question: 'What are the comps?',
         answer: 'Median INR 8500/sqft across 4 verified comps in Whitefield.',
         citations: [
-          { embedding_id: 'e-1', document_name: 'Whitefield JLL Q1 2026.pdf', page_number: 12, similarity: 0.91, excerpt: 'Whitefield median INR 8500/sqft.' },
+          { embedding_id: 'e-1', kind: 'document', document_name: 'Whitefield JLL Q1 2026.pdf', page_number: 12, similarity: 0.91, excerpt: 'Whitefield median INR 8500/sqft.' },
         ],
         status: 'complete',
         numerical_drifts: [],
@@ -124,6 +124,25 @@ describe('DealQaBox', () => {
     expect(screen.getByText(/Median INR 8500\/sqft/)).toBeInTheDocument();
     // Citation chip surfaced
     expect(screen.getByText('Whitefield JLL Q1 2026.pdf')).toBeInTheDocument();
+  });
+
+  it('renders synthetic citation chips with the deal-data label', () => {
+    qaState.history = { data: [
+      {
+        id: 'r-syn',
+        question: 'Brief about this deal',
+        answer: 'This is a 9-acre Jigani parcel at IRR 13.6%.',
+        citations: [
+          { embedding_id: 'deal_snapshot', kind: 'synthetic', document_name: 'Deal snapshot', excerpt: 'IRR 13.6% / 9 acres', why_relevant: 'IRR claim' },
+        ],
+        status: 'complete',
+        created_at: '2026-05-09T10:00:00Z',
+      },
+    ], isLoading: false };
+    renderWithClient(<DealQaBox dealId="d-1" />);
+    fireEvent.click(screen.getByText('Brief about this deal'));
+    // Synthetic chip uses the friendly label "Deal snapshot"
+    expect(screen.getByText('Deal snapshot')).toBeInTheDocument();
   });
 
   it('shows the failure-reason banner on a failed history row', () => {
