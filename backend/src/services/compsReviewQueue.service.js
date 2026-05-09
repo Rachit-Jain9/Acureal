@@ -167,50 +167,122 @@ function mapToCompsRow(comp, organizationId) {
 // List / get
 // ──────────────────────────────────────────────────────────────────────────
 
-const listQueue = async ({ status, source, limit = 50, offset = 0 } = {}) => {
+const listQueue = async ({
+  status,
+  source,
+  limit = 50,
+  offset = 0,
+  // Filters added for the queue page's "Assigned to me" pill (PR with
+  // migration 20260520_comps_queue_assignment). Optional; when neither
+  // is provided the listing behaves exactly as before.
+  assignedToMe = false,
+  currentUserId = null,
+} = {}) => {
   const conditions = ['organization_id = current_organization_id()'];
   const values = [];
   let idx = 1;
   if (status) { conditions.push(`status = $${idx++}`); values.push(status); }
   if (source) { conditions.push(`source = $${idx++}`); values.push(source); }
+  // assignedToMe maps to assigned_to = currentUserId. We deliberately
+  // ignore the flag when currentUserId is not supplied (rather than
+  // returning everyone-is-no-one rows) so the route handler can pass
+  // the auth user id explicitly without us coupling to req.
+  if (assignedToMe && currentUserId) {
+    conditions.push(`assigned_to = $${idx++}`);
+    values.push(currentUserId);
+  }
 
   const cappedLimit = Math.min(parseInt(limit, 10) || 50, 200);
   const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
 
   const where = conditions.join(' AND ');
-  const countResult = await query(`SELECT COUNT(*) FROM comps_review_queue WHERE ${where}`, values);
-  const result = await query(
-    `SELECT id, organization_id, source, source_meta, raw_doc_url, raw_doc_mime,
-            raw_doc_size_bytes, status, confidence_scores, reviewer_notes,
-            rejection_reason, failure_reason, email_thread_id,
-            committed_comp_ids, reviewed_at, reviewed_by, committed_at,
-            created_at, updated_at
-       FROM comps_review_queue
-       WHERE ${where}
-       ORDER BY
-         CASE status
-           WHEN 'pending_review' THEN 0
-           WHEN 'pending_extraction' THEN 1
-           WHEN 'extracting' THEN 2
-           WHEN 'approved' THEN 3
-           WHEN 'failed' THEN 4
-           WHEN 'rejected' THEN 5
-           WHEN 'committed' THEN 6
-           ELSE 7
-         END,
-         created_at DESC
-       LIMIT $${idx} OFFSET $${idx + 1}`,
-    [...values, cappedLimit, safeOffset]
-  );
+  // Surface the assignee + assigned_at columns so the queue UI can render
+  // who's on each row. Wrapped in a try/catch path so an org that hasn't
+  // applied the assignment migration yet still sees the list (just
+  // without the new fields).
+  try {
+    const countResult = await query(`SELECT COUNT(*) FROM comps_review_queue WHERE ${where}`, values);
+    const result = await query(
+      `SELECT id, organization_id, source, source_meta, raw_doc_url, raw_doc_mime,
+              raw_doc_size_bytes, status, confidence_scores, reviewer_notes,
+              rejection_reason, failure_reason, email_thread_id,
+              committed_comp_ids, reviewed_at, reviewed_by, committed_at,
+              created_at, updated_at,
+              assigned_to, assigned_at, assigned_by
+         FROM comps_review_queue
+         WHERE ${where}
+         ORDER BY
+           CASE status
+             WHEN 'pending_review' THEN 0
+             WHEN 'pending_extraction' THEN 1
+             WHEN 'extracting' THEN 2
+             WHEN 'approved' THEN 3
+             WHEN 'failed' THEN 4
+             WHEN 'rejected' THEN 5
+             WHEN 'committed' THEN 6
+             ELSE 7
+           END,
+           created_at DESC
+         LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...values, cappedLimit, safeOffset]
+    );
 
-  return {
-    data: result.rows,
-    pagination: {
-      total: parseInt(countResult.rows[0].count, 10),
-      limit: cappedLimit,
-      offset: safeOffset,
-    },
-  };
+    // Hydrate assignee display name in a single bulk lookup so the UI
+    // doesn't have to round-trip per row.
+    const assigneeIds = [...new Set(result.rows.map((r) => r.assigned_to).filter(Boolean))];
+    let assigneeMap = new Map();
+    if (assigneeIds.length > 0) {
+      const usersResult = await query(
+        `SELECT id, name, email FROM users WHERE id = ANY($1::uuid[])`,
+        [assigneeIds],
+      );
+      assigneeMap = new Map(usersResult.rows.map((u) => [u.id, u]));
+    }
+    const rows = result.rows.map((row) => {
+      if (!row.assigned_to) return row;
+      const u = assigneeMap.get(row.assigned_to);
+      return u
+        ? { ...row, assignee: { id: u.id, name: u.name, email: u.email } }
+        : row;
+    });
+
+    return {
+      data: rows,
+      pagination: {
+        total: parseInt(countResult.rows[0].count, 10),
+        limit: cappedLimit,
+        offset: safeOffset,
+      },
+    };
+  } catch (err) {
+    // Migration not yet applied → fall back to the legacy projection so
+    // the queue page still renders. The bulk-reassign endpoint already
+    // surfaces a clear 503 with operator instructions when this happens.
+    if (err?.code === '42703' || /column .*assigned_(to|at|by).* does not exist/i.test(err?.message || '')) {
+      const countResult = await query(`SELECT COUNT(*) FROM comps_review_queue WHERE ${where}`, values);
+      const legacyResult = await query(
+        `SELECT id, organization_id, source, source_meta, raw_doc_url, raw_doc_mime,
+                raw_doc_size_bytes, status, confidence_scores, reviewer_notes,
+                rejection_reason, failure_reason, email_thread_id,
+                committed_comp_ids, reviewed_at, reviewed_by, committed_at,
+                created_at, updated_at
+           FROM comps_review_queue
+           WHERE ${where}
+           ORDER BY created_at DESC
+           LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...values, cappedLimit, safeOffset]
+      );
+      return {
+        data: legacyResult.rows,
+        pagination: {
+          total: parseInt(countResult.rows[0].count, 10),
+          limit: cappedLimit,
+          offset: safeOffset,
+        },
+      };
+    }
+    throw err;
+  }
 };
 
 const getQueueRow = async (id) => {

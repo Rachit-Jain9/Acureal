@@ -38,7 +38,10 @@ const QUEUE_SOURCES = [
   'api_listing_portal',
 ];
 
-// GET /api/comps-review-queue — list with status/source filter + pagination
+// GET /api/comps-review-queue — list with status/source filter + pagination.
+// `assignedToMe=true` scopes to rows where assigned_to = current user
+// (the "Assigned to me" filter pill on the queue page). The user id is
+// taken from the auth session; the query string just toggles the filter.
 router.get(
   '/',
   authenticate,
@@ -48,15 +51,20 @@ router.get(
     qv('source').optional().isIn(QUEUE_SOURCES),
     qv('limit').optional().isInt({ min: 1, max: 200 }),
     qv('offset').optional().isInt({ min: 0 }),
+    qv('assignedToMe').optional().isBoolean(),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
+      const assignedToMe =
+        req.query.assignedToMe === 'true' || req.query.assignedToMe === '1';
       const result = await queueService.listQueue({
         status: req.query.status,
         source: req.query.source,
         limit: req.query.limit ? parseInt(req.query.limit, 10) : 50,
         offset: req.query.offset ? parseInt(req.query.offset, 10) : 0,
+        assignedToMe,
+        currentUserId: req.user.id,
       });
       res.json({ success: true, ...result });
     } catch (err) {
