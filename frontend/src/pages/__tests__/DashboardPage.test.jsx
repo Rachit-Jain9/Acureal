@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('../../hooks/useDashboard', () => ({
   useDashboard: () => ({
@@ -27,15 +28,34 @@ vi.mock('../../hooks/useDashboard', () => ({
   }),
 }));
 
+// AI cost summary + audit-trail-tail widgets self-fetch via adminAPI;
+// stub the network so the dashboard renders without real HTTP traffic.
+vi.mock('../../services/api', () => ({
+  adminAPI: {
+    getAiUsage: vi.fn(() => Promise.resolve({ data: { data: null } })),
+    getRecentEvents: vi.fn(() => Promise.resolve({ data: { data: [] } })),
+  },
+}));
+
+beforeEach(() => {
+  // Each test starts from a clean layout — defaults visible.
+  window.localStorage.clear();
+});
+
 // Recharts brings ResizeObserver needs; the Dashboard renders charts conditionally
 // on non-empty data — with empty arrays above, no chart tree mounts.
 import DashboardPage from '../DashboardPage';
 
 function renderPage() {
+  // Each test gets a fresh client; retries off so failed queries surface
+  // immediately instead of looping in the background.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <DashboardPage />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

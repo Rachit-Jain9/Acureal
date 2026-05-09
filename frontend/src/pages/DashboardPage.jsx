@@ -1,40 +1,25 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Label,
-} from 'recharts';
-import {
-  Briefcase,
-  TrendingUp,
-  ArrowRight,
-  AlertTriangle,
-  Clock,
-  Inbox,
-  Hourglass,
-} from 'lucide-react';
+import { ArrowRight, AlertTriangle, Settings2 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
+import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import useAuthStore from '../store/authStore';
 import { roleSatisfies } from '../utils/roles';
 import PageHeader from '../components/common/PageHeader';
-import Badge from '../components/common/Badge';
-import { Card, SectionHeader, MetricTile, SkeletonKpi, SkeletonCard } from '../design-system';
+import { SkeletonKpi, SkeletonCard } from '../design-system';
 import useThemeStore from '../store/themeStore';
 import {
-  formatCrores,
-  formatPct,
-  formatRelativeTime,
-  STAGE_CONFIG,
-} from '../utils/format';
+  KpiStripWidget,
+  CompsQueueAlertWidget,
+  PipelineChartWidget,
+  CitiesChartWidget,
+  RecentActivitiesWidget,
+  TopDealsIrrWidget,
+  AiCostSummaryWidget,
+  AuditTrailTailWidget,
+} from '../components/dashboard/DashboardWidgets';
+import CustomizePopover from '../components/dashboard/CustomizePopover';
 
 // Precision Analysis chart palette — colorblind-safe, layered:
 //   neutral blue (trust)  → primary / default
@@ -65,26 +50,30 @@ function useTooltipStyle() {
   };
 }
 
-function SectionCard({ title, children, action, eyebrow }) {
-  return (
-    <Card elevated className="p-5">
-      <SectionHeader
-        eyebrow={eyebrow}
-        title={title}
-        action={action}
-        className="mb-4 items-center"
-      />
-      {children}
-    </Card>
-  );
-}
+// Map widget id → render. Each entry is a small thunk that produces the
+// component for the current dashboard payload + chart context. Wrapping
+// in thunks (vs an object of components) keeps the heavy chart deps
+// from rendering when a widget is toggled off.
+const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) => ({
+  kpi_strip:         () => <KpiStripWidget stats={data?.stats} />,
+  comps_queue_alert: () => <CompsQueueAlertWidget stats={data?.stats} canCurate={canCurate} />,
+  pipeline_chart:    () => <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
+  cities_chart:      () => <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
+  recent_activities: () => <RecentActivitiesWidget recent_activities={data?.recent_activities} />,
+  top_deals_irr:     () => <TopDealsIrrWidget top_deals_by_irr={data?.top_deals_by_irr} />,
+  ai_cost_summary:   () => <AiCostSummaryWidget />,
+  audit_trail_tail:  () => <AuditTrailTailWidget />,
+});
 
 export default function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useDashboard();
   const chartPalette = useChartPalette();
   const tooltipStyle = useTooltipStyle();
-  const accentBarFill = chartPalette[0];
   const userRole = useAuthStore((s) => s.user?.role);
+  const canCurate = roleSatisfies(userRole, ['editor']);
+
+  const { layout, toggleVisible, moveUp, moveDown, reset } = useDashboardLayout();
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
   // so the layout doesn't reflow when data lands. Per FRONTEND_GUIDELINES §2:
@@ -125,46 +114,46 @@ export default function DashboardPage() {
     );
   }
 
-  const {
-    stats = {},
-    stage_distribution = [],
-    recent_activities = [],
-    top_deals_by_irr = [],
-    cities_distribution = [],
-  } = data || {};
+  const renderer = buildWidgetRenderer({ data, chartPalette, tooltipStyle, canCurate });
 
-  const activeDeals     = stats.active_deals_count   || 0;
-  const pipelineValue   = stats.total_pipeline_value_cr || 0;
-  const avgIrr          = stats.avg_irr_pct          || 0;
-  const icReadyDeals    = stats.ic_ready_count        || 0;
-  const dealsWithRisk   = stats.deals_with_open_risks || 0;
+  // Walk the persisted layout in order. Skip non-visible widgets, skip
+  // unknown ids, and pair adjacent "chart-grid" widgets into a 2-col row
+  // so the existing pipeline+cities visual rhythm survives the refactor.
+  const SIDE_BY_SIDE_PAIRS = [
+    new Set(['pipeline_chart', 'cities_chart']),
+    new Set(['recent_activities', 'top_deals_irr']),
+    new Set(['ai_cost_summary', 'audit_trail_tail']),
+  ];
 
-  // Tier-0 ingestion queue — surfaced as an "Action items" row that only
-  // renders when there's actually work to do. Editor+ only (matches the
-  // sidebar's role gate for the admin section).
-  const queuePendingReview     = stats.comps_queue_pending_review     || 0;
-  const queuePendingExtraction = stats.comps_queue_pending_extraction || 0;
-  const queueFailed            = stats.comps_queue_failed             || 0;
-  const queueAttention         = queuePendingReview + queuePendingExtraction + queueFailed;
-  const showQueueRow           = roleSatisfies(userRole, ['editor']) && queueAttention > 0;
-
-  // Pipeline bar chart data — filter out stages with 0 deals
-  const pipelineChartData = stage_distribution
-    .map((item) => ({
-      stage: STAGE_CONFIG[item.stage]?.label || item.stage,
-      count: item.count,
-      fill: accentBarFill,
-    }))
-    .filter((d) => d.count > 0);
-
-  // City pie chart data
-  const cityChartData = cities_distribution
-    .map((item) => ({
-      name: item.city || item.name || 'Unknown',
-      value: Number(item.deal_count ?? item.count ?? 0),
-    }))
-    .filter((item) => item.value > 0);
-  const totalCityDeals = cityChartData.reduce((sum, item) => sum + item.value, 0);
+  const blocks = [];
+  let i = 0;
+  while (i < layout.length) {
+    const entry = layout[i];
+    if (!entry.visible || !renderer[entry.id]) {
+      i += 1;
+      continue;
+    }
+    const next = layout[i + 1];
+    const pair = SIDE_BY_SIDE_PAIRS.find(
+      (set) =>
+        set.has(entry.id)
+        && next?.visible
+        && set.has(next.id)
+        && renderer[next.id],
+    );
+    if (pair) {
+      blocks.push(
+        <div key={`${entry.id}+${next.id}`} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {renderer[entry.id]()}
+          {renderer[next.id]()}
+        </div>,
+      );
+      i += 2;
+    } else {
+      blocks.push(<div key={entry.id}>{renderer[entry.id]()}</div>);
+      i += 1;
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -173,379 +162,39 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         actions={
-          <Link
-            to="/dashboard/deals"
-            className="btn btn-secondary text-sm flex items-center gap-1.5"
-          >
-            All Deals <ArrowRight size={14} />
-          </Link>
+          <div className="flex items-center gap-2 relative">
+            <button
+              type="button"
+              data-customize-toggle
+              onClick={() => setCustomizeOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              aria-haspopup="dialog"
+              aria-expanded={customizeOpen}
+              title="Show, hide, and reorder dashboard sections"
+            >
+              <Settings2 size={13} />
+              Customize
+            </button>
+            <Link
+              to="/dashboard/deals"
+              className="btn btn-secondary text-sm flex items-center gap-1.5"
+            >
+              All Deals <ArrowRight size={14} />
+            </Link>
+            <CustomizePopover
+              open={customizeOpen}
+              onClose={() => setCustomizeOpen(false)}
+              layout={layout}
+              toggleVisible={toggleVisible}
+              moveUp={moveUp}
+              moveDown={moveDown}
+              reset={reset}
+            />
+          </div>
         }
       />
 
-      {/* ── Primary KPI row — institutional scan: pipeline size, flow, return, readiness ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricTile
-          label="Pipeline Value"
-          value={formatCrores(pipelineValue)}
-          footnote="Cumulative ask · active deals"
-        />
-        <MetricTile
-          label="Active Deals"
-          value={activeDeals}
-          footnote="Live in pipeline"
-          delta={dealsWithRisk > 0 ? `${dealsWithRisk} with open risk` : null}
-          tone={dealsWithRisk > 0 ? 'down' : 'neutral'}
-        />
-        <MetricTile
-          label="Avg IRR"
-          value={formatPct(avgIrr)}
-          footnote="Across modelled deals"
-          delta={avgIrr >= 20 ? 'Above 20% bench' : avgIrr >= 12 ? null : 'Below bench'}
-          tone={avgIrr >= 20 ? 'up' : avgIrr >= 12 ? 'neutral' : 'down'}
-        />
-        <MetricTile
-          label="Investor-Grade"
-          value={icReadyDeals}
-          footnote="IC-ready · fully vetted"
-          delta={icReadyDeals > 0 ? 'Ready to deploy' : null}
-          tone={icReadyDeals > 0 ? 'up' : 'neutral'}
-        />
-      </div>
-
-      {/* ── Action items — Tier-0 ingestion queue. Only renders for editor+
-            roles when there's actually work to do, so non-curator users
-            see a clean dashboard. ─────────────────────────────────────── */}
-      {showQueueRow && (
-        <Card className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="shrink-0 w-9 h-9 rounded-md bg-amber-50 text-amber-700 flex items-center justify-center">
-              <Inbox size={16} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-eyebrow uppercase text-content-muted font-medium">
-                Comps review queue
-              </div>
-              <div className="text-sm text-content-primary font-medium tabular-nums">
-                {queuePendingReview > 0 && (
-                  <>
-                    <span className="text-amber-600">{queuePendingReview}</span> pending review
-                  </>
-                )}
-                {queuePendingReview === 0 && queuePendingExtraction > 0 && (
-                  <span className="inline-flex items-center gap-1 text-content-secondary">
-                    <Hourglass size={12} />
-                    {queuePendingExtraction} pending extraction
-                  </span>
-                )}
-                {queuePendingReview === 0 && queuePendingExtraction === 0 && queueFailed > 0 && (
-                  <span className="text-data-negative">{queueFailed} failed extractions</span>
-                )}
-                {queuePendingReview > 0 && (queuePendingExtraction > 0 || queueFailed > 0) && (
-                  <span className="text-content-muted ml-2 text-xs font-normal">
-                    {queuePendingExtraction > 0 && (
-                      <span>· {queuePendingExtraction} extracting</span>
-                    )}
-                    {queueFailed > 0 && (
-                      <span className="text-data-negative ml-1">· {queueFailed} failed</span>
-                    )}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <Link
-            to="/dashboard/admin/comps-queue"
-            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            Open queue
-            <ArrowRight size={13} />
-          </Link>
-        </Card>
-      )}
-
-      {/* ── Charts row ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pipeline Distribution */}
-        <SectionCard title="Pipeline Distribution" eyebrow="Stage mix">
-          {pipelineChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart
-                data={pipelineChartData}
-                margin={{ top: 4, right: 10, bottom: 4, left: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border-primary)"
-                  strokeOpacity={0.5}
-                />
-                <XAxis
-                  dataKey="stage"
-                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
-                  axisLine={{ stroke: 'var(--color-border-primary)' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ fill: 'var(--color-brand-accent-soft)' }}
-                />
-                <Bar
-                  dataKey="count"
-                  fill={accentBarFill}
-                  radius={[3, 3, 0, 0]}
-                  name="Deals"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="py-16 text-center">
-              <Briefcase size={28} className="mx-auto mb-2 text-content-muted opacity-50" />
-              <p className="text-sm text-content-muted">No pipeline data yet</p>
-              <Link
-                to="/dashboard/deals"
-                className="text-xs mt-1 inline-block hover:underline text-accent"
-              >
-                Create your first deal
-              </Link>
-            </div>
-          )}
-        </SectionCard>
-
-        {/* City Distribution */}
-        <SectionCard title="City Distribution" eyebrow="Geography">
-          {cityChartData.length > 0 ? (
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-center">
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={cityChartData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={95}
-                    innerRadius={58}
-                    paddingAngle={3}
-                    stroke="transparent"
-                    isAnimationActive={false}
-                  >
-                    {cityChartData.map((item, idx) => (
-                      <Cell
-                        key={item.name}
-                        fill={chartPalette[idx % chartPalette.length]}
-                      />
-                    ))}
-                    <Label
-                      content={({ viewBox }) => {
-                        if (!viewBox || typeof viewBox.cx !== 'number') return null;
-                        return (
-                          <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
-                            <tspan
-                              x={viewBox.cx}
-                              y={viewBox.cy - 4}
-                              fill="var(--color-text-primary)"
-                              fontSize="22"
-                              fontWeight="700"
-                            >
-                              {totalCityDeals}
-                            </tspan>
-                            <tspan
-                              x={viewBox.cx}
-                              y={viewBox.cy + 16}
-                              fill="var(--color-text-muted)"
-                              fontSize="11"
-                            >
-                              deals
-                            </tspan>
-                          </text>
-                        );
-                      }}
-                    />
-                  </Pie>
-                  <Tooltip
-                    formatter={(value, _n, entry) => [
-                      `${value} deal${value === 1 ? '' : 's'}`,
-                      entry.payload.name,
-                    ]}
-                    contentStyle={tooltipStyle}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-2">
-                {cityChartData.map((item, idx) => {
-                  const pct = totalCityDeals > 0
-                    ? Math.round((item.value / totalCityDeals) * 100)
-                    : 0;
-                  return (
-                    <div
-                      key={item.name}
-                      className="flex items-center justify-between rounded-md px-3 py-2 bg-surface border border-hairline-soft"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: chartPalette[idx % chartPalette.length] }}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate text-content-primary">
-                            {item.name}
-                          </p>
-                          <p className="text-xs tabular-nums text-content-muted">{pct}%</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-bold ml-2 tabular-nums text-content-primary">
-                        {item.value}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="py-16 text-center">
-              <p className="text-sm text-content-muted">
-                Cities will appear once deals have location data
-              </p>
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      {/* ── Lower row ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activities */}
-        <SectionCard
-          title="Recent Activities"
-          eyebrow="Timeline"
-          action={
-            <Link
-              to="/dashboard/deals"
-              className="text-xs hover:underline flex items-center gap-1 text-accent"
-            >
-              View all <ArrowRight size={12} />
-            </Link>
-          }
-        >
-          {recent_activities.length > 0 ? (
-            <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {recent_activities.map((activity, idx) => (
-                <li
-                  key={activity.id || idx}
-                  className="flex items-start gap-3 p-3 rounded-md bg-surface border border-hairline-soft"
-                >
-                  <div className="w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0 bg-accent" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-snug text-content-primary">
-                      {activity.description}
-                    </p>
-                    <p className="text-xs mt-1 text-content-muted">
-                      <Clock size={10} className="inline mr-1" />
-                      {formatRelativeTime(activity.activity_date || activity.created_at)}
-                      {activity.deal_name && (
-                        <span className="ml-1 text-content-secondary">
-                          &middot; {activity.deal_name}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="py-10 text-center">
-              <p className="text-sm text-content-muted">No activities yet</p>
-              <p className="text-xs mt-1 text-content-muted opacity-70">
-                Activities logged on deals will appear here
-              </p>
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Top Deals by IRR */}
-        <SectionCard
-          title="Top Deals by IRR"
-          eyebrow="Performance"
-          action={
-            <Link
-              to="/dashboard/deals"
-              className="text-xs hover:underline flex items-center gap-1 text-accent"
-            >
-              All deals <ArrowRight size={12} />
-            </Link>
-          }
-        >
-          {top_deals_by_irr.length > 0 ? (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-hairline">
-                    <th className="text-left py-2 pr-3 text-eyebrow uppercase text-content-muted font-medium">
-                      Deal
-                    </th>
-                    <th className="text-left py-2 pr-3 text-eyebrow uppercase text-content-muted font-medium">
-                      Stage
-                    </th>
-                    <th className="text-right py-2 pr-3 text-eyebrow uppercase text-content-muted font-medium">
-                      Value
-                    </th>
-                    <th className="text-right py-2 text-eyebrow uppercase text-content-muted font-medium">
-                      IRR
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {top_deals_by_irr.map((deal, idx) => {
-                    const stageConf = STAGE_CONFIG[deal.stage] || {};
-                    const irrToneClass = Number(deal.irr_pct) >= 20
-                      ? 'text-data-positive'
-                      : Number(deal.irr_pct) >= 15
-                        ? 'text-premium'
-                        : 'text-accent';
-                    return (
-                      <tr
-                        key={deal.id || idx}
-                        className="border-b border-hairline-soft transition-colors hover:bg-surface"
-                      >
-                        <td className="py-2.5 pr-3">
-                          <Link
-                            to={`/dashboard/deals/${deal.id}`}
-                            className="font-medium truncate max-w-[140px] block text-content-primary"
-                          >
-                            {deal.name}
-                          </Link>
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <Badge tone={stageConf.tone}>
-                            {stageConf.label || deal.stage}
-                          </Badge>
-                        </td>
-                        <td className="py-2.5 pr-3 text-right whitespace-nowrap tabular-nums text-content-secondary">
-                          {formatCrores(deal.total_revenue_cr)}
-                        </td>
-                        <td className={`py-2.5 text-right font-semibold whitespace-nowrap tabular-nums ${irrToneClass}`}>
-                          {formatPct(deal.irr_pct)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="py-10 text-center">
-              <TrendingUp size={28} className="mx-auto mb-2 text-content-muted opacity-50" />
-              <p className="text-sm text-content-muted">
-                Run a financial model on a deal to see IRR rankings
-              </p>
-            </div>
-          )}
-        </SectionCard>
-      </div>
+      {blocks}
     </div>
   );
 }

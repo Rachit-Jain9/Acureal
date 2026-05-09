@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2, UserPlus } from 'lucide-react';
+import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2, UserPlus, User } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
@@ -15,6 +15,7 @@ import {
   useBulkReassignQueue,
 } from '../hooks/useCompsReviewQueue';
 import { adminAPI } from '../services/api';
+import useAuthStore from '../store/authStore';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -146,9 +147,18 @@ const QueueRow = ({ row, selectable, selected, onToggleSelect }) => {
 
       {/* Identity column */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="text-sm font-medium text-content-primary truncate">{subject}</span>
           <Badge tone="neutral" className="shrink-0 text-[10px]">{sourceShortLabel(row.source)}</Badge>
+          {/* Assignee badge — surfaces who picked up this row. Hidden when
+              unassigned to keep the row clean. Hydrated server-side by
+              listQueue with a single bulk users lookup. */}
+          {row.assignee && (
+            <Badge tone="info" className="shrink-0 text-[10px] inline-flex items-center gap-1">
+              <User size={9} />
+              {row.assignee.name || row.assignee.email}
+            </Badge>
+          )}
         </div>
         <div className="text-xs text-content-muted truncate mt-0.5">
           {from}
@@ -360,6 +370,8 @@ function UploadModal({ open, onClose, onUploaded }) {
 export default function CompsQueuePage() {
   const [statusFilter, setStatusFilter] = useState('pending_review');
   const [sourceFilter, setSourceFilter] = useState(null);
+  const [assignedToMe, setAssignedToMe] = useState(false);
+  const currentUser = useAuthStore((s) => s.user);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -377,7 +389,7 @@ export default function CompsQueuePage() {
     setRejectReason('');
     setReassignModalOpen(false);
     setReassignTargetId('');
-  }, [statusFilter, sourceFilter]);
+  }, [statusFilter, sourceFilter, assignedToMe]);
 
   const bulkApprove = useBulkApproveQueue();
   const bulkReject = useBulkRejectQueue();
@@ -396,6 +408,7 @@ export default function CompsQueuePage() {
   const { data, isLoading, isError, error, refetch } = useCompsReviewQueueList({
     status: statusFilter,
     source: sourceFilter,
+    assignedToMe,
     limit: 100,
   });
 
@@ -547,7 +560,32 @@ export default function CompsQueuePage() {
       {/* Filter bar */}
       <Card className="p-4 space-y-3">
         <div>
-          <div className="text-eyebrow uppercase text-content-muted mb-2 font-medium">Status</div>
+          <div className="flex items-center justify-between mb-2 gap-3">
+            <div className="text-eyebrow uppercase text-content-muted font-medium">Status</div>
+            {/* "Assigned to me" pill — orthogonal to status/source. Sits in
+                the status row's right side because it's the most-used filter
+                once a team starts dividing up the inbox. Disabled when the
+                user record hasn't loaded yet (rare; the queue page is
+                role-gated). */}
+            <button
+              type="button"
+              onClick={() => setAssignedToMe((v) => !v)}
+              disabled={!currentUser?.id}
+              className={clsx(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                'disabled:opacity-50',
+                assignedToMe
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-bg-elevated text-content-secondary border-hairline hover:border-content-muted hover:text-content-primary'
+              )}
+              title="Show only rows assigned to me"
+              aria-pressed={assignedToMe}
+            >
+              <User size={11} />
+              Assigned to me
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {STATUS_FILTERS.map((f) => (
               <Pill
@@ -595,7 +633,11 @@ export default function CompsQueuePage() {
             size="sm"
             eyebrow="Queue"
             title={statusFilter ? `${STATUS_FILTERS.find((f) => f.id === statusFilter)?.label || statusFilter}` : 'All queue items'}
-            sub={isLoading ? null : `${total} item${total === 1 ? '' : 's'}${sourceFilter ? ` · filtered to ${sourceShortLabel(sourceFilter)}` : ''}`}
+            sub={
+              isLoading
+                ? null
+                : `${total} item${total === 1 ? '' : 's'}${sourceFilter ? ` · filtered to ${sourceShortLabel(sourceFilter)}` : ''}${assignedToMe ? ' · assigned to me' : ''}`
+            }
           />
         </div>
 

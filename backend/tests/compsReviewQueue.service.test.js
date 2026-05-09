@@ -536,6 +536,67 @@ describe('bulkApprove', () => {
   });
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// listQueue — assignedToMe filter + assignee hydration
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('listQueue assignedToMe filter', () => {
+  test('does NOT add assigned_to filter when assignedToMe=false', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // count
+      .mockResolvedValueOnce({ rows: [] });              // rows
+    await queue.listQueue({ status: 'pending_review', assignedToMe: false, currentUserId: 'u-1' });
+    const sqlText = query.mock.calls[0][0];
+    expect(sqlText).not.toMatch(/assigned_to = /);
+  });
+
+  test('adds assigned_to predicate when assignedToMe=true and userId is supplied', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    await queue.listQueue({ status: 'pending_review', assignedToMe: true, currentUserId: 'u-99' });
+    const countSql = query.mock.calls[0][0];
+    const countParams = query.mock.calls[0][1];
+    expect(countSql).toMatch(/assigned_to = /);
+    expect(countParams).toContain('u-99');
+  });
+
+  test('ignores assignedToMe when no currentUserId is supplied', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    await queue.listQueue({ assignedToMe: true });
+    const sqlText = query.mock.calls[0][0];
+    expect(sqlText).not.toMatch(/assigned_to = /);
+  });
+
+  test('hydrates assignee {id,name,email} on rows that have assigned_to', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ count: '1' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'r-1', status: 'pending_review', assigned_to: 'u-1' }] })
+      // bulk users lookup
+      .mockResolvedValueOnce({ rows: [{ id: 'u-1', name: 'Rachit', email: 'r@x.io' }] });
+    const result = await queue.listQueue({});
+    expect(result.data[0].assignee).toEqual({ id: 'u-1', name: 'Rachit', email: 'r@x.io' });
+  });
+
+  test('falls back to legacy projection when assignment columns are missing (migration not applied)', async () => {
+    // First SELECT throws 42703 (undefined_column); legacy retry path runs.
+    query
+      .mockResolvedValueOnce({ rows: [{ count: '2' }] }) // count
+      .mockRejectedValueOnce(Object.assign(new Error('column "assigned_to" does not exist'), { code: '42703' }))
+      // legacy fallback path: count again, then legacy SELECT
+      .mockResolvedValueOnce({ rows: [{ count: '2' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'r-1', status: 'pending_review' }, { id: 'r-2', status: 'pending_review' }] });
+
+    const result = await queue.listQueue({});
+    expect(result.pagination.total).toBe(2);
+    expect(result.data).toHaveLength(2);
+    // Assignee field absent on legacy projection.
+    expect(result.data[0]).not.toHaveProperty('assignee');
+  });
+});
+
 describe('bulkReassign', () => {
   test('rejects empty array with 400', async () => {
     await expect(queue.bulkReassign([], 'user-1', 'actor-1')).rejects.toMatchObject({ statusCode: 400 });

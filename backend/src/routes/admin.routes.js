@@ -43,6 +43,37 @@ router.get('/users', authenticate, requireRole('admin', 'analyst'), async (req, 
   }
 });
 
+// GET /api/admin/recent-events?limit=10
+//
+// Org-scoped tail of `deal_events` (the HMAC-signed financial-computation
+// audit log). Used by the dashboard's Audit-trail-tail widget. Joined
+// against deals + users so the timeline can render deal name + actor
+// without per-row lookups.
+//
+// Read-only. RLS on deal_events filters to current_organization_id()
+// automatically; this endpoint just joins for display.
+router.get('/recent-events', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+    const result = await query(
+      `SELECT e.id, e.deal_id, e.event_type, e.engine_version, e.asset_class,
+              e.created_at,
+              d.name AS deal_name,
+              u.id   AS actor_id,
+              u.name AS actor_name
+         FROM deal_events e
+         LEFT JOIN deals d ON d.id = e.deal_id
+         LEFT JOIN users u ON u.id = e.actor_id
+        ORDER BY e.created_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/ai-usage?days=30
 //
 // Returns rollups over `ai_call_logs` for the trailing window:

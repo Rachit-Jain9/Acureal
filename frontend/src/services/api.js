@@ -614,6 +614,9 @@ export const adminAPI = {
   // by_doctype[], top_cost_calls[], generated_at }. Window is configurable
   // via ?days= (default 30, max 365).
   getAiUsage: (days = 30) => api.get('/admin/ai-usage', { params: { days } }),
+  // Recent audit events (deal_events) across the org — backs the
+  // dashboard's Audit-trail-tail widget. Default 10, max 50.
+  getRecentEvents: (limit = 10) => api.get('/admin/recent-events', { params: { limit } }),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

@@ -7,12 +7,12 @@ const QUEUE_KEY = 'comps-review-queue';
 const errMessage = (err, fallback) =>
   err?.response?.data?.message || err?.message || fallback;
 
-export function useCompsReviewQueueList({ status, source, limit = 50, offset = 0 } = {}) {
+export function useCompsReviewQueueList({ status, source, limit = 50, offset = 0, assignedToMe = false } = {}) {
   return useQuery({
-    queryKey: [QUEUE_KEY, 'list', { status, source, limit, offset }],
+    queryKey: [QUEUE_KEY, 'list', { status, source, limit, offset, assignedToMe }],
     queryFn: () =>
       compsReviewQueueAPI
-        .list({ status, source, limit, offset })
+        .list({ status, source, limit, offset, assignedToMe: assignedToMe || undefined })
         .then((r) => ({ data: r.data.data, pagination: r.data.pagination })),
     // Pending items are time-sensitive — refresh on focus, every 60s in background.
     refetchOnWindowFocus: true,
