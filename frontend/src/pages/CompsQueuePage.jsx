@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2, UserPlus, User } from 'lucide-react';
+import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2, UserPlus, User, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
@@ -14,10 +14,12 @@ import {
   useBulkRejectQueue,
   useBulkReassignQueue,
 } from '../hooks/useCompsReviewQueue';
-import { adminAPI } from '../services/api';
+import { adminAPI, compsReviewQueueAPI } from '../services/api';
 import useAuthStore from '../store/authStore';
 import { useSavedViews } from '../hooks/useSavedViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
+import { downloadAxiosResponse } from '../utils/download';
+import { toast } from '../components/common/Toast';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -543,6 +545,31 @@ export default function CompsQueuePage() {
     }
   };
 
+  // CSV export — passes the current filter combination through so the
+  // download matches whatever the queue page currently shows. Filename
+  // is suffixed with the active saved-view name when one matches so a
+  // multi-export workflow ends up with self-describing files.
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const handleExportCsv = async () => {
+    if (exportingCsv) return;
+    setExportingCsv(true);
+    try {
+      const params = {};
+      if (statusFilter) params.status = statusFilter;
+      if (sourceFilter) params.source = sourceFilter;
+      if (assignedToMe) params.assignedToMe = true;
+      const response = await compsReviewQueueAPI.exportCsv(params);
+      const today = new Date().toISOString().slice(0, 10);
+      const suffix = activeView ? `-${activeView.name.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 40).toLowerCase()}` : '';
+      downloadAxiosResponse(response, `redip-comps-queue${suffix}-${today}.csv`);
+      toast.success(`Exported ${total} item${total === 1 ? '' : 's'} to CSV`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'CSV export failed');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -551,6 +578,22 @@ export default function CompsQueuePage() {
         description="Forwarded broker quotes and IPC reports land here for human review before committing to the comps database. Approve, edit, or reject each batch."
         actions={
           <div className="flex items-center gap-2">
+            {/* CSV export — respects the current status / source / assigned-to-me
+                filter combo. Disabled when the filtered list is empty. */}
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={exportingCsv || total === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              title={
+                total === 0
+                  ? 'Nothing to export — list is empty'
+                  : `Download ${total} matching row${total === 1 ? '' : 's'} as CSV`
+              }
+            >
+              {exportingCsv ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              {exportingCsv ? 'Exporting…' : 'Export CSV'}
+            </button>
             <button
               type="button"
               onClick={() => setUploadOpen(true)}

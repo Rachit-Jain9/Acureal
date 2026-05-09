@@ -422,7 +422,13 @@ export default function CompsPage() {
     if (exporting) return;
     setExporting(true);
     try {
-      const response = await exportsAPI.comps();
+      // Pass the current page filters through so the export reflects
+      // exactly what the analyst sees on the page (city / projectType /
+      // rate band / search). Pagination params are stripped — the
+      // export is the full filtered set, not just the visible page.
+      // eslint-disable-next-line no-unused-vars
+      const { page: _p, limit: _l, ...exportParams } = queryParams;
+      const response = await exportsAPI.comps(exportParams);
       const blob = response.data instanceof Blob
         ? response.data
         : new Blob([response.data], { type: 'text/csv' });
@@ -446,7 +452,7 @@ export default function CompsPage() {
     } finally {
       setExporting(false);
     }
-  }, [exporting]);
+  }, [exporting, queryParams]);
 
   const updateFilter = useCallback((patch) => {
     setFilters((prev) => ({ ...prev, ...patch }));

@@ -15,6 +15,7 @@ const {
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getDealExportContext } = require('../services/dealExport.service');
 const dealService = require('../services/deal.service');
+const compsService = require('../services/comps.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
@@ -215,41 +216,72 @@ router.get(
   },
 );
 
-// GET /exports/comps
+// GET /exports/comps — verified-comps database as CSV.
+//
+// Accepts the same query params as GET /comps so the export respects
+// the page's current filter combination — city + locality +
+// projectType + rate band + launchYear + search. The list itself is
+// org-scoped via RLS; the same scope flows through here.
+//
+// Backed by `compsService.getCompsForExport` which shares the WHERE
+// builder with `getComps` so filter parity is guaranteed without
+// duplication.
 router.get(
   '/comps',
   authenticate,
   requireRole('admin', 'analyst'),
+  [
+    qv('city').optional().trim(),
+    qv('locality').optional().trim(),
+    qv('projectType').optional().isIn(['residential', 'commercial', 'mixed_use']),
+    qv('minRate').optional().isFloat({ min: 0 }),
+    qv('maxRate').optional().isFloat({ min: 0 }),
+    qv('launchYear').optional().isInt({ min: 2000, max: 2050 }),
+    qv('search').optional().trim(),
+  ],
+  handleValidation,
   async (req, res, next) => {
     try {
-      const result = await query(
-        `SELECT project_name, developer, city, locality, project_type,
-          bhk_config, carpet_area_sqft, super_builtup_area_sqft,
-          rate_per_sqft, total_units, launch_year, possession_year,
-          rera_number, source, created_at
-         FROM comps ORDER BY city, rate_per_sqft DESC`
-      );
+      const filters = {
+        city: req.query.city,
+        locality: req.query.locality,
+        projectType: req.query.projectType,
+        minRate: req.query.minRate,
+        maxRate: req.query.maxRate,
+        launchYear: req.query.launchYear,
+        search: req.query.search,
+      };
+      const rows = await compsService.getCompsForExport(filters, { maxRows: 5000 });
 
       const headers = [
         'Project', 'Developer', 'City', 'Locality', 'Type',
         'BHK', 'Carpet (sqft)', 'Super Built-up (sqft)',
-        'Rate/sqft', 'Units', 'Launch Year', 'Possession Year',
-        'RERA', 'Source', 'Added',
+        'Rate/sqft', 'Min Rate', 'Max Rate', 'Units',
+        'Launch Year', 'Possession Year',
+        'RERA', 'Verified', 'Source', 'Added',
       ];
 
-      const rows = result.rows.map((r) =>
+      const fmtDate = (d) => {
+        if (!d) return '';
+        try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; }
+      };
+
+      const dataRows = rows.map((r) =>
         toCsvRow([
           r.project_name, r.developer, r.city, r.locality, r.project_type,
           r.bhk_config, r.carpet_area_sqft, r.super_builtup_area_sqft,
-          r.rate_per_sqft, r.total_units, r.launch_year, r.possession_year,
-          r.rera_number, r.source, r.created_at,
+          r.rate_per_sqft, r.rate_per_sqft_min, r.rate_per_sqft_max,
+          r.total_units, r.launch_year, r.possession_year,
+          r.rera_number, r.is_verified ? 'yes' : 'no', r.source,
+          fmtDate(r.created_at),
         ])
       );
 
-      const csv = [toCsvRow(headers), ...rows].join('\n');
+      const csv = [toCsvRow(headers), ...dataRows].join('\n');
+      const today = new Date().toISOString().slice(0, 10);
 
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="comps-export-${Date.now()}.csv"`);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="redip-comps-${today}.csv"`);
       res.send(csv);
     } catch (error) {
       next(error);
