@@ -4,6 +4,49 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-09 (continued) — Investor tear-sheet PDF + streaming Q&A
+
+After the Tier-2 #11 Q&A agent landed, picked the two highest-leverage follow-ups from the "beyond the original handoff" list and shipped them together as a paired ship.
+
+### What was worked on
+
+**Investor tear-sheet PDF.** Replaces the basic 1-page deal summary that lived inline in `export.routes.js`. New service `dealTearSheet.service.js` builds a 2-page landscape A4 PDF:
+
+- **Page 1 — Snapshot.** Navy header, deal-name + stage / priority / asset-class / structure / RERA pills, KPI strip (IRR · Equity Multiple · Total Cost · Total Revenue), two-column cards (Property | Deal Economics), readiness ribbon (DD % · approvals % · open risks · IC recommendation).
+- **Page 2 — Synthesis + Risks + Comps.** Excerpt of the latest persisted IC memo (or risk brief fallback) under an "AI-assisted, requires human review" eyebrow, severity-sorted risk register table, top comps table with verified/source columns.
+- **Editorial chrome** matches the existing Market Intelligence tear-sheet (same navy/accent palette, same pdf-lib + StandardFonts, same landscape A4) so the family of REDIP PDFs reads as one product.
+- Reuses `getDealExportContext()` so DD / risks / approvals / comps / AI insights all come from the same well-tested upstream payload — zero duplication of SQL.
+- Forces fixed 2-decimal precision on all rupee values (no "INR 12.5 Cr" sloppiness).
+- Same path `GET /exports/deals/:dealId/pdf` so existing download links keep working — strict upgrade.
+- New "Tear-Sheet" button on the deal page header next to "Export Deck", `FileDown` icon.
+
+**Streaming Q&A.** Q&A used to block on the full 6-15s Claude round-trip. Now the answer paints token-by-token while citations + drift checks land at the end:
+
+- New service method `dealQa.streamQuestion()` mirroring the streamDealAnalysis / icMemoService.stream contract: assembles context (deterministic, no LLM yet), opens `runClaudeReasoningStream()`, on `done()` parses the streamed JSON, validates citations against retrieval set, runs the numerical verifier, persists the row.
+- New SSE route `POST /api/deals/:id/qa/stream` — same headers + `req.on('close')` abort hook as the IC memo / deal-analysis streams. Cache short-circuit emits one `done` frame with the cached row, no streaming needed.
+- New frontend hook `useStreamDealQa()` with a progressive JSON parser `extractStreamingAnswer(buffer)` that walks the streamed bytes, finds `"answer":"...up to current position..."`, handles `\"` `\\` `\n` `\t` `\r` `\/` and `\uXXXX` JSON escapes — so the UI never shows raw JSON to the analyst.
+- `DealQaBox.jsx` rewritten to use streaming: live question header, token-by-token answer with blinking-cursor caret, Cancel button mid-stream (abort propagates to Anthropic — no wasted tokens), persisted citations and drift badges land when the stream finishes and the cached history row paints.
+
+**Bonus fix.** `OverviewTab.test.jsx` was failing on master since PR #199 (DealQaBox needed a `QueryClientProvider` wrap that the test never provided). Wrapped the test in a fresh QueryClient + mocked `dealQaAPI` and the test now passes again.
+
+### Tests + build
+
+- **Backend**: 1022 tests across 74 suites — all green. Includes 12 new tests on `dealTearSheet.service.test.js` covering the helpers (safeText, fmtCr, fmtPct, fmtX, fmtArea, titleCase) and full PDF generation across populated / no-AI-artifacts / risk-brief-fallback / sourcing-stage / 404 / 400 paths. Tests parse the produced PDF binary to assert page count + magic bytes.
+- **Frontend**: 218 tests across 29 files — all green. New `useDealQa.test.js` with 8 cases on the `extractStreamingAnswer` parser (pre-open / mid-stream / fully-formed / escapes / unicode / whitespace tolerance).
+- **Production build**: clean, 40s, no warnings on bundle size.
+
+### Plain-English recap (for the user)
+
+- The Download PDF on a deal now produces a much richer **2-page investor tear-sheet** — KPIs, property, economics, AI synthesis, risks, and comps — instead of a basic 1-page summary. New "Tear-Sheet" button on the deal page makes it discoverable.
+- The **Ask anything about this deal** box now answers token-by-token like ChatGPT instead of blocking for 10+ seconds. There's a Cancel button if the analyst changes their mind mid-stream — the upstream Claude call gets aborted so we don't burn tokens.
+- The deal-page test suite was quietly broken for a few days. Fixed.
+
+### PRs opened/merged today (this batch)
+
+To be filled in once the auto-merge PR lands.
+
+---
+
 ## 2026-05-09 — Tier-2 #11 Q&A agent + roadmap deferrals + final 4-of-4 AI artifact suite, 3 PRs
 
 Mostly a Tier-2 day. Shipped the highest-leverage remaining capability (the narrow Deal Q&A agent), wired the 4th and final AI artifact type to the persistence + verifier suite, added markdown export buttons across all AI panels, and locked in roadmap deferrals so future sessions don't re-debate skipped items.

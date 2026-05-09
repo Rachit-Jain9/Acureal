@@ -37,7 +37,7 @@ const crypto = require('crypto');
 const { z } = require('zod');
 const { query } = require('../config/database');
 const { getProviderAvailability } = require('./ai/providerRegistry');
-const { runAIWithSchema, runClaudeReasoning } = require('./ai/aiRouter');
+const { runAIWithSchema, runClaudeReasoning, runClaudeReasoningStream, stripJsonFences } = require('./ai/aiRouter');
 const embeddingsService = require('./embeddings.service');
 const numericalVerifier = require('./numericalVerifier.service');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
@@ -462,6 +462,187 @@ async function askQuestion({ dealId, question, userId = null, organizationId = n
 }
 
 /**
+ * Streaming variant of askQuestion. Returns an SSE-compatible handle:
+ *
+ *   • assembles context (deterministic, no LLM yet)
+ *   • opens a Claude streaming reasoning call against the same
+ *     mandatory-citation prompt
+ *   • emits raw text deltas via `onText(delta)` so the route handler
+ *     can write `data: { type: 'text', text }` SSE frames
+ *   • on `done()` parses the accumulated JSON, validates citations
+ *     against the retrieval set, runs the numerical verifier,
+ *     persists the row, returns the final hydrated payload
+ *
+ * Mirrors the streamDealAnalysis / icMemoService.stream contract so
+ * the route handler that consumes all three is symmetric. Cache hits
+ * short-circuit before opening a stream — caller renders the cached
+ * row in one shot via `cacheHit: true` in the return.
+ */
+async function streamQuestion({ dealId, question, userId = null, organizationId = null }) {
+  if (!getProviderAvailability().claude) {
+    return { error: 'ANTHROPIC_API_KEY not configured', status: 503 };
+  }
+
+  const trimmed = String(question || '').trim();
+  if (!trimmed) return { error: 'Question is required.', status: 400 };
+  if (trimmed.length > MAX_QUESTION_LENGTH) {
+    return { error: `Question exceeds ${MAX_QUESTION_LENGTH} chars (got ${trimmed.length}).`, status: 400 };
+  }
+
+  const deal = await fetchDealSnapshot(dealId);
+  if (!deal) return { error: 'Deal not found or not visible.', status: 404 };
+
+  const context = await assembleContext({ dealId, question: trimmed, deal });
+  const snapshotHash = computeSnapshotHash({ question: trimmed, chunks: context.chunks });
+
+  // Cache short-circuit — same as askQuestion. No stream needed if we
+  // already have an answer with identical (question, retrieval).
+  const cached = await query(
+    `SELECT * FROM deal_qa_history
+       WHERE deal_id = $1
+         AND snapshot_hash = $2
+         AND organization_id = current_organization_id()
+         AND status = 'complete'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    [dealId, snapshotHash],
+  );
+  if (cached.rows[0]) {
+    return { cacheHit: true, row: { ...cached.rows[0], cache_hit: true } };
+  }
+
+  const payload = buildPromptPayload({ question: trimmed, context });
+
+  // Open the streaming Claude call. Stream emits raw JSON deltas; the
+  // UI strips fences and pretty-renders the answer field as text comes
+  // in. (We keep the model's strict JSON contract — we just stream
+  // the bytes as they generate.)
+  const handle = await runClaudeReasoningStream({
+    task: 'reasoning',
+    systemPrompt: SYSTEM_PROMPT,
+    cachePrompt: true,
+    payload,
+    maxTokens: 800,
+    attach: { dealId, userId },
+    metadata: {
+      stage: 'deal_qa',
+      deal_id: dealId,
+      chunk_count: context.chunks.length,
+      snapshot_hash: snapshotHash,
+      streamed: true,
+    },
+  });
+
+  return {
+    onText: handle.onText,
+    abort: handle.abort,
+    callIdPromise: handle.callIdPromise,
+    async done() {
+      let modelResult = null;
+      let callId = null;
+      let failureReason = null;
+
+      try {
+        const final = await handle.done();
+        callId = final.callId;
+        // Parse the streamed JSON. Same forgiveness as runAIWithSchema:
+        // strip ```json fences, then parse, then schema-validate.
+        const rawText = final.result || '';
+        let parsed = null;
+        try {
+          parsed = JSON.parse(stripJsonFences(rawText));
+        } catch (parseErr) {
+          failureReason = `Streamed JSON parse failed: ${parseErr.message}`;
+        }
+        if (parsed) {
+          const schemaResult = AnswerSchema.safeParse(parsed);
+          if (!schemaResult.success) {
+            failureReason = `Schema validation failed: ${schemaResult.error.errors[0]?.message || 'unknown'}`;
+          } else {
+            modelResult = schemaResult.data;
+          }
+        }
+      } catch (err) {
+        failureReason = err.message || 'AI stream failed';
+        log.warn('deal_qa_stream_failed', { dealId, error: failureReason });
+      }
+
+      // Citation post-validation — same as askQuestion.
+      if (modelResult) {
+        const { valid, invalid_ids } = validateCitations(modelResult.citations, context.chunks);
+        if (!valid) {
+          failureReason = `Hallucinated citation ids: ${invalid_ids.join(', ')}`;
+          log.warn('deal_qa_citation_validation_failed', { dealId, invalid_ids });
+          modelResult = null;
+        }
+      }
+
+      // Numerical verifier — same as askQuestion.
+      let drifts = null;
+      let verifiedAt = null;
+      if (modelResult?.answer) {
+        try {
+          const snapshot = numericalVerifier.snapshotFromDealAnalysisInput({
+            deal: { land_area_acres: deal.land_area_acres },
+            financials: {
+              irr_pct: deal.irr_pct,
+              total_revenue_cr: deal.total_revenue_cr,
+              total_cost_cr: deal.total_cost_cr,
+            },
+          });
+          const v = numericalVerifier.verifyDealAnalysis({
+            contentMd: modelResult.answer,
+            snapshot,
+          });
+          drifts = v.drifts;
+          verifiedAt = v.verifiedAt;
+        } catch (verifierErr) {
+          log.warn('deal_qa_verifier_failed', { dealId, error: verifierErr.message });
+        }
+      }
+
+      const status = modelResult ? 'complete' : 'failed';
+      const hydratedCitations = modelResult
+        ? hydrateCitations(modelResult.citations, context.chunks)
+        : [];
+
+      const insertResult = await query(
+        `INSERT INTO deal_qa_history
+           (organization_id, deal_id, asked_by, question, answer, citations,
+            generated_by_call_id, numerical_drifts, verified_at,
+            snapshot_hash, status, failure_reason)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, $11, $12)
+         RETURNING *`,
+        [
+          organizationId,
+          dealId,
+          userId,
+          trimmed,
+          modelResult?.answer || null,
+          JSON.stringify(hydratedCitations),
+          callId,
+          drifts ? JSON.stringify(drifts) : null,
+          verifiedAt,
+          snapshotHash,
+          status,
+          failureReason,
+        ],
+      );
+
+      return {
+        row: {
+          ...insertResult.rows[0],
+          confidence: modelResult?.confidence || null,
+          cache_hit: false,
+        },
+        status,
+        failureReason,
+      };
+    },
+  };
+}
+
+/**
  * Return the most recent N Q&A rows for a deal. Used by the deal page
  * on mount.
  */
@@ -494,6 +675,7 @@ async function deleteHistoryRow(rowId) {
 module.exports = {
   // Public
   askQuestion,
+  streamQuestion,
   listHistory,
   deleteHistoryRow,
   // Helpers — exported for tests

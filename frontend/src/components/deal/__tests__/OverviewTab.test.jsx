@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('../../../hooks/useDealContext', () => ({
   useDealContext: () => ({ dealId: 'deal-123' }),
@@ -32,6 +33,15 @@ vi.mock('../../../services/api', () => ({
     streamDealAnalysis: vi.fn(() => ({ promise: new Promise(() => {}), abort: vi.fn() })),
     getCachedDealAnalysis: vi.fn(() => Promise.resolve({ data: { data: null } })),
   },
+  // Q&A box (Tier-2 #11) is rendered at the bottom of OverviewTab. The
+  // hooks call useQueryClient() — return enough shape for a no-op
+  // render under the test's QueryClientProvider.
+  dealQaAPI: {
+    history: vi.fn(() => Promise.resolve({ data: { data: [] } })),
+    ask: vi.fn(),
+    stream: vi.fn(() => ({ promise: new Promise(() => {}), abort: vi.fn() })),
+    deleteRow: vi.fn(),
+  },
 }));
 
 vi.mock('../BuildabilitySummary', () => ({
@@ -40,13 +50,20 @@ vi.mock('../BuildabilitySummary', () => ({
 
 import OverviewTab from '../OverviewTab';
 
+const renderWithProviders = (ui) => {
+  // Each test gets a fresh client; retries off so failed queries surface
+  // immediately instead of looping in the background.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
+};
+
 describe('OverviewTab', () => {
   it('links to the financial model with the context deal id', () => {
-    render(
-      <MemoryRouter>
-        <OverviewTab />
-      </MemoryRouter>,
-    );
+    renderWithProviders(<OverviewTab />);
 
     expect(screen.getByRole('link', { name: /full model/i })).toHaveAttribute(
       'href',
