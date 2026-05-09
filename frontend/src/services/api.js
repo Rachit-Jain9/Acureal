@@ -440,6 +440,16 @@ export const exportsAPI = {
     api.get('/exports/intelligence/tear-sheet', { params, responseType: 'blob' }),
 };
 
+// Tier-2 #11 — Deal Q&A agent.
+// Single-shot Q&A on a specific deal. Backend retrieves relevant document
+// chunks via pgvector, runs Claude with mandatory-citation contract,
+// persists to deal_qa_history. Returns the new history row.
+export const dealQaAPI = {
+  ask:        (dealId, question)   => api.post(`/deals/${dealId}/qa`, { question }),
+  history:    (dealId, limit = 10) => api.get(`/deals/${dealId}/qa/history`, { params: { limit } }),
+  deleteRow:  (dealId, rowId)      => api.delete(`/deals/${dealId}/qa/${rowId}`),
+};
+
 // DD Items
 export const ddAPI = {
   list:         (dealId)           => api.get(`/deals/${dealId}/dd`),
