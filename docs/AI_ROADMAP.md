@@ -1,10 +1,26 @@
 # AI Roadmap — Institutional Analyst, not a Chatbot
 
-**Last reviewed:** 2026-05-04 (after the 8-PR session that landed Tiers 1, 2.2, 2.3, 4.1, 3.1-foundation, plus MFA, account closure, AI usage dashboard, virtualization, count-up universal).
+**Last reviewed:** 2026-05-09 (after the Tier-2 #11 narrow Deal Q&A agent landed via #199, completing the AI artifact suite + activating the dormant tool registry safely).
 **Owner:** REDIP core
-**Status:** Tiers 0–2 LANDED. Tier 4.1 LANDED. Tier 3 foundation LANDED (registry only — full Deal Analyst persona awaits its entry criterion). Only Tier 2.1 (Vercel AI SDK migration) and the rest of Tiers 3–5 are open.
+**Status:** Tiers 0–2 LANDED in full. Tier 4.1 LANDED. Tier 3 foundation LANDED (registry only). The 4-of-4 AI artifact suite is fully wired (deal_analysis, risk_brief, ic_memo, parcel_narrative all share persistence + numerical verifier + Copy/Download exports). Open Tier work: Tier 2.1 (Vercel AI SDK migration — bundled with Tier 3.2 agent runner whenever that ships) and Tier 5 reliability items.
 
 This is the canonical, single-source roadmap for AI work in REDIP. It supersedes any earlier plan doc that named individual prompts or models. Whenever something here changes, update this file in the same PR.
+
+### Operator-locked deferrals / skips (2026-05-09)
+
+Items the operator (Rachit) explicitly chose NOT to pursue from the 2026-05-08 product-roadmap document. Recorded here so future sessions don't re-relitigate. These are distinct from the AI-tier numbering above; they reference the data-flywheel tier numbering in the 2026-05-08 handoff:
+
+| Handoff item | Decision (2026-05-09) | Rationale |
+|---|---|---|
+| Tier-1 #5 — Karnataka IGR SRO PDF extraction | DEFERRED until operator uploads PDF | Manual data-acquisition blocker; extraction infra ready (`igr_guidance_pdf` doctype) |
+| Tier-1 #6 — Co-working / managed office benchmarks | SKIPPED | Operator-initiated 2026-05-08; no schema follow-up planned |
+| Tier-1 #7 — Student housing / co-living benchmarks | SKIPPED | Operator-initiated 2026-05-08 |
+| Tier-1 #8 — Senior living benchmarks | SKIPPED | Operator-initiated 2026-05-08 |
+| Tier-1 #9 — Data center detailed comps | SKIPPED | Operator-initiated 2026-05-08 |
+| Tier-3 (handoff) — Source-identity verification for broker reports | SKIPPED | Operator-initiated 2026-05-09 |
+| Tier-3 (handoff) — Fine-tune small extraction model on reviewed corpus | SKIPPED | Operator-initiated 2026-05-09; was conditional on >2,000 reviewed rows anyway |
+| Tier-3 (handoff) — Multi-agent orchestration | SKIPPED | Operator-initiated 2026-05-09; the narrow Q&A agent stays narrow on purpose |
+| Tier-3 (handoff) — WhatsApp Business API ingestion | SKIPPED | Operator-initiated 2026-05-09; email ingestion (Tier-0 #181) covers the use case |
 
 ---
 

@@ -4,6 +4,57 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-09 — Tier-2 #11 Q&A agent + roadmap deferrals + final 4-of-4 AI artifact suite, 3 PRs
+
+Mostly a Tier-2 day. Shipped the highest-leverage remaining capability (the narrow Deal Q&A agent), wired the 4th and final AI artifact type to the persistence + verifier suite, added markdown export buttons across all AI panels, and locked in roadmap deferrals so future sessions don't re-debate skipped items.
+
+### What was worked on
+
+**PR #197 — Parcel narrative wired to ai_artifacts + Copy/Download .md on AI panels.** Two complementary additions: (1) `parcel_narrative` was the only AI artifact type from migration 20260510 that wasn't persisting yet — every page-mount on the Parcel tab was burning Claude tokens regenerating the same summary. Now it persists with snapshot_hash, runs through the numerical verifier (Tier-1 #3), and the card prefers the cached version on mount with a "Cached" badge. (2) Both the IC Memo and Risk Brief panels got Copy + Download .md buttons. New helper `frontend/src/utils/downloadMarkdown.js` builds sensible filenames like `whitefield-plot-22-ic-memo-2026-05-09.md`. UTF-8 BOM-less so ₹ glyphs render correctly in Word/Google Docs. Now all four AI artifact types (deal_analysis, risk_brief, ic_memo, parcel_narrative) share the same persistence + caching + drift verifier + export infrastructure. **990/990 backend tests pass**, frontend build clean.
+
+**PR #199 — Tier-2 #11 narrow Deal Q&A agent.** The biggest remaining capability gap from the original handoff. Until now an analyst on a deal page had six tabs of data and zero way to ask conversational questions. New service `dealQa.service.js` orchestrates: (1) deterministic context assembly — deal snapshot + open risk_flags + top 5 comps + pgvector top-K retrieval over `document_embeddings`, all parallel, RLS-scoped. (2) Claude call via `runAIWithSchema` with strict Zod-validated contract: `{ answer, citations: [{ embedding_id, excerpt, why_relevant }], confidence }`. (3) Citation post-validation — every embedding_id MUST exist in the retrieval set; hallucinated ids → row marked status='failed'. (4) Numerical verifier (Tier-1 #3) runs over the answer to catch drift. (5) Snapshot-hash short-circuit so identical re-asks return the cached answer with zero token spend. New migration `20260518_deal_qa_history.sql` with RLS, 3 indexes, 4 policies. New endpoints POST `/api/deals/:dealId/qa`, GET `/api/deals/:dealId/qa/history`, DELETE `/api/deals/:dealId/qa/:rowId`. New frontend component `DealQaBox.jsx` slotted between IcMemoPanel and Stage History on the Overview tab — input box, suggested-question chips on first use, in-flight skeleton, citation chips with click-to-expand excerpt popovers, expandable history rows, drift surface, Cmd/Ctrl+Enter shortcut. **20 unit tests** covering citation validator (hallucination detection), hydrator, snapshot hash (case/whitespace/order-insensitive), AnswerSchema, input validation, cache hit short-circuit, hallucination → 502 with persisted failed row. **1010/1010 backend tests pass.**
+
+**PR #200 — Roadmap deferrals + session log.** Locks in user direction so future sessions don't re-relitigate:
+
+| # | Item | State |
+|---|---|---|
+| Tier-1 #5 | Karnataka IGR SRO PDF extraction | DEFERRED — operator will upload sample PDF later (sample needed from `igr.karnataka.gov.in` → Revised Guidelines Value → any Bengaluru SRO) |
+| Tier-1 #6-9 | Co-working / Student housing / Senior living / Data center benchmarks | SKIPPED |
+| Tier-3 (handoff) | Source-identity verification for broker reports | SKIPPED |
+| Tier-3 (handoff) | Fine-tune small extraction model on reviewed corpus | SKIPPED |
+| Tier-3 (handoff) | Multi-agent orchestration | SKIPPED |
+| Tier-3 (handoff) | WhatsApp Business API ingestion | SKIPPED |
+
+### PRs opened/merged today (3)
+
+| PR | Title |
+|---|---|
+| **[#197](https://github.com/Rachit-Jain9/REDIP/pull/197)** | feat(ai): parcel_narrative wired to ai_artifacts + Copy/Download .md on AI panels |
+| **[#199](https://github.com/Rachit-Jain9/REDIP/pull/199)** | feat(ai): narrow Deal Q&A agent — pgvector + Claude + mandatory citations (Tier-2 #11) |
+| **[#200](https://github.com/Rachit-Jain9/REDIP/pull/200)** | docs(session-log + deferrals): 2026-05-09 session + lock skipped items |
+
+### Operator actions still pending
+- Apply migration `20260518_deal_qa_history.sql` via Supabase SQL editor (project `niamgjbxxgmmffggumvj`). Idempotent. Until applied, the Q&A box renders but POSTs fail with `relation does not exist`.
+- Tier-1 #5 SRO PDF — when ready, drop a Bengaluru SRO PDF (e.g. Sarjapur, Whitefield, Yelahanka) into chat and I wire extraction.
+
+### What's actually pending after today's deferrals
+
+**Original handoff items left:**
+- **Tier-1 #5** — IGR SRO PDF extraction. Waiting on operator PDF download.
+- **Tier-2 #14** — GPT-5.4 A/B harness on parcel narrative + export insights. Held-out 30-deal eval set with hallucination + tone-regression scoring.
+
+**Beyond the original handoff** — opportunities surfaced as the platform matured:
+- **Information architecture pass on the deal Overview tab** — KPIs + AI deal analysis + IC memo + Q&A box + financial summary + stage history + activities + notes is a lot. Could collapse into "AI Insights" sub-section or sub-tabs.
+- **Investor-grade tear sheet PDF** — comprehensive single-page IC printout combining KPIs + AI memo + risk register + comps. Reuses everything we shipped.
+- **Streaming Q&A** — current is sync; could match the deal_analysis / IC memo streaming pattern.
+- **Frontend test coverage** — backend has 1010 tests; frontend is mostly untested. Add Vitest + RTL coverage for the AI panels and queue UI.
+- **Comps queue bulk operations** — approve / reject N rows at once.
+- **Cost / latency monitoring dashboard** — existing `ai_call_logs` table has the data; needs a UI surface.
+- **Dashboard widget customization** — KPI tile selector for analysts.
+- **Audit trail UI** — every material change to a deal is already in `audit_log`; surface it.
+
+---
+
 ## 2026-05-08 (afternoon) — Tier-1 progress + cross-doc inconsistency detector — 11 PRs
 
 Continuation of the same calendar day after the Tier-0 ingestion sequence (#180–#186) shipped earlier. Whole afternoon spent stacking Tier-1 items, polish, and one big new capability — a cross-document AI risk detector that's the first piece of REDIP that actually *reasons across documents* rather than just storing them.
