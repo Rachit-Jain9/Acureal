@@ -319,6 +319,30 @@ router.post(
   },
 );
 
+// POST /deals/bulk/delete { ids: [...] }
+//
+// Hard-delete multiple deals. Admin-only — same `requireRole('admin')`
+// gate as DELETE /deals/:id. Bulk-deletion is the most-destructive
+// operation we expose; the frontend additionally requires a
+// "type DELETE to confirm" pattern before sending the request, but
+// the backend doesn't depend on that — anything that gets past the
+// admin role check executes.
+router.post(
+  '/bulk/delete',
+  authenticate,
+  requireRole('admin'),
+  [body('ids').isArray({ min: 1, max: 50 })],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await dealService.bulkDeleteDeals(req.body.ids);
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // DELETE /deals/:id
 router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next) => {
   try {

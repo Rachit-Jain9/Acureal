@@ -921,6 +921,39 @@ const bulkReassignDeals = async (ids, targetUserId, actorId) => {
 };
 
 /**
+ * Hard-delete a list of deals. Same partial-failure shape as the other
+ * bulk ops — anything that errors out (storage cleanup failure,
+ * row-not-found, etc.) lands in failed[]. Each deletion runs through
+ * the existing `deleteDeal` so the document-storage purge + property
+ * cascade stay consistent. Admin-gated at the route layer; per-id RLS
+ * inside `deleteDeal` is the additional safeguard.
+ */
+const bulkDeleteDeals = async (ids) => {
+  const cleaned = sanitizeBulkIds(ids);
+  const succeeded = [];
+  const failed = [];
+  for (const id of cleaned) {
+    try {
+      const result = await deleteDeal(id);
+      succeeded.push({ id: result?.id || id });
+    } catch (err) {
+      failed.push({
+        id,
+        error: err.message || 'Unknown error',
+        statusCode: err.statusCode || 500,
+      });
+    }
+  }
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+  };
+};
+
+/**
  * Move a list of deals to the same target stage. Validates each
  * transition against the existing canTransitionStage rules — any deal
  * whose current stage doesn't allow the requested target lands in
@@ -1010,5 +1043,6 @@ module.exports = {
   bulkArchiveDeals,
   bulkReassignDeals,
   bulkTransitionStage,
+  bulkDeleteDeals,
   deleteDeal,
 };

@@ -210,3 +210,18 @@ export function useBulkTransitionDeals() {
     onError: (err) => toast.error(err.response?.data?.message || 'Bulk stage transition failed'),
   });
 }
+
+// Admin-only — same authz gate as the single-row DELETE /deals/:id.
+// The component layer additionally requires a "type DELETE to confirm"
+// pattern before firing this mutation.
+export function useBulkDeleteDeals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids) => dealsAPI.bulkDelete(ids).then((r) => r.data.data),
+    onSuccess: (data) => {
+      invalidateDealsQueries(qc);
+      bulkToast('Deleted', data);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Bulk delete failed'),
+  });
+}
