@@ -95,10 +95,13 @@ Data sources that REDIP would benefit from but cannot fabricate or assume availa
 - UI: Section 5e on `/intelligence` renders the table with asset-class chip filter and per-row data-layer badge — honoring the methodology rule that listing / IPC / guidance / internal layers must be visually distinct, not silently blended.
 
 ### Pending: Karnataka IGR guidance-value SRO PDF extraction
-- Status: PARTIAL — placeholder rows now exist in `residential_segmented_benchmarks` for 11 Bengaluru SROs (Devanahalli, Gandhinagar, Hebbal, Hoskote, Indiranagar, Jayanagar, KR Puram, Mahadevapura, Malleshwaram, Varthur, Yelahanka) tagged `guidance_q1_2026_v0_2_pending`.
-- Source needed: Karnataka IGR Revised Guidance Value PDF table per SRO (https://igr.karnataka.gov.in/page/Revised+Guidelines+Value/en).
-- Workaround: Manual Gemini PDF extraction → fill in value_low/high/avg + flip `is_verified=TRUE`.
+- Status: DEFERRED — operator (Rachit) confirmed 2026-05-09 they'll upload sample PDFs later. Until then, placeholder rows continue in `residential_segmented_benchmarks` for 11 Bengaluru SROs (Devanahalli, Gandhinagar, Hebbal, Hoskote, Indiranagar, Jayanagar, KR Puram, Mahadevapura, Malleshwaram, Varthur, Yelahanka) tagged `guidance_q1_2026_v0_2_pending`.
+- Source needed: Karnataka IGR Revised Guidance Value PDF table per SRO.
+  - Path: `https://igr.karnataka.gov.in/english` → top nav → **Revised Guidelines Value** → district selector (Bengaluru Urban / Bengaluru Rural) → SRO list → click any SRO for PDF download.
+  - **Note**: this is the IGR registration/stamp-duty rate — distinct from BBMP UAV property-tax PDFs (which extraction prompt `bbmp_uav_pdf` already handles separately).
+- Workaround on receipt: Drop the PDF in chat → existing `igr_guidance_pdf` Gemini doctype (`backend/src/services/ai/extractionPrompts.js`) handles extraction → results populate the 11 placeholder rows above + flip to `is_verified=TRUE`.
 - Note: Do NOT infer guidance value from listing prices — they're legally distinct floors set by the state. Methodology footnote in TODO is explicit.
+- **Once one Bengaluru SRO PDF lands, the rest is mechanical** — the same extractor handles every SRO; only the file changes. Cost ~$0.05 per SRO via Gemini.
 
 ---
 
