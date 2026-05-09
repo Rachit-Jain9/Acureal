@@ -21,6 +21,14 @@ const embeddings = require('../src/services/embeddings.service');
 const aiRouter = require('../src/services/ai/aiRouter');
 const dealQa = require('../src/services/dealQa.service');
 
+// Postgres "undefined_table" SQLSTATE — Q&A hits this when the
+// 20260518_deal_qa_history migration hasn't been applied yet.
+const makeMissingTableError = () => {
+  const err = new Error('relation "deal_qa_history" does not exist');
+  err.code = '42P01';
+  return err;
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -266,5 +274,56 @@ describe('askQuestion — input validation', () => {
     ).rejects.toMatchObject({
       statusCode: 502,
     });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Migration not yet applied — graceful 503 with operator instructions
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('askQuestion — missing migration handling', () => {
+  test('returns 503 with apply-migration message when cache lookup hits 42P01', async () => {
+    embeddings.searchSimilar.mockResolvedValueOnce([makeChunk('a')]);
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'd1', name: 'Plot 22' }] })  // deal snapshot
+      .mockResolvedValueOnce({ rows: [] })                               // risks
+      .mockResolvedValueOnce({ rows: [] })                               // comps
+      .mockResolvedValueOnce({ rows: [{ id: 'doc-a', name: 'doc-a.pdf' }] }) // doc meta
+      .mockRejectedValueOnce(makeMissingTableError());                   // cache check fails
+
+    await expect(
+      dealQa.askQuestion({ dealId: 'd1', question: 'q', organizationId: 'org-1' }),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      message: expect.stringMatching(/deal_qa_history migration/i),
+    });
+  });
+
+  test('returns 503 when INSERT fails with 42P01', async () => {
+    embeddings.searchSimilar.mockResolvedValueOnce([makeChunk('a')]);
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'd1', name: 'Plot 22' }] })  // deal snapshot
+      .mockResolvedValueOnce({ rows: [] })                               // risks
+      .mockResolvedValueOnce({ rows: [] })                               // comps
+      .mockResolvedValueOnce({ rows: [{ id: 'doc-a', name: 'doc-a.pdf' }] }) // doc meta
+      .mockResolvedValueOnce({ rows: [] })                               // cache miss
+      .mockRejectedValueOnce(makeMissingTableError());                   // INSERT fails
+    aiRouter.runAIWithSchema.mockResolvedValueOnce({
+      result: { answer: 'ok', citations: [{ embedding_id: 'a', excerpt: 'x' }] },
+      callId: 'call-1',
+    });
+
+    await expect(
+      dealQa.askQuestion({ dealId: 'd1', question: 'q', organizationId: 'org-1' }),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      message: expect.stringMatching(/deal_qa_history migration/i),
+    });
+  });
+
+  test('listHistory fails open — returns [] when table is missing', async () => {
+    query.mockRejectedValueOnce(makeMissingTableError());
+    const rows = await dealQa.listHistory('d1');
+    expect(rows).toEqual([]);
   });
 });

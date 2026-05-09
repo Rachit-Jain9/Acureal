@@ -51,6 +51,30 @@ const DEFAULT_TOP_K = 6;
 const MAX_QUESTION_LENGTH = 2000;
 const MAX_HISTORY_LIMIT = 50;
 
+// The Q&A box only works once the deal_qa_history migration is applied.
+// Until then every cache-lookup / insert hits Postgres with SQLSTATE
+// 42P01 ("relation does not exist"). Catch that here and rethrow with a
+// user-friendly 503 so the toast tells the operator exactly what to do.
+const MIGRATION_NOT_APPLIED_MESSAGE =
+  'Q&A is not yet enabled for this organization. The operator needs to apply the deal_qa_history migration in the Supabase SQL editor (database/migrations/20260518_deal_qa_history.sql).';
+
+const isMissingTableError = (err) => {
+  if (!err) return false;
+  const code = err.code || err.original?.code;
+  if (code === '42P01') return true;
+  return /relation .*deal_qa_history.* does not exist/i.test(String(err.message || ''));
+};
+
+const wrapMissingTable = (err) => {
+  if (isMissingTableError(err)) {
+    const e = new Error(MIGRATION_NOT_APPLIED_MESSAGE);
+    e.statusCode = 503;
+    e.code = 'qa_history_table_missing';
+    return e;
+  }
+  return err;
+};
+
 // Each citation must reference a chunk we actually retrieved. The schema
 // validates *shape*; the service post-validates that every embedding_id
 // exists in the retrieval set (no hallucinated provenance).
@@ -333,16 +357,21 @@ async function askQuestion({ dealId, question, userId = null, organizationId = n
 
   // Short-circuit: identical re-ask with same retrieval → return the
   // most recent persisted answer, no Claude call.
-  const cached = await query(
-    `SELECT * FROM deal_qa_history
-       WHERE deal_id = $1
-         AND snapshot_hash = $2
-         AND organization_id = current_organization_id()
-         AND status = 'complete'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-    [dealId, snapshotHash],
-  );
+  let cached;
+  try {
+    cached = await query(
+      `SELECT * FROM deal_qa_history
+         WHERE deal_id = $1
+           AND snapshot_hash = $2
+           AND organization_id = current_organization_id()
+           AND status = 'complete'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      [dealId, snapshotHash],
+    );
+  } catch (err) {
+    throw wrapMissingTable(err);
+  }
   if (cached.rows[0]) {
     return { ...cached.rows[0], cache_hit: true };
   }
@@ -424,28 +453,33 @@ async function askQuestion({ dealId, question, userId = null, organizationId = n
     ? hydrateCitations(modelResult.citations, context.chunks)
     : [];
 
-  const insertResult = await query(
-    `INSERT INTO deal_qa_history
-       (organization_id, deal_id, asked_by, question, answer, citations,
-        generated_by_call_id, numerical_drifts, verified_at,
-        snapshot_hash, status, failure_reason)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, $11, $12)
-     RETURNING *`,
-    [
-      organizationId,
-      dealId,
-      userId,
-      trimmed,
-      modelResult?.answer || null,
-      JSON.stringify(hydratedCitations),
-      callId,
-      drifts ? JSON.stringify(drifts) : null,
-      verifiedAt,
-      snapshotHash,
-      status,
-      failureReason,
-    ],
-  );
+  let insertResult;
+  try {
+    insertResult = await query(
+      `INSERT INTO deal_qa_history
+         (organization_id, deal_id, asked_by, question, answer, citations,
+          generated_by_call_id, numerical_drifts, verified_at,
+          snapshot_hash, status, failure_reason)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        organizationId,
+        dealId,
+        userId,
+        trimmed,
+        modelResult?.answer || null,
+        JSON.stringify(hydratedCitations),
+        callId,
+        drifts ? JSON.stringify(drifts) : null,
+        verifiedAt,
+        snapshotHash,
+        status,
+        failureReason,
+      ],
+    );
+  } catch (err) {
+    throw wrapMissingTable(err);
+  }
 
   if (status === 'failed') {
     const err = new Error(failureReason || 'Q&A generation failed.');
@@ -497,16 +531,24 @@ async function streamQuestion({ dealId, question, userId = null, organizationId 
 
   // Cache short-circuit — same as askQuestion. No stream needed if we
   // already have an answer with identical (question, retrieval).
-  const cached = await query(
-    `SELECT * FROM deal_qa_history
-       WHERE deal_id = $1
-         AND snapshot_hash = $2
-         AND organization_id = current_organization_id()
-         AND status = 'complete'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-    [dealId, snapshotHash],
-  );
+  let cached;
+  try {
+    cached = await query(
+      `SELECT * FROM deal_qa_history
+         WHERE deal_id = $1
+           AND snapshot_hash = $2
+           AND organization_id = current_organization_id()
+           AND status = 'complete'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      [dealId, snapshotHash],
+    );
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      return { error: MIGRATION_NOT_APPLIED_MESSAGE, status: 503 };
+    }
+    throw err;
+  }
   if (cached.rows[0]) {
     return { cacheHit: true, row: { ...cached.rows[0], cache_hit: true } };
   }
@@ -606,28 +648,33 @@ async function streamQuestion({ dealId, question, userId = null, organizationId 
         ? hydrateCitations(modelResult.citations, context.chunks)
         : [];
 
-      const insertResult = await query(
-        `INSERT INTO deal_qa_history
-           (organization_id, deal_id, asked_by, question, answer, citations,
-            generated_by_call_id, numerical_drifts, verified_at,
-            snapshot_hash, status, failure_reason)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, $11, $12)
-         RETURNING *`,
-        [
-          organizationId,
-          dealId,
-          userId,
-          trimmed,
-          modelResult?.answer || null,
-          JSON.stringify(hydratedCitations),
-          callId,
-          drifts ? JSON.stringify(drifts) : null,
-          verifiedAt,
-          snapshotHash,
-          status,
-          failureReason,
-        ],
-      );
+      let insertResult;
+      try {
+        insertResult = await query(
+          `INSERT INTO deal_qa_history
+             (organization_id, deal_id, asked_by, question, answer, citations,
+              generated_by_call_id, numerical_drifts, verified_at,
+              snapshot_hash, status, failure_reason)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, $11, $12)
+           RETURNING *`,
+          [
+            organizationId,
+            dealId,
+            userId,
+            trimmed,
+            modelResult?.answer || null,
+            JSON.stringify(hydratedCitations),
+            callId,
+            drifts ? JSON.stringify(drifts) : null,
+            verifiedAt,
+            snapshotHash,
+            status,
+            failureReason,
+          ],
+        );
+      } catch (err) {
+        throw wrapMissingTable(err);
+      }
 
       return {
         row: {
@@ -648,17 +695,29 @@ async function streamQuestion({ dealId, question, userId = null, organizationId 
  */
 async function listHistory(dealId, { limit = 10 } = {}) {
   const cappedLimit = Math.min(Math.max(parseInt(limit, 10) || 10, 1), MAX_HISTORY_LIMIT);
-  const result = await query(
-    `SELECT id, question, answer, citations, status, failure_reason,
-            numerical_drifts, verified_at, snapshot_hash, created_at, asked_by
-       FROM deal_qa_history
-      WHERE deal_id = $1
-        AND organization_id = current_organization_id()
-      ORDER BY created_at DESC
-      LIMIT $2`,
-    [dealId, cappedLimit],
-  );
-  return result.rows;
+  try {
+    const result = await query(
+      `SELECT id, question, answer, citations, status, failure_reason,
+              numerical_drifts, verified_at, snapshot_hash, created_at, asked_by
+         FROM deal_qa_history
+        WHERE deal_id = $1
+          AND organization_id = current_organization_id()
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [dealId, cappedLimit],
+    );
+    return result.rows;
+  } catch (err) {
+    // Migration not yet applied → return empty history. The Q&A box on the
+    // page renders the input + suggested questions without throwing; the
+    // ask route will return the proper 503 when the user actually
+    // submits.
+    if (isMissingTableError(err)) {
+      log.warn('deal_qa_history_table_missing_returning_empty', { dealId });
+      return [];
+    }
+    throw err;
+  }
 }
 
 async function deleteHistoryRow(rowId) {
