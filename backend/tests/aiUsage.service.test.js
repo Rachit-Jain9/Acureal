@@ -159,13 +159,66 @@ describe('aiUsage.getSummary p50', () => {
   });
 });
 
+describe('aiUsage.getCostCapStatus', () => {
+  // The cost cap check sits behind costGuard's getDailyCap (env) +
+  // sumDailySpend (DB). We don't mock costGuard itself — the service
+  // composes them through the public surface so the integration is
+  // exercised end-to-end.
+  const ORIGINAL_CAP = process.env.AI_DAILY_COST_CAP_USD;
+  afterEach(() => {
+    if (ORIGINAL_CAP === undefined) delete process.env.AI_DAILY_COST_CAP_USD;
+    else process.env.AI_DAILY_COST_CAP_USD = ORIGINAL_CAP;
+  });
+
+  test('returns enabled=false when AI_DAILY_COST_CAP_USD is unset', async () => {
+    delete process.env.AI_DAILY_COST_CAP_USD;
+    query.mockResolvedValueOnce({ rows: [{ spent_usd: 0 }] });
+    const out = await aiUsage.getCostCapStatus();
+    expect(out.enabled).toBe(false);
+    expect(out.cap_usd).toBeNull();
+    expect(out.blocked).toBe(false);
+  });
+
+  test('reports utilization when cap is set and spend < cap', async () => {
+    process.env.AI_DAILY_COST_CAP_USD = '50';
+    query.mockResolvedValueOnce({ rows: [{ spent_usd: '12.5' }] });
+    const out = await aiUsage.getCostCapStatus();
+    expect(out.enabled).toBe(true);
+    // No org id in test → platform 2× cap = $100
+    expect(out.cap_usd).toBe(100);
+    expect(out.spent_today_usd).toBe(12.5);
+    expect(out.pct_of_cap).toBe(12.5);
+    expect(out.blocked).toBe(false);
+  });
+
+  test('flags blocked=true when spend ≥ cap', async () => {
+    process.env.AI_DAILY_COST_CAP_USD = '20';
+    // Platform 2× cap = $40; spend = $42 → over.
+    query.mockResolvedValueOnce({ rows: [{ spent_usd: '42' }] });
+    const out = await aiUsage.getCostCapStatus();
+    expect(out.blocked).toBe(true);
+    expect(out.pct_of_cap).toBeGreaterThanOrEqual(100);
+  });
+
+  test('fails open: query error returns disabled snapshot', async () => {
+    process.env.AI_DAILY_COST_CAP_USD = '50';
+    query.mockRejectedValueOnce(new Error('boom'));
+    const out = await aiUsage.getCostCapStatus();
+    expect(out.enabled).toBe(false);
+    expect(out.spent_today_usd).toBe(0);
+    expect(out.blocked).toBe(false);
+  });
+});
+
 describe('aiUsage.getUsageDashboard', () => {
   test('clamps days to [1, 365] and parallelizes child queries', async () => {
+    delete process.env.AI_DAILY_COST_CAP_USD;
     query.mockResolvedValue({ rows: [{}] });
     const out = await aiUsage.getUsageDashboard({ days: 9999 });
     expect(out.summary.window_days).toBe(365);
-    // 5 parallel queries: summary, daily, by_task_provider, by_doctype, top_cost_calls
-    expect(query).toHaveBeenCalledTimes(5);
+    // 6 parallel queries: summary, daily, by_task_provider, by_doctype,
+    // top_cost_calls, cost_cap (sumDailySpend).
+    expect(query).toHaveBeenCalledTimes(6);
   });
 
   test('defaults to 30-day window when days is missing', async () => {
