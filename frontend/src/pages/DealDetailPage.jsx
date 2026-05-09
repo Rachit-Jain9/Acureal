@@ -44,6 +44,7 @@ import DDTab from '../components/deal/DDTab';
 import RiskTab from '../components/deal/RiskTab';
 import CompsTab from '../components/deal/CompsTab';
 import ZoningTab from '../components/deal/ZoningTab';
+import AuditTab from '../components/deal/AuditTab';
 import ShareDealPanel from '../components/deal/ShareDealPanel';
 
 const TABS = [
@@ -56,6 +57,7 @@ const TABS = [
   { id: 'dd',         label: 'DD & Approvals' },
   { id: 'risk',       label: 'Risk' },
   { id: 'comps',      label: 'Market / Comps' },
+  { id: 'audit',      label: 'Audit' },
 ];
 
 const DEAL_STRUCTURE_LABELS = {
@@ -468,6 +470,7 @@ export default function DealDetailPage() {
         {activeTab === 'dd' && <DDTab />}
         {activeTab === 'risk' && <RiskTab />}
         {activeTab === 'comps' && <CompsTab />}
+        {activeTab === 'audit' && <AuditTab />}
       </div>
 
       {/* ── Edit Modal ───────────────────────────────────────────────────── */}

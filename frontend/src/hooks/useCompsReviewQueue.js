@@ -120,6 +120,45 @@ export function useRejectQueueRow() {
   });
 }
 
+// Bulk approve — accepts an array of queue ids. Per-id failures land in
+// `data.failed`; the toast summarises succeeded vs failed counts so the
+// analyst doesn't need to open the network tab to understand outcomes.
+export function useBulkApproveQueue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids) => compsReviewQueueAPI.bulkApprove(ids).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
+      qc.invalidateQueries({ queryKey: ['comps'] });
+      const { succeeded_count = 0, failed_count = 0 } = data || {};
+      if (failed_count === 0) {
+        toast.success(`Approved ${succeeded_count} item${succeeded_count === 1 ? '' : 's'}`);
+      } else {
+        toast.error(`Approved ${succeeded_count}, ${failed_count} failed — see queue for details`);
+      }
+    },
+    onError: (err) => toast.error(errMessage(err, 'Bulk approve failed')),
+  });
+}
+
+export function useBulkRejectQueue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, reason }) =>
+      compsReviewQueueAPI.bulkReject(ids, reason).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
+      const { succeeded_count = 0, failed_count = 0 } = data || {};
+      if (failed_count === 0) {
+        toast.success(`Rejected ${succeeded_count} item${succeeded_count === 1 ? '' : 's'}`);
+      } else {
+        toast.error(`Rejected ${succeeded_count}, ${failed_count} failed — see queue for details`);
+      }
+    },
+    onError: (err) => toast.error(errMessage(err, 'Bulk reject failed')),
+  });
+}
+
 // Analyst-driven upload — drops a PDF / image / spreadsheet directly into
 // the queue without going through email. Useful pre-domain or whenever
 // the analyst already has the source document in hand.

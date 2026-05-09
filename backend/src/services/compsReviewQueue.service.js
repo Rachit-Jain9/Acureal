@@ -545,6 +545,100 @@ const reject = async (id, reason, userId) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// Bulk operations — multi-row approve / reject for the queue page
+// ──────────────────────────────────────────────────────────────────────────
+
+const MAX_BULK_IDS = 50;
+
+const sanitizeIds = (ids) => {
+  if (!Array.isArray(ids)) {
+    throw createError('Body must include an array of queue ids.', 400);
+  }
+  const cleaned = [...new Set(
+    ids
+      .map((id) => (typeof id === 'string' ? id.trim() : ''))
+      .filter(Boolean),
+  )];
+  if (cleaned.length === 0) {
+    throw createError('At least one id is required.', 400);
+  }
+  if (cleaned.length > MAX_BULK_IDS) {
+    throw createError(`Bulk operation capped at ${MAX_BULK_IDS} ids per request (received ${cleaned.length}).`, 400);
+  }
+  return cleaned;
+};
+
+/**
+ * Approve + commit each id in `ids`. Per-id failures are collected and
+ * returned alongside successes — the request never aborts halfway.
+ *
+ * Each successful approval still flows through `approveAndCommit` so the
+ * existing transactional contract holds: every comp insert + queue
+ * status update for one row is atomic. A failure on row N doesn't roll
+ * back rows 0..N-1 (different transactions). The UI surfaces the
+ * per-row breakdown so the analyst can retry only the failed ones.
+ */
+const bulkApprove = async (ids, userId) => {
+  const cleaned = sanitizeIds(ids);
+  const succeeded = [];
+  const failed = [];
+  for (const id of cleaned) {
+    try {
+      const result = await approveAndCommit(id, userId);
+      succeeded.push({
+        id,
+        committed_count: result.committed_count,
+        skipped_count: result.skipped_count,
+        comp_ids: result.comp_ids,
+      });
+    } catch (err) {
+      failed.push({
+        id,
+        error: err.message || 'Unknown error',
+        statusCode: err.statusCode || 500,
+      });
+    }
+  }
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+  };
+};
+
+/**
+ * Mark each id in `ids` as rejected with an optional shared reason. Same
+ * partial-failure shape as bulkApprove.
+ */
+const bulkReject = async (ids, reason, userId) => {
+  const cleaned = sanitizeIds(ids);
+  const succeeded = [];
+  const failed = [];
+  for (const id of cleaned) {
+    try {
+      const updated = await reject(id, reason, userId);
+      if (updated) succeeded.push({ id, status: updated.status });
+      else failed.push({ id, error: 'Row not found.', statusCode: 404 });
+    } catch (err) {
+      failed.push({
+        id,
+        error: err.message || 'Unknown error',
+        statusCode: err.statusCode || 500,
+      });
+    }
+  }
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+  };
+};
+
+// ──────────────────────────────────────────────────────────────────────────
 // Cron worker entrypoint — establishes its own request context
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -705,6 +799,8 @@ module.exports = {
   applyReviewerEdits,
   approveAndCommit,
   reject,
+  bulkApprove,
+  bulkReject,
   // Manual upload
   manualUpload,
   MANUAL_UPLOAD_ALLOWED_MIMES,

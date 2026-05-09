@@ -1,11 +1,17 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X } from 'lucide-react';
+import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle, CheckCircle2, XCircle, Database, Hourglass, RefreshCw, X, Check, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { Card, SectionHeader, SkeletonList, ErrorState } from '../design-system';
-import { useCompsReviewQueueList, useProcessPendingBatch, useManualUpload } from '../hooks/useCompsReviewQueue';
+import {
+  useCompsReviewQueueList,
+  useProcessPendingBatch,
+  useManualUpload,
+  useBulkApproveQueue,
+  useBulkRejectQueue,
+} from '../hooks/useCompsReviewQueue';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -76,7 +82,7 @@ const Pill = ({ active, onClick, children, tone }) => (
   </button>
 );
 
-const QueueRow = ({ row }) => {
+const QueueRow = ({ row, selectable, selected, onToggleSelect }) => {
   const visual = statusVisual(row.status);
   const Icon = visual.icon;
   const subject = row.source_meta?.subject || row.source_meta?.attachment_name || '(no subject)';
@@ -84,16 +90,43 @@ const QueueRow = ({ row }) => {
   const overall = row.confidence_scores?._overall;
   const overallPct = typeof overall === 'number' ? Math.round(overall * 100) : null;
 
+  const handleCheckboxClick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onToggleSelect?.(row.id);
+  };
+
   return (
     <Link
       to={`/dashboard/admin/comps-queue/${row.id}`}
       className={clsx(
         'group flex items-center gap-4 px-4 py-3.5',
         'border-b border-hairline last:border-b-0',
-        'hover:bg-bg-secondary transition-colors duration-100',
+        'transition-colors duration-100',
+        selected ? 'bg-accent-soft/30' : 'hover:bg-bg-secondary',
         'focus-visible:outline-none focus-visible:bg-bg-secondary'
       )}
     >
+      {/* Multi-select checkbox — only renders when the current status
+          filter supports bulk operations (pending_review). Click is
+          stopPropagation'd so it doesn't navigate to the detail page. */}
+      {selectable && (
+        <button
+          type="button"
+          onClick={handleCheckboxClick}
+          className={clsx(
+            'shrink-0 w-4 h-4 rounded border flex items-center justify-center',
+            'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            selected
+              ? 'bg-accent border-accent text-white'
+              : 'bg-bg-elevated border-hairline hover:border-content-muted',
+          )}
+          aria-pressed={selected}
+          aria-label={selected ? 'Deselect row' : 'Select row'}
+        >
+          {selected && <Check size={11} strokeWidth={3} />}
+        </button>
+      )}
       {/* Status icon column */}
       <div
         className={clsx(
@@ -324,6 +357,23 @@ function UploadModal({ open, onClose, onUploaded }) {
 export default function CompsQueuePage() {
   const [statusFilter, setStatusFilter] = useState('pending_review');
   const [sourceFilter, setSourceFilter] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+
+  // Bulk operations only make sense when the status filter is
+  // pending_review. Other statuses (committed / rejected) are terminal;
+  // the multi-select chrome would be misleading. Selection clears when
+  // the filter changes so stale ids never carry over.
+  const bulkEligible = statusFilter === 'pending_review';
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setRejectModalOpen(false);
+    setRejectReason('');
+  }, [statusFilter, sourceFilter]);
+
+  const bulkApprove = useBulkApproveQueue();
+  const bulkReject = useBulkRejectQueue();
 
   const { data, isLoading, isError, error, refetch } = useCompsReviewQueueList({
     status: statusFilter,
@@ -355,6 +405,59 @@ export default function CompsQueuePage() {
     SOURCE_FILTERS.forEach((s) => { map[s.id ?? 'all'] = sourceCount(rows, s.id); });
     return map;
   }, [rows]);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allRowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const allSelected = bulkEligible && allRowIds.length > 0 && allRowIds.every((id) => selectedIds.has(id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allRowIds));
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (!someSelected) return;
+    const ids = [...selectedIds];
+    const ok = window.confirm(`Approve ${ids.length} item${ids.length === 1 ? '' : 's'}? Each will commit its extracted comps to the database.`);
+    if (!ok) return;
+    try {
+      await bulkApprove.mutateAsync(ids);
+      setSelectedIds(new Set());
+    } catch {
+      // hook surfaces toast
+    }
+  };
+
+  const openBulkReject = () => {
+    if (!someSelected) return;
+    setRejectReason('');
+    setRejectModalOpen(true);
+  };
+
+  const handleBulkRejectConfirm = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await bulkReject.mutateAsync({ ids, reason: rejectReason.trim() || null });
+      setSelectedIds(new Set());
+      setRejectModalOpen(false);
+      setRejectReason('');
+    } catch {
+      // hook surfaces toast — keep modal open so user can retry
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -523,11 +626,158 @@ export default function CompsQueuePage() {
         )}
 
         {!isLoading && !isError && rows.length > 0 && (
-          <div>
-            {rows.map((row) => <QueueRow key={row.id} row={row} />)}
-          </div>
+          <>
+            {/* Select-all header — only renders when bulk operations are
+                eligible (pending_review filter). Mirrors the email-client
+                pattern: checkbox toggles all on the current page. */}
+            {bulkEligible && (
+              <div className="flex items-center gap-3 px-4 py-2 border-b border-hairline bg-bg-secondary/40 text-xs">
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className={clsx(
+                    'shrink-0 w-4 h-4 rounded border flex items-center justify-center',
+                    'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                    allSelected
+                      ? 'bg-accent border-accent text-white'
+                      : 'bg-bg-elevated border-hairline hover:border-content-muted',
+                  )}
+                  aria-pressed={allSelected}
+                  aria-label={allSelected ? 'Deselect all' : 'Select all'}
+                >
+                  {allSelected && <Check size={11} strokeWidth={3} />}
+                </button>
+                <span className="text-content-secondary">
+                  {someSelected
+                    ? `${selectedIds.size} selected`
+                    : 'Select rows for bulk approve / reject'}
+                </span>
+              </div>
+            )}
+            <div>
+              {rows.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  row={row}
+                  selectable={bulkEligible}
+                  selected={selectedIds.has(row.id)}
+                  onToggleSelect={toggleSelect}
+                />
+              ))}
+            </div>
+          </>
         )}
       </Card>
+
+      {/* Bulk action bar — sticky at the bottom while ≥1 row is selected.
+          Mirrors the Gmail / Linear pattern: the bar slides in only when
+          there's something to act on, and clears itself on success. */}
+      {bulkEligible && someSelected && (
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-bg-elevated border border-hairline shadow-editorial rounded-md px-4 py-2.5"
+        >
+          <span className="text-sm font-medium text-content-primary tabular-nums">
+            {selectedIds.size} selected
+          </span>
+          <span className="text-content-muted">·</span>
+          <button
+            type="button"
+            onClick={handleBulkApprove}
+            disabled={bulkApprove.isPending || bulkReject.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+          >
+            {bulkApprove.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            {bulkApprove.isPending ? 'Approving…' : `Approve ${selectedIds.size}`}
+          </button>
+          <button
+            type="button"
+            onClick={openBulkReject}
+            disabled={bulkApprove.isPending || bulkReject.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <XCircle size={13} />
+            Reject {selectedIds.size}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={bulkApprove.isPending || bulkReject.isPending}
+            className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-content-muted hover:text-content-primary transition-colors disabled:opacity-60"
+            aria-label="Clear selection"
+          >
+            <X size={12} />
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* Bulk reject — optional shared reason applied to every selected
+          row. Submit triggers POST /bulk/reject with the id list. */}
+      {rejectModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !bulkReject.isPending && setRejectModalOpen(false)}
+        >
+          <div
+            className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h3 className="font-display text-base font-semibold text-content-primary">
+                Reject {selectedIds.size} item{selectedIds.size === 1 ? '' : 's'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                disabled={bulkReject.isPending}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-content-muted">
+                Each selected row will be marked as rejected with this reason. This is terminal — rejected rows can't be reopened from the queue.
+              </p>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Reason <span className="text-content-muted normal-case tracking-normal">(optional, applied to all)</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Duplicate batch · already covered in the previous quarter's report"
+                  maxLength={1000}
+                  className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                disabled={bulkReject.isPending}
+                className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkRejectConfirm}
+                disabled={bulkReject.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+              >
+                {bulkReject.isPending ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
+                {bulkReject.isPending ? 'Rejecting…' : `Reject ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </div>
