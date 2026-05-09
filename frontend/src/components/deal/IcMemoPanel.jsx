@@ -118,15 +118,14 @@ export default function IcMemoPanel({ dealId, dealName }) {
   };
 
   return (
-    <div className="card-editorial">
+    <div>
       <SectionHeader
         size="sm"
         icon={Brain}
         title={
           <>
-            IC Memo
-            <Badge className="ml-2">Claude</Badge>
-            <Badge className="ml-1" tone="neutral">AI-assisted — review before signoff</Badge>
+            Full IC Memo
+            <Badge className="ml-2" tone="neutral">AI-assisted — review before signoff</Badge>
             {cached && !loading && (
               <Badge className="ml-1" tone="neutral">Cached</Badge>
             )}
