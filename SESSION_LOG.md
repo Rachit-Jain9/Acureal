@@ -4,6 +4,55 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-09 (continued ×2) — Tier-2 #14 A/B eval harness + frontend AI-panel coverage
+
+Two parallel streams shipped together. Closes the last original-handoff item (#14) and lifts frontend coverage on the AI surfaces from "untested" to "regression-guarded."
+
+### What was worked on
+
+**Tier-2 #14 — GPT-5.4 vs Claude A/B eval harness.** A held-out 30-deal fixture set + a deterministic two-axis scorer + a runner CLI for operator-driven comparisons.
+
+- **Scorer (`abEvalScoring.js`).** Pure functions, no DB, no LLM. Two dimensions:
+  - **Hallucination** — extracts every numeric token from the generated text, walks the input snapshot to build the "allowed numbers" set (tolerance ±1%), flags fabricated rupees / FAR / RERA / zone codes. Severity tiers (high near magnitude unit, medium freestanding); a 25-point egregious-output bonus penalty fires once 4 high-severity fabrications stack up.
+  - **Tone regression** — forbidden marketing-tell vocabulary ("groundbreaking", "leverage", "best-in-class"), markdown leakage when prose is required, emoji presence, first-/second-person voice, hedge-density ceiling, target word-count band.
+  - Composite weighted 0.6 hallucination · 0.4 tone — hallucination is the harder failure mode.
+- **Harness orchestrator (`abEvalHarness.service.js`).** Runs N candidate (provider, model) pairs against a fixture list, scores each pair, returns per-candidate summaries + pairwise deltas. Lazy-loaded service prompts so tests can mock without circular requires. Continues on per-fixture errors (one timeout doesn't abort the run).
+- **30-deal fixture set (`tests/fixtures/ab-eval-deals.json`).** 6 micro-markets × 5 verdict labels, programmatically generated from `scripts/generate-ab-eval-fixtures.js` for reproducibility. Each row carries both a `parcel_payload` (for parcel narrative scoring) and a `deal_payload` (for export-insights scoring).
+- **Operator CLI (`scripts/run-ab-eval.js`).** Cost-aware (`--confirm` required > 50 calls), prints per-fixture progress, writes a markdown report with per-candidate summaries, head-to-head deltas, and the worst-3 fixtures per candidate.
+
+**Frontend AI-panel coverage.** Backend has 1062 tests; frontend was mostly untested on the AI surfaces. Closed that gap with 33 new tests across the 4 AI panels:
+
+- **DealQaBox (11 tests)** — empty state suggested questions, suggested-question click fills textarea, submit calls ask with trimmed text, Cmd+Enter shortcut, streaming text paints into the live panel, Cancel button aborts the stream, history rows render with citation chips, failed-row banner, Remove button calls delete, AI-assisted disclaimer.
+- **IcMemoPanel (8 tests)** — empty CTA state, cached-on-mount with Cached badge, Generate calls streamIcMemo with onText/onDone handlers, streamed deltas paint into the markdown, Cancel aborts the upstream call, Copy calls clipboard with the memo body, Download writes a .md with the deal-name filename, drift surface renders when drifts > 0.
+- **ParcelNarrativeCard (8 tests)** — Generate CTA, cached narrative on mount, Generate calls mutate with both ids, skeleton on pending, error state with Try-again, Copy writes via navigator.clipboard, disclaimer rendering, drift surface.
+- **RiskTab risk-brief panel (6 tests)** — gated rendering, body content, Copy, Download, disclaimer, expand/collapse.
+
+### Tests + build
+
+- **Backend**: 1062 tests across 76 suites — all green (+40 from this batch). New `abEvalScoring.test.js` (29 cases) and `abEvalHarness.service.test.js` (11 cases).
+- **Frontend**: 251 tests across 33 files — all green (+33 from this batch).
+- **Production build**: clean, 25s.
+
+### Plain-English recap (for the user)
+
+- The site can now compare two AI models side-by-side on the same set of deals. Run a single command and you get a markdown report showing which model lies less and which writes more like a real analyst — no more guessing if a model swap helped or hurt.
+- The four AI panels on the deal page (Q&A, IC Memo, Parcel Narrative, Risk Brief) now have automated tests covering streaming, caching, and Copy/Download — so future refactors can't quietly break them.
+- No operator action needed. No new env vars, no migrations.
+
+### Operator action available (optional)
+
+When you want to actually compare Claude vs GPT-5.4 on real fixtures:
+```
+node backend/scripts/run-ab-eval.js \
+  --task=parcel_narrative \
+  --candidates=claude:claude-sonnet-4-6,openai:gpt-5.4-mini \
+  --limit=10 \
+  --confirm
+```
+Estimated cost ~$0.24 for a 10-fixture × 2-candidate smoke run. Reports land under `backend/tests/fixtures/ab-eval-report-*.md`.
+
+---
+
 ## 2026-05-09 (continued) — Investor tear-sheet PDF + streaming Q&A
 
 After the Tier-2 #11 Q&A agent landed, picked the two highest-leverage follow-ups from the "beyond the original handoff" list and shipped them together as a paired ship.
