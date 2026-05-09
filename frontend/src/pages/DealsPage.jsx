@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
-  MoreVertical, Presentation, Share2, Trash2, Loader2, User,
+  MoreVertical, Presentation, Share2, Trash2, Loader2, User, Download,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDeals, useCreateDeal, useDeleteDeal } from '../hooks/useDeals';
@@ -163,6 +163,31 @@ export default function DealsPage() {
 
   const hasFilters = search || stageFilter || typeFilter || priorityFilter || assignedToMe;
 
+  // CSV export — passes the current filter combo to the backend so the
+  // file matches exactly what's on screen. Active saved view → click
+  // Export → file rows = filtered rows. Page/limit are stripped because
+  // the export is meant to capture the full filtered set, not just the
+  // visible page.
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const handleExportCsv = async () => {
+    if (exportingCsv) return;
+    setExportingCsv(true);
+    try {
+      const exportParams = { ...params };
+      delete exportParams.page;
+      delete exportParams.limit;
+      const response = await exportsAPI.dealsCsv(exportParams);
+      const today = new Date().toISOString().slice(0, 10);
+      const suffix = activeView ? `-${activeView.name.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 40).toLowerCase()}` : '';
+      downloadAxiosResponse(response, `redip-deals${suffix}-${today}.csv`);
+      toast.success(`Exported ${pagination.total} deal${pagination.total === 1 ? '' : 's'} to CSV`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'CSV export failed');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
   const handleOpenModal = () => {
     setForm(INITIAL_FORM);
     setShowModal(true);
@@ -235,10 +260,26 @@ export default function DealsPage() {
         title="Deals"
         description={`${pagination.total} deal${pagination.total !== 1 ? 's' : ''} in pipeline`}
         actions={
-          <button onClick={handleOpenModal} className="btn btn-primary flex items-center gap-2">
-            <Plus size={16} />
-            New Deal
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={exportingCsv || pagination.total === 0}
+              className="btn btn-secondary flex items-center gap-1.5 text-sm disabled:opacity-50"
+              title={
+                pagination.total === 0
+                  ? 'Nothing to export — list is empty'
+                  : `Download all ${pagination.total} matching deal${pagination.total === 1 ? '' : 's'} as CSV`
+              }
+            >
+              {exportingCsv ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              {exportingCsv ? 'Exporting…' : 'Export CSV'}
+            </button>
+            <button onClick={handleOpenModal} className="btn btn-primary flex items-center gap-2">
+              <Plus size={16} />
+              New Deal
+            </button>
+          </div>
         }
       />
 

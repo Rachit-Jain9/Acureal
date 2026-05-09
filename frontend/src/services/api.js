@@ -436,6 +436,11 @@ export const exportsAPI = {
   dealPdf: (dealId) => api.get(`/exports/deals/${dealId}/pdf`, { responseType: 'blob' }),
   dealPptx: (dealId) => api.get(`/exports/deals/${dealId}/pptx`, { responseType: 'blob' }),
   dealsXlsx: (params) => api.get('/exports/deals/xlsx', { params, responseType: 'blob' }),
+  // CSV export of the deals list. Accepts the same filter query params
+  // as `dealsAPI.list` so the export respects the page's current filter
+  // combination — saved view → click Export → file matches what's on
+  // screen. Always-on visibility scope rules are enforced server-side.
+  dealsCsv: (params) => api.get('/exports/deals/csv', { params, responseType: 'blob' }),
   intelligenceTearSheet: (params) =>
     api.get('/exports/intelligence/tear-sheet', { params, responseType: 'blob' }),
 };

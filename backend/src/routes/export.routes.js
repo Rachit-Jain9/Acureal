@@ -4,8 +4,17 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const ExcelJS = require('exceljs');
 const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
 const pptxgen = require('pptxgenjs');
+const { query: qv } = require('express-validator');
+const { handleValidation } = require('../middleware/validate');
+const {
+  DEAL_STAGES,
+  DEAL_TYPES,
+  PROPERTY_TYPES,
+  normalizePropertyType,
+} = require('../constants/domain');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getDealExportContext } = require('../services/dealExport.service');
+const dealService = require('../services/deal.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
@@ -95,6 +104,115 @@ router.get(
       message: 'JSON pipeline exports have been retired. Use per-deal PDF, PPTX, XLSX, or CSV exports instead.',
     });
   }
+);
+
+// GET /exports/deals/csv — filtered deals list as CSV.
+//
+// Accepts the same query params as GET /deals so an analyst can save
+// a view, then export exactly that view's rows: status + asset class +
+// city + my-deals etc. The filter combination is plumbed through
+// `dealService.getDeals` so the visibility rules (organization scope +
+// archived / dead / share-with-me) match the in-app list exactly.
+//
+// Single-sheet, plain-CSV output. For the rich multi-sheet workbook,
+// callers want /exports/deals/xlsx (which doesn't yet take filters —
+// follow-up).
+router.get(
+  '/deals/csv',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    qv('stage').optional().isIn(DEAL_STAGES),
+    qv('dealType').optional().isIn(DEAL_TYPES),
+    qv('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
+    qv('city').optional().trim(),
+    qv('propertyType').optional().customSanitizer(normalizePropertyType).isIn(PROPERTY_TYPES),
+    qv('search').optional().trim(),
+    qv('includeArchived').optional().isBoolean().toBoolean(),
+    qv('onlyArchived').optional().isBoolean().toBoolean(),
+    qv('liveOnly').optional().isBoolean().toBoolean(),
+    qv('assignedToMe').optional().isBoolean().toBoolean(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const assignedTo =
+        req.query.assignedTo ||
+        (req.query.assignedToMe ? req.user.id : undefined);
+      const filters = {
+        stage: req.query.stage,
+        dealType: req.query.dealType,
+        assignedTo,
+        city: req.query.city,
+        propertyType: req.query.propertyType,
+        search: req.query.search,
+        priority: req.query.priority,
+        includeArchived: req.query.includeArchived,
+        onlyArchived: req.query.onlyArchived,
+        liveOnly: req.query.liveOnly,
+      };
+      // Cap at 5000 rows to keep the response time + memory predictable
+      // — far above any realistic filter combination but a real ceiling
+      // if someone export-spams the unfiltered list.
+      const result = await dealService.getDeals(filters, { page: 1, limit: 5000 });
+      const rows = result?.data || [];
+
+      // Stable column order — matches what the user sees on the Deals
+      // page so the CSV is recognisable. Numeric values land as raw
+      // numbers (no currency suffix) so analysts can pivot them in
+      // Sheets without text-cleaning.
+      const headers = [
+        'Deal Name', 'Type', 'Stage', 'Priority', 'Asset Class', 'Structure',
+        'Property', 'City', 'State', 'Property Type',
+        'Land Area (sqft)', 'Ask Price (Cr)', 'Negotiated Price (Cr)',
+        'Revenue (Cr)', 'Total Cost (Cr)', 'Gross Profit (Cr)', 'Margin %',
+        'IRR %', 'NPV (Cr)', 'Equity Multiple', 'RLV (Cr)',
+        'Assigned To', 'RERA', 'Archived', 'Created', 'Updated',
+      ];
+
+      const fmtDate = (d) => {
+        if (!d) return '';
+        try {
+          return new Date(d).toISOString().slice(0, 10);
+        } catch {
+          return '';
+        }
+      };
+      const num = (v) => (v == null || v === '' ? '' : Number(v));
+
+      const csvLines = [toCsvRow(headers)];
+      for (const r of rows) {
+        csvLines.push(toCsvRow([
+          r.name, r.deal_type, r.stage, r.priority, r.asset_class, r.deal_structure,
+          r.property_name || '', r.city || '', r.state || '', r.property_type || '',
+          num(r.land_area_sqft),
+          num(r.land_ask_price_cr),
+          num(r.negotiated_price_cr),
+          num(r.total_revenue_cr),
+          num(r.total_cost_cr),
+          num(r.gross_profit_cr),
+          num(r.gross_margin_pct),
+          num(r.irr_pct),
+          num(r.npv_cr),
+          num(r.equity_multiple),
+          num(r.residual_land_value_cr),
+          r.assigned_to_name || '',
+          r.rera_number || '',
+          r.is_archived ? 'yes' : 'no',
+          fmtDate(r.created_at),
+          fmtDate(r.updated_at),
+        ]));
+      }
+      const csv = csvLines.join('\n');
+
+      const today = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="redip-deals-${today}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      next(error);
+    }
+  },
 );
 
 // GET /exports/comps
