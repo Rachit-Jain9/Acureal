@@ -33,6 +33,11 @@ router.get(
     qv('includeArchived').optional().isBoolean().toBoolean(),
     qv('onlyArchived').optional().isBoolean().toBoolean(),
     qv('liveOnly').optional().isBoolean().toBoolean(),
+    // "My deals" pill on the Deals list page. When true, scopes the
+    // listing to deals where assigned_to = the auth user's id. The
+    // route plumbs req.user.id explicitly — the query string is
+    // just a flag so the URL doesn't carry user ids.
+    qv('assignedToMe').optional().isBoolean().toBoolean(),
     qv('search').optional().trim(),
     qv('page').optional().isInt({ min: 1 }),
     qv('limit').optional().isInt({ min: 1, max: 500 }),
@@ -40,10 +45,18 @@ router.get(
   handleValidation,
   async (req, res, next) => {
     try {
+      // assignedTo wins as the explicit override; assignedToMe is the
+      // sugar form that fills it in from the auth user. Setting both
+      // is allowed but explicit assignedTo takes precedence so admins
+      // can still filter "show me Asha's queue" without the pill
+      // overriding it.
+      const assignedTo =
+        req.query.assignedTo ||
+        (req.query.assignedToMe ? req.user.id : undefined);
       const filters = {
         stage: req.query.stage,
         dealType: req.query.dealType,
-        assignedTo: req.query.assignedTo,
+        assignedTo,
         city: req.query.city,
         propertyType: req.query.propertyType,
         search: req.query.search,
