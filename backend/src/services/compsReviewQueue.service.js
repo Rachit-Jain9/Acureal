@@ -639,6 +639,110 @@ const bulkReject = async (ids, reason, userId) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// Bulk reassign (PR with migration 20260520_comps_queue_assignment)
+// ──────────────────────────────────────────────────────────────────────────
+
+const REASSIGN_MIGRATION_MESSAGE =
+  'Bulk reassign is not enabled for this organization. The operator needs to apply the comps_review_queue assignment migration in the Supabase SQL editor (database/migrations/20260520_comps_queue_assignment.sql).';
+
+const isAssignmentColumnMissing = (err) => {
+  if (!err) return false;
+  const code = err.code || err.original?.code;
+  if (code === '42703') return true; // undefined_column
+  return /column .*assigned_(to|at|by).* does not exist/i.test(String(err.message || ''));
+};
+
+/**
+ * Reassign each id in `ids` to `targetUserId` (or unassign when null).
+ * Same partial-failure shape as bulkApprove / bulkReject — errors are
+ * collected per-id and returned alongside successes. Capped at the
+ * shared MAX_BULK_IDS.
+ *
+ * Refuses to operate on terminal rows (committed/rejected) — those rows
+ * are append-only-effectively and reassigning them would only confuse the
+ * audit trail. Returns 409-equivalent in the failed[] entry for those.
+ *
+ * Fail-graceful when the migration hasn't been applied yet: surfaces a
+ * clear 503 with operator instructions instead of a generic 500.
+ */
+const bulkReassign = async (ids, targetUserId, actorId) => {
+  const cleaned = sanitizeIds(ids);
+
+  // Validate target user belongs to the same org if non-null. NULL is the
+  // canonical "unassign" — no validation needed.
+  if (targetUserId) {
+    let targetCheck;
+    try {
+      targetCheck = await query(
+        `SELECT id, name, email
+           FROM users
+          WHERE id = $1
+            AND organization_id = current_organization_id()
+          LIMIT 1`,
+        [targetUserId],
+      );
+    } catch (err) {
+      throw err;
+    }
+    if (!targetCheck.rows[0]) {
+      throw createError('Target user not found in this organization.', 400);
+    }
+  }
+
+  let result;
+  try {
+    result = await query(
+      `UPDATE comps_review_queue
+          SET assigned_to = $1,
+              assigned_at = CASE WHEN $1::uuid IS NULL THEN NULL ELSE NOW() END,
+              assigned_by = $2,
+              updated_at  = NOW()
+        WHERE id = ANY($3::uuid[])
+          AND organization_id = current_organization_id()
+          AND status NOT IN ('committed', 'rejected')
+        RETURNING id, status, assigned_to`,
+      [targetUserId || null, actorId || null, cleaned],
+    );
+  } catch (err) {
+    if (isAssignmentColumnMissing(err)) {
+      const e = new Error(REASSIGN_MIGRATION_MESSAGE);
+      e.statusCode = 503;
+      e.code = 'queue_assignment_column_missing';
+      throw e;
+    }
+    throw err;
+  }
+
+  const succeededIds = new Set(result.rows.map((r) => r.id));
+  const succeeded = result.rows.map((r) => ({
+    id: r.id,
+    status: r.status,
+    assigned_to: r.assigned_to,
+  }));
+  // Anything in `cleaned` that didn't come back from the UPDATE either:
+  //   • doesn't exist in the org, or
+  //   • is in a terminal status (committed/rejected).
+  // Surface either way as a per-id failure with a generic message — the
+  // analyst sees which ids didn't move and can investigate.
+  const failed = cleaned
+    .filter((id) => !succeededIds.has(id))
+    .map((id) => ({
+      id,
+      error: 'Row not found, in a terminal status, or not in this organization.',
+      statusCode: 409,
+    }));
+
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+    target_user_id: targetUserId || null,
+  };
+};
+
+// ──────────────────────────────────────────────────────────────────────────
 // Cron worker entrypoint — establishes its own request context
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -801,6 +905,7 @@ module.exports = {
   reject,
   bulkApprove,
   bulkReject,
+  bulkReassign,
   // Manual upload
   manualUpload,
   MANUAL_UPLOAD_ALLOWED_MIMES,

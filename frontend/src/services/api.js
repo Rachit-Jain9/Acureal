@@ -596,6 +596,24 @@ export const compsReviewQueueAPI = {
     if (reason != null && reason !== '') body.reason = reason;
     return api.post('/comps-review-queue/bulk/reject', body);
   },
+  // assignedTo: UUID of the new assignee, or null to clear assignment.
+  // Returns 503 with operator instructions if the assignment migration
+  // (database/migrations/20260520_comps_queue_assignment.sql) hasn't
+  // been applied yet — the toast will tell the operator what to do.
+  bulkReassign: (ids, assignedTo) =>
+    api.post('/comps-review-queue/bulk/reassign', { ids, assignedTo: assignedTo || null }),
+};
+
+// Admin / operator endpoints. Mounted at /api/admin on the backend.
+// All routes here require admin or analyst role.
+export const adminAPI = {
+  // Org-scoped list of active users — backs the user-picker on the
+  // Comps Queue's bulk-reassign modal and any future "assign to" UI.
+  listUsers: () => api.get('/admin/users'),
+  // AI usage dashboard. Returns { summary, daily[], by_task_provider[],
+  // by_doctype[], top_cost_calls[], generated_at }. Window is configurable
+  // via ?days= (default 30, max 365).
+  getAiUsage: (days = 30) => api.get('/admin/ai-usage', { params: { days } }),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

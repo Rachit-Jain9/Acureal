@@ -51,6 +51,7 @@ const getSummary = async ({ days = DEFAULT_DAYS } = {}) => {
        COUNT(*) FILTER (WHERE (metadata->>'recovered_via_retry')::boolean IS TRUE)::int       AS recovered_via_retry,
        COUNT(*) FILTER (WHERE (metadata->>'prompt_cache_used')::boolean IS TRUE)::int         AS prompt_cache_used,
        AVG(latency_ms)::int                                                                   AS avg_latency_ms,
+       PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY latency_ms)::int                          AS p50_latency_ms,
        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms)::int                          AS p95_latency_ms
      FROM ai_call_logs
      WHERE created_at >= NOW() - ($1 || ' days')::interval`,
@@ -74,6 +75,7 @@ const getSummary = async ({ days = DEFAULT_DAYS } = {}) => {
     recovered_via_retry: Number(r.recovered_via_retry || 0),
     prompt_cache_used: Number(r.prompt_cache_used || 0),
     avg_latency_ms: Number(r.avg_latency_ms || 0),
+    p50_latency_ms: Number(r.p50_latency_ms || 0),
     p95_latency_ms: Number(r.p95_latency_ms || 0),
   };
 };
@@ -169,19 +171,63 @@ const getByDoctype = async ({ days = DEFAULT_DAYS } = {}) => {
   }));
 };
 
+// Top N most-expensive individual calls in the trailing window. Useful
+// for spotting "one runaway extraction blew the budget" without paging
+// through the raw log. Status is included so the operator can tell
+// whether the spend was successful (worth it) or wasted on errors.
+const getTopCostCalls = async ({ days = DEFAULT_DAYS, limit = 20 } = {}) => {
+  const cappedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const rows = await safeQuery(
+    `SELECT
+       id,
+       task,
+       provider,
+       model,
+       status,
+       cost_usd,
+       latency_ms,
+       total_tokens,
+       deal_id,
+       document_id,
+       created_at
+     FROM ai_call_logs
+     WHERE created_at >= NOW() - ($1 || ' days')::interval
+       AND cost_usd IS NOT NULL
+     ORDER BY cost_usd DESC NULLS LAST
+     LIMIT $2`,
+    [days, cappedLimit],
+    [],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    task: r.task,
+    provider: r.provider,
+    model: r.model,
+    status: r.status,
+    cost_usd: Number(r.cost_usd || 0),
+    latency_ms: Number(r.latency_ms || 0),
+    total_tokens: Number(r.total_tokens || 0),
+    deal_id: r.deal_id,
+    document_id: r.document_id,
+    created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at || ''),
+  }));
+};
+
 const getUsageDashboard = async ({ days = DEFAULT_DAYS } = {}) => {
   const safeDays = Math.min(Math.max(parseInt(days, 10) || DEFAULT_DAYS, 1), 365);
-  const [summary, dailySeries, byTaskProvider, byDoctype] = await Promise.all([
+  const [summary, dailySeries, byTaskProvider, byDoctype, topCostCalls] = await Promise.all([
     getSummary({ days: safeDays }),
     getDailySeries({ days: safeDays }),
     getByTaskProvider({ days: safeDays }),
     getByDoctype({ days: safeDays }),
+    getTopCostCalls({ days: safeDays, limit: 20 }),
   ]);
   return {
     summary,
     daily: dailySeries,
     by_task_provider: byTaskProvider,
     by_doctype: byDoctype,
+    top_cost_calls: topCostCalls,
     generated_at: new Date().toISOString(),
   };
 };
@@ -193,4 +239,5 @@ module.exports = {
   getDailySeries,
   getByTaskProvider,
   getByDoctype,
+  getTopCostCalls,
 };

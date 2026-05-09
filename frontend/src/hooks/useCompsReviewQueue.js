@@ -159,6 +159,28 @@ export function useBulkRejectQueue() {
   });
 }
 
+// Bulk reassign — sets assigned_to on each row (or null to unassign).
+// Surfaces the migration-pending 503 (queue_assignment_column_missing) as
+// a clear toast so the operator knows what to apply.
+export function useBulkReassignQueue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, assignedTo }) =>
+      compsReviewQueueAPI.bulkReassign(ids, assignedTo).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
+      const { succeeded_count = 0, failed_count = 0, target_user_id } = data || {};
+      const verb = target_user_id ? 'Reassigned' : 'Unassigned';
+      if (failed_count === 0) {
+        toast.success(`${verb} ${succeeded_count} item${succeeded_count === 1 ? '' : 's'}`);
+      } else {
+        toast.error(`${verb} ${succeeded_count}, ${failed_count} skipped (terminal status or not in this org)`);
+      }
+    },
+    onError: (err) => toast.error(errMessage(err, 'Bulk reassign failed')),
+  });
+}
+
 // Analyst-driven upload — drops a PDF / image / spreadsheet directly into
 // the queue without going through email. Useful pre-domain or whenever
 // the analyst already has the source document in hand.
