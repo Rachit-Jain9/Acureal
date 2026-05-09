@@ -3,9 +3,19 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
   MoreVertical, Presentation, Share2, Trash2, Loader2, User, Download,
+  Check, Archive, UserPlus, ArrowRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useDeals, useCreateDeal, useDeleteDeal } from '../hooks/useDeals';
+import {
+  useDeals,
+  useCreateDeal,
+  useDeleteDeal,
+  useBulkArchiveDeals,
+  useBulkReassignDeals,
+  useBulkTransitionDeals,
+} from '../hooks/useDeals';
+import { useQuery } from '@tanstack/react-query';
+import { adminAPI } from '../services/api';
 import { useProperties } from '../hooks/useProperties';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
@@ -151,6 +161,90 @@ export default function DealsPage() {
     extentUnit: form.landExtentInputUnit,
     fallbackAreaSqft: selectedProperty?.land_area_sqft,
   });
+
+  // Multi-select for bulk operations on the deals list. Selection
+  // clears when filters change so stale ids never carry over.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState('');
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassignTargetId, setReassignTargetId] = useState('');
+  const [stageModalOpen, setStageModalOpen] = useState(false);
+  const [stageTarget, setStageTarget] = useState('');
+  const [stageNotes, setStageNotes] = useState('');
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setArchiveModalOpen(false);
+    setReassignModalOpen(false);
+    setStageModalOpen(false);
+    setArchiveReason('');
+    setReassignTargetId('');
+    setStageTarget('');
+    setStageNotes('');
+  }, [search, stageFilter, typeFilter, priorityFilter, assignedToMe]);
+
+  const bulkArchive = useBulkArchiveDeals();
+  const bulkReassign = useBulkReassignDeals();
+  const bulkTransition = useBulkTransitionDeals();
+  const usersQuery = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => adminAPI.listUsers().then((r) => r.data.data),
+    enabled: reassignModalOpen,
+    staleTime: 5 * 60_000,
+  });
+
+  const someSelected = selectedIds.size > 0;
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const bulkBusy = bulkArchive.isPending || bulkReassign.isPending || bulkTransition.isPending;
+
+  const handleConfirmArchive = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await bulkArchive.mutateAsync({ ids, reason: archiveReason.trim() || null });
+      clearSelection();
+      setArchiveModalOpen(false);
+      setArchiveReason('');
+    } catch {
+      // toast surfaced by hook
+    }
+  };
+
+  const handleConfirmReassign = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await bulkReassign.mutateAsync({ ids, assignedTo: reassignTargetId || null });
+      clearSelection();
+      setReassignModalOpen(false);
+      setReassignTargetId('');
+    } catch {
+      // toast surfaced by hook
+    }
+  };
+
+  const handleConfirmStage = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0 || !stageTarget) return;
+    try {
+      await bulkTransition.mutateAsync({ ids, stage: stageTarget, notes: stageNotes.trim() || null });
+      clearSelection();
+      setStageModalOpen(false);
+      setStageTarget('');
+      setStageNotes('');
+    } catch {
+      // toast surfaced by hook
+    }
+  };
 
   const handleFilterReset = () => {
     setSearch('');
@@ -388,7 +482,12 @@ export default function DealsPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {deals.map((deal) => (
-              <DealCard key={deal.id} deal={deal} />
+              <DealCard
+                key={deal.id}
+                deal={deal}
+                selected={selectedIds.has(deal.id)}
+                onToggleSelect={toggleSelect}
+              />
             ))}
           </div>
 
@@ -422,6 +521,286 @@ export default function DealsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Bulk action bar — slides in when ≥1 deal is selected ───────
+            Mirrors the sticky pattern from the Comps Review Queue.
+            Each button gates on `bulkBusy` so the user can't fire
+            another mutation while one is in flight. */}
+      {someSelected && (
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-bg-elevated border border-hairline shadow-editorial rounded-md px-4 py-2.5"
+        >
+          <span className="text-sm font-medium text-content-primary tabular-nums">
+            {selectedIds.size} selected
+          </span>
+          <span className="text-content-muted">·</span>
+          <button
+            type="button"
+            onClick={() => setReassignModalOpen(true)}
+            disabled={bulkBusy}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <UserPlus size={13} />
+            Reassign
+          </button>
+          <button
+            type="button"
+            onClick={() => setStageModalOpen(true)}
+            disabled={bulkBusy}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <ArrowRight size={13} />
+            Move stage
+          </button>
+          <button
+            type="button"
+            onClick={() => setArchiveModalOpen(true)}
+            disabled={bulkBusy}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <Archive size={13} />
+            Archive
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            disabled={bulkBusy}
+            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-content-muted hover:text-content-primary transition-colors disabled:opacity-60"
+            aria-label="Clear selection"
+          >
+            <X size={12} />
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* Bulk archive — optional shared reason applied to every row. */}
+      {archiveModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !bulkBusy && setArchiveModalOpen(false)}
+        >
+          <div
+            className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h3 className="font-display text-base font-semibold text-content-primary">
+                Archive {selectedIds.size} deal{selectedIds.size === 1 ? '' : 's'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setArchiveModalOpen(false)}
+                disabled={bulkBusy}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-content-muted">
+                Archived deals are removed from active views but kept for audit. They can be restored individually from the deal detail page.
+              </p>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Reason <span className="text-content-muted normal-case tracking-normal">(optional, applied to all)</span>
+                </label>
+                <textarea
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Stalled — owner unresponsive for 6 weeks"
+                  maxLength={1000}
+                  className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+              <button
+                type="button"
+                onClick={() => setArchiveModalOpen(false)}
+                disabled={bulkBusy}
+                className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmArchive}
+                disabled={bulkBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                {bulkArchive.isPending ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
+                {bulkArchive.isPending ? 'Archiving…' : `Archive ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk reassign — picker for the new owner. */}
+      {reassignModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !bulkBusy && setReassignModalOpen(false)}
+        >
+          <div
+            className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h3 className="font-display text-base font-semibold text-content-primary">
+                Reassign {selectedIds.size} deal{selectedIds.size === 1 ? '' : 's'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReassignModalOpen(false)}
+                disabled={bulkBusy}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-content-muted">
+                Pick a new owner. Choose <span className="font-medium">Unassign</span> to clear ownership. Archived rows are skipped.
+              </p>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Assign to
+                </label>
+                {usersQuery.isLoading ? (
+                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                ) : usersQuery.isError ? (
+                  <p className="text-sm text-data-negative">Couldn't load users — try closing and re-opening this dialog.</p>
+                ) : (
+                  <select
+                    value={reassignTargetId}
+                    onChange={(e) => setReassignTargetId(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+                  >
+                    <option value="">— Unassign —</option>
+                    {(usersQuery.data || []).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name || u.email}{u.role ? ` · ${u.role}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+              <button
+                type="button"
+                onClick={() => setReassignModalOpen(false)}
+                disabled={bulkBusy}
+                className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReassign}
+                disabled={bulkBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                {bulkReassign.isPending ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                {bulkReassign.isPending
+                  ? 'Reassigning…'
+                  : reassignTargetId
+                    ? `Reassign ${selectedIds.size}`
+                    : `Unassign ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk stage transition — pick a target stage. The validator on
+          the backend rejects per-deal incompatible transitions; the
+          aggregated result lands in the toast. */}
+      {stageModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !bulkBusy && setStageModalOpen(false)}
+        >
+          <div
+            className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h3 className="font-display text-base font-semibold text-content-primary">
+                Move {selectedIds.size} deal{selectedIds.size === 1 ? '' : 's'} to a new stage
+              </h3>
+              <button
+                type="button"
+                onClick={() => setStageModalOpen(false)}
+                disabled={bulkBusy}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-content-muted">
+                Each selected deal moves to the chosen target stage. Deals whose current stage doesn't permit this transition are skipped — the toast summarises succeeded vs skipped counts.
+              </p>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Target stage
+                </label>
+                <select
+                  value={stageTarget}
+                  onChange={(e) => setStageTarget(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+                >
+                  <option value="">— Select target stage —</option>
+                  {Object.entries(STAGE_CONFIG).map(([key, cfg]) => (
+                    <option key={key} value={key}>{cfg.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
+                  Notes <span className="text-content-muted normal-case tracking-normal">(optional, applied to all)</span>
+                </label>
+                <textarea
+                  value={stageNotes}
+                  onChange={(e) => setStageNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Why is this stage transition happening?"
+                  maxLength={1000}
+                  className="w-full px-2.5 py-1.5 text-sm border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-accent"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-bg-secondary/40 rounded-b-editorial">
+              <button
+                type="button"
+                onClick={() => setStageModalOpen(false)}
+                disabled={bulkBusy}
+                className="px-3 py-1.5 text-sm text-content-secondary hover:bg-bg-secondary rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmStage}
+                disabled={bulkBusy || !stageTarget}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                {bulkTransition.isPending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                {bulkTransition.isPending ? 'Moving…' : `Move ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* New Deal Modal */}
@@ -669,7 +1048,7 @@ export default function DealsPage() {
   );
 }
 
-function DealCard({ deal }) {
+function DealCard({ deal, selected = false, onToggleSelect }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const deleteDeal = useDeleteDeal();
@@ -739,13 +1118,43 @@ function DealCard({ deal }) {
     }
   };
 
+  const handleCheckboxClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onToggleSelect?.(deal.id);
+  };
+
   return (
     <>
       <Link
         to={`/dashboard/deals/${deal.id}`}
-        className="card-editorial hover:shadow-md transition-shadow cursor-pointer relative"
+        className={clsx(
+          'card-editorial hover:shadow-md transition-all cursor-pointer relative group',
+          selected && 'ring-1 ring-accent/50 bg-accent-soft/20',
+        )}
       >
-        <div className="flex items-start justify-between mb-3 gap-2">
+        {/* Multi-select checkbox — visible on hover or when this card is
+            already part of the active selection. Click stops propagation
+            so it doesn't navigate to the deal detail page. Mirrors the
+            comps queue pattern (PR #208). */}
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={handleCheckboxClick}
+            aria-pressed={selected}
+            aria-label={selected ? 'Deselect deal' : 'Select deal'}
+            className={clsx(
+              'absolute top-3 left-3 z-10 w-5 h-5 rounded border flex items-center justify-center',
+              'transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              selected
+                ? 'bg-accent border-accent text-white opacity-100'
+                : 'bg-bg-elevated border-hairline text-transparent opacity-0 group-hover:opacity-100 hover:border-accent',
+            )}
+          >
+            {selected && <Check size={12} strokeWidth={3} />}
+          </button>
+        )}
+        <div className={clsx('flex items-start justify-between mb-3 gap-2', selected && 'pl-7')}>
           <h3 className="font-semibold text-content-primary truncate pr-2">{deal.name}</h3>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>

@@ -191,6 +191,21 @@ export const dealsAPI = {
   restore: (id) => api.patch(`/deals/${id}/restore`),
   delete: (id) => api.delete(`/deals/${id}`),
   transitionStage: (id, stage, notes) => api.patch(`/deals/${id}/stage`, { stage, notes }),
+  // Bulk operations — multi-select on /dashboard/deals. Each request
+  // accepts up to 50 ids; per-id failures come back in the response
+  // payload (the HTTP call always succeeds when the body validates).
+  bulkArchive: (ids, reason) => {
+    const body = { ids };
+    if (reason != null && reason !== '') body.reason = reason;
+    return api.post('/deals/bulk/archive', body);
+  },
+  bulkReassign: (ids, assignedTo) =>
+    api.post('/deals/bulk/reassign', { ids, assignedTo: assignedTo || null }),
+  bulkTransitionStage: (ids, stage, notes) => {
+    const body = { ids, stage };
+    if (notes != null && notes !== '') body.notes = notes;
+    return api.post('/deals/bulk/stage', body);
+  },
   getPipeline: () => api.get('/deals/pipeline'),
   getSummary: () => api.get('/deals/summary'),
   // Sharing

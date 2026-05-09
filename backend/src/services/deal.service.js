@@ -802,6 +802,157 @@ const restoreDeal = async (id) => {
   return result.rows[0];
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Bulk operations — multi-deal archive / reassign / stage transition
+// ──────────────────────────────────────────────────────────────────────────
+
+const MAX_BULK_DEAL_IDS = 50;
+
+const sanitizeBulkIds = (ids) => {
+  if (!Array.isArray(ids)) {
+    throw createError('Body must include an array of deal ids.', 400);
+  }
+  const cleaned = [...new Set(
+    ids
+      .map((id) => (typeof id === 'string' ? id.trim() : ''))
+      .filter(Boolean),
+  )];
+  if (cleaned.length === 0) {
+    throw createError('At least one id is required.', 400);
+  }
+  if (cleaned.length > MAX_BULK_DEAL_IDS) {
+    throw createError(
+      `Bulk operation capped at ${MAX_BULK_DEAL_IDS} ids per request (received ${cleaned.length}).`,
+      400,
+    );
+  }
+  return cleaned;
+};
+
+/**
+ * Archive a list of deals. Per-id failures (already archived, not
+ * found, etc.) are aggregated into the response — the request never
+ * aborts halfway. Each archive runs through the existing
+ * `archiveDeal` so the property-purge logic stays consistent.
+ */
+const bulkArchiveDeals = async (ids, userId, reason = null) => {
+  const cleaned = sanitizeBulkIds(ids);
+  const succeeded = [];
+  const failed = [];
+  for (const id of cleaned) {
+    try {
+      const row = await archiveDeal(id, userId, reason);
+      succeeded.push({ id, archived_at: row.archived_at });
+    } catch (err) {
+      failed.push({
+        id,
+        error: err.message || 'Unknown error',
+        statusCode: err.statusCode || 500,
+      });
+    }
+  }
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+  };
+};
+
+/**
+ * Reassign a list of deals to a target user (or unassign with null).
+ * Validates the target belongs to the same org, then runs a single
+ * UPDATE with `id = ANY($ids)`. Same partial-failure shape as the
+ * other bulk ops — anything that didn't move (deleted/archived/wrong-
+ * org) lands in `failed[]` for the analyst to investigate.
+ */
+const bulkReassignDeals = async (ids, targetUserId, actorId) => {
+  const cleaned = sanitizeBulkIds(ids);
+
+  if (targetUserId) {
+    const targetCheck = await query(
+      `SELECT id FROM users WHERE id = $1 AND organization_id = current_organization_id() LIMIT 1`,
+      [targetUserId],
+    );
+    if (!targetCheck.rows[0]) {
+      throw createError('Target user not found in this organization.', 400);
+    }
+  }
+
+  const result = await query(
+    `UPDATE deals
+        SET assigned_to = $1,
+            updated_at  = NOW()
+      WHERE id = ANY($2::uuid[])
+        AND organization_id = current_organization_id()
+        AND is_archived = FALSE
+      RETURNING id, assigned_to`,
+    [targetUserId || null, cleaned],
+  );
+
+  const succeededIds = new Set(result.rows.map((r) => r.id));
+  const succeeded = result.rows.map((r) => ({
+    id: r.id,
+    assigned_to: r.assigned_to,
+  }));
+  const failed = cleaned
+    .filter((id) => !succeededIds.has(id))
+    .map((id) => ({
+      id,
+      error: 'Deal not found, archived, or not in this organization.',
+      statusCode: 409,
+    }));
+
+  // Telemetry — the actor's id is recorded in the audit trail via
+  // standard request logging. We don't persist a per-row "reassigned by"
+  // since `deals` doesn't have that column today; the financial-event
+  // audit ledger captures the broader change set.
+  void actorId;
+
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+    target_user_id: targetUserId || null,
+  };
+};
+
+/**
+ * Move a list of deals to the same target stage. Validates each
+ * transition against the existing canTransitionStage rules — any deal
+ * whose current stage doesn't allow the requested target lands in
+ * failed[]. Iterates so the per-stage history rows + DEAL_STAGE_CHANGED
+ * events fire correctly per deal.
+ */
+const bulkTransitionStage = async (ids, newStage, userId, notes = '') => {
+  const cleaned = sanitizeBulkIds(ids);
+  const succeeded = [];
+  const failed = [];
+  for (const id of cleaned) {
+    try {
+      const row = await transitionStage(id, newStage, userId, notes);
+      succeeded.push({ id, stage: row.stage });
+    } catch (err) {
+      failed.push({
+        id,
+        error: err.message || 'Unknown error',
+        statusCode: err.statusCode || 500,
+      });
+    }
+  }
+  return {
+    requested: cleaned.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+    target_stage: newStage,
+  };
+};
+
 const deleteDeal = async (id) =>
   transaction(async (client) => {
     const dealResult = await client.query(
@@ -856,5 +1007,8 @@ module.exports = {
   getPipelineSummary,
   archiveDeal,
   restoreDeal,
+  bulkArchiveDeals,
+  bulkReassignDeals,
+  bulkTransitionStage,
   deleteDeal,
 };

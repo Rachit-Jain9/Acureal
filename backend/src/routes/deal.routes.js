@@ -226,6 +226,99 @@ router.patch('/:id/restore', authenticate, requireRole('admin', 'analyst'), asyn
   }
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// Bulk operations on the Deals list — multi-select on /dashboard/deals.
+// Each request accepts an `ids` array (capped at 50) and returns an
+// aggregated { succeeded[], failed[] } so the UI can render per-row
+// outcomes without aborting the whole batch on a single failure.
+// ──────────────────────────────────────────────────────────────────────────
+
+// POST /deals/bulk/archive { ids: [...], reason?: '...' }
+router.post(
+  '/bulk/archive',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    body('ids').isArray({ min: 1, max: 50 }),
+    body('reason').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await dealService.bulkArchiveDeals(
+        req.body.ids,
+        req.user.id,
+        req.body.reason || null,
+      );
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /deals/bulk/reassign { ids: [...], assignedTo?: '<uuid>'|null }
+//
+// Sets `deals.assigned_to` on each id. assignedTo: null is "unassign".
+// Refuses archived rows (the bulk reassign isn't meant for cleanup
+// of dead deals — restore first if that's the intent).
+router.post(
+  '/bulk/reassign',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    body('ids').isArray({ min: 1, max: 50 }),
+    body('assignedTo').optional({ values: 'null' }).isUUID(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await dealService.bulkReassignDeals(
+        req.body.ids,
+        req.body.assignedTo || null,
+        req.user.id,
+      );
+      res.json({ success: true, data: result });
+    } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({ success: false, message: err.message });
+      }
+      return next(err);
+    }
+  },
+);
+
+// POST /deals/bulk/stage { ids: [...], stage: '<stage>', notes?: '...' }
+//
+// Move multiple deals to the same target stage. Each transition is
+// validated against canTransitionStage — incompatible rows land in
+// failed[]. Iterates so the per-stage history rows + DEAL_STAGE_CHANGED
+// events fire correctly per deal.
+router.post(
+  '/bulk/stage',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    body('ids').isArray({ min: 1, max: 50 }),
+    body('stage').isIn(DEAL_STAGES),
+    body('notes').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await dealService.bulkTransitionStage(
+        req.body.ids,
+        req.body.stage,
+        req.user.id,
+        req.body.notes || '',
+      );
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // DELETE /deals/:id
 router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next) => {
   try {
