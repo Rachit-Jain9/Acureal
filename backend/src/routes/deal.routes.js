@@ -309,4 +309,66 @@ router.delete('/:id/shares/:userId', authenticate, async (req, res, next) => {
   }
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// Tier-2 #11 — Deal Q&A agent
+// ──────────────────────────────────────────────────────────────────────────
+
+const dealQaService = require('../services/dealQa.service');
+
+// POST /deals/:dealId/qa { question }
+// Synchronous Q&A: retrieves relevant document chunks via pgvector,
+// runs Claude with mandatory-citation contract, persists to
+// deal_qa_history. Returns the new history row.
+router.post('/:id/qa', authenticate, async (req, res, next) => {
+  try {
+    const { question } = req.body || {};
+    const row = await dealQaService.askQuestion({
+      dealId: req.params.id,
+      question,
+      userId: req.user.id,
+      organizationId: req.user.organization_id,
+    });
+    return res.status(row.cache_hit ? 200 : 201).json({ success: true, data: row });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+        // Even on failure we may have persisted a row (status='failed').
+        // Surface the row so the UI can render the failed-attempt entry
+        // in history without a refetch.
+        ...(err.row ? { data: err.row } : {}),
+      });
+    }
+    return next(err);
+  }
+});
+
+// GET /deals/:dealId/qa/history?limit=10
+// Most recent N Q&A rows for a deal (newest first).
+router.get('/:id/qa/history', authenticate, async (req, res, next) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 10;
+    const rows = await dealQaService.listHistory(req.params.id, { limit });
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /deals/:dealId/qa/:rowId
+// Remove a single Q&A row. Useful when an analyst wants to clean up a
+// failed/wrong answer before sharing the deal page in IC.
+router.delete('/:id/qa/:rowId', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const deleted = await dealQaService.deleteHistoryRow(req.params.rowId);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Q&A row not found.' });
+    }
+    res.json({ success: true, data: deleted });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

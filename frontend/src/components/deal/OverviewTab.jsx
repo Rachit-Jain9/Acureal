@@ -23,6 +23,7 @@ import Badge from '../common/Badge';
 import { SectionHeader } from '../../design-system';
 import BuildabilitySummary from './BuildabilitySummary';
 import IcMemoPanel from './IcMemoPanel';
+import DealQaBox from './DealQaBox';
 import {
   formatCrores,
   formatPct,
@@ -554,6 +555,12 @@ export default function OverviewTab() {
           approval_items. Self-contained component because it carries its
           own state machine for cached-on-mount + streaming generate. */}
       <IcMemoPanel dealId={dealId} dealName={deal?.name} />
+
+      {/* Tier-2 #11 — Deal Q&A agent. Single-shot synchronous Q&A on the
+          deal: pgvector retrieves relevant document chunks, Claude
+          answers with mandatory citations back to source. Self-contained
+          component with its own state machine + history. */}
+      <DealQaBox dealId={dealId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stage History */}
