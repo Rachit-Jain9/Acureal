@@ -16,6 +16,8 @@ import {
 } from '../hooks/useCompsReviewQueue';
 import { adminAPI } from '../services/api';
 import useAuthStore from '../store/authStore';
+import { useSavedViews } from '../hooks/useSavedViews';
+import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 
 // Queue surface for the analyst — top-level list of ingested comps awaiting
 // review, grouped by status (Pending review prioritized).
@@ -395,6 +397,36 @@ export default function CompsQueuePage() {
   const bulkReject = useBulkRejectQueue();
   const bulkReassign = useBulkReassignQueue();
 
+  // Saved-views store for the queue. Same SavedViewsMenu component as
+  // the Deals list (PR #209), pointed at a queue-specific localStorage
+  // key so the two pages don't share each other's saved combos.
+  const savedViews = useSavedViews({ storageKey: 'redip.compsQueue.savedViews' });
+
+  // Snapshot of the user-controlled filter state — what saved views
+  // capture and recall.
+  const currentFilters = useMemo(
+    () => ({
+      status: statusFilter || '',
+      source: sourceFilter || '',
+      assignedToMe: !!assignedToMe,
+    }),
+    [statusFilter, sourceFilter, assignedToMe],
+  );
+
+  const applySavedView = (view) => {
+    const f = view?.filters || {};
+    setStatusFilter(f.status || '');
+    setSourceFilter(f.source || null);
+    setAssignedToMe(!!f.assignedToMe);
+  };
+
+  const activeView = savedViews.findActive(currentFilters);
+  // Always allow saving — the queue's "default" state (pending_review +
+  // no source) is itself a useful named view. Lower bar than DealsPage,
+  // which gates save on dirty filters because its empty state shows
+  // every active deal.
+  const canSaveCurrentView = true;
+
   // Org users for the reassign user-picker. Only fetched when the modal
   // opens (enabled flag) so the page-load doesn't pay for it. 5-minute
   // staleTime — the org user list barely changes during a session.
@@ -562,29 +594,43 @@ export default function CompsQueuePage() {
         <div>
           <div className="flex items-center justify-between mb-2 gap-3">
             <div className="text-eyebrow uppercase text-content-muted font-medium">Status</div>
-            {/* "Assigned to me" pill — orthogonal to status/source. Sits in
-                the status row's right side because it's the most-used filter
-                once a team starts dividing up the inbox. Disabled when the
-                user record hasn't loaded yet (rare; the queue page is
-                role-gated). */}
-            <button
-              type="button"
-              onClick={() => setAssignedToMe((v) => !v)}
-              disabled={!currentUser?.id}
-              className={clsx(
-                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
-                'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                'disabled:opacity-50',
-                assignedToMe
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-bg-elevated text-content-secondary border-hairline hover:border-content-muted hover:text-content-primary'
-              )}
-              title="Show only rows assigned to me"
-              aria-pressed={assignedToMe}
-            >
-              <User size={11} />
-              Assigned to me
-            </button>
+            <div className="flex items-center gap-2">
+              {/* "Assigned to me" pill — orthogonal to status/source. Sits in
+                  the status row's right side because it's the most-used filter
+                  once a team starts dividing up the inbox. Disabled when the
+                  user record hasn't loaded yet (rare; the queue page is
+                  role-gated). */}
+              <button
+                type="button"
+                onClick={() => setAssignedToMe((v) => !v)}
+                disabled={!currentUser?.id}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                  'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  'disabled:opacity-50',
+                  assignedToMe
+                    ? 'bg-accent text-white border-accent'
+                    : 'bg-bg-elevated text-content-secondary border-hairline hover:border-content-muted hover:text-content-primary'
+                )}
+                title="Show only rows assigned to me"
+                aria-pressed={assignedToMe}
+              >
+                <User size={11} />
+                Assigned to me
+              </button>
+              {/* Saved views — same component as the Deals list. Backed
+                  by a queue-specific localStorage key so the two pages'
+                  saved combos don't collide. */}
+              <SavedViewsMenu
+                views={savedViews.views}
+                activeView={activeView}
+                currentFilters={currentFilters}
+                onApply={applySavedView}
+                onSave={savedViews.save}
+                onRemove={savedViews.remove}
+                canSave={canSaveCurrentView}
+              />
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {STATUS_FILTERS.map((f) => (
