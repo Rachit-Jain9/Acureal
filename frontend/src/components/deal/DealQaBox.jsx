@@ -9,11 +9,15 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import Badge from '../common/Badge';
 import { Card, SectionHeader } from '../../design-system';
-import { useDealQaHistory, useAskDealQa, useDeleteDealQaRow } from '../../hooks/useDealQa';
+import {
+  useDealQaHistory,
+  useStreamDealQa,
+  useDeleteDealQaRow,
+} from '../../hooks/useDealQa';
 
 /**
  * Tier-2 #11 — Deal Q&A box.
@@ -177,22 +181,22 @@ function HistoryRow({ row, dealId, onDelete }) {
 export default function DealQaBox({ dealId }) {
   const [question, setQuestion] = useState('');
   const [showHistory, setShowHistory] = useState(true);
+  const [activeQuestion, setActiveQuestion] = useState('');
   const inputRef = useRef(null);
 
-  const ask = useAskDealQa();
+  // Streaming Q&A — token-by-token answer rendering. Falls back to the
+  // persisted history row once the stream completes.
+  const { ask, streamingText, isStreaming, abort } = useStreamDealQa();
   const deleteRow = useDeleteDealQaRow();
   const { data: history = [], isLoading: historyLoading } = useDealQaHistory(dealId);
 
   const submit = (e) => {
     e?.preventDefault?.();
     const trimmed = question.trim();
-    if (!trimmed || ask.isPending) return;
-    ask.mutate(
-      { dealId, question: trimmed },
-      {
-        onSuccess: () => setQuestion(''),
-      },
-    );
+    if (!trimmed || isStreaming) return;
+    setActiveQuestion(trimmed);
+    ask({ dealId, question: trimmed });
+    setQuestion('');
   };
 
   const onKeyDown = (e) => {
@@ -215,6 +219,14 @@ export default function DealQaBox({ dealId }) {
     return () => clearTimeout(t);
   }, []);
 
+  // When a fresh history row lands matching the active question, clear
+  // the in-flight panel — the persisted row takes over rendering.
+  useEffect(() => {
+    if (!activeQuestion) return;
+    const fresh = history.find((r) => r.question === activeQuestion);
+    if (fresh) setActiveQuestion('');
+  }, [history, activeQuestion]);
+
   return (
     <Card className="p-5">
       <SectionHeader
@@ -235,7 +247,7 @@ export default function DealQaBox({ dealId }) {
             rows={2}
             maxLength={2000}
             placeholder="e.g. What are the open title risks? Is the IRR above the bench?"
-            disabled={ask.isPending}
+            disabled={isStreaming}
             className={clsx(
               'w-full px-3 py-2 pr-12 text-sm border border-hairline rounded-md',
               'bg-bg-elevated text-content-primary placeholder:text-content-muted',
@@ -245,7 +257,7 @@ export default function DealQaBox({ dealId }) {
           />
           <button
             type="submit"
-            disabled={ask.isPending || !question.trim()}
+            disabled={isStreaming || !question.trim()}
             className={clsx(
               'absolute right-2 bottom-2 inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded',
               'bg-accent text-white hover:bg-accent/90 transition-colors',
@@ -254,24 +266,36 @@ export default function DealQaBox({ dealId }) {
             )}
             title="Submit (⌘/Ctrl + Enter)"
           >
-            {ask.isPending ? (
+            {isStreaming ? (
               <Loader2 size={11} className="animate-spin" />
             ) : (
               <Send size={11} />
             )}
-            {ask.isPending ? 'Asking…' : 'Ask'}
+            {isStreaming ? 'Streaming…' : 'Ask'}
           </button>
         </div>
         <div className="mt-1.5 text-[10px] text-content-muted flex items-center gap-2">
           <span>{question.length} / 2000</span>
           <span className="text-content-muted">·</span>
           <span>⌘/Ctrl + Enter to submit</span>
+          {isStreaming && (
+            <>
+              <span className="text-content-muted">·</span>
+              <button
+                type="button"
+                onClick={abort}
+                className="inline-flex items-center gap-1 text-content-muted hover:text-data-negative transition-colors focus-visible:outline-none focus-visible:underline"
+              >
+                <X size={9} /> Cancel
+              </button>
+            </>
+          )}
         </div>
       </form>
 
       {/* Suggested questions — only render when history is empty so the
           deal page doesn't get cluttered with prompts after first use. */}
-      {history.length === 0 && !historyLoading && !ask.isPending && (
+      {history.length === 0 && !historyLoading && !isStreaming && !activeQuestion && (
         <div className="mt-4">
           <div className="text-eyebrow uppercase text-content-muted mb-2 font-medium">
             Try one of these
@@ -291,12 +315,34 @@ export default function DealQaBox({ dealId }) {
         </div>
       )}
 
-      {/* In-flight state — skeleton mirrors the answer shape. */}
-      {ask.isPending && (
-        <div className="mt-4 space-y-2 animate-pulse" aria-busy="true">
-          <div className="h-3 w-11/12 rounded bg-bg-secondary" />
-          <div className="h-3 w-9/12 rounded bg-bg-secondary" />
-          <div className="h-3 w-10/12 rounded bg-bg-secondary" />
+      {/* Streaming answer — paints token-by-token from the SSE stream.
+          Renders the live question + the answer-field text as the
+          model writes it. Disclaimer + citations only land when the
+          stream finishes (citations require post-validation). */}
+      {(isStreaming || (activeQuestion && streamingText)) && (
+        <div className="mt-4 space-y-2 border-t border-hairline pt-4">
+          <div className="flex items-start gap-2">
+            <MessageSquare size={13} className="shrink-0 mt-0.5 text-content-muted" />
+            <div className="text-sm font-medium text-content-primary">
+              {activeQuestion}
+            </div>
+          </div>
+          {streamingText ? (
+            <p className="text-sm text-content-primary leading-relaxed whitespace-pre-line ml-5">
+              {streamingText}
+              {isStreaming && <span className="inline-block w-1.5 h-3 bg-accent ml-0.5 animate-pulse align-baseline" aria-hidden />}
+            </p>
+          ) : (
+            // Pre-first-token skeleton — model is thinking, no text yet.
+            <div className="ml-5 space-y-2 animate-pulse" aria-busy="true">
+              <div className="h-3 w-11/12 rounded bg-bg-secondary" />
+              <div className="h-3 w-9/12 rounded bg-bg-secondary" />
+              <div className="h-3 w-10/12 rounded bg-bg-secondary" />
+            </div>
+          )}
+          <div className="ml-5 text-[10px] text-content-muted">
+            AI-assisted — citations + drift checks land when the stream finishes.
+          </div>
         </div>
       )}
 

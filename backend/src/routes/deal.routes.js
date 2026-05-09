@@ -344,6 +344,89 @@ router.post('/:id/qa', authenticate, async (req, res, next) => {
   }
 });
 
+// POST /deals/:dealId/qa/stream { question }
+// SSE-streamed Q&A. Same context assembly + citation contract as the
+// non-streaming POST, but writes Claude's JSON deltas back as SSE
+// frames so the UI shows the answer as it generates instead of
+// blocking for the full ~6-15s round-trip.
+//
+// Frame shape:
+//   { type: 'text',  text: '<delta>' }       — incremental tokens
+//   { type: 'done',  row, cacheHit, ... }    — final hydrated row
+//   { type: 'error', message }               — fatal stream error
+router.post('/:id/qa/stream', authenticate, async (req, res, next) => {
+  try {
+    const { question } = req.body || {};
+    const handle = await dealQaService.streamQuestion({
+      dealId: req.params.id,
+      question,
+      userId: req.user.id,
+      organizationId: req.user.organization_id,
+    });
+
+    if (handle.error) {
+      return res.status(handle.status || 500).json({ success: false, message: handle.error });
+    }
+
+    // SSE headers — disable proxy/CDN buffering so deltas hit the client
+    // immediately. flushHeaders() ships before the first frame instead
+    // of after.
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+    const writeFrame = (obj) => {
+      if (res.writableEnded) return;
+      res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    };
+
+    // Cache short-circuit — emit one done frame with the cached row,
+    // no streaming needed.
+    if (handle.cacheHit) {
+      writeFrame({ type: 'done', row: handle.row, cacheHit: true });
+      res.end();
+      return undefined;
+    }
+
+    // Client disconnect → abort the upstream Anthropic call so we
+    // don't burn tokens on something nobody's reading.
+    let aborted = false;
+    req.on('close', () => {
+      if (!res.writableEnded) {
+        aborted = true;
+        handle.abort?.();
+      }
+    });
+
+    // Stream raw JSON deltas. Frontend incrementally JSON-parses to
+    // pull out the answer.field as it grows; citations land in the
+    // final `done` frame with hydrated metadata.
+    handle.onText((delta) => writeFrame({ type: 'text', text: delta }));
+
+    try {
+      const final = await handle.done();
+      if (!aborted) {
+        if (final.status === 'complete') {
+          writeFrame({ type: 'done', row: final.row, cacheHit: false });
+        } else {
+          writeFrame({ type: 'error', message: final.failureReason || 'Q&A generation failed.', row: final.row });
+        }
+      }
+    } catch (err) {
+      if (!aborted) {
+        writeFrame({ type: 'error', message: err.message || 'Stream failed' });
+      }
+    } finally {
+      if (!res.writableEnded) res.end();
+    }
+    return undefined;
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /deals/:dealId/qa/history?limit=10
 // Most recent N Q&A rows for a deal (newest first).
 router.get('/:id/qa/history', authenticate, async (req, res, next) => {

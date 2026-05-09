@@ -10,6 +10,7 @@ import {
   X,
   Loader2,
   Presentation,
+  FileDown,
   Share2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -133,6 +134,7 @@ export default function DealDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [exportingPptx, setExportingPptx] = useState(false);
+  const [exportingTearSheet, setExportingTearSheet] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
@@ -192,6 +194,24 @@ export default function DealDetailPage() {
       toast.error(error.response?.data?.message || 'PPTX export failed');
     } finally {
       setExportingPptx(false);
+    }
+  };
+
+  // Investor tear-sheet — 2-page landscape PDF combining KPIs, property,
+  // economics, AI synthesis, risks, and comps. Lighter-weight than the
+  // full PPTX deck; designed to be the one-page-printable IC handoff.
+  const handleExportTearSheet = async () => {
+    setExportingTearSheet(true);
+    try {
+      const response = await exportsAPI.dealPdf(id);
+      const safeName = (deal?.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      const today = new Date().toISOString().slice(0, 10);
+      downloadAxiosResponse(response, `redip-${safeName}-tear-sheet-${today}.pdf`);
+      toast.success('Tear-sheet PDF downloaded');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Tear-sheet export failed');
+    } finally {
+      setExportingTearSheet(false);
     }
   };
 
@@ -282,9 +302,21 @@ export default function DealDetailPage() {
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {canEdit && (
             <button
+              onClick={handleExportTearSheet}
+              disabled={exportingTearSheet}
+              className="btn btn-secondary flex items-center gap-1 text-sm"
+              title="2-page investor tear-sheet PDF"
+            >
+              {exportingTearSheet ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+              Tear-Sheet
+            </button>
+          )}
+          {canEdit && (
+            <button
               onClick={handleExportPptx}
               disabled={exportingPptx}
               className="btn btn-secondary flex items-center gap-1 text-sm"
+              title="Full investor PPTX deck"
             >
               {exportingPptx ? <Loader2 size={13} className="animate-spin" /> : <Presentation size={13} />}
               Export Deck

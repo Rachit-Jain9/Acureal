@@ -444,8 +444,17 @@ export const exportsAPI = {
 // Single-shot Q&A on a specific deal. Backend retrieves relevant document
 // chunks via pgvector, runs Claude with mandatory-citation contract,
 // persists to deal_qa_history. Returns the new history row.
+//
+// `stream` opens an SSE connection so the answer paints token-by-token
+// instead of blocking on the full ~6-15s round-trip. The streamed bytes
+// are raw JSON deltas (the model is contracted to return the strict
+// { answer, citations[] } shape); the consumer should accumulate the
+// `text` deltas and rely on the final `done` frame for the persisted
+// row + hydrated citations. Returns { promise, abort }.
 export const dealQaAPI = {
   ask:        (dealId, question)   => api.post(`/deals/${dealId}/qa`, { question }),
+  stream:     (dealId, question, { onText, onDone } = {}) =>
+                streamPost(`/deals/${dealId}/qa/stream`, { onText, onDone, body: { question } }),
   history:    (dealId, limit = 10) => api.get(`/deals/${dealId}/qa/history`, { params: { limit } }),
   deleteRow:  (dealId, rowId)      => api.delete(`/deals/${dealId}/qa/${rowId}`),
 };
