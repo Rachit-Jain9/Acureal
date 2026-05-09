@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-09 - Trust-first product experience pass
+
+### What was worked on
+
+Re-centered REDIP around Traceable Conviction instead of cinematic product theater. The landing page now opens with a realistic redacted deal file snapshot, clear India-first diligence positioning, traceability, diligence replay, financial defensibility, human review, and the 9 canonical asset classes. The copy avoids unsupported metrics and labels all sample content as demo.
+
+Added quiet in-product guidance for complex workflows. Financials now has a guide drawer, traceability chips, smart first-use copy, hover/focus help, and first-class templates for villas, mixed-use, and redevelopment. Settings now lets users save product role, contextual-help visibility, and preferred asset classes so onboarding can become role-aware.
+
+Cleaned up the asset-class contract so raw land is no longer a hidden tenth product class. Legacy land labels fold into plotted development, while villas, mixed-use, and redevelopment route as first-class financial model classes. The local backend override was aligned to the Mumbai Supabase project instead of the old Tokyo pooler.
+
+### PRs opened/merged
+
+No PR opened or merged in this session. Work is on branch `codex/trust-first-product-experience-v2`.
+
+### What's left to do
+
+The `database/migrations/20260518_user_preferences.sql` migration was applied successfully by the operator, so guidance preferences can persist once this branch is deployed. Add deeper authenticated visual checks for Financials, Settings, and Deal Detail once a seeded local account or preview login is available. Performance monitoring for Mumbai DB TTFB and Core Web Vitals still needs to be wired into the production observability stack.
+
+---
+
 ## 2026-05-08 (afternoon) — Tier-1 progress + cross-doc inconsistency detector — 11 PRs
 
 Continuation of the same calendar day after the Tier-0 ingestion sequence (#180–#186) shipped earlier. Whole afternoon spent stacking Tier-1 items, polish, and one big new capability — a cross-document AI risk detector that's the first piece of REDIP that actually *reasons across documents* rather than just storing them.

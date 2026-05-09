@@ -16,7 +16,6 @@ const INCOME_CLASSES = new Set([
   'industrial_warehousing',
 ]);
 const HOSPITALITY_CLASSES = new Set(['hospitality']);
-const LAND_ONLY_CLASSES = new Set(['land_parcel']);
 const MERCHANT_SALE_CLASSES = new Set([
   'residential_apartments',
   'plotted_development',
@@ -63,9 +62,9 @@ export function buildStandardGraph({
   // ── Asset-class-specific revenue/cost pipeline ────────────────────────────
   const isIncome = INCOME_CLASSES.has(assetClass);
   const isHospitality = HOSPITALITY_CLASSES.has(assetClass);
-  const isLandOnly = LAND_ONLY_CLASSES.has(assetClass);
+  const isLandOnly = assetClass === 'land_parcel';
   const isMerchant = MERCHANT_SALE_CLASSES.has(assetClass) ||
-    (!isIncome && !isHospitality && !isLandOnly);
+    (!isIncome && !isHospitality);
 
   if (isIncome) {
     addNode('input.area', 'input', 'Leasable area, rent, cap rates');

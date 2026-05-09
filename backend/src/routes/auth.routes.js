@@ -4,8 +4,10 @@ const { body } = require('express-validator');
 const authService = require('../services/auth.service');
 const emailVerificationService = require('../services/emailVerification.service');
 const refreshTokenService = require('../services/refreshToken.service');
+const userPreferencesService = require('../services/userPreferences.service');
 const { authenticate } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
+const { ASSET_CLASSES, normalizeAssetClass } = require('../constants/assetClasses');
 const {
   setAccessCookie,
   setRefreshCookie,
@@ -485,6 +487,40 @@ router.get('/me', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+// GET /auth/me/preferences
+router.get('/me/preferences', authenticate, async (req, res, next) => {
+  try {
+    const preferences = await userPreferencesService.getPreferences(req.user.id);
+    res.json({ success: true, data: preferences });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /auth/me/preferences
+router.patch(
+  '/me/preferences',
+  authenticate,
+  [
+    body('productRole').optional().isIn(userPreferencesService.PRODUCT_ROLES),
+    body('showContextualHelp').optional().isBoolean().toBoolean(),
+    body('dismissedHelpKeys').optional().isArray({ max: 200 }),
+    body('dismissedHelpKeys.*').optional().isString().trim().isLength({ max: 120 }),
+    body('onboardingState').optional().isObject(),
+    body('preferredAssetClasses').optional().isArray({ max: 9 }),
+    body('preferredAssetClasses.*').optional().customSanitizer(normalizeAssetClass).isIn(ASSET_CLASSES),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const preferences = await userPreferencesService.upsertPreferences(req.user.id, req.body);
+      res.json({ success: true, message: 'Preferences updated.', data: preferences });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // PUT /auth/me
 router.put(

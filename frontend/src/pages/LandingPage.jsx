@@ -1,36 +1,42 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ArrowRight,
+  CheckCircle2,
+  FileCheck2,
+  GitBranch,
+  Layers3,
+  LockKeyhole,
+  Moon,
+  ShieldCheck,
+  Sun,
+  UserCheck,
+} from 'lucide-react';
 import useThemeStore from '../store/themeStore';
-import { Moon, Sun } from 'lucide-react';
+import { ASSET_CLASS_CONFIG } from '../utils/assetClasses';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// REDIP Landing — Precision Analysis system.
-// Bloomberg DNA: near-black surface, crisp typography, blue trust accent,
-// amber premium signal, tabular numerals everywhere.
-// Fully themed: flips on html[data-theme] from dark → light.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Intersection-observer driven fade/slide-in. One-shot.
 function Reveal({ children, delay = 0, className = '' }) {
   const ref = useRef(null);
+
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
+    if (!el) return undefined;
+    const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
             el.style.transitionDelay = `${delay}ms`;
             el.classList.add('redip-revealed');
-            io.unobserve(el);
+            observer.unobserve(el);
           }
         });
       },
-      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
     );
-    io.observe(el);
-    return () => io.disconnect();
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [delay]);
+
   return (
     <div ref={ref} className={`redip-reveal ${className}`}>
       {children}
@@ -38,50 +44,77 @@ function Reveal({ children, delay = 0, className = '' }) {
   );
 }
 
+const SNAPSHOT_ROWS = [
+  { label: 'Title chain', state: 'Reviewer requested seller clarification', tone: 'warn' },
+  { label: 'Encumbrance certificate', state: 'Two date gaps need confirmation', tone: 'warn' },
+  { label: 'RERA filing', state: 'Registration captured for human review', tone: 'ok' },
+  { label: 'Approvals', state: 'Sanction plan and khata pending', tone: 'warn' },
+  { label: 'Comps', state: 'No verified feed available yet', tone: 'muted' },
+  { label: 'Financial model', state: 'Base case saved with assumption trail', tone: 'ok' },
+];
+
+const REPLAY_STEPS = [
+  ['Sourced', 'Parcel and promoter details captured from intake notes.'],
+  ['Extracted', 'Documents classified; title, EC, and RERA fields queued for review.'],
+  ['Reviewed', 'Analyst adds notes, confidence bands, and source freshness.'],
+  ['IC Ready', 'Open issues are either resolved, waived, or explicitly carried to memo.'],
+];
+
+const TRACE_ITEMS = [
+  ['Source', 'Document excerpt, feed, or manually entered note.'],
+  ['Freshness', 'Last refresh date plus stale-data warning.'],
+  ['Confidence', 'Band, reason, and reviewer context.'],
+  ['Reviewer', 'Human sign-off before material use.'],
+];
+
+const FINANCIAL_ITEMS = [
+  'Nine canonical asset-class templates',
+  'Scenario cards and sensitivity views',
+  'Waterfall and capital-stack outputs',
+  'Model version history with input diffs',
+];
+
 function Nav() {
   const navigate = useNavigate();
   const mode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggle);
+
   return (
-    <nav
-      className="sticky top-0 z-50 backdrop-blur"
-      style={{
-        backgroundColor: mode === 'dark' ? 'rgba(5,5,7,0.82)' : 'rgba(255,255,255,0.85)',
-        borderBottom: '1px solid var(--color-border-primary)',
-      }}
-    >
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-        <div className="flex items-baseline gap-3 sm:gap-6 min-w-0">
-          <span className="font-serif text-xl font-semibold tracking-tight text-content-primary">
-            REDIP
-            <span className="text-premium">.</span>
+    <nav className="sticky top-0 z-50 border-b border-hairline bg-bg-primary/90 backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="flex min-w-0 items-baseline gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <span className="font-serif text-xl font-semibold tracking-tight text-content-primary">REDIP</span>
+          <span className="hidden text-eyebrow uppercase text-content-muted sm:inline">
+            India-first deal intelligence
           </span>
-          <span className="hidden sm:inline text-[11px] uppercase tracking-[0.18em] text-content-muted">
-            Real Estate Deal Intelligence · India
-          </span>
-        </div>
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
+            type="button"
             onClick={toggleTheme}
             aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="p-2 rounded-md transition-colors text-content-secondary"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-content-secondary transition-colors hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
-            {mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            {mode === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="text-sm px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap text-content-secondary"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
             Sign in
           </button>
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="text-sm font-medium text-white px-3 sm:px-3.5 py-1.5 rounded-md hover:brightness-110 whitespace-nowrap"
-            style={{ backgroundColor: 'var(--color-brand-accent)' }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
-            <span className="hidden sm:inline">Request access </span>
-            <span className="sm:hidden">Request </span>
-            →
+            Request access
+            <ArrowRight size={15} />
           </button>
         </div>
       </div>
@@ -89,122 +122,65 @@ function Nav() {
   );
 }
 
-// Animated hero backdrop: drifting grid, subtle skyline, accent orbit, ticker.
-function HeroBackdrop() {
-  const mode = useThemeStore((s) => s.mode);
-  const isDark = mode === 'dark';
-  const gridStroke = isDark ? '#1e293b' : '#e2e8f0';
-  const boldStroke = isDark ? '#334155' : '#cbd5e1';
-  const spotStop   = isDark ? '#050507' : '#ffffff';
-  const skylineFill = isDark ? '#f1f5f9' : '#0f172a';
-  const skylineOp   = isDark ? 0.06 : 0.05;
+function StatusPill({ tone, children }) {
+  const toneClass = {
+    ok: 'border-hairline text-data-positive',
+    warn: 'border-hairline text-content-secondary',
+    muted: 'border-hairline text-content-muted',
+  }[tone] || 'border-hairline text-content-muted';
 
   return (
-    <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden">
-      {/* Gradient wash */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: isDark
-            ? 'radial-gradient(1200px 600px at 12% -10%, rgba(59,130,246,0.12), transparent 55%), radial-gradient(800px 500px at 90% 10%, rgba(245,184,0,0.08), transparent 55%), #050507'
-            : 'radial-gradient(1200px 600px at 12% -10%, rgba(37,99,235,0.08), transparent 60%), radial-gradient(800px 500px at 90% 10%, rgba(245,184,0,0.06), transparent 60%), #ffffff',
-        }}
-      />
-      {/* Drifting data grid */}
-      <svg
-        className="absolute inset-0 w-full h-full redip-hero-drift redip-hero-pulse"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <pattern id="redip-grid-fine" width="28" height="28" patternUnits="userSpaceOnUse">
-            <path d="M 28 0 L 0 0 0 28" fill="none" stroke={gridStroke} strokeWidth="0.5" />
-          </pattern>
-          <pattern id="redip-grid-bold" width="140" height="140" patternUnits="userSpaceOnUse">
-            <path d="M 140 0 L 0 0 0 140" fill="none" stroke={boldStroke} strokeWidth="0.6" />
-          </pattern>
-          <radialGradient id="redip-spot" cx="50%" cy="40%" r="70%">
-            <stop offset="0%"  stopColor={spotStop} stopOpacity="0" />
-            <stop offset="60%" stopColor={spotStop} stopOpacity="0.45" />
-            <stop offset="100%" stopColor={spotStop} stopOpacity="0.95" />
-          </radialGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#redip-grid-fine)" />
-        <rect width="100%" height="100%" fill="url(#redip-grid-bold)" />
-        <rect width="100%" height="100%" fill="url(#redip-spot)" />
-      </svg>
-      {/* Skyline silhouette */}
-      <svg
-        className="absolute bottom-0 left-0 w-[140%] h-[42%] redip-hero-skyline"
-        style={{ opacity: skylineOp }}
-        viewBox="0 0 1400 300"
-        preserveAspectRatio="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          fill={skylineFill}
-          d="M0 300 V220 H40 V160 H80 V200 H120 V120 H180 V170 H220 V90 H280 V140 H320 V60 H380 V130 H430 V180 H470 V110 H520 V40 H580 V100 H630 V170 H680 V80 H740 V130 H790 V60 H850 V20 H900 V80 H950 V140 H1000 V70 H1060 V110 H1110 V30 H1170 V90 H1220 V150 H1270 V60 H1330 V120 H1400 V300 Z"
-        />
-      </svg>
-      {/* Accent orbit */}
-      <svg
-        className="absolute -top-24 -right-24 w-[560px] h-[560px] redip-hero-orbit"
-        style={{ opacity: isDark ? 0.35 : 0.25 }}
-        viewBox="0 0 200 200"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <circle cx="100" cy="100" r="92" fill="none" stroke="var(--color-brand-accent)" strokeWidth="0.4" strokeDasharray="2 6" />
-        <circle cx="100" cy="100" r="72" fill="none" stroke="var(--color-brand-accent)" strokeWidth="0.3" strokeDasharray="1 5" />
-        <circle cx="100" cy="100" r="52" fill="none" stroke="var(--color-brand-premium)" strokeWidth="0.35" strokeDasharray="1 4" />
-      </svg>
-    </div>
+    <span className={`inline-flex rounded-full border bg-bg-secondary px-2 py-0.5 text-[11px] font-medium ${toneClass}`}>
+      {children}
+    </span>
   );
 }
 
-// Live-style ticker — real asset-class labels, not fake symbols.
-function LiveTicker() {
-  const items = [
-    ['BLR · Residential', '14.0% IRR', 'pos'],
-    ['BLR · Office',      '7.6% cap',   'neu'],
-    ['MUM · Mixed-use',   '12.2% IRR',  'pos'],
-    ['HYD · Logistics',   '9.4% yield', 'pos'],
-    ['BLR · Plotted',     '26.1% IRR',  'pos'],
-    ['NCR · Retail',      '8.0% cap',   'neu'],
-    ['BLR · Hospitality', 'ADR ₹9,820', 'pre'],
-    ['BLR · Redevelopment', '21.8% IRR', 'pos'],
-  ];
-  const row = [...items, ...items];
+function DealFileSnapshot() {
   return (
-    <div
-      className="relative overflow-hidden"
-      style={{
-        borderTop: '1px solid var(--color-border-primary)',
-        borderBottom: '1px solid var(--color-border-primary)',
-        backgroundColor: 'var(--color-bg-secondary)',
-      }}
-    >
-      <div className="py-2 flex redip-ticker whitespace-nowrap">
-        {row.map(([label, metric, tone], i) => (
-          <div
-            key={i}
-            className="flex items-baseline gap-3 px-6 text-[12px] tabular-nums text-content-secondary"
-          >
-            <span className="uppercase tracking-[0.12em] text-[10px] text-content-muted">
-              {label}
-            </span>
-            <span
-              style={{
-                color:
-                  tone === 'pos' ? 'var(--color-data-positive)' :
-                  tone === 'pre' ? 'var(--color-brand-premium)' :
-                                   'var(--color-data-neutral)',
-                fontWeight: 600,
-              }}
-            >
-              {metric}
-            </span>
-            <span className="text-content-muted">·</span>
+    <div className="rounded-editorial border border-hairline bg-bg-elevated shadow-editorial">
+      <div className="border-b border-hairline p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-eyebrow uppercase text-content-muted">Demo deal file</p>
+            <h2 className="mt-1 text-lg font-semibold text-content-primary">Bengaluru Redevelopment, Redacted</h2>
+            <p className="mt-1 text-sm text-content-secondary">
+              Sample data only. No legal conclusion implied.
+            </p>
           </div>
-        ))}
+          <StatusPill tone="warn">In review</StatusPill>
+        </div>
+      </div>
+      <div className="grid gap-0 lg:grid-cols-[1fr_240px]">
+        <div className="divide-y divide-hairline">
+          {SNAPSHOT_ROWS.map((row, index) => (
+            <div
+              key={row.label}
+              className={`${index > 2 ? 'hidden sm:grid' : 'grid'} gap-3 px-4 py-3 sm:grid-cols-[160px_1fr_auto] sm:items-center`}
+            >
+              <p className="text-sm font-medium text-content-primary">{row.label}</p>
+              <p className="text-sm text-content-secondary">{row.state}</p>
+              <StatusPill tone={row.tone}>{row.tone === 'ok' ? 'Linked' : row.tone === 'warn' ? 'Open' : 'Pending'}</StatusPill>
+            </div>
+          ))}
+        </div>
+        <div className="hidden border-t border-hairline bg-bg-secondary p-4 sm:block lg:border-l lg:border-t-0">
+          <p className="text-eyebrow uppercase text-content-muted">Reviewer trail</p>
+          <div className="mt-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-content-primary">Open risks</p>
+              <p className="mt-1 text-sm text-content-secondary">Title gap, approval dependency, comp freshness.</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-content-primary">Human sign-off</p>
+              <p className="mt-1 text-sm text-content-secondary">Required before memo export or IC use.</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-content-primary">AI label</p>
+              <p className="mt-1 text-sm text-content-secondary">AI-assisted - requires human review.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -212,143 +188,80 @@ function LiveTicker() {
 
 function Hero() {
   const navigate = useNavigate();
-  return (
-    <section className="relative overflow-hidden" style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-      <HeroBackdrop />
-      <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
-        <div
-          className="text-[11px] uppercase tracking-[0.22em] mb-6 flex items-center gap-2 text-content-muted"
-        >
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: 'var(--color-data-positive)', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }}
-          />
-          Institutional · Private beta
-        </div>
-        <h1
-          className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight max-w-4xl text-content-primary"
-        >
-          The deal intelligence platform <em className="italic text-accent">private capital</em> runs on.
-        </h1>
-        <p
-          className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl text-content-secondary"
-        >
-          REDIP unifies sourcing, diligence, underwriting, and investor-grade
-          reporting into one institutional workspace. AI accelerates the work.
-          A deterministic financial kernel makes the math unassailable. Every
-          number traced, every assumption stressed — so the memo your Investment
-          Committee receives is the memo they approve.
-        </p>
-        <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
-          <button
-            onClick={() => navigate('/login')}
-            className="text-sm font-medium text-white px-5 py-2.5 rounded-md hover:brightness-110"
-            style={{ backgroundColor: 'var(--color-brand-accent)' }}
-          >
-            Start a deal →
-          </button>
-          <button
-            onClick={() => navigate('/login')}
-            className="text-sm font-medium px-5 py-2.5 rounded-md text-content-primary"
-            style={{
-              border: '1px solid var(--color-border-strong)',
-              backgroundColor: 'transparent',
-            }}
-          >
-            Request access
-          </button>
-        </div>
 
-        {/* Editorial KPI strip with colored data signals */}
-        <div
-          className="mt-20 pt-8 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8"
-          style={{ borderTop: '1px solid var(--color-border-primary)' }}
-        >
-          {[
-            ['10',  'Asset classes',    'residential → hospitality', 'neu'],
-            ['15y', 'Quarterly horizon','per cash-flow line',         'neu'],
-            ['7',   'DD layers',        'title → physical',           'pos'],
-            ['8',   'Deal structures',  'outright · JV · JDA · …',    'pre'],
-          ].map(([stat, label, note, tone]) => (
-            <div key={label}>
-              <div
-                className="font-serif text-3xl md:text-4xl font-medium leading-none tabular-nums"
-                style={{
-                  color:
-                    tone === 'pos' ? 'var(--color-data-positive)' :
-                    tone === 'pre' ? 'var(--color-brand-premium)' :
-                                     'var(--color-text-primary)',
-                }}
-              >
-                {stat}
-              </div>
-              <div className="mt-2 text-xs uppercase tracking-[0.16em] text-content-secondary">
-                {label}
-              </div>
-              <div className="mt-1 text-[11px] text-content-muted">{note}</div>
-            </div>
-          ))}
-        </div>
+  return (
+    <section className="border-b border-hairline bg-bg-primary">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 pb-8 pt-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:pb-9 lg:pt-12">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Traceable conviction for Indian real estate</p>
+          <h1 className="mt-5 font-serif text-4xl font-semibold leading-tight tracking-tight text-content-primary sm:text-5xl lg:text-6xl">
+            REDIP is the deal room between sourcing and IC decision.
+          </h1>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-content-secondary sm:text-lg">
+            Bring fragmented title, EC, RERA, approvals, comps, underwriting, and reviewer notes into one source-linked workspace built for serious Indian real estate work.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
+            >
+              Start a deal
+              <ArrowRight size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="rounded-lg border border-hairline bg-bg-elevated px-5 py-2.5 text-sm font-semibold text-content-primary transition-colors hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
+            >
+              Request access
+            </button>
+          </div>
+        </Reveal>
+        <Reveal delay={80}>
+          <DealFileSnapshot />
+        </Reveal>
       </div>
     </section>
   );
 }
 
-function Columns() {
-  const columns = [
+function WhyRedip() {
+  const cards = [
     {
-      tag: '§ Underwrite',
-      title: 'A deterministic financial engine.',
-      body: 'Ten asset classes. Eight deal structures. Fifteen-year quarterly horizons. Sources & uses, debt schedules, JDA / JV waterfalls, scenario comparison, and sensitivity tornadoes — all from a single kernel in TypeScript.',
-      bullets: ['Quick-compute < 50ms', 'What-If sliders with live KPI deltas', 'Downside / Base / Upside scenarios'],
-      tone: 'neu',
+      icon: Layers3,
+      title: 'India-specific diligence',
+      body: 'REDIP is designed around fragmented records, reviewer judgment, and source freshness instead of generic CRM fields.',
     },
     {
-      tag: '§ Diligence',
-      title: 'Seven layers, each scored by deal impact.',
-      body: 'Title, regulatory, seller validity, statutory approvals, financial, project, and physical. Each DD item is classified as Deal-Breaker, Buildability-Blocker, Commercial-Blocker, or Secondary. Evidence links live inside the deal — not in a separate drive.',
-      bullets: ['Title-chain reconstruction', 'JDA/JV clause parsing', 'Missing-item detection'],
-      tone: 'pos',
+      icon: GitBranch,
+      title: 'Workflow to IC',
+      body: 'Sourcing, diligence, underwriting, risk notes, waterfall, and memo prep stay connected in one deal workspace.',
     },
     {
-      tag: '§ Report',
-      title: 'IC-ready outputs without reformatting.',
-      body: 'A memo, a model, a DD summary, and a risk narrative. One click each. Every number is traced to its source — so the pushback in the IC room is about the deal, not about the spreadsheet.',
-      bullets: ['Investor-grade PDF memo', 'Excel model export', 'Structured risk narrative'],
-      tone: 'pre',
+      icon: LockKeyhole,
+      title: 'No fake certainty',
+      body: 'Unsupported data is marked as missing or pending. Legal, zoning, and title conclusions require human verification.',
     },
   ];
-  const toneColor = (t) =>
-    t === 'pos' ? 'var(--color-data-positive)' :
-    t === 'pre' ? 'var(--color-brand-premium)' :
-                  'var(--color-brand-accent)';
 
   return (
-    <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
-        <div className="grid md:grid-cols-3 gap-10 md:gap-8">
-          {columns.map((c, i) => (
-            <Reveal key={c.tag} delay={i * 90}>
-              <div className="text-[11px] uppercase tracking-[0.22em] mb-4" style={{ color: toneColor(c.tone) }}>
-                {c.tag}
+    <section className="border-b border-hairline bg-bg-secondary py-14">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Why REDIP</p>
+          <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-content-primary">
+            Built for the messy middle of Indian deal work.
+          </h2>
+        </Reveal>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {cards.map((card, index) => (
+            <Reveal key={card.title} delay={index * 80} className="h-full">
+              <div className="h-full rounded-editorial border border-hairline bg-bg-elevated p-5 shadow-sm">
+                <card.icon size={18} className="text-content-muted" />
+                <h3 className="mt-4 text-base font-semibold text-content-primary">{card.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-content-secondary">{card.body}</p>
               </div>
-              <h3 className="font-serif text-2xl leading-snug tracking-tight text-content-primary">
-                {c.title}
-              </h3>
-              <p className="mt-4 text-sm leading-relaxed text-content-secondary">
-                {c.body}
-              </p>
-              <ul
-                className="mt-5 space-y-2 text-[13px] pt-4"
-                style={{ borderTop: '1px solid var(--color-border-primary)' }}
-              >
-                {c.bullets.map((b) => (
-                  <li key={b} className="flex items-baseline gap-2 text-content-primary">
-                    <span className="font-mono text-[11px]" style={{ color: toneColor(c.tone) }}>→</span>
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
             </Reveal>
           ))}
         </div>
@@ -357,99 +270,124 @@ function Columns() {
   );
 }
 
-function AssetClasses() {
-  const rows = [
-    ['Residential apartments', 'Mumbai / NCR / Bengaluru stacks'],
-    ['Villas', 'low-rise, plotted-adjacent'],
-    ['Plotted development', 'layout approvals, saleable %'],
-    ['Commercial office', 'Grade-A, leasing + yield'],
-    ['Retail', 'high-street + mall'],
-    ['Industrial / warehousing', 'logistics parks, peripheral'],
-    ['Hospitality', 'ADR + occupancy stabilisation'],
-    ['Mixed-use', 'residential + retail + office'],
-    ['Redevelopment', 'FSI premiums + existing tenant TDR'],
-    ['Raw land', 'appreciation-play, zone transitions'],
-  ];
+function TraceableConviction() {
   return (
-    <section
-      style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-        borderBottom: '1px solid var(--color-border-primary)',
-      }}
-    >
-      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
-        <div className="grid md:grid-cols-12 gap-8">
-          <Reveal className="md:col-span-4">
-            <div className="text-[11px] uppercase tracking-[0.22em] mb-4 text-accent">
-              § Asset coverage
-            </div>
-            <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-content-primary">
-              Every asset class an Indian GP actually underwrites.
-            </h2>
-            <p className="mt-5 leading-relaxed text-[15px] text-content-secondary">
-              Not a toy subset. Each class is modelled against its own cash-flow
-              shape — apartment absorption is not a plotted layout, and a hotel
-              is nobody&rsquo;s office tower.
-            </p>
-          </Reveal>
-          <div className="md:col-span-8">
-            <div style={{ borderTop: '1px solid var(--color-border-strong)' }}>
-              {rows.map(([name, note], i) => (
-                <Reveal key={name} delay={i * 30}>
-                  <div
-                    className="flex items-baseline justify-between py-3.5"
-                    style={{ borderBottom: '1px solid var(--color-border-primary)' }}
-                  >
-                    <div className="flex items-baseline gap-4">
-                      <span className="font-mono text-[11px] tabular-nums text-content-muted">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <span className="font-medium text-content-primary">
-                        {name}
-                      </span>
-                    </div>
-                    <span className="text-[12.5px] text-content-muted">
-                      {note}
-                    </span>
-                  </div>
-                </Reveal>
+    <section className="border-b border-hairline bg-bg-primary py-14">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Traceable Conviction</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-content-primary">
+            Every material claim opens back to evidence.
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-content-secondary">
+            A risk flag, assumption, or KPI should never be a dead end. REDIP makes source, freshness, confidence, reviewer, and notes visible where decisions happen.
+          </p>
+        </Reveal>
+        <Reveal delay={80}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {TRACE_ITEMS.map(([title, body]) => (
+              <div key={title} className="rounded-editorial border border-hairline bg-bg-elevated p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-content-muted" />
+                  <h3 className="text-sm font-semibold text-content-primary">{title}</h3>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-content-secondary">{body}</p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+function DiligenceReplay() {
+  return (
+    <section className="border-b border-hairline bg-bg-secondary py-14">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Diligence Replay</p>
+          <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-content-primary">
+            Watch conviction evolve as evidence arrives.
+          </h2>
+        </Reveal>
+        <div className="mt-8 grid gap-4 md:grid-cols-4">
+          {REPLAY_STEPS.map(([title, body], index) => (
+            <Reveal key={title} delay={index * 90}>
+              <div className="relative rounded-editorial border border-hairline bg-bg-elevated p-5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-hairline bg-bg-secondary text-sm font-semibold text-content-primary">
+                  {index + 1}
+                </div>
+                <h3 className="mt-5 text-base font-semibold text-content-primary">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-content-secondary">{body}</p>
+                <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-bg-secondary">
+                  <div className="h-full rounded-full bg-accent motion-safe:transition-all motion-safe:duration-700" style={{ width: `${25 + index * 25}%` }} />
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FinancialDefensibility() {
+  return (
+    <section className="border-b border-hairline bg-bg-primary py-14">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-2 lg:items-center">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Financial Defensibility</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-content-primary">
+            Underwriting that is explicit, versioned, and reviewable.
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-content-secondary">
+            Financial math stays deterministic. AI can help summarize or extract, but KPIs, scoring, area normalization, and capital-stack calculations stay in code.
+          </p>
+        </Reveal>
+        <Reveal delay={80}>
+          <div className="rounded-editorial border border-hairline bg-bg-elevated p-5 shadow-sm">
+            <div className="grid gap-3">
+              {FINANCIAL_ITEMS.map((item) => (
+                <div key={item} className="flex items-center gap-3 rounded-lg border border-hairline bg-bg-secondary px-4 py-3 text-sm text-content-secondary">
+                  <FileCheck2 size={16} className="shrink-0 text-content-muted" />
+                  <span>{item}</span>
+                </div>
               ))}
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-function Conviction() {
+function HumanReview() {
   return (
-    <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
-        <Reveal className="md:col-span-5">
-          <div className="text-[11px] uppercase tracking-[0.22em] mb-4 text-premium">
-            § Conviction, engineered
-          </div>
-          <h2 className="font-serif text-3xl md:text-4xl leading-tight tracking-tight text-content-primary">
-            Every number traced. Every assumption stressed. Every memo, defensible in the room.
+    <section className="border-b border-hairline bg-bg-secondary py-14">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Human Review</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-content-primary">
+            AI speeds the work. Humans own the judgment.
           </h2>
         </Reveal>
-        <Reveal className="md:col-span-7" delay={120}>
-          <div className="text-[15px] leading-relaxed space-y-4 text-content-secondary">
-            <p>
-              Other platforms export spreadsheets. REDIP exports conviction. A
-              deterministic financial kernel that records every calculation —
-              not just the final number. A provenance graph that shows exactly
-              which driver moved which IRR. Scenario comparisons, sensitivity
-              tornadoes, and confidence grades attached to every headline KPI.
-            </p>
-            <p>
-              This is the difference between <em>&ldquo;the model says 14.2%&rdquo;</em> and
-              <em> &ldquo;the model says 14.2%, here is the full chain of reasoning, the
-              downside compression, and the three comparable transactions that
-              anchor every line.&rdquo;</em> Institutional underwriting, engineered the
-              way it should have been all along.
-            </p>
+        <Reveal delay={80}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-editorial border border-hairline bg-bg-elevated p-5">
+              <ShieldCheck size={18} className="text-content-muted" />
+              <h3 className="mt-4 text-base font-semibold text-content-primary">Decision labels</h3>
+              <p className="mt-2 text-sm leading-6 text-content-secondary">
+                AI-assisted narratives carry review labels in UI and exports so users know what still needs verification.
+              </p>
+            </div>
+            <div className="rounded-editorial border border-hairline bg-bg-elevated p-5">
+              <UserCheck size={18} className="text-content-muted" />
+              <h3 className="mt-4 text-base font-semibold text-content-primary">Reviewer accountability</h3>
+              <p className="mt-2 text-sm leading-6 text-content-secondary">
+                Material changes are meant to preserve who changed what, why it changed, and which source supported it.
+              </p>
+            </div>
           </div>
         </Reveal>
       </div>
@@ -457,95 +395,36 @@ function Conviction() {
   );
 }
 
-function Close() {
-  const navigate = useNavigate();
+function AssetClasses() {
   return (
-    <section
-      style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-      }}
-    >
-      <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
-        <div className="max-w-3xl">
-          <div className="text-[11px] uppercase tracking-[0.22em] mb-5 text-premium">
-            § Deploy
+    <section className="bg-bg-primary py-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <Reveal>
+          <p className="text-eyebrow uppercase text-content-muted">Canonical asset classes</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {ASSET_CLASS_CONFIG.map((assetClass) => (
+              <span key={assetClass.value} className="rounded-full border border-hairline bg-bg-elevated px-3 py-1.5 text-sm text-content-secondary">
+                {assetClass.label}
+              </span>
+            ))}
           </div>
-          <h2 className="font-serif text-4xl md:text-5xl leading-[1.1] tracking-tight text-content-primary">
-            Put REDIP on your pipeline.
-          </h2>
-          <p className="mt-5 text-lg max-w-2xl leading-relaxed text-content-secondary">
-            Spin up a deal workspace, link a parcel, run the kernel, and export
-            an IC memo in the time it would have taken to reconcile your
-            spreadsheet tabs.
-          </p>
-          <div className="mt-10 flex flex-wrap gap-4">
-            <button
-              onClick={() => navigate('/login')}
-              className="text-sm font-medium text-white px-5 py-2.5 rounded-md hover:brightness-110"
-              style={{ backgroundColor: 'var(--color-brand-accent)' }}
-            >
-              Request access →
-            </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="text-sm font-medium px-5 py-2.5 rounded-md text-content-primary"
-              style={{
-                border: '1px solid var(--color-border-strong)',
-                backgroundColor: 'transparent',
-              }}
-            >
-              Sign in
-            </button>
-          </div>
-        </div>
+        </Reveal>
       </div>
     </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer
-      style={{
-        backgroundColor: 'var(--color-bg-primary)',
-        borderTop: '1px solid var(--color-border-primary)',
-      }}
-    >
-      <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px]">
-        <div>
-          <span className="font-serif text-base text-content-primary">
-            REDIP
-            <span className="text-premium">.</span>
-          </span>
-          <span className="ml-3 uppercase tracking-[0.18em] text-[10.5px] text-content-muted">
-            Real Estate Deal Intelligence
-          </span>
-        </div>
-        <div className="text-content-muted">
-          India-first · No mock data · No fabricated facts
-        </div>
-        <div className="tabular-nums text-content-muted">
-          © {new Date().getFullYear()} REDIP
-        </div>
-      </div>
-    </footer>
   );
 }
 
 export default function LandingPage() {
   return (
-    <div
-      className="min-h-screen antialiased text-content-primary"
-      style={{ backgroundColor: 'var(--color-bg-primary)' }}
-    >
+    <div className="min-h-screen bg-bg-primary text-content-primary">
       <Nav />
       <Hero />
-      <LiveTicker />
-      <Columns />
+      <WhyRedip />
+      <TraceableConviction />
+      <DiligenceReplay />
+      <FinancialDefensibility />
+      <HumanReview />
       <AssetClasses />
-      <Conviction />
-      <Close />
-      <Footer />
     </div>
   );
 }

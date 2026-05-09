@@ -14,8 +14,8 @@ export const ASSET_CLASS_CONFIG = [
   {
     value: 'villas',
     label: 'Villas',
-    financialModelClass: 'residential_apartments',
-    financialModelLabel: 'Residential Apartments',
+    financialModelClass: 'villas',
+    financialModelLabel: 'Villas',
   },
   {
     value: 'commercial_office',
@@ -44,20 +44,14 @@ export const ASSET_CLASS_CONFIG = [
   {
     value: 'mixed_use',
     label: 'Mixed Use',
-    financialModelClass: 'residential_apartments',
-    financialModelLabel: 'Residential Apartments',
-  },
-  {
-    value: 'raw_land',
-    label: 'Raw Land',
-    financialModelClass: 'plotted_development',
-    financialModelLabel: 'Plotted Development',
+    financialModelClass: 'mixed_use',
+    financialModelLabel: 'Mixed Use',
   },
   {
     value: 'redevelopment',
     label: 'Redevelopment',
-    financialModelClass: 'residential_apartments',
-    financialModelLabel: 'Residential Apartments',
+    financialModelClass: 'redevelopment',
+    financialModelLabel: 'Redevelopment',
   },
 ];
 
@@ -73,5 +67,23 @@ export const FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS = Object.fromEntries(
   ASSET_CLASS_CONFIG.map((entry) => [entry.value, entry.financialModelLabel])
 );
 
+export const ASSET_CLASSES = ASSET_CLASS_CONFIG.map((entry) => entry.value);
+
+export const LEGACY_ASSET_CLASS_ALIASES = {
+  raw_land: 'plotted_development',
+  land: 'plotted_development',
+  land_parcel: 'plotted_development',
+};
+
+export const normalizeAssetClass = (assetClass) => {
+  if (!assetClass || typeof assetClass !== 'string') return assetClass;
+  return LEGACY_ASSET_CLASS_ALIASES[assetClass] || assetClass;
+};
+
+export const getAssetClassLabel = (assetClass) => {
+  const canonicalAssetClass = normalizeAssetClass(assetClass);
+  return ASSET_CLASS_LABELS[canonicalAssetClass] || assetClass;
+};
+
 export const resolveFinancialModelClass = (assetClass) =>
-  FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS[assetClass] || 'residential_apartments';
+  FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS[normalizeAssetClass(assetClass)] || 'residential_apartments';

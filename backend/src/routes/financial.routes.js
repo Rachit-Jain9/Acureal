@@ -3,12 +3,12 @@ const { body } = require('express-validator');
 const financialService = require('../services/financial.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
-const { FINANCIAL_ASSET_CLASSES } = require('../constants/assetClasses');
+const { FINANCIAL_ASSET_CLASSES, normalizeAssetClass } = require('../constants/assetClasses');
 
 const router = express.Router();
 
 const baseValidation = [
-  body('assetClass').optional().isIn(FINANCIAL_ASSET_CLASSES).withMessage('Invalid asset class'),
+  body('assetClass').optional().customSanitizer(normalizeAssetClass).isIn(FINANCIAL_ASSET_CLASSES).withMessage('Invalid asset class'),
 ];
 
 const modelValidation = [
@@ -136,7 +136,7 @@ router.get('/defaults/:assetClass?', authenticate, (req, res, next) => {
       });
     }
 
-    const cls = req.params.assetClass;
+    const cls = normalizeAssetClass(req.params.assetClass);
     if (!SUPPORTED_ASSET_CLASSES.includes(cls)) {
       return res.status(404).json({
         success: false,

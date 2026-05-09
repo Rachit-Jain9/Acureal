@@ -17,6 +17,7 @@ export {
 } from './Skeleton';
 
 // Virtualized list — auto-windows long lists (>= threshold rows).
+export { HelpTip, HelpDrawer, SmartEmptyState, EvidenceChip } from './Guidance';
 export { default as VirtualizedList } from './VirtualizedList';
 
 import clsx from 'clsx';

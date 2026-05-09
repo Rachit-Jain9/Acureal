@@ -57,7 +57,6 @@ const DISTANCE_SATURATION_KM = {
   industrial_warehousing: 25,
   hospitality: 30,
   mixed_use: 12,
-  raw_land: 15,
   redevelopment: 8,
   default: 10,
 };
@@ -76,7 +75,7 @@ const normalizeAssetClass = (value) => {
   if (/industrial|warehous/.test(s)) return 'industrial_warehousing';
   if (/hotel|hospitality|resort/.test(s)) return 'hospitality';
   if (/mixed/.test(s)) return 'mixed_use';
-  if (/raw[_ ]?land|land[_ ]?bank/.test(s)) return 'raw_land';
+  if (/raw[_ ]?land|land[_ ]?bank/.test(s)) return 'plotted_development';
   if (/redevelop/.test(s)) return 'redevelopment';
   return s;
 };

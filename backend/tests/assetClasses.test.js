@@ -5,16 +5,18 @@ const {
 } = require('../src/constants/assetClasses');
 
 describe('asset class contract', () => {
-  test('exposes all 10 domain asset classes to backend validators', () => {
-    expect(ASSET_CLASSES).toHaveLength(10);
-    expect(FINANCIAL_ASSET_CLASSES).toHaveLength(10);
+  test('exposes the 9 canonical domain asset classes to backend validators', () => {
+    expect(ASSET_CLASSES).toHaveLength(9);
+    expect(FINANCIAL_ASSET_CLASSES).toHaveLength(9);
     expect(FINANCIAL_ASSET_CLASSES).toEqual(ASSET_CLASSES);
+    expect(ASSET_CLASSES).not.toContain('raw_land');
   });
 
-  test('maps unsupported underwriting classes onto their nearest model family', () => {
-    expect(resolveFinancialModelClass('villas')).toBe('residential_apartments');
-    expect(resolveFinancialModelClass('mixed_use')).toBe('residential_apartments');
+  test('keeps canonical underwriting classes first-class and maps legacy land aliases', () => {
+    expect(resolveFinancialModelClass('villas')).toBe('villas');
+    expect(resolveFinancialModelClass('mixed_use')).toBe('mixed_use');
     expect(resolveFinancialModelClass('raw_land')).toBe('plotted_development');
-    expect(resolveFinancialModelClass('redevelopment')).toBe('residential_apartments');
+    expect(resolveFinancialModelClass('land_parcel')).toBe('plotted_development');
+    expect(resolveFinancialModelClass('redevelopment')).toBe('redevelopment');
   });
 });

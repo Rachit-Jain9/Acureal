@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calculator, Building2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Calculator, Building2, ChevronDown, LifeBuoy } from 'lucide-react';
 import ReferenceMenu from '../components/financials/ReferenceMenu';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
@@ -28,8 +28,28 @@ import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
-import { SkeletonKpi, SkeletonCard } from '../design-system';
+import { EvidenceChip, HelpDrawer, SkeletonKpi, SkeletonCard, SmartEmptyState } from '../design-system';
 import { normalizeFinancials, hasLegacyResidentialLoadingFactor } from '../components/financials/normalizeFinancials';
+import { useUserPreferences } from '../hooks/useUserPreferences';
+
+const FINANCIALS_HELP_SECTIONS = [
+  {
+    title: 'Model Purpose',
+    body: 'This page runs deterministic underwriting for the selected asset class. It calculates from explicit inputs and saved assumptions, not AI estimates.',
+  },
+  {
+    title: 'Assumptions',
+    body: 'Use Base, Downside, and Upside scenarios to make judgment visible. Flagged assumptions should link to comps, approvals, or reviewer notes before IC use.',
+  },
+  {
+    title: 'KPIs and Sensitivity',
+    body: 'IRR, equity multiple, DSCR, yield on cost, waterfall, and tornado views should be read with the input trail. High-impact variables belong in the IC risk discussion.',
+  },
+  {
+    title: 'Audit Trail',
+    body: 'Saved model versions are intended to show what changed, who changed it, and which assumptions drove the output. AI-written narratives still require human review.',
+  },
+];
 
 
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────────
@@ -38,10 +58,12 @@ export default function FinancialsPage() {
   const { dealId } = useParams();
   const { data: financials, isLoading, error } = useFinancials(dealId);
   const { data: deal } = useDeal(dealId);
+  const { data: preferences } = useUserPreferences();
   const calculateMutation = useCalculateFinancials();
 
   const existingClass = financials?.asset_class || 'residential_apartments';
   const [selectedClass, setSelectedClass] = useState(null); // null = use stored
+  const [helpOpen, setHelpOpen] = useState(false);
   const activeClass = selectedClass || existingClass;
 
   const inputsRef = useRef(null);
@@ -73,6 +95,7 @@ export default function FinancialsPage() {
   const normalizedFinancials = useMemo(() => normalizeFinancials(financials), [financials]);
   const hasResults = !!normalizedFinancials;
   const activeFinancialModelLabel = getFinancialModelLabel(activeClass);
+  const showGuidance = preferences?.showContextualHelp !== false;
   const showLegacyResidentialNotice = useMemo(
     () => hasLegacyResidentialLoadingFactor(financials),
     [financials]
@@ -116,6 +139,15 @@ export default function FinancialsPage() {
         description="Multi-asset-class financial modeling"
         actions={
           <div className="flex items-center gap-2">
+            {showGuidance && (
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="btn btn-secondary flex items-center gap-1.5"
+              >
+                <LifeBuoy size={16} /> Guide
+              </button>
+            )}
             <ReferenceMenu assetClass={activeClass} />
             <Link to={`/dashboard/deals/${dealId}`} className="btn btn-secondary flex items-center gap-1.5">
               <ArrowLeft size={16} /> Back to Deal
@@ -124,20 +156,47 @@ export default function FinancialsPage() {
         }
       />
 
+      <HelpDrawer
+        open={helpOpen}
+        title="Financials"
+        sections={FINANCIALS_HELP_SECTIONS}
+        onClose={() => setHelpOpen(false)}
+      />
+
       <AssetClassInsightBanner assetClass={activeClass} />
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-bg-elevated px-4 py-3 shadow-sm">
+        <span className="text-eyebrow uppercase text-content-muted">Traceability</span>
+        <EvidenceChip
+          label={hasResults ? 'Saved model inputs' : 'Assumption trail pending'}
+          source={hasResults ? 'Financial model version' : 'No model saved yet'}
+          freshness={financials?.updated_at ? `Updated ${new Date(financials.updated_at).toLocaleDateString('en-IN')}` : 'Not refreshed'}
+          confidence={hasResults ? 'Input-linked' : 'Pending'}
+          reviewer="AI-assisted narratives require human review"
+          onClick={showGuidance ? () => setHelpOpen(true) : undefined}
+        />
+        <EvidenceChip
+          label="Human review"
+          source="Reviewer sign-off"
+          freshness="Required before IC use"
+          confidence="Manual verification"
+          reviewer="Human review required"
+          onClick={showGuidance ? () => setHelpOpen(true) : undefined}
+        />
+      </div>
+
       {/* Asset Class Selector */}
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-4">
+      <div className="rounded-xl border border-hairline bg-bg-elevated p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-sm font-medium text-content-secondary">
-            <Building2 size={16} className="text-primary-600" />
+            <Building2 size={16} className="text-accent" />
             Asset Class
           </div>
           <div className="relative">
             <select
               value={activeClass}
               onChange={(e) => handleClassChange(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-2 border border-hairline-strong rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              className="appearance-none rounded-lg border border-hairline bg-bg-elevated py-2 pl-3 pr-8 text-sm font-medium text-content-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
             >
               {ASSET_CLASSES.map((ac) => (
                 <option key={ac.value} value={ac.value}>{ac.label}</option>
@@ -235,15 +294,30 @@ export default function FinancialsPage() {
       {/* First-time form */}
       {!hasResults && !shouldShowError && (
         <>
-          <InputForm
-            initialValues={null}
-            assetClass={activeClass}
-            deal={deal}
-            onSubmit={handleCalculate}
-            isLoading={calculateMutation.isPending}
-            prefill={prefill}
-            onPrefillConsumed={handlePrefillConsumed}
+          <SmartEmptyState
+            title="No financial model saved yet"
+            body="Start with the selected asset-class template, then save a deterministic model that can feed sensitivity, waterfall, IC readiness, and the audit trail."
+            action={
+              <button
+                type="button"
+                onClick={scrollToInputs}
+                className="btn btn-secondary"
+              >
+                Review assumptions
+              </button>
+            }
           />
+          <div ref={inputsRef}>
+            <InputForm
+              initialValues={null}
+              assetClass={activeClass}
+              deal={deal}
+              onSubmit={handleCalculate}
+              isLoading={calculateMutation.isPending}
+              prefill={prefill}
+              onPrefillConsumed={handlePrefillConsumed}
+            />
+          </div>
           {/* Waterfall panels available even before DCF is run */}
           <JDAWaterfallPanel financials={null} deal={deal} />
           <JVWaterfallPanel financials={null} deal={deal} />

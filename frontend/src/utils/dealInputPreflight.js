@@ -29,7 +29,6 @@ const REQUIRED_BY_CLASS = {
     'landCostCr',
   ],
   hospitality: ['keys', 'adr', 'landCostCr'],
-  land_parcel: ['landCostCr'],
 };
 
 const LABELS = {

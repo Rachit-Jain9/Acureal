@@ -1,4 +1,4 @@
-const { ASSET_CLASSES } = require('./assetClasses');
+const { ASSET_CLASSES, normalizeAssetClass } = require('./assetClasses');
 
 const PROPERTY_TYPES = [
   'land',
@@ -194,6 +194,7 @@ module.exports = {
   normalizeLandPricingBasis,
   canTransitionStage,
   ASSET_CLASSES,
+  normalizeAssetClass,
   DEAL_STRUCTURES,
   DOC_TYPES,
   DD_CATEGORIES,

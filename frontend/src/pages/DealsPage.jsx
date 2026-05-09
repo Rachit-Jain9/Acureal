@@ -16,6 +16,7 @@ import ShareDealPanel from '../components/deal/ShareDealPanel';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
 import { downloadAxiosResponse } from '../utils/download';
+import { ASSET_CLASS_CONFIG, getAssetClassLabel } from '../utils/assetClasses';
 import {
   formatCrores,
   formatPct,
@@ -26,19 +27,6 @@ import {
   PROPERTY_TYPE_LABELS,
 } from '../utils/format';
 import { buildLandPricingPreview } from '../utils/landPricing';
-
-const ASSET_CLASS_LABELS = {
-  residential_apartments: 'Residential Apts',
-  plotted_development: 'Plotted Dev',
-  villas: 'Villas',
-  commercial_office: 'Commercial Office',
-  retail: 'Retail',
-  industrial_warehousing: 'Industrial/WH',
-  hospitality: 'Hospitality',
-  mixed_use: 'Mixed Use',
-  raw_land: 'Raw Land',
-  redevelopment: 'Redevelopment',
-};
 
 const DEAL_STRUCTURE_LABELS = {
   outright: 'Outright',
@@ -391,16 +379,11 @@ export default function DealsPage() {
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Asset Class</label>
                   <select name="assetClass" value={form.assetClass} onChange={handleFormChange} className="input w-full">
-                    <option value="residential_apartments">Residential Apartments</option>
-                    <option value="plotted_development">Plotted Development</option>
-                    <option value="villas">Villas</option>
-                    <option value="commercial_office">Commercial Office</option>
-                    <option value="retail">Retail</option>
-                    <option value="industrial_warehousing">Industrial / Warehousing</option>
-                    <option value="hospitality">Hospitality</option>
-                    <option value="mixed_use">Mixed Use</option>
-                    <option value="raw_land">Raw Land</option>
-                    <option value="redevelopment">Redevelopment</option>
+                    {ASSET_CLASS_CONFIG.map((assetClass) => (
+                      <option key={assetClass.value} value={assetClass.value}>
+                        {assetClass.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="col-span-2 md:col-span-1">
@@ -713,7 +696,7 @@ function DealCard({ deal }) {
           <span className="text-xs text-content-secondary">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
           {deal.asset_class && (
             <span className="text-xs text-content-secondary">
-              {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}
+              {getAssetClassLabel(deal.asset_class)}
             </span>
           )}
           {deal.deal_structure && (

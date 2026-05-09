@@ -26,6 +26,7 @@ import { Skeleton, SkeletonKpi, SkeletonCard } from '../design-system';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
 import { downloadAxiosResponse } from '../utils/download';
+import { ASSET_CLASS_CONFIG, getAssetClassLabel } from '../utils/assetClasses';
 import {
   STAGE_CONFIG,
   STAGE_TRANSITIONS,
@@ -66,19 +67,6 @@ const DEAL_STRUCTURE_LABELS = {
   profit_share:   'Profit Share',
   ground_lease:   'Ground Lease',
   hybrid:         'Hybrid',
-};
-
-const ASSET_CLASS_LABELS = {
-  residential_apartments: 'Residential Apts',
-  plotted_development:    'Plotted Development',
-  villas:                 'Villas',
-  commercial_office:      'Commercial Office',
-  retail:                 'Retail',
-  industrial_warehousing: 'Industrial / WH',
-  hospitality:            'Hospitality',
-  mixed_use:              'Mixed Use',
-  raw_land:               'Raw Land',
-  redevelopment:          'Redevelopment',
 };
 
 const buildEditForm = (deal) => ({
@@ -267,7 +255,7 @@ export default function DealDetailPage() {
           <p className="text-sm text-content-secondary mt-0.5">
             {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || ''}
             {deal.asset_class && (
-              <> · {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}</>
+              <> · {getAssetClassLabel(deal.asset_class)}</>
             )}
             {deal.deal_structure && (
               <> · {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}</>
@@ -508,8 +496,8 @@ export default function DealDetailPage() {
                     className="input"
                   >
                     <option value="">— Select —</option>
-                    {Object.entries(ASSET_CLASS_LABELS).map(([v, label]) => (
-                      <option key={v} value={v}>{label}</option>
+                    {ASSET_CLASS_CONFIG.map((assetClass) => (
+                      <option key={assetClass.value} value={assetClass.value}>{assetClass.label}</option>
                     ))}
                   </select>
                 </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, KeyRound } from 'lucide-react';
+import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, KeyRound, LifeBuoy } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
@@ -10,6 +10,8 @@ import { emitCurrencyChange } from '../hooks/useCurrencyPref';
 import AIUsageWidget from '../components/admin/AIUsageWidget';
 import CloseAccountCard from '../components/common/CloseAccountCard';
 import MfaCard from '../components/common/MfaCard';
+import { useUpdateUserPreferences, useUserPreferences } from '../hooks/useUserPreferences';
+import { ASSET_CLASS_CONFIG } from '../utils/assetClasses';
 
 const CURRENCY_OPTIONS = [
   { value: 'crores', label: 'Crores (Cr)' },
@@ -38,6 +40,14 @@ const DATE_FORMAT_OPTIONS = [
   { value: 'en-US', label: 'MM/DD/YYYY (US)' },
   { value: 'en-GB', label: 'DD/MM/YYYY (UK)' },
   { value: 'iso', label: 'YYYY-MM-DD (ISO)' },
+];
+
+const PRODUCT_ROLE_OPTIONS = [
+  { value: 'analyst', label: 'Analyst' },
+  { value: 'deal_lead', label: 'Deal Lead' },
+  { value: 'ic_approver', label: 'IC Approver' },
+  { value: 'admin_portfolio', label: 'Admin / Portfolio' },
+  { value: 'viewer', label: 'Viewer' },
 ];
 
 export default function SettingsPage() {
@@ -75,6 +85,13 @@ export default function SettingsPage() {
     areaUnit: localStorage.getItem('pref_areaUnit') || 'sqft',
     dateFormat: localStorage.getItem('pref_dateFormat') || 'en-IN',
   });
+  const { data: guidancePrefs } = useUserPreferences();
+  const updateGuidancePreferences = useUpdateUserPreferences();
+  const guidanceState = guidancePrefs || {
+    productRole: 'analyst',
+    showContextualHelp: true,
+    preferredAssetClasses: [],
+  };
 
   // Currency code + live FX rates
   const [currencyCode, setCurrencyCode] = useState(localStorage.getItem('pref_currencyCode') || 'INR');
@@ -253,6 +270,15 @@ export default function SettingsPage() {
     setPreferences((prev) => ({ ...prev, [key]: value }));
     localStorage.setItem(`pref_${key}`, value);
     toast.success('Preference saved');
+  };
+
+  const handleGuidancePreferenceChange = async (patch) => {
+    try {
+      await updateGuidancePreferences.mutateAsync(patch);
+      toast.success('Guidance preference saved');
+    } catch {
+      return;
+    }
   };
 
   const handleCurrencyCodeChange = (code) => {
@@ -486,6 +512,72 @@ export default function SettingsPage() {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline p-6">
+        <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
+          <LifeBuoy size={18} />
+          Guidance & Onboarding
+        </h3>
+        <p className="text-xs text-content-secondary mb-4">
+          Tailor REDIP's contextual guidance so Financials, Evidence, and IC views explain the right level of detail.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Product Role</label>
+            <select
+              value={guidanceState.productRole}
+              onChange={(e) => handleGuidancePreferenceChange({ productRole: e.target.value })}
+              disabled={updateGuidancePreferences.isPending}
+              className="input w-full"
+            >
+              {PRODUCT_ROLE_OPTIONS.map((role) => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-start gap-3 rounded-lg border border-hairline bg-bg-secondary p-3 text-sm transition-colors hover:border-hairline-soft">
+            <input
+              type="checkbox"
+              checked={guidanceState.showContextualHelp}
+              onChange={(e) => handleGuidancePreferenceChange({ showContextualHelp: e.target.checked })}
+              disabled={updateGuidancePreferences.isPending}
+              className="mt-0.5 h-4 w-4 rounded border-hairline text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+            />
+            <span>
+              <span className="block font-medium text-content-primary">Show contextual help</span>
+              <span className="block text-xs text-content-secondary">
+                Keep compact HelpTips and page drawers visible for complex workflows. Power users can turn this off.
+              </span>
+            </span>
+          </label>
+          <div>
+            <p className="mb-2 text-sm font-medium text-content-secondary">Preferred Asset Classes</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {ASSET_CLASS_CONFIG.map((assetClass) => {
+                const selected = guidanceState.preferredAssetClasses?.includes(assetClass.value);
+                const nextSelected = selected
+                  ? guidanceState.preferredAssetClasses.filter((value) => value !== assetClass.value)
+                  : [...(guidanceState.preferredAssetClasses || []), assetClass.value];
+                return (
+                  <label
+                    key={assetClass.value}
+                    className="flex items-center gap-2 rounded-lg border border-hairline bg-bg-secondary px-3 py-2 text-sm text-content-secondary transition-colors hover:border-hairline-soft"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => handleGuidancePreferenceChange({ preferredAssetClasses: nextSelected })}
+                      disabled={updateGuidancePreferences.isPending}
+                      className="h-4 w-4 rounded border-hairline text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                    />
+                    <span>{assetClass.label}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

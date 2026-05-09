@@ -103,7 +103,7 @@ describe('utils/compSimilarity', () => {
       ['Warehousing', 'industrial_warehousing'],
       ['Hotel', 'hospitality'],
       ['Mixed-Use', 'mixed_use'],
-      ['Raw Land', 'raw_land'],
+      ['Raw Land', 'plotted_development'],
       ['Redevelopment', 'redevelopment'],
     ])('%s → %s', (input, expected) => {
       expect(normalizeAssetClass(input)).toBe(expected);

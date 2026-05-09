@@ -39,9 +39,9 @@ const ASSET_CLASS_ALIASES = {
   mixed_use: 'mixed_use',
   mixeduse: 'mixed_use',
   mixed: 'mixed_use',
-  raw_land: 'raw_land',
-  land: 'raw_land',
-  land_parcel: 'raw_land',
+  raw_land: 'plotted_development',
+  land: 'plotted_development',
+  land_parcel: 'plotted_development',
   redevelopment: 'redevelopment',
 };
 
@@ -57,7 +57,7 @@ const resolveAssetClass = (value) => {
   if (normalized.includes('plot')) return 'plotted_development';
   if (normalized.includes('mixed')) return 'mixed_use';
   if (normalized.includes('redevelop')) return 'redevelopment';
-  if (normalized.includes('land')) return 'raw_land';
+  if (normalized.includes('land')) return 'plotted_development';
   if (normalized.includes('residential') || normalized.includes('apartment')) return 'residential_apartments';
   return null;
 };

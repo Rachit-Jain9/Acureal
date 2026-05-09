@@ -199,6 +199,25 @@ export const FIELD_DEFS = {
   ],
 };
 
+FIELD_DEFS.villas = FIELD_DEFS.residential_apartments.map((field) => (
+  field.name === 'loadingFactor'
+    ? { ...field, placeholder: '0.05', hint: 'Villa projects typically carry less saleable loading than apartment projects.' }
+    : field
+));
+
+FIELD_DEFS.mixed_use = FIELD_DEFS.residential_apartments.map((field) => (
+  field.name === 'constructionCostPerSqft'
+    ? { ...field, label: 'Blended Construction Cost (INR/sqft)' }
+    : field.name === 'sellingRatePerSqft'
+    ? { ...field, label: 'Blended Sale Rate (INR/sqft)' }
+    : field
+));
+
+FIELD_DEFS.redevelopment = [
+  ...FIELD_DEFS.residential_apartments,
+  { name: 'rehousingCostCr', label: 'Rehousing / Corpus Cost (INR Cr)', type: 'number', step: '0.01', placeholder: '8', hint: 'Temporary accommodation, corpus, or rehousing carry for existing occupants where applicable.' },
+];
+
 export const DEFAULT_VALUES = {
   residential_apartments: {
     loadingFactor: '0.15', marketingCostPct: '5', financeCostPct: '12',
@@ -207,6 +226,33 @@ export const DEFAULT_VALUES = {
     debtLTV: '0', debtRatePct: '14',
     projectDurationYears: '3', discountRatePct: '14',
     constructionStartMonths: '3', constructionEndMonths: '30',
+    gstPct: '18',
+  },
+  villas: {
+    loadingFactor: '0.05', marketingCostPct: '4', financeCostPct: '12',
+    developerMarginPct: '20', pricingEscalationPct: '0',
+    contingencyPct: '5', architectFeePct: '2', pmcFeePct: '1.5',
+    debtLTV: '0', debtRatePct: '14',
+    projectDurationYears: '2.5', discountRatePct: '14',
+    constructionStartMonths: '3', constructionEndMonths: '24',
+    gstPct: '18',
+  },
+  mixed_use: {
+    loadingFactor: '0.12', marketingCostPct: '5', financeCostPct: '12',
+    developerMarginPct: '20', pricingEscalationPct: '0',
+    contingencyPct: '6', architectFeePct: '2', pmcFeePct: '1.5',
+    debtLTV: '0', debtRatePct: '14',
+    projectDurationYears: '3.5', discountRatePct: '15',
+    constructionStartMonths: '3', constructionEndMonths: '36',
+    gstPct: '18',
+  },
+  redevelopment: {
+    loadingFactor: '0.12', marketingCostPct: '5', financeCostPct: '12',
+    developerMarginPct: '20', pricingEscalationPct: '0',
+    contingencyPct: '7', architectFeePct: '2', pmcFeePct: '1.5',
+    debtLTV: '0', debtRatePct: '14',
+    projectDurationYears: '4', discountRatePct: '16',
+    constructionStartMonths: '6', constructionEndMonths: '42',
     gstPct: '18',
   },
   plotted_development: {
@@ -255,4 +301,6 @@ export const getModelAssetClass = (assetClass) => resolveFinancialModelClass(ass
 export const getFieldDefs = (assetClass) => FIELD_DEFS[getModelAssetClass(assetClass)] || [];
 export const getDefaultValues = (assetClass) => DEFAULT_VALUES[getModelAssetClass(assetClass)] || {};
 export const getFinancialModelLabel = (assetClass) =>
-  FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS[assetClass] || 'Residential Apartments';
+  FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS[assetClass]
+  || FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS[getModelAssetClass(assetClass)]
+  || 'Residential Apartments';

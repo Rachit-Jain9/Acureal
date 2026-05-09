@@ -134,6 +134,8 @@ export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   getMe: () => api.get('/auth/me'),
   updateMe: (data) => api.put('/auth/me', data),
+  getPreferences: () => api.get('/auth/me/preferences'),
+  updatePreferences: (data) => api.patch('/auth/me/preferences', data),
   // Email verification — `confirm` is public (consumed before login on a fresh
   // browser); `request` and `status` require authentication so the dashboard
   // banner can poll and offer a "resend" action.
