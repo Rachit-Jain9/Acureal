@@ -150,3 +150,63 @@ export function useDeleteDeal() {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete deal'),
   });
 }
+
+// ── Bulk operations on the Deals list ─────────────────────────────────────
+// Each hook accepts a list of ids + the operation-specific argument.
+// The toast aggregates succeeded vs failed counts so the analyst doesn't
+// need to open the network tab to understand outcomes.
+
+const invalidateDealsQueries = (qc) => {
+  qc.invalidateQueries({ queryKey: ['deals'] });
+  qc.invalidateQueries({ queryKey: ['pipeline'] });
+  qc.invalidateQueries({ queryKey: ['dashboard'] });
+  qc.invalidateQueries({ queryKey: ['properties'] });
+  qc.invalidateQueries({ queryKey: ['activities'] });
+};
+
+const bulkToast = (verb, data) => {
+  const { succeeded_count = 0, failed_count = 0 } = data || {};
+  if (failed_count === 0) {
+    toast.success(`${verb} ${succeeded_count} deal${succeeded_count === 1 ? '' : 's'}`);
+  } else {
+    toast.error(`${verb} ${succeeded_count}, ${failed_count} skipped — see deals list for details`);
+  }
+};
+
+export function useBulkArchiveDeals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, reason }) => dealsAPI.bulkArchive(ids, reason).then((r) => r.data.data),
+    onSuccess: (data) => {
+      invalidateDealsQueries(qc);
+      bulkToast('Archived', data);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Bulk archive failed'),
+  });
+}
+
+export function useBulkReassignDeals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, assignedTo }) => dealsAPI.bulkReassign(ids, assignedTo).then((r) => r.data.data),
+    onSuccess: (data) => {
+      invalidateDealsQueries(qc);
+      const verb = data?.target_user_id ? 'Reassigned' : 'Unassigned';
+      bulkToast(verb, data);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Bulk reassign failed'),
+  });
+}
+
+export function useBulkTransitionDeals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, stage, notes }) => dealsAPI.bulkTransitionStage(ids, stage, notes).then((r) => r.data.data),
+    onSuccess: (data) => {
+      invalidateDealsQueries(qc);
+      const stageLabel = data?.target_stage ? `→ ${data.target_stage}` : '';
+      bulkToast(`Moved ${stageLabel}`.trim(), data);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Bulk stage transition failed'),
+  });
+}

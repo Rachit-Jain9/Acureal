@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Download, FileText, Loader2, Presentation } from 'lucide-react';
 import { downloadAxiosResponse } from '../utils/download';
+import { downloadCsv } from '../utils/csvDownload';
 import { useDeals } from '../hooks/useDeals';
 import { useDailyBrief } from '../hooks/useIntelligence';
 import PageHeader from '../components/common/PageHeader';
@@ -198,6 +199,90 @@ export default function ReportsPage() {
     return null;
   };
 
+  // Per-tab CSV exports. Each builds a header + row matrix from the
+  // already-derived tab data and triggers a client-side download — no
+  // new backend endpoint needed because every tab is in-memory math
+  // over `deals` we already have.
+  const today = () => new Date().toISOString().slice(0, 10);
+  const num = (v) => (v == null || v === '' ? '' : Number(v));
+
+  const handleDownloadPipelineCsv = () => {
+    if (!pipelineData.length) return;
+    const headers = ['Stage', 'Count', 'Total Value (Cr)'];
+    const rows = pipelineData.map((r) => [r.label, r.count, num(r.totalValue)]);
+    rows.push([
+      'Total',
+      pipelineData.reduce((s, r) => s + r.count, 0),
+      num(pipelineData.reduce((s, r) => s + r.totalValue, 0)),
+    ]);
+    downloadCsv({ filename: `redip-pipeline-${today()}.csv`, headers, rows });
+    toast.success('Pipeline report downloaded');
+  };
+
+  const handleDownloadFinancialCsv = () => {
+    if (!deals.length) return;
+    const headers = [
+      'Deal', 'City', 'Stage',
+      'Revenue (Cr)', 'Cost (Cr)', 'Profit (Cr)',
+      'IRR %', 'NPV (Cr)', 'Equity Multiple',
+    ];
+    const rows = deals.map((d) => [
+      d.name,
+      d.city || '',
+      d.stage || '',
+      num(getFinancialValue(d, 'total_revenue_cr')),
+      num(getFinancialValue(d, 'total_cost_cr')),
+      num(getFinancialValue(d, 'gross_profit_cr')),
+      num(getFinancialValue(d, 'irr_pct')),
+      num(getFinancialValue(d, 'npv_cr')),
+      num(getFinancialValue(d, 'equity_multiple')),
+    ]);
+    downloadCsv({ filename: `redip-financial-${today()}.csv`, headers, rows });
+    toast.success('Financial report downloaded');
+  };
+
+  const handleDownloadCitywiseCsv = () => {
+    if (!cityData.length) return;
+    const headers = ['City', 'Deal Count', 'Avg IRR %'];
+    const rows = cityData.map((r) => [r.city, r.count, r.avgIRR != null ? num(r.avgIRR) : '']);
+    downloadCsv({ filename: `redip-citywise-${today()}.csv`, headers, rows });
+    toast.success('City-wise report downloaded');
+  };
+
+  const handleDownloadPerformanceCsv = () => {
+    if (!performanceData.length) return;
+    const headers = ['Rank', 'Deal', 'City', 'Stage', 'IRR %', 'NPV (Cr)'];
+    const rows = performanceData.map((d, idx) => [
+      idx + 1,
+      d.name,
+      d.city || '',
+      STAGE_CONFIG[d.stage]?.label || d.stage || '',
+      num(d._irr),
+      num(getFinancialValue(d, 'npv_cr')),
+    ]);
+    downloadCsv({ filename: `redip-performance-${today()}.csv`, headers, rows });
+    toast.success('Performance ranking downloaded');
+  };
+
+  // Tiny presentational helper — per-tab "Download CSV" header strip.
+  const TabCsvHeader = ({ title, onDownload, disabled }) => (
+    <div className="flex items-center justify-between px-6 py-3 border-b border-hairline-strong bg-bg-secondary/40 rounded-t-xl">
+      <div className="text-eyebrow uppercase tracking-wider text-content-muted text-[10px] font-medium">
+        {title}
+      </div>
+      <button
+        type="button"
+        onClick={onDownload}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-hairline bg-bg-elevated text-content-secondary hover:text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        title={disabled ? 'Nothing to export — table is empty' : 'Download this report as CSV'}
+      >
+        <Download size={11} />
+        Download CSV
+      </button>
+    </div>
+  );
+
   // Skeleton: header + tab strip + table-shaped body.
   if (isLoading) {
     return (
@@ -260,7 +345,12 @@ export default function ReportsPage() {
       </div>
 
       {activeTab === 'pipeline' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+          <TabCsvHeader
+            title="Pipeline by stage"
+            onDownload={handleDownloadPipelineCsv}
+            disabled={!pipelineData.length}
+          />
           {deals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No deals yet. Add verified opportunities to generate pipeline reports." />
@@ -300,7 +390,12 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'financial' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+          <TabCsvHeader
+            title="Financial summary by deal"
+            onDownload={handleDownloadFinancialCsv}
+            disabled={!deals.length}
+          />
           {deals.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No deals yet. Create deals and financial models to populate this report." />
@@ -345,7 +440,12 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'citywise' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+          <TabCsvHeader
+            title="City-wise exposure"
+            onDownload={handleDownloadCitywiseCsv}
+            disabled={!cityData.length}
+          />
           {cityData.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No city-level portfolio data yet. Add linked properties and deals to compare city exposure." />
@@ -376,7 +476,12 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'performance' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
+        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+          <TabCsvHeader
+            title="Performance ranking by IRR"
+            onDownload={handleDownloadPerformanceCsv}
+            disabled={!performanceData.length}
+          />
           {performanceData.length === 0 ? (
             <div className="p-6">
               <EmptyTableState message="No performance ranking yet. As financial models are added, REDIP will rank live opportunities by return profile." />
