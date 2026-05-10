@@ -421,14 +421,17 @@ const renderInvestmentHighlights = (pptx, slide, context, pageNumber, totalSlide
       bandColor: row % 2 === 0 ? COLORS.plum : COLORS.sandDeep,
       fill: row % 2 === 0 ? COLORS.white : COLORS.mist,
     });
-    // Numbered badge (top-left) — copper square with white digit
+    // Numbered badge (top-left) — copper square with single white digit.
+    // No zero-padding — "01/02/03/04" wraps vertically in the small
+    // badge and reads as separate digits stacked. Plain 1/2/3/4 is
+    // unambiguous.
     slide.addShape(pptx.ShapeType.rect, {
       x: x + 0.22, y: y + 0.22, w: 0.36, h: 0.36,
       fill: { color: COLORS.plumSoft }, line: { color: COLORS.plumSoft, pt: 0 },
     });
-    slide.addText(String(index + 1).padStart(2, '0'), {
+    slide.addText(String(index + 1), {
       x: x + 0.22, y: y + 0.22, w: 0.36, h: 0.36,
-      fontFace: FONT, fontSize: 14, bold: true, color: COLORS.white,
+      fontFace: FONT, fontSize: 16, bold: true, color: COLORS.white,
       align: 'center', valign: 'mid',
     });
     // Title (right of badge)

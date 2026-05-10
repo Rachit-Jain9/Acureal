@@ -182,8 +182,10 @@ const addSectionDivider = (pptx, slide, context, title, subtitle, pageNumber, to
     line: { color: COLORS.plum, pt: 0.1 },
   });
 
+  // Plain digits — no zero-padding. "01 / 17" reads as a code; "1 / 17"
+  // reads as page-of-pages, which is what the eyebrow is for.
   const sectionNumber = options.eyebrow
-    || `${String(options.sectionIndex || pageNumber).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+    || `${options.sectionIndex || pageNumber} / ${totalSlides}`;
   slide.addText(sectionNumber, {
     x: 0.78, y: 1.45, w: 5.5, h: 0.22,
     fontFace: FONT, fontSize: 10, bold: true, color: COLORS.plumSoft, charSpace: 2.4,
