@@ -4,6 +4,64 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-10 — Investor-Grade Exports Rebuild (5 PRs)
+
+End-to-end overhaul of the export pipeline. PPTX, XLSX, DOCX all upgraded; pricing model documented; all behind English-only and "no AI numbers" guardrails.
+
+### What was worked on
+
+The operator brief: existing exports are "complacent, ugly, boring and not of much use." Rebuild to investor-grade standard. Sophisticated palette, locked formulas, formula linkages, dynamic charts, AI-assisted prose. New paid DOCX underwriting report. **All exports in English only — non-negotiable.**
+
+Five PRs shipped end-to-end this session:
+
+1. **PR #225 — Foundation.** Cross-cutting modules: `shared/palette.js` (deep navy + ink + paper + copper accent + semantic emerald/red/amber), `shared/staticMap.service.js` (Mapbox Static Images API), `shared/qrImage.service.js` (QR codes), `shared/svgGauge.service.js` (pure-SVG 0–100 score gauge), `narrative/exportNarrative.service.js` (Gemini-primary, OpenAI-fallback narrative; rejects every non-Latin script before content reaches an export; no numbers ever), `utils/scoring/dealScore.js` (deterministic 0–100 with asset-class-aware benchmarks), `migrations/20260527_export_events.sql` (RLS-scoped audit ledger). 79 new tests; 1,277 backend tests green.
+
+2. **PR #226 — PPTX upgrade.** Whole-deck palette migration to the new editorial tokens (legacy `COLORS` keys preserved as a translation layer so existing render code keeps working). Cover slide gets a 0–100 score gauge replacing the decorative ellipses + a QR code linking to the live deal in REDIP. New Pros & Cons slide (AI-augmented Gemini synthesis with deterministic fallback so it always has content). Async pre-compute step in the orchestrator; every dependency wrapped — a single failure never crashes the deck. New primitives: `addChartImage`, `addMapImage`, `addQrCode`, `addScoreGauge`, `addProsConsColumns`, `addNativeChart`. 9 PPTX tests pass (was 7).
+
+3. **PR #227 — Pricing + status docs.** `docs/PRICING.md` captures the DOCX underwriting report's three-tier model (Standard ₹4,999, Premium ₹14,999, Enterprise ₹49,999+) with what's included, cost-to-us, margin, and when-to-recommend per tier. `docs/EXPORTS_REWRITE_STATUS.md` is the multi-PR tracker so future sessions can pick up without re-reading chat. Pure docs.
+
+4. **PR #228 — XLSX v2 (4-sheet).** Brand-new investor-grade workbook (~800 LOC) per the operator brief. Four visible sheets — `Inputs & Assumptions`, `Phasing & Sales Collection`, `Quarterly Cash Flow & Debt`, `Dashboard`. Workbook-level **defined names** (e.g. `SellRatePerSqft`, `DebtLTV`) so cross-sheet formulas reference by name, never `$A$5`. Input zone unlocked (yellow fill, blue text, finance-convention); every output cell locked. Conditional formatting on the DSCR row (red < 1.20, amber 1.20–1.50, green > 1.50). Native ExcelJS doughnut chart on the Dashboard. Quarter count driven by the `ProjectMonths` input (clamped 4–32). Existing 13-sheet workbook retained — operator opts in to v2 by appending `?v=2` to the URL or flipping `XLSX_V2_DEFAULT=1`. 9 new tests.
+
+5. **PR #229 — DOCX underwriting report.** Net-new paid product (~870 LOC). 8 of 16 brief sections in v1: Cover, Executive Summary (Claude IC opinion + KPIs + score), Site Information (Mapbox map when configured), Overview, Comparables, Financials, Pros & Cons (Gemini-synthesised with deterministic fallback), Overall Score (deterministic 0–100 with weight breakdown), Disclaimer (split into "AI-Assisted" vs "Platform Data" badges). Route gated behind `DOCX_REPORT_ENABLED=1`; admins always have access. New dep: `docx@9.5.1` (pinned). Header/footer with page numbers, A4-equivalent margins. 8 new tests; 1,296 backend total.
+
+### Cross-cutting rules now enforced in code
+
+- **English only — non-negotiable.** Narrative service rejects Devanagari, Kannada, Tamil, Telugu, Malayalam, Bengali, Gujarati, Gurmukhi, Oriya, Sinhala, Thai, Tibetan, Myanmar, Hiragana, Katakana, CJK, Hangul, Hebrew, Arabic, Syriac before content reaches an export.
+- **No AI-generated numbers.** System prompt forbids specific figures. The deterministic financial kernel is the only source of numerics in any export.
+- **Audit trail.** `export_events` table records every export with format, ai_used, ai_cost_usd, generation_ms, byte_size, downloaded_at.
+- **Disclaimer model.** AI-Assisted vs Platform Data badges so reviewers can target their scrutiny.
+
+### Tests + build
+
+- **Backend**: 1,296 tests across 93 suites — all green (+98 from this batch: 79 in PR #225, 2 in PR #226, 9 in PR #228, 8 in PR #229).
+- **Frontend**: untouched — no UI changes shipped this session.
+- All five PRs land cleanly with CI green; PRs 225–228 squash-merged; PR 229 in flight at session-log time.
+
+### Operator actions outstanding
+
+- [ ] Apply migration `database/migrations/20260527_export_events.sql` via Supabase SQL Editor.
+- [ ] Set `MAPBOX_TOKEN` env var in Vercel before site maps render in PPTX/DOCX.
+- [ ] Set `REDIP_PUBLIC_URL` if production URL differs from `https://redip.vercel.app`.
+- [ ] Verify by downloading: a deal PPTX (palette, QR, gauge, Pros & Cons), an XLSX with `?v=2` (input recalc), a DOCX as admin (all 9 sections render).
+- [ ] Pick payment provider (Razorpay vs Stripe) before paywall PR starts.
+
+### Plain-English recap (for the user)
+
+- Downloaded **PowerPoint decks** now use a sophisticated investor-grade colour scheme. The cover page shows a 0–100 deal score and a QR code that opens the live deal in REDIP. A new Pros & Cons slide lays out the case for and against the deal in two columns.
+- Downloaded **Excel workbooks** can now be downloaded in a tight 4-sheet investor-grade format (`?v=2` for now). The yellow input cells are the only ones you can edit; change a number and the rest of the workbook recalculates in real time. The Dashboard shows live KPIs and a Sources & Uses chart.
+- Downloaded **Word documents** are a brand-new feature — admin-only for now, paid product later. The report runs about 8 sections including a score, KPIs, comparables, financials, AI-assisted Pros & Cons, and a clear disclaimer about which sections are AI-assisted vs platform data.
+- **No fabricated numbers.** AI in this rebuild only writes prose; every figure in every export comes from the platform's deterministic financial engine.
+- **English only.** Hard guardrail in code — no Hindi or Kannada output can slip through.
+
+### What's left for follow-up sessions
+
+- PPTX phase 2: native pptxgenjs charts on financial slides (sources/uses doughnut, cash flow bars, sensitivity heatmap, IRR tornado), site map embed, comp scatter chart, Key Assumptions appendix slide.
+- XLSX phase 2: hidden Calculations audit-trail sheet, sensitivity heatmap chart on Dashboard, IRR/NPV via Excel functions.
+- DOCX phase 2: 8 remaining sections (Demographics, Why This Area, Job Growth, Social Infrastructure, Supply & Demand, Better Alternatives).
+- Paywall scaffold: `deal_export_purchases` table + Razorpay-or-Stripe integration + paid-record check on the DOCX endpoint.
+
+---
+
 ## 2026-05-09 (continued ×2) — Tier-2 #14 A/B eval harness + frontend AI-panel coverage
 
 Two parallel streams shipped together. Closes the last original-handoff item (#14) and lifts frontend coverage on the AI surfaces from "untested" to "regression-guarded."
