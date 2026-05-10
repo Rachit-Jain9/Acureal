@@ -243,6 +243,7 @@ describe('dealPptx.service', () => {
     expect(slideTitles).toContain('Cash Flow & Sensitivity');
     expect(slideTitles).toContain('Transaction Summary');
     expect(slideTitles).toContain('Pros & Cons');
+    expect(slideTitles).toContain('Key Assumptions & Sources');
     expect(slideTitles).toContain('Disclaimer');
   });
 

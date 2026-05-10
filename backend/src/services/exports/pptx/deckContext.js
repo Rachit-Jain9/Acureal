@@ -114,6 +114,7 @@ const buildSlideManifest = (context) => {
     { key: 'risksMitigants', title: 'Risks & Mitigants' },
     { key: 'prosCons', title: 'Pros & Cons' },
     { key: 'nextSteps', title: 'Next Steps' },
+    { key: 'keyAssumptions', title: 'Key Assumptions & Sources' },
     { key: 'disclaimer', title: 'Disclaimer' },
   );
 

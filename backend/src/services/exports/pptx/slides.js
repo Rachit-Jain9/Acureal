@@ -1168,6 +1168,78 @@ const renderReadiness = (pptx, slide, context, pageNumber, totalSlides) => {
       fontFace: FONT, fontSize: 11, italic: true, color: COLORS.charcoal, align: 'center',
     });
   }
+
+  // ─── Bottom strip — Readiness composition (4 progress bars) ────────────
+  // Was: ~2" of empty canvas below the two tables (y 4.85 → 7.0).
+  // Now: a horizontal four-track progress strip showing the four major
+  // readiness pillars with their % completion. Reviewer scans the slide
+  // and immediately sees which track is the bottleneck.
+  addCard(pptx, slide, {
+    x: 0.55, y: 5.05, w: 12.23, h: 1.95,
+    bandColor: COLORS.plumSoft, fill: COLORS.white,
+  });
+  slide.addText('READINESS COMPOSITION', {
+    x: 0.78, y: 5.18, w: 4.5, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addText('Each track must clear before commitment — bottleneck reads at a glance.', {
+    x: 6.0, y: 5.18, w: 6.6, h: 0.22,
+    fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, align: 'right',
+  });
+
+  // Compute the four track percentages from existing context.
+  const approvalsPct = context.approvalSummary?.required
+    ? Math.round((Number(context.approvalSummary.validated) || 0) / Number(context.approvalSummary.required) * 100)
+    : null;
+  const ddPct = num(context.readiness?.dd_completion_pct);
+  const docsTotal = Number(context.documentSummary?.total) || 0;
+  const docsAvailable = Number(context.documentSummary?.available) || Number(context.documentSummary?.availableCount) || 0;
+  const docsPct = docsTotal > 0 ? Math.round(docsAvailable / docsTotal * 100) : null;
+  const overallPct = num(context.readiness?.readiness_pct);
+
+  const tracks = [
+    { label: 'Overall Readiness', pct: overallPct, accent: COLORS.plum },
+    { label: 'Diligence',         pct: ddPct,      accent: COLORS.plumSoft },
+    { label: 'Approvals',         pct: approvalsPct, accent: COLORS.green },
+    { label: 'Documents',         pct: docsPct,    accent: COLORS.amber },
+  ];
+
+  const trackY = 5.50;
+  const trackH = 0.32;
+  const trackW = 11.7;
+  const labelW = 2.2;
+  const barX = 0.78 + labelW;
+  const barTotalW = trackW - labelW - 0.6;
+
+  tracks.forEach((track, idx) => {
+    const ty = trackY + idx * 0.36;
+    // Track label
+    slide.addText(track.label, {
+      x: 0.78, y: ty, w: labelW - 0.15, h: trackH,
+      fontFace: FONT, fontSize: 9.5, bold: true, color: COLORS.charcoal,
+      valign: 'mid', fit: 'shrink',
+    });
+    // Bar background
+    slide.addShape(pptx.ShapeType.rect, {
+      x: barX, y: ty + 0.06, w: barTotalW, h: trackH - 0.12,
+      fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+    });
+    // Bar fill
+    if (track.pct != null) {
+      const fillW = Math.max(0.04, (track.pct / 100) * barTotalW);
+      slide.addShape(pptx.ShapeType.rect, {
+        x: barX, y: ty + 0.06, w: fillW, h: trackH - 0.12,
+        fill: { color: track.accent }, line: { color: track.accent, pt: 0 },
+      });
+    }
+    // Percentage text on the right
+    slide.addText(track.pct != null ? `${track.pct}%` : '–', {
+      x: barX + barTotalW + 0.10, y: ty, w: 0.50, h: trackH,
+      fontFace: FONT, fontSize: 10, bold: true,
+      color: track.pct == null ? COLORS.muted : track.accent,
+      valign: 'mid', align: 'right',
+    });
+  });
 };
 
 const renderFinancialOverview = (pptx, slide, context, pageNumber, totalSlides) => {
@@ -1840,23 +1912,122 @@ const renderNextSteps = (pptx, slide, context, pageNumber, totalSlides) => {
 
 const renderDisclaimer = (pptx, slide, context, pageNumber, totalSlides) => {
   setSlideDefaults(slide);
+  // Frame
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0.8, y: 1.05, w: 11.73, h: 5.35,
-    fill: { color: COLORS.mist },
-    line: { color: COLORS.sandDeep, pt: 1 },
+    x: 0.55, y: 0.55, w: 12.23, h: 6.35,
+    fill: { color: COLORS.white },
+    line: { color: COLORS.line, pt: 0.6 },
   });
+  // Copper accent left rule
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0.8, y: 1.05, w: 0.26, h: 5.35,
+    x: 0.55, y: 0.55, w: 0.10, h: 6.35,
     fill: { color: COLORS.plum },
-    line: { color: COLORS.plum, pt: 0.1 },
+    line: { color: COLORS.plum, pt: 0 },
+  });
+
+  // Heading
+  slide.addText('REDIP — INTERNAL INVESTMENT MATERIAL', {
+    x: 0.85, y: 0.78, w: 11.7, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.8,
   });
   slide.addText('Disclaimer', {
-    x: 1.28, y: 1.62, w: 2.4, h: 0.28,
-    fontFace: FONT, fontSize: 24, bold: true, color: COLORS.charcoal,
+    x: 0.85, y: 1.05, w: 11.7, h: 0.46,
+    fontFace: FONT, fontSize: 28, bold: true, color: COLORS.charcoal,
   });
-  slide.addText(`${context.brandName} | Generated for ${context.generatedFor} | ${formatDate(context.generatedAt)} | ${pageNumber} / ${totalSlides}`, {
-    x: 1.28, y: 5.82, w: 10.5, h: 0.16,
-    fontFace: FONT, fontSize: 8, color: COLORS.muted, align: 'center',
+  // Hairline under title
+  slide.addShape(pptx.ShapeType.line, {
+    x: 0.85, y: 1.62, w: 1.4, h: 0,
+    line: { color: COLORS.plumSoft, pt: 1.5 },
+  });
+
+  // Lead paragraph
+  slide.addText(
+    'This deck is an AI-assisted draft generated by REDIP from stored deal data and verified market sources. ' +
+    'It is intended for internal investment review and is not a recommendation to buy, sell, or otherwise transact in any property or security.',
+    {
+      x: 0.85, y: 1.78, w: 11.7, h: 0.7,
+      fontFace: FONT, fontSize: 11, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+    },
+  );
+
+  // Two-column badge row — AI-Assisted vs Platform Data
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.85, y: 2.65, w: 5.85, h: 1.85,
+    fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.85, y: 2.65, w: 0.06, h: 1.85,
+    fill: { color: COLORS.amber }, line: { color: COLORS.amber, pt: 0 },
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 1.05, y: 2.78, w: 1.45, h: 0.28,
+    fill: { color: COLORS.amber }, line: { color: COLORS.amber, pt: 0 },
+  });
+  slide.addText('AI-ASSISTED', {
+    x: 1.05, y: 2.78, w: 1.45, h: 0.28,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.white,
+    align: 'center', valign: 'mid', charSpace: 1.6,
+  });
+  slide.addText(
+    'Sections labelled "AI-Assisted" — Executive Summary thesis, IC Stance, Pros & Cons, Why-this-area — contain interpretation generated by large language models from the deal\'s structured data. ' +
+    'AI never emits specific numerical figures; every number in this deck comes from REDIP\'s deterministic financial kernel. Verify every interpretation against the underlying data before relying on it.',
+    {
+      x: 1.05, y: 3.18, w: 5.55, h: 1.30,
+      fontFace: FONT, fontSize: 9, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+    },
+  );
+
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 6.93, y: 2.65, w: 5.85, h: 1.85,
+    fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 6.93, y: 2.65, w: 0.06, h: 1.85,
+    fill: { color: COLORS.plum }, line: { color: COLORS.plum, pt: 0 },
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 7.13, y: 2.78, w: 1.65, h: 0.28,
+    fill: { color: COLORS.plum }, line: { color: COLORS.plum, pt: 0 },
+  });
+  slide.addText('PLATFORM DATA', {
+    x: 7.13, y: 2.78, w: 1.65, h: 0.28,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.white,
+    align: 'center', valign: 'mid', charSpace: 1.6,
+  });
+  slide.addText(
+    'KPIs, Financials, Comparables, Composite Score, and Sensitivity grids are auto-extracted from REDIP records and the deterministic financial kernel. ' +
+    'Treat them as faithful representations of the data captured in REDIP at generation time, not as warranted facts. Verify against source documents.',
+    {
+      x: 7.13, y: 3.18, w: 5.55, h: 1.30,
+      fontFace: FONT, fontSize: 9, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+    },
+  );
+
+  // Hard rules section
+  slide.addText('HARD RULES', {
+    x: 0.85, y: 4.65, w: 4.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  addBulletList(slide, [
+    'REDIP does not warrant zoning, legal title, RERA registration, encumbrance status, or approval status. Independent verification through Karnataka land-records (Bhoomi / Kaveri portal) and Karnataka RERA is required before any investment decision.',
+    'Comparables are limited to those verified in REDIP at generation time. Confirm freshness and applicability against external sources before relying on the comp set.',
+    'Any AI-assisted prose carries an "AI-assisted — requires human review" notice in the relevant slide. Treat those sections as synthesis aids, not analyst conclusions.',
+    'This deck is confidential and prepared for internal review only.',
+  ], {
+    x: 0.85, y: 4.92, w: 11.7, h: 1.55,
+    fontSize: 9.2,
+    bulletColor: COLORS.plum,
+    lineH: 0.36,
+  });
+
+  // Footer
+  slide.addText(`Generated by ${context.brandName} on ${formatDate(context.generatedAt)} for ${context.generatedFor}.`, {
+    x: 0.85, y: 6.55, w: 11.7, h: 0.20,
+    fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted, align: 'center',
+  });
+  slide.addText(`${pageNumber} / ${totalSlides}`, {
+    x: 12.10, y: 7.05, w: 0.7, h: 0.16,
+    fontFace: FONT, fontSize: 8, color: COLORS.plum, align: 'right',
   });
 };
 
@@ -2011,6 +2182,129 @@ const renderProsCons = (pptx, slide, context, pageNumber, totalSlides) => {
   );
 };
 
+/**
+ * Key Assumptions & Sources appendix slide.
+ *
+ * Lists the inputs that drove the deck's KPIs/score/sensitivity, with
+ * an explicit source label per row so the IC reader can audit "where
+ * did this number come from?" without flipping into the platform.
+ *
+ * Sources collapse to a small vocabulary so the cell stays readable:
+ *   - Deal record           — saved on the deal row in REDIP
+ *   - Underwriting input    — stored in deal.model_params.inputs
+ *   - Property record       — extracted from the parcel / property doc
+ *   - Financial kernel      — computed by the deterministic engine
+ *   - Platform default      — falls back when neither operator nor
+ *                             extractor populated the field
+ */
+const renderKeyAssumptions = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(pptx, slide, context, 'Key Assumptions & Sources', pageNumber, totalSlides, 'Input trace | every figure in this deck is auditable to a source field');
+
+  const inp = context.inputs || {};
+
+  const fmt = (v, formatter) => {
+    if (v == null || v === '') return null;
+    return formatter ? formatter(v) : String(v);
+  };
+  const SRC = {
+    deal: 'Deal record',
+    input: 'Underwriting input',
+    property: 'Property record',
+    kernel: 'Financial kernel',
+    fallback: 'Platform default',
+    extracted: 'Document extraction',
+  };
+
+  // Row builder — keeps the table compact even when a value is missing
+  // (still shows the label and the source so reviewers know where to
+  // populate it).
+  const row = (assumption, value, source) => ({
+    assumption,
+    value: value == null || value === '' ? '— not yet populated —' : value,
+    source: value == null || value === '' ? `${source} · pending` : source,
+    pending: value == null || value === '',
+  });
+
+  // Build the assumption table — grouped categories, but rendered as one
+  // table so the visual treatment is consistent.
+  const rows = [
+    // ── General
+    row('Asset class',          fmt(context.assetClassLabel), SRC.deal),
+    row('Deal type / structure', `${context.dealTypeLabel} · ${context.dealStructureLabel}`, SRC.deal),
+    row('Locality',             fmt(context.locationLine),     SRC.deal),
+    row('Saleable area',        fmt(context.saleableAreaSqft, formatArea), SRC.property),
+    row('Land area',            fmt(context.landAreaSqft,     formatArea), SRC.property),
+    row('FSI / FAR',            fmt(num(firstNumber(context.deal.fsi, inp.fsi))), SRC.property),
+    // ── Pricing & Revenue
+    row('Selling rate / sqft',  fmt(context.modelSellRate, formatRate),    SRC.input),
+    row('Pricing escalation',   fmt(num(firstNumber(inp.pricingEscalationPct, inp.rentEscalationPct)), (v) => formatPct(v * (Math.abs(v) > 1 ? 1 : 100), 1)), SRC.input),
+    row('Sales velocity',       fmt(num(inp.salesVelocityPct), (v) => formatPct(v * (Math.abs(v) > 1 ? 1 : 100), 1)), SRC.input),
+    // ── Cost Structure
+    row('Land cost',            fmt(num(firstNumber(inp.landCostCr, context.deal.land_cost_cr)), formatCrores), SRC.input),
+    row('Construction / sqft',  fmt(num(firstNumber(inp.constructionCostPerSqft, context.deal.construction_cost_per_sqft)), formatRate), SRC.input),
+    row('Approval & fees',      fmt(num(firstNumber(inp.approvalCostCr, context.deal.approval_cost_cr)), formatCrores), SRC.input),
+    // ── Capital & Returns
+    row('Debt LTV',             fmt(num(firstNumber(inp.debtLTV, inp.debtPct)), (v) => formatPct(v * (Math.abs(v) > 1 ? 1 : 100), 1)), SRC.input),
+    row('Interest rate',        fmt(num(firstNumber(inp.debtRatePct, inp.interestRatePct)), (v) => formatPct(v * (Math.abs(v) > 1 ? 1 : 100), 2)), SRC.input),
+    row('Discount rate',        fmt(num(firstNumber(inp.discountRatePct, context.deal.discount_rate_pct)), (v) => formatPct(v * (Math.abs(v) > 1 ? 1 : 100), 2)), SRC.input),
+    row('Project IRR',          fmt(context.irr, (v) => formatPct(v, 1)),  SRC.kernel),
+    row('Equity multiple',      fmt(context.equityMultiple, (v) => `${formatNumber(v, 2)}x`), SRC.kernel),
+  ];
+
+  // Two-column layout. Each column shows ~9 rows so the slide stays
+  // breathable; we cap to 18 rows total which we already have.
+  const halfPoint = Math.ceil(rows.length / 2);
+  const leftRows = rows.slice(0, halfPoint);
+  const rightRows = rows.slice(halfPoint);
+
+  const buildTable = (data, x) => {
+    const tableRows = [
+      [
+        { text: 'Assumption', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8.5 } },
+        { text: 'Value',      options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8.5 } },
+        { text: 'Source',     options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8.5 } },
+      ],
+      ...data.map((r, idx) => [
+        { text: r.assumption, options: {
+          fontSize: 8.5, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist },
+          color: COLORS.charcoal, bold: true,
+        } },
+        { text: String(r.value),  options: {
+          fontSize: 8.5, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist },
+          color: r.pending ? COLORS.muted : COLORS.charcoal,
+          italic: r.pending,
+        } },
+        { text: r.source, options: {
+          fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist },
+          color: r.pending ? COLORS.amber : COLORS.muted, italic: true,
+        } },
+      ]),
+    ];
+    addTable(slide, tableRows, {
+      x, y: 1.30, w: 6.10,
+      colW: [2.05, 2.20, 1.85],
+      rowH: 0.36,
+    });
+  };
+
+  buildTable(leftRows, 0.55);
+  buildTable(rightRows, 6.78);
+
+  // Footer — explicit promise that no AI generated any value here
+  addCard(pptx, slide, {
+    x: 0.55, y: 6.50, w: 12.23, h: 0.45,
+    bandColor: COLORS.plumSoft, fill: COLORS.mist,
+  });
+  slide.addText(
+    'Every value in this appendix is sourced from the deterministic platform — deal record, property record, underwriting inputs, or the financial kernel. ' +
+    'AI is not used to generate any number anywhere in this deck.',
+    {
+      x: 0.78, y: 6.55, w: 11.7, h: 0.36,
+      fontFace: FONT, fontSize: 9, italic: true, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+    },
+  );
+};
+
 module.exports = {
   renderCover,
   renderContents,
@@ -2029,5 +2323,6 @@ module.exports = {
   renderRisksMitigants,
   renderNextSteps,
   renderProsCons,
+  renderKeyAssumptions,
   renderDisclaimer,
 };
