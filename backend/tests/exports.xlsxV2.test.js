@@ -190,5 +190,91 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBeGreaterThan(2000);
     });
+
+    test('income asset (commercial_office) renders Operating P&L with PGI / EGR / NOI rows', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.deal.name = 'Whitefield Office Park';
+      ctx.property.property_type = 'commercial_office';
+      ctx.deal.model_params.inputs = {
+        ...ctx.deal.model_params.inputs,
+        baseRentPerSqftMonth: 95,
+        rentEscalationPct: 0.05,
+        occupancyPct: 0.92,
+        vacancyPct: 0.05,
+        propertyTaxPct: 0.015,
+        insurancePct: 0.01,
+        propMgmtPct: 0.03,
+        utilitiesPct: 0.04,
+        maintenancePct: 0.05,
+        capExReservePct: 0.02,
+        exitCapRate: 0.075,
+        loanTermYears: 7,
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+
+      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      expect(phasing).toBeDefined();
+      const phasingText = [];
+      phasing.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') phasingText.push(cell.value);
+      }));
+      const phasingJoined = phasingText.join(' | ');
+      // Income-asset rows
+      expect(phasingJoined).toMatch(/PGI/);
+      expect(phasingJoined).toMatch(/EGR/);
+      expect(phasingJoined).toMatch(/NOI/);
+      expect(phasingJoined).toMatch(/Property Tax/);
+      expect(phasingJoined).toMatch(/CapEx Reserves/);
+      // Title is asset-aware
+      expect(phasingJoined).toMatch(/Lease-up & Operating/);
+
+      const dash = wb.getWorksheet('Dashboard');
+      const dashText = [];
+      dash.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') dashText.push(cell.value);
+      }));
+      const dashJoined = dashText.join(' | ');
+      // Income KPI tiles
+      expect(dashJoined).toMatch(/Stabilised NOI/);
+      expect(dashJoined).toMatch(/Modeled Cap Rate/);
+      expect(dashJoined).toMatch(/Cash-on-Cash/);
+    }, 30000);
+
+    test('development asset (residential_apartments) keeps Sales Collection rows', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments default
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      const text = [];
+      phasing.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text.push(cell.value);
+      }));
+      const joined = text.join(' | ');
+      expect(joined).toMatch(/Construction cost/);
+      expect(joined).toMatch(/Customer collection/);
+      expect(joined).toMatch(/Construction Phasing & Sales/);
+      // Should NOT have income-asset rows
+      expect(joined).not.toMatch(/PGI/);
+      expect(joined).not.toMatch(/Property Tax/);
+    }, 30000);
+
+    test('all sheets are unprotected (operator can edit any cell)', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      // ExcelJS exposes sheet protection via worksheet.sheetProtection
+      // (only set when protect() was called). We removed all protect()
+      // calls, so this property should be undefined or empty on every
+      // visible sheet.
+      const visibleSheets = wb.worksheets.filter((ws) => ws.state !== 'hidden');
+      visibleSheets.forEach((ws) => {
+        // sheetProtection.sheet === true would mean protection is active
+        const isProtected = ws.sheetProtection && ws.sheetProtection.sheet === true;
+        expect(isProtected).toBeFalsy();
+      });
+    });
   });
 });
