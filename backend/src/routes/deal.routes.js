@@ -171,7 +171,7 @@ router.put(
   handleValidation,
   async (req, res, next) => {
     try {
-      const deal = await dealService.updateDeal(req.params.id, req.body);
+      const deal = await dealService.updateDeal(req.params.id, req.body, req.user?.id || null);
       res.json({ success: true, message: 'Deal updated.', data: deal });
     } catch (error) {
       next(error);
@@ -219,7 +219,7 @@ router.patch('/:id/archive', authenticate, requireRole('admin', 'analyst'), [
 // PATCH /deals/:id/restore
 router.patch('/:id/restore', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
-    const deal = await dealService.restoreDeal(req.params.id);
+    const deal = await dealService.restoreDeal(req.params.id, req.user?.id || null);
     res.json({ success: true, message: 'Deal restored.', data: deal });
   } catch (error) {
     next(error);
@@ -335,7 +335,7 @@ router.post(
   handleValidation,
   async (req, res, next) => {
     try {
-      const result = await dealService.bulkDeleteDeals(req.body.ids);
+      const result = await dealService.bulkDeleteDeals(req.body.ids, req.user?.id || null);
       res.json({ success: true, data: result });
     } catch (err) {
       next(err);
@@ -346,7 +346,7 @@ router.post(
 // DELETE /deals/:id
 router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next) => {
   try {
-    const result = await dealService.deleteDeal(req.params.id);
+    const result = await dealService.deleteDeal(req.params.id, req.user?.id || null);
     res.json({ success: true, message: 'Deal deleted.', data: result });
   } catch (error) {
     next(error);

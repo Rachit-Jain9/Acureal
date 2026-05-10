@@ -206,4 +206,126 @@ describe('attachDeltas (pure helper)', () => {
     const result = attachDeltas(events);
     expect(result[0].delta.total_revenue_cr.pct).toBeCloseTo(50, 0);
   });
+
+  it('skips mutation rows entirely (no delta attached)', () => {
+    const events = [
+      { id: 'mut', kind: 'mutation', event_type: 'stage_changed' },
+      { id: 'a', outputs_summary: { irr_pct: 22 } },
+    ];
+    const result = attachDeltas(events);
+    // Mutation row passes through unchanged.
+    expect(result[0]).toEqual({ id: 'mut', kind: 'mutation', event_type: 'stage_changed' });
+    expect(result[0].delta).toBeUndefined();
+  });
+
+  it('threads the prior-financial pointer past intervening mutation rows', () => {
+    // Newest financial → mutation → older financial. The newer
+    // financial should still see a delta against the older one
+    // because attachDeltas skips mutation rows when seeking
+    // "previous financial event with a summary".
+    const events = [
+      { id: 'newer', outputs_summary: { irr_pct: 25 } },
+      { id: 'mut', kind: 'mutation', event_type: 'stage_changed' },
+      { id: 'older', outputs_summary: { irr_pct: 22 } },
+    ];
+    const result = attachDeltas(events);
+    expect(result[0].delta).toMatchObject({
+      irr_pct: { from: 22, to: 25, delta: 3 },
+    });
+  });
+});
+
+// ── Mutation-row UI ────────────────────────────────────────────────────────
+
+describe('AuditTab mutation events', () => {
+  it('renders a stage-changed mutation row with before → after diff', () => {
+    eventsState = {
+      data: [{
+        id: 'm1',
+        kind: 'mutation',
+        event_type: 'stage_changed',
+        actor: { id: 'u1', name: 'Rachit Jain' },
+        before: { stage: 'sourced' },
+        after: { stage: 'screening' },
+        metadata: {},
+        created_at: new Date().toISOString(),
+      }],
+      isLoading: false,
+    };
+    renderWithClient(<AuditTab />);
+    expect(screen.getByText('Stage changed')).toBeInTheDocument();
+    expect(screen.getByText('sourced')).toBeInTheDocument();
+    expect(screen.getByText('screening')).toBeInTheDocument();
+    expect(screen.getByText('Rachit Jain')).toBeInTheDocument();
+  });
+
+  it('renders an archived mutation row with the reason metadata badge', () => {
+    eventsState = {
+      data: [{
+        id: 'm2',
+        kind: 'mutation',
+        event_type: 'archived',
+        actor: { id: 'u1', name: 'Rachit Jain' },
+        before: { is_archived: false },
+        after: { is_archived: true, archived_reason: 'Owner pulled out' },
+        metadata: { reason: 'Owner pulled out' },
+        created_at: new Date().toISOString(),
+      }],
+      isLoading: false,
+    };
+    renderWithClient(<AuditTab />);
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+    expect(screen.getByText(/Owner pulled out/)).toBeInTheDocument();
+  });
+
+  it('renders a bulk-deleted row with batch-size context when diff is empty', () => {
+    eventsState = {
+      data: [{
+        id: 'm3',
+        kind: 'mutation',
+        event_type: 'bulk_deleted',
+        actor: { id: 'u1', name: 'Admin User' },
+        before: {},
+        after: {},
+        metadata: { bulk_id: 'batch-1', bulk_size: 4 },
+        created_at: new Date().toISOString(),
+      }],
+      isLoading: false,
+    };
+    renderWithClient(<AuditTab />);
+    expect(screen.getByText('Deleted (bulk)')).toBeInTheDocument();
+    expect(screen.getByText(/bulk batch/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 deals/)).toBeInTheDocument();
+  });
+
+  it('renders the merged-feed breakdown sub-text', () => {
+    eventsState = {
+      data: [
+        {
+          id: 'fin1',
+          event_type: 'calculate_and_save',
+          actor: { name: 'Rachit Jain' },
+          inputs_hash: 'a'.repeat(64),
+          outputs_hash: 'b'.repeat(64),
+          signature: 'c'.repeat(64),
+          created_at: new Date().toISOString(),
+          outputs_summary: { irr_pct: 22 },
+        },
+        {
+          id: 'mut1',
+          kind: 'mutation',
+          event_type: 'stage_changed',
+          actor: { name: 'Rachit Jain' },
+          before: { stage: 'sourced' },
+          after: { stage: 'screening' },
+          metadata: {},
+          created_at: new Date(Date.now() - 60000).toISOString(),
+        },
+      ],
+      isLoading: false,
+    };
+    renderWithClient(<AuditTab />);
+    expect(screen.getByText(/1 signed financial event/)).toBeInTheDocument();
+    expect(screen.getByText(/1 mutation event/)).toBeInTheDocument();
+  });
 });
