@@ -44,6 +44,9 @@ const {
   addBulletList,
   addTable,
   addSectionDivider,
+  addQrCode,
+  addScoreGauge,
+  addProsConsColumns,
 } = require('./primitives');
 
 const renderCover = (pptx, slide, context, totalSlides) => {
@@ -83,16 +86,41 @@ const renderCover = (pptx, slide, context, totalSlides) => {
       line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
     });
   }
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: 9.15, y: 2.0, w: 2.55, h: 2.55,
-    fill: { color: 'F6EFE6', transparency: 68 },
-    line: { color: COLORS.sandDeep, pt: 1.3, transparency: 25 },
-  });
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: 9.93, y: 2.78, w: 0.98, h: 0.98,
-    fill: { color: COLORS.plum },
-    line: { color: COLORS.plum, pt: 0.2 },
-  });
+  // Score gauge replaces the decorative ellipse pair when a precomputed
+  // gauge is available (PR2 onwards). Falls back to the legacy decorative
+  // ellipses for back-compat with deck contexts that haven't been
+  // pre-enriched yet (e.g. unit tests that drive buildDeckContext directly).
+  if (context.precomputed?.scoreGaugeDataUri) {
+    addScoreGauge(slide, {
+      x: 8.7, y: 1.55, w: 3.7, h: 2.6,
+      dataUri: context.precomputed.scoreGaugeDataUri,
+      alt: 'Composite deal score (0-100)',
+    });
+  } else {
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: 9.15, y: 2.0, w: 2.55, h: 2.55,
+      fill: { color: 'F6EFE6', transparency: 68 },
+      line: { color: COLORS.sandDeep, pt: 1.3, transparency: 25 },
+    });
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: 9.93, y: 2.78, w: 0.98, h: 0.98,
+      fill: { color: COLORS.plum },
+      line: { color: COLORS.plum, pt: 0.2 },
+    });
+  }
+
+  // QR code linking to the live deal in REDIP. Always bottom-right when set.
+  if (context.precomputed?.qrDataUri) {
+    addQrCode(slide, {
+      x: 11.55, y: 5.55, size: 1.15,
+      dataUri: context.precomputed.qrDataUri,
+      alt: 'Scan for live deal',
+    });
+    slide.addText('Scan to open this deal in REDIP', {
+      x: 9.45, y: 5.62, w: 2.05, h: 0.34,
+      fontFace: FONT, fontSize: 8, color: COLORS.muted, align: 'right', italic: true,
+    });
+  }
 
   slide.addText(context.brandName, {
     x: 0.98, y: 0.95, w: 1.8, h: 0.18,
@@ -970,6 +998,85 @@ const renderPlanningContext = (pptx, slide, context, pageNumber, totalSlides) =>
 };
 
 
+/**
+ * Pros & Cons slide. Two-column layout, deterministic-then-AI synthesis.
+ * Renders even when prosCons narrative is unavailable — falls back to
+ * a deterministic pros/cons set computed from the deal payload so the
+ * slide still ships value.
+ */
+const renderProsCons = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(pptx, slide, context, 'Pros & Cons', pageNumber, totalSlides, `${context.assetClassLabel} | ${context.dealTypeLabel}`);
+
+  const prosCons = context.precomputed?.prosCons || {};
+  const aiPros = Array.isArray(prosCons.pros) ? prosCons.pros : [];
+  const aiCons = Array.isArray(prosCons.cons) ? prosCons.cons : [];
+
+  // Deterministic fallback — anchored in payload data so we always have at
+  // least 2 items per column. Order matters: AI synthesis comes first,
+  // determinist seed only fills the gaps.
+  const determinedPros = [];
+  const determinedCons = [];
+  if (context.irr != null) {
+    if (context.irr >= 20) determinedPros.push(`Project IRR of ${context.irr.toFixed(1)}% sits in the strong band for ${context.assetClassLabel.toLowerCase()}.`);
+    else if (context.irr < 14) determinedCons.push(`Project IRR of ${context.irr.toFixed(1)}% is below benchmark for ${context.assetClassLabel.toLowerCase()}.`);
+  }
+  if (context.equityMultiple != null) {
+    if (context.equityMultiple >= 1.8) determinedPros.push(`Equity multiple of ${context.equityMultiple.toFixed(2)}x is healthy for the asset class.`);
+    else if (context.equityMultiple < 1.4) determinedCons.push(`Equity multiple of ${context.equityMultiple.toFixed(2)}x is thin.`);
+  }
+  if (context.grossMargin != null) {
+    if (context.grossMargin >= 25) determinedPros.push(`Gross margin of ${context.grossMargin.toFixed(1)}% gives meaningful cushion against cost overruns.`);
+    else if (context.grossMargin < 15) determinedCons.push(`Gross margin of ${context.grossMargin.toFixed(1)}% leaves little buffer for execution slip.`);
+  }
+  if (context.readiness?.readiness_pct != null) {
+    if (context.readiness.readiness_pct >= 75) determinedPros.push(`Execution readiness at ${context.readiness.readiness_pct}% — most prep work already done.`);
+    else if (context.readiness.readiness_pct < 35) determinedCons.push(`Execution readiness at ${context.readiness.readiness_pct}% — significant prep still pending.`);
+  }
+  const riskSummary = context.exportContext?.risks?.summary || {};
+  if ((Number(riskSummary.critical) || 0) > 0) {
+    determinedCons.push(`${riskSummary.critical} critical risk${riskSummary.critical > 1 ? 's' : ''} flagged in the register — must clear before commitment.`);
+  }
+  if ((Number(context.approvalSummary?.validated) || 0) > 0 && (Number(context.approvalSummary?.required) || 0) > 0) {
+    const ratio = context.approvalSummary.validated / context.approvalSummary.required;
+    if (ratio >= 0.8) determinedPros.push(`${context.approvalSummary.validated} of ${context.approvalSummary.required} required approvals validated.`);
+    else if (ratio < 0.4) determinedCons.push(`Only ${context.approvalSummary.validated} of ${context.approvalSummary.required} required approvals validated so far.`);
+  }
+
+  // Merge: AI synthesis first, deterministic seed fills any remaining slots up to 5.
+  const mergeUnique = (primary, secondary, cap = 5) => {
+    const out = [];
+    const seen = new Set();
+    [...primary, ...secondary].forEach((item) => {
+      const text = String(item || '').trim();
+      const key = text.toLowerCase();
+      if (!text || seen.has(key) || out.length >= cap) return;
+      seen.add(key);
+      out.push(text);
+    });
+    return out;
+  };
+  const pros = mergeUnique(aiPros, determinedPros);
+  const cons = mergeUnique(aiCons, determinedCons);
+
+  addCard(pptx, slide, { x: 0.55, y: 1.3, w: 12.23, h: 5.5, bandColor: COLORS.plum, fill: COLORS.white });
+  addProsConsColumns(slide, {
+    x: 0.85, y: 1.6, w: 11.65, h: 4.7,
+    pros, cons,
+  });
+
+  // Source / disclaimer line
+  const aiUsed = prosCons.available && (aiPros.length || aiCons.length);
+  slide.addText(
+    aiUsed
+      ? 'AI-assisted synthesis from stored deal data. Deterministic items fill any remaining slots. Verify all interpretations.'
+      : 'Deterministic synthesis from stored deal data. AI commentary unavailable for this run.',
+    {
+      x: 0.85, y: 6.4, w: 11.65, h: 0.32,
+      fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted,
+    },
+  );
+};
+
 module.exports = {
   renderCover,
   renderContents,
@@ -986,5 +1093,6 @@ module.exports = {
   renderTransactionSummary,
   renderRisksMitigants,
   renderNextSteps,
+  renderProsCons,
   renderDisclaimer,
 };

@@ -6,26 +6,37 @@
  * Extracted from the original dealPptx.service.js (2,292 LOC) as part of
  * the Bet 3 god-service decomposition. Every export here is dependency-
  * free or only depends on other exports from this same file.
+ *
+ * 2026-05-10 — palette migrated to the editorial export palette
+ * (`shared/palette.js`). Legacy COLORS keys kept as a translation layer so
+ * existing render code continues to work; the *values* now resolve to the
+ * new deep-navy + copper + semantic-emerald/red/amber tokens.
  */
 
-const FONT = 'Arial';
+const palette = require('../shared/palette');
 
+const FONT = palette.FONTS.body;
+
+// Translation map: legacy key → new palette token.
+//   plum / plumSoft / sandDeep — these were the old "primary brand" tones;
+//   they all collapse to inkDeep + accent in the new palette so the existing
+//   slides shift visually without us editing every renderer.
 const COLORS = {
-  paper: 'F7F3ED',
-  white: 'FFFFFF',
-  charcoal: '26221F',
-  muted: '6E655E',
-  line: 'DDD4CA',
-  plum: '5B2C42',
-  plumSoft: '8C6677',
-  sand: 'D8C5AF',
-  sandDeep: 'B89B7C',
-  green: '3E6F57',
-  amber: 'A06A35',
-  red: 'A44747',
-  blue: '58738E',
-  cloud: 'ECE6DE',
-  mist: 'F2EDE7',
+  paper:     palette.pptx('paper'),
+  white:     palette.pptx('paperElevated'),
+  charcoal:  palette.pptx('ink'),
+  muted:     palette.pptx('mutedHigh'),
+  line:      palette.pptx('hairline'),
+  plum:      palette.pptx('inkDeep'),     // primary structural colour
+  plumSoft:  palette.pptx('accent'),      // secondary accent
+  sand:      palette.pptx('paperSubtle'), // soft surface
+  sandDeep:  palette.pptx('accent'),      // accent rule colour
+  green:     palette.pptx('dataPositive'),
+  amber:     palette.pptx('dataWarning'),
+  red:       palette.pptx('dataNegative'),
+  blue:      palette.pptx('mutedHigh'),
+  cloud:     palette.pptx('hairlineStrong'),
+  mist:      palette.pptx('paperSubtle'),
 };
 
 const ASSET_CLASS_LABELS = {
@@ -173,14 +184,16 @@ const pickSeverityColor = (severity) => {
   switch (severity) {
     case 'deal_breaker':
     case 'critical':
-      return COLORS.red;
+      return palette.pptx('dataNegative');
     case 'buildability_blocker':
     case 'high':
-      return COLORS.amber;
+      return palette.pptx('dataNegative');
     case 'medium':
-      return COLORS.blue;
+      return palette.pptx('dataWarning');
+    case 'low':
+      return palette.pptx('mutedHigh');
     default:
-      return COLORS.green;
+      return palette.pptx('dataPositive');
   }
 };
 
@@ -257,6 +270,10 @@ const filterRows = (rows) => rows.filter((row) => row && row.value);
 module.exports = {
   FONT,
   COLORS,
+  // Re-export the shared palette so renderers can reach the richer token API
+  // (severityColor, deltaColor, TYPE_SCALE, FONTS) without taking a separate
+  // import — keeps slide files looking close to the existing pattern.
+  palette,
   ASSET_CLASS_LABELS,
   DEAL_TYPE_LABELS,
   DEAL_STRUCTURE_LABELS,

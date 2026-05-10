@@ -111,6 +111,7 @@ const buildSlideManifest = (context) => {
   slides.push(
     { key: 'transactionSummary', title: 'Transaction Summary' },
     { key: 'risksMitigants', title: 'Risks & Mitigants' },
+    { key: 'prosCons', title: 'Pros & Cons' },
     { key: 'nextSteps', title: 'Next Steps' },
     { key: 'disclaimer', title: 'Disclaimer' },
   );
