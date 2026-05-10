@@ -9,6 +9,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 let eventsState;
 const verifyMutate = vi.fn();
 const replayMutate = vi.fn();
+const exportAuditCSVMock = vi.fn();
+const bulkBatchMock = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
 
 vi.mock('../../../hooks/useDealContext', () => ({
   useDealContext: () => ({ dealId: 'd-test' }),
@@ -18,6 +22,20 @@ vi.mock('../../../hooks/useDealEvents', () => ({
   useDealEvents: () => eventsState,
   useVerifyDealEvent: () => ({ mutate: verifyMutate, mutateAsync: verifyMutate, isPending: false }),
   useReplayDealEvent: () => ({ mutate: replayMutate, isPending: false }),
+}));
+
+vi.mock('../../../services/api', () => ({
+  financialsAPI: {
+    exportAuditCSV: (...args) => exportAuditCSVMock(...args),
+    bulkBatch: (...args) => bulkBatchMock(...args),
+  },
+}));
+
+vi.mock('../../common/Toast', () => ({
+  toast: {
+    success: (...args) => toastSuccess(...args),
+    error: (...args) => toastError(...args),
+  },
 }));
 
 import AuditTab, { attachDeltas } from '../AuditTab';
@@ -30,6 +48,10 @@ const renderWithClient = (ui) => {
 beforeEach(() => {
   verifyMutate.mockReset();
   replayMutate.mockReset();
+  exportAuditCSVMock.mockReset();
+  bulkBatchMock.mockReset();
+  toastSuccess.mockReset();
+  toastError.mockReset();
   eventsState = { data: [], isLoading: false, isError: false };
 });
 
@@ -327,5 +349,108 @@ describe('AuditTab mutation events', () => {
     renderWithClient(<AuditTab />);
     expect(screen.getByText(/1 signed financial event/)).toBeInTheDocument();
     expect(screen.getByText(/1 mutation event/)).toBeInTheDocument();
+  });
+});
+
+// ── Filter chips, CSV export, bulk-batch peek ──────────────────────────────
+
+describe('AuditTab UX upgrades', () => {
+  const mixedFeed = () => ({
+    data: [
+      {
+        id: 'fin1',
+        event_type: 'calculate_and_save',
+        actor: { name: 'Rachit Jain' },
+        inputs_hash: 'a'.repeat(64),
+        outputs_hash: 'b'.repeat(64),
+        signature: 'c'.repeat(64),
+        created_at: new Date().toISOString(),
+        outputs_summary: { irr_pct: 22 },
+      },
+      {
+        id: 'mut1',
+        kind: 'mutation',
+        event_type: 'bulk_archived',
+        actor: { name: 'Rachit Jain' },
+        before: { is_archived: false },
+        after: { is_archived: true },
+        metadata: { bulk_id: 'batch-xyz', bulk_size: 4 },
+        created_at: new Date(Date.now() - 60000).toISOString(),
+      },
+    ],
+    isLoading: false,
+  });
+
+  it('renders the filter chips with counts and lets the user filter to mutations', () => {
+    eventsState = mixedFeed();
+    renderWithClient(<AuditTab />);
+    // Three chips
+    const allChip = screen.getByRole('tab', { name: /^All/ });
+    const finChip = screen.getByRole('tab', { name: /^Financial/ });
+    const mutChip = screen.getByRole('tab', { name: /^Mutations/ });
+    expect(allChip).toHaveAttribute('aria-selected', 'true');
+    expect(finChip).toHaveAttribute('aria-selected', 'false');
+    expect(mutChip).toHaveAttribute('aria-selected', 'false');
+
+    // Click Mutations — financial row should drop out of view.
+    fireEvent.click(mutChip);
+    expect(mutChip).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Archived (bulk)')).toBeInTheDocument();
+    expect(screen.queryByText('Calculate & Save')).not.toBeInTheDocument();
+
+    // Click Financial — bulk row should drop out, financial row visible.
+    fireEvent.click(finChip);
+    expect(finChip).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Calculate & Save')).toBeInTheDocument();
+    expect(screen.queryByText('Archived (bulk)')).not.toBeInTheDocument();
+  });
+
+  it('triggers a CSV export when the "Export CSV" button is clicked', async () => {
+    eventsState = mixedFeed();
+    exportAuditCSVMock.mockResolvedValueOnce({ data: 'csv,bytes' });
+    // jsdom needs window.URL stubs for Blob URLs.
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      configurable: true, writable: true, value: createObjectURL,
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      configurable: true, writable: true, value: revokeObjectURL,
+    });
+
+    renderWithClient(<AuditTab />);
+    const exportBtn = screen.getByRole('button', { name: /Export CSV/ });
+    fireEvent.click(exportBtn);
+    // Wait a tick for the async chain
+    await new Promise((r) => setTimeout(r, 10));
+    expect(exportAuditCSVMock).toHaveBeenCalledWith('d-test');
+    expect(toastSuccess).toHaveBeenCalledWith('Audit feed exported');
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalled();
+  });
+
+  it('opens the bulk-batch peek when "View batch" is clicked on a bulk-event row', async () => {
+    eventsState = mixedFeed();
+    bulkBatchMock.mockResolvedValueOnce({
+      data: {
+        data: [
+          { deal_id: 'd-test', deal_name: 'This deal', deal_stage: 'screening', deal_is_archived: true,  event_type: 'bulk_archived', created_at: new Date().toISOString() },
+          { deal_id: 'd-2',     deal_name: 'Other deal', deal_stage: 'screening', deal_is_archived: true, event_type: 'bulk_archived', created_at: new Date().toISOString() },
+        ],
+      },
+    });
+    renderWithClient(<AuditTab />);
+    const viewBtn = screen.getByRole('button', { name: /View batch/ });
+    fireEvent.click(viewBtn);
+    // Modal renders with a header
+    expect(screen.getByRole('dialog', { name: /Bulk batch/i })).toBeInTheDocument();
+    // Wait for fetch
+    await new Promise((r) => setTimeout(r, 20));
+    expect(bulkBatchMock).toHaveBeenCalledWith('batch-xyz');
+    expect(screen.getByText('Other deal')).toBeInTheDocument();
+    // Two matches expected: the deal name "This deal" and the
+    // "(this deal)" highlight badge for the row that matches the
+    // currentDealId. Asserting on the badge specifically.
+    expect(screen.getByText(/^\(this deal\)$/i)).toBeInTheDocument();
   });
 });

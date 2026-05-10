@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ShieldCheck,
   Clock,
@@ -18,6 +18,9 @@ import {
   Trash2,
   Edit3,
   Layers,
+  Download,
+  X,
+  ExternalLink,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import Badge from '../common/Badge';
@@ -28,6 +31,8 @@ import {
   useVerifyDealEvent,
   useReplayDealEvent,
 } from '../../hooks/useDealEvents';
+import { financialsAPI } from '../../services/api';
+import { toast } from '../common/Toast';
 
 /**
  * Investor-grade audit trail for a deal.
@@ -308,10 +313,11 @@ function MutationDiff({ before, after, metadata, eventType }) {
   );
 }
 
-function MutationRow({ event }) {
+function MutationRow({ event, onPeekBatch }) {
   const cfg = EVENT_TYPE_CONFIG[event.event_type] || { label: event.event_type, tone: 'neutral' };
   const Icon = cfg.icon || ShieldCheck;
   const actorName = event.actor?.name || event.actor?.email || (event.actor_id ? 'Unknown user' : 'System');
+  const bulkId = event.metadata?.bulk_id;
 
   return (
     <div className="border-t border-hairline first:border-t-0">
@@ -333,6 +339,17 @@ function MutationRow({ event }) {
                 "{event.metadata.notes}"
               </span>
             )}
+            {bulkId && onPeekBatch && (
+              <button
+                type="button"
+                onClick={() => onPeekBatch(bulkId)}
+                className="inline-flex items-center gap-1 text-[10px] text-accent hover:underline focus-visible:outline-none focus-visible:underline"
+                title="View every deal that moved in this same bulk action"
+              >
+                <ExternalLink size={9} />
+                View batch
+              </button>
+            )}
           </div>
           <div className="mt-1.5">
             <MutationDiff
@@ -346,6 +363,149 @@ function MutationRow({ event }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Modal that lists every deal touched by a single bulk operation.
+ * Fetched on open. Closes via ESC, backdrop click, or X.
+ */
+function BulkBatchPeek({ bulkId, currentDealId, onClose }) {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Fetch on mount. Single-shot — modal is short-lived so no
+  // re-fetch logic needed. The endpoint is org-scoped via RLS so
+  // there's no admin-only gate to worry about.
+  useEffect(() => {
+    let alive = true;
+    financialsAPI
+      .bulkBatch(bulkId)
+      .then((res) => {
+        if (alive) setRows(res?.data?.data || []);
+      })
+      .catch((err) => {
+        if (alive) {
+          setError(err?.response?.data?.message || err.message || 'Failed to load batch');
+        }
+      });
+    return () => { alive = false; };
+  }, [bulkId]);
+
+  // ESC to dismiss — keyboard parity with backdrop-click + close-button.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bulk batch details"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40"
+      />
+      <Card className="relative w-full max-w-2xl p-0 overflow-hidden">
+        <div className="flex items-start justify-between px-5 py-3 border-b border-hairline">
+          <div>
+            <div className="text-sm font-semibold text-content-primary">Bulk batch</div>
+            <div className="text-[11px] text-content-muted font-mono mt-0.5" title={bulkId}>
+              id {bulkId.slice(0, 8)}…
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 rounded hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <X size={14} className="text-content-secondary" />
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          {rows === null && !error && (
+            <div className="p-5">
+              <SkeletonList rows={4} columns={2} />
+            </div>
+          )}
+          {error && (
+            <div className="p-5 text-sm text-data-negative">{error}</div>
+          )}
+          {rows && rows.length === 0 && !error && (
+            <div className="p-5 text-sm text-content-muted">
+              No batch records found. The batch may have been older than the audit
+              log retention window.
+            </div>
+          )}
+          {rows && rows.length > 0 && (
+            <ul className="divide-y divide-hairline">
+              {rows.map((r) => (
+                <li
+                  key={`${r.deal_id}-${r.created_at}`}
+                  className={clsx(
+                    'flex items-center gap-3 px-5 py-2.5 text-sm',
+                    r.deal_id === currentDealId && 'bg-accent-soft/40',
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-content-primary font-medium truncate">
+                      {r.deal_name || 'Unnamed deal'}
+                      {r.deal_id === currentDealId && (
+                        <span className="ml-2 text-[10px] text-accent">(this deal)</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-content-muted">
+                      {r.event_type} · stage {r.deal_stage || '—'}
+                      {r.deal_is_archived ? ' · archived' : ''}
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-content-muted tabular-nums">
+                    {fmtAbsolute(r.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="px-5 py-2.5 border-t border-hairline bg-bg-secondary text-[11px] text-content-muted">
+          Bulk actions stamp every affected deal with a shared id so the trail
+          can be reconstructed across deals.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Trigger a CSV download of the merged audit feed for the current
+ * deal. Uses the standard blob → object-URL → click-anchor pattern
+ * shared with the rest of the app's CSV exporters.
+ */
+async function downloadAuditCSV(dealId) {
+  try {
+    const res = await financialsAPI.exportAuditCSV(dealId);
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().slice(0, 10);
+    a.download = `deal-audit-${dealId}-${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    toast.success('Audit feed exported');
+  } catch (err) {
+    toast.error(err?.response?.data?.message || err.message || 'Audit export failed');
+  }
 }
 
 function EventRow({ event, dealId }) {
@@ -511,11 +671,50 @@ function EventRow({ event, dealId }) {
   );
 }
 
+// Filter chip definitions. 'all' shows the full merged feed; the
+// other two narrow to one kind. Keeping this as a small enum lets us
+// add 'risk' / 'docs' filters later without re-plumbing.
+const FILTER_OPTIONS = [
+  { id: 'all',        label: 'All' },
+  { id: 'financial',  label: 'Financial' },
+  { id: 'mutations',  label: 'Mutations' },
+];
+
+const matchesFilter = (event, filterId) => {
+  if (filterId === 'all') return true;
+  if (filterId === 'mutations') return event.kind === 'mutation';
+  // 'financial' covers any non-mutation row (legacy events default
+  // to undefined kind).
+  return event.kind !== 'mutation';
+};
+
 export default function AuditTab() {
   const { dealId } = useDealContext();
   const { data, isLoading, isError, error, refetch } = useDealEvents(dealId);
 
+  const [filter, setFilter] = useState('all');
+  const [peekBulkId, setPeekBulkId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Compute deltas FIRST on the full feed, then filter for display —
+  // this way the financial KPI deltas are still computed against the
+  // true previous financial event, not the previous one that
+  // happened to pass the filter. Otherwise toggling to "Mutations"
+  // and back could produce different deltas, which would be a lie.
   const events = useMemo(() => attachDeltas(data || []), [data]);
+  const visibleEvents = useMemo(
+    () => events.filter((e) => matchesFilter(e, filter)),
+    [events, filter],
+  );
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadAuditCSV(dealId);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -574,28 +773,95 @@ export default function AuditTab() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader
-        size="sm"
-        eyebrow="Append-only audit trail"
-        title="Audit trail"
-        sub={`${breakdown}. Newest first. Click a financial row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
-      />
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <SectionHeader
+          size="sm"
+          eyebrow="Append-only audit trail"
+          title="Audit trail"
+          sub={`${breakdown}. Newest first. Click a financial row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
+        />
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50 shrink-0"
+          title="Download the merged audit feed as CSV (financial computations + mutation log)"
+        >
+          <Download size={11} />
+          {exporting ? 'Exporting…' : 'Export CSV'}
+        </button>
+      </div>
 
-      <Card className="p-0 overflow-hidden">
-        {events.map((ev) =>
-          ev.kind === 'mutation' ? (
-            <MutationRow key={ev.id} event={ev} />
-          ) : (
-            <EventRow key={ev.id} event={ev} dealId={dealId} />
-          ),
-        )}
-      </Card>
+      {/* Filter chips */}
+      <div className="flex items-center gap-1.5" role="tablist" aria-label="Filter audit feed">
+        {FILTER_OPTIONS.map((opt) => {
+          const count = opt.id === 'all'
+            ? events.length
+            : opt.id === 'mutations'
+              ? mutationCount
+              : financialCount;
+          const active = filter === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setFilter(opt.id)}
+              className={clsx(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                active
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-bg-elevated text-content-secondary border-hairline hover:bg-bg-secondary',
+              )}
+            >
+              {opt.label}
+              <span
+                className={clsx(
+                  'tabular-nums',
+                  active ? 'text-white/80' : 'text-content-muted',
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {visibleEvents.length === 0 ? (
+        <Card className="p-6 text-center text-sm text-content-muted">
+          No {filter === 'mutations' ? 'mutation' : 'financial'} events in this trail yet.
+        </Card>
+      ) : (
+        <Card className="p-0 overflow-hidden">
+          {visibleEvents.map((ev) =>
+            ev.kind === 'mutation' ? (
+              <MutationRow
+                key={ev.id}
+                event={ev}
+                onPeekBatch={(id) => setPeekBulkId(id)}
+              />
+            ) : (
+              <EventRow key={ev.id} event={ev} dealId={dealId} />
+            ),
+          )}
+        </Card>
+      )}
 
       <p className="text-[11px] text-content-muted">
         Rows are immutable under application credentials (RLS grants SELECT + INSERT only). Signature
         binds (inputs hash · outputs hash · engine version) under the server-side
         <span className="font-mono"> DEAL_EVENTS_HMAC_KEY</span>.
       </p>
+
+      {peekBulkId && (
+        <BulkBatchPeek
+          bulkId={peekBulkId}
+          currentDealId={dealId}
+          onClose={() => setPeekBulkId(null)}
+        />
+      )}
     </div>
   );
 }

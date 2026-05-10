@@ -598,6 +598,126 @@ const exportFinancialCSV = async (dealId) => {
   ].join('\n');
 };
 
+// ─── AUDIT FEED CSV EXPORT ────────────────────────────────────────────────────
+//
+// Exports the same merged feed the AuditTab renders, in CSV form, so an
+// analyst can drop it into an IC packet or hand it to a diligence
+// partner. Mirrors the column set the UI exposes — actor name, event
+// type, before/after diff (mutation rows), KPI snapshot (financial
+// rows), cryptographic hashes (financial rows). One row per event.
+
+const csvEsc = (v) => {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const stringifyJson = (obj) => {
+  if (!obj || typeof obj !== 'object' || Object.keys(obj).length === 0) return '';
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return '';
+  }
+};
+
+const exportAuditFeedCSV = async (dealId) => {
+  // Reuse the merged feed so the CSV matches the UI exactly. We pull
+  // up to 500 rows (the listDealEvents internal cap) — the deal page
+  // shows the most recent 50 by default but an exporter should hand
+  // back the full audit history available.
+  const rows = await listDealEvents(dealId, {
+    limit: 500,
+    includeOutputsSummary: true,
+  });
+
+  const header = [
+    'created_at',
+    'kind',
+    'event_type',
+    'actor_name',
+    'actor_email',
+    'engine_version',
+    // Financial-row columns
+    'irr_pct', 'npv_cr', 'total_revenue_cr', 'total_cost_cr',
+    'gross_profit_cr', 'gross_margin_pct', 'equity_multiple', 'residual_land_value_cr',
+    'inputs_hash', 'outputs_hash', 'signature',
+    // Mutation-row columns
+    'before_json', 'after_json', 'metadata_json',
+  ].join(',');
+
+  const dataLines = rows.map((row) => {
+    const summary = row.outputs_summary || {};
+    const cols = [
+      row.created_at ? new Date(row.created_at).toISOString() : '',
+      row.kind || 'financial',
+      row.event_type || '',
+      row.actor?.name || '',
+      row.actor?.email || '',
+      row.engine_version || '',
+      summary.irr_pct ?? '',
+      summary.npv_cr ?? '',
+      summary.total_revenue_cr ?? '',
+      summary.total_cost_cr ?? '',
+      summary.gross_profit_cr ?? '',
+      summary.gross_margin_pct ?? '',
+      summary.equity_multiple ?? '',
+      summary.residual_land_value_cr ?? '',
+      row.inputs_hash || '',
+      row.outputs_hash || '',
+      row.signature || '',
+      stringifyJson(row.before),
+      stringifyJson(row.after),
+      stringifyJson(row.metadata),
+    ];
+    return cols.map(csvEsc).join(',');
+  });
+
+  // Two-line header banner so the file is self-describing when opened
+  // in Excel — same convention as exportFinancialCSV.
+  return [
+    csvEsc(`REDIP Deal Audit Feed Export — deal ${dealId}`),
+    csvEsc(`Generated ${new Date().toISOString()}`),
+    '',
+    header,
+    ...dataLines,
+  ].join('\n');
+};
+
+// ─── BULK-BATCH PIVOT ─────────────────────────────────────────────────────────
+//
+// Given a bulk_id (UUID stamped on every per-deal audit row that came
+// from a bulk operation), return the list of deals that batch
+// touched. Lets the UI render a "this was 1 of 12 deals moved at the
+// same time" peek. Org-scoped via RLS on deal_audit_log.
+const listDealsForBulkBatch = async (bulkId) => {
+  if (!bulkId) return [];
+  let result;
+  try {
+    result = await query(
+      `SELECT dal.deal_id,
+              dal.event_type,
+              dal.before_json,
+              dal.after_json,
+              dal.created_at,
+              d.name AS deal_name,
+              d.stage AS deal_stage,
+              d.is_archived AS deal_is_archived
+         FROM deal_audit_log dal
+         LEFT JOIN deals d ON d.id = dal.deal_id
+        WHERE dal.metadata->>'bulk_id' = $1
+        ORDER BY dal.created_at ASC`,
+      [bulkId],
+    );
+  } catch (err) {
+    // Migration not applied yet — return empty list rather than
+    // surface a 500 to the AuditTab.
+    if (err && err.code === '42P01') return [];
+    throw err;
+  }
+  return result.rows;
+};
+
 module.exports = {
   calculateAndSave,
   getFinancials,
@@ -606,7 +726,9 @@ module.exports = {
   getScenarios,
   getFinancialGraph,
   exportFinancialCSV,
+  exportAuditFeedCSV,
   listDealEvents,
   verifyDealEvent,
   replayDealEvent,
+  listDealsForBulkBatch,
 };

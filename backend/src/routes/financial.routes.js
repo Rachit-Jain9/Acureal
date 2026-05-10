@@ -409,4 +409,31 @@ router.get('/:dealId/export/csv', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /financials/:dealId/audit/export.csv — download the merged audit
+// feed (financial + mutation) for IC packets / diligence handoffs.
+router.get('/:dealId/audit/export.csv', authenticate, async (req, res, next) => {
+  try {
+    const csv = await financialService.exportAuditFeedCSV(req.params.dealId);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="deal-audit-${req.params.dealId}.csv"`,
+    );
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /financials/audit/bulk/:bulkId — list every deal touched by a
+// single bulk operation. Used by the AuditTab "view batch" peek.
+router.get('/audit/bulk/:bulkId', authenticate, async (req, res, next) => {
+  try {
+    const rows = await financialService.listDealsForBulkBatch(req.params.bulkId);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
