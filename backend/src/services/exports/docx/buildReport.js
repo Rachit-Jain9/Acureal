@@ -463,6 +463,282 @@ const buildOverview = (ctx) => {
   return children;
 };
 
+// ─── Phase-2 sections ────────────────────────────────────────────────
+// Six additional sections promised in the original rewrite plan. They
+// surface real data when present and fall back to honest "manual input
+// required" empty states per CLAUDE.md when data isn't yet populated —
+// no fabrication, no placeholder filler.
+
+const buildDemographics = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Demographics'));
+  children.push(platformBadge());
+
+  const demo = ctx.exportContext?.market?.demographics
+    || ctx.exportContext?.demographics
+    || {};
+  const populated = Object.keys(demo).some((k) => demo[k] != null && demo[k] !== '');
+
+  if (populated) {
+    const rows = [
+      demo.population_total      != null ? labelValueRow('Population (micro-market)', formatNumber(demo.population_total)) : null,
+      demo.population_density    != null ? labelValueRow('Population density',         `${formatNumber(demo.population_density)} / sq km`) : null,
+      demo.median_age            != null ? labelValueRow('Median age',                 `${formatNumber(demo.median_age, 1)} years`) : null,
+      demo.median_household_inr  != null ? labelValueRow('Median household income',    `INR ${formatNumber(demo.median_household_inr, 1)} L / yr`) : null,
+      demo.income_tier           != null ? labelValueRow('Income tier',                String(demo.income_tier)) : null,
+      demo.literacy_pct          != null ? labelValueRow('Literacy',                   `${formatNumber(demo.literacy_pct, 1)}%`) : null,
+      demo.working_population_pct != null ? labelValueRow('Working population',        `${formatNumber(demo.working_population_pct, 1)}%`) : null,
+    ].filter(Boolean);
+    children.push(buildLabelValueTable(rows));
+  } else {
+    children.push(bodyPara(
+      'Demographic data is not yet available for this micro-market. Manual input required — populate population, income tier, age mix, and literacy on the deal\'s market record before this section can render.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+  return children;
+};
+
+const buildWhyThisArea = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Why This Area'));
+  children.push(aiBadge());
+
+  const wta = ctx.whyThisArea || { available: false };
+  if (wta.available && Array.isArray(wta.paragraphs) && wta.paragraphs.length > 0) {
+    wta.paragraphs.forEach((p) => {
+      if (p && String(p).trim()) children.push(bodyPara(p));
+    });
+    if (wta.summary) {
+      children.push(blank());
+      children.push(bodyPara(`Summary: ${wta.summary}`, { bold: true, color: HEX('accent') }));
+    }
+    if (Array.isArray(wta.sources) && wta.sources.length > 0) {
+      children.push(bodyPara(
+        `Synthesised from: ${wta.sources.join(', ')}.`,
+        { italic: true, color: HEX('mutedHigh') },
+      ));
+    }
+  } else {
+    children.push(bodyPara(
+      'AI-assisted synthesis of why this micro-market matters could not be generated for this deal. ' +
+      'Populate locality, infrastructure proximity, and intelligence briefs on the deal record to enable this section.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+  return children;
+};
+
+const buildJobGrowth = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Job Growth & Micro-Market'));
+  children.push(platformBadge());
+
+  const briefs = ctx.exportContext?.market?.intelligence_briefs
+    || ctx.exportContext?.intelligence_briefs
+    || [];
+  const jobGrowthBriefs = (Array.isArray(briefs) ? briefs : [])
+    .filter((b) => /job|employment|hiring|gcc|tech|workforce|economic/i.test(String(b.theme || b.title || b.summary || '')))
+    .slice(0, 4);
+
+  if (jobGrowthBriefs.length > 0) {
+    children.push(bodyPara(`${jobGrowthBriefs.length} verified intelligence brief${jobGrowthBriefs.length > 1 ? 's' : ''} relevant to job growth and micro-market employment context:`));
+    children.push(blank());
+    jobGrowthBriefs.forEach((brief, idx) => {
+      const title = firstText(brief.title, brief.theme) || `Brief ${idx + 1}`;
+      const summary = firstText(brief.summary, brief.detail) || '';
+      const dateStr = brief.published_at || brief.date ? formatDate(brief.published_at || brief.date) : null;
+      children.push(bodyPara(title, { bold: true }));
+      if (summary) children.push(bodyPara(summary));
+      if (dateStr) children.push(bodyPara(`Dated: ${dateStr}`, { italic: true, color: HEX('mutedHigh') }));
+      children.push(blank());
+    });
+  } else {
+    children.push(bodyPara(
+      'No verified intelligence briefs on micro-market job growth are linked to this deal yet. Manual input required — populate Market Intelligence with relevant briefs (GCC announcements, tech-park expansions, employment-area trends) to surface this section.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+  return children;
+};
+
+const buildSocialInfrastructure = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Social Infrastructure'));
+  children.push(platformBadge());
+
+  const infra = ctx.exportContext?.infra_proximity
+    || ctx.exportContext?.market?.infra_proximity
+    || ctx.exportContext?.deal?.infra_proximity
+    || {};
+
+  // Buckets we report on, with the keys we look for in the source object.
+  const buckets = [
+    { label: 'Schools / education',    keys: ['schools', 'school', 'education'] },
+    { label: 'Hospitals / healthcare', keys: ['hospitals', 'hospital', 'healthcare'] },
+    { label: 'Retail / malls',         keys: ['retail', 'malls', 'mall', 'shopping'] },
+    { label: 'Office / business parks', keys: ['offices', 'office', 'business_park', 'tech_park'] },
+    { label: 'Metro / transit',        keys: ['metro', 'transit', 'rail', 'station'] },
+    { label: 'Expressway / highway',   keys: ['highway', 'expressway', 'arterial'] },
+    { label: 'Airport',                keys: ['airport'] },
+    { label: 'Port',                   keys: ['port', 'seaport'] },
+  ];
+
+  const findBucket = (keys) => {
+    for (const k of keys) {
+      if (infra[k] != null) return infra[k];
+    }
+    return null;
+  };
+
+  const populatedRows = buckets.map((b) => {
+    const value = findBucket(b.keys);
+    if (value == null) return null;
+    // Value can be a string ("2.3 km, 5 schools") or an object ({ count, nearest_km })
+    if (typeof value === 'string' || typeof value === 'number') {
+      return { label: b.label, value: String(value) };
+    }
+    if (typeof value === 'object') {
+      const parts = [];
+      if (value.count != null) parts.push(`${value.count} within radius`);
+      if (value.nearest_km != null) parts.push(`nearest ${formatNumber(value.nearest_km, 1)} km`);
+      if (value.note) parts.push(value.note);
+      return { label: b.label, value: parts.join(' · ') || '–' };
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (populatedRows.length > 0) {
+    const headerRow = buildHeaderTableRow(['Category', 'Distance / Count']);
+    const bodyRows = populatedRows.map((r, idx) => buildBodyTableRow([r.label, r.value], { alt: idx % 2 === 1 }));
+    children.push(new Table({
+      rows: [headerRow, ...bodyRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TABLE_BORDER,
+    }));
+  } else {
+    children.push(bodyPara(
+      'Social infrastructure proximity has not been ingested for this deal yet. Manual input required — populate the Property record with distances to nearby schools, hospitals, retail, transit, airport, and expressway.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+  return children;
+};
+
+const buildSupplyDemand = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Supply & Demand Pipeline'));
+  children.push(platformBadge());
+
+  const txns = ctx.exportContext?.market?.market_transactions
+    || ctx.exportContext?.market_transactions
+    || [];
+  const benches = ctx.exportContext?.market?.micro_market_benchmarks
+    || ctx.exportContext?.market?.cityBenchmarks
+    || [];
+
+  const recentTxns = (Array.isArray(txns) ? txns : []).slice(0, 5);
+  const recentBenches = (Array.isArray(benches) ? benches : []).slice(0, 5);
+
+  if (recentTxns.length === 0 && recentBenches.length === 0) {
+    children.push(bodyPara(
+      'No verified market transactions or micro-market benchmarks are linked to this deal yet. Manual input required — ingest recent transactions and benchmark medians from your verified comp source to enable this section.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  if (recentTxns.length > 0) {
+    children.push(bodyPara('Recent transactions in the micro-market:', { bold: true }));
+    const headerRow = buildHeaderTableRow(['Project / Property', 'Type', 'Date', 'Rate / sqft']);
+    const bodyRows = recentTxns.map((t, idx) => buildBodyTableRow([
+      firstText(t.project_name, t.property_name) || '–',
+      firstText(t.transaction_type, t.deal_type, t.asset_class) || '–',
+      t.transaction_date ? formatDate(t.transaction_date) : '–',
+      t.rate_per_sqft != null ? formatRate(t.rate_per_sqft) : '–',
+    ], { alt: idx % 2 === 1 }));
+    children.push(new Table({
+      rows: [headerRow, ...bodyRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TABLE_BORDER,
+    }));
+    children.push(blank());
+  }
+
+  if (recentBenches.length > 0) {
+    children.push(bodyPara('Verified micro-market benchmarks:', { bold: true }));
+    const headerRow = buildHeaderTableRow(['Micro-market', 'Median rate', 'Source']);
+    const bodyRows = recentBenches.map((b, idx) => buildBodyTableRow([
+      firstText(b.micro_market, b.locality, b.metric_display_name) || '–',
+      b.value_numeric != null ? `${formatRate(b.value_numeric)}${b.unit ? ` (${b.unit})` : ''}`
+        : (b.median_rate_per_sqft != null ? formatRate(b.median_rate_per_sqft) : '–'),
+      firstText(b.source_name, b.source) || '–',
+    ], { alt: idx % 2 === 1 }));
+    children.push(new Table({
+      rows: [headerRow, ...bodyRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TABLE_BORDER,
+    }));
+  }
+
+  return children;
+};
+
+const buildBetterAlternatives = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Better Alternatives in this Micro-Market'));
+  children.push(platformBadge());
+
+  // Use the verified comp set as the alternatives universe — sorted by
+  // rate/sqft proximity to the deal's modeled sell rate (closer = more
+  // comparable). Top 3 surface here; honest empty-state when none.
+  const comps = (ctx.exportContext?.market?.exportComps || [])
+    .filter((c) => c.is_verified !== false && c.rate_per_sqft != null);
+
+  if (comps.length === 0) {
+    children.push(bodyPara(
+      'No verified peer alternatives are currently linked to this deal. Manual input required — populate the comp set with verified transactions in the same micro-market.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  const dealRate = ctx.modelSellRate || ctx.deal?.selling_rate_per_sqft;
+  const sorted = [...comps].sort((a, b) => {
+    if (dealRate == null) return 0;
+    return Math.abs(a.rate_per_sqft - dealRate) - Math.abs(b.rate_per_sqft - dealRate);
+  });
+  const top3 = sorted.slice(0, 3);
+
+  children.push(bodyPara(
+    'Three closest verified peers ranked by rate-per-sqft proximity to this deal\'s modeled pricing. ' +
+    'These are alternatives the same buyer could have considered — surface them for context, not as a recommendation.',
+    { italic: true, color: HEX('mutedHigh') },
+  ));
+  children.push(blank());
+
+  const headerRow = buildHeaderTableRow(['Project', 'Developer', 'Type', 'Units', 'Rate / sqft', 'Δ vs deal']);
+  const bodyRows = top3.map((c, idx) => {
+    const delta = (dealRate != null && c.rate_per_sqft != null)
+      ? `${c.rate_per_sqft > dealRate ? '+' : ''}${formatNumber((c.rate_per_sqft - dealRate) / dealRate * 100, 1)}%`
+      : '–';
+    return buildBodyTableRow([
+      firstText(c.project_name) || '–',
+      firstText(c.developer) || '–',
+      firstText(c.project_type, c.bhk_config) || '–',
+      c.total_units != null ? String(c.total_units) : '–',
+      formatRate(c.rate_per_sqft),
+      delta,
+    ], { alt: idx % 2 === 1 });
+  });
+  children.push(new Table({
+    rows: [headerRow, ...bodyRows],
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: TABLE_BORDER,
+  }));
+  return children;
+};
+
 const buildComparables = (ctx) => {
   const children = [];
   children.push(sectionHeading('Comparable Transactions'));
@@ -712,6 +988,7 @@ const buildReportContext = (exportContext = {}, options = {}) => {
   const landAreaSqft = firstNumber(property.land_area_sqft, deal.land_area_sqft);
   const saleableAreaSqft = firstNumber(property.saleable_area_sqft, deal.saleable_area_sqft);
   const fsi = firstNumber(property.existing_fsi, inputs.fsi);
+  const modelSellRate = firstNumber(deal.selling_rate_per_sqft, inputs.sellingRatePerSqft);
 
   const lat = num(deal.property_lat) ?? num(property.coordinates?.latitude);
   const lng = num(deal.property_lng) ?? num(property.coordinates?.longitude);
@@ -747,7 +1024,7 @@ const buildReportContext = (exportContext = {}, options = {}) => {
     inputs,
     irr, equityMultiple, npv, grossMargin, totalCost, totalRevenue,
     yieldOnCost, noi, exitValue, residualLandValue,
-    landAreaSqft, saleableAreaSqft, fsi,
+    landAreaSqft, saleableAreaSqft, fsi, modelSellRate,
     coords,
     coordinates: coords ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}` : null,
     assetClass,
@@ -767,7 +1044,9 @@ const buildReportContext = (exportContext = {}, options = {}) => {
 const buildDealReportDocx = async (exportContext = {}, options = {}) => {
   const ctx = buildReportContext(exportContext, options);
 
-  // Prefetch AI Pros & Cons in parallel with section assembly. Never throws.
+  // Prefetch async sections (AI Pros & Cons, Why This Area, site map)
+  // in parallel with section assembly. Each .catch()es so a single
+  // failure never crashes the report.
   const prosConsPromise = generateSection({
     section: 'prosCons',
     payload: {
@@ -782,19 +1061,48 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     organizationId: ctx.deal.organization_id || null,
   }).catch(() => ({ available: false, pros: [], cons: [], reason: 'narrative call failed' }));
 
+  const whyThisAreaPromise = generateSection({
+    section: 'whyThisArea',
+    payload: {
+      locality: ctx.locationLine,
+      city: ctx.deal.city || null,
+      asset_class: ctx.assetClass,
+      infra_proximity: exportContext?.infra_proximity
+        || exportContext?.market?.infra_proximity
+        || exportContext?.deal?.infra_proximity
+        || null,
+      intelligence_briefs: exportContext?.market?.intelligence_briefs
+        || exportContext?.intelligence_briefs
+        || [],
+      demographics: exportContext?.market?.demographics
+        || exportContext?.demographics
+        || null,
+    },
+    dealId: ctx.deal.id || null,
+    organizationId: ctx.deal.organization_id || null,
+  }).catch(() => ({ available: false, paragraphs: [], reason: 'narrative call failed' }));
+
   // Build site info section (async — Google Maps call). Never throws.
-  const [prosCons, siteSection] = await Promise.all([
+  const [prosCons, whyThisArea, siteSection] = await Promise.all([
     prosConsPromise,
+    whyThisAreaPromise,
     buildSiteInformation(ctx),
   ]);
   ctx.prosCons = prosCons;
+  ctx.whyThisArea = whyThisArea;
 
   const documentChildren = [
     ...buildCover(ctx),
     ...buildExecutiveSummary(ctx),
     ...siteSection,
     ...buildOverview(ctx),
+    ...buildDemographics(ctx),
+    ...buildWhyThisArea(ctx),
+    ...buildJobGrowth(ctx),
+    ...buildSocialInfrastructure(ctx),
+    ...buildSupplyDemand(ctx),
     ...buildComparables(ctx),
+    ...buildBetterAlternatives(ctx),
     ...buildFinancials(ctx),
     ...buildProsCons(ctx),
     ...buildOverallScore(ctx),

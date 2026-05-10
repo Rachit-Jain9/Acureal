@@ -116,5 +116,45 @@ describe('services/exports/docx/buildReport', () => {
       const buffer = await buildDealReportDocx(minimalContext());
       expect(Buffer.isBuffer(buffer)).toBe(true);
     }, 30000);
+
+    test('phase-2 sections render with mostly-empty data (honest empty-state)', async () => {
+      // No demographics, no infra, no intelligence briefs — every new
+      // section should render its empty-state branch without throwing.
+      const buffer = await buildDealReportDocx(minimalContext());
+      expect(Buffer.isBuffer(buffer)).toBe(true);
+      expect(buffer.length).toBeGreaterThan(5000);
+    }, 30000);
+
+    test('phase-2 sections render when data is populated', async () => {
+      const ctx = minimalContext();
+      ctx.market.demographics = {
+        population_total: 280000,
+        population_density: 12500,
+        median_age: 31.5,
+        median_household_inr: 18.5,
+        income_tier: 'Upper-middle',
+        literacy_pct: 94.2,
+      };
+      ctx.market.intelligence_briefs = [
+        {
+          title: 'Whitefield GCC expansion',
+          summary: 'Three multinational GCCs announced 1.2M sqft of new office space in Whitefield Q1 2026.',
+          theme: 'job growth',
+          published_at: '2026-04-22',
+        },
+      ];
+      ctx.infra_proximity = {
+        schools:    { count: 12, nearest_km: 0.8 },
+        hospitals:  { count: 4,  nearest_km: 1.5 },
+        metro:      { nearest_km: 2.1, note: 'Whitefield Purple Line' },
+        airport:    { nearest_km: 38.2 },
+      };
+      ctx.market.market_transactions = [
+        { project_name: 'Whitefield Heights', transaction_type: 'sale', transaction_date: '2026-03-15', rate_per_sqft: 11800 },
+      ];
+      const buffer = await buildDealReportDocx(ctx);
+      expect(Buffer.isBuffer(buffer)).toBe(true);
+      expect(buffer.length).toBeGreaterThan(5000);
+    }, 30000);
   });
 });
