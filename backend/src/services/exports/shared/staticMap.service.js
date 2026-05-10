@@ -122,15 +122,23 @@ const fetchMapPng = async (url, token) => {
 };
 
 /**
- * Render a single-marker site map. Returns a PNG buffer or null if Mapbox
- * isn't configured / lat-lng is invalid / fetch fails.
+ * Render a single-marker site map.
  *
- * Errors are swallowed and returned as null so the calling export builder
- * can simply skip the slide slot. We log to stderr so the operator can
- * spot persistent failures in Vercel logs.
+ * Returns a structured result so callers can distinguish "no token set"
+ * from "token set but Mapbox returned 401" from "token + auth fine but
+ * coords were invalid." Without that distinction, downstream slides end
+ * up showing a generic "not configured" placeholder even when the
+ * actual cause is a bad token / scope / rate limit.
+ *
+ * @returns {Promise<{buffer: Buffer|null, status: 'ok'|'no_token'|'no_coords'|'fetch_failed', error: string|null, httpStatus: number|null}>}
  */
-const renderSiteMap = async ({ lat, lng, zoom = 15, label = 'Site' } = {}) => {
-  if (!isMapsEnabled() || !isFiniteNumber(lat) || !isFiniteNumber(lng)) return null;
+const renderSiteMapDetailed = async ({ lat, lng, zoom = 15, label = 'Site' } = {}) => {
+  if (!isMapsEnabled()) {
+    return { buffer: null, status: 'no_token', error: 'MAPBOX_TOKEN env var not set or placeholder.', httpStatus: null };
+  }
+  if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) {
+    return { buffer: null, status: 'no_coords', error: 'Latitude or longitude is not a finite number.', httpStatus: null };
+  }
   const url = buildMapboxUrl({
     lat,
     lng,
@@ -138,12 +146,31 @@ const renderSiteMap = async ({ lat, lng, zoom = 15, label = 'Site' } = {}) => {
     markers: [{ lat, lng, color: 'B5793C', label, size: 'l' }],
   });
   try {
-    return await fetchMapPng(url, process.env.MAPBOX_TOKEN);
+    const buffer = await fetchMapPng(url, process.env.MAPBOX_TOKEN);
+    return { buffer, status: 'ok', error: null, httpStatus: 200 };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[staticMap.renderSiteMap] failed:', err.message);
-    return null;
+    const httpStatus = err?.response?.status || null;
+    let friendly = err.message || 'Unknown Mapbox error';
+    if (httpStatus === 401) friendly = 'Mapbox returned 401 — token invalid, expired, or lacking the styles:read scope.';
+    else if (httpStatus === 403) friendly = 'Mapbox returned 403 — token rejected (URL restriction, monthly cap reached, or scope mismatch).';
+    else if (httpStatus === 422) friendly = 'Mapbox returned 422 — the requested coordinates / overlay are out of range.';
+    else if (httpStatus === 429) friendly = 'Mapbox returned 429 — rate-limit hit on this token.';
+    else if (httpStatus >= 500) friendly = `Mapbox returned ${httpStatus} — service-side issue, retry or check status.mapbox.com.`;
+    else if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') friendly = 'Network timeout reaching Mapbox after 8s.';
+    return { buffer: null, status: 'fetch_failed', error: friendly, httpStatus };
   }
+};
+
+/**
+ * Back-compat wrapper that returns just the buffer (or null). New code
+ * should prefer `renderSiteMapDetailed` so it can show the actual reason
+ * to the user when a map fails to render.
+ */
+const renderSiteMap = async (args) => {
+  const { buffer } = await renderSiteMapDetailed(args);
+  return buffer;
 };
 
 /**
@@ -230,6 +257,7 @@ module.exports = {
   isMapsEnabled,
   buildMapboxUrl,
   renderSiteMap,
+  renderSiteMapDetailed,
   renderCompsMap,
   renderInfraMap,
   __resetCache,

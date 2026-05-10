@@ -96,6 +96,38 @@ describe('services/exports/shared/staticMap', () => {
     });
   });
 
+  describe('renderSiteMapDetailed', () => {
+    afterEach(() => {
+      delete process.env.MAPBOX_TOKEN;
+      staticMap.__resetCache();
+    });
+
+    test('returns no_token status when MAPBOX_TOKEN not set', async () => {
+      delete process.env.MAPBOX_TOKEN;
+      const result = await staticMap.renderSiteMapDetailed({ lat: 12.97, lng: 77.59 });
+      expect(result.buffer).toBeNull();
+      expect(result.status).toBe('no_token');
+      expect(result.error).toMatch(/MAPBOX_TOKEN/);
+    });
+
+    test('returns no_coords status on invalid coordinates', async () => {
+      process.env.MAPBOX_TOKEN = 'pk.test.real';
+      const result = await staticMap.renderSiteMapDetailed({ lat: 'south', lng: null });
+      expect(result.buffer).toBeNull();
+      expect(result.status).toBe('no_coords');
+      expect(result.error).toMatch(/finite/);
+    });
+
+    test('always returns a structured envelope with status + error fields', async () => {
+      delete process.env.MAPBOX_TOKEN;
+      const result = await staticMap.renderSiteMapDetailed({ lat: 12.97, lng: 77.59 });
+      expect(result).toHaveProperty('buffer');
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('error');
+      expect(result).toHaveProperty('httpStatus');
+    });
+  });
+
   describe('renderCompsMap', () => {
     afterEach(() => {
       delete process.env.MAPBOX_TOKEN;

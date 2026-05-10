@@ -66,6 +66,7 @@ const buildSlideManifest = (context) => {
   const slides = [
     { key: 'cover', title: context.dealTitle },
     { key: 'contents', title: 'Contents' },
+    { key: 'decisionFrame', title: 'Decision Frame & Composite Score' },
     { key: 'dividerOpportunity', title: 'The Opportunity' },
     { key: 'executiveSummary', title: 'Executive Summary' },
     { key: 'investmentHighlights', title: 'Key Investment Highlights' },

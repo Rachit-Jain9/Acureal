@@ -235,6 +235,7 @@ describe('dealPptx.service', () => {
 
     expect(slideTitles[0]).toBe('North Gate Logistics Park');
     expect(slideTitles).toContain('Executive Summary');
+    expect(slideTitles).toContain('Decision Frame & Composite Score');
     expect(slideTitles).toContain('City Benchmarking');
     expect(slideTitles).toContain('Structure & Counterparty');
     expect(slideTitles).toContain('Diligence & Operating Readiness');
@@ -443,6 +444,10 @@ describe('dealPptx.service', () => {
       // (with reason). Either way, it's an object — never throws.
       expect(typeof assets.prosCons).toBe('object');
       expect(assets.prosCons).not.toBeNull();
+      // Asset-class artwork — pure-SVG, always present.
+      expect(assets.assetArtDataUri).toMatch(/^data:image\/svg\+xml;base64,/);
+      // Site-map status surfaces the actual reason when MAPBOX_TOKEN absent.
+      expect(['ok', 'no_token', 'no_coords', 'fetch_failed']).toContain(assets.siteMapStatus);
     });
 
     test('still produces deck assets when no deal id present', async () => {
