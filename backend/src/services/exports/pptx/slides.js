@@ -1045,6 +1045,105 @@ const renderRisksMitigants = (pptx, slide, context, pageNumber, totalSlides) => 
     rowH: 0.44,
   });
 
+  // Severity distribution + category breakdown — fills the previously
+  // empty 3.5" of space below the table (y 3.7 to 6.5).
+  const allRiskItems = context.exportContext?.risks?.items || [];
+  const summary = context.exportContext?.risks?.summary || {};
+  const severityCounts = {
+    Critical: Number(summary.critical) || allRiskItems.filter((r) => /critical|deal_breaker/i.test(String(r.severity || ''))).length,
+    High:     Number(summary.high)     || allRiskItems.filter((r) => /^high$|buildability/i.test(String(r.severity || ''))).length,
+    Medium:   Number(summary.medium)   || allRiskItems.filter((r) => /medium/i.test(String(r.severity || ''))).length,
+    Low:      Number(summary.low)      || allRiskItems.filter((r) => /low/i.test(String(r.severity || ''))).length,
+  };
+  const totalRisks = severityCounts.Critical + severityCounts.High + severityCounts.Medium + severityCounts.Low;
+
+  // Card frame for the bottom-left density block
+  addCard(pptx, slide, {
+    x: 0.55, y: 3.85, w: 8.1, h: 3.05,
+    bandColor: COLORS.plumSoft,
+    fill: COLORS.white,
+  });
+  slide.addText('SEVERITY DISTRIBUTION', {
+    x: 0.78, y: 4.0, w: 4.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  // Severity histogram (native pptxgenjs bar chart). Always rendered;
+  // when there are no risks, all four bars are zero and the chart still
+  // tells a story ("0 across the board").
+  slide.addChart(pptx.ChartType.bar, [{
+    name: 'Open risks',
+    labels: ['Critical', 'High', 'Medium', 'Low'],
+    values: [severityCounts.Critical, severityCounts.High, severityCounts.Medium, severityCounts.Low],
+  }], {
+    x: 0.65, y: 4.3, w: 3.9, h: 2.5,
+    barDir: 'col',
+    chartColors: [COLORS.red, COLORS.amber, COLORS.plumSoft, COLORS.muted],
+    showValue: true,
+    dataLabelFontSize: 9,
+    dataLabelColor: COLORS.charcoal,
+    catAxisLabelFontSize: 9,
+    valAxisLabelFontSize: 8,
+    valAxisHidden: true,
+    legendPos: 'none',
+    showTitle: false,
+    barGapWidthPct: 60,
+    chartColorsOpacity: 90,
+  });
+
+  // Right column inside the bottom card — risk by category breakdown
+  const categoryCounts = {};
+  allRiskItems.forEach((r) => {
+    const cat = String(r.category || 'other').toLowerCase();
+    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+  });
+  const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  slide.addText('BY CATEGORY', {
+    x: 4.85, y: 4.0, w: 3.6, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  if (sortedCategories.length > 0) {
+    sortedCategories.forEach(([cat, count], idx) => {
+      const rowY = 4.3 + idx * 0.45;
+      // Category label
+      slide.addText(cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), {
+        x: 4.85, y: rowY, w: 2.4, h: 0.32,
+        fontFace: FONT, fontSize: 10, bold: true, color: COLORS.charcoal, valign: 'mid',
+      });
+      // Bar visualisation — width relative to max count
+      const maxCount = sortedCategories[0][1];
+      const barW = Math.max(0.2, (count / maxCount) * 1.2);
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 7.25, y: rowY + 0.06, w: barW, h: 0.20,
+        fill: { color: COLORS.plum },
+        line: { color: COLORS.plum, pt: 0.1 },
+      });
+      // Count value
+      slide.addText(String(count), {
+        x: 7.25 + barW + 0.08, y: rowY + 0.04, w: 0.4, h: 0.24,
+        fontFace: FONT, fontSize: 10, bold: true, color: COLORS.plum, valign: 'mid',
+      });
+    });
+  } else {
+    slide.addText('No risk categories captured for this deal yet.', {
+      x: 4.85, y: 4.4, w: 3.6, h: 0.4,
+      fontFace: FONT, fontSize: 10, italic: true, color: COLORS.muted, valign: 'top',
+    });
+  }
+
+  // Footer line — total risks
+  slide.addText(
+    totalRisks > 0
+      ? `${totalRisks} open risk${totalRisks === 1 ? '' : 's'} on the live register. Resolve criticals before commitment.`
+      : 'No open risks captured on the live register at the time of generation.',
+    {
+      x: 0.78, y: 6.55, w: 7.7, h: 0.32,
+      fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, valign: 'top',
+    },
+  );
+
   addCard(pptx, slide, {
     x: 8.95,
     y: 1.3,
