@@ -405,26 +405,91 @@ const renderInvestmentHighlights = (pptx, slide, context, pageNumber, totalSlide
     ? context.highlightCards
     : [{ title: 'Deal context', detail: 'Stored REDIP data is currently limited, so the highlight set will expand as approvals, comps, and underwriting inputs are added.' }];
 
-  cards.forEach((card, index) => {
+  // 2×2 grid — taller cards (1.55") with numbered badges in copper, hairline
+  // separator under the title, larger body type. Replaces the previous
+  // dense-but-flat 1.42" cards.
+  cards.slice(0, 4).forEach((card, index) => {
     const col = index % 2;
     const row = Math.floor(index / 2);
     const x = 0.55 + col * 6.18;
-    const y = 1.32 + row * 1.72;
+    const y = 1.32 + row * 1.78;
     addCard(pptx, slide, {
       x,
       y,
       w: 5.95,
-      h: 1.42,
+      h: 1.55,
       bandColor: row % 2 === 0 ? COLORS.plum : COLORS.sandDeep,
       fill: row % 2 === 0 ? COLORS.white : COLORS.mist,
     });
-    slide.addText(card.title, {
-      x: x + 0.22, y: y + 0.22, w: 5.2, h: 0.18,
-      fontFace: FONT, fontSize: 11, bold: true, color: COLORS.charcoal,
+    // Numbered badge (top-left) — copper square with white digit
+    slide.addShape(pptx.ShapeType.rect, {
+      x: x + 0.22, y: y + 0.22, w: 0.36, h: 0.36,
+      fill: { color: COLORS.plumSoft }, line: { color: COLORS.plumSoft, pt: 0 },
     });
+    slide.addText(String(index + 1).padStart(2, '0'), {
+      x: x + 0.22, y: y + 0.22, w: 0.36, h: 0.36,
+      fontFace: FONT, fontSize: 14, bold: true, color: COLORS.white,
+      align: 'center', valign: 'mid',
+    });
+    // Title (right of badge)
+    slide.addText(card.title, {
+      x: x + 0.70, y: y + 0.22, w: 5.0, h: 0.36,
+      fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal, valign: 'mid',
+    });
+    // Hairline separator beneath title
+    slide.addShape(pptx.ShapeType.line, {
+      x: x + 0.22, y: y + 0.66, w: 5.5, h: 0,
+      line: { color: COLORS.line, pt: 0.6 },
+    });
+    // Detail body
     slide.addText(card.detail, {
-      x: x + 0.22, y: y + 0.52, w: 5.35, h: 0.58,
-      fontFace: FONT, fontSize: 9.5, color: COLORS.charcoal, fit: 'shrink',
+      x: x + 0.22, y: y + 0.74, w: 5.5, h: 0.74,
+      fontFace: FONT, fontSize: 9.5, color: COLORS.charcoal, fit: 'shrink', valign: 'top',
+    });
+  });
+
+  // Bottom strip — Thesis Bottom Line (fills the previously empty
+  // y 4.95 → 6.65 zone). Three tiles surfacing the most-decisive
+  // headline numbers + one-line reading of the recommendation tone.
+  addCard(pptx, slide, {
+    x: 0.55, y: 4.98, w: 12.23, h: 1.62,
+    bandColor: COLORS.plumSoft, fill: COLORS.white,
+  });
+  slide.addText('THESIS BOTTOM LINE', {
+    x: 0.78, y: 5.12, w: 4.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  const tone = context.recommendations?.tone || 'neutral';
+  const recoColor = tone === 'negative' ? COLORS.red : tone === 'caution' ? COLORS.amber : COLORS.green;
+  const irrText = formatPct(context.irr) || '–';
+  const emText = context.equityMultiple != null ? `${formatNumber(context.equityMultiple, 2)}x` : '–';
+  const readinessText = context.readiness?.readiness_pct != null
+    ? `${context.readiness.readiness_pct}%`
+    : '–';
+  const tiles = [
+    { eyebrow: 'PROJECT IRR / EM',     value: `${irrText}  ·  ${emText}`, color: COLORS.charcoal, accent: COLORS.plum },
+    { eyebrow: 'EXECUTION READINESS',  value: readinessText,              color: COLORS.charcoal, accent: COLORS.plum },
+    { eyebrow: 'CURRENT RECOMMENDATION', value: (context.recommendations?.label || 'Review').toUpperCase(), color: recoColor, accent: recoColor },
+  ];
+  tiles.forEach((tile, idx) => {
+    const tx = 0.78 + idx * 4.05;
+    const ty = 5.40;
+    slide.addShape(pptx.ShapeType.rect, {
+      x: tx, y: ty, w: 3.85, h: 1.10,
+      fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x: tx, y: ty, w: 0.06, h: 1.10,
+      fill: { color: tile.accent }, line: { color: tile.accent, pt: 0 },
+    });
+    slide.addText(tile.eyebrow, {
+      x: tx + 0.20, y: ty + 0.14, w: 3.5, h: 0.22,
+      fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.4,
+    });
+    slide.addText(tile.value, {
+      x: tx + 0.20, y: ty + 0.40, w: 3.5, h: 0.62,
+      fontFace: FONT, fontSize: 22, bold: true, color: tile.color, valign: 'top', fit: 'shrink',
     });
   });
 };
@@ -672,8 +737,8 @@ const renderLocationContext = (pptx, slide, context, pageNumber, totalSlides) =>
       x: 0.7, y: 6.32, w: 3.6, h: 0.22,
       fontFace: FONT, fontSize: 9, bold: true, color: COLORS.charcoal,
     });
-    slide.addText('Source: Mapbox Static API', {
-      x: 4.3, y: 6.32, w: 1.85, h: 0.22,
+    slide.addText('Source: Google Maps Static API', {
+      x: 4.0, y: 6.32, w: 2.15, h: 0.22,
       fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted, align: 'right',
     });
   } else {
@@ -704,11 +769,11 @@ const renderLocationContext = (pptx, slide, context, pageNumber, totalSlides) =>
       headline = 'No coordinates on this deal record';
       body = 'Geocode the property (Property → Edit → Address) to enable the site map on future exports.';
     } else if (status === 'no_token') {
-      headline = 'Mapbox token not configured';
-      body = 'Set MAPBOX_TOKEN in the Vercel environment variables (Production + Preview), then redeploy.';
+      headline = 'Google Maps API key not configured';
+      body = 'Set GOOGLE_MAPS_API_KEY in the Vercel environment variables (Production + Preview), enable Maps Static API in your Google Cloud project, then redeploy.';
     } else if (status === 'fetch_failed') {
       headline = 'Map render failed';
-      body = detail || 'Mapbox call failed. Check Vercel logs for [staticMap.renderSiteMap] entries.';
+      body = detail || 'Google Maps call failed. Check Vercel logs for [googleMapsStaticMap.renderSiteMap] entries.';
     } else {
       headline = 'Site map unavailable';
       body = detail || 'Map could not be rendered for this deal.';

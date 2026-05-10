@@ -55,7 +55,7 @@ const {
 } = require('./exports/pptx/contentBuilders');
 const { computeDealScore } = require('../utils/scoring/dealScore');
 const { renderScoreGaugeDataUri } = require('./exports/shared/svgGauge.service');
-const { renderSiteMapDetailed, isMapsEnabled } = require('./exports/shared/staticMap.service');
+const { renderSiteMapDetailed, isGoogleMapsEnabled } = require('./exports/shared/googleMapsStaticMap.service');
 const { renderAssetClassArt } = require('./exports/shared/assetClassArt.service');
 const { generateSection } = require('./exports/narrative/exportNarrative.service');
 
@@ -223,7 +223,7 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
       : Promise.resolve({ buffer: null, status: 'no_coords', error: 'No coordinates on the deal record.', httpStatus: null }),
   ]);
   const siteMapBuffer = siteMapResult?.buffer || null;
-  const siteMapStatus = siteMapResult?.status || (hasCoords ? (isMapsEnabled() ? 'fetch_failed' : 'no_token') : 'no_coords');
+  const siteMapStatus = siteMapResult?.status || (hasCoords ? (isGoogleMapsEnabled() ? 'fetch_failed' : 'no_token') : 'no_coords');
   const siteMapError = siteMapResult?.error || null;
   const siteMapHttpStatus = siteMapResult?.httpStatus || null;
 
