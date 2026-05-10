@@ -4,6 +4,29 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-10 (late late session) — XLSX restructure for income assets (PRs #244–#247)
+
+Continuation of the same long day. Operator pushed back hard on the v2 workbook ("ugly, incompetent, no PGI / EGR / OpEx / NOI / CapEx / Debt Service / NPV") — fair criticism, the v2 was development-focused even for income deals. Three more PRs land tonight.
+
+### PRs shipped
+- **#244** docs handoff for the earlier batch (#237–#243).
+- **#245** Asset-class-aware operating P&L — income deals (commercial_office / retail / industrial_warehousing / hospitality) now get a full PGI → Vacancy → EGR → OpEx breakdown (Property Tax / Insurance / Mgmt / Utilities / Maintenance) → NOI → CapEx Reserves → Cash Flow Before Debt → Debt Service (Interest / Principal sculpted to LoanTerm) → Cash Flow After Debt → DSCR → Reversion (NOI × 4 / ExitCapRate × (1−SellingCostPct)). Inputs sheet gets two new dedicated income-asset sections (Operating Revenue, Operating Expenses). Dashboard KPI tiles flip per family (Income: Stabilised NOI / Modeled Cap Rate / Exit Cap Rate / Min DSCR / Cash-on-Cash Y1 / Net Sale Proceeds; Development: existing tiles). **Sheet protection removed across all 5 sheets** — the popup ("trying to change is on a protected sheet") was hostile.
+- **#246** Dashboard layout restructure — wider 14-column grid; asset-aware subtitle ("Operating Asset Dashboard" vs "Development Project Dashboard"); IRR / NPV / Equity Multiple cash-flow row fixed (was hardcoded to row 8 / Project Net CF for development; now uses row 11 / Total CF Including Reversion for income — was producing wrong values for commercial / retail / hospitality / industrial deals). New "Quarterly Operating Trend" table with conditional-format **data bars** (palette navy / copper / emerald / muted) — inline bar charts per cell that resize live with input changes. Asset-aware columns: Income shows PGI / EGR / NOI / CF After Debt; Development shows Sales / Construction / Net CF / Cumulative.
+- **#247** JV / JDA profit waterfall — for deals with `deal_structure = jv / jda / da`, Dashboard now renders a Total Project Profit → Developer Share → Landowner Share waterfall block keyed off the JVDevPct / JVLandPct named ranges. Hidden for outright deals.
+
+### Honest framing
+- Excel chart polish is inherently weaker than PowerPoint. Tried ExcelJS chart objects, they're patchy across renderers / consumer Excel versions. Used **conditional-format data bars** instead for the Quarterly Trend (rock-solid, render identically everywhere, resize live). Sources & Uses doughnut + colour-scale heatmap remain as native chart objects.
+- Reference image the operator shared was a PowerPoint dashboard with custom infographics. The XLSX is the working analyst model — it now has the right financial-modeling depth (PGI / EGR / OpEx / NOI / CapEx / Debt Service / Reversion / IRR / NPV / Sensitivity / Scenarios / JV waterfall / Audit-trail Calculations sheet) but is constrained to Excel-native primitives for visuals.
+
+### Tests
+1,348 backend tests passing (17 XLSX v2 tests, 4 new this batch).
+
+### Operator manual actions outstanding
+- Apply migration `database/migrations/20260527_export_events.sql` (export-events audit ledger — exports work without it but rows aren't logged).
+- Optional: `DOCX_REPORT_ENABLED=1` to expose DOCX to non-admin users.
+
+---
+
 ## 2026-05-10 (late session) — Exports rebuild finishes feature-complete (PRs #237–#243)
 
 Continuation of the investor-grade exports rebuild. Picks up after PRs #225–#236 closed out earlier in the day. Seven more PRs land tonight, taking PPTX, XLSX, and DOCX to feature-complete state matching (and exceeding) the original brief.

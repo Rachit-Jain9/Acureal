@@ -1244,8 +1244,63 @@ const buildDashboardSheet = (workbook, ctx) => {
     }
   }
 
-  // Footer disclaimer — pushed below the trend table.
-  const footerRow = 37 + trendQuarters + 2;
+  // ── JV / JDA Profit Waterfall (only when deal_structure is JV/JDA/DA)
+  // Honest scope — we don't model tiered preferred-return / catch-up /
+  // promote splits because that requires deal-specific waterfall config
+  // that isn't on the deal record. We DO surface the agreed
+  // Developer/Landowner profit split that lives in the Inputs sheet
+  // (JVDevPct + JVLandPct named ranges), and apply it to the modeled
+  // total profit.
+  const dealStructure = String(ctx.deal.deal_structure || '').toLowerCase();
+  const isJv = ['jv', 'jda', 'da'].includes(dealStructure);
+  let waterfallEndRow = 37 + trendQuarters; // baseline if waterfall not shown
+  if (isJv) {
+    const wfStartRow = 37 + trendQuarters + 2;
+    sheet.mergeCells(`A${wfStartRow}:N${wfStartRow}`);
+    sheet.getCell(`A${wfStartRow}`).value = `Profit Waterfall — ${ctx.deal.deal_structure ? ctx.deal.deal_structure.toUpperCase() : 'JV'} structure`;
+    styleSectionTitle(sheet.getCell(`A${wfStartRow}`));
+    sheet.getRow(wfStartRow).height = 22;
+
+    const wfRows = [
+      ['Total Project Profit (modeled)',
+        `=(SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)`,
+        'Total profit before split — base case, mid-period escalation',
+      ],
+      ['Developer Share',
+        `=B${wfStartRow + 1}*JVDevPct`,
+        `${ctx.dealFamily === 'income' ? 'Equity & operating party' : 'Construction & sales party'}`,
+      ],
+      ['Landowner Share',
+        `=B${wfStartRow + 1}*JVLandPct`,
+        'Land contributor party',
+      ],
+      ['Sum of shares (sanity check)',
+        `=B${wfStartRow + 2}+B${wfStartRow + 3}`,
+        'Should equal Total Project Profit when JVDevPct + JVLandPct = 100%',
+      ],
+    ];
+    wfRows.forEach(([label, formula, note], idx) => {
+      const r = wfStartRow + 1 + idx;
+      sheet.getCell(`A${r}`).value = label;
+      sheet.getCell(`A${r}`).font = { name: FONT, size: 9, bold: idx === 0, color: { argb: palette.xlsx('ink') } };
+      sheet.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' };
+      sheet.getCell(`A${r}`).fill = FILL(palette.xlsx(idx === 0 ? 'paperSubtle' : 'paperElevated'));
+      const valCell = sheet.getCell(`B${r}`);
+      valCell.value = { formula };
+      valCell.numFmt = NUMBER_FORMATS.currency;
+      valCell.font = { name: FONT, size: idx === 0 ? 12 : 11, bold: true, color: { argb: idx === 1 ? palette.xlsx('plum') : idx === 2 ? palette.xlsx('accent') : palette.xlsx('inkDeep') } };
+      valCell.alignment = { horizontal: 'right' };
+      valCell.fill = FILL(palette.xlsx('paperElevated'));
+      sheet.getCell(`C${r}`).value = note;
+      sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`C${r}`).alignment = { horizontal: 'left', vertical: 'middle' };
+      sheet.mergeCells(`C${r}:N${r}`);
+    });
+    waterfallEndRow = wfStartRow + wfRows.length;
+  }
+
+  // Footer disclaimer — pushed below the trend table (or waterfall if shown).
+  const footerRow = waterfallEndRow + 2;
   sheet.mergeCells(`A${footerRow}:N${footerRow}`);
   sheet.getCell(`A${footerRow}`).value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision. Power users: right-click any sheet tab → Unhide → Calculations to inspect the audit-trail maths.`;
   sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
