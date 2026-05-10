@@ -110,7 +110,7 @@ const formatArea = (value) => {
 };
 const formatRate = (value) => {
   const parsed = num(value);
-  if (parsed === null) return '–';
+  if (parsed === null || parsed === 0) return '–';
   return `INR ${formatNumber(parsed, 0)} / sqft`;
 };
 const formatDate = (value) => {

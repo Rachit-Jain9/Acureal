@@ -154,13 +154,15 @@ const formatArea = (value) => {
 };
 
 const formatRate = (value) => {
-  const formatted = formatNumber(value, 0);
-  return formatted ? `INR ${formatted} / sqft` : null;
+  const parsed = num(value);
+  if (parsed === null || parsed === 0) return null;
+  return `INR ${formatNumber(parsed, 0)} / sqft`;
 };
 
 const formatRent = (value) => {
-  const formatted = formatNumber(value, 0);
-  return formatted ? `INR ${formatted} / sqft / month` : null;
+  const parsed = num(value);
+  if (parsed === null || parsed === 0) return null;
+  return `INR ${formatNumber(parsed, 0)} / sqft / month`;
 };
 
 const formatDate = (value) => {
