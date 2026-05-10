@@ -18,7 +18,6 @@ import {
   Trash2,
   Edit3,
   Layers,
-  Download,
   X,
   ExternalLink,
 } from 'lucide-react';
@@ -32,7 +31,6 @@ import {
   useReplayDealEvent,
 } from '../../hooks/useDealEvents';
 import { financialsAPI } from '../../services/api';
-import { toast } from '../common/Toast';
 
 /**
  * Investor-grade audit trail for a deal.
@@ -484,29 +482,6 @@ function BulkBatchPeek({ bulkId, currentDealId, onClose }) {
   );
 }
 
-/**
- * Trigger a CSV download of the merged audit feed for the current
- * deal. Uses the standard blob → object-URL → click-anchor pattern
- * shared with the rest of the app's CSV exporters.
- */
-async function downloadAuditCSV(dealId) {
-  try {
-    const res = await financialsAPI.exportAuditCSV(dealId);
-    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const ts = new Date().toISOString().slice(0, 10);
-    a.download = `deal-audit-${dealId}-${ts}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    toast.success('Audit feed exported');
-  } catch (err) {
-    toast.error(err?.response?.data?.message || err.message || 'Audit export failed');
-  }
-}
 
 function EventRow({ event, dealId }) {
   const [expanded, setExpanded] = useState(false);
@@ -694,7 +669,6 @@ export default function AuditTab() {
 
   const [filter, setFilter] = useState('all');
   const [peekBulkId, setPeekBulkId] = useState(null);
-  const [exporting, setExporting] = useState(false);
 
   // Compute deltas FIRST on the full feed, then filter for display —
   // this way the financial KPI deltas are still computed against the
@@ -706,15 +680,6 @@ export default function AuditTab() {
     () => events.filter((e) => matchesFilter(e, filter)),
     [events, filter],
   );
-
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      await downloadAuditCSV(dealId);
-    } finally {
-      setExporting(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -773,24 +738,12 @@ export default function AuditTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <SectionHeader
-          size="sm"
-          eyebrow="Append-only audit trail"
-          title="Audit trail"
-          sub={`${breakdown}. Newest first. Click a financial row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
-        />
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={exporting}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50 shrink-0"
-          title="Download the merged audit feed as CSV (financial computations + mutation log)"
-        >
-          <Download size={11} />
-          {exporting ? 'Exporting…' : 'Export CSV'}
-        </button>
-      </div>
+      <SectionHeader
+        size="sm"
+        eyebrow="Append-only audit trail"
+        title="Audit trail"
+        sub={`${breakdown}. Newest first. Click a financial row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
+      />
 
       {/* Filter chips */}
       <div className="flex items-center gap-1.5" role="tablist" aria-label="Filter audit feed">
