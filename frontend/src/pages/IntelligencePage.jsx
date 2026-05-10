@@ -33,6 +33,7 @@ import {
   useIndustrialBenchmarks,
   useHospitalityBenchmarks,
   useResidentialSegmentedBenchmarks,
+  useNicheAssetClassBenchmarks,
   useMacroKpis,
 } from '../hooks/useIntelligence';
 import PageHeader from '../components/common/PageHeader';
@@ -1229,6 +1230,145 @@ function ResidentialSegmentedBenchmarksTable({ rows }) {
   );
 }
 
+// ─── Niche Asset Class Benchmarks (co-working / student housing / senior living / data centers) ───
+//
+// Same shape as residential_segmented_benchmarks: one table, four sub-classes,
+// filtered by an asset_class chip. Hides cleanly when there are no rows so we
+// don't surface an "operator-y migration prompt" on the page (per CLAUDE.md
+// hard rule). The data flywheel populates this table when the operator drops
+// an IPC report / broker quote into the Comps Review Queue.
+
+const NICHE_ASSET_CLASS_META = {
+  coworking:        { label: 'Co-working / managed office', tone: 'info',     order: 1 },
+  student_housing:  { label: 'Student housing / co-living', tone: 'info',     order: 2 },
+  senior_living:    { label: 'Senior living',                tone: 'info',     order: 3 },
+  data_center:      { label: 'Data center',                  tone: 'premium',  order: 4 },
+};
+
+// Per-row layer badge — same prefix-based routing as the rest of the page.
+// New data_type strings can be added here as new IPC reports / broker
+// quotes land; unknown values fall back to neutral.
+const NICHE_DATA_TYPE_BADGE = {
+  ipc_q1_2026:           { tone: 'premium',  label: 'IPC · Q1 2026' },
+  ipc_q4_2025:           { tone: 'premium',  label: 'IPC · Q4 2025' },
+  listing_q1_2026:       { tone: 'info',     label: 'Listing Q1 2026' },
+  verified_internal:     { tone: 'success',  label: 'Internal · verified' },
+  broker_quote_q1_2026:  { tone: 'warn',     label: 'Broker quote' },
+};
+
+function NicheAssetClassBenchmarksTable({ rows }) {
+  const [search, setSearch] = useState('');
+  const [assetClass, setAssetClass] = useState(null);
+  const [sort, setSort] = useState({ key: 'value_avg', dir: 'desc' });
+  const onSort = useCallback((k) => setSort((p) => cycleSort(k, p)), []);
+
+  const assetClassOptions = useMemo(() => {
+    const counts = {};
+    for (const r of rows) counts[r.asset_class] = (counts[r.asset_class] || 0) + 1;
+    return Object.entries(counts)
+      .sort((a, b) => (NICHE_ASSET_CLASS_META[a[0]]?.order ?? 99) - (NICHE_ASSET_CLASS_META[b[0]]?.order ?? 99))
+      .map(([value, count]) => ({
+        value,
+        label: NICHE_ASSET_CLASS_META[value]?.label || value,
+        count,
+      }));
+  }, [rows]);
+
+  const filtered = useMemo(() => rows.filter((r) =>
+    matchesSearch(r, search, ['micro_market', 'zone_cluster', 'metric', 'operator_name', 'brand_name', 'property_name', 'notes', 'source']) &&
+    (!assetClass || r.asset_class === assetClass),
+  ), [rows, search, assetClass]);
+
+  const sorted = useMemo(() => applySort(filtered, sort, {
+    asset_class: (r) => NICHE_ASSET_CLASS_META[r.asset_class]?.order ?? 99,
+    micro_market: (r) => r.micro_market || '',
+    value_avg: (r) => Number(r.value_avg ?? r.value_high ?? r.value_low ?? 0),
+    value_low: (r) => Number(r.value_low ?? r.value_avg ?? 0),
+    value_high: (r) => Number(r.value_high ?? r.value_avg ?? 0),
+  }), [filtered, sort]);
+
+  const formatValue = (r) => {
+    const v = r.value_avg ?? r.value_high ?? r.value_low;
+    if (v == null) return '—';
+    const unit = r.unit || '';
+    const fmtNum = (n) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    if (r.value_low != null && r.value_high != null && r.value_low !== r.value_high) {
+      return `₹${fmtNum(r.value_low)}–${fmtNum(r.value_high)} ${unit}`;
+    }
+    return `₹${fmtNum(v)} ${unit}`;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 flex-wrap mb-3">
+        <DataToolbar.Search
+          value={search}
+          onChange={setSearch}
+          placeholder="Search micro-market, operator, brand, property…"
+          ariaLabel="Search niche asset class benchmarks"
+        />
+        <DataToolbar.Chips
+          label="Asset class"
+          value={assetClass}
+          onChange={setAssetClass}
+          options={assetClassOptions}
+          allowAll
+          allLabel="All classes"
+        />
+      </div>
+      <div className="overflow-x-auto -mx-5">
+        <table className="w-full text-xs border-collapse min-w-[820px]">
+          <thead>
+            <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
+              <SortableHeader sortKey="asset_class" sort={sort} onSort={onSort} className="py-2 px-3">Asset class</SortableHeader>
+              <SortableHeader sortKey="micro_market" sort={sort} onSort={onSort} className="py-2 px-3">Micro-market</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Operator / property</th>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Metric</th>
+              <SortableHeader sortKey="value_avg" sort={sort} onSort={onSort} align="right" className="py-2 px-3">Value</SortableHeader>
+              <th className="text-left py-2 px-3 font-semibold text-[11px] tracking-wide uppercase text-content-secondary">Layer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => {
+              const acMeta = NICHE_ASSET_CLASS_META[r.asset_class] || { label: r.asset_class, tone: 'neutral' };
+              const dtMeta = NICHE_DATA_TYPE_BADGE[r.data_type] || { tone: 'neutral', label: r.data_type };
+              const propertyLabel = r.operator_name || r.brand_name || r.property_name || '';
+              return (
+                <tr key={r.id} className="border-b border-hairline transition-colors duration-150 ease-out hover:bg-bg-secondary">
+                  <td className="py-2 px-3">
+                    <Badge tone={acMeta.tone} variant="soft">{acMeta.label}</Badge>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="font-medium text-content-primary">{r.micro_market}</div>
+                    {r.zone_cluster && (
+                      <div className="text-[10px] text-content-muted">{r.zone_cluster}</div>
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-content-secondary">
+                    {propertyLabel || <span className="text-content-muted">—</span>}
+                  </td>
+                  <td className="py-2 px-3 text-content-secondary">{r.metric}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
+                    {formatValue(r)}
+                  </td>
+                  <td className="py-2 px-3">
+                    <Badge tone={dtMeta.tone} variant="soft">{dtMeta.label}</Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-content-muted">
+        Niche & alternative asset classes — co-working / student housing / senior living / data centers.
+        Per-class metrics differ (per-seat / per-bed / entry capital + monthly fee / MW capacity). Layer
+        badge marks the source provenance — listing, IPC report, broker quote, or internal verified.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 // Asset-class filter — Bengaluru is the only city we have data for, so the
@@ -1237,7 +1377,7 @@ function ResidentialSegmentedBenchmarksTable({ rows }) {
 // professional actually thinks: "show me the office market" or "show me
 // land prices", not "show me Hyderabad".
 //
-// 5 buckets + an All view, chosen to match institutional deal taxonomy:
+// 6 buckets + an All view, chosen to match institutional deal taxonomy:
 //   - Residential       — apartments, builder floor, villa/house. The thickest
 //                         dataset; everything where a homebuyer is the end-tenant.
 //   - Land & Plotted    — plotted dev, raw residential land, guidance/circle
@@ -1249,6 +1389,11 @@ function ResidentialSegmentedBenchmarksTable({ rows }) {
 //                         to deserve a separate pill.
 //   - Industrial & Warehouse — manufacturing + logistics + serviced industrial
 //                         land. Logistics-led demand, distinct underwriting.
+//   - Niche & Alternatives — co-working / managed office, student housing /
+//                         co-living, senior living, data centers. Operator-
+//                         seeded asset classes where per-unit metrics differ
+//                         (per-seat, per-bed, entry capital + monthly fee,
+//                         MW capacity). Hidden when empty.
 const ASSET_CLASS_FILTERS = [
   { value: 'all',            label: 'All' },
   { value: 'residential',    label: 'Residential' },
@@ -1256,6 +1401,7 @@ const ASSET_CLASS_FILTERS = [
   { value: 'office',         label: 'Office' },
   { value: 'retail_hosp',    label: 'Retail & Hospitality' },
   { value: 'industrial',     label: 'Industrial & Warehouse' },
+  { value: 'niche',          label: 'Niche & Alternatives' },
 ];
 const ASSET_CLASS_VALUES = ASSET_CLASS_FILTERS.map((f) => f.value);
 
@@ -1329,6 +1475,7 @@ export default function IntelligencePage() {
   const { data: industrialBenchmarks } = useIndustrialBenchmarks({ city });
   const { data: hospitalityBenchmarks } = useHospitalityBenchmarks({ city });
   const { data: residentialSegmented } = useResidentialSegmentedBenchmarks({ city });
+  const { data: nicheAssetBenchmarks } = useNicheAssetClassBenchmarks({ city });
   const { data: macroKpis } = useMacroKpis({ city });
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
@@ -1698,6 +1845,20 @@ export default function IntelligencePage() {
           }
         >
           <ResidentialSegmentedBenchmarksTable rows={segmentedRowsForFilter} />
+        </SectionCard>
+      )}
+
+      {/* Section 5g: Niche & Alternatives — Co-working / Student housing /
+          Senior living / Data centers. Hidden when empty per the "no
+          operator-y migration prompts" rule — the data flywheel populates
+          the table when the operator drops an IPC report or broker quote
+          into the Comps Review Queue. */}
+      {showSection('niche') && Array.isArray(nicheAssetBenchmarks) && nicheAssetBenchmarks.length > 0 && (
+        <SectionCard
+          icon={Building2}
+          title="5g. Niche & Alternatives — Co-working · Student housing · Senior living · Data centers"
+        >
+          <NicheAssetClassBenchmarksTable rows={nicheAssetBenchmarks} />
         </SectionCard>
       )}
 

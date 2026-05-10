@@ -754,6 +754,57 @@ const getResidentialSegmentedBenchmarks = async ({ city = 'Bengaluru', assetClas
   return result.rows;
 };
 
+/**
+ * Niche asset-class benchmarks (Tier 1 #6–#9 from the original handoff).
+ *
+ * Same shape as residential_segmented_benchmarks: one table, four classes,
+ * (micro_market × metric × value × source × data_type). The UI uses an
+ * asset_class chip filter to split the rows by class for display.
+ *
+ * Soft-fails to [] when the migration hasn't been applied yet (Postgres
+ * 42P01 = relation does not exist) so the Intelligence page renders the
+ * empty-state CTA instead of an error tile.
+ *
+ * Filters:
+ *   - city          default 'Bengaluru'
+ *   - assetClass    'coworking' | 'student_housing' | 'senior_living' | 'data_center'
+ *   - dataType      e.g. 'ipc_q1_2026' | 'listing_q1_2026' | 'verified_internal'
+ */
+const NICHE_ASSET_CLASSES = ['coworking', 'student_housing', 'senior_living', 'data_center'];
+
+const getNicheAssetClassBenchmarks = async ({ city = 'Bengaluru', assetClass, dataType } = {}) => {
+  if (assetClass && !NICHE_ASSET_CLASSES.includes(assetClass)) {
+    // Unknown class — return empty rather than 400 so the UI can pivot
+    // its chip group without orchestrating a separate validation call.
+    return [];
+  }
+  const params = [city];
+  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  if (assetClass) {
+    params.push(assetClass);
+    where += ` AND asset_class = $${params.length}`;
+  }
+  if (dataType) {
+    params.push(dataType);
+    where += ` AND data_type = $${params.length}`;
+  }
+  try {
+    const result = await query(
+      `SELECT * FROM niche_asset_class_benchmarks
+       WHERE ${where}
+       ORDER BY asset_class ASC,
+                COALESCE(value_avg, value_high, value_low) DESC NULLS LAST,
+                micro_market ASC`,
+      params,
+    );
+    return result.rows;
+  } catch (err) {
+    // 42P01 = undefined_table — migration not applied yet.
+    if (err && err.code === '42P01') return [];
+    throw err;
+  }
+};
+
 const getHospitalityBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => {
   const params = [city];
   let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
@@ -805,6 +856,8 @@ module.exports = {
   getIndustrialBenchmarks,
   getHospitalityBenchmarks,
   getResidentialSegmentedBenchmarks,
+  getNicheAssetClassBenchmarks,
+  NICHE_ASSET_CLASSES,
   getMacroKpis,
   getDealAnalysis,
   streamDealAnalysis,
