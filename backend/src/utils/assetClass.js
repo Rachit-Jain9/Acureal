@@ -76,18 +76,33 @@ const hasOperatingSignals = ({ deal = {}, inputs = {} } = {}) =>
   ].some((value) => value !== null && value !== undefined && value !== '');
 
 const inferAssetClass = ({ deal = {}, inputs = {} } = {}) => {
-  const explicit = [deal.asset_class, deal.financial_asset_class]
+  // Resolve from the most-curated text first (deal name) AND the
+  // explicit dropdown field. If the name yields a confident non-
+  // residential class, trust the name — operators name deals
+  // descriptively but sometimes leave the asset_class dropdown at
+  // its default ("residential_apartments"), so a deal named
+  // "Commercial Retail" with asset_class still on default would
+  // otherwise render the entire deck as residential. Catches the
+  // 2026-05-10 operator-reported "Commercial Retail" mismatch.
+  const fromName = resolveAssetClass(deal.name);
+  const fromExplicit = [deal.asset_class, deal.financial_asset_class]
     .map((value) => resolveAssetClass(value))
     .find(Boolean);
-  if (explicit) return explicit;
 
-  const textual = [
-    deal.name,
+  if (fromName && fromName !== 'residential_apartments') return fromName;
+  if (fromExplicit) return fromExplicit;
+
+  // Other textual cues from the rest of the record.
+  const otherTextual = [
     deal.property_name,
     deal.investment_thesis,
     deal.property_notes,
   ].map((value) => resolveAssetClass(value)).find(Boolean);
-  if (textual) return textual;
+  if (otherTextual) return otherTextual;
+
+  // Name match that resolved to residential — apply only after other
+  // textual fields have had a chance to override.
+  if (fromName) return fromName;
 
   if (hasOperatingSignals({ deal, inputs })) {
     const operatingHint = [deal.property_type, deal.zoning]
