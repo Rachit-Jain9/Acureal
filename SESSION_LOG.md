@@ -1879,3 +1879,38 @@ None. PR #214's migration was already applied; this PR ships pure UX + read-side
 2. Future work — org-wide `/admin/audit` page that lists every mutation across the org with filters (event_type, actor, date range, bulk_id). Lets compliance reviewers ask "show me everything Rachit deleted in March" without needing to open each deal.
 3. Future work — "Recent activity" widget on the Dashboard, sourced from `deal_audit_log`, so an analyst sees their last 10 actions when they sign in and can pick up where they left off.
 
+
+## 2026-05-10 — Niche asset-class scaffolds (PR #219) + deferral
+
+### What was worked on
+Cross-checked the original handoff doc against current state. Tier 0 (email ingestion + review queue) and most of Tier 1/Tier 2 are already shipped. The genuinely-pending tier-1 items were the four niche asset classes (#6 co-working, #7 student housing, #8 senior living, #9 data centers) and the operator-blocked Karnataka IGR PDFs (#5).
+
+Shipped the schema + service + route + UI scaffold for the four niche classes (PR #219). Section 5g on the Intelligence page will surface rows the moment data lands. Per CLAUDE.md "no fabrication" rule, the table is empty by design — the data flywheel populates it when the operator drops an IPC report or broker quote into the comps review queue.
+
+Operator then paused further work on these tiered items (Tier 1 #5–#9). Recorded the deferral cleanly in `TODO_DATA.md`.
+
+### Plain-English recap
+- A new "Niche & Alternatives" filter chip is live on the Market Intelligence page covering co-working, student housing, senior living, and data centers.
+- The table behind it is empty for now — it'll fill the moment any IPC report or broker quote lands for one of those classes.
+- Per the operator's call, no further autonomous work on these items until they explicitly say "resume."
+
+### PRs opened / merged
+- PR #219 — `feat(intelligence): scaffold niche & alternative asset class benchmarks` — **merged**.
+- (Follow-on docs PR pending) — `chore(todos): mark tier-1 #5–#9 ON HOLD per operator request`.
+
+### Operator action required
+Apply `database/migrations/20260525_niche_asset_class_benchmarks.sql` in Supabase SQL editor. Idempotent. Until applied the new endpoint soft-fails to []; Section 5g stays hidden.
+
+### Test counts after merge
+- Backend: 1151 tests pass (+7 in `nicheAssetClassBenchmarks.service.test.js`).
+- Frontend: 360 tests pass.
+
+### What's left to do next (NOT including ON HOLD items)
+1. **Operator: apply `20260525_niche_asset_class_benchmarks.sql`** in Supabase.
+2. Future autonomous candidates that don't touch ON-HOLD work:
+   - Org-wide `/admin/audit` page sourced from `deal_audit_log` (compliance review surface).
+   - "Recent activity" widget on the Dashboard for the signed-in user.
+   - Workspace / Team page + invite flow for adding user #2 (DPDP-aligned).
+   - Existing-user re-acceptance modal when a new legal-doc version is published.
+   - Project-precise geocoding (replaces locality centroids with Google Geocoding API per project name).
+
