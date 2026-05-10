@@ -64,10 +64,28 @@ const clampLongitude = (lng) => {
   return normalized;
 };
 
+// Mapbox Static API marker label MUST be either a Maki icon name (`marker`,
+// `building`, `circle`, etc.) or a single alphanumeric character. Anything
+// else — including encoded text like "Bengaluru%2C%20Karnataka" — returns
+// 422 "out of range" from the API. Earlier revision passed the deal's
+// `locationLine` as the label and produced exactly that 422.
+//
+// Sanitisation: accept a Maki icon name (lowercase letters + hyphens),
+// accept a single alphanumeric char, otherwise drop the label entirely.
+const MAKI_ICON_PATTERN = /^[a-z][a-z0-9-]{0,30}$/;
+const sanitiseLabel = (raw) => {
+  if (raw == null) return '';
+  const text = String(raw).trim();
+  if (!text) return '';
+  if (MAKI_ICON_PATTERN.test(text)) return `-${text}`;
+  if (/^[A-Za-z0-9]$/.test(text)) return `-${text.toLowerCase()}`;
+  return ''; // invalid — drop, never let through to Mapbox
+};
+
 const buildMarker = (marker) => {
   const size = marker.size === 's' ? 's' : 'l';
   const colour = String(marker.color || 'B5793C').replace(/^#/, '').toLowerCase();
-  const label = marker.label ? `-${encodeURIComponent(marker.label)}` : '';
+  const label = sanitiseLabel(marker.label);
   return `pin-${size}${label}+${colour}(${clampLongitude(marker.lng)},${clampLatitude(marker.lat)})`;
 };
 

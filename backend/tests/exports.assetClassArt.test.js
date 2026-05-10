@@ -19,8 +19,9 @@ describe('services/exports/shared/assetClassArt', () => {
     expect(art.svg.startsWith('<svg')).toBe(true);
     expect(art.svg.endsWith('</svg>')).toBe(true);
     expect(art.dataUri.startsWith('data:image/svg+xml;base64,')).toBe(true);
-    // Should reference paper colour at least once (windows/fills)
-    expect(art.svg).toMatch(/#FBF9F6/);
+    // Atmospheric residential SVG includes a sky linearGradient and lit windows
+    expect(art.svg).toMatch(/<linearGradient id="sky-residential"/);
+    expect(art.svg).toMatch(/#FFD089/); // warm window-glow colour
   });
 
   test('industrial warehousing SVG references warehouse imagery', () => {
@@ -42,7 +43,8 @@ describe('services/exports/shared/assetClassArt', () => {
     Object.entries(RENDERERS).forEach(([key, renderer]) => {
       const svg = renderer();
       expect(svg.startsWith('<svg')).toBe(true);
-      expect(svg).toMatch(/viewBox="0 0 1200 600"/);
+      // Atmospheric portrait orientation matching the cover panel ratio
+      expect(svg).toMatch(/viewBox="0 0 1000 1200"/);
       expect(svg).toMatch(/role="img"/);
       // Decode-and-check round-trip
       const base64 = Buffer.from(svg, 'utf8').toString('base64');

@@ -47,6 +47,7 @@ const {
   addScoreGauge,
   addProsConsColumns,
 } = require('./primitives');
+const { drawAssetClassCover } = require('./coverArtwork');
 
 const renderCover = (pptx, slide, context, totalSlides) => {
   setSlideDefaults(slide);
@@ -67,62 +68,26 @@ const renderCover = (pptx, slide, context, totalSlides) => {
     line: { color: COLORS.plum, pt: 0.1 },
   });
 
-  // Right half — asset-class artwork on top, score gauge on bottom.
-  // Replaces the decorative blueprint grid + ellipses with a content-rich
-  // visual that's specific to the deal's asset class (multi-story tower
-  // for residential, warehouse for industrial, glass tower for commercial,
-  // master-plan grid for plotted, hotel for hospitality, etc.).
-  if (context.precomputed?.assetArtDataUri) {
-    // Card frame for the artwork
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 6.85, y: 0.65, w: 5.93, h: 3.4,
-      fill: { color: COLORS.white },
-      line: { color: COLORS.line, pt: 0.6 },
-    });
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 6.85, y: 0.65, w: 5.93, h: 0.06,
-      fill: { color: COLORS.plum },
-      line: { color: COLORS.plum, pt: 0.1 },
-    });
-    slide.addText(context.assetClassLabel.toUpperCase(), {
-      x: 7.05, y: 0.82, w: 5.55, h: 0.22,
-      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
-    });
-    slide.addImage({
-      x: 6.95, y: 1.1, w: 5.75, h: 2.85,
-      data: context.precomputed.assetArtDataUri,
-      sizing: { type: 'contain', w: 5.75, h: 2.85 },
-      altText: `${context.assetClassLabel} silhouette illustration`,
-    });
-  } else {
-    // Fallback: keep the legacy blueprint grid for back-compat (e.g. unit
-    // tests that drive buildDeckContext directly without precompute).
-    for (let idx = 0; idx < 11; idx += 1) {
-      slide.addShape(pptx.ShapeType.line, {
-        x: 6.95 + idx * 0.55,
-        y: 0.6,
-        w: 0,
-        h: 3.4,
-        line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
-      });
-    }
-  }
-
-  // Score gauge — bottom-right
-  if (context.precomputed?.scoreGaugeDataUri) {
-    addScoreGauge(slide, {
-      x: 7.6, y: 4.2, w: 4.55, h: 2.4,
-      dataUri: context.precomputed.scoreGaugeDataUri,
-      alt: 'Composite deal score (0-100)',
-    });
-  } else {
-    // Fallback decorative ellipse
-    slide.addShape(pptx.ShapeType.ellipse, {
-      x: 9.15, y: 4.5, w: 2.55, h: 2.0,
-      fill: { color: 'F6EFE6', transparency: 68 },
-      line: { color: COLORS.sandDeep, pt: 1.3, transparency: 25 },
-    });
-  }
+  // Right half — full-bleed atmospheric asset-class artwork drawn with
+  // pptxgenjs **native shape primitives** (rect, ellipse, triangle, line,
+  // text). No SVG image embedding — every element is a first-class
+  // PowerPoint object, fully editable, and the deck cannot trigger
+  // PowerPoint's "found a problem with content" recovery dialog from a
+  // fragile SVG embed. Per-class composition (residential skyline, hotel
+  // at evening, warehouse at dusk, raw-land plot diagram, etc.).
+  drawAssetClassCover(pptx, slide, context.assetClass, {
+    x: 6.65, y: 0, w: 6.68, h: 7.5,
+  });
+  // Asset-class eyebrow tag overlaid on the artwork (top-right).
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 8.65, y: 0.45, w: 4.4, h: 0.42,
+    fill: { color: COLORS.plum, transparency: 8 },
+    line: { color: COLORS.plum, pt: 0.1 },
+  });
+  slide.addText(context.assetClassLabel.toUpperCase(), {
+    x: 8.85, y: 0.5, w: 4.0, h: 0.32,
+    fontFace: FONT, fontSize: 10, bold: true, color: 'FFFFFF', charSpace: 2.2, valign: 'mid',
+  });
 
   slide.addText(context.brandName, {
     x: 0.98, y: 0.95, w: 1.8, h: 0.18,
