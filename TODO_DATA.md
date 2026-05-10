@@ -7,6 +7,40 @@ Data sources that REDIP would benefit from but cannot fabricate or assume availa
 - MANUAL: Can be entered manually or via document upload
 - PARTIAL: Some data available via OSM or open sources
 - READY: Architecture exists, needs configuration
+- **ON HOLD**: Operator paused this stream — do not pick up autonomously; wait for explicit go-ahead
+
+---
+
+## ⏸ ON HOLD — Operator paused 2026-05-10
+
+The following Tier 1 items from the original handoff doc are intentionally
+paused. Schema scaffolds shipped where appropriate; the data ingestion +
+extraction-prompt + section-population work is **not** to be continued
+autonomously. Resume only when the operator (Rachit) explicitly asks.
+
+| Tier | Item | Scaffold status | What's paused |
+|---|---|---|---|
+| 1 #5 | **Karnataka IGR SRO PDF extraction** (11 placeholders in `residential_segmented_benchmarks` flagged `guidance_q1_2026_v0_2_pending`) | `igr_guidance_pdf` extractor exists | Awaiting operator to drop one Bengaluru SRO PDF into chat. Once any one lands, the rest is mechanical. |
+| 1 #6 | **Co-working / managed office benchmarks** | ✅ Schema landed in PR #219 (`niche_asset_class_benchmarks`, `asset_class='coworking'`) | Gemini extraction prompt (`coworking_report` doctype) and IPC-report ingestion. |
+| 1 #7 | **Student housing / co-living benchmarks** | ✅ Schema landed in PR #219 (`asset_class='student_housing'`) | Gemini extraction prompt (`student_housing_report` doctype) and IPC-report ingestion. |
+| 1 #8 | **Senior living benchmarks** | ✅ Schema landed in PR #219 (`asset_class='senior_living'`) | Gemini extraction prompt (`senior_living_report` doctype) and IPC-report ingestion. |
+| 1 #9 | **Data center detailed comps** | ✅ Schema landed in PR #219 (`asset_class='data_center'`) | Gemini extraction prompt (`data_center_report` doctype) and IPC-report ingestion. NTT Bengaluru-4, Sify, ESDS, STT GDC, Equinix operator footprint pending. |
+
+**Why on hold**: Operator wants to direct sequencing on these. The
+schema scaffold (PR #219) means Section 5g on the Intelligence page
+will surface rows the moment any extraction lands, but no autonomous
+agent should add the matching extraction prompts, doctypes, or
+classifier branches until directed.
+
+When the operator says "resume Tier 1 #6 / #7 / #8 / #9 / #5", the
+next session should:
+1. Add the corresponding extraction prompt(s) to
+   `backend/src/services/ai/extractionPrompts.js`
+2. Wire each new doctype into the comps review queue classifier
+3. Update the prompt-hash registry (single source of truth)
+4. Add per-doctype unit tests on extraction shape
+5. (For #5 only) await the operator's first SRO PDF upload before
+   committing extracted rows
 
 ---
 
