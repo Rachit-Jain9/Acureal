@@ -94,20 +94,35 @@ describe('bulkReassignDeals', () => {
   test('happy path: UPDATE returns succeeded rows; missing ids land in failed[]', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'user-1' }] }) // target user check
-      .mockResolvedValueOnce({ rows: [{ id: 'd-1', assigned_to: 'user-1' }] }); // UPDATE
+      // UPDATE...RETURNING uses a CTE that includes old_assigned_to
+      .mockResolvedValueOnce({
+        rows: [{ id: 'd-1', assigned_to: 'user-1', old_assigned_to: 'user-7' }],
+      })
+      // Per-deal audit insert (fail-open; rows shape ignored)
+      .mockResolvedValueOnce({ rows: [] });
     const result = await dealService.bulkReassignDeals(['d-1', 'd-2'], 'user-1', 'actor-1');
     expect(result.succeeded_count).toBe(1);
     expect(result.failed_count).toBe(1);
     expect(result.succeeded[0]).toMatchObject({ id: 'd-1', assigned_to: 'user-1' });
     expect(result.failed[0].id).toBe('d-2');
     expect(result.target_user_id).toBe('user-1');
+    expect(result.bulk_id).toBeTruthy();
   });
 
   test('null target = unassign skips the user lookup', async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 'd-1', assigned_to: null }] });
+    query
+      // CTE-based UPDATE
+      .mockResolvedValueOnce({
+        rows: [{ id: 'd-1', assigned_to: null, old_assigned_to: 'user-7' }],
+      })
+      // audit insert
+      .mockResolvedValueOnce({ rows: [] });
     const result = await dealService.bulkReassignDeals(['d-1'], null, 'actor-1');
     expect(result.target_user_id).toBeNull();
-    expect(query).toHaveBeenCalledTimes(1); // no user-lookup call
+    // No user-lookup call: the SQL of the first invocation must be the
+    // UPDATE, not a `SELECT id FROM users` lookup.
+    expect(query.mock.calls[0][0]).not.toMatch(/FROM users/);
+    expect(query.mock.calls[0][0]).toMatch(/UPDATE deals/);
   });
 });
 

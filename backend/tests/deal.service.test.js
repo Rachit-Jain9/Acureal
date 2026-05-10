@@ -70,15 +70,29 @@ describe('deal.service inactive deal handling', () => {
 
   test('deleteDeal removes associated storage files before deleting the deal', async () => {
     query
-      .mockResolvedValueOnce({ rows: [{ id: 'deal-1', stage: 'closed', is_archived: false, property_id: 'prop-1' }] })
+      // SELECT deal
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'deal-1', name: 'Test deal', stage: 'closed',
+          is_archived: false, property_id: 'prop-1',
+        }],
+      })
+      // SELECT documents
       .mockResolvedValueOnce({ rows: [{ id: 'doc-1', file_url: 'organizations/org-1/deals/deal-1/file.pdf' }] })
+      // INSERT INTO deal_audit_log (deleted) — fail-open inside the txn
+      .mockResolvedValueOnce({ rows: [] })
+      // DELETE FROM deals
       .mockResolvedValueOnce({ rows: [{ id: 'deal-1' }] })
+      // purgePropertyIfInactiveOnly visibility check
       .mockResolvedValueOnce({ rows: [{ has_visible_deals: true }] });
 
-    const result = await dealService.deleteDeal('deal-1');
+    const result = await dealService.deleteDeal('deal-1', 'admin-1');
 
     expect(deleteStorageFile).toHaveBeenCalledWith('organizations/org-1/deals/deal-1/file.pdf');
-    expect(query.mock.calls[2][0]).toContain('DELETE FROM deals');
+    // Find the DELETE call regardless of where it landed in the queue —
+    // resilient to future audit-row additions inside the txn.
+    const deleteCall = query.mock.calls.find((c) => /DELETE FROM deals/.test(c[0]));
+    expect(deleteCall).toBeTruthy();
     expect(result.deleted).toBe(true);
   });
 });

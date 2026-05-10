@@ -121,7 +121,15 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
         .events(dealId, 50)
         .then((res) => {
           const rows = res?.data?.data || [];
-          setEvents(Array.isArray(rows) ? rows : []);
+          // The /financials/:id/events endpoint now returns a merged
+          // feed of financial computations + mutation log rows. This
+          // FinancialsPage timeline is the kernel-replay-and-verify
+          // panel, so filter to the signed financial subset only.
+          // The deal page's AuditTab renders the merged feed.
+          const financialOnly = (Array.isArray(rows) ? rows : []).filter(
+            (r) => r?.kind !== 'mutation',
+          );
+          setEvents(financialOnly);
           setStatus('ok');
         })
         .catch((err) => {

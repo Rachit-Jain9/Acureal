@@ -11,6 +11,53 @@ const { calculateLandPricing } = require('../utils/landPricing');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const { deleteStorageFile } = require('../config/storage');
+const dealAuditLog = require('./dealAuditLog.service');
+const crypto = require('crypto');
+
+// Fields whose changes are worth surfacing on the deal audit timeline.
+// We intentionally exclude purely-derived columns (computed pricing
+// rates, updated_at, etc.) so the timeline doesn't drown in noise.
+const UPDATED_FIELDS_TRACKED = [
+  'name',
+  'deal_type',
+  'priority',
+  'asset_class',
+  'deal_structure',
+  'assigned_to',
+  'target_launch_date',
+  'expected_close_date',
+  'land_ask_price_cr',
+  'negotiated_price_cr',
+  'jv_split_developer_pct',
+  'jv_split_landowner_pct',
+  'rera_number',
+  'rera_expiry_date',
+  'notes',
+];
+
+// Build a pair of {before, after} objects by diffing the relevant
+// updated-deal columns. Returns null when nothing tracked actually
+// changed — the caller skips the audit row in that case so the
+// timeline doesn't gain a "nothing changed" entry on every save.
+const diffTrackedFields = (before, after) => {
+  const beforeDiff = {};
+  const afterDiff = {};
+  let dirty = false;
+  for (const col of UPDATED_FIELDS_TRACKED) {
+    const b = before?.[col] ?? null;
+    const a = after?.[col] ?? null;
+    // Treat ISO timestamps + string equivalents that differ only by
+    // representation as unchanged.
+    const bStr = b instanceof Date ? b.toISOString() : b;
+    const aStr = a instanceof Date ? a.toISOString() : a;
+    if (bStr !== aStr) {
+      beforeDiff[col] = b;
+      afterDiff[col] = a;
+      dirty = true;
+    }
+  }
+  return dirty ? { before: beforeDiff, after: afterDiff } : null;
+};
 
 const buildStageOrderCase = (column = 'd.stage') => `
   CASE ${column}
@@ -503,8 +550,8 @@ const getDealById = async (id) => {
   return deal;
 };
 
-const updateDeal = async (id, data) =>
-  transaction(async (client) => {
+const updateDeal = async (id, data, userId = null) => {
+  const { result, beforeDeal } = await transaction(async (client) => {
     const existingResult = await client.query(
       'SELECT * FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
       [id]
@@ -533,7 +580,7 @@ const updateDeal = async (id, data) =>
 
     const pricing = buildDealPricing(merged, property?.land_area_sqft || null);
 
-    const result = await client.query(
+    const updateResult = await client.query(
       `UPDATE deals SET
         property_id = $1,
         name = $2,
@@ -583,8 +630,46 @@ const updateDeal = async (id, data) =>
       ]
     );
 
-    return result.rows[0];
+    return { result: updateResult.rows[0], beforeDeal: existingDeal };
   });
+
+  // Reassignment is captured as its own event_type so the timeline
+  // can render an "owner changed" pill that the analyst recognizes
+  // separately from a "fields edited" entry. Other tracked fields
+  // collapse into a single 'updated' row.
+  if (
+    beforeDeal &&
+    result &&
+    (beforeDeal.assigned_to ?? null) !== (result.assigned_to ?? null)
+  ) {
+    await dealAuditLog.recordAudit({
+      dealId: id,
+      eventType: 'reassigned',
+      actorId: userId,
+      before: { assigned_to: beforeDeal.assigned_to ?? null },
+      after: { assigned_to: result.assigned_to ?? null },
+    });
+  }
+
+  // Generic field-edit row — only fires when something tracked
+  // actually changed (excluding assigned_to which already got its
+  // own row above).
+  const otherDiff = diffTrackedFields(
+    { ...beforeDeal, assigned_to: result?.assigned_to },
+    result,
+  );
+  if (otherDiff) {
+    await dealAuditLog.recordAudit({
+      dealId: id,
+      eventType: 'updated',
+      actorId: userId,
+      before: otherDiff.before,
+      after: otherDiff.after,
+    });
+  }
+
+  return result;
+};
 
 const transitionStage = async (dealId, newStage, userId, notes = '') => {
   const dealResult = await query(
@@ -641,6 +726,17 @@ const transitionStage = async (dealId, newStage, userId, notes = '') => {
       toStage: newStage,
       userId,
       notes,
+    });
+
+    // Audit the transition for the AuditTab timeline. Fail-open: an
+    // audit insert error must not roll back the stage write.
+    await dealAuditLog.recordAudit({
+      dealId,
+      eventType: 'stage_changed',
+      actorId: userId,
+      before: { stage: currentDeal.stage },
+      after: { stage: newStage },
+      metadata: notes ? { notes } : {},
     });
 
     return {
@@ -747,8 +843,8 @@ const getPipelineSummary = async () => {
   };
 };
 
-const archiveDeal = async (id, userId, reason = null) =>
-  transaction(async (client) => {
+const archiveDeal = async (id, userId, reason = null) => {
+  const result = await transaction(async (client) => {
     const currentDealResult = await client.query(
       'SELECT id, property_id, is_archived FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
       [id]
@@ -758,7 +854,7 @@ const archiveDeal = async (id, userId, reason = null) =>
       throw createError('Deal not found or already archived.', 404);
     }
 
-    const result = await client.query(
+    const updateResult = await client.query(
       `UPDATE deals
        SET is_archived = TRUE,
            archived_at = NOW(),
@@ -772,17 +868,31 @@ const archiveDeal = async (id, userId, reason = null) =>
 
     const propertyDeleted = await purgePropertyIfInactiveOnly(
       client,
-      result.rows[0].property_id,
+      updateResult.rows[0].property_id,
       id
     );
 
     return {
-      ...result.rows[0],
+      ...updateResult.rows[0],
       property_deleted: propertyDeleted,
     };
   });
 
-const restoreDeal = async (id) => {
+  // Audit OUTSIDE the txn. Fail-open: a logging failure must not
+  // pretend the archive didn't happen.
+  await dealAuditLog.recordAudit({
+    dealId: id,
+    eventType: 'archived',
+    actorId: userId,
+    before: { is_archived: false },
+    after: { is_archived: true, archived_reason: reason || null },
+    metadata: reason ? { reason } : {},
+  });
+
+  return result;
+};
+
+const restoreDeal = async (id, userId = null) => {
   const result = await query(
     `UPDATE deals
      SET is_archived = FALSE,
@@ -798,6 +908,15 @@ const restoreDeal = async (id) => {
   if (result.rows.length === 0) {
     throw createError('Deal not found or not archived.', 404);
   }
+
+  // Audit. Fail-open.
+  await dealAuditLog.recordAudit({
+    dealId: id,
+    eventType: 'restored',
+    actorId: userId,
+    before: { is_archived: true },
+    after: { is_archived: false },
+  });
 
   return result.rows[0];
 };
@@ -834,15 +953,30 @@ const sanitizeBulkIds = (ids) => {
  * found, etc.) are aggregated into the response — the request never
  * aborts halfway. Each archive runs through the existing
  * `archiveDeal` so the property-purge logic stays consistent.
+ *
+ * Each successful archive's per-deal audit row is augmented with the
+ * shared `bulk_id` so an analyst can pivot on "show me everything
+ * archived in that one batch action".
  */
 const bulkArchiveDeals = async (ids, userId, reason = null) => {
   const cleaned = sanitizeBulkIds(ids);
+  const bulkId = crypto.randomUUID();
   const succeeded = [];
   const failed = [];
   for (const id of cleaned) {
     try {
       const row = await archiveDeal(id, userId, reason);
       succeeded.push({ id, archived_at: row.archived_at });
+      // Re-tag the audit row with bulk metadata. Best-effort; if
+      // the migration is missing this is a no-op.
+      await dealAuditLog.recordAudit({
+        dealId: id,
+        eventType: 'bulk_archived',
+        actorId: userId,
+        before: { is_archived: false },
+        after: { is_archived: true, archived_reason: reason || null },
+        metadata: { bulk_id: bulkId, bulk_size: cleaned.length, reason: reason || null },
+      });
     } catch (err) {
       failed.push({
         id,
@@ -857,6 +991,7 @@ const bulkArchiveDeals = async (ids, userId, reason = null) => {
     failed_count: failed.length,
     succeeded,
     failed,
+    bulk_id: bulkId,
   };
 };
 
@@ -880,14 +1015,24 @@ const bulkReassignDeals = async (ids, targetUserId, actorId) => {
     }
   }
 
+  // CTE captures the previous assignee in the same round-trip as the
+  // UPDATE so the audit row can record before / after without a
+  // second SELECT. RETURNING surfaces both columns to the caller.
   const result = await query(
-    `UPDATE deals
+    `WITH prev AS (
+       SELECT id, assigned_to AS old_assigned_to
+         FROM deals
+        WHERE id = ANY($2::uuid[])
+          AND organization_id = current_organization_id()
+     )
+     UPDATE deals d
         SET assigned_to = $1,
             updated_at  = NOW()
-      WHERE id = ANY($2::uuid[])
-        AND organization_id = current_organization_id()
-        AND is_archived = FALSE
-      RETURNING id, assigned_to`,
+       FROM prev
+      WHERE d.id = prev.id
+        AND d.organization_id = current_organization_id()
+        AND d.is_archived = FALSE
+      RETURNING d.id, d.assigned_to, prev.old_assigned_to`,
     [targetUserId || null, cleaned],
   );
 
@@ -904,11 +1049,21 @@ const bulkReassignDeals = async (ids, targetUserId, actorId) => {
       statusCode: 409,
     }));
 
-  // Telemetry — the actor's id is recorded in the audit trail via
-  // standard request logging. We don't persist a per-row "reassigned by"
-  // since `deals` doesn't have that column today; the financial-event
-  // audit ledger captures the broader change set.
-  void actorId;
+  // Per-deal audit row tagged with the bulk_id so analysts can
+  // reconstruct the batch. Fail-open: insert errors don't undo the
+  // UPDATE that already committed. The CTE above gave us both old
+  // and new assignees in a single round-trip.
+  const bulkId = crypto.randomUUID();
+  for (const r of result.rows) {
+    await dealAuditLog.recordAudit({
+      dealId: r.id,
+      eventType: 'bulk_reassigned',
+      actorId,
+      before: { assigned_to: r.old_assigned_to ?? null },
+      after: { assigned_to: r.assigned_to ?? null },
+      metadata: { bulk_id: bulkId, bulk_size: cleaned.length },
+    });
+  }
 
   return {
     requested: cleaned.length,
@@ -917,6 +1072,7 @@ const bulkReassignDeals = async (ids, targetUserId, actorId) => {
     succeeded,
     failed,
     target_user_id: targetUserId || null,
+    bulk_id: bulkId,
   };
 };
 
@@ -928,13 +1084,30 @@ const bulkReassignDeals = async (ids, targetUserId, actorId) => {
  * cascade stay consistent. Admin-gated at the route layer; per-id RLS
  * inside `deleteDeal` is the additional safeguard.
  */
-const bulkDeleteDeals = async (ids) => {
+const bulkDeleteDeals = async (ids, userId = null) => {
   const cleaned = sanitizeBulkIds(ids);
+  // We don't write a separate bulk_deleted audit row per deal because
+  // the per-deal audit row inserted inside deleteDeal cascades when
+  // the deal is removed. Instead, the bulk_id is recorded against the
+  // org-scoped audit log via a synthetic 'bulk_deleted' row that
+  // references each deal id, written BEFORE deleteDeal runs so the
+  // FK still resolves. As with deleteDeal itself, the cascade will
+  // sweep these up post-delete; the value is an org-wide audit query
+  // that can list "everything this admin deleted in one click".
+  const bulkId = crypto.randomUUID();
   const succeeded = [];
   const failed = [];
   for (const id of cleaned) {
     try {
-      const result = await deleteDeal(id);
+      await dealAuditLog.recordAudit({
+        dealId: id,
+        eventType: 'bulk_deleted',
+        actorId: userId,
+        before: {},
+        after: {},
+        metadata: { bulk_id: bulkId, bulk_size: cleaned.length },
+      });
+      const result = await deleteDeal(id, userId);
       succeeded.push({ id: result?.id || id });
     } catch (err) {
       failed.push({
@@ -950,6 +1123,7 @@ const bulkDeleteDeals = async (ids) => {
     failed_count: failed.length,
     succeeded,
     failed,
+    bulk_id: bulkId,
   };
 };
 
@@ -962,12 +1136,23 @@ const bulkDeleteDeals = async (ids) => {
  */
 const bulkTransitionStage = async (ids, newStage, userId, notes = '') => {
   const cleaned = sanitizeBulkIds(ids);
+  const bulkId = crypto.randomUUID();
   const succeeded = [];
   const failed = [];
   for (const id of cleaned) {
     try {
       const row = await transitionStage(id, newStage, userId, notes);
       succeeded.push({ id, stage: row.stage });
+      // Tag the bulk batch id in addition to the per-deal
+      // 'stage_changed' row that transitionStage already wrote.
+      await dealAuditLog.recordAudit({
+        dealId: id,
+        eventType: 'bulk_stage_changed',
+        actorId: userId,
+        before: {},
+        after: { stage: newStage },
+        metadata: { bulk_id: bulkId, bulk_size: cleaned.length, notes: notes || null },
+      });
     } catch (err) {
       failed.push({
         id,
@@ -983,13 +1168,23 @@ const bulkTransitionStage = async (ids, newStage, userId, notes = '') => {
     succeeded,
     failed,
     target_stage: newStage,
+    bulk_id: bulkId,
   };
 };
 
-const deleteDeal = async (id) =>
-  transaction(async (client) => {
+const deleteDeal = async (id, userId = null) => {
+  // Snapshot the deal BEFORE deletion so the audit row can record what
+  // was lost. We do this outside the transaction because the audit row
+  // references the deal_id which won't exist after the txn commits — the
+  // audit table FK is ON DELETE CASCADE so a post-delete insert would
+  // fail. By logging *before* the row goes, the cascade later removes
+  // the orphan log too — which is correct: a deleted deal can't have a
+  // visible AuditTab anymore.
+  // ...unless the audit table is missing. In that case `recordAudit`
+  // soft-fails and the deletion proceeds anyway.
+  const dealSnapshot = await transaction(async (client) => {
     const dealResult = await client.query(
-      'SELECT id, stage, is_archived, property_id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+      'SELECT id, name, stage, is_archived, property_id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
       [id]
     );
 
@@ -1020,6 +1215,39 @@ const deleteDeal = async (id) =>
       }
     }
 
+    // Audit BEFORE the DELETE so the deal_id FK still resolves. The
+    // audit row will then cascade-delete with the deal, leaving a
+    // clean slate. We accept that the deal-level AuditTab won't show
+    // this row post-delete; an org-wide query would (until cascade).
+    // Fail-open: if the audit insert fails we still want the delete to
+    // proceed — the docs are already gone.
+    try {
+      await client.query(
+        `INSERT INTO deal_audit_log (
+           deal_id, organization_id, actor_id,
+           event_type, before_json, after_json, metadata
+         ) VALUES (
+           $1,
+           (SELECT organization_id FROM deals WHERE id = $1),
+           $2,
+           'deleted',
+           $3, $4, $5
+         )`,
+        [
+          id,
+          userId,
+          JSON.stringify({ name: deal.name, stage: deal.stage, is_archived: deal.is_archived }),
+          JSON.stringify({}),
+          JSON.stringify({}),
+        ],
+      );
+    } catch (err) {
+      if (err && err.code !== '42P01' && err.code !== '42703') {
+        // eslint-disable-next-line no-console
+        console.warn(`[deleteDeal] audit insert failed: ${err.message || err}`);
+      }
+    }
+
     const result = await client.query('DELETE FROM deals WHERE id = $1 RETURNING id', [id]);
     const propertyDeleted = await purgePropertyIfInactiveOnly(client, deal.property_id, id);
 
@@ -1029,6 +1257,9 @@ const deleteDeal = async (id) =>
       property_deleted: propertyDeleted,
     };
   });
+
+  return dealSnapshot;
+};
 
 module.exports = {
   createDeal,

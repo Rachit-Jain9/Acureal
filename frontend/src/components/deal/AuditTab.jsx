@@ -10,6 +10,14 @@ import {
   Hash,
   ArrowDown,
   ArrowUp,
+  ArrowRight,
+  Archive,
+  ArchiveRestore,
+  GitBranch,
+  UserCog,
+  Trash2,
+  Edit3,
+  Layers,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import Badge from '../common/Badge';
@@ -45,12 +53,74 @@ import {
  */
 
 const EVENT_TYPE_CONFIG = {
+  // Financial computations (HMAC-signed via deal_events)
   calculate_and_save:  { label: 'Calculate & Save',    tone: 'success' },
   scenario_recompute:  { label: 'Scenario Recompute',  tone: 'info' },
   sensitivity_run:     { label: 'Sensitivity Run',     tone: 'info' },
   manual_replay:       { label: 'Manual Replay',       tone: 'neutral' },
   graph_snapshot:      { label: 'Graph Snapshot',      tone: 'neutral' },
   export_snapshot:     { label: 'Export Snapshot',     tone: 'neutral' },
+  // Mutation events (deal_audit_log)
+  stage_changed:       { label: 'Stage changed',       tone: 'info',     icon: GitBranch },
+  archived:            { label: 'Archived',            tone: 'warning',  icon: Archive },
+  restored:            { label: 'Restored',            tone: 'success',  icon: ArchiveRestore },
+  deleted:             { label: 'Deleted',             tone: 'danger',   icon: Trash2 },
+  reassigned:          { label: 'Reassigned',          tone: 'info',     icon: UserCog },
+  updated:             { label: 'Edited',              tone: 'neutral',  icon: Edit3 },
+  bulk_archived:       { label: 'Archived (bulk)',     tone: 'warning',  icon: Layers },
+  bulk_reassigned:     { label: 'Reassigned (bulk)',   tone: 'info',     icon: Layers },
+  bulk_stage_changed:  { label: 'Stage changed (bulk)', tone: 'info',    icon: Layers },
+  bulk_deleted:        { label: 'Deleted (bulk)',      tone: 'danger',   icon: Layers },
+};
+
+// Human-readable labels for the per-field diff renderer. Kept in sync
+// with the UPDATED_FIELDS_TRACKED list on the backend.
+const FIELD_LABELS = {
+  stage: 'Stage',
+  is_archived: 'Archived',
+  archived_reason: 'Archive reason',
+  assigned_to: 'Assignee',
+  name: 'Name',
+  deal_type: 'Deal type',
+  priority: 'Priority',
+  asset_class: 'Asset class',
+  deal_structure: 'Deal structure',
+  target_launch_date: 'Target launch',
+  expected_close_date: 'Expected close',
+  land_ask_price_cr: 'Land ask (₹ Cr)',
+  negotiated_price_cr: 'Negotiated (₹ Cr)',
+  jv_split_developer_pct: 'JV split — dev %',
+  jv_split_landowner_pct: 'JV split — owner %',
+  rera_number: 'RERA number',
+  rera_expiry_date: 'RERA expiry',
+  notes: 'Notes',
+};
+
+// Render a value for the diff pill. Strings stay as-is; nulls and
+// blanks render as a muted em-dash. Booleans render Yes/No. Dates
+// render their date portion only.
+const fmtFieldValue = (raw) => {
+  if (raw === null || raw === undefined || raw === '') return '—';
+  if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
+  if (typeof raw === 'number') {
+    return raw.toLocaleString('en-IN', { maximumFractionDigits: 4 });
+  }
+  // ISO date heuristic
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    try {
+      return new Date(raw).toLocaleDateString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+      });
+    } catch {
+      return raw;
+    }
+  }
+  if (typeof raw === 'string') return raw;
+  try {
+    return JSON.stringify(raw);
+  } catch {
+    return String(raw);
+  }
 };
 
 const KPI_FIELDS = [
@@ -95,16 +165,27 @@ const fmtAbsolute = (iso) => {
   }
 };
 
-// Pure: walk the events array and attach a `delta` to each row that
-// references the prior event's outputs_summary. Events are newest-
-// first so "prior" means index+1.
+// Pure: walk the events array and attach a `delta` to each financial
+// row that references the prior financial event's outputs_summary.
+// Events are newest-first so "prior" means the next financial row in
+// the array. Mutation rows are skipped — they have their own
+// before/after diff.
 function attachDeltas(events) {
   const arr = Array.isArray(events) ? [...events] : [];
   return arr.map((ev, i) => {
-    const prev = arr[i + 1] || null;
-    if (!ev?.outputs_summary || !prev?.outputs_summary) {
-      return { ...ev, delta: null };
+    if (ev?.kind === 'mutation') return ev;
+    if (!ev?.outputs_summary) return { ...ev, delta: null };
+    // Find the next financial event with a summary; skip intervening
+    // mutation rows so a stage transition between two computations
+    // doesn't break the KPI delta.
+    let prev = null;
+    for (let j = i + 1; j < arr.length; j += 1) {
+      if (arr[j]?.kind !== 'mutation' && arr[j]?.outputs_summary) {
+        prev = arr[j];
+        break;
+      }
     }
+    if (!prev) return { ...ev, delta: null };
     const delta = {};
     for (const { key } of KPI_FIELDS) {
       const cur = ev.outputs_summary[key];
@@ -156,6 +237,114 @@ function DeltaCell({ field, change }) {
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * Render a per-field before → after pill set for a mutation event.
+ *
+ * Logic:
+ *   - Walk the union of keys in `before` and `after`.
+ *   - Skip keys whose values are equal (defensive; recordAudit shouldn't
+ *     write these but cheap to check).
+ *   - Render each one as "Label: from → to" with bold values, muted
+ *     hyphens for missing data.
+ *
+ * For events that don't carry any tracked diff (e.g. bulk_deleted writes
+ * empty before/after by design), surface metadata.bulk_id + bulk_size
+ * instead so the row still tells a story.
+ */
+function MutationDiff({ before, after, metadata, eventType }) {
+  const beforeObj = before || {};
+  const afterObj = after || {};
+  const keys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]));
+  const changed = keys.filter((k) => {
+    const b = beforeObj[k];
+    const a = afterObj[k];
+    return JSON.stringify(b) !== JSON.stringify(a);
+  });
+
+  if (changed.length === 0) {
+    // Synthesize a useful row from metadata when the diff is empty.
+    if (metadata?.bulk_id || metadata?.bulk_size) {
+      return (
+        <div className="text-xs text-content-secondary">
+          Part of a <span className="font-medium text-content-primary">bulk batch</span>
+          {metadata.bulk_size ? (
+            <> of {metadata.bulk_size} deal{metadata.bulk_size === 1 ? '' : 's'}</>
+          ) : null}
+          .
+        </div>
+      );
+    }
+    if (eventType === 'deleted') {
+      return (
+        <div className="text-xs text-content-secondary">
+          The deal record was permanently deleted.
+        </div>
+      );
+    }
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+      {changed.map((key) => {
+        const label = FIELD_LABELS[key] || key;
+        return (
+          <div key={key} className="text-xs text-content-secondary inline-flex items-center gap-1.5 flex-wrap">
+            <span className="text-content-muted">{label}:</span>
+            <span className="line-through text-content-muted tabular-nums">
+              {fmtFieldValue(beforeObj[key])}
+            </span>
+            <ArrowRight size={10} className="text-content-muted" />
+            <span className="text-content-primary font-medium tabular-nums">
+              {fmtFieldValue(afterObj[key])}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MutationRow({ event }) {
+  const cfg = EVENT_TYPE_CONFIG[event.event_type] || { label: event.event_type, tone: 'neutral' };
+  const Icon = cfg.icon || ShieldCheck;
+  const actorName = event.actor?.name || event.actor?.email || (event.actor_id ? 'Unknown user' : 'System');
+
+  return (
+    <div className="border-t border-hairline first:border-t-0">
+      <div className="w-full flex items-start gap-3 px-4 py-3 text-left">
+        <div className="shrink-0 mt-0.5 w-7 h-7 rounded-md bg-bg-secondary text-content-secondary flex items-center justify-center">
+          <Icon size={13} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge tone={cfg.tone} className="text-[10px]">{cfg.label}</Badge>
+            <span className="text-xs text-content-secondary">
+              by <span className="text-content-primary font-medium">{actorName}</span>
+            </span>
+            <span className="text-xs text-content-muted tabular-nums" title={fmtAbsolute(event.created_at)}>
+              {fmtRelative(event.created_at)}
+            </span>
+            {event.metadata?.notes && (
+              <span className="text-[10px] text-content-muted italic truncate max-w-[24ch]" title={event.metadata.notes}>
+                "{event.metadata.notes}"
+              </span>
+            )}
+          </div>
+          <div className="mt-1.5">
+            <MutationDiff
+              before={event.before}
+              after={event.after}
+              metadata={event.metadata}
+              eventType={event.event_type}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -362,26 +551,44 @@ export default function AuditTab() {
         <ShieldCheck size={28} className="mx-auto text-content-muted mb-3" />
         <p className="text-sm font-medium text-content-primary">No audit events yet</p>
         <p className="text-xs text-content-muted mt-1 max-w-md mx-auto leading-relaxed">
-          Every persisted financial computation lands here — calculate &amp; save, scenario recompute,
-          sensitivity run, replay, snapshot. Run the financial model on this deal to start the trail.
+          Every material change to this deal lands here — financial computations,
+          stage transitions, archive / restore, reassignments. Run the financial model
+          or move the deal across stages to start the trail.
         </p>
       </Card>
     );
   }
 
+  const financialCount = events.filter((e) => e.kind !== 'mutation').length;
+  const mutationCount = events.filter((e) => e.kind === 'mutation').length;
+  const breakdown = [
+    financialCount > 0
+      ? `${financialCount} signed financial event${financialCount === 1 ? '' : 's'}`
+      : null,
+    mutationCount > 0
+      ? `${mutationCount} mutation event${mutationCount === 1 ? '' : 's'}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div className="space-y-4">
       <SectionHeader
         size="sm"
-        eyebrow="Append-only · HMAC-signed"
+        eyebrow="Append-only audit trail"
         title="Audit trail"
-        sub={`${events.length} signed event${events.length === 1 ? '' : 's'}. Newest first. Click a row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
+        sub={`${breakdown}. Newest first. Click a financial row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
       />
 
       <Card className="p-0 overflow-hidden">
-        {events.map((ev) => (
-          <EventRow key={ev.id} event={ev} dealId={dealId} />
-        ))}
+        {events.map((ev) =>
+          ev.kind === 'mutation' ? (
+            <MutationRow key={ev.id} event={ev} />
+          ) : (
+            <EventRow key={ev.id} event={ev} dealId={dealId} />
+          ),
+        )}
       </Card>
 
       <p className="text-[11px] text-content-muted">

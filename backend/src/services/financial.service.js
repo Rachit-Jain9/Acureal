@@ -10,6 +10,7 @@ const {
   FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS,
 } = require('../constants/assetClasses');
 const auditService = require('./audit.service');
+const dealAuditLog = require('./dealAuditLog.service');
 
 // ─── SCENARIO PERSISTENCE ────────────────────────────────────────────────────
 
@@ -407,15 +408,31 @@ const getFinancialGraph = async (dealId) => {
  */
 const listDealEvents = async (dealId, { limit = 50, includeOutputsSummary = false } = {}) => {
   await getFinancials(dealId); // visibility gate
-  const rows = await auditService.listEvents(dealId, {
-    limit,
-    includeOutputs: !!includeOutputsSummary,
-  });
 
-  // Bulk-resolve actor display names so the timeline can show "Rachit Jain"
-  // instead of an opaque UUID. One round-trip regardless of event count.
+  // Pull both feeds in parallel — financial computations (HMAC-signed)
+  // and mutation log (stage transitions / archive / reassign / bulk).
+  // The two are merged + sorted client-side here so the AuditTab
+  // renders one chronological timeline.
+  const [financialRows, mutationRows] = await Promise.all([
+    auditService.listEvents(dealId, {
+      limit,
+      includeOutputs: !!includeOutputsSummary,
+    }),
+    dealAuditLog.listForDeal(dealId, { limit }),
+  ]);
+
+  // Bulk-resolve actor display names across BOTH feeds so the timeline
+  // can show "Rachit Jain" instead of an opaque UUID. One round-trip
+  // regardless of event count.
   let actorMap = new Map();
-  const actorIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean))];
+  const actorIds = [
+    ...new Set(
+      [
+        ...financialRows.map((r) => r.actor_id),
+        ...mutationRows.map((r) => r.actor_id),
+      ].filter(Boolean),
+    ),
+  ];
   if (actorIds.length > 0) {
     try {
       const actorsResult = await query(
@@ -428,23 +445,63 @@ const listDealEvents = async (dealId, { limit = 50, includeOutputsSummary = fals
     }
   }
 
-  return rows.map((row) => {
+  const hydrateActor = (actorId) => {
+    if (!actorId) return null;
+    const u = actorMap.get(actorId);
+    return u ? { id: u.id, name: u.name, email: u.email } : null;
+  };
+
+  // Financial rows: keep the existing shape (verification note, hashes,
+  // optional outputs_summary). Tag with kind: 'financial' so the UI
+  // discriminator renders the existing KPI delta block.
+  const financial = financialRows.map((row) => {
     const summary = includeOutputsSummary
       ? auditService.summarizeEventOutputs(row.outputs_json)
       : null;
-    const actor = row.actor_id ? actorMap.get(row.actor_id) || null : null;
-    // Strip the heavy outputs_json from the response — the summary is the
-    // only thing the UI needs. Replay endpoint hands back the full payload.
     const { outputs_json: _drop, ...restRow } = row;
     return {
       ...restRow,
-      actor: actor ? { id: actor.id, name: actor.name, email: actor.email } : null,
+      kind: 'financial',
+      actor: hydrateActor(row.actor_id),
       outputs_summary: summary,
       verification: {
         note: 'Call GET /financials/:dealId/events/:eventId/verify for full hash + HMAC check.',
       },
     };
   });
+
+  // Mutation rows: shape them so the UI renders a before/after diff
+  // pill block instead of KPI deltas. Hashes / signature are absent
+  // by design — these aren't replay-verifiable.
+  const mutation = mutationRows.map((row) => ({
+    id: row.id,
+    deal_id: row.deal_id,
+    organization_id: row.organization_id,
+    actor_id: row.actor_id,
+    actor: hydrateActor(row.actor_id),
+    event_type: row.event_type,
+    before: row.before_json || {},
+    after: row.after_json || {},
+    metadata: row.metadata || {},
+    created_at: row.created_at,
+    kind: 'mutation',
+  }));
+
+  // Merge + sort newest-first by created_at. Tie-break by kind so
+  // mutation events render below financial events of the same
+  // millisecond (rarely happens in practice, but stable ordering
+  // keeps snapshot tests happy).
+  const merged = [...financial, ...mutation].sort((a, b) => {
+    const at = new Date(a.created_at).getTime();
+    const bt = new Date(b.created_at).getTime();
+    if (bt !== at) return bt - at;
+    return a.kind === 'financial' ? -1 : 1;
+  });
+
+  // Cap the merged feed at the requested limit (default 50). The two
+  // upstream queries each fetch up to `limit` rows so the merged
+  // result can be up to 2*limit before truncation.
+  return merged.slice(0, Math.max(1, Math.min(Number(limit) || 50, 500)));
 };
 
 const verifyDealEvent = async (dealId, eventId) => {
