@@ -11,7 +11,7 @@
  * Sections shipped in this v1 (8 of 16 in the operator brief):
  *   1. Cover               — title, asset class, locality, generated-on, disclaimer banner
  *   2. Executive Summary   — IC opinion (Claude) + headline KPIs + composite score
- *   3. Site Information    — address, area, FSI; site map (Mapbox) when available
+ *   3. Site Information    — address, area, FSI; site map (Google Maps) when available
  *   4. Overview            — deal type, structure, stage
  *   5. Comparables         — top 5 verified comps with rate / units / developer
  *   6. Financials          — full KPI table; cost / revenue / margin
@@ -37,7 +37,7 @@
 const docx = require('docx');
 const palette = require('../shared/palette');
 const { computeDealScore } = require('../../../utils/scoring/dealScore');
-const { renderSiteMap } = require('../shared/staticMap.service');
+const { renderSiteMap } = require('../shared/googleMapsStaticMap.service');
 const { generateSection } = require('../narrative/exportNarrative.service');
 
 const {
@@ -414,7 +414,7 @@ const buildSiteInformation = async (ctx) => {
   ];
   children.push(buildLabelValueTable(rows));
 
-  // Site map — only when Mapbox is configured AND we have lat/lng.
+  // Site map — only when Google Maps is configured AND we have lat/lng.
   if (ctx.coords) {
     try {
       const mapBuffer = await renderSiteMap({ lat: ctx.coords.lat, lng: ctx.coords.lng, zoom: 15 });
@@ -430,9 +430,9 @@ const buildSiteInformation = async (ctx) => {
           alignment: AlignmentType.LEFT,
           spacing: { before: 120, after: 120 },
         }));
-        children.push(bodyPara('Source: Mapbox Static Images.', { italic: true, color: HEX('mutedHigh') }));
+        children.push(bodyPara('Source: Google Maps Static API.', { italic: true, color: HEX('mutedHigh') }));
       } else {
-        children.push(bodyPara('Site map unavailable — Mapbox token not configured or coordinates unresolved.', { italic: true, color: HEX('mutedHigh') }));
+        children.push(bodyPara('Site map unavailable — GOOGLE_MAPS_API_KEY not configured or coordinates unresolved.', { italic: true, color: HEX('mutedHigh') }));
       }
     } catch {
       // never throw on map render failure
@@ -782,7 +782,7 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     organizationId: ctx.deal.organization_id || null,
   }).catch(() => ({ available: false, pros: [], cons: [], reason: 'narrative call failed' }));
 
-  // Build site info section (async — Mapbox call). Never throws.
+  // Build site info section (async — Google Maps call). Never throws.
   const [prosCons, siteSection] = await Promise.all([
     prosConsPromise,
     buildSiteInformation(ctx),

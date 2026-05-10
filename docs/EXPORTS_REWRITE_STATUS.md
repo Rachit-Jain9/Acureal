@@ -27,12 +27,16 @@ sessions can pick up where the last left off without re-reading the chat.
 
 - [ ] Apply migration `database/migrations/20260527_export_events.sql` via
   Supabase SQL Editor on Mumbai.
-- [ ] Set `MAPBOX_TOKEN` env var in Vercel before the PPTX phase-2 PR ships
-  (otherwise `staticMap` calls bail gracefully and maps are skipped).
-- [ ] Set `REDIP_PUBLIC_URL` env var in Vercel if it differs from
-  `https://redip.vercel.app` (this is what the cover QR encodes).
-- [ ] Decide payment provider (Razorpay vs Stripe) before paywall PR
-  starts. Razorpay is the obvious default for the Indian market.
+- [x] ~~Set `MAPBOX_TOKEN`~~ — replaced with Google Maps Static API.
+  `GOOGLE_MAPS_API_KEY` must be present in Vercel (already set as of
+  2026-05-10) and the **Maps Static API** must be enabled in the Google
+  Cloud project (console.cloud.google.com → APIs & Services → Library
+  → search "Maps Static API" → Enable).
+- [x] ~~Set `REDIP_PUBLIC_URL`~~ — cover QR removed per operator
+  feedback; env var no longer used.
+- [ ] Payment provider — operator confirmed "free for BETA testing" so
+  paywall PR is deferred indefinitely. Re-open this row when paid plans
+  go live.
 
 ---
 
