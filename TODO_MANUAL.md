@@ -2,6 +2,22 @@
 
 Manual actions that still require credentials, authority, or infrastructure outside this repo.
 
+## Pending now (most recent first)
+
+### Apply migration: `20260526_ab_eval_runs.sql` (Tier 2 #14)
+Path: `database/migrations/20260526_ab_eval_runs.sql`. Idempotent. Adds `ab_eval_runs` + `ab_eval_results` tables that back the new `/dashboard/admin/ab-eval` page (PR #222). Until applied, the page still works for one-shot runs but does not persist past comparisons.
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260526_ab_eval_runs.sql
+```
+
+### Smoke: Tier 1 #10 cross-locality geocode upgrade (PR #221)
+No migration. When ready to re-pin the existing 80 production comps, operator runs the script from the `backend/` directory:
+```powershell
+cd backend
+node ../scripts/upgrade-comps-geocoding.mjs --apply --allow-cross-locality
+```
+The summary at the end lists every "cross-locality correction" — these are rows where Google said the project is in a different locality from what the comp recorded. Manually spot-check those before flipping the `locality` column (the script does NOT auto-rewrite locality).
+
 ## Critical
 
 ### 1. Apply the deal-centric database migrations

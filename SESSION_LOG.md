@@ -1914,3 +1914,45 @@ Apply `database/migrations/20260525_niche_asset_class_benchmarks.sql` in Supabas
    - Existing-user re-acceptance modal when a new legal-doc version is published.
    - Project-precise geocoding (replaces locality centroids with Google Geocoding API per project name).
 
+
+## 2026-05-10 — Tier 1 #10 + Tier 2 #14 closeouts (PR #221, #222)
+
+### What was worked on
+Audited the original handoff doc against current state. Apart from the operator-paused Tier 1 #5–#9 stream, the only items still legitimately open were:
+- **Tier 1 #10 — project-precise geocoding**: script existed but had no cross-locality fallback when a comp's recorded locality was wrong.
+- **Tier 2 #14 — A/B harness**: CLI tool existed; no web surface, no DB persistence, no admin UI.
+
+Closed both.
+
+### Plain-English recap
+- The geocode upgrade now has a two-stage fallback: when the precise (project + locality + city) query lands too far from where the comp says it should be, a second (project + city) query fires — accepted only when Google returns a high-precision match. Mis-recorded localities can finally get an accurate map pin.
+- A new admin page at `/dashboard/admin/ab-eval` lets you A/B test models without leaving the browser. One click runs the held-out fixture set against Claude vs GPT-5.4-mini (or any other pair), shows side-by-side per-fixture scores, and persists every past run so you can see which model is winning over time.
+
+### PRs opened / merged
+- PR #221 — `feat(geocoding): two-stage cross-locality fallback (Tier 1 #10 finish)` — **merged**.
+- PR #222 — `feat(ab-eval): web admin surface + persistence (Tier 2 #14 finish)` — **merged**.
+
+### Operator action required
+Apply one new migration in Supabase SQL editor:
+```
+database/migrations/20260526_ab_eval_runs.sql
+```
+Idempotent. Until applied, the new admin A/B page reads return `[]`/`null`. Triggering a run still produces an in-memory result (visible to the page once) but doesn't persist; a warn lands in server logs.
+
+PR #221 (geocoding) needs no migration — operator runs `node ../scripts/upgrade-comps-geocoding.mjs --apply --allow-cross-locality` from `backend/` when ready to re-pin existing comps.
+
+### Test counts after merge
+- Backend: 1198 tests pass (+27 in `geocodeUpgrade.test.js`, +20 in `abEvalPersistence.service.test.js`).
+- Frontend: 360 tests pass.
+
+### What's left to do next
+After this batch, the original handoff doc has only the operator-paused Tier 1 #5–#9 stream remaining. Genuinely-pending non-blocked items now:
+
+1. **Operator action**: apply `20260526_ab_eval_runs.sql` in Supabase, then trigger a 5-fixture A/B run from the admin UI to confirm the persistence path.
+2. **Operator action** (when ready): run the cross-locality geocode upgrade — `node ../scripts/upgrade-comps-geocoding.mjs --apply --allow-cross-locality` from `backend/`. The summary will list any cross-locality corrections worth manually verifying.
+3. Beyond the original handoff (surfaced in earlier sessions, not blocking):
+   - Org-wide `/admin/audit` page sourced from `deal_audit_log`.
+   - "Recent activity" Dashboard widget for the signed-in user.
+   - Workspace / Team page + invite flow for adding user #2.
+   - Existing-user re-acceptance modal when a new legal-doc version publishes.
+
