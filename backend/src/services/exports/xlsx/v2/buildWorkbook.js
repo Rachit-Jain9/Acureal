@@ -72,6 +72,26 @@ const firstNumber = (...values) => {
   return null;
 };
 
+// Normalize a percent-typed input to its decimal-fraction representation.
+// The financial kernel stores percents inconsistently — some as integer
+// (5 = 5%, 14 = 14% as the kernel's own defaults) and some as decimal
+// (0.05 = 5%, 0.5 = 50% LTV). XLSX cells with the `0.0%` number format
+// require the underlying value to be a decimal fraction; an integer-stored
+// percent like 5 renders as "500.0%" and worse, formulas like
+// `=Revenue*MarketingCostPct` produce 5× revenue instead of 5% of revenue.
+//
+// Heuristic: any positive value greater than 1 is treated as integer
+// percent and divided by 100. A value of exactly 1 is treated as 100%
+// (decimal), which is the conventional reading. Real-estate input
+// percents never legitimately exceed 100%, so the rule is unambiguous
+// across every input field we expose (marketing, finance, GST, stamp
+// duty, debt LTV, occupancy, escalation, contingency, JV splits, etc.).
+const toPctDecimal = (value) => {
+  const n = num(value);
+  if (n === null) return null;
+  return n > 1 ? n / 100 : n;
+};
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 /**
@@ -255,9 +275,9 @@ const buildInputsSheet = (workbook, ctx) => {
     title: 'Pricing & Revenue (Development)',
     rows: [
       ['Selling Rate per sqft',   'SellRatePerSqft',     firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft, 0),                'INR/sqft', NUMBER_FORMATS.integer],
-      ['Pricing Escalation',      'EscalationPct',       firstNumber(ctx.inputs.pricingEscalationPct, ctx.inputs.rentEscalationPct, 0),                 '% / year', NUMBER_FORMATS.percent],
-      ['Sales Velocity',          'SalesVelocityPct',    firstNumber(ctx.inputs.salesVelocityPct, ctx.inputs.absorptionPct, 0.20),                     '% / quarter', NUMBER_FORMATS.percent],
-      ['Customer Collection',     'CollectionPct',       firstNumber(ctx.inputs.customerCollectionPct, 0.85),                                          '% of sale', NUMBER_FORMATS.percent],
+      ['Pricing Escalation',      'EscalationPct',       toPctDecimal(firstNumber(ctx.inputs.pricingEscalationPct, ctx.inputs.rentEscalationPct, 0)),                 '% / year', NUMBER_FORMATS.percent],
+      ['Sales Velocity',          'SalesVelocityPct',    toPctDecimal(firstNumber(ctx.inputs.salesVelocityPct, ctx.inputs.absorptionPct, 0.20)),                     '% / quarter', NUMBER_FORMATS.percent],
+      ['Customer Collection',     'CollectionPct',       toPctDecimal(firstNumber(ctx.inputs.customerCollectionPct, 0.85)),                                          '% of sale', NUMBER_FORMATS.percent],
     ],
   };
 
@@ -265,9 +285,9 @@ const buildInputsSheet = (workbook, ctx) => {
     title: 'Operating Revenue Inputs (Income Asset)',
     rows: [
       ['Base Rent / sqft / month','BaseRentPerSqftMonth', firstNumber(ctx.inputs.baseRentPerSqftMonth, ctx.inputs.rentPerSqftMonth, 0),               'INR/sqft/mo', NUMBER_FORMATS.integer],
-      ['Rent Escalation',         'RentEscalationPct',   firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05),             '% / year', NUMBER_FORMATS.percent],
-      ['Stabilised Occupancy',    'OccupancyPct',        firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct ? ctx.deal.occupancy_pct / 100 : null, 0.92), '% of leasable', NUMBER_FORMATS.percent],
-      ['Vacancy & Credit Loss',   'VacancyPct',          firstNumber(ctx.inputs.vacancyPct, 0.05),                                                     '% of PGI', NUMBER_FORMATS.percent],
+      ['Rent Escalation',         'RentEscalationPct',   toPctDecimal(firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05)),             '% / year', NUMBER_FORMATS.percent],
+      ['Stabilised Occupancy',    'OccupancyPct',        toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),                  '% of leasable', NUMBER_FORMATS.percent],
+      ['Vacancy & Credit Loss',   'VacancyPct',          toPctDecimal(firstNumber(ctx.inputs.vacancyPct, 0.05)),                                                     '% of PGI', NUMBER_FORMATS.percent],
       ['Other Income / sqft / yr','OtherIncomePerSqft',  firstNumber(ctx.inputs.otherIncomePerSqft, 0),                                                'INR/sqft/yr', NUMBER_FORMATS.integer],
       ['Lease-up Period',         'LeaseUpQuarters',     firstNumber(ctx.inputs.leaseUpQuarters, 4),                                                   'quarters', NUMBER_FORMATS.integer],
     ],
@@ -276,15 +296,15 @@ const buildInputsSheet = (workbook, ctx) => {
   const incomeOpExSection = {
     title: 'Operating Expenses (Income Asset)',
     rows: [
-      ['Property Tax',            'PropertyTaxPct',      firstNumber(ctx.inputs.propertyTaxPct, 0.015),                                                '% of EGR', NUMBER_FORMATS.percent],
-      ['Insurance',               'InsurancePct',        firstNumber(ctx.inputs.insurancePct, 0.01),                                                   '% of EGR', NUMBER_FORMATS.percent],
-      ['Property Management Fee', 'PropMgmtPct',         firstNumber(ctx.inputs.propMgmtPct, ctx.inputs.managementFeePct, 0.03),                       '% of EGR', NUMBER_FORMATS.percent],
-      ['Utilities',               'UtilitiesPct',        firstNumber(ctx.inputs.utilitiesPct, 0.04),                                                   '% of EGR', NUMBER_FORMATS.percent],
-      ['Maintenance & Repairs',   'MaintenancePct',      firstNumber(ctx.inputs.maintenancePct, ctx.inputs.opexPct, 0.05),                              '% of EGR', NUMBER_FORMATS.percent],
-      ['CapEx Reserves',          'CapExReservePct',     firstNumber(ctx.inputs.capExReservePct, 0.02),                                                '% of EGR', NUMBER_FORMATS.percent],
+      ['Property Tax',            'PropertyTaxPct',      toPctDecimal(firstNumber(ctx.inputs.propertyTaxPct, 0.015)),                                                '% of EGR', NUMBER_FORMATS.percent],
+      ['Insurance',               'InsurancePct',        toPctDecimal(firstNumber(ctx.inputs.insurancePct, 0.01)),                                                   '% of EGR', NUMBER_FORMATS.percent],
+      ['Property Management Fee', 'PropMgmtPct',         toPctDecimal(firstNumber(ctx.inputs.propMgmtPct, ctx.inputs.managementFeePct, 0.03)),                       '% of EGR', NUMBER_FORMATS.percent],
+      ['Utilities',               'UtilitiesPct',        toPctDecimal(firstNumber(ctx.inputs.utilitiesPct, 0.04)),                                                   '% of EGR', NUMBER_FORMATS.percent],
+      ['Maintenance & Repairs',   'MaintenancePct',      toPctDecimal(firstNumber(ctx.inputs.maintenancePct, ctx.inputs.opexPct, 0.05)),                              '% of EGR', NUMBER_FORMATS.percent],
+      ['CapEx Reserves',          'CapExReservePct',     toPctDecimal(firstNumber(ctx.inputs.capExReservePct, 0.02)),                                                '% of EGR', NUMBER_FORMATS.percent],
       ['TI / LC (Tenant Improv)', 'TILCAllowanceCr',     firstNumber(ctx.inputs.tiLcAllowanceCr, ctx.inputs.tenantImprovementsCr, 0),                  'INR Cr (one-time)', NUMBER_FORMATS.currency],
-      ['Exit Cap Rate',           'ExitCapRate',         firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08),       '% / year', NUMBER_FORMATS.percent],
-      ['Selling Cost on Exit',    'SellingCostPct',      firstNumber(ctx.inputs.sellingCostPct, 0.02),                                                 '% of sale', NUMBER_FORMATS.percent],
+      ['Exit Cap Rate',           'ExitCapRate',         toPctDecimal(firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08)),       '% / year', NUMBER_FORMATS.percent],
+      ['Selling Cost on Exit',    'SellingCostPct',      toPctDecimal(firstNumber(ctx.inputs.sellingCostPct, 0.02)),                                                 '% of sale', NUMBER_FORMATS.percent],
     ],
   };
 
@@ -295,14 +315,14 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Construction Cost / sqft','ConstructionCostPerSqft', firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0), 'INR/sqft', NUMBER_FORMATS.integer],
       ['Approval & Fees',         'ApprovalCostCr',      firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),                           'INR Cr', NUMBER_FORMATS.currency],
       ...(ctx.dealFamily === 'development' ? [
-        ['Marketing & Sales',       'MarketingCostPct',    firstNumber(ctx.inputs.marketingCostPct, 0.04),                                                '% of revenue', NUMBER_FORMATS.percent],
+        ['Marketing & Sales',       'MarketingCostPct',    toPctDecimal(firstNumber(ctx.inputs.marketingCostPct, 0.04)),                                                '% of revenue', NUMBER_FORMATS.percent],
       ] : [
-        ['Marketing / Leasing',     'MarketingCostPct',    firstNumber(ctx.inputs.marketingCostPct, 0.02),                                                '% of EGR', NUMBER_FORMATS.percent],
+        ['Marketing / Leasing',     'MarketingCostPct',    toPctDecimal(firstNumber(ctx.inputs.marketingCostPct, 0.02)),                                                '% of EGR', NUMBER_FORMATS.percent],
       ]),
-      ['Finance / Treasury Cost', 'FinanceCostPct',      firstNumber(ctx.inputs.financeCostPct, 0.02),                                                   '% of revenue', NUMBER_FORMATS.percent],
-      ['Contingency',             'ContingencyPct',      firstNumber(ctx.inputs.contingencyPct, 0.05),                                                   '% of cost', NUMBER_FORMATS.percent],
-      ['GST',                     'GstPct',              firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, 0.05),                                    '%', NUMBER_FORMATS.percent],
-      ['Stamp Duty',              'StampDutyPct',        firstNumber(ctx.inputs.stampDutyPct, 0.05),                                                     '%', NUMBER_FORMATS.percent],
+      ['Finance / Treasury Cost', 'FinanceCostPct',      toPctDecimal(firstNumber(ctx.inputs.financeCostPct, 0.02)),                                                   '% of revenue', NUMBER_FORMATS.percent],
+      ['Contingency',             'ContingencyPct',      toPctDecimal(firstNumber(ctx.inputs.contingencyPct, 0.05)),                                                   '% of cost', NUMBER_FORMATS.percent],
+      ['GST',                     'GstPct',              toPctDecimal(firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, 0.05)),                                    '%', NUMBER_FORMATS.percent],
+      ['Stamp Duty',              'StampDutyPct',        toPctDecimal(firstNumber(ctx.inputs.stampDutyPct, 0.05)),                                                     '%', NUMBER_FORMATS.percent],
     ],
   };
 
@@ -319,14 +339,14 @@ const buildInputsSheet = (workbook, ctx) => {
   const capitalSection = {
     title: 'Capital Structure & Returns',
     rows: [
-      ['Debt %',                  'DebtLTV',             firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55),                                      '% of cost', NUMBER_FORMATS.percent],
-      ['Interest Rate',           'DebtRatePct',         firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115),                          '% / year', NUMBER_FORMATS.percent],
+      ['Debt %',                  'DebtLTV',             toPctDecimal(firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55)),                                      '% of cost', NUMBER_FORMATS.percent],
+      ['Interest Rate',           'DebtRatePct',         toPctDecimal(firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115)),                          '% / year', NUMBER_FORMATS.percent],
       ['Loan Term',               'LoanTermYears',       firstNumber(ctx.inputs.loanTermYears, 7),                                                       'years', NUMBER_FORMATS.integer],
       ['Moratorium',              'MoratoriumMonths',    firstNumber(ctx.inputs.moratoriumMonths, 0),                                                    'months', NUMBER_FORMATS.integer],
-      ['Discount Rate',           'DiscountRatePct',     firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16),                      '% / year', NUMBER_FORMATS.percent],
-      ['Developer Margin Target', 'DeveloperMarginPct',  firstNumber(ctx.inputs.developerMarginPct, ctx.deal.developer_margin_pct, 0.20),                 '%', NUMBER_FORMATS.percent],
-      ['JV — Developer Share',    'JVDevPct',            firstNumber(ctx.deal.jv_split_developer_pct ? ctx.deal.jv_split_developer_pct / 100 : null, ctx.inputs.jvDevPct, 0.50),  '% of profit', NUMBER_FORMATS.percent],
-      ['JV — Landowner Share',    'JVLandPct',           firstNumber(ctx.deal.jv_split_landowner_pct ? ctx.deal.jv_split_landowner_pct / 100 : null, ctx.inputs.jvLandPct, 0.50), '% of profit', NUMBER_FORMATS.percent],
+      ['Discount Rate',           'DiscountRatePct',     toPctDecimal(firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16)),                      '% / year', NUMBER_FORMATS.percent],
+      ['Developer Margin Target', 'DeveloperMarginPct',  toPctDecimal(firstNumber(ctx.inputs.developerMarginPct, ctx.deal.developer_margin_pct, 0.20)),                 '%', NUMBER_FORMATS.percent],
+      ['JV — Developer Share',    'JVDevPct',            toPctDecimal(firstNumber(ctx.deal.jv_split_developer_pct, ctx.inputs.jvDevPct, 0.50)),                          '% of profit', NUMBER_FORMATS.percent],
+      ['JV — Landowner Share',    'JVLandPct',           toPctDecimal(firstNumber(ctx.deal.jv_split_landowner_pct, ctx.inputs.jvLandPct, 0.50)),                         '% of profit', NUMBER_FORMATS.percent],
     ],
   };
 
