@@ -47,6 +47,7 @@ const {
   addScoreGauge,
   addProsConsColumns,
 } = require('./primitives');
+const { drawAssetClassCover } = require('./coverArtwork');
 
 const renderCover = (pptx, slide, context, totalSlides) => {
   setSlideDefaults(slide);
@@ -67,43 +68,26 @@ const renderCover = (pptx, slide, context, totalSlides) => {
     line: { color: COLORS.plum, pt: 0.1 },
   });
 
-  // Right half — full-bleed atmospheric asset-class artwork.
-  // Composite score gauge has moved to the Decision Frame slide, so the
-  // cover is now visual-first: a magazine-cover-style artwork specific to
-  // the deal's asset class (residential tower at golden hour, warehouse
-  // at dusk, hotel under evening lights, etc.). No score gauge here.
-  if (context.precomputed?.assetArtDataUri) {
-    // Frame the artwork as full-bleed on the right half (no white card
-    // border — let the SVG's own atmospheric background carry).
-    slide.addImage({
-      x: 6.65, y: 0, w: 6.68, h: 7.5,
-      data: context.precomputed.assetArtDataUri,
-      sizing: { type: 'cover', w: 6.68, h: 7.5 },
-      altText: `${context.assetClassLabel} cover illustration`,
-    });
-    // Asset-class eyebrow tag overlaid on the artwork (top-right).
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 8.65, y: 0.45, w: 4.4, h: 0.42,
-      fill: { color: COLORS.plum, transparency: 8 },
-      line: { color: COLORS.plum, pt: 0.1 },
-    });
-    slide.addText(context.assetClassLabel.toUpperCase(), {
-      x: 8.85, y: 0.5, w: 4.0, h: 0.32,
-      fontFace: FONT, fontSize: 10, bold: true, color: 'FFFFFF', charSpace: 2.2, valign: 'mid',
-    });
-  } else {
-    // Fallback: keep the legacy blueprint grid for back-compat (e.g. unit
-    // tests that drive buildDeckContext directly without precompute).
-    for (let idx = 0; idx < 11; idx += 1) {
-      slide.addShape(pptx.ShapeType.line, {
-        x: 6.95 + idx * 0.55,
-        y: 0.6,
-        w: 0,
-        h: 6.05,
-        line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
-      });
-    }
-  }
+  // Right half — full-bleed atmospheric asset-class artwork drawn with
+  // pptxgenjs **native shape primitives** (rect, ellipse, triangle, line,
+  // text). No SVG image embedding — every element is a first-class
+  // PowerPoint object, fully editable, and the deck cannot trigger
+  // PowerPoint's "found a problem with content" recovery dialog from a
+  // fragile SVG embed. Per-class composition (residential skyline, hotel
+  // at evening, warehouse at dusk, raw-land plot diagram, etc.).
+  drawAssetClassCover(pptx, slide, context.assetClass, {
+    x: 6.65, y: 0, w: 6.68, h: 7.5,
+  });
+  // Asset-class eyebrow tag overlaid on the artwork (top-right).
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 8.65, y: 0.45, w: 4.4, h: 0.42,
+    fill: { color: COLORS.plum, transparency: 8 },
+    line: { color: COLORS.plum, pt: 0.1 },
+  });
+  slide.addText(context.assetClassLabel.toUpperCase(), {
+    x: 8.85, y: 0.5, w: 4.0, h: 0.32,
+    fontFace: FONT, fontSize: 10, bold: true, color: 'FFFFFF', charSpace: 2.2, valign: 'mid',
+  });
 
   slide.addText(context.brandName, {
     x: 0.98, y: 0.95, w: 1.8, h: 0.18,
