@@ -261,6 +261,42 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).not.toMatch(/Property Tax/);
     }, 30000);
 
+    test('Dashboard renders Quarterly Operating Trend table with asset-aware columns', async () => {
+      // Income deal — should show PGI / EGR / NOI / CF After Debt columns
+      const incomeCtx = minimalContext();
+      incomeCtx.deal.asset_class = 'commercial_office';
+      incomeCtx.deal.name = 'Office Tower';
+      const buf1 = await buildDealWorkbookV2(incomeCtx);
+      const wb1 = new ExcelJS.Workbook();
+      await wb1.xlsx.load(buf1);
+      const dash1 = wb1.getWorksheet('Dashboard');
+      const text1 = [];
+      dash1.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text1.push(cell.value);
+      }));
+      const joined1 = text1.join(' | ');
+      expect(joined1).toMatch(/Quarterly Operating Trend/);
+      expect(joined1).toMatch(/PGI \(Cr\)/);
+      expect(joined1).toMatch(/NOI \(Cr\)/);
+      expect(joined1).toMatch(/CF After Debt/);
+
+      // Development deal — should show Sales / Construction / Net CF / Cumulative columns
+      const devCtx = minimalContext();
+      const buf2 = await buildDealWorkbookV2(devCtx);
+      const wb2 = new ExcelJS.Workbook();
+      await wb2.xlsx.load(buf2);
+      const dash2 = wb2.getWorksheet('Dashboard');
+      const text2 = [];
+      dash2.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text2.push(cell.value);
+      }));
+      const joined2 = text2.join(' | ');
+      expect(joined2).toMatch(/Quarterly Project Trend/);
+      expect(joined2).toMatch(/Sales \(Cr\)/);
+      expect(joined2).toMatch(/Construction \(Cr\)/);
+      expect(joined2).toMatch(/Cumulative \(Cr\)/);
+    }, 30000);
+
     test('all sheets are unprotected (operator can edit any cell)', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
