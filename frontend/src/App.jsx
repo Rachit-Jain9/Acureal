@@ -48,6 +48,7 @@ const ParcelIntelligenceAdminPage = lazy(() => import('./pages/ParcelIntelligenc
 const CompsQueuePage = lazy(() => import('./pages/CompsQueuePage'));
 const CompsQueueDetailPage = lazy(() => import('./pages/CompsQueueDetailPage'));
 const AdminAiUsagePage = lazy(() => import('./pages/AdminAiUsagePage'));
+const AdminAbEvalPage = lazy(() => import('./pages/AdminAbEvalPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
@@ -150,6 +151,7 @@ export default function App() {
           <Route path="admin/comps-queue" element={withSuspense(<CompsQueuePage />)} />
           <Route path="admin/comps-queue/:id" element={withSuspense(<CompsQueueDetailPage />)} />
           <Route path="admin/ai-usage" element={withSuspense(<AdminAiUsagePage />)} />
+          <Route path="admin/ab-eval" element={withSuspense(<AdminAbEvalPage />)} />
           <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
           <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}

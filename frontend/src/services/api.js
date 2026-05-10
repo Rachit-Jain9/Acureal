@@ -654,6 +654,14 @@ export const adminAPI = {
   // Recent audit events (deal_events) across the org — backs the
   // dashboard's Audit-trail-tail widget. Default 10, max 50.
   getRecentEvents: (limit = 10) => api.get('/admin/recent-events', { params: { limit } }),
+  // A/B eval harness (Tier 2 #14) — admin-only.
+  // listAbEvalRuns: newest-first index of past runs. Each row carries the
+  // per-candidate summary so the index can show winner/loser deltas.
+  // getAbEvalRun: single run with per-fixture detail rows attached.
+  // runAbEval: triggers a new evaluation; sync, blocks until complete.
+  listAbEvalRuns: (limit = 50) => api.get('/admin/ab-eval/runs', { params: { limit } }),
+  getAbEvalRun: (id) => api.get(`/admin/ab-eval/runs/${id}`),
+  runAbEval: (body) => api.post('/admin/ab-eval/runs', body),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

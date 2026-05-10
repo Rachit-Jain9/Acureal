@@ -16,6 +16,7 @@ const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const aiUsageService = require('../services/aiUsage.service');
 const routingConfigService = require('../services/ai/routingConfig');
+const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 const { query } = require('../config/database');
 
 const router = express.Router();
@@ -136,6 +137,69 @@ router.put('/ai-routing/:task', authenticate, requireRole('admin'), async (req, 
       changedBy: req.user.id,
     });
     return res.json({ success: true, data: updated });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// A/B eval harness — Tier 2 #14 finish.
+// Wraps the existing CLI harness (backend/scripts/run-ab-eval.js) with
+// admin-only HTTP routes that persist results to ab_eval_runs +
+// ab_eval_results. Surfaced on AdminAbEvalPage on the frontend.
+// ──────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/ab-eval/runs?limit=50 — list past runs, newest first
+router.get('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const rows = await abEvalPersistence.listRuns({
+      limit: Number(req.query.limit) || 50,
+    });
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/ab-eval/runs/:id — full detail incl. per-fixture rows
+router.get('/ab-eval/runs/:id', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const run = await abEvalPersistence.getRunDetail(req.params.id);
+    if (!run) {
+      return res.status(404).json({ success: false, message: 'Run not found.' });
+    }
+    return res.json({ success: true, data: run });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/admin/ab-eval/runs — trigger a new evaluation
+//
+// Body:
+//   { task: 'parcel_narrative' | 'export_insights',
+//     candidates: ['claude:claude-sonnet-4-6', 'openai:gpt-5.4-mini'],
+//     limit: 10 }
+//
+// Sync — the request blocks until the eval completes. With the
+// 10-fixture default and 2 candidates, expect ~30–40s end-to-end.
+// Vercel function timeout is 60s; harness internally caps at 50
+// fixtures per run.
+router.post('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const {
+      task = 'parcel_narrative',
+      candidates = ['claude:claude-sonnet-4-6', 'openai:gpt-5.4-mini'],
+      limit = 10,
+    } = req.body || {};
+    const run = await abEvalPersistence.runAndPersist({
+      organizationId: req.user.organization_id,
+      triggeredBy: req.user.id,
+      task,
+      candidateSpecs: candidates,
+      limit,
+    });
+    return res.json({ success: true, data: run });
   } catch (error) {
     return next(error);
   }
