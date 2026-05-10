@@ -1174,8 +1174,12 @@ router.get(
       // named ranges + locked formulas + native chart on Dashboard.
       // Default remains the existing 13-sheet workbook until v2 is
       // proven in production.
-      const useV2 = String(req.query.v || '').trim() === '2'
-        || process.env.XLSX_V2_DEFAULT === '1';
+      // Workbook variant — v2 is the new default (4 visible sheets +
+      // hidden Calculations audit trail). Operator can opt back to the
+      // legacy 13-sheet workbook with `?v=1` or by setting
+      // `XLSX_V1_FORCE=1` in Vercel.
+      const explicitV1 = String(req.query.v || '').trim() === '1' || process.env.XLSX_V1_FORCE === '1';
+      const useV2 = !explicitV1;
       const builder = useV2 ? buildDealWorkbookV2 : buildDealWorkbookXlsx;
 
       const xlsxBuffer = await builder(exportContext, {
@@ -1186,7 +1190,9 @@ router.get(
       const xlsxSafeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
         .replace(/[^a-z0-9]/gi, '-')
         .toLowerCase();
-      const variantSuffix = useV2 ? '-v2' : '';
+      // v2 is now the default — only tag the filename when the operator
+      // opts back to v1, so they can tell which they downloaded.
+      const variantSuffix = explicitV1 ? '-v1' : '';
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}${variantSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
       return res.send(xlsxBuffer);

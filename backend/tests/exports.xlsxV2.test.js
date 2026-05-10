@@ -83,7 +83,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook contains exactly the four named sheets', async () => {
+    test('produced workbook contains the four visible sheets + hidden Calculations sheet', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
@@ -93,7 +93,48 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Phasing & Sales Collection',
         'Quarterly Cash Flow & Debt',
         'Dashboard',
+        'Calculations',
       ]);
+      const calc = wb.getWorksheet('Calculations');
+      expect(calc).toBeDefined();
+      // Hidden by default — power users right-click → Unhide
+      expect(calc.state).toBe('hidden');
+    });
+
+    test('Calculations sheet carries the audit-trail blocks', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const calc = wb.getWorksheet('Calculations');
+      const text = [];
+      calc.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text.push(cell.value);
+      }));
+      const joined = text.join(' | ');
+      expect(joined).toMatch(/Revenue Build/);
+      expect(joined).toMatch(/Cost Build/);
+      expect(joined).toMatch(/Debt Sculpting/);
+      expect(joined).toMatch(/Returns Inputs/);
+    });
+
+    test('Dashboard renders Returns block (IRR / NPV / Equity Multiple) and Scenario strip', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+      const text = [];
+      dash.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text.push(cell.value);
+      }));
+      const joined = text.join(' | ');
+      expect(joined).toMatch(/Returns/);
+      expect(joined).toMatch(/Project IRR/);
+      expect(joined).toMatch(/NPV/);
+      expect(joined).toMatch(/Equity Multiple/);
+      expect(joined).toMatch(/Sensitivity/);
+      expect(joined).toMatch(/Scenario Comparison/);
+      expect(joined).toMatch(/BULL CASE/);
+      expect(joined).toMatch(/BEAR CASE/);
     });
 
     test('Inputs sheet has the input zone unlocked', async () => {
