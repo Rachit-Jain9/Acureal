@@ -54,6 +54,7 @@ const {
 } = require('./exports/pptx/contentBuilders');
 const { computeDealScore } = require('../utils/scoring/dealScore');
 const { renderScoreGaugeDataUri } = require('./exports/shared/svgGauge.service');
+const { renderSiteMap } = require('./exports/shared/staticMap.service');
 const { generateSection } = require('./exports/narrative/exportNarrative.service');
 
 // Format helpers (lightweight — primary formatters live in pptx/_helpers.js).
@@ -181,32 +182,42 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
   };
   const dealScore = computeDealScore(scoreInput);
 
-  // AI Pros & Cons synthesis (Gemini primary, OpenAI fallback). Never throws.
-  const prosCons = await generateSection({
-    section: 'prosCons',
-    payload: {
-      kpis: {
-        irrPct: baseContext.irr,
-        npvCr: baseContext.npv,
-        equityMultiple: baseContext.equityMultiple,
-        grossMarginPct: baseContext.grossMargin,
-        totalCostCr: baseContext.totalCost,
-        totalRevenueCr: baseContext.totalRevenue,
+  // Run AI narrative + Mapbox site-map fetch in parallel. Both wrapped so a
+  // single failure never crashes the deck — each returns a fallback shape.
+  const lat = Number(exportContext?.deal?.property_lat);
+  const lng = Number(exportContext?.deal?.property_lng);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+
+  const [prosCons, siteMapBuffer] = await Promise.all([
+    generateSection({
+      section: 'prosCons',
+      payload: {
+        kpis: {
+          irrPct: baseContext.irr,
+          npvCr: baseContext.npv,
+          equityMultiple: baseContext.equityMultiple,
+          grossMarginPct: baseContext.grossMargin,
+          totalCostCr: baseContext.totalCost,
+          totalRevenueCr: baseContext.totalRevenue,
+        },
+        dd_progress: { completionPct: ddCompletionPct, openDealBreakers: Number(ddSummary.open_deal_breakers) || 0 },
+        approvals: baseContext.approvalSummary,
+        risk_flags: baseContext.exportContext?.risks?.items?.slice(0, 5) || [],
+        comp_positioning: {
+          benchmarkMedianRate: baseContext.benchmarkMedianRate,
+          modelSellRate: baseContext.modelSellRate,
+        },
+        asset_class: baseContext.assetClass,
+        deal_type: baseContext.dealTypeLabel,
+        locality: baseContext.locationLine,
       },
-      dd_progress: { completionPct: ddCompletionPct, openDealBreakers: Number(ddSummary.open_deal_breakers) || 0 },
-      approvals: baseContext.approvalSummary,
-      risk_flags: baseContext.exportContext?.risks?.items?.slice(0, 5) || [],
-      comp_positioning: {
-        benchmarkMedianRate: baseContext.benchmarkMedianRate,
-        modelSellRate: baseContext.modelSellRate,
-      },
-      asset_class: baseContext.assetClass,
-      deal_type: baseContext.dealTypeLabel,
-      locality: baseContext.locationLine,
-    },
-    dealId,
-    organizationId: orgId,
-  }).catch(() => ({ available: false, pros: [], cons: [], reason: 'Narrative call failed' }));
+      dealId,
+      organizationId: orgId,
+    }).catch(() => ({ available: false, pros: [], cons: [], reason: 'Narrative call failed' })),
+    hasCoords
+      ? renderSiteMap({ lat, lng, zoom: 15, label: baseContext.locationLine || 'Site' }).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
   const scoreGaugeDataUri = renderScoreGaugeDataUri({
     score: dealScore.score,
@@ -219,6 +230,7 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
     scoreGaugeDataUri,
     dealScore,
     prosCons,
+    siteMapBuffer,
   };
 };
 
