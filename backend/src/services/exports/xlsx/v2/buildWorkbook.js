@@ -102,12 +102,22 @@ const buildContext = (exportContext = {}, options = {}) => {
   ) || 36;
   const totalQuarters = clamp(Math.ceil(projectMonths / 3), 4, 32);
 
+  // Income-producing vs development asset classes. Drives the entire
+  // workbook's structure: income deals get a PGI / Vacancy / EGR / OpEx
+  // / NOI / CapEx / Debt Service operating P&L; development deals get
+  // construction phasing + sales collection cash flows. Both get the
+  // same Inputs / Dashboard / Calculations chrome.
+  const INCOME_CLASSES = ['commercial_office', 'retail', 'industrial_warehousing', 'hospitality'];
+  const dealFamily = INCOME_CLASSES.includes(assetClass) ? 'income' : 'development';
+
   return {
     exportContext,
     deal,
     property,
     inputs,
     assetClass,
+    dealFamily,
+    isIncome: dealFamily === 'income',
     projectMonths,
     totalQuarters,
     brandName: options.brandName || 'REDIP',
@@ -223,59 +233,110 @@ const buildInputsSheet = (workbook, ctx) => {
   styleHeader(sheet.getRow(4));
 
   // Sections — each entry: [label, name, value, unit, format]
-  const sections = [
-    {
-      title: 'General Site Information',
-      rows: [
-        ['Effective Date',          'EffectiveDate',       ctx.effectiveDate,                           '',      NUMBER_FORMATS.date],
-        ['Asset Class',             'AssetClass',          ctx.assetClass || 'generic',                  '',      null],
-        ['Deal Type',               'DealType',            ctx.deal.deal_type || 'acquisition',          '',      null],
-        ['Locality',                'Locality',            ctx.deal.city || ctx.property.city || 'Bengaluru', '', null],
-        ['Land Area',               'LandAreaSqft',        firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft), 'sqft', NUMBER_FORMATS.integer],
-        ['Saleable Area',           'SaleableAreaSqft',    firstNumber(ctx.property.saleable_area_sqft, ctx.deal.saleable_area_sqft, ctx.inputs.saleableAreaSqft), 'sqft', NUMBER_FORMATS.integer],
-        ['Floor Space Index (FSI)', 'FSI',                 firstNumber(ctx.property.existing_fsi, ctx.inputs.fsi),                                       'ratio', NUMBER_FORMATS.multiple],
-      ],
-    },
-    {
-      title: 'Pricing & Revenue',
-      rows: [
-        ['Selling Rate per sqft',   'SellRatePerSqft',     firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft),                  'INR/sqft', NUMBER_FORMATS.integer],
-        ['Pricing Escalation',      'EscalationPct',       firstNumber(ctx.inputs.pricingEscalationPct, ctx.inputs.rentEscalationPct, 0),                 '% / year', NUMBER_FORMATS.percent],
-        ['Sales Velocity',          'SalesVelocityPct',    firstNumber(ctx.inputs.salesVelocityPct, ctx.inputs.absorptionPct, 0.20),                     '% / quarter', NUMBER_FORMATS.percent],
-        ['Customer Collection',     'CollectionPct',       firstNumber(ctx.inputs.customerCollectionPct, 0.85),                                          '% of sale', NUMBER_FORMATS.percent],
-      ],
-    },
-    {
-      title: 'Cost Structure',
-      rows: [
-        ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),                                 'INR Cr', NUMBER_FORMATS.currency],
-        ['Construction Cost / sqft','ConstructionCostPerSqft', firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0),  'INR/sqft', NUMBER_FORMATS.integer],
-        ['Approval & Fees',         'ApprovalCostCr',      firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),                          'INR Cr', NUMBER_FORMATS.currency],
+  // Asset-class-aware: income deals get rent/vacancy/OpEx/exit-cap inputs;
+  // development deals get sale-rate/velocity/collection/marketing inputs.
+  // Common sections (General Site, Cost Structure, Schedule, Capital +
+  // Returns) appear for both.
+  const generalSection = {
+    title: 'General Site Information',
+    rows: [
+      ['Effective Date',          'EffectiveDate',       ctx.effectiveDate,                           '',      NUMBER_FORMATS.date],
+      ['Asset Class',             'AssetClass',          ctx.assetClass || 'generic',                  '',      null],
+      ['Deal Type',               'DealType',            ctx.deal.deal_type || 'acquisition',          '',      null],
+      ['Deal Family',             'DealFamily',          ctx.dealFamily,                              '',      null],
+      ['Locality',                'Locality',            ctx.deal.city || ctx.property.city || 'Bengaluru', '', null],
+      ['Land Area',               'LandAreaSqft',        firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0), 'sqft', NUMBER_FORMATS.integer],
+      ['Saleable / Leasable Area','SaleableAreaSqft',    firstNumber(ctx.property.saleable_area_sqft, ctx.deal.saleable_area_sqft, ctx.inputs.saleableAreaSqft, ctx.inputs.leasableAreaSqft, 0), 'sqft', NUMBER_FORMATS.integer],
+      ['Floor Space Index (FSI)', 'FSI',                 firstNumber(ctx.property.existing_fsi, ctx.inputs.fsi, 1.5), 'ratio', NUMBER_FORMATS.multiple],
+    ],
+  };
+
+  const developmentRevenueSection = {
+    title: 'Pricing & Revenue (Development)',
+    rows: [
+      ['Selling Rate per sqft',   'SellRatePerSqft',     firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft, 0),                'INR/sqft', NUMBER_FORMATS.integer],
+      ['Pricing Escalation',      'EscalationPct',       firstNumber(ctx.inputs.pricingEscalationPct, ctx.inputs.rentEscalationPct, 0),                 '% / year', NUMBER_FORMATS.percent],
+      ['Sales Velocity',          'SalesVelocityPct',    firstNumber(ctx.inputs.salesVelocityPct, ctx.inputs.absorptionPct, 0.20),                     '% / quarter', NUMBER_FORMATS.percent],
+      ['Customer Collection',     'CollectionPct',       firstNumber(ctx.inputs.customerCollectionPct, 0.85),                                          '% of sale', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  const incomeRevenueSection = {
+    title: 'Operating Revenue Inputs (Income Asset)',
+    rows: [
+      ['Base Rent / sqft / month','BaseRentPerSqftMonth', firstNumber(ctx.inputs.baseRentPerSqftMonth, ctx.inputs.rentPerSqftMonth, 0),               'INR/sqft/mo', NUMBER_FORMATS.integer],
+      ['Rent Escalation',         'RentEscalationPct',   firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05),             '% / year', NUMBER_FORMATS.percent],
+      ['Stabilised Occupancy',    'OccupancyPct',        firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct ? ctx.deal.occupancy_pct / 100 : null, 0.92), '% of leasable', NUMBER_FORMATS.percent],
+      ['Vacancy & Credit Loss',   'VacancyPct',          firstNumber(ctx.inputs.vacancyPct, 0.05),                                                     '% of PGI', NUMBER_FORMATS.percent],
+      ['Other Income / sqft / yr','OtherIncomePerSqft',  firstNumber(ctx.inputs.otherIncomePerSqft, 0),                                                'INR/sqft/yr', NUMBER_FORMATS.integer],
+      ['Lease-up Period',         'LeaseUpQuarters',     firstNumber(ctx.inputs.leaseUpQuarters, 4),                                                   'quarters', NUMBER_FORMATS.integer],
+    ],
+  };
+
+  const incomeOpExSection = {
+    title: 'Operating Expenses (Income Asset)',
+    rows: [
+      ['Property Tax',            'PropertyTaxPct',      firstNumber(ctx.inputs.propertyTaxPct, 0.015),                                                '% of EGR', NUMBER_FORMATS.percent],
+      ['Insurance',               'InsurancePct',        firstNumber(ctx.inputs.insurancePct, 0.01),                                                   '% of EGR', NUMBER_FORMATS.percent],
+      ['Property Management Fee', 'PropMgmtPct',         firstNumber(ctx.inputs.propMgmtPct, ctx.inputs.managementFeePct, 0.03),                       '% of EGR', NUMBER_FORMATS.percent],
+      ['Utilities',               'UtilitiesPct',        firstNumber(ctx.inputs.utilitiesPct, 0.04),                                                   '% of EGR', NUMBER_FORMATS.percent],
+      ['Maintenance & Repairs',   'MaintenancePct',      firstNumber(ctx.inputs.maintenancePct, ctx.inputs.opexPct, 0.05),                              '% of EGR', NUMBER_FORMATS.percent],
+      ['CapEx Reserves',          'CapExReservePct',     firstNumber(ctx.inputs.capExReservePct, 0.02),                                                '% of EGR', NUMBER_FORMATS.percent],
+      ['TI / LC (Tenant Improv)', 'TILCAllowanceCr',     firstNumber(ctx.inputs.tiLcAllowanceCr, ctx.inputs.tenantImprovementsCr, 0),                  'INR Cr (one-time)', NUMBER_FORMATS.currency],
+      ['Exit Cap Rate',           'ExitCapRate',         firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08),       '% / year', NUMBER_FORMATS.percent],
+      ['Selling Cost on Exit',    'SellingCostPct',      firstNumber(ctx.inputs.sellingCostPct, 0.02),                                                 '% of sale', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  const costSection = {
+    title: 'Cost Structure',
+    rows: [
+      ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
+      ['Construction Cost / sqft','ConstructionCostPerSqft', firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0), 'INR/sqft', NUMBER_FORMATS.integer],
+      ['Approval & Fees',         'ApprovalCostCr',      firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),                           'INR Cr', NUMBER_FORMATS.currency],
+      ...(ctx.dealFamily === 'development' ? [
         ['Marketing & Sales',       'MarketingCostPct',    firstNumber(ctx.inputs.marketingCostPct, 0.04),                                                '% of revenue', NUMBER_FORMATS.percent],
-        ['Finance / Treasury Cost', 'FinanceCostPct',      firstNumber(ctx.inputs.financeCostPct, 0.02),                                                  '% of revenue', NUMBER_FORMATS.percent],
-        ['GST',                     'GstPct',              firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, 0.05),                                   '%', NUMBER_FORMATS.percent],
-        ['Stamp Duty',              'StampDutyPct',        firstNumber(ctx.inputs.stampDutyPct, 0.05),                                                    '%', NUMBER_FORMATS.percent],
-      ],
-    },
-    {
-      title: 'Project Schedule',
-      rows: [
-        ['Project Duration',        'ProjectMonths',       ctx.projectMonths,                                                                              'months', NUMBER_FORMATS.integer],
-        ['Quarters',                'TotalQuarters',       ctx.totalQuarters,                                                                              'count', NUMBER_FORMATS.integer],
-        ['Construction Start Lag',  'ConstructionLagQ',    firstNumber(ctx.inputs.constructionLagQuarters, 1),                                              'quarters', NUMBER_FORMATS.integer],
-        ['Sales Launch Lag',        'SalesLagQ',           firstNumber(ctx.inputs.salesLagQuarters, 0),                                                     'quarters', NUMBER_FORMATS.integer],
-      ],
-    },
-    {
-      title: 'Capital Structure & Returns',
-      rows: [
-        ['Debt %',                  'DebtLTV',             firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55),                                      '% of cost', NUMBER_FORMATS.percent],
-        ['Interest Rate',           'DebtRatePct',         firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115),                          '% / year', NUMBER_FORMATS.percent],
-        ['Moratorium',              'MoratoriumMonths',    firstNumber(ctx.inputs.moratoriumMonths, 0),                                                    'months', NUMBER_FORMATS.integer],
-        ['Discount Rate',           'DiscountRatePct',     firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16),                       '% / year', NUMBER_FORMATS.percent],
-        ['Developer Margin Target', 'DeveloperMarginPct',  firstNumber(ctx.inputs.developerMarginPct, ctx.deal.developer_margin_pct, 0.20),                  '%', NUMBER_FORMATS.percent],
-      ],
-    },
+      ] : [
+        ['Marketing / Leasing',     'MarketingCostPct',    firstNumber(ctx.inputs.marketingCostPct, 0.02),                                                '% of EGR', NUMBER_FORMATS.percent],
+      ]),
+      ['Finance / Treasury Cost', 'FinanceCostPct',      firstNumber(ctx.inputs.financeCostPct, 0.02),                                                   '% of revenue', NUMBER_FORMATS.percent],
+      ['Contingency',             'ContingencyPct',      firstNumber(ctx.inputs.contingencyPct, 0.05),                                                   '% of cost', NUMBER_FORMATS.percent],
+      ['GST',                     'GstPct',              firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, 0.05),                                    '%', NUMBER_FORMATS.percent],
+      ['Stamp Duty',              'StampDutyPct',        firstNumber(ctx.inputs.stampDutyPct, 0.05),                                                     '%', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  const scheduleSection = {
+    title: 'Project Schedule',
+    rows: [
+      ['Project Duration',        'ProjectMonths',       ctx.projectMonths,                                                                              'months', NUMBER_FORMATS.integer],
+      ['Quarters',                'TotalQuarters',       ctx.totalQuarters,                                                                              'count', NUMBER_FORMATS.integer],
+      ['Construction Start Lag',  'ConstructionLagQ',    firstNumber(ctx.inputs.constructionLagQuarters, 1),                                             'quarters', NUMBER_FORMATS.integer],
+      ['Sales / Lease Launch Lag','SalesLagQ',           firstNumber(ctx.inputs.salesLagQuarters, ctx.inputs.leaseLagQuarters, 0),                       'quarters', NUMBER_FORMATS.integer],
+    ],
+  };
+
+  const capitalSection = {
+    title: 'Capital Structure & Returns',
+    rows: [
+      ['Debt %',                  'DebtLTV',             firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55),                                      '% of cost', NUMBER_FORMATS.percent],
+      ['Interest Rate',           'DebtRatePct',         firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115),                          '% / year', NUMBER_FORMATS.percent],
+      ['Loan Term',               'LoanTermYears',       firstNumber(ctx.inputs.loanTermYears, 7),                                                       'years', NUMBER_FORMATS.integer],
+      ['Moratorium',              'MoratoriumMonths',    firstNumber(ctx.inputs.moratoriumMonths, 0),                                                    'months', NUMBER_FORMATS.integer],
+      ['Discount Rate',           'DiscountRatePct',     firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16),                      '% / year', NUMBER_FORMATS.percent],
+      ['Developer Margin Target', 'DeveloperMarginPct',  firstNumber(ctx.inputs.developerMarginPct, ctx.deal.developer_margin_pct, 0.20),                 '%', NUMBER_FORMATS.percent],
+      ['JV — Developer Share',    'JVDevPct',            firstNumber(ctx.deal.jv_split_developer_pct ? ctx.deal.jv_split_developer_pct / 100 : null, ctx.inputs.jvDevPct, 0.50),  '% of profit', NUMBER_FORMATS.percent],
+      ['JV — Landowner Share',    'JVLandPct',           firstNumber(ctx.deal.jv_split_landowner_pct ? ctx.deal.jv_split_landowner_pct / 100 : null, ctx.inputs.jvLandPct, 0.50), '% of profit', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  // Compose the sections list with asset-class branching.
+  const sections = [
+    generalSection,
+    ...(ctx.dealFamily === 'income' ? [incomeRevenueSection, incomeOpExSection] : [developmentRevenueSection]),
+    costSection,
+    scheduleSection,
+    capitalSection,
   ];
 
   let row = 5;
@@ -313,16 +374,8 @@ const buildInputsSheet = (workbook, ctx) => {
   sheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getCell(`A${row}`).protection = { locked: true };
 
-  // Sheet protection — allow input cells to be edited, lock everything else.
-  sheet.protect('', {
-    selectLockedCells: true,
-    selectUnlockedCells: true,
-    formatCells: false,
-    formatColumns: false,
-    formatRows: false,
-    insertRows: false,
-    deleteRows: false,
-  });
+  // Sheet protection intentionally disabled — the operator owns this
+  // file once downloaded. Yellow input cells remain visually obvious.
 
   return { sheet, definedNames };
 };
@@ -340,17 +393,32 @@ const buildPhasingSheet = (workbook, ctx) => {
   cols.push({ width: 16 }); // Total
   sheet.columns = cols;
 
-  // Title row
+  // Helpers
+  const colLetter = (n) => {
+    let s = '';
+    let v = n;
+    while (v > 0) {
+      const r = (v - 1) % 26;
+      s = String.fromCharCode(65 + r) + s;
+      v = Math.floor((v - r) / 26);
+    }
+    return s;
+  };
+
+  // Title row — asset-class-aware
   sheet.mergeCells(1, 1, 1, ctx.totalQuarters + 2);
-  sheet.getCell(1, 1).value = `${ctx.brandName} | Construction Phasing & Sales Collection`;
+  sheet.getCell(1, 1).value = ctx.dealFamily === 'income'
+    ? `${ctx.brandName} | Lease-up & Operating Schedule`
+    : `${ctx.brandName} | Construction Phasing & Sales Collection`;
   styleSectionTitle(sheet.getCell(1, 1));
   sheet.getRow(1).height = 26;
 
   sheet.mergeCells(2, 1, 2, ctx.totalQuarters + 2);
-  sheet.getCell(2, 1).value = `Quarters driven by ProjectMonths input. All formulas reference Inputs & Assumptions named ranges.`;
+  sheet.getCell(2, 1).value = ctx.dealFamily === 'income'
+    ? `Quarter-by-quarter PGI / EGR / OpEx / NOI build. All formulas reference Inputs & Assumptions named ranges.`
+    : `Quarters driven by ProjectMonths input. All formulas reference Inputs & Assumptions named ranges.`;
   sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(2, 1).alignment = { vertical: 'middle' };
-  sheet.getCell(2, 1).protection = { locked: true };
 
   // Header row 4
   sheet.getCell(4, 1).value = 'Line item';
@@ -358,7 +426,107 @@ const buildPhasingSheet = (workbook, ctx) => {
   sheet.getCell(4, ctx.totalQuarters + 2).value = 'Total';
   styleHeader(sheet.getRow(4));
 
-  const rows = [
+  // Asset-class branching: Income deals get a full operating P&L
+  // (PGI/Vacancy/Other-Income/EGR/OpEx-line-items/NOI/CapEx-Reserves/
+  // NOI-after-CapEx/Cumulative-NOI). Development deals get the existing
+  // construction phasing + sales collection rows, expanded with
+  // marketing spend + cumulative collections.
+  const incomeRows = [
+    // Lease-up ramp — 0% before SalesLagQ, then linear ramp over LeaseUpQuarters, capped at OccupancyPct
+    {
+      label: 'Lease-up % of stabilised',
+      formula: (q) => `=IF(${q}<=SalesLagQ,0,MIN(1,(${q}-SalesLagQ)/LeaseUpQuarters))`,
+      format: NUMBER_FORMATS.percent,
+    },
+    {
+      label: 'Effective occupancy',
+      formula: (q) => `=B5*OccupancyPct`.replace('B5', `${colLetter(q + 1)}5`),
+      format: NUMBER_FORMATS.percent,
+    },
+    {
+      label: 'Effective rent / sqft / mo',
+      formula: (q) => `=BaseRentPerSqftMonth*(1+RentEscalationPct)^((${q}-1)/4)`,
+      format: NUMBER_FORMATS.integer,
+    },
+    {
+      label: 'PGI — Potential Gross Income (INR Cr)',
+      formula: (q) => `=SaleableAreaSqft*${colLetter(q + 1)}7*3/10000000`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Less: Vacancy & Credit Loss',
+      formula: (q) => `=-${colLetter(q + 1)}8*VacancyPct*(1-${colLetter(q + 1)}6)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Plus: Other Income',
+      formula: (q) => `=SaleableAreaSqft*OtherIncomePerSqft*${colLetter(q + 1)}6/4/10000000`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'EGR — Effective Gross Revenue',
+      formula: (q) => `=${colLetter(q + 1)}8+${colLetter(q + 1)}9+${colLetter(q + 1)}10`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Less: Property Tax',
+      formula: (q) => `=-${colLetter(q + 1)}11*PropertyTaxPct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Less: Insurance',
+      formula: (q) => `=-${colLetter(q + 1)}11*InsurancePct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Less: Property Management',
+      formula: (q) => `=-${colLetter(q + 1)}11*PropMgmtPct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Less: Utilities',
+      formula: (q) => `=-${colLetter(q + 1)}11*UtilitiesPct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Less: Maintenance & Repairs',
+      formula: (q) => `=-${colLetter(q + 1)}11*MaintenancePct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Total Operating Expenses',
+      formula: (q) => `=SUM(${colLetter(q + 1)}12:${colLetter(q + 1)}16)`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'NOI — Net Operating Income',
+      formula: (q) => `=${colLetter(q + 1)}11+${colLetter(q + 1)}17`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Less: CapEx Reserves',
+      formula: (q) => `=-${colLetter(q + 1)}11*CapExReservePct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Cash Flow Before Debt Service',
+      formula: (q) => `=${colLetter(q + 1)}18+${colLetter(q + 1)}19`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Cumulative CF Before Debt',
+      formula: (q) => q === 1
+        ? `=${colLetter(q + 1)}20`
+        : `=${colLetter(q)}21+${colLetter(q + 1)}20`,
+      format: NUMBER_FORMATS.currency,
+    },
+  ];
+
+  const developmentRows = [
     {
       label: 'Quarter share (uniform)',
       formula: () => `=1/TotalQuarters`,
@@ -372,22 +540,9 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'Cumulative construction cost (INR Cr)',
-      formula: (q) => {
-        if (q === 1) return `=B6`;
-        const colLetter = (n) => {
-          let s = '';
-          let v = n;
-          while (v > 0) {
-            const r = (v - 1) % 26;
-            s = String.fromCharCode(65 + r) + s;
-            v = Math.floor((v - r) / 26);
-          }
-          return s;
-        };
-        const prev = colLetter(q);
-        const curr = colLetter(q + 1);
-        return `=${prev}7+${curr}6`;
-      },
+      formula: (q) => q === 1
+        ? `=B6`
+        : `=${colLetter(q)}7+${colLetter(q + 1)}6`,
       format: NUMBER_FORMATS.currency,
     },
     {
@@ -406,47 +561,42 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'Customer collection (INR Cr)',
-      formula: (q) => {
-        const colLetter = (n) => {
-          let s = '';
-          let v = n;
-          while (v > 0) {
-            const r = (v - 1) % 26;
-            s = String.fromCharCode(65 + r) + s;
-            v = Math.floor((v - r) / 26);
-          }
-          return s;
-        };
-        const curr = colLetter(q + 1);
-        return `=${curr}9*CollectionPct`;
-      },
+      formula: (q) => `=${colLetter(q + 1)}9*CollectionPct`,
       format: NUMBER_FORMATS.currency,
     },
+    {
+      label: 'Marketing & Sales spend (INR Cr)',
+      formula: (q) => `=${colLetter(q + 1)}9*MarketingCostPct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Cumulative customer collection',
+      formula: (q) => q === 1
+        ? `=${colLetter(q + 1)}10`
+        : `=${colLetter(q)}12+${colLetter(q + 1)}10`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
   ];
+
+  const rows = ctx.dealFamily === 'income' ? incomeRows : developmentRows;
 
   rows.forEach((rowSpec, rowIdx) => {
     const r = 5 + rowIdx;
     sheet.getCell(r, 1).value = rowSpec.label;
     styleLabelCell(sheet.getCell(r, 1));
 
+    if (rowSpec.bold) sheet.getCell(r, 1).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+
     for (let q = 1; q <= ctx.totalQuarters; q += 1) {
       const cell = sheet.getCell(r, 1 + q);
       const formula = rowSpec.formula(q);
       cell.value = { formula };
       styleOutputCell(cell, rowSpec.format);
+      if (rowSpec.bold) cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
     }
     // Total column — sum of quarters
     const totalCell = sheet.getCell(r, ctx.totalQuarters + 2);
-    const colLetter = (n) => {
-      let s = '';
-      let v = n;
-      while (v > 0) {
-        const r2 = (v - 1) % 26;
-        s = String.fromCharCode(65 + r2) + s;
-        v = Math.floor((v - r2) / 26);
-      }
-      return s;
-    };
     const startCol = colLetter(2); // Q1 is column B
     const endCol = colLetter(ctx.totalQuarters + 1);
     totalCell.value = { formula: `=SUM(${startCol}${r}:${endCol}${r})` };
@@ -454,10 +604,9 @@ const buildPhasingSheet = (workbook, ctx) => {
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
 
-  sheet.protect('', {
-    selectLockedCells: true,
-    selectUnlockedCells: true,
-  });
+  // Sheet protection intentionally disabled — the operator owns this
+  // file once it's downloaded and shouldn't be blocked from editing
+  // any cell. Yellow input cells are still visually obvious.
   return sheet;
 };
 
@@ -506,7 +655,66 @@ const buildCashFlowSheet = (workbook, ctx) => {
   // Helper to reference the phasing sheet for revenue / cost
   const phasing = `'${SHEETS.phasing}'`;
 
-  const rows = [
+  // Income deal cash flow rows — pulls Cash Flow Before Debt from
+  // Phasing!{col}20 (the new Operating P&L), adds debt service.
+  // Reversion in the final period uses NOI / Cap Rate.
+  const incomeRows = [
+    {
+      label: 'Cash Flow Before Debt Service (from Operating P&L)',
+      formula: (q) => `=${phasing}!${colLetters[q - 1]}20`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Less: Interest expense',
+      formula: (q) => {
+        // Interest = (LTV × Total Cost − cumulative principal paid) × rate / 4
+        if (q === 1) return `=-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV*DebtRatePct/4`;
+        return `=-((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV-IFERROR(SUM($B$7:${colLetters[q - 2]}7),0))*DebtRatePct/4`;
+      },
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Less: Principal repayment',
+      formula: (q) =>
+        `=IF(AND(${q}>MoratoriumMonths/3,${colLetters[q - 1]}5+${colLetters[q - 1]}6>0),MIN(${colLetters[q - 1]}5+${colLetters[q - 1]}6,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV/(LoanTermYears*4)),0)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Total Debt Service',
+      formula: (q) => `=${colLetters[q - 1]}6+${colLetters[q - 1]}7`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Cash Flow After Debt Service',
+      formula: (q) => `=${colLetters[q - 1]}5+${colLetters[q - 1]}8`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'DSCR',
+      formula: (q) => `=IFERROR(${colLetters[q - 1]}5/-${colLetters[q - 1]}8,"–")`,
+      format: NUMBER_FORMATS.multiple,
+      conditional: 'dscr',
+    },
+    {
+      label: 'Reversion — Net Sale Proceeds (final period)',
+      formula: (q) => q === ctx.totalQuarters
+        ? `=IFERROR(${phasing}!${colLetters[q - 1]}18*4/ExitCapRate*(1-SellingCostPct),0)`
+        : `=0`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Total Cash Flow Including Reversion',
+      formula: (q) => `=${colLetters[q - 1]}9+${colLetters[q - 1]}11`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+  ];
+
+  // Development deal cash flow rows — existing structure.
+  const developmentRows = [
     {
       label: 'Inflow — Customer collection (INR Cr)',
       formula: (q) => `=${phasing}!${colLetters[q - 1]}10`,
@@ -561,6 +769,8 @@ const buildCashFlowSheet = (workbook, ctx) => {
       conditional: 'dscr',
     },
   ];
+
+  const rows = ctx.dealFamily === 'income' ? incomeRows : developmentRows;
 
   rows.forEach((rowSpec, rowIdx) => {
     const r = 5 + rowIdx;
@@ -622,10 +832,9 @@ const buildCashFlowSheet = (workbook, ctx) => {
     });
   }
 
-  sheet.protect('', {
-    selectLockedCells: true,
-    selectUnlockedCells: true,
-  });
+  // Sheet protection intentionally disabled — the operator owns this
+  // file once it's downloaded and shouldn't be blocked from editing
+  // any cell. Yellow input cells are still visually obvious.
   return sheet;
 };
 
@@ -668,14 +877,28 @@ const buildDashboardSheet = (workbook, ctx) => {
   };
   const totalCol = colLetter(totalQ + 2);
 
-  const kpiCells = [
-    { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',     formula: `=${phasing}!${totalCol}9`,                                format: NUMBER_FORMATS.currency },
-    { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)', formula: `=-${cashflow}!${totalCol}6+(-${cashflow}!${totalCol}7)`,  format: NUMBER_FORMATS.currency },
-    { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', formula: `=${cashflow}!${totalCol}8`,                            format: NUMBER_FORMATS.currency },
-    { row: 7, col: 'A', label: 'Gross Margin',                formula: `=IFERROR(${cashflow}!${totalCol}8/${phasing}!${totalCol}9,0)`, format: NUMBER_FORMATS.percent },
-    { row: 7, col: 'C', label: 'Min DSCR',                    formula: `=${cashflow}!${totalCol}13`,                              format: NUMBER_FORMATS.multiple },
-    { row: 7, col: 'E', label: 'Equity Cash Flow (INR Cr)',   formula: `=${cashflow}!${totalCol}12`,                              format: NUMBER_FORMATS.currency },
-  ];
+  // Asset-class-aware KPI tiles. Income deals show NOI / Cap Rate /
+  // DSCR / Cash-on-Cash / Reversion. Development deals show Revenue /
+  // Cost / Net CF / Gross Margin / Min DSCR / Equity CF.
+  const kpiCells = ctx.dealFamily === 'income'
+    ? [
+        // Top row — operating fundamentals
+        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'C', label: 'Modeled Cap Rate',              formula: `=IFERROR(${phasing}!${totalCol}18*4/(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr),0)`, format: NUMBER_FORMATS.percent },
+        { row: 4, col: 'E', label: 'Exit Cap Rate',                 formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent },
+        // Bottom row — investor returns
+        { row: 7, col: 'A', label: 'Min DSCR',                      formula: `=${cashflow}!${totalCol}10`,                                                                         format: NUMBER_FORMATS.multiple },
+        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           formula: `=IFERROR(${cashflow}!C9/((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    formula: `=${cashflow}!${totalCol}11`,                                                                         format: NUMBER_FORMATS.currency },
+      ]
+    : [
+        { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     formula: `=-${cashflow}!${totalCol}6+(-${cashflow}!${totalCol}7)`,                                          format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', formula: `=${cashflow}!${totalCol}8`,                                                                        format: NUMBER_FORMATS.currency },
+        { row: 7, col: 'A', label: 'Gross Margin',                    formula: `=IFERROR(${cashflow}!${totalCol}8/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'C', label: 'Min DSCR',                        formula: `=${cashflow}!${totalCol}13`,                                                                      format: NUMBER_FORMATS.multiple },
+        { row: 7, col: 'E', label: 'Equity Cash Flow (INR Cr)',       formula: `=${cashflow}!${totalCol}12`,                                                                      format: NUMBER_FORMATS.currency },
+      ];
   kpiCells.forEach(({ row, col, label, formula, format }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
     labelCell.value = label;
@@ -932,10 +1155,9 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getCell('A36').protection = { locked: true };
   sheet.getRow(36).height = 28;
 
-  sheet.protect('', {
-    selectLockedCells: true,
-    selectUnlockedCells: true,
-  });
+  // Sheet protection intentionally disabled — the operator owns this
+  // file once it's downloaded and shouldn't be blocked from editing
+  // any cell. Yellow input cells are still visually obvious.
   return sheet;
 };
 
@@ -1041,10 +1263,9 @@ const buildCalculationsSheet = (workbook, ctx) => {
   sheet.getCell(`A${row + 1}`).protection = { locked: true };
 
   // Lock everything — power users who want to edit can unhide + unprotect.
-  sheet.protect('', {
-    selectLockedCells: true,
-    selectUnlockedCells: true,
-  });
+  // Sheet protection intentionally disabled — the operator owns this
+  // file once it's downloaded and shouldn't be blocked from editing
+  // any cell. Yellow input cells are still visually obvious.
   return sheet;
 };
 

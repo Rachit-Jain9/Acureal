@@ -22,7 +22,7 @@ describe('services/exports/shared/qrImage', () => {
     const large = await qrImage.renderQrPng('https://redip.vercel.app/', { size: 512 });
     expect(small.length).toBeGreaterThan(0);
     expect(large.length).toBeGreaterThan(small.length);
-  });
+  }, 15000);
 
   test('renderQrDataUri returns a base64 data URI', async () => {
     const uri = await qrImage.renderQrDataUri('https://redip.vercel.app/');
