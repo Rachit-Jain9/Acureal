@@ -1402,23 +1402,65 @@ const renderCashFlowSensitivity = (pptx, slide, context, pageNumber, totalSlides
   addTopHeader(pptx, slide, context, 'Cash Flow & Sensitivity', pageNumber, totalSlides, `${context.assetClassLabel} | phasing and scenario range`);
 
   if (context.cashRows.length >= 2) {
-    slide.addChart(pptx.ChartType.bar, [{
-      name: 'Net cash flow',
-      labels: context.cashRows.map((row, index) => truncate(row.label || `P${index + 1}`, 12)),
-      values: context.cashRows.map((row) => num(row.net) || 0),
-    }], {
-      x: 0.55, y: 1.3, w: 6.4, h: 3.55,
-      barDir: 'col',
-      chartColors: [COLORS.plum],
-      showValue: true,
-      dataLabelFontSize: 8,
-      catAxisLabelFontSize: 8,
-      valAxisLabelFontSize: 8,
-      legendPos: 'none',
-      title: 'Modeled Net Cash Flow',
-      titleFontFace: FONT,
-      titleFontSize: 10,
-    });
+    // Combo chart: column for period net + line for cumulative.
+    // Single-series bar buried the two facts that matter to a reader —
+    // is the period contribution positive, and where does cumulative
+    // turn the corner. Showing both at once is the standard analyst
+    // read (CBRE / JLL underwriting decks). Asset-class branching only
+    // affects the series label / chart title — the math is identical
+    // either way (the kernel already produces the right `net` and
+    // `cumulative` fields per asset family).
+    const periodLabels = context.cashRows.map((row, idx) => truncate(row.label || `P${idx + 1}`, 12));
+    const periodNets = context.cashRows.map((row) => num(row.net) || 0);
+    const cumulativeNets = context.cashRows.map((row) => num(row.cumulative) || 0);
+    const periodSeriesName = context.isIncome ? 'Period NOI' : 'Period net';
+    const chartTitle = context.isIncome
+      ? 'Period NOI & Cumulative'
+      : 'Period Net Cash Flow & Cumulative';
+
+    slide.addChart(
+      [
+        {
+          type: pptx.ChartType.bar,
+          data: [{ name: periodSeriesName, labels: periodLabels, values: periodNets }],
+          options: { barDir: 'col', chartColors: [COLORS.plum] },
+        },
+        {
+          type: pptx.ChartType.line,
+          data: [{ name: 'Cumulative', labels: periodLabels, values: cumulativeNets }],
+          options: {
+            chartColors: [COLORS.green],
+            secondaryValAxis: true,
+            secondaryCatAxis: true,
+            lineSize: 2,
+            lineDataSymbol: 'circle',
+            lineDataSymbolSize: 5,
+          },
+        },
+      ],
+      {
+        x: 0.55, y: 1.3, w: 6.4, h: 3.55,
+        catAxisLabelFontSize: 8,
+        valAxisLabelFontSize: 8,
+        valAxes: [
+          { valAxisLabelFontSize: 8, valGridLine: { style: 'none' } },
+          { valAxisLabelFontSize: 8, valGridLine: { style: 'none' }, valAxisCrossesAt: 'autoZero' },
+        ],
+        catAxes: [
+          { catAxisLabelFontSize: 8 },
+          { catAxisHidden: true },
+        ],
+        showLegend: true,
+        legendPos: 'b',
+        legendFontSize: 8,
+        legendColor: COLORS.muted,
+        title: chartTitle,
+        showTitle: true,
+        titleFontFace: FONT,
+        titleFontSize: 10,
+        titleColor: COLORS.charcoal,
+      }
+    );
   }
 
   const hasSensitivity = Array.isArray(context.sensitivityMatrix?.irrGrid) && context.sensitivityMatrix.irrGrid.length > 0;
@@ -1581,10 +1623,88 @@ const renderTransactionSummary = (pptx, slide, context, pageNumber, totalSlides)
     x: 7.42,
     y: 1.98,
     w: 4.95,
-    h: 2.1,
+    h: 1.45,
     fontSize: 9.4,
     bulletColor: context.recommendations.tone === 'negative' ? COLORS.red : COLORS.sandDeep,
   });
+
+  // ─── Capital stack (debt / equity split) ──────────────────────────────
+  // Was: capital stack appeared only as a comma-separated text row inside
+  // the commercial-terms table on the left ("debt 110 Cr | equity 331 Cr")
+  // — a reader couldn't see the split proportion at a glance. Now: a
+  // horizontal stacked bar in the right panel showing debt vs equity
+  // share (segment width ∝ INR Cr value) with both absolute and pct
+  // labels. Empty-state when the model hasn't recorded a stack.
+  const debtCr = num(context.capitalStack?.debtCr);
+  const equityCr = num(context.capitalStack?.equityCr);
+  const stackTotal = (debtCr != null && debtCr > 0 ? debtCr : 0) + (equityCr != null && equityCr > 0 ? equityCr : 0);
+  slide.addText('CAPITAL STACK', {
+    x: 7.42, y: 3.50, w: 4.95, h: 0.20,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  if (stackTotal > 0) {
+    const debtFrac = (debtCr != null && debtCr > 0 ? debtCr : 0) / stackTotal;
+    const debtPct = debtFrac * 100;
+    const equityPct = 100 - debtPct;
+    const barX = 7.42;
+    const barY = 3.78;
+    const barW = 4.95;
+    const barH = 0.40;
+    const debtW = debtFrac * barW;
+
+    slide.addShape(pptx.ShapeType.rect, {
+      x: barX, y: barY, w: barW, h: barH,
+      fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+    });
+    if (debtW > 0) {
+      slide.addShape(pptx.ShapeType.rect, {
+        x: barX, y: barY, w: debtW, h: barH,
+        fill: { color: COLORS.plum }, line: { color: COLORS.plum, pt: 0 },
+      });
+    }
+    if (debtW < barW) {
+      slide.addShape(pptx.ShapeType.rect, {
+        x: barX + debtW, y: barY, w: barW - debtW, h: barH,
+        fill: { color: COLORS.sandDeep }, line: { color: COLORS.sandDeep, pt: 0 },
+      });
+    }
+    // Inline labels — only render if the segment is wide enough to read.
+    if (debtFrac >= 0.18) {
+      slide.addText(`Debt ${debtPct.toFixed(0)}%`, {
+        x: barX + 0.08, y: barY, w: debtW - 0.16, h: barH,
+        fontFace: FONT, fontSize: 10, bold: true, color: COLORS.white,
+        valign: 'mid', fit: 'shrink',
+      });
+    }
+    if (debtFrac <= 0.82) {
+      slide.addText(`Equity ${equityPct.toFixed(0)}%`, {
+        x: barX + debtW + 0.08, y: barY, w: barW - debtW - 0.16, h: barH,
+        fontFace: FONT, fontSize: 10, bold: true, color: COLORS.white,
+        valign: 'mid', fit: 'shrink',
+      });
+    }
+    // Sub-line — absolute INR Cr values with palette dots so the legend
+    // still reads on a low-contrast print-out.
+    slide.addText(
+      [
+        { text: '● ', options: { color: COLORS.plum, fontSize: 9 } },
+        { text: `Debt ${formatCrores(debtCr) || '–'}`, options: { color: COLORS.charcoal, fontSize: 9 } },
+        { text: '   ●  ', options: { color: COLORS.sandDeep, fontSize: 9 } },
+        { text: `Equity ${formatCrores(equityCr) || '–'}`, options: { color: COLORS.charcoal, fontSize: 9 } },
+      ],
+      { x: barX, y: barY + barH + 0.04, w: barW, h: 0.20, fontFace: FONT, valign: 'mid' }
+    );
+  } else {
+    slide.addText(
+      'Debt / equity split will populate once the kernel records capital stack values for this deal.',
+      {
+        x: 7.42, y: 3.78, w: 4.95, h: 0.62,
+        fontFace: FONT, fontSize: 9, italic: true, color: COLORS.muted,
+        valign: 'top', fit: 'shrink',
+      },
+    );
+  }
+
   addKpiCard(pptx, slide, {
     x: 7.42,
     y: 4.58,

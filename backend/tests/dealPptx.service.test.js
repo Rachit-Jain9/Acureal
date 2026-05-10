@@ -279,6 +279,98 @@ describe('dealPptx.service', () => {
     expect(result.length).toBeGreaterThan(1000);
   });
 
+  // The Cash Flow & Sensitivity slide previously rendered a single-series
+  // column chart of net cash flow only. A reader couldn't see the
+  // cumulative trajectory at a glance — when does the deal turn positive?
+  // The combo chart (column for period + line for cumulative on a
+  // secondary axis) is the standard analyst read on CBRE / JLL decks.
+  // Asset-class branching only changes the series label / chart title.
+  test('emits a bar+line combo chart on the Cash Flow & Sensitivity slide', () => {
+    const script = `
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const JSZip = require('jszip');
+      const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+      const exportContext = ${JSON.stringify(createExportContext())};
+      (async () => {
+        const buffer = await buildDealDeckPptx(exportContext, {
+          brandName: 'REDIP', userName: 'Test', generatedAt: '2026-05-11T00:00:00Z',
+        });
+        const zip = await JSZip.loadAsync(buffer);
+        const chartFiles = Object.keys(zip.files).filter((n) => /^ppt\\/charts\\/chart\\d+\\.xml$/.test(n));
+        const chartTypes = await Promise.all(chartFiles.map(async (name) => {
+          const xml = await zip.files[name].async('string');
+          const types = (xml.match(/<c:(barChart|pieChart|doughnutChart|lineChart|scatterChart|areaChart)/g) || []).map((m) => m.slice(3));
+          const titleMatch = xml.match(/<a:t>([^<]+Cash Flow[^<]*|[^<]+NOI[^<]*|[^<]+Cumulative[^<]*)<\\\/a:t>/);
+          return { types: [...new Set(types)], title: titleMatch ? titleMatch[1] : null };
+        }));
+        process.stdout.write(JSON.stringify({ chartTypes }));
+      })().catch((error) => { console.error(error); process.exit(1); });
+    `;
+    const output = execFileSync(process.execPath, ['-e', script], {
+      cwd: require('path').resolve(__dirname, '..'), encoding: 'utf8',
+    });
+    const result = JSON.parse(output);
+
+    // At least one chart in the deck must be the combo (bar + line).
+    const comboCharts = result.chartTypes.filter((c) =>
+      c.types.includes('barChart') && c.types.includes('lineChart')
+    );
+    expect(comboCharts.length).toBeGreaterThanOrEqual(1);
+
+    // And one of them must carry the asset-class-aware title. PPTX
+    // charts encode "&" as "&amp;" in the title cell — match either form.
+    const titles = result.chartTypes.map((c) => c.title).filter(Boolean);
+    expect(titles.some((t) => /Period (Net Cash Flow|NOI) (&|&amp;) Cumulative/.test(t))).toBe(true);
+  });
+
+  // Capital stack (debt vs equity) used to appear only as a comma-
+  // separated text row inside the commercial-terms table on the
+  // Transaction Summary slide. Reader couldn't see the proportion
+  // at a glance. Now: a horizontal stacked bar with both percent
+  // and absolute INR Cr labels.
+  test('renders a Capital Stack section on Transaction Summary with debt/equity labels', () => {
+    const script = `
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const JSZip = require('jszip');
+      const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+      const ctx = ${JSON.stringify(createExportContext())};
+      ctx.deal.model_params = { capitalStack: { debtCr: 110, equityCr: 331 } };
+      (async () => {
+        const buffer = await buildDealDeckPptx(ctx, {
+          brandName: 'REDIP', userName: 'Test', generatedAt: '2026-05-11T00:00:00Z',
+        });
+        const zip = await JSZip.loadAsync(buffer);
+        const slideNames = Object.keys(zip.files).filter((n) => /^ppt\\/slides\\/slide\\d+\\.xml$/.test(n));
+        const xmls = await Promise.all(slideNames.map((n) => zip.files[n].async('string')));
+        const matches = xmls
+          .filter((xml) => xml.includes('Transaction Summary'))
+          .map((xml) => ({
+            hasEyebrow: xml.includes('CAPITAL STACK'),
+            hasDebtPct: /Debt \\d+%/.test(xml),
+            hasEquityPct: /Equity \\d+%/.test(xml),
+            hasDebtCr: /Debt INR/.test(xml),
+            hasEquityCr: /Equity INR/.test(xml),
+          }));
+        process.stdout.write(JSON.stringify({ slidesWithCapStack: matches }));
+      })().catch((error) => { console.error(error); process.exit(1); });
+    `;
+    const output = execFileSync(process.execPath, ['-e', script], {
+      cwd: require('path').resolve(__dirname, '..'), encoding: 'utf8',
+    });
+    const result = JSON.parse(output);
+    const transactionSlides = result.slidesWithCapStack;
+
+    expect(transactionSlides.length).toBeGreaterThanOrEqual(1);
+    const fullSlide = transactionSlides.find((s) =>
+      s.hasEyebrow && s.hasDebtPct && s.hasEquityPct && s.hasDebtCr && s.hasEquityCr
+    );
+    expect(fullSlide).toBeDefined();
+  });
+
   test('derives recommendation and underwriting risks for a negative economics case', () => {
     const context = __testables.buildDeckContext(createNegativeExportContext(), {
       brandName: 'REDIP',
