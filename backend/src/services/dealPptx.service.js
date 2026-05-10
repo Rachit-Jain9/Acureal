@@ -47,6 +47,7 @@ const {
   renderRisksMitigants,
   renderNextSteps,
   renderProsCons,
+  renderKeyAssumptions,
   renderDisclaimer,
 } = require('./exports/pptx/slides');
 const {
@@ -145,6 +146,7 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
     case 'risksMitigants': renderRisksMitigants(pptx, slide, context, pageNumber, totalSlides); return;
     case 'prosCons': renderProsCons(pptx, slide, context, pageNumber, totalSlides); return;
     case 'nextSteps': renderNextSteps(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'keyAssumptions': renderKeyAssumptions(pptx, slide, context, pageNumber, totalSlides); return;
     case 'disclaimer': renderDisclaimer(pptx, slide, context, pageNumber, totalSlides); return;
     default: addTopHeader(pptx, slide, context, slideDef.title, pageNumber, totalSlides);
   }
