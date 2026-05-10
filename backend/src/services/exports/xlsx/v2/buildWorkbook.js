@@ -1381,24 +1381,30 @@ const buildCalculationsSheet = (workbook, ctx) => {
     ['Customer collected (INR Cr)',  '=SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)*CollectionPct/10000000', '× CollectionPct'],
   ]);
 
+  // Cost Build occupies rows 12-19:
+  //   R12 Land · R13 Construction · R14 Approvals · R15 Hard subtotal
+  //   R16 Marketing · R17 Finance · R18 Soft subtotal · R19 Total project cost
   writeBlock('Cost Build', [
     ['Land cost (INR Cr)',           '=LandCostCr',                                     'From Inputs & Assumptions'],
     ['Construction cost (INR Cr)',   '=ConstructionCostPerSqft*SaleableAreaSqft/10000000', 'Construction rate × saleable area'],
     ['Approval & fees (INR Cr)',     '=ApprovalCostCr',                                 'From Inputs & Assumptions'],
-    ['Hard cost subtotal',           '=B13+B14+B15',                                    'Land + Construction + Approvals'],
+    ['Hard cost subtotal',           '=B12+B13+B14',                                    'Land + Construction + Approvals'],
     ['Marketing & sales (INR Cr)',   '=B8*MarketingCostPct',                            'Total revenue × MarketingCostPct'],
     ['Finance / treasury (INR Cr)',  '=B8*FinanceCostPct',                              'Total revenue × FinanceCostPct'],
-    ['Soft cost subtotal',           '=B17+B18',                                        'Marketing + Finance'],
-    ['Total project cost (INR Cr)',  '=B16+B19',                                        'Hard + Soft costs'],
+    ['Soft cost subtotal',           '=B16+B17',                                        'Marketing + Finance'],
+    ['Total project cost (INR Cr)',  '=B15+B18',                                        'Hard + Soft costs'],
   ]);
 
+  // Debt Sculpting occupies rows 21-27:
+  //   R22 LTV · R23 Total debt · R24 Equity · R25 Annual interest
+  //   R26 Quarterly accrual · R27 Per-sqft proxy
   writeBlock('Debt Sculpting', [
     ['Debt LTV (% of cost)',         '=DebtLTV',                                        'From Inputs & Assumptions'],
-    ['Total debt envelope (INR Cr)', '=B20*DebtLTV',                                    'Total project cost × LTV'],
-    ['Equity envelope (INR Cr)',     '=B20*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
-    ['Annualised interest cost',     '=B25*DebtRatePct',                                'Debt × rate (peak proxy)'],
-    ['Quarterly interest accrual',   '=B25*DebtRatePct/4',                              'Used in Cash Flow row 10'],
-    ['Effective debt cost / unit',   '=B25*DebtRatePct/SaleableAreaSqft*10000000',      'Per-sqft cost-of-capital proxy'],
+    ['Total debt envelope (INR Cr)', '=B19*DebtLTV',                                    'Total project cost × LTV'],
+    ['Equity envelope (INR Cr)',     '=B19*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
+    ['Annualised interest cost',     '=B23*DebtRatePct',                                'Debt envelope × rate (peak proxy)'],
+    ['Quarterly interest accrual',   '=B25/4',                                          'Annualised ÷ 4 (sanity check vs Cash Flow row 10)'],
+    ['Effective debt cost / unit',   '=B25/SaleableAreaSqft*10000000',                  'Per-sqft cost-of-capital proxy (Cr → INR ÷ sqft)'],
   ]);
 
   writeBlock('Returns Inputs (for Dashboard IRR/NPV)', [

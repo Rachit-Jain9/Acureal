@@ -117,6 +117,42 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).toMatch(/Returns Inputs/);
     });
 
+    // Regression: previously these cells contained off-by-one row references
+    // that produced circular formulas (e.g. "Hard cost subtotal = B13+B14+B15"
+    // self-referencing its own cell, "Annualised interest = B25*DebtRatePct"
+    // self-referencing). Excel surfaced this as a "circular reference" warning
+    // on file open and zero values throughout the audit trail. Lock the
+    // intended row references in.
+    test('Calculations sheet subtotal + debt formulas have no self-references', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const calc = wb.getWorksheet('Calculations');
+
+      const formulaAt = (cellRef) => {
+        const v = calc.getCell(cellRef).value;
+        return v && typeof v === 'object' && v.formula ? v.formula : null;
+      };
+
+      // Cost Build (rows 12–19)
+      expect(formulaAt('B15')).toBe('=B12+B13+B14');          // Hard cost = Land + Construction + Approvals
+      expect(formulaAt('B18')).toBe('=B16+B17');              // Soft cost = Marketing + Finance
+      expect(formulaAt('B19')).toBe('=B15+B18');              // Total cost = Hard + Soft
+
+      // Debt Sculpting (rows 22–27)
+      expect(formulaAt('B23')).toBe('=B19*DebtLTV');          // Total debt envelope
+      expect(formulaAt('B24')).toBe('=B19*(1-DebtLTV)');      // Equity envelope
+      expect(formulaAt('B25')).toBe('=B23*DebtRatePct');      // Annualised interest
+      expect(formulaAt('B26')).toBe('=B25/4');                // Quarterly accrual
+      expect(formulaAt('B27')).toBe('=B25/SaleableAreaSqft*10000000'); // Per-sqft proxy
+
+      // None of those formulas should reference their own cell
+      ['B15', 'B18', 'B19', 'B23', 'B24', 'B25', 'B26', 'B27'].forEach((cellRef) => {
+        const formula = formulaAt(cellRef) || '';
+        expect(formula).not.toMatch(new RegExp(`\\b${cellRef}\\b`));
+      });
+    });
+
     test('Dashboard renders Returns block (IRR / NPV / Equity Multiple) and Scenario strip', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
