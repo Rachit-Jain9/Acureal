@@ -7,28 +7,34 @@
  * one (12.97, 77.75) point, every Hebbal comp to another, etc.). The
  * cluster-pin UI from PR #169 was a workaround for that artificial
  * stacking. This script upgrades each comp to a project-precise pin
- * by querying the Google Geocoding API for `{project_name}, {locality},
- * {city}, India` and writing the result + a quality tag back to the
- * row.
+ * by querying the Google Geocoding API and writing the result + a
+ * quality tag back to the row.
  *
- * Companion to migration 20260516_comps_geocode_quality.sql. Run AFTER
- * the migration is applied (the script depends on the geocode_quality
- * column).
+ * The pure two-stage upgrade logic lives in
+ * `backend/src/utils/geocodeUpgrade.js` so it can be unit-tested with
+ * a mocked fetch and reused by future admin endpoints. This script
+ * is the operator-facing wrapper around that utility.
+ *
+ * Companion to migration 20260516_comps_geocode_quality.sql.
  *
  * Behaviour:
  *   • Picks rows where geocode_quality IN (NULL, 'locality_centroid',
  *     'approximate'). Skips rows tagged 'rooftop' / 'range_interpolated' /
  *     'manual' — those are already as good as we can make them.
- *   • Throttled at ~5 req/sec (well under Google's per-second QPS limit
- *     of 50 to stay polite). Override via --rps.
- *   • Idempotent — already-upgraded rows are skipped on re-runs. Cached
- *     responses also dedupe across retries.
+ *   • Two-stage geocode:
+ *       Stage 1 — `(project_name, locality, city, India)` query.
+ *                 Drift guard: > 5 km from locality centroid = reject.
+ *       Stage 2 — `(project_name, city, India)` query (fallback when
+ *                 stage 1 drifts and `--allow-cross-locality` is set).
+ *                 Accepted only at rooftop / range_interpolated quality.
+ *                 Used when a project's true coords are in a different
+ *                 locality from what's recorded on the comp row.
+ *   • Throttled at ~5 req/sec (well under Google's QPS limit). Override
+ *     via --rps. Note: stage-2 fires only on stage-1 drift, so the
+ *     real worst case is ~10 req/sec, still under Google's 50 ceiling.
+ *   • Idempotent — already-upgraded rows are skipped on re-runs.
  *   • Persists Google's `geometry.location_type` directly:
  *       ROOFTOP / RANGE_INTERPOLATED / GEOMETRIC_CENTER / APPROXIMATE
- *   • For results that fall back to APPROXIMATE we ALSO compare against
- *     the existing locality centroid — if the new lat/lng is more than
- *     5 km from the centroid, we treat the result as a misfire and
- *     leave the row alone.
  *
  * Required env (read from `backend/.env` automatically):
  *   GOOGLE_MAPS_API_KEY
@@ -38,14 +44,14 @@
  * same convention as scripts/migrate-tokyo-to-mumbai.mjs):
  *
  *   cd backend
- *   node ../scripts/upgrade-comps-geocoding.mjs              # dry run
- *   node ../scripts/upgrade-comps-geocoding.mjs --apply      # actually update
+ *   node ../scripts/upgrade-comps-geocoding.mjs                              # dry run, stage-1 only
+ *   node ../scripts/upgrade-comps-geocoding.mjs --apply                      # commit, stage-1 only
+ *   node ../scripts/upgrade-comps-geocoding.mjs --allow-cross-locality       # dry run with stage-2 fallback
+ *   node ../scripts/upgrade-comps-geocoding.mjs --apply --allow-cross-locality
  *   node ../scripts/upgrade-comps-geocoding.mjs --apply --limit 10
  *   node ../scripts/upgrade-comps-geocoding.mjs --rps 2 --apply
  *
- * Cost: ~$0.005 per call. 80 comps × 1 call each = ~$0.40. Cached calls
- * are free (served from geocode_cache — though this script does not yet
- * read/write that cache; future improvement).
+ * Cost: ~$0.005 per call. 80 comps × 1–2 calls = ~$0.40–$0.80 worst case.
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -61,6 +67,12 @@ const requireFromBackend = createRequire(
   resolve(_dir, '..', 'backend', 'package.json'),
 );
 const pg = requireFromBackend('pg');
+// Pure two-stage upgrade logic lives in backend/src/utils so a future
+// admin endpoint and the test suite can both consume it.
+const {
+  upgradeOneComp,
+  MAX_DRIFT_KM_DEFAULT,
+} = requireFromBackend('./src/utils/geocodeUpgrade.js');
 
 // ─── env loader ─────────────────────────────────────────────────────────────
 const ENV_PATH = resolve(_dir, '..', 'backend', '.env');
@@ -96,6 +108,7 @@ if (!DB_URL) {
 // ─── args ───────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
+const ALLOW_CROSS_LOCALITY = args.includes('--allow-cross-locality');
 const RPS = (() => {
   const idx = args.indexOf('--rps');
   return idx >= 0 ? Math.max(0.5, Math.min(10, parseFloat(args[idx + 1]))) : 5;
@@ -106,76 +119,13 @@ const LIMIT = (() => {
 })();
 const DELAY_MS = Math.ceil(1000 / RPS);
 
-// Maximum drift between the new geocode and the historical locality
-// centroid. If a result lands further than this, we assume Google
-// matched a different "Whitefield" or similar — the result is suspect
-// and we keep the existing centroid.
-const MAX_DRIFT_KM = 5;
+// Imported from backend/src/utils/geocodeUpgrade.js for parity with the
+// admin endpoint and the unit tests.
+const MAX_DRIFT_KM = MAX_DRIFT_KM_DEFAULT;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const haversineKm = (a, b) => {
-  if (a == null || b == null || a.lat == null || b.lat == null) return null;
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const aa =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) *
-      Math.cos((b.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(aa));
-};
-
-const QUALITY_RANK = {
-  rooftop: 5,
-  range_interpolated: 4,
-  geometric_center: 3,
-  approximate: 2,
-  locality_centroid: 1,
-  manual: 6, // higher than rooftop — reviewer overrides everything
-};
-const isUpgrade = (oldQ, newQ) =>
-  (QUALITY_RANK[newQ] || 0) > (QUALITY_RANK[oldQ] || 0);
-
-const mapLocationType = (t) => {
-  switch (t) {
-    case 'ROOFTOP': return 'rooftop';
-    case 'RANGE_INTERPOLATED': return 'range_interpolated';
-    case 'GEOMETRIC_CENTER': return 'geometric_center';
-    case 'APPROXIMATE': return 'approximate';
-    default: return 'approximate';
-  }
-};
-
-async function geocodeOnce(query) {
-  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-  url.searchParams.set('address', query);
-  url.searchParams.set('region', 'in');
-  url.searchParams.set('key', GOOGLE_KEY);
-
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  const json = await res.json();
-
-  if (json.status === 'REQUEST_DENIED' || json.status === 'OVER_QUERY_LIMIT') {
-    throw new Error(`Google API failure: ${json.status} ${json.error_message || ''}`);
-  }
-  if (json.status === 'ZERO_RESULTS' || !json.results?.length) {
-    return null;
-  }
-
-  const r = json.results[0];
-  const loc = r.geometry?.location || {};
-  return {
-    lat: loc.lat,
-    lng: loc.lng,
-    locationType: r.geometry?.location_type,
-    formattedAddress: r.formatted_address,
-    placeId: r.place_id,
-  };
-}
 
 // ─── main ───────────────────────────────────────────────────────────────────
 
@@ -190,10 +140,14 @@ const summary = {
   picked: 0,
   unchanged: 0,
   upgraded: 0,
+  upgraded_stage1: 0,
+  upgraded_stage2: 0,
   skipped_no_match: 0,
   skipped_drift: 0,
+  skipped_stage2_low_precision: 0,
   errored: 0,
   by_quality: {},
+  cross_locality_corrections: [],
 };
 
 async function main() {
@@ -213,17 +167,30 @@ async function main() {
   console.log(`Found ${summary.picked} candidate comps to upgrade.`);
   console.log(`Mode: ${APPLY ? 'APPLY (writes will commit)' : 'DRY RUN (read-only)'}`);
   console.log(`Throttle: ${RPS} req/sec (~${DELAY_MS}ms between calls)`);
+  console.log(
+    `Cross-locality fallback: ${ALLOW_CROSS_LOCALITY ? 'ENABLED — stage 2 fires on stage-1 drift' : 'OFF (use --allow-cross-locality to enable)'}`,
+  );
   console.log('');
 
   for (const row of candidates.rows) {
-    const queryParts = [row.project_name, row.locality, row.city, 'India'].filter(Boolean);
-    const query = queryParts.join(', ');
-    const oldCoord = { lat: parseFloat(row.lat), lng: parseFloat(row.lng) };
-    const oldQuality = row.geocode_quality || 'NULL';
+    const oldQuality = row.geocode_quality || 'locality_centroid';
 
-    let g = null;
+    let outcome = null;
     try {
-      g = await geocodeOnce(query);
+      outcome = await upgradeOneComp({
+        comp: {
+          project_name: row.project_name,
+          locality: row.locality,
+          city: row.city,
+          lat: row.lat,
+          lng: row.lng,
+          geocode_quality: oldQuality,
+        },
+        apiKey: GOOGLE_KEY,
+        fetchImpl: fetch,
+        maxDriftKm: MAX_DRIFT_KM,
+        allowCrossLocality: ALLOW_CROSS_LOCALITY,
+      });
     } catch (err) {
       console.error(`  [ERR ] ${row.project_name?.slice(0, 50)}: ${err.message}`);
       summary.errored += 1;
@@ -231,44 +198,65 @@ async function main() {
       continue;
     }
 
-    if (!g) {
-      console.log(`  [SKIP] ${row.project_name?.slice(0, 50)} — no match`);
-      summary.skipped_no_match += 1;
-      await sleep(DELAY_MS);
-      continue;
-    }
-
-    const newQuality = mapLocationType(g.locationType);
-    const newCoord = { lat: g.lat, lng: g.lng };
-
-    if (!isUpgrade(oldQuality, newQuality)) {
-      console.log(`  [-   ] ${row.project_name?.slice(0, 50)} — already at ${oldQuality}, no upgrade`);
-      summary.unchanged += 1;
-      await sleep(DELAY_MS);
-      continue;
-    }
-
-    // Drift guard: if we had a locality centroid and the new pin is far
-    // from it, Google probably matched a same-named place elsewhere. Skip.
-    if (oldQuality === 'locality_centroid' && oldCoord.lat && oldCoord.lng) {
-      const drift = haversineKm(oldCoord, newCoord);
-      if (drift != null && drift > MAX_DRIFT_KM) {
-        console.log(
-          `  [DRIFT] ${row.project_name?.slice(0, 50)} — ${drift.toFixed(1)}km from centroid, suspicious match → kept`,
-        );
-        summary.skipped_drift += 1;
-        await sleep(DELAY_MS);
-        continue;
+    if (outcome.action === 'skip') {
+      switch (outcome.reason) {
+        case 'no_match':
+          console.log(`  [SKIP] ${row.project_name?.slice(0, 50)} — no match`);
+          summary.skipped_no_match += 1;
+          break;
+        case 'no_upgrade':
+          console.log(`  [-   ] ${row.project_name?.slice(0, 50)} — already at ${oldQuality}, no upgrade (Google returned ${outcome.newQuality})`);
+          summary.unchanged += 1;
+          break;
+        case 'drift':
+          console.log(
+            `  [DRIFT] ${row.project_name?.slice(0, 50)} — ${outcome.drift_km?.toFixed?.(1) ?? '?'}km from centroid, suspicious match → kept`,
+          );
+          summary.skipped_drift += 1;
+          break;
+        case 'stage2_low_precision':
+          console.log(
+            `  [S2-LP] ${row.project_name?.slice(0, 50)} — stage 2 returned ${outcome.newQuality}, not high-precision → kept`,
+          );
+          summary.skipped_stage2_low_precision += 1;
+          break;
+        default:
+          console.log(`  [SKIP] ${row.project_name?.slice(0, 50)} — ${outcome.reason}`);
       }
+      await sleep(DELAY_MS);
+      continue;
     }
 
+    // outcome.action === 'accept'
     summary.upgraded += 1;
-    summary.by_quality[newQuality] = (summary.by_quality[newQuality] || 0) + 1;
+    summary.by_quality[outcome.quality] = (summary.by_quality[outcome.quality] || 0) + 1;
+    if (outcome.stage === 1) summary.upgraded_stage1 += 1;
+    else summary.upgraded_stage2 += 1;
+
+    const tag = outcome.stage === 2 ? '[OK-S2]' : '[OK   ]';
+    const localityNote = outcome.stage === 2 && outcome.locality
+      ? ` (cross-locality: ${row.locality} → ${outcome.locality})`
+      : '';
     console.log(
-      `  [OK  ] ${row.project_name?.slice(0, 50)} — ${oldQuality} → ${newQuality} (${newCoord.lat.toFixed(4)}, ${newCoord.lng.toFixed(4)})`,
+      `  ${tag} ${row.project_name?.slice(0, 50)} — ${oldQuality} → ${outcome.quality} (${outcome.lat.toFixed(4)}, ${outcome.lng.toFixed(4)})${localityNote}`,
     );
 
+    if (outcome.stage === 2 && outcome.locality && outcome.locality !== row.locality) {
+      summary.cross_locality_corrections.push({
+        id: row.id,
+        project_name: row.project_name,
+        old_locality: row.locality,
+        new_locality: outcome.locality,
+        formatted_address: outcome.formatted_address,
+      });
+    }
+
     if (APPLY) {
+      // We update lat/lng/quality. Locality stays as-is — flipping
+      // a comp's locality field is a separate review action so the
+      // analyst can spot-check what Google decided. The cross-
+      // locality_corrections summary above lists every row that
+      // would benefit from a manual locality edit.
       await client.query(
         `UPDATE comps
             SET lat = $1,
@@ -276,7 +264,7 @@ async function main() {
                 geocode_quality = $3,
                 updated_at = NOW()
           WHERE id = $4`,
-        [newCoord.lat, newCoord.lng, newQuality, row.id],
+        [outcome.lat, outcome.lng, outcome.quality, row.id],
       );
     }
 
@@ -289,12 +277,25 @@ async function main() {
   console.log('');
   console.log('────────────────────────────────────────────────────');
   console.log(`Done in ${elapsed}s.`);
-  console.log(`  picked:               ${summary.picked}`);
-  console.log(`  upgraded:             ${summary.upgraded}`);
-  console.log(`  unchanged (was good): ${summary.unchanged}`);
-  console.log(`  skipped (no match):   ${summary.skipped_no_match}`);
-  console.log(`  skipped (drift):      ${summary.skipped_drift}`);
-  console.log(`  errored:              ${summary.errored}`);
+  console.log(`  picked:                          ${summary.picked}`);
+  console.log(`  upgraded:                        ${summary.upgraded}`);
+  console.log(`    via stage 1:                   ${summary.upgraded_stage1}`);
+  console.log(`    via stage 2 (cross-locality):  ${summary.upgraded_stage2}`);
+  console.log(`  unchanged (was good):            ${summary.unchanged}`);
+  console.log(`  skipped (no match):              ${summary.skipped_no_match}`);
+  console.log(`  skipped (drift):                 ${summary.skipped_drift}`);
+  console.log(`  skipped (stage 2 low precision): ${summary.skipped_stage2_low_precision}`);
+  console.log(`  errored:                         ${summary.errored}`);
+  if (summary.cross_locality_corrections.length) {
+    console.log('');
+    console.log('Cross-locality corrections (manual locality edit recommended):');
+    for (const c of summary.cross_locality_corrections.slice(0, 20)) {
+      console.log(`  ${c.id}  ${c.project_name?.slice(0, 40).padEnd(42)}  ${c.old_locality} → ${c.new_locality}`);
+    }
+    if (summary.cross_locality_corrections.length > 20) {
+      console.log(`  ...and ${summary.cross_locality_corrections.length - 20} more`);
+    }
+  }
   if (Object.keys(summary.by_quality).length) {
     console.log('  upgraded by quality:');
     for (const [k, v] of Object.entries(summary.by_quality)) {
