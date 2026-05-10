@@ -261,6 +261,14 @@ export const financialsAPI = {
   verifyEvent: (dealId, eventId) => api.get(`/financials/${dealId}/events/${eventId}/verify`),
   replayEvent: (dealId, eventId) => api.post(`/financials/${dealId}/events/${eventId}/replay`),
   exportCSV: (dealId) => api.get(`/financials/${dealId}/export/csv`, { responseType: 'blob' }),
+  // CSV of the merged audit feed (financial events + mutation log)
+  // for IC packets / diligence handoffs.
+  exportAuditCSV: (dealId) =>
+    api.get(`/financials/${dealId}/audit/export.csv`, { responseType: 'blob' }),
+  // Pivot a single bulk_id back to every deal it touched. Powers the
+  // AuditTab "view batch" peek so an analyst can see "this deal was
+  // 1 of 12 moved in that one click".
+  bulkBatch: (bulkId) => api.get(`/financials/audit/bulk/${bulkId}`),
   // Stateless kernel-first what-if runner. No DB touch; powers live sliders.
   quickCompute: (data) => api.post('/financials/quick-compute', data),
   // Single-source-of-truth defaults registry with provenance metadata.
