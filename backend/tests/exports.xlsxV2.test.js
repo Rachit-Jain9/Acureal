@@ -101,6 +101,61 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(calc.state).toBe('hidden');
     });
 
+    // Regression: kernel stores some percents as integer (5 = 5%) and
+    // others as decimal (0.05). Excel's `0.0%` cell format expects the
+    // underlying value to be a decimal fraction — integer-stored values
+    // render as 500%, AND formulas like `=Revenue*MarketingCostPct`
+    // produce 5× revenue. toPctDecimal() normalizes both representations
+    // to decimal at the input layer.
+    test('toPctDecimal normalizes integer-percent inputs to decimal in cells', async () => {
+      const ctx = minimalContext();
+      // Mix integer- and decimal-stored percents — exactly the shape the
+      // financial.service.js kernel actually emits today (defaults are
+      // integer; some stored values are decimal).
+      ctx.deal.model_params.inputs = {
+        ...ctx.deal.model_params.inputs,
+        marketingCostPct: 5,            // integer percent
+        financeCostPct: 12,             // integer percent
+        gstPct: 18,                     // integer percent
+        stampDutyPct: 0.05,             // decimal percent
+        contingencyPct: 4,              // integer percent
+        debtRatePct: 12,                // integer percent
+        discountRatePct: 14,            // integer percent
+        developerMarginPct: 25,         // integer percent
+        debtLTV: 0.5,                   // decimal — already correct
+        customerCollectionPct: 0.85,    // decimal — already correct
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+
+      // Every percent cell must hold the decimal-fraction value, no
+      // matter whether the kernel handed it to us as integer or decimal.
+      const expected = {
+        'Marketing & Sales':       0.05,
+        'Finance / Treasury Cost': 0.12,
+        'Contingency':             0.04,
+        'GST':                     0.18,
+        'Stamp Duty':              0.05,
+        'Debt %':                  0.50,
+        'Interest Rate':           0.12,
+        'Discount Rate':           0.14,
+        'Developer Margin Target': 0.25,
+        'Customer Collection':     0.85,
+      };
+      const actual = {};
+      inputs.eachRow((row) => {
+        const label = String(row.getCell(1).value || '').trim();
+        if (Object.prototype.hasOwnProperty.call(expected, label)) {
+          actual[label] = row.getCell(2).value;
+        }
+      });
+      Object.entries(expected).forEach(([label, want]) => {
+        expect(actual[label]).toBeCloseTo(want, 4);
+      });
+    });
+
     test('Calculations sheet carries the audit-trail blocks', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
