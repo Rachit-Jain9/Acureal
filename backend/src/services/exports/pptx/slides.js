@@ -1160,6 +1160,101 @@ const renderCashFlowSensitivity = (pptx, slide, context, pageNumber, totalSlides
       rowH: 0.42,
     });
   }
+
+  // ─── Bottom strip — Scenario comparison (Base / Bull / Bear) ─────────
+  // Was: ~1.8" of empty canvas below the chart + heatmap.
+  // Now: three semantic-coloured cards showing each scenario's IRR / EM
+  // / NPV side by side. Pulled directly from context.scenarioRows so
+  // every value traces to the deterministic financial kernel.
+  const scenarioRows = Array.isArray(context.scenarioRows) ? context.scenarioRows : [];
+  if (scenarioRows.length > 0) {
+    addCard(pptx, slide, {
+      x: 0.55, y: 5.05, w: 12.23, h: 1.85,
+      bandColor: COLORS.plumSoft, fill: COLORS.white,
+    });
+    slide.addText('SCENARIO COMPARISON', {
+      x: 0.78, y: 5.18, w: 4.0, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    slide.addText('Modeled Base / Bull / Bear cases — same kernel, different sensitivities.', {
+      x: 4.5, y: 5.18, w: 8.1, h: 0.22,
+      fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, align: 'right',
+    });
+
+    // Order: bull, base, bear — bull on the left as the upside, bear on
+    // the right as the downside. Base in the centre as the anchor.
+    const orderedLabels = ['bull', 'base', 'bear'];
+    const tilesData = orderedLabels.map((key) => {
+      const row = scenarioRows.find((s) => String(s.label || '').toLowerCase().includes(key));
+      return row ? {
+        title: key === 'bull' ? 'BULL CASE' : key === 'bear' ? 'BEAR CASE' : 'BASE CASE',
+        irr: row.irr,
+        npv: row.npv,
+        multiple: row.multiple,
+        accent: key === 'bull' ? COLORS.green : key === 'bear' ? COLORS.red : COLORS.plumSoft,
+        valueColor: key === 'bull' ? COLORS.green : key === 'bear' ? COLORS.red : COLORS.charcoal,
+      } : null;
+    }).filter(Boolean);
+
+    // Fall back to whatever scenarios exist if not all three are populated.
+    const tiles = tilesData.length > 0 ? tilesData : scenarioRows.slice(0, 3).map((row) => ({
+      title: (row.label || 'Scenario').toUpperCase(),
+      irr: row.irr,
+      npv: row.npv,
+      multiple: row.multiple,
+      accent: COLORS.plum,
+      valueColor: COLORS.charcoal,
+    }));
+
+    const tileW = (12.23 - 0.46 - (tiles.length - 1) * 0.20) / Math.max(tiles.length, 1);
+    tiles.forEach((tile, idx) => {
+      const tx = 0.78 + idx * (tileW + 0.20);
+      const ty = 5.50;
+      const th = 1.30;
+      slide.addShape(pptx.ShapeType.rect, {
+        x: tx, y: ty, w: tileW, h: th,
+        fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+      });
+      slide.addShape(pptx.ShapeType.rect, {
+        x: tx, y: ty, w: 0.06, h: th,
+        fill: { color: tile.accent }, line: { color: tile.accent, pt: 0 },
+      });
+      // Eyebrow
+      slide.addText(tile.title, {
+        x: tx + 0.20, y: ty + 0.14, w: tileW - 0.40, h: 0.22,
+        fontFace: FONT, fontSize: 9, bold: true, color: tile.accent, charSpace: 1.6,
+      });
+      // Big IRR
+      slide.addText(tile.irr || '–', {
+        x: tx + 0.20, y: ty + 0.42, w: tileW - 0.40, h: 0.50,
+        fontFace: FONT, fontSize: 26, bold: true, color: tile.valueColor, valign: 'top', fit: 'shrink',
+      });
+      slide.addText('IRR', {
+        x: tx + 0.20, y: ty + 0.94, w: tileW - 0.40, h: 0.16,
+        fontFace: FONT, fontSize: 8, color: COLORS.muted, charSpace: 1.4,
+      });
+      // EM + NPV row at bottom
+      slide.addText(`${tile.multiple || '–'}   ·   NPV ${tile.npv || '–'}`, {
+        x: tx + 0.20, y: ty + 1.10, w: tileW - 0.40, h: 0.18,
+        fontFace: FONT, fontSize: 9, bold: true, color: COLORS.charcoal, fit: 'shrink',
+      });
+    });
+  } else {
+    // Soft empty-state — when no scenarios are computed yet, surface a
+    // typographic note instead of leaving the bottom strip blank.
+    addCard(pptx, slide, {
+      x: 0.55, y: 5.05, w: 12.23, h: 1.85,
+      bandColor: COLORS.muted, fill: COLORS.white,
+    });
+    slide.addText('SCENARIO COMPARISON', {
+      x: 0.78, y: 5.18, w: 4.0, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    slide.addText('Run the financial kernel with Base / Bull / Bear sensitivity overrides on the Financial Engine tab in REDIP to populate this panel.', {
+      x: 0.78, y: 5.7, w: 11.7, h: 0.6,
+      fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'mid', fit: 'shrink',
+    });
+  }
 };
 
 const renderTransactionSummary = (pptx, slide, context, pageNumber, totalSlides) => {
