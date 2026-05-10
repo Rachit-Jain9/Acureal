@@ -414,57 +414,89 @@ const renderMarketPositioning = (pptx, slide, context, pageNumber, totalSlides) 
 const renderLocationContext = (pptx, slide, context, pageNumber, totalSlides) => {
   addTopHeader(pptx, slide, context, 'Location & Site Context', pageNumber, totalSlides, `${context.locationLine}`);
 
-  addCard(pptx, slide, { x: 0.55, y: 1.25, w: 5.7, h: 5.55, bandColor: COLORS.plum, fill: COLORS.mist });
-  for (let idx = 0; idx < 7; idx += 1) {
-    slide.addShape(pptx.ShapeType.line, {
-      x: 0.95 + idx * 0.7,
-      y: 1.65,
-      w: 0,
-      h: 4.5,
-      line: { color: COLORS.line, pt: 0.4 },
+  // ── Left half — site map (Mapbox PNG when MAPBOX_TOKEN is configured)
+  // or a graceful "map unavailable" placeholder otherwise. No more fake
+  // site-pin diagram on a grid.
+  const mapBuffer = context.precomputed?.siteMapBuffer;
+  if (mapBuffer) {
+    // Card framing with copper top accent so the image feels intentional.
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0.55, y: 1.25, w: 5.7, h: 5.55,
+      fill: { color: COLORS.white },
+      line: { color: COLORS.line, pt: 0.6 },
     });
-  }
-  for (let idx = 0; idx < 6; idx += 1) {
-    slide.addShape(pptx.ShapeType.line, {
-      x: 0.88,
-      y: 1.9 + idx * 0.72,
-      w: 4.95,
-      h: 0,
-      line: { color: COLORS.line, pt: 0.4 },
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0.55, y: 1.25, w: 5.7, h: 0.06,
+      fill: { color: COLORS.plum },
+      line: { color: COLORS.plum, pt: 0.1 },
     });
+    slide.addText('SITE MAP', {
+      x: 0.75, y: 1.42, w: 5.3, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    // Embed the map.
+    const mapDataUri = `data:image/png;base64,${mapBuffer.toString('base64')}`;
+    slide.addImage({
+      x: 0.7, y: 1.78, w: 5.4, h: 4.5,
+      data: mapDataUri,
+      sizing: { type: 'cover', w: 5.4, h: 4.5 },
+      altText: `Site map at ${context.locationLine || 'project location'}`,
+    });
+    // Caption with coords + source attribution.
+    slide.addText(context.coordinates || 'Coordinates not provided', {
+      x: 0.7, y: 6.32, w: 3.6, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.charcoal,
+    });
+    slide.addText('Source: Mapbox Static API', {
+      x: 4.3, y: 6.32, w: 1.85, h: 0.22,
+      fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted, align: 'right',
+    });
+  } else {
+    // Fallback when map isn't available — typographic placeholder, no
+    // fake-pin diagram. Honest about why the map is missing.
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0.55, y: 1.25, w: 5.7, h: 5.55,
+      fill: { color: COLORS.mist },
+      line: { color: COLORS.line, pt: 0.6 },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0.55, y: 1.25, w: 5.7, h: 0.06,
+      fill: { color: COLORS.plum },
+      line: { color: COLORS.plum, pt: 0.1 },
+    });
+    slide.addText('SITE MAP', {
+      x: 0.75, y: 1.42, w: 5.3, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    const reason = context.coordinates
+      ? 'Map provider not configured. Set MAPBOX_TOKEN in the deployment environment to render this site map automatically on every export.'
+      : 'No coordinates on this deal record. Geocode the property address to enable the site map on future exports.';
+    slide.addText(reason, {
+      x: 0.85, y: 3.2, w: 5.1, h: 1.6,
+      fontFace: FONT, fontSize: 11, color: COLORS.charcoal, italic: true, align: 'center', valign: 'mid', fit: 'shrink',
+    });
+    if (context.coordinates) {
+      slide.addText(context.coordinates, {
+        x: 0.85, y: 4.85, w: 5.1, h: 0.22,
+        fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, align: 'center',
+      });
+    }
   }
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: 2.42, y: 2.68, w: 1.7, h: 1.7,
-    fill: { color: 'F5EBE2', transparency: 30 },
-    line: { color: COLORS.sandDeep, pt: 1.1 },
-  });
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: 2.97, y: 3.23, w: 0.6, h: 0.6,
-    fill: { color: COLORS.plum },
-    line: { color: COLORS.plum, pt: 0.2 },
-  });
-  slide.addText('Site Pin', {
-    x: 2.73, y: 4.6, w: 1.15, h: 0.16,
-    fontFace: FONT, fontSize: 8, bold: true, color: COLORS.plum, align: 'center',
-  });
-  slide.addText(context.coordinates || 'Coordinates not provided', {
-    x: 1.1, y: 5.3, w: 4.55, h: 0.24,
-    fontFace: FONT, fontSize: 9, color: COLORS.charcoal, align: 'center',
-  });
 
+  // ── Right half — known site facts (unchanged, just denser type)
   addCard(pptx, slide, { x: 6.55, y: 1.25, w: 6.23, h: 5.55, bandColor: COLORS.sandDeep });
   slide.addText('Known Site Facts', {
     x: 6.82, y: 1.48, w: 2.4, h: 0.18,
     fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
   });
-  context.locationRows.slice(0, 8).forEach((row, index) => {
-    const y = 1.9 + index * 0.49;
+  context.locationRows.slice(0, 9).forEach((row, index) => {
+    const y = 1.95 + index * 0.49;
     slide.addText(row.label, {
-      x: 6.82, y, w: 1.6, h: 0.16,
+      x: 6.82, y, w: 1.7, h: 0.16,
       fontFace: FONT, fontSize: 8.5, color: COLORS.muted,
     });
     slide.addText(row.value, {
-      x: 8.6, y: y - 0.01, w: 3.8, h: 0.2,
+      x: 8.6, y: y - 0.01, w: 3.95, h: 0.2,
       fontFace: FONT, fontSize: 9, bold: true, color: COLORS.charcoal, fit: 'shrink',
     });
   });
@@ -659,26 +691,105 @@ const renderFinancialOverview = (pptx, slide, context, pageNumber, totalSlides) 
     rowH: 0.44,
   });
 
+  // Sources & Uses native chart panel — replaces the old text-only
+  // commentary card. Native pptxgenjs chart, fully editable in PowerPoint
+  // (right-click → Edit Data). Shows the cost stack as a doughnut so the
+  // viewer sees at a glance how the project cost is composed.
   addCard(pptx, slide, {
     x: 6.95,
     y: 2.55,
     w: 5.83,
-    h: 3.6,
-    bandColor: COLORS.sandDeep,
+    h: 3.85,
+    bandColor: COLORS.plum,
     fill: COLORS.white,
   });
-  slide.addText('Underwriting Read-Through', {
-    x: 7.22, y: 2.78, w: 2.8, h: 0.18,
-    fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
+  slide.addText('SOURCES & USES (USES BREAKDOWN)', {
+    x: 7.22, y: 2.74, w: 5.45, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
   });
-  addBulletList(slide, context.financialCommentary, {
-    x: 7.22,
-    y: 3.18,
-    w: 5.05,
-    h: 2.35,
-    fontSize: 9.4,
-    bulletColor: COLORS.sandDeep,
-  });
+
+  // Compute cost components from the underwriting inputs. Pure numeric;
+  // skip slices where the component is missing rather than fabricate.
+  const inp = context.inputs || {};
+  const usesComponents = [];
+  const landCost = num(firstNumber(inp.landCostCr, context.deal?.land_cost_cr, context.deal?.negotiated_price_cr));
+  const constructionCost = (num(inp.constructionCostPerSqft) != null && num(context.saleableAreaSqft) != null)
+    ? (Number(inp.constructionCostPerSqft) * Number(context.saleableAreaSqft)) / 10_000_000
+    : null;
+  const approvalCost = num(firstNumber(inp.approvalCostCr, context.deal?.approval_cost_cr));
+  const marketingCost = (num(context.totalRevenue) != null && num(inp.marketingCostPct) != null)
+    ? Number(context.totalRevenue) * Number(inp.marketingCostPct) : null;
+  const financeCost = (num(context.totalRevenue) != null && num(inp.financeCostPct) != null)
+    ? Number(context.totalRevenue) * Number(inp.financeCostPct) : null;
+  if (landCost != null && landCost > 0)         usesComponents.push({ label: 'Land', value: landCost });
+  if (constructionCost != null && constructionCost > 0) usesComponents.push({ label: 'Construction', value: constructionCost });
+  if (approvalCost != null && approvalCost > 0) usesComponents.push({ label: 'Approvals & fees', value: approvalCost });
+  if (marketingCost != null && marketingCost > 0) usesComponents.push({ label: 'Marketing & sales', value: marketingCost });
+  if (financeCost != null && financeCost > 0)   usesComponents.push({ label: 'Finance / treasury', value: financeCost });
+
+  if (usesComponents.length >= 2) {
+    slide.addChart(pptx.ChartType.doughnut, [{
+      name: 'Uses (INR Cr)',
+      labels: usesComponents.map((c) => c.label),
+      values: usesComponents.map((c) => Number(c.value.toFixed(2))),
+    }], {
+      x: 7.05, y: 3.0, w: 5.6, h: 3.25,
+      chartColors: [COLORS.plum, COLORS.plumSoft, COLORS.sandDeep, COLORS.green, COLORS.amber],
+      showLegend: true,
+      legendPos: 'r',
+      legendFontSize: 9,
+      legendColor: COLORS.charcoal,
+      showValue: true,
+      dataLabelColor: COLORS.charcoal,
+      dataLabelFontSize: 8,
+      dataLabelFormatCode: '#,##0.0',
+      dataLabelPosition: 'outEnd',
+      holeSize: 60,
+      showTitle: false,
+      border: { pt: 0, color: COLORS.line },
+    });
+    slide.addText('Editable in PowerPoint: right-click chart → Edit Data.', {
+      x: 7.22, y: 6.15, w: 5.4, h: 0.22,
+      fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted,
+    });
+  } else if (num(context.totalCost) != null) {
+    // Single-component degenerate case — show the total as a tile.
+    slide.addText(formatCrores(context.totalCost) || 'N/A', {
+      x: 7.22, y: 3.4, w: 5.4, h: 0.8,
+      fontFace: FONT, fontSize: 32, bold: true, color: COLORS.plum, align: 'center',
+    });
+    slide.addText('Total project cost', {
+      x: 7.22, y: 4.3, w: 5.4, h: 0.22,
+      fontFace: FONT, fontSize: 10, color: COLORS.muted, align: 'center',
+    });
+    slide.addText('Cost component breakdown not available — populate land / construction / approval inputs to render the doughnut.', {
+      x: 7.22, y: 5.1, w: 5.4, h: 0.8,
+      fontFace: FONT, fontSize: 9, italic: true, color: COLORS.muted, align: 'center', valign: 'top',
+    });
+  } else {
+    slide.addText('Cost data unavailable — populate the underwriting inputs to render this chart.', {
+      x: 7.22, y: 4.0, w: 5.4, h: 0.6,
+      fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'mid',
+    });
+  }
+
+  // Underwriting read-through — moved to a compact footer strip below
+  // the table + chart so the commentary doesn't crowd the chart.
+  if (Array.isArray(context.financialCommentary) && context.financialCommentary.length > 0) {
+    addCard(pptx, slide, {
+      x: 0.55, y: 6.5, w: 12.23, h: 0.65,
+      bandColor: COLORS.sandDeep,
+      fill: COLORS.mist,
+    });
+    slide.addText('READ-THROUGH', {
+      x: 0.78, y: 6.6, w: 1.7, h: 0.2,
+      fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    slide.addText(context.financialCommentary.slice(0, 2).join('  ·  '), {
+      x: 2.5, y: 6.58, w: 10.15, h: 0.5,
+      fontFace: FONT, fontSize: 9.5, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+    });
+  }
 };
 
 const getHeatFill = (value) => {
