@@ -845,20 +845,24 @@ const buildDashboardSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.dashboard, {
     views: [{ showGridLines: false }],
   });
+  // Wider 14-column grid so charts have horizontal real estate.
   sheet.columns = [
     { width: 22 }, { width: 18 }, { width: 22 }, { width: 18 },
-    { width: 22 }, { width: 18 },
+    { width: 22 }, { width: 18 }, { width: 12 }, { width: 12 },
+    { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
+    { width: 12 }, { width: 12 },
   ];
 
-  sheet.mergeCells('A1:F1');
+  // Title banner across the full 14 columns
+  sheet.mergeCells('A1:N1');
   sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Dashboard`;
   styleSectionTitle(sheet.getCell('A1'));
   sheet.getRow(1).height = 28;
 
-  sheet.mergeCells('A2:F2');
-  sheet.getCell('A2').value = `Live KPIs — every cell recalculates when you change inputs on the Inputs sheet.`;
+  sheet.mergeCells('A2:N2');
+  sheet.getCell('A2').value = `${ctx.dealFamily === 'income' ? 'Operating Asset Dashboard' : 'Development Project Dashboard'} — every figure recalculates live from the Inputs sheet.`;
   sheet.getCell('A2').font = { name: FONT, size: 10, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A2').protection = { locked: true };
+  sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getRow(2).height = 22;
 
   // Three rows of KPI cards
@@ -962,14 +966,13 @@ const buildDashboardSheet = (workbook, ctx) => {
   }
 
   // ── Returns block — IRR / NPV via native Excel functions ─────────────
-  // Project net cash flow lives on Cash Flow sheet row 8 (cols B → totalCol).
+  // Cash flow row used for IRR / NPV is asset-class-aware:
+  //   - Income deals: row 11 = "Total Cash Flow Including Reversion"
+  //   - Development:  row 8  = "Project net cash flow"
   // Excel's IRR() expects a contiguous range; NPV() takes a quarterly rate
-  // because the cash flows are quarterly. We compute the quarter-equivalent
-  // discount rate via (1+annual)^(1/4)-1 inline.
-  const startCFCol = 'B'; // Q1 starts in column B on the cashflow sheet
-  const endCFCol = totalCol === 'A' ? 'B' : totalCol; // last quarter column
-  const cfRange = `${cashflow}!${startCFCol}8:${endCFCol === totalCol ? colLetter(totalQ + 1) : endCFCol}8`;
-  const cfRangeProper = `${cashflow}!$${colLetter(2)}$8:$${colLetter(totalQ + 1)}$8`;
+  // because the cash flows are quarterly.
+  const cfRow = ctx.dealFamily === 'income' ? 11 : 8;
+  const cfRangeProper = `${cashflow}!$${colLetter(2)}$${cfRow}:$${colLetter(totalQ + 1)}$${cfRow}`;
 
   sheet.mergeCells('A19:F19');
   sheet.getCell('A19').value = 'Returns';
@@ -979,7 +982,7 @@ const buildDashboardSheet = (workbook, ctx) => {
   const returnsCells = [
     { row: 20, col: 'A', label: 'Project IRR (modeled)', formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`, format: NUMBER_FORMATS.percent },
     { row: 20, col: 'C', label: 'NPV (INR Cr)',          formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`, format: NUMBER_FORMATS.currency },
-    { row: 20, col: 'E', label: 'Equity Multiple',       formula: `=IFERROR((${cashflow}!${totalCol}8+ABS(SUMIF(${cfRangeProper},"<0")))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`, format: NUMBER_FORMATS.multiple },
+    { row: 20, col: 'E', label: 'Equity Multiple',       formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`, format: NUMBER_FORMATS.multiple },
   ];
   returnsCells.forEach(({ row, col, label, formula, format }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
@@ -1147,13 +1150,107 @@ const buildDashboardSheet = (workbook, ctx) => {
     profitVal.protection = { locked: true };
   });
 
-  // Footer disclaimer
-  sheet.mergeCells('A36:F36');
-  sheet.getCell('A36').value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision. Power users: right-click any sheet tab → Unhide → Calculations to inspect the audit-trail maths.`;
-  sheet.getCell('A36').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A36').alignment = { wrapText: true, vertical: 'middle' };
-  sheet.getCell('A36').protection = { locked: true };
-  sheet.getRow(36).height = 28;
+  // ── Quarterly Operating Trend (asset-class-aware, conditional-format
+  // data bars give the table an inline-chart feel that works across every
+  // Excel version — more reliable than ExcelJS chart objects)
+  // Income deals: Quarter | PGI | EGR | NOI | Cash Flow After Debt
+  // Development: Quarter | Sales | Construction Cost | Net Cash Flow | Cumulative
+  sheet.mergeCells('A36:N36');
+  sheet.getCell('A36').value = ctx.dealFamily === 'income'
+    ? 'Quarterly Operating Trend (PGI / EGR / NOI / CF After Debt)'
+    : 'Quarterly Project Trend (Sales / Construction / Net CF / Cumulative)';
+  styleSectionTitle(sheet.getCell('A36'));
+  sheet.getRow(36).height = 22;
+
+  // Header row
+  const trendHeaders = ctx.dealFamily === 'income'
+    ? ['Quarter', 'PGI (Cr)', 'EGR (Cr)', 'NOI (Cr)', 'CF After Debt (Cr)']
+    : ['Quarter', 'Sales (Cr)', 'Construction (Cr)', 'Net CF (Cr)', 'Cumulative (Cr)'];
+  trendHeaders.forEach((h, idx) => {
+    const cell = sheet.getCell(37, idx + 1);
+    cell.value = h;
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+  });
+  sheet.getRow(37).height = 22;
+
+  // Source rows on Phasing / Cash Flow sheet — asset-class-aware
+  const trendQuarters = Math.min(ctx.totalQuarters, 16); // cap at 16 for readability
+  for (let q = 1; q <= trendQuarters; q += 1) {
+    const r = 37 + q;
+    sheet.getCell(r, 1).value = `Q${q}`;
+    sheet.getCell(r, 1).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(r, 1).alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell(r, 1).fill = FILL(palette.xlsx('paper'));
+    const qCol = colLetter(q + 1); // q=1 → B on phasing/cashflow
+
+    if (ctx.dealFamily === 'income') {
+      // PGI = Phasing!{qCol}8, EGR = row 11, NOI = row 18, CFAfterDebt = Cash Flow row 9
+      const formulas = [
+        `=${phasing}!${qCol}8`,
+        `=${phasing}!${qCol}11`,
+        `=${phasing}!${qCol}18`,
+        `=${cashflow}!${qCol}9`,
+      ];
+      formulas.forEach((f, idx) => {
+        const cell = sheet.getCell(r, idx + 2);
+        cell.value = { formula: f };
+        cell.numFmt = NUMBER_FORMATS.currency;
+        cell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('ink') } };
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      });
+    } else {
+      // Sales = Phasing!{qCol}9, Construction = row 6, Net CF = Cash Flow row 8, Cum = Cash Flow!{qCol}8 cumulative via SUMIF
+      const startCol = colLetter(2);
+      const formulas = [
+        `=${phasing}!${qCol}9`,
+        `=${phasing}!${qCol}6`,
+        `=${cashflow}!${qCol}8`,
+        `=SUM(${cashflow}!$${startCol}$8:${qCol}8)`,
+      ];
+      formulas.forEach((f, idx) => {
+        const cell = sheet.getCell(r, idx + 2);
+        cell.value = { formula: f };
+        cell.numFmt = NUMBER_FORMATS.currency;
+        cell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('ink') } };
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      });
+    }
+  }
+
+  // Conditional-format data bars on each metric column — inline bar chart
+  // per cell. ExcelJS data-bar config requires `cfvo` min/max anchors.
+  const dataBarColors = [palette.xlsx('plum'), palette.xlsx('accent'), palette.xlsx('dataPositive'), palette.xlsx('mutedHigh')];
+  for (let col = 2; col <= 5; col += 1) {
+    const startCell = `${colLetter(col)}38`;
+    const endCell = `${colLetter(col)}${37 + trendQuarters}`;
+    try {
+      sheet.addConditionalFormatting({
+        ref: `${startCell}:${endCell}`,
+        rules: [{
+          type: 'dataBar',
+          cfvo: [
+            { type: 'min' },
+            { type: 'max' },
+          ],
+          color: { argb: palette.xlsx(['plum', 'accent', 'dataPositive', 'mutedHigh'][col - 2]) },
+          gradient: true,
+          priority: col,
+        }],
+      });
+    } catch {
+      // Some ExcelJS versions don't support data bars; silently skip.
+    }
+  }
+
+  // Footer disclaimer — pushed below the trend table.
+  const footerRow = 37 + trendQuarters + 2;
+  sheet.mergeCells(`A${footerRow}:N${footerRow}`);
+  sheet.getCell(`A${footerRow}`).value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision. Power users: right-click any sheet tab → Unhide → Calculations to inspect the audit-trail maths.`;
+  sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${footerRow}`).alignment = { wrapText: true, vertical: 'middle' };
+  sheet.getRow(footerRow).height = 28;
 
   // Sheet protection intentionally disabled — the operator owns this
   // file once it's downloaded and shouldn't be blocked from editing
