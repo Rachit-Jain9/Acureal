@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Brain, BarChart3,
   FileBarChart2, Settings, LogOut, ChevronLeft, ChevronRight, X,
-  Shield, Map, Database, Inbox, Activity,
+  Shield, Map, Database, Inbox, Activity, Beaker,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
@@ -25,6 +25,7 @@ const adminNavItems = [
   { to: '/dashboard/admin/parcel-intelligence',  icon: Database, label: 'Parcel Intelligence' },
   { to: '/dashboard/admin/comps-queue',          icon: Inbox,    label: 'Comps Review Queue' },
   { to: '/dashboard/admin/ai-usage',             icon: Activity, label: 'AI Usage & Cost' },
+  { to: '/dashboard/admin/ab-eval',              icon: Beaker,   label: 'A/B Evaluations' },
 ];
 
 const tailNavItems = [
