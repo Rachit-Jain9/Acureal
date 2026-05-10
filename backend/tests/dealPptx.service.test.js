@@ -424,7 +424,7 @@ describe('dealPptx.service', () => {
   describe('precomputeDeckAssets', () => {
     test('produces a score gauge and survives missing AI providers', async () => {
       // No GEMINI / ANTHROPIC / OPENAI keys → narrative falls back to
-      // the deterministic path; QR generation is local; gauge is local.
+      // the deterministic path; gauge is local.
       const exportContext = createExportContext();
       const baseContext = __testables.buildDeckContext(exportContext, {
         brandName: 'REDIP', generatedAt: '2026-04-15T10:00:00Z',
@@ -439,16 +439,13 @@ describe('dealPptx.service', () => {
       expect(typeof assets.dealScore.score).toBe('number');
       expect(assets.dealScore.score).toBeGreaterThanOrEqual(0);
       expect(assets.dealScore.score).toBeLessThanOrEqual(100);
-      // QR is generated locally — should always be present when liveDealUrl resolves.
-      expect(assets.qrDataUri).toMatch(/^data:image\/png;base64,/);
-      expect(assets.liveDealUrl).toBe('https://redip.vercel.app/deals/1');
       // prosCons either available (with pros/cons arrays) or unavailable
       // (with reason). Either way, it's an object — never throws.
       expect(typeof assets.prosCons).toBe('object');
       expect(assets.prosCons).not.toBeNull();
     });
 
-    test('skips QR when no deal id present', async () => {
+    test('still produces deck assets when no deal id present', async () => {
       const exportContext = createExportContext();
       delete exportContext.deal.id;
       const baseContext = __testables.buildDeckContext(exportContext, {
@@ -459,8 +456,8 @@ describe('dealPptx.service', () => {
         baseContext,
         { publicUrl: 'https://redip.vercel.app' },
       );
-      expect(assets.qrDataUri).toBeNull();
-      expect(assets.liveDealUrl).toBeNull();
+      expect(assets.scoreGaugeDataUri).toMatch(/^data:image\/svg\+xml;base64,/);
+      expect(assets.dealScore).toBeDefined();
     });
   });
 });
