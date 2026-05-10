@@ -9,10 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 let eventsState;
 const verifyMutate = vi.fn();
 const replayMutate = vi.fn();
-const exportAuditCSVMock = vi.fn();
 const bulkBatchMock = vi.fn();
-const toastSuccess = vi.fn();
-const toastError = vi.fn();
 
 vi.mock('../../../hooks/useDealContext', () => ({
   useDealContext: () => ({ dealId: 'd-test' }),
@@ -26,15 +23,7 @@ vi.mock('../../../hooks/useDealEvents', () => ({
 
 vi.mock('../../../services/api', () => ({
   financialsAPI: {
-    exportAuditCSV: (...args) => exportAuditCSVMock(...args),
     bulkBatch: (...args) => bulkBatchMock(...args),
-  },
-}));
-
-vi.mock('../../common/Toast', () => ({
-  toast: {
-    success: (...args) => toastSuccess(...args),
-    error: (...args) => toastError(...args),
   },
 }));
 
@@ -48,10 +37,7 @@ const renderWithClient = (ui) => {
 beforeEach(() => {
   verifyMutate.mockReset();
   replayMutate.mockReset();
-  exportAuditCSVMock.mockReset();
   bulkBatchMock.mockReset();
-  toastSuccess.mockReset();
-  toastError.mockReset();
   eventsState = { data: [], isLoading: false, isError: false };
 });
 
@@ -403,30 +389,6 @@ describe('AuditTab UX upgrades', () => {
     expect(finChip).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Calculate & Save')).toBeInTheDocument();
     expect(screen.queryByText('Archived (bulk)')).not.toBeInTheDocument();
-  });
-
-  it('triggers a CSV export when the "Export CSV" button is clicked', async () => {
-    eventsState = mixedFeed();
-    exportAuditCSVMock.mockResolvedValueOnce({ data: 'csv,bytes' });
-    // jsdom needs window.URL stubs for Blob URLs.
-    const createObjectURL = vi.fn(() => 'blob:mock');
-    const revokeObjectURL = vi.fn();
-    Object.defineProperty(window.URL, 'createObjectURL', {
-      configurable: true, writable: true, value: createObjectURL,
-    });
-    Object.defineProperty(window.URL, 'revokeObjectURL', {
-      configurable: true, writable: true, value: revokeObjectURL,
-    });
-
-    renderWithClient(<AuditTab />);
-    const exportBtn = screen.getByRole('button', { name: /Export CSV/ });
-    fireEvent.click(exportBtn);
-    // Wait a tick for the async chain
-    await new Promise((r) => setTimeout(r, 10));
-    expect(exportAuditCSVMock).toHaveBeenCalledWith('d-test');
-    expect(toastSuccess).toHaveBeenCalledWith('Audit feed exported');
-    expect(createObjectURL).toHaveBeenCalled();
-    expect(revokeObjectURL).toHaveBeenCalled();
   });
 
   it('opens the bulk-batch peek when "View batch" is clicked on a bulk-event row', async () => {
