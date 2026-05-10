@@ -18,6 +18,7 @@ const dealService = require('../services/deal.service');
 const compsService = require('../services/comps.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
+const { buildDealWorkbookV2 } = require('../services/exports/xlsx/v2/buildWorkbook');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
 const { buildDealTearSheet } = require('../services/dealTearSheet.service');
 
@@ -1167,7 +1168,16 @@ router.get(
         return res.status(404).json({ success: false, message: 'Deal not found.' });
       }
 
-      const xlsxBuffer = await buildDealWorkbookXlsx(exportContext, {
+      // Workbook variant — `?v=2` opts in to the new investor-grade
+      // 4-sheet workbook (Inputs, Phasing, Cash Flow, Dashboard) with
+      // named ranges + locked formulas + native chart on Dashboard.
+      // Default remains the existing 13-sheet workbook until v2 is
+      // proven in production.
+      const useV2 = String(req.query.v || '').trim() === '2'
+        || process.env.XLSX_V2_DEFAULT === '1';
+      const builder = useV2 ? buildDealWorkbookV2 : buildDealWorkbookXlsx;
+
+      const xlsxBuffer = await builder(exportContext, {
         brandName: 'REDIP',
         userName: req.user?.name || 'REDIP',
         generatedAt: new Date().toISOString(),
@@ -1175,8 +1185,9 @@ router.get(
       const xlsxSafeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
         .replace(/[^a-z0-9]/gi, '-')
         .toLowerCase();
+      const variantSuffix = useV2 ? '-v2' : '';
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}${variantSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
       return res.send(xlsxBuffer);
     } catch (error) {
       next(error);
