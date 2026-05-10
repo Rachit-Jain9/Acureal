@@ -4,6 +4,53 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-10 (late session) — Exports rebuild finishes feature-complete (PRs #237–#243)
+
+Continuation of the investor-grade exports rebuild. Picks up after PRs #225–#236 closed out earlier in the day. Seven more PRs land tonight, taking PPTX, XLSX, and DOCX to feature-complete state matching (and exceeding) the original brief.
+
+### PRs shipped
+
+- **#237** Mapbox → Google Maps Static API swap (operator request — `GOOGLE_MAPS_API_KEY` already set in Vercel; Maps Static API enabled in Google Cloud) + Investment Highlights density pass with numbered copper badges + Thesis Bottom Line strip (IRR/EM, Readiness, Recommendation tiles).
+- **#238** Cash Flow & Sensitivity scenario tiles (Bull/Base/Bear) + **asset-class precedence fix** — root cause of why a "Commercial Retail" deal was rendering as residential everywhere. `inferAssetClass` now prefers descriptive deal names over a stale `asset_class = residential_apartments` default, with parameterised tests covering 8 asset classes.
+- **#239** Drop zero-padded "01/02/03/04" everywhere — PowerPoint was wrapping the small badges vertically as stacked digits. Plain "1, 2, 3, 4" now reads cleanly.
+- **#240** Density passes on three remaining text-heavy slides: Asset Snapshot (area-composition stacked bar — Land / Built / Saleable), Transaction Summary (6-step deal life-cycle path — Sourcing → Diligence → Underwriting → IC Review → Negotiation → Close, current stage highlighted), Structure & Counterparty (capital-structure visualisation — JV split bar OR outright pricing breakdown with Karnataka stamp duty + registration estimates).
+- **#241** Three coherent finishing touches: new **Key Assumptions & Sources** appendix slide (18-row two-column table listing every input with explicit source attribution — "Deal record", "Underwriting input", "Property record", "Financial kernel", "Document extraction", "Platform default"); Readiness slide density pass (4-track horizontal progress visualisation: Overall / Diligence / Approvals / Documents); Disclaimer slide rebuild (was a near-empty card; now full editorial layout with AI-Assisted vs Platform Data badge cards + Hard Rules section + confidentiality language).
+- **#242** XLSX v2 phase 2 — finishes the workbook to feature-complete: hidden **Calculations** sheet with revenue/cost/debt/returns audit blocks (right-click any tab → Unhide → Calculations); native Excel **IRR / NPV** functions on Dashboard; 5×5 **sensitivity heatmap** with 3-point color scale (red < 0% → amber → emerald > 30%); Bull/Base/Bear **scenario strip** with margin% and profit Cr per scenario. **v2 is now the default download** — operators get the new workbook without `?v=2`. v1 (legacy 13-sheet) still accessible via `?v=1` or `XLSX_V1_FORCE=1`.
+- **#243** DOCX phase 2 — six new sections inserted between Overview and Comparables for IC-report flow: **Demographics** (population / density / age / income from `market.demographics`), **Why This Area** (AI-synthesised via `generateSection({section: 'whyThisArea'})` — already wired in narrative service, just not previously called from DOCX), **Job Growth & Micro-Market** (filters `intelligence_briefs` for job/employment/GCC/tech themes), **Social Infrastructure** (8-bucket proximity table from `infra_proximity`), **Supply & Demand Pipeline** (recent transactions + verified benchmark tables), **Better Alternatives** (top 3 verified comps ranked by rate/sqft proximity to the deal's modeled selling rate, with Δ-vs-deal %). Every section has an honest "Manual input required" empty-state — no fabrication.
+
+### Cross-cutting fixes during this session
+
+- **Cover artwork SVG → native shapes** (PR #236, earlier in day) — fixed PowerPoint's "found a problem with content" recovery dialog. Cover art now uses pptxgenjs primitives (rect, ellipse, triangle, line, text) per asset class. Each cover is editable in PowerPoint.
+- **Mapbox 422** root-caused as long-string marker label; sanitisation drops anything that isn't a single alphanumeric or Maki icon name.
+- **English-only guardrail** still rejects non-Latin scripts before any AI content reaches an export.
+
+### Tests + build
+
+- Backend: 96 suites, **1,342 tests passing** (+98 across the full session day, up from 1,198 at session start).
+- Frontend: untouched.
+- All 19+ PRs squash-merged with admin override after CI passed.
+
+### Operator manual actions outstanding
+
+- [ ] Apply migration `database/migrations/20260527_export_events.sql` via Supabase SQL Editor (audit ledger — exports work without it but rows aren't logged).
+- [x] `GOOGLE_MAPS_API_KEY` set in Vercel + Maps Static API enabled in Google Cloud (confirmed via screenshot 2026-05-10).
+- [x] XLSX v2 is now the default — no `?v=2` needed.
+- [ ] Optionally set `DOCX_REPORT_ENABLED=1` to expose the DOCX underwriting report to non-admin users.
+
+### Plain-English recap (for the user)
+
+- **PowerPoint deck** — fully polished. Asset-class-specific cover artwork using native shapes (residential = skyline, commercial = glass tower, industrial = warehouse with truck, hospitality = hotel with portico, etc.). Every slide has informational density — no more empty bottom strips. New Key Assumptions appendix lets reviewers audit every number's source. Disclaimer slide is now actually a disclaimer.
+- **Excel workbook** — feature-complete v2 is the default. 4 visible sheets + 1 hidden Calculations sheet for power users. Live IRR / NPV / Equity Multiple via Excel functions. Sensitivity heatmap and Bull/Base/Bear scenario strip on the Dashboard.
+- **Word underwriting report** — 14 sections including all 6 phase-2 additions. Demographics, Why-this-area (AI-synthesised), Job Growth, Social Infrastructure, Supply & Demand, Better Alternatives. Every section either renders real data or shows "Manual input required" — no fabrication.
+- **Consistency across all exports** — a "Commercial Retail" deal now correctly shows retail artwork, retail KPIs, retail benchmarks everywhere. A "Whitefield Office Tower" deal shows commercial-office. The asset-class precedence fix flows through every code path that reads `inferAssetClass`.
+
+### What's left (intentionally deferred)
+
+- Paywall scaffold + Razorpay/Stripe — free for BETA per operator.
+- DOCX cover artwork as native shapes — `docx` library lacks the same shape primitives as pptxgenjs.
+
+---
+
 ## 2026-05-10 — Investor-Grade Exports Rebuild (5 PRs)
 
 End-to-end overhaul of the export pipeline. PPTX, XLSX, DOCX all upgraded; pricing model documented; all behind English-only and "no AI numbers" guardrails.
