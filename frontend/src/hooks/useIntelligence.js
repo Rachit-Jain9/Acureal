@@ -81,6 +81,18 @@ export function useResidentialSegmentedBenchmarks(params) {
   });
 }
 
+// Niche asset classes (Tier 1 #6–#9): co-working, student housing,
+// senior living, data centers. The endpoint soft-fails to [] when
+// the migration is missing, so the consumer can render an empty-
+// state CTA without checking error state separately.
+export function useNicheAssetClassBenchmarks(params) {
+  return useQuery({
+    queryKey: ['intelligence', 'niche-asset-class-benchmarks', params],
+    queryFn: () => intelligenceAPI.getNicheAssetClassBenchmarks(params).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useMacroKpis(params) {
   return useQuery({
     queryKey: ['intelligence', 'macro-kpis', params],

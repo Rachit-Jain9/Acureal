@@ -162,6 +162,24 @@ router.get('/residential-segmented-benchmarks', authenticate, async (req, res, n
   }
 });
 
+// GET /intelligence/niche-asset-class-benchmarks
+// Asset classes loaded here: coworking, student_housing, senior_living,
+// data_center. Source: operator-uploaded IPC reports / broker quotes
+// flowing through the comps review queue. Soft-fails to [] when the
+// migration hasn't been applied yet (Tier 1 #6–#9 from the v0.2 handoff).
+router.get('/niche-asset-class-benchmarks', authenticate, async (req, res, next) => {
+  try {
+    const data = await intelligenceService.getNicheAssetClassBenchmarks({
+      city: req.query.city,
+      assetClass: req.query.assetClass,
+      dataType: req.query.dataType,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /intelligence/macro-kpis
 router.get('/macro-kpis', authenticate, async (req, res, next) => {
   try {

@@ -436,6 +436,7 @@ export const intelligenceAPI = {
   getIndustrialBenchmarks:  (params) => api.get('/intelligence/industrial-benchmarks', { params }),
   getHospitalityBenchmarks: (params) => api.get('/intelligence/hospitality-benchmarks', { params }),
   getResidentialSegmentedBenchmarks: (params) => api.get('/intelligence/residential-segmented-benchmarks', { params }),
+  getNicheAssetClassBenchmarks: (params) => api.get('/intelligence/niche-asset-class-benchmarks', { params }),
   getMacroKpis:             (params) => api.get('/intelligence/macro-kpis', { params }),
   getDealAnalysis:          (dealId) => api.post(`/intelligence/deal-analysis/${dealId}`),
   // Last persisted analysis (or null on miss). Used by OverviewTab on
