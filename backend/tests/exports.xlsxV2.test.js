@@ -297,6 +297,41 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined2).toMatch(/Cumulative \(Cr\)/);
     }, 30000);
 
+    test('Dashboard renders JV profit waterfall when deal_structure is JV/JDA/DA', async () => {
+      const ctx = minimalContext();
+      ctx.deal.deal_structure = 'jv';
+      ctx.deal.jv_split_developer_pct = 60;
+      ctx.deal.jv_split_landowner_pct = 40;
+      const buf = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const dash = wb.getWorksheet('Dashboard');
+      const text = [];
+      dash.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text.push(cell.value);
+      }));
+      const joined = text.join(' | ');
+      expect(joined).toMatch(/Profit Waterfall/);
+      expect(joined).toMatch(/Total Project Profit/);
+      expect(joined).toMatch(/Developer Share/);
+      expect(joined).toMatch(/Landowner Share/);
+    }, 30000);
+
+    test('Dashboard hides JV waterfall when deal_structure is outright', async () => {
+      const ctx = minimalContext();
+      ctx.deal.deal_structure = 'outright';
+      const buf = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const dash = wb.getWorksheet('Dashboard');
+      const text = [];
+      dash.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text.push(cell.value);
+      }));
+      const joined = text.join(' | ');
+      expect(joined).not.toMatch(/Profit Waterfall/);
+    }, 30000);
+
     test('all sheets are unprotected (operator can edit any cell)', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();

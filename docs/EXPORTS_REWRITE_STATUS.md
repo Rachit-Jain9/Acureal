@@ -30,6 +30,10 @@ sessions can pick up where the last left off without re-reading the chat.
 | #241 | Key Assumptions appendix + Readiness density + Disclaimer rebuild | ✅ MERGED |
 | #242 | **XLSX v2 phase 2**: hidden Calculations sheet + IRR/NPV functions + sensitivity heatmap + Bull/Base/Bear scenarios; v2 is now the default | ✅ MERGED |
 | #243 | **DOCX phase 2**: Demographics + Why-this-area + Job Growth + Social Infra + Supply & Demand + Better Alternatives sections | ✅ MERGED |
+| #244 | docs: status tracker + session log handoff for the late 2026-05-10 batch | ✅ MERGED |
+| #245 | **XLSX asset-class restructure**: full Operating P&L for income deals (PGI / Vacancy / EGR / OpEx breakdown / NOI / CapEx / Debt Service / Reversion) + sheet-protection popups removed | ✅ MERGED |
+| #246 | **XLSX Dashboard restructure**: 14-column grid, asset-aware Quarterly Trend table with conditional-format data bars, IRR/NPV cash-flow row fixed for income deals | ✅ MERGED |
+| #247 | **XLSX JV / JDA profit waterfall** on Dashboard (Total Profit → Developer Share → Landowner Share) | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
