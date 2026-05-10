@@ -45,6 +45,7 @@ const SHEETS = {
   phasing: 'Phasing & Sales Collection',
   cashflow: 'Quarterly Cash Flow & Debt',
   dashboard: 'Dashboard',
+  calculations: 'Calculations',
 };
 
 const FILL = (color) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: color } });
@@ -737,12 +738,309 @@ const buildDashboardSheet = (workbook, ctx) => {
     // skip the chart and the data remains visible in the cells.
   }
 
-  // Footer disclaimer
-  sheet.mergeCells('A24:F24');
-  sheet.getCell('A24').value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision.`;
-  sheet.getCell('A24').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  // ── Returns block — IRR / NPV via native Excel functions ─────────────
+  // Project net cash flow lives on Cash Flow sheet row 8 (cols B → totalCol).
+  // Excel's IRR() expects a contiguous range; NPV() takes a quarterly rate
+  // because the cash flows are quarterly. We compute the quarter-equivalent
+  // discount rate via (1+annual)^(1/4)-1 inline.
+  const startCFCol = 'B'; // Q1 starts in column B on the cashflow sheet
+  const endCFCol = totalCol === 'A' ? 'B' : totalCol; // last quarter column
+  const cfRange = `${cashflow}!${startCFCol}8:${endCFCol === totalCol ? colLetter(totalQ + 1) : endCFCol}8`;
+  const cfRangeProper = `${cashflow}!$${colLetter(2)}$8:$${colLetter(totalQ + 1)}$8`;
+
+  sheet.mergeCells('A19:F19');
+  sheet.getCell('A19').value = 'Returns';
+  styleSectionTitle(sheet.getCell('A19'));
+  sheet.getRow(19).height = 22;
+
+  const returnsCells = [
+    { row: 20, col: 'A', label: 'Project IRR (modeled)', formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`, format: NUMBER_FORMATS.percent },
+    { row: 20, col: 'C', label: 'NPV (INR Cr)',          formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`, format: NUMBER_FORMATS.currency },
+    { row: 20, col: 'E', label: 'Equity Multiple',       formula: `=IFERROR((${cashflow}!${totalCol}8+ABS(SUMIF(${cfRangeProper},"<0")))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`, format: NUMBER_FORMATS.multiple },
+  ];
+  returnsCells.forEach(({ row, col, label, formula, format }) => {
+    const labelCell = sheet.getCell(`${col}${row}`);
+    labelCell.value = label;
+    labelCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') }, bold: true };
+    labelCell.alignment = { horizontal: 'left' };
+    labelCell.fill = FILL(palette.xlsx('paper'));
+    labelCell.protection = { locked: true };
+    const valueCell = sheet.getCell(`${String.fromCharCode(col.charCodeAt(0) + 1)}${row}`);
+    valueCell.value = { formula };
+    valueCell.numFmt = format;
+    valueCell.font = { name: FONT, size: 16, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    valueCell.alignment = { horizontal: 'right' };
+    valueCell.fill = FILL(palette.xlsx('paperElevated'));
+    valueCell.protection = { locked: true };
+    valueCell.border = {
+      top: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
+      bottom: { style: 'thin', color: { argb: palette.xlsx('accent') } },
+      left: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
+      right: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
+    };
+    sheet.getRow(row).height = 30;
+  });
+
+  // ── Sensitivity grid — Project margin under sale-rate × cost variance ──
+  // Two-axis 5x5 with conditional formatting (color scale). No native chart
+  // (ExcelJS chart support is patchy); a coloured cell grid renders
+  // identically in every Excel version and prints correctly.
+  sheet.mergeCells('A23:F23');
+  sheet.getCell('A23').value = 'Sensitivity — Project Margin (sale-rate × construction-cost variance)';
+  styleSectionTitle(sheet.getCell('A23'));
+  sheet.getRow(23).height = 22;
+
+  // Column headers — sale rate variance (-10% to +10%)
+  const saleVariances = [-0.10, -0.05, 0, 0.05, 0.10];
+  const costVariances = [-0.10, -0.05, 0, 0.05, 0.10]; // constr cost variance
+
+  // Top-left cell — corner label
+  sheet.getCell('A24').value = 'Cost ↓ × Rate →';
+  sheet.getCell('A24').font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  sheet.getCell('A24').alignment = { vertical: 'middle', horizontal: 'center' };
+  sheet.getCell('A24').fill = FILL(palette.xlsx('inkDeep'));
   sheet.getCell('A24').protection = { locked: true };
 
+  // Sale-rate variance column headers (cols B → F)
+  saleVariances.forEach((v, idx) => {
+    const cell = sheet.getCell(24, 2 + idx);
+    cell.value = v;
+    cell.numFmt = '+0%;-0%;"base"';
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.protection = { locked: true };
+  });
+
+  // Row labels — construction cost variance (rows 25 → 29)
+  costVariances.forEach((v, rIdx) => {
+    const r = 25 + rIdx;
+    const labelCell = sheet.getCell(`A${r}`);
+    labelCell.value = v;
+    labelCell.numFmt = '+0%;-0%;"base"';
+    labelCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    labelCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    labelCell.fill = FILL(palette.xlsx('inkDeep'));
+    labelCell.protection = { locked: true };
+
+    saleVariances.forEach((rateV, cIdx) => {
+      const cell = sheet.getCell(r, 2 + cIdx);
+      // Margin = (Revenue × (1 + saleVar) − Cost × (1 + costVar)) / Revenue × (1 + saleVar)
+      const formula =
+        `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateV})` +
+        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+IF(ROW()-25=${rIdx},${costVariances[rIdx]},0))) ` +
+        `/((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateV})),0)`;
+      cell.value = { formula };
+      cell.numFmt = NUMBER_FORMATS.percent;
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('ink') } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.protection = { locked: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+        bottom: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+        left: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+        right: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      };
+    });
+  });
+
+  // Color scale on the heatmap range B25:F29 — red (negative) → amber (0) → green (high)
+  sheet.addConditionalFormatting({
+    ref: 'B25:F29',
+    rules: [{
+      type: 'colorScale',
+      cfvo: [
+        { type: 'num', value: -0.10 },
+        { type: 'num', value: 0.10 },
+        { type: 'num', value: 0.30 },
+      ],
+      color: [
+        { argb: palette.xlsx('dataNegative') },
+        { argb: palette.xlsx('dataWarning') },
+        { argb: palette.xlsx('dataPositive') },
+      ],
+      priority: 1,
+    }],
+  });
+
+  // ── Scenario strip (Bull / Base / Bear) ──────────────────────────────
+  sheet.mergeCells('A31:F31');
+  sheet.getCell('A31').value = 'Scenario Comparison (modeled)';
+  styleSectionTitle(sheet.getCell('A31'));
+  sheet.getRow(31).height = 22;
+
+  const scenarios = [
+    { col: 'A', name: 'BULL CASE',  rate: 0.10,  cost: -0.05, accent: palette.xlsx('dataPositive') },
+    { col: 'C', name: 'BASE CASE',  rate: 0,     cost: 0,     accent: palette.xlsx('accent') },
+    { col: 'E', name: 'BEAR CASE',  rate: -0.10, cost: 0.10,  accent: palette.xlsx('dataNegative') },
+  ];
+  scenarios.forEach((sc) => {
+    // Header
+    const hdr = sheet.getCell(`${sc.col}32`);
+    hdr.value = sc.name;
+    hdr.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') }, charSpace: 1.6 };
+    hdr.alignment = { horizontal: 'center', vertical: 'middle' };
+    hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.accent } };
+    hdr.protection = { locked: true };
+    sheet.mergeCells(`${sc.col}32:${String.fromCharCode(sc.col.charCodeAt(0) + 1)}32`);
+
+    // Margin
+    const marginLabel = sheet.getCell(`${sc.col}33`);
+    marginLabel.value = 'Margin';
+    marginLabel.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+    marginLabel.alignment = { horizontal: 'left' };
+    marginLabel.fill = FILL(palette.xlsx('paper'));
+    marginLabel.protection = { locked: true };
+    const marginVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}33`);
+    marginVal.value = {
+      formula:
+        `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})` +
+        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+${sc.cost})) ` +
+        `/((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})),0)`,
+    };
+    marginVal.numFmt = NUMBER_FORMATS.percent;
+    marginVal.font = { name: FONT, size: 14, bold: true, color: { argb: sc.accent } };
+    marginVal.alignment = { horizontal: 'right' };
+    marginVal.fill = FILL(palette.xlsx('paperElevated'));
+    marginVal.protection = { locked: true };
+
+    // Profit
+    const profitLabel = sheet.getCell(`${sc.col}34`);
+    profitLabel.value = 'Profit (Cr)';
+    profitLabel.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+    profitLabel.alignment = { horizontal: 'left' };
+    profitLabel.fill = FILL(palette.xlsx('paper'));
+    profitLabel.protection = { locked: true };
+    const profitVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}34`);
+    profitVal.value = {
+      formula:
+        `=(SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})` +
+        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+${sc.cost})`,
+    };
+    profitVal.numFmt = NUMBER_FORMATS.currency;
+    profitVal.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('ink') } };
+    profitVal.alignment = { horizontal: 'right' };
+    profitVal.fill = FILL(palette.xlsx('paperElevated'));
+    profitVal.protection = { locked: true };
+  });
+
+  // Footer disclaimer
+  sheet.mergeCells('A36:F36');
+  sheet.getCell('A36').value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision. Power users: right-click any sheet tab → Unhide → Calculations to inspect the audit-trail maths.`;
+  sheet.getCell('A36').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A36').alignment = { wrapText: true, vertical: 'middle' };
+  sheet.getCell('A36').protection = { locked: true };
+  sheet.getRow(36).height = 28;
+
+  sheet.protect('', {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+  });
+  return sheet;
+};
+
+/**
+ * Calculations sheet — HIDDEN audit-trail with intermediate
+ * revenue / cost / debt build. Power users can right-click → Unhide
+ * to see how the visible Dashboard / Cash Flow numbers compose.
+ *
+ * Addresses the "black-box risk" raised against the 4-sheet redesign:
+ * sophisticated reviewers want to trace where a number comes from.
+ *
+ * Layout:
+ *   Block 1 — Revenue Build      (rows 4-8)
+ *   Block 2 — Cost Build         (rows 12-19)
+ *   Block 3 — Debt Sculpting     (rows 23-28)
+ *   Block 4 — Returns Inputs     (rows 32-35)
+ *
+ * All formulas reference named ranges from `Inputs & Assumptions` so
+ * the audit trail recalculates in lockstep with operator edits.
+ */
+const buildCalculationsSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.calculations, {
+    state: 'hidden', // power users can unhide via right-click
+    views: [{ showGridLines: false }],
+  });
+  sheet.columns = [
+    { width: 36 }, // A: Label
+    { width: 18 }, // B: Value
+    { width: 22 }, // C: Source / formula description
+  ];
+
+  sheet.mergeCells('A1:C1');
+  sheet.getCell('A1').value = `${ctx.brandName} | Calculations (audit trail)`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+
+  sheet.mergeCells('A2:C2');
+  sheet.getCell('A2').value = 'Hidden by default. Right-click any sheet tab → Unhide → Calculations to inspect the intermediate maths.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle' };
+  sheet.getCell('A2').protection = { locked: true };
+
+  let row = 4;
+  const writeBlock = (title, rows) => {
+    sheet.mergeCells(`A${row}:C${row}`);
+    sheet.getCell(`A${row}`).value = title;
+    styleSectionTitle(sheet.getCell(`A${row}`));
+    row += 1;
+    rows.forEach(([label, formula, note]) => {
+      sheet.getCell(`A${row}`).value = label;
+      styleLabelCell(sheet.getCell(`A${row}`));
+      const valCell = sheet.getCell(`B${row}`);
+      valCell.value = { formula };
+      styleOutputCell(valCell, NUMBER_FORMATS.currency);
+      sheet.getCell(`C${row}`).value = note;
+      sheet.getCell(`C${row}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`C${row}`).alignment = { vertical: 'middle', horizontal: 'left' };
+      sheet.getCell(`C${row}`).protection = { locked: true };
+      row += 1;
+    });
+    row += 1;
+  };
+
+  writeBlock('Revenue Build', [
+    ['Saleable area (sqft)',         '=SaleableAreaSqft',                               'From Inputs & Assumptions'],
+    ['Sell rate (INR / sqft)',       '=SellRatePerSqft',                                'From Inputs & Assumptions'],
+    ['Average escalation factor',    '=(1+EscalationPct)^(TotalQuarters/4/2)',          'Mid-period uplift across project'],
+    ['Total revenue (INR Cr)',       '=SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000', 'Saleable × rate × escalation / 1Cr'],
+    ['Customer collected (INR Cr)',  '=SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)*CollectionPct/10000000', '× CollectionPct'],
+  ]);
+
+  writeBlock('Cost Build', [
+    ['Land cost (INR Cr)',           '=LandCostCr',                                     'From Inputs & Assumptions'],
+    ['Construction cost (INR Cr)',   '=ConstructionCostPerSqft*SaleableAreaSqft/10000000', 'Construction rate × saleable area'],
+    ['Approval & fees (INR Cr)',     '=ApprovalCostCr',                                 'From Inputs & Assumptions'],
+    ['Hard cost subtotal',           '=B13+B14+B15',                                    'Land + Construction + Approvals'],
+    ['Marketing & sales (INR Cr)',   '=B8*MarketingCostPct',                            'Total revenue × MarketingCostPct'],
+    ['Finance / treasury (INR Cr)',  '=B8*FinanceCostPct',                              'Total revenue × FinanceCostPct'],
+    ['Soft cost subtotal',           '=B17+B18',                                        'Marketing + Finance'],
+    ['Total project cost (INR Cr)',  '=B16+B19',                                        'Hard + Soft costs'],
+  ]);
+
+  writeBlock('Debt Sculpting', [
+    ['Debt LTV (% of cost)',         '=DebtLTV',                                        'From Inputs & Assumptions'],
+    ['Total debt envelope (INR Cr)', '=B20*DebtLTV',                                    'Total project cost × LTV'],
+    ['Equity envelope (INR Cr)',     '=B20*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
+    ['Annualised interest cost',     '=B25*DebtRatePct',                                'Debt × rate (peak proxy)'],
+    ['Quarterly interest accrual',   '=B25*DebtRatePct/4',                              'Used in Cash Flow row 10'],
+    ['Effective debt cost / unit',   '=B25*DebtRatePct/SaleableAreaSqft*10000000',      'Per-sqft cost-of-capital proxy'],
+  ]);
+
+  writeBlock('Returns Inputs (for Dashboard IRR/NPV)', [
+    ['Discount rate (annual)',       '=DiscountRatePct',                                'From Inputs & Assumptions'],
+    ['Quarterly discount rate',      '=(1+DiscountRatePct)^(1/4)-1',                    'Quarter-equivalent for NPV'],
+    ['Periods (quarters)',           '=TotalQuarters',                                  'Project life'],
+    ['Hurdle rate (developer margin)', '=DeveloperMarginPct',                           'From Inputs & Assumptions'],
+  ]);
+
+  // Footer
+  sheet.mergeCells(`A${row + 1}:C${row + 1}`);
+  sheet.getCell(`A${row + 1}`).value = `Generated ${ctx.generatedAt} | ${ctx.brandName}. Every formula here references named ranges on the Inputs sheet — change an input, re-open the file, and watch the audit trail recalc.`;
+  sheet.getCell(`A${row + 1}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${row + 1}`).protection = { locked: true };
+
+  // Lock everything — power users who want to edit can unhide + unprotect.
   sheet.protect('', {
     selectLockedCells: true,
     selectUnlockedCells: true,
@@ -769,6 +1067,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   buildPhasingSheet(workbook, ctx);
   buildCashFlowSheet(workbook, ctx);
   buildDashboardSheet(workbook, ctx);
+  buildCalculationsSheet(workbook, ctx); // hidden audit trail
 
   // Register defined names AFTER all sheets exist so the references resolve.
   definedNames.forEach(({ name, ref }) => {
