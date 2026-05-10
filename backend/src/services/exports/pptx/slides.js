@@ -396,19 +396,125 @@ const renderMarketPositioning = (pptx, slide, context, pageNumber, totalSlides) 
     });
   }
 
-  addCard(pptx, slide, { x: 6.95, y: 1.3, w: 5.83, h: 5.2, bandColor: COLORS.sandDeep, fill: COLORS.white });
+  // ── Bottom-left strip: comparable transactions summary table.
+  // Was empty space below the chart (y 5.25–7.0) — now packed with the
+  // top 4 verified comps so the deck reads as dense, not sparse.
+  const compsForTable = (context.compRows || []).filter((c) => num(c.rate_per_sqft) != null).slice(0, 4);
+  if (compsForTable.length > 0) {
+    addCard(pptx, slide, {
+      x: 0.55, y: 5.35, w: 6.2, h: 1.65,
+      bandColor: COLORS.plumSoft,
+      fill: COLORS.white,
+    });
+    slide.addText('TOP VERIFIED COMPARABLES', {
+      x: 0.78, y: 5.5, w: 5.6, h: 0.2,
+      fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    const compTableRows = [
+      [
+        { text: 'Project', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
+        { text: 'Developer', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
+        { text: 'Rate / sqft', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
+        { text: 'Verified', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
+      ],
+      ...compsForTable.map((c, idx) => [
+        { text: truncate(c.project_name || '–', 22), options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist } } },
+        { text: truncate(c.developer || '–', 18), options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist } } },
+        { text: formatRate(c.rate_per_sqft) || '–', options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist }, bold: true } },
+        { text: c.is_verified === false ? 'No' : 'Yes', options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist }, color: c.is_verified === false ? COLORS.red : COLORS.green } },
+      ]),
+    ];
+    addTable(slide, compTableRows, {
+      x: 0.78,
+      y: 5.78,
+      w: 5.8,
+      colW: [1.95, 1.6, 1.35, 0.9],
+      rowH: 0.27,
+      fontSize: 8,
+    });
+  }
+
+  // ── Right column: read-through bullets + "Deal vs market" tile + per-comp distribution.
+  addCard(pptx, slide, { x: 6.95, y: 1.3, w: 5.83, h: 5.7, bandColor: COLORS.sandDeep, fill: COLORS.white });
   slide.addText('Market Read-Through', {
-    x: 7.22, y: 1.54, w: 2.4, h: 0.18,
+    x: 7.22, y: 1.54, w: 2.8, h: 0.22,
     fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
   });
   addBulletList(slide, context.marketObservations, {
     x: 7.22,
     y: 1.95,
-    w: 5.0,
-    h: 1.3,
+    w: 5.3,
+    h: 1.5,
     fontSize: 9.5,
     bulletColor: COLORS.sandDeep,
+    lineH: 0.5,
   });
+
+  // Hairline separator
+  slide.addShape(pptx.ShapeType.line, {
+    x: 7.22, y: 3.65, w: 5.3, h: 0,
+    line: { color: COLORS.line, pt: 0.6 },
+  });
+
+  // Deal vs market tile — reference rate, model rate, delta.
+  slide.addText('DEAL vs MARKET', {
+    x: 7.22, y: 3.78, w: 5.3, h: 0.2,
+    fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  const benchmark = num(context.benchmarkMedianRate);
+  const modelRate = num(context.modelSellRate);
+  const hasBoth = benchmark != null && modelRate != null;
+  const deltaPct = hasBoth ? ((modelRate - benchmark) / benchmark) * 100 : null;
+  const deltaColor = deltaPct == null ? COLORS.muted : (deltaPct > 5 ? COLORS.green : (deltaPct < -5 ? COLORS.red : COLORS.amber));
+  // Three mini-tiles
+  const tiles = [
+    { label: 'Benchmark median', value: benchmark != null ? formatRate(benchmark) : '–', color: COLORS.charcoal },
+    { label: 'Deal sell rate', value: modelRate != null ? formatRate(modelRate) : '–', color: COLORS.charcoal },
+    { label: 'Delta vs median', value: deltaPct == null ? '–' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`, color: deltaColor },
+  ];
+  tiles.forEach((tile, idx) => {
+    const tx = 7.22 + idx * 1.78;
+    const ty = 4.05;
+    slide.addShape(pptx.ShapeType.rect, {
+      x: tx, y: ty, w: 1.65, h: 0.95,
+      fill: { color: COLORS.mist },
+      line: { color: COLORS.line, pt: 0.5 },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x: tx, y: ty, w: 0.06, h: 0.95,
+      fill: { color: idx === 2 ? deltaColor : COLORS.plum },
+      line: { color: idx === 2 ? deltaColor : COLORS.plum, pt: 0.1 },
+    });
+    slide.addText(tile.label.toUpperCase(), {
+      x: tx + 0.18, y: ty + 0.08, w: 1.45, h: 0.18,
+      fontFace: FONT, fontSize: 7, bold: true, color: COLORS.muted, charSpace: 1.2,
+    });
+    slide.addText(tile.value, {
+      x: tx + 0.18, y: ty + 0.32, w: 1.45, h: 0.5,
+      fontFace: FONT, fontSize: 13, bold: true, color: tile.color, valign: 'top', fit: 'shrink',
+    });
+  });
+
+  // Bottom note — verified count.
+  const verifiedCount = (context.compRows || []).filter((c) => c.is_verified !== false).length;
+  const totalCompRows = (context.compRows || []).length;
+  if (totalCompRows > 0) {
+    slide.addText(
+      `${verifiedCount} of ${totalCompRows} comparable rate references are verified. Unverified rows surfaced for context only.`,
+      {
+        x: 7.22, y: 5.35, w: 5.3, h: 0.5,
+        fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, valign: 'top',
+      },
+    );
+  } else if (!hasBoth) {
+    slide.addText(
+      'Comparable rate context is still limited for this micro-market. Populate verified comps to surface a sharper position.',
+      {
+        x: 7.22, y: 5.35, w: 5.3, h: 0.5,
+        fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, valign: 'top',
+      },
+    );
+  }
 };
 
 const renderLocationContext = (pptx, slide, context, pageNumber, totalSlides) => {
