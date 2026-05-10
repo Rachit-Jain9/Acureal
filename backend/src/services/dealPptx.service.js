@@ -53,26 +53,88 @@ const {
   buildInvestmentHighlights,
 } = require('./exports/pptx/contentBuilders');
 const { computeDealScore } = require('../utils/scoring/dealScore');
-const { renderQrDataUri } = require('./exports/shared/qrImage.service');
 const { renderScoreGaugeDataUri } = require('./exports/shared/svgGauge.service');
 const { generateSection } = require('./exports/narrative/exportNarrative.service');
+
+// Format helpers (lightweight — primary formatters live in pptx/_helpers.js).
+const fmtPct = (v, d = 1) => (v == null || Number.isNaN(Number(v)) ? null : `${Number(v).toFixed(d)}%`);
+const fmtCr = (v) => (v == null || Number.isNaN(Number(v)) ? null : `INR ${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 1 })} Cr`);
+const fmtArea = (v) => (v == null || Number.isNaN(Number(v)) ? null : `${Number(v).toLocaleString('en-IN')} sqft`);
+const fmtRate = (v) => (v == null || Number.isNaN(Number(v)) ? null : `INR ${Number(v).toLocaleString('en-IN')} / sqft`);
+
+/**
+ * Build a section-specific right-panel preview for the divider slide.
+ * Each section returns a heading + 2–4 label/value tiles drawn from
+ * already-computed deck context. Where data is missing we just send
+ * fewer tiles (don't fabricate).
+ */
+const buildDividerRightPanel = (kind, context) => {
+  const cards = [];
+  if (kind === 'opportunity') {
+    if (context.irr != null)             cards.push({ label: 'Project IRR',      value: fmtPct(context.irr, 1) });
+    if (context.equityMultiple != null)  cards.push({ label: 'Equity multiple',  value: `${Number(context.equityMultiple).toFixed(2)}x` });
+    if (context.npv != null)             cards.push({ label: 'NPV',              value: fmtCr(context.npv) });
+    if (context.grossMargin != null)     cards.push({ label: 'Gross margin',     value: fmtPct(context.grossMargin, 1) });
+    return {
+      heading: 'What you will see in this section',
+      cards,
+      note: cards.length ? 'Live KPIs synthesised from the underwriting model.' : null,
+    };
+  }
+  if (kind === 'market') {
+    const cityCount = (context.cityBenchmarks || []).length;
+    const compCount = (context.compRows || []).length;
+    if (cityCount)                        cards.push({ label: 'City benchmarks',  value: String(cityCount), hint: 'verified rates / yields' });
+    if (compCount)                        cards.push({ label: 'Verified comps',   value: String(compCount) });
+    if (context.benchmarkMedianRate != null) cards.push({ label: 'Median rate',   value: fmtRate(context.benchmarkMedianRate) });
+    if (context.priceGapPct != null)      cards.push({ label: 'Price-gap vs market', value: fmtPct(context.priceGapPct, 1) });
+    return {
+      heading: 'Market context for this site',
+      cards,
+      note: cards.length ? null : 'Market intelligence will populate as verified data lands.',
+    };
+  }
+  if (kind === 'asset') {
+    if (context.saleableAreaSqft != null) cards.push({ label: 'Saleable area',    value: fmtArea(context.saleableAreaSqft) });
+    if (context.landAreaSqft != null)     cards.push({ label: 'Land area',        value: fmtArea(context.landAreaSqft) });
+    if (context.modelSellRate != null)    cards.push({ label: 'Sell rate',        value: fmtRate(context.modelSellRate) });
+    if (context.readiness?.readiness_pct != null) cards.push({ label: 'Readiness', value: `${context.readiness.readiness_pct}%`, hint: 'execution prep' });
+    return {
+      heading: 'Asset & site at a glance',
+      cards,
+      note: null,
+    };
+  }
+  if (kind === 'financial') {
+    if (context.totalCost != null)        cards.push({ label: 'Total project cost', value: fmtCr(context.totalCost) });
+    if (context.totalRevenue != null)     cards.push({ label: 'Total revenue',      value: fmtCr(context.totalRevenue) });
+    if (context.irr != null)              cards.push({ label: 'IRR',                value: fmtPct(context.irr, 1) });
+    if (context.equityMultiple != null)   cards.push({ label: 'Equity multiple',    value: `${Number(context.equityMultiple).toFixed(2)}x` });
+    return {
+      heading: 'Financial summary preview',
+      cards,
+      note: 'Detailed cash flow, sensitivity, and capital stack follow.',
+    };
+  }
+  return { heading: 'Section preview', cards: [], note: null };
+};
 
 const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) => {
   switch (slideDef.key) {
     case 'cover': renderCover(pptx, slide, context, totalSlides); return;
     case 'contents': renderContents(pptx, slide, context, pageNumber, totalSlides); return;
-    case 'dividerOpportunity': addSectionDivider(pptx, slide, context, 'The Opportunity', `${context.assetClassLabel} | ${context.dealTypeLabel}`, pageNumber, totalSlides); return;
+    case 'dividerOpportunity': addSectionDivider(pptx, slide, context, 'The Opportunity', `${context.assetClassLabel} | ${context.dealTypeLabel}`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('opportunity', context) }); return;
     case 'executiveSummary': renderExecutiveSummary(pptx, slide, context, pageNumber, totalSlides); return;
     case 'investmentHighlights': renderInvestmentHighlights(pptx, slide, context, pageNumber, totalSlides); return;
     case 'structure': renderStructure(pptx, slide, context, pageNumber, totalSlides); return;
-    case 'dividerMarket': addSectionDivider(pptx, slide, context, 'Market / Micro-Market', `${context.deal.city || 'City'} | verified market context`, pageNumber, totalSlides); return;
+    case 'dividerMarket': addSectionDivider(pptx, slide, context, 'Market / Micro-Market', `${context.deal.city || 'City'} | verified market context`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('market', context) }); return;
     case 'marketPositioning': renderMarketPositioning(pptx, slide, context, pageNumber, totalSlides); return;
     case 'locationContext': renderLocationContext(pptx, slide, context, pageNumber, totalSlides); return;
     case 'planningContext': renderPlanningContext(pptx, slide, context, pageNumber, totalSlides); return;
-    case 'dividerAsset': addSectionDivider(pptx, slide, context, 'About the Asset', `${context.assetClassLabel} | site, title, and delivery context`, pageNumber, totalSlides); return;
+    case 'dividerAsset': addSectionDivider(pptx, slide, context, 'About the Asset', `${context.assetClassLabel} | site, title, and delivery context`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('asset', context) }); return;
     case 'assetSnapshot': renderAssetSnapshot(pptx, slide, context, pageNumber, totalSlides); return;
     case 'readiness': renderReadiness(pptx, slide, context, pageNumber, totalSlides); return;
-    case 'dividerFinancial': addSectionDivider(pptx, slide, context, 'Financial Summary', `${context.assetClassLabel} | current underwriting outputs`, pageNumber, totalSlides); return;
+    case 'dividerFinancial': addSectionDivider(pptx, slide, context, 'Financial Summary', `${context.assetClassLabel} | current underwriting outputs`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('financial', context) }); return;
     case 'financialOverview': renderFinancialOverview(pptx, slide, context, pageNumber, totalSlides); return;
     case 'cashFlowSensitivity': renderCashFlowSensitivity(pptx, slide, context, pageNumber, totalSlides); return;
     case 'transactionSummary': renderTransactionSummary(pptx, slide, context, pageNumber, totalSlides); return;
@@ -95,8 +157,6 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
 const precomputeDeckAssets = async (exportContext, baseContext, options) => {
   const dealId = exportContext?.deal?.id || null;
   const orgId = exportContext?.deal?.organization_id || null;
-  const baseUrl = options.publicUrl || process.env.REDIP_PUBLIC_URL || 'https://redip.vercel.app';
-  const liveDealUrl = dealId ? `${baseUrl.replace(/\/$/, '')}/deals/${dealId}` : null;
 
   // Risk-count rollup for deal-score input.
   const riskSummary = exportContext?.risks?.summary || {};
@@ -121,39 +181,32 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
   };
   const dealScore = computeDealScore(scoreInput);
 
-  // Run async tasks in parallel — QR generation is local-fast, gauge is
-  // pure synchronous (we wrap it for shape consistency), prosCons is the
-  // potentially-slow remote call.
-  const [qrDataUri, prosCons] = await Promise.all([
-    liveDealUrl
-      ? renderQrDataUri(liveDealUrl, { dark: '#0E1B2C', light: '#FBF9F6' }).catch(() => null)
-      : Promise.resolve(null),
-    generateSection({
-      section: 'prosCons',
-      payload: {
-        kpis: {
-          irrPct: baseContext.irr,
-          npvCr: baseContext.npv,
-          equityMultiple: baseContext.equityMultiple,
-          grossMarginPct: baseContext.grossMargin,
-          totalCostCr: baseContext.totalCost,
-          totalRevenueCr: baseContext.totalRevenue,
-        },
-        dd_progress: { completionPct: ddCompletionPct, openDealBreakers: Number(ddSummary.open_deal_breakers) || 0 },
-        approvals: baseContext.approvalSummary,
-        risk_flags: baseContext.exportContext?.risks?.items?.slice(0, 5) || [],
-        comp_positioning: {
-          benchmarkMedianRate: baseContext.benchmarkMedianRate,
-          modelSellRate: baseContext.modelSellRate,
-        },
-        asset_class: baseContext.assetClass,
-        deal_type: baseContext.dealTypeLabel,
-        locality: baseContext.locationLine,
+  // AI Pros & Cons synthesis (Gemini primary, OpenAI fallback). Never throws.
+  const prosCons = await generateSection({
+    section: 'prosCons',
+    payload: {
+      kpis: {
+        irrPct: baseContext.irr,
+        npvCr: baseContext.npv,
+        equityMultiple: baseContext.equityMultiple,
+        grossMarginPct: baseContext.grossMargin,
+        totalCostCr: baseContext.totalCost,
+        totalRevenueCr: baseContext.totalRevenue,
       },
-      dealId,
-      organizationId: orgId,
-    }).catch(() => ({ available: false, pros: [], cons: [], reason: 'Narrative call failed' })),
-  ]);
+      dd_progress: { completionPct: ddCompletionPct, openDealBreakers: Number(ddSummary.open_deal_breakers) || 0 },
+      approvals: baseContext.approvalSummary,
+      risk_flags: baseContext.exportContext?.risks?.items?.slice(0, 5) || [],
+      comp_positioning: {
+        benchmarkMedianRate: baseContext.benchmarkMedianRate,
+        modelSellRate: baseContext.modelSellRate,
+      },
+      asset_class: baseContext.assetClass,
+      deal_type: baseContext.dealTypeLabel,
+      locality: baseContext.locationLine,
+    },
+    dealId,
+    organizationId: orgId,
+  }).catch(() => ({ available: false, pros: [], cons: [], reason: 'Narrative call failed' }));
 
   const scoreGaugeDataUri = renderScoreGaugeDataUri({
     score: dealScore.score,
@@ -163,11 +216,9 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
   });
 
   return {
-    qrDataUri,
     scoreGaugeDataUri,
     dealScore,
     prosCons,
-    liveDealUrl,
   };
 };
 

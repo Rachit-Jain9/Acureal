@@ -44,7 +44,6 @@ const {
   addBulletList,
   addTable,
   addSectionDivider,
-  addQrCode,
   addScoreGauge,
   addProsConsColumns,
 } = require('./primitives');
@@ -106,19 +105,6 @@ const renderCover = (pptx, slide, context, totalSlides) => {
       x: 9.93, y: 2.78, w: 0.98, h: 0.98,
       fill: { color: COLORS.plum },
       line: { color: COLORS.plum, pt: 0.2 },
-    });
-  }
-
-  // QR code linking to the live deal in REDIP. Always bottom-right when set.
-  if (context.precomputed?.qrDataUri) {
-    addQrCode(slide, {
-      x: 11.55, y: 5.55, size: 1.15,
-      dataUri: context.precomputed.qrDataUri,
-      alt: 'Scan for live deal',
-    });
-    slide.addText('Scan to open this deal in REDIP', {
-      x: 9.45, y: 5.62, w: 2.05, h: 0.34,
-      fontFace: FONT, fontSize: 8, color: COLORS.muted, align: 'right', italic: true,
     });
   }
 
@@ -879,27 +865,69 @@ const renderNextSteps = (pptx, slide, context, pageNumber, totalSlides) => {
     ? context.nextStepGroups
     : [{ group: 'Immediate Actions', items: ['Populate approvals, documents, and underwriting fields to unlock a fuller Investor-Grade deck.'] }];
 
-  groups.forEach((group, index) => {
+  // Pad to 3 cards so the slide layout doesn't leave one or two columns
+  // dangling. Empty pads render a "no items captured yet" state.
+  const padded = groups.slice(0, 3);
+  while (padded.length < 3) {
+    padded.push({ group: padded.length === 0 ? 'Immediate Actions' : (padded.length === 1 ? 'Legal Actions' : 'Regulatory Actions'), items: [] });
+  }
+
+  padded.forEach((group, index) => {
     const x = 0.55 + index * 4.12;
+    const cardY = 1.32;
+    const cardH = 5.3;
     addCard(pptx, slide, {
       x,
-      y: 1.32,
+      y: cardY,
       w: 3.84,
-      h: 5.3,
+      h: cardH,
       bandColor: index === 0 ? COLORS.plum : index === 1 ? COLORS.sandDeep : COLORS.plumSoft,
       fill: index === 1 ? COLORS.mist : COLORS.white,
     });
-    slide.addText(group.group, {
-      x: x + 0.24, y: 1.56, w: 3.1, h: 0.18,
-      fontFace: FONT, fontSize: 11, bold: true, color: COLORS.charcoal,
+
+    // Group eyebrow + heading
+    slide.addText(`Track ${String.fromCharCode(65 + index)}`, {
+      x: x + 0.24, y: cardY + 0.20, w: 3.1, h: 0.18,
+      fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.6,
     });
-    addBulletList(slide, group.items, {
-      x: x + 0.24,
-      y: 1.98,
-      w: 3.2,
-      h: 3.9,
-      fontSize: 9.3,
-      bulletColor: index === 1 ? COLORS.sandDeep : COLORS.plum,
+    slide.addText(group.group, {
+      x: x + 0.24, y: cardY + 0.42, w: 3.4, h: 0.32,
+      fontFace: FONT, fontSize: 14, bold: true, color: COLORS.charcoal, fit: 'shrink',
+    });
+    // Hairline separator under the title
+    slide.addShape(pptx.ShapeType.line, {
+      x: x + 0.24, y: cardY + 0.85, w: 0.7, h: 0,
+      line: { color: index === 0 ? COLORS.plum : index === 1 ? COLORS.sandDeep : COLORS.plumSoft, pt: 1.5 },
+    });
+
+    // Items list — bullets aligned with text, top-anchored, fixed line
+    // height so a single-bullet card no longer floats text to the middle.
+    if (group.items && group.items.length > 0) {
+      addBulletList(slide, group.items, {
+        x: x + 0.24,
+        y: cardY + 1.05,
+        w: 3.4,
+        h: cardH - 1.2,
+        fontSize: 10,
+        bulletColor: index === 1 ? COLORS.sandDeep : COLORS.plum,
+        lineH: 0.62,
+      });
+    } else {
+      slide.addText('No actions captured yet for this track.', {
+        x: x + 0.24, y: cardY + 1.05, w: 3.4, h: 0.6,
+        fontFace: FONT, fontSize: 9.5, italic: true, color: COLORS.muted, valign: 'top',
+      });
+    }
+
+    // Footer note — what this track means
+    const trackHints = [
+      'Diligence + financial-model preparation needed before IC.',
+      'Title / EC / mutation evidence requested from the seller side.',
+      'Approvals, conversions, and statutory clearances to validate.',
+    ];
+    slide.addText(trackHints[index] || '', {
+      x: x + 0.24, y: cardY + cardH - 0.55, w: 3.4, h: 0.4,
+      fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, valign: 'top', fit: 'shrink',
     });
   });
 };

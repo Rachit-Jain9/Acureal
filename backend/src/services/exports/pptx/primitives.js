@@ -84,16 +84,38 @@ const addKpiCard = (pptx, slide, { x, y, w, h, label, value, tone = COLORS.plum,
   }
 };
 
-const addBulletList = (slide, items, { x, y, w, h, fontSize = 11, color = COLORS.charcoal, bulletColor = COLORS.plum }) => {
+/**
+ * Render a bullet list inside a bounded rect.
+ *
+ * Each item gets a fixed-ish row anchored to the TOP of its slot, so the
+ * bullet marker and the first line of text align horizontally. Earlier
+ * revision used `valign: 'mid'` which produced a "bullet at top, text
+ * floating at bottom" look on cards with few items (the row stretched to
+ * fill the card). Caller still controls the bounding `h`; if items don't
+ * fill it, the empty space is at the bottom — the way bullet lists read
+ * everywhere else.
+ *
+ * `gap` (optional, default 0.06") gives small breathing room between
+ * items. `lineH` (optional) overrides the per-row height; when omitted
+ * we use a sensible default scaled from the font size and capped so a
+ * single-item list doesn't stretch into one massive empty row.
+ */
+const addBulletList = (slide, items, { x, y, w, h, fontSize = 11, color = COLORS.charcoal, bulletColor = COLORS.plum, gap = 0.06, lineH }) => {
   const totalItems = items.length || 1;
-  const rowHeight = h / totalItems;
+  // Scale from font size — typical line-height ratio ~1.4, plus a touch
+  // for two-line items. Capped at 0.9" so a 3" tall card with one item
+  // doesn't end up with a single 3" tall row.
+  const desired = lineH != null ? lineH : Math.max(0.32, Math.min(0.9, (fontSize / 72) * 1.6 * 2));
+  const rowHeight = Math.min(desired, h / totalItems);
   items.forEach((item, index) => {
     const top = y + index * rowHeight;
+    // Bullet baseline-aligned with first line of text — small offset down
+    // from the row top so it sits with the cap-height of the type.
     slide.addShape('ellipse', {
       x,
-      y: top + 0.05,
-      w: 0.12,
-      h: 0.12,
+      y: top + (fontSize / 72) * 0.45,
+      w: 0.11,
+      h: 0.11,
       fill: { color: bulletColor },
       line: { color: bulletColor, pt: 0.1 },
     });
@@ -101,12 +123,12 @@ const addBulletList = (slide, items, { x, y, w, h, fontSize = 11, color = COLORS
       x: x + 0.22,
       y: top,
       w: w - 0.22,
-      h: Math.max(0.28, rowHeight - 0.04),
+      h: Math.max(0.28, rowHeight - gap),
       fontFace: FONT,
       fontSize,
       color,
       fit: 'shrink',
-      valign: 'mid',
+      valign: 'top',
       margin: 0,
     });
   });
@@ -130,7 +152,19 @@ const addTable = (slide, rows, options) => {
   });
 };
 
-const addSectionDivider = (pptx, slide, context, title, subtitle, pageNumber, totalSlides) => {
+/**
+ * Section divider — typographic "chapter break" with a content-rich
+ * right-panel preview of what's coming. No decorative ellipses or
+ * orphan shapes. The right panel shows up to four label/value tiles
+ * passed via `rightPanel.cards` so each divider previews real content
+ * for that section instead of acting as filler.
+ *
+ * `eyebrow` (optional) — small uppercase label above the title (e.g.
+ *   "Section 02"). Falls back to a numeric "0X / 0Y" when omitted.
+ * `rightPanel` (optional) — `{ heading: string, cards: [{label, value, hint}], note: string }`.
+ *   Heading appears above the tile grid; note appears beneath it.
+ */
+const addSectionDivider = (pptx, slide, context, title, subtitle, pageNumber, totalSlides, options = {}) => {
   setSlideDefaults(slide);
   slide.addShape(pptx.ShapeType.rect, {
     x: 0, y: 0, w: 13.33, h: 7.5,
@@ -138,59 +172,133 @@ const addSectionDivider = (pptx, slide, context, title, subtitle, pageNumber, to
     line: { color: COLORS.paper, pt: 0.1 },
   });
 
-  for (let idx = 0; idx < 8; idx += 1) {
-    slide.addShape(pptx.ShapeType.line, {
-      x: 7 + (idx * 0.72),
-      y: 0.55,
-      w: 0,
-      h: 6.2,
-      line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
-    });
-  }
-
-  for (let idx = 0; idx < 7; idx += 1) {
-    slide.addShape(pptx.ShapeType.line, {
-      x: 6.9,
-      y: 0.8 + (idx * 0.8),
-      w: 5.8,
-      h: 0,
-      line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
-    });
-  }
-
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: 9.3, y: 2.1, w: 2.1, h: 2.1,
-    fill: { color: 'F6EFE6', transparency: 65 },
-    line: { color: COLORS.sandDeep, pt: 1.2, transparency: 25 },
-  });
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: 9.8, y: 2.6, w: 1.1, h: 1.1,
-    fill: { color: COLORS.plum, transparency: 10 },
-    line: { color: COLORS.plum, pt: 0.8 },
-  });
-
+  // ── Left half — typography panel ────────────────────────────────────────
+  // Solid accent rule down the left edge instead of a sand fill behind the
+  // title. Cleaner, less template-y; lets the warm paper background carry
+  // the slide. Width 6.0" leaves the right panel plenty of room.
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0.8, y: 1.45, w: 4.9, h: 3.55,
-    fill: { color: COLORS.sand },
-    line: { color: COLORS.sandDeep, pt: 0.1 },
-  });
-  slide.addShape(pptx.ShapeType.rect, {
-    x: 0.8, y: 1.45, w: 0.22, h: 3.55,
+    x: 0.5, y: 1.4, w: 0.08, h: 4.2,
     fill: { color: COLORS.plum },
     line: { color: COLORS.plum, pt: 0.1 },
   });
+
+  const sectionNumber = options.eyebrow
+    || `${String(options.sectionIndex || pageNumber).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+  slide.addText(sectionNumber, {
+    x: 0.78, y: 1.45, w: 5.5, h: 0.22,
+    fontFace: FONT, fontSize: 10, bold: true, color: COLORS.plumSoft, charSpace: 2.4,
+  });
   slide.addText(title, {
-    x: 1.2, y: 2.05, w: 4.1, h: 0.82,
-    fontFace: FONT, fontSize: 26, bold: true, color: COLORS.charcoal, fit: 'shrink',
+    x: 0.78, y: 1.85, w: 5.4, h: 1.6,
+    fontFace: FONT, fontSize: 38, bold: true, color: COLORS.charcoal, fit: 'shrink',
   });
   slide.addText(subtitle, {
-    x: 1.2, y: 3.22, w: 4.0, h: 0.56,
-    fontFace: FONT, fontSize: 11, color: COLORS.charcoal, fit: 'shrink',
+    x: 0.78, y: 3.55, w: 5.4, h: 0.64,
+    fontFace: FONT, fontSize: 12, color: COLORS.muted, fit: 'shrink',
   });
-  slide.addText(context.locationLine, {
-    x: 1.2, y: 4.32, w: 4.1, h: 0.22,
-    fontFace: FONT, fontSize: 8, color: COLORS.plum, bold: true, charSpace: 0.8,
+  // Hairline separator under subtitle
+  slide.addShape(pptx.ShapeType.line, {
+    x: 0.78, y: 4.4, w: 1.2, h: 0,
+    line: { color: COLORS.plumSoft, pt: 1.5 },
   });
+  slide.addText(context.locationLine || `${context.brandName} · institutional opportunity`, {
+    x: 0.78, y: 4.55, w: 5.4, h: 0.26,
+    fontFace: FONT, fontSize: 9, color: COLORS.plum, bold: true, charSpace: 1.0,
+  });
+
+  // ── Right half — content preview panel ──────────────────────────────────
+  // White card with a copper top band; up to 4 label/value tiles rendered
+  // inside. Makes every divider an information-bearing slide instead of
+  // pure decoration.
+  const panelX = 7.05;
+  const panelY = 1.4;
+  const panelW = 5.78;
+  const panelH = 5.55;
+  slide.addShape(pptx.ShapeType.rect, {
+    x: panelX, y: panelY, w: panelW, h: panelH,
+    fill: { color: COLORS.white },
+    line: { color: COLORS.line, pt: 0.6 },
+  });
+  // Copper band at top of the card
+  slide.addShape(pptx.ShapeType.rect, {
+    x: panelX, y: panelY, w: panelW, h: 0.06,
+    fill: { color: COLORS.plumSoft },
+    line: { color: COLORS.plumSoft, pt: 0.1 },
+  });
+
+  const rightPanel = options.rightPanel || {};
+  const heading = rightPanel.heading || 'Section preview';
+  slide.addText(heading.toUpperCase(), {
+    x: panelX + 0.32, y: panelY + 0.32, w: panelW - 0.64, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  const cards = Array.isArray(rightPanel.cards) ? rightPanel.cards.slice(0, 4) : [];
+  if (cards.length === 0) {
+    slide.addText(
+      rightPanel.note || `What follows: a structured walkthrough of ${title.toLowerCase()} grounded in the verified data on this deal.`,
+      {
+        x: panelX + 0.32, y: panelY + 0.7, w: panelW - 0.64, h: panelH - 1.2,
+        fontFace: FONT, fontSize: 13, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
+      },
+    );
+  } else {
+    // 2x2 grid of tiles when 3-4 cards, single column when 1-2.
+    const cols = cards.length >= 3 ? 2 : 1;
+    const rows = Math.ceil(cards.length / cols);
+    const tileGapX = 0.18;
+    const tileGapY = 0.18;
+    const gridX = panelX + 0.32;
+    const gridY = panelY + 0.7;
+    const gridW = panelW - 0.64;
+    const gridH = panelH - 1.4;
+    const tileW = (gridW - (cols - 1) * tileGapX) / cols;
+    const tileH = (gridH - (rows - 1) * tileGapY) / rows;
+
+    cards.forEach((card, idx) => {
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+      const tx = gridX + c * (tileW + tileGapX);
+      const ty = gridY + r * (tileH + tileGapY);
+      // Tile chrome — paper fill, hairline border, narrow accent band on left
+      slide.addShape(pptx.ShapeType.rect, {
+        x: tx, y: ty, w: tileW, h: tileH,
+        fill: { color: COLORS.mist },
+        line: { color: COLORS.line, pt: 0.5 },
+      });
+      slide.addShape(pptx.ShapeType.rect, {
+        x: tx, y: ty, w: 0.06, h: tileH,
+        fill: { color: idx % 2 === 0 ? COLORS.plum : COLORS.plumSoft },
+        line: { color: idx % 2 === 0 ? COLORS.plum : COLORS.plumSoft, pt: 0.1 },
+      });
+      // Eyebrow label
+      slide.addText((card.label || '').toUpperCase(), {
+        x: tx + 0.22, y: ty + 0.18, w: tileW - 0.32, h: 0.22,
+        fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.4,
+      });
+      // Value — large
+      slide.addText(card.value || '–', {
+        x: tx + 0.22, y: ty + 0.44, w: tileW - 0.32, h: tileH * 0.42,
+        fontFace: FONT, fontSize: 18, bold: true, color: COLORS.charcoal, fit: 'shrink', valign: 'top',
+      });
+      // Hint
+      if (card.hint) {
+        slide.addText(card.hint, {
+          x: tx + 0.22, y: ty + tileH - 0.46, w: tileW - 0.32, h: 0.36,
+          fontFace: FONT, fontSize: 8, color: COLORS.muted, valign: 'top', fit: 'shrink',
+        });
+      }
+    });
+  }
+
+  if (rightPanel.note && cards.length > 0) {
+    slide.addText(rightPanel.note, {
+      x: panelX + 0.32, y: panelY + panelH - 0.5, w: panelW - 0.64, h: 0.32,
+      fontFace: FONT, fontSize: 9, italic: true, color: COLORS.muted, valign: 'top',
+    });
+  }
+
+  // Page indicator (subtle, bottom-right)
   slide.addText(`${pageNumber} / ${totalSlides}`, {
     x: 12.1, y: 7.05, w: 0.7, h: 0.16,
     fontFace: FONT, fontSize: 8, color: COLORS.plum, align: 'right',
