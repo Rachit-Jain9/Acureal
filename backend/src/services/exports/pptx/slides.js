@@ -67,44 +67,60 @@ const renderCover = (pptx, slide, context, totalSlides) => {
     line: { color: COLORS.plum, pt: 0.1 },
   });
 
-  for (let idx = 0; idx < 11; idx += 1) {
-    slide.addShape(pptx.ShapeType.line, {
-      x: 6.95 + idx * 0.55,
-      y: 0.6,
-      w: 0,
-      h: 6.05,
-      line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
+  // Right half — asset-class artwork on top, score gauge on bottom.
+  // Replaces the decorative blueprint grid + ellipses with a content-rich
+  // visual that's specific to the deal's asset class (multi-story tower
+  // for residential, warehouse for industrial, glass tower for commercial,
+  // master-plan grid for plotted, hotel for hospitality, etc.).
+  if (context.precomputed?.assetArtDataUri) {
+    // Card frame for the artwork
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 6.85, y: 0.65, w: 5.93, h: 3.4,
+      fill: { color: COLORS.white },
+      line: { color: COLORS.line, pt: 0.6 },
     });
-  }
-  for (let idx = 0; idx < 8; idx += 1) {
-    slide.addShape(pptx.ShapeType.line, {
-      x: 6.75,
-      y: 0.85 + idx * 0.78,
-      w: 5.8,
-      h: 0,
-      line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 6.85, y: 0.65, w: 5.93, h: 0.06,
+      fill: { color: COLORS.plum },
+      line: { color: COLORS.plum, pt: 0.1 },
     });
+    slide.addText(context.assetClassLabel.toUpperCase(), {
+      x: 7.05, y: 0.82, w: 5.55, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+    slide.addImage({
+      x: 6.95, y: 1.1, w: 5.75, h: 2.85,
+      data: context.precomputed.assetArtDataUri,
+      sizing: { type: 'contain', w: 5.75, h: 2.85 },
+      altText: `${context.assetClassLabel} silhouette illustration`,
+    });
+  } else {
+    // Fallback: keep the legacy blueprint grid for back-compat (e.g. unit
+    // tests that drive buildDeckContext directly without precompute).
+    for (let idx = 0; idx < 11; idx += 1) {
+      slide.addShape(pptx.ShapeType.line, {
+        x: 6.95 + idx * 0.55,
+        y: 0.6,
+        w: 0,
+        h: 3.4,
+        line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
+      });
+    }
   }
-  // Score gauge replaces the decorative ellipse pair when a precomputed
-  // gauge is available (PR2 onwards). Falls back to the legacy decorative
-  // ellipses for back-compat with deck contexts that haven't been
-  // pre-enriched yet (e.g. unit tests that drive buildDeckContext directly).
+
+  // Score gauge — bottom-right
   if (context.precomputed?.scoreGaugeDataUri) {
     addScoreGauge(slide, {
-      x: 8.7, y: 1.55, w: 3.7, h: 2.6,
+      x: 7.6, y: 4.2, w: 4.55, h: 2.4,
       dataUri: context.precomputed.scoreGaugeDataUri,
       alt: 'Composite deal score (0-100)',
     });
   } else {
+    // Fallback decorative ellipse
     slide.addShape(pptx.ShapeType.ellipse, {
-      x: 9.15, y: 2.0, w: 2.55, h: 2.55,
+      x: 9.15, y: 4.5, w: 2.55, h: 2.0,
       fill: { color: 'F6EFE6', transparency: 68 },
       line: { color: COLORS.sandDeep, pt: 1.3, transparency: 25 },
-    });
-    slide.addShape(pptx.ShapeType.ellipse, {
-      x: 9.93, y: 2.78, w: 0.98, h: 0.98,
-      fill: { color: COLORS.plum },
-      line: { color: COLORS.plum, pt: 0.2 },
     });
   }
 
@@ -154,77 +170,215 @@ const renderCover = (pptx, slide, context, totalSlides) => {
   });
 };
 
+/**
+ * Contents slide — pure table-of-contents with slide numbers.
+ *
+ * Renders as a 2-column ToC. Each top-level section (the divider
+ * keys + their grouped slides) gets a heading and the working slides
+ * underneath are listed with their resolved slide number. Non-divider
+ * stand-alone slides (Cover, Contents, Disclaimer, etc.) skip the
+ * group heading and render in a "Open & Close" section at top.
+ *
+ * Decision Frame + Composite Score moved to its own slide (renderDecisionFrame).
+ */
 const renderContents = (pptx, slide, context, pageNumber, totalSlides) => {
   addTopHeader(pptx, slide, context, 'Contents', pageNumber, totalSlides, `${context.assetClassLabel} | ${context.locationLine}`);
 
-  addCard(pptx, slide, { x: 0.55, y: 1.3, w: 6.05, h: 5.2, bandColor: COLORS.plum });
-  slide.addText('Deck Architecture', {
-    x: 0.78, y: 1.52, w: 2.3, h: 0.2,
-    fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
-  });
-
-  const groups = [];
-  let currentGroup = null;
-  context.slideManifest.forEach((slideDef) => {
+  // Build a structured outline by walking the slide manifest. Keys that
+  // start with 'divider' open a new section; everything inside is listed.
+  const sections = [];
+  let current = null;
+  context.slideManifest.forEach((slideDef, index) => {
+    const slideNumber = index + 1;
     if (slideDef.key.startsWith('divider')) {
-      currentGroup = { title: slideDef.title, items: [] };
-      groups.push(currentGroup);
+      current = { title: slideDef.title, startSlide: slideNumber + 1, items: [] };
+      sections.push(current);
       return;
     }
-    if (!currentGroup) {
-      currentGroup = { title: 'Deck Overview', items: [] };
-      groups.push(currentGroup);
+    if (slideDef.key === 'cover' || slideDef.key === 'contents') return;
+    if (!current) {
+      current = { title: 'Open & Decision Frame', startSlide: slideNumber, items: [] };
+      sections.push(current);
     }
-    if (slideDef.key !== 'cover' && slideDef.key !== 'contents' && slideDef.key !== 'disclaimer') {
-      currentGroup.items.push(slideDef.title);
-    }
+    current.items.push({ title: slideDef.title, slideNumber });
   });
 
-  groups.slice(0, 4).forEach((group, index) => {
-    const y = 1.95 + index * 1.17;
-    slide.addText(group.title, {
-      x: 0.82, y, w: 2.0, h: 0.18,
-      fontFace: FONT, fontSize: 10, bold: true, color: COLORS.plum,
-    });
-    slide.addText(group.items.slice(0, 3).join(' | '), {
-      x: 2.1, y: y - 0.01, w: 4.1, h: 0.28,
-      fontFace: FONT, fontSize: 9, color: COLORS.charcoal, fit: 'shrink',
-    });
+  // Two-column layout: A (left) and B (right). Distribute sections so
+  // both columns are roughly equal. Each section title + its items.
+  // Compute total row count per column to balance.
+  const rowCount = (s) => 1 + s.items.length; // 1 for the section header
+  const totalRows = sections.reduce((acc, s) => acc + rowCount(s), 0);
+  const target = totalRows / 2;
+  let leftRows = 0;
+  const splitIdx = sections.findIndex((s, i) => {
+    leftRows += rowCount(s);
+    return leftRows >= target;
   });
+  const leftSections = sections.slice(0, splitIdx + 1);
+  const rightSections = sections.slice(splitIdx + 1);
 
-  addCard(pptx, slide, {
-    x: 6.95,
-    y: 1.3,
-    w: 5.83,
-    h: 5.2,
-    bandColor: COLORS.sandDeep,
-    fill: COLORS.white,
-  });
-  slide.addText('Current Decision Frame', {
-    x: 7.22, y: 1.52, w: 2.6, h: 0.18,
-    fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
+  // Card frame for the whole ToC
+  addCard(pptx, slide, { x: 0.55, y: 1.25, w: 12.23, h: 5.55, bandColor: COLORS.plum, fill: COLORS.white });
+
+  const renderColumn = (cols, x, w) => {
+    let y = 1.5;
+    cols.forEach((section, sIdx) => {
+      // Section heading row
+      slide.addText(section.title.toUpperCase(), {
+        x, y, w: w * 0.75, h: 0.26,
+        fontFace: FONT, fontSize: 10, bold: true, color: COLORS.plum, charSpace: 1.4,
+      });
+      slide.addText(`p${section.startSlide}`, {
+        x: x + w * 0.78, y, w: w * 0.2, h: 0.26,
+        fontFace: FONT, fontSize: 10, bold: true, color: COLORS.plumSoft, align: 'right',
+      });
+      // Hairline below heading
+      slide.addShape(pptx.ShapeType.line, {
+        x, y: y + 0.28, w, h: 0,
+        line: { color: COLORS.line, pt: 0.6 },
+      });
+      y += 0.36;
+      // Items
+      section.items.forEach((item) => {
+        slide.addText(item.title, {
+          x: x + 0.1, y, w: w * 0.78, h: 0.24,
+          fontFace: FONT, fontSize: 9.5, color: COLORS.charcoal, fit: 'shrink',
+        });
+        slide.addText(String(item.slideNumber).padStart(2, '0'), {
+          x: x + w * 0.82, y, w: w * 0.16, h: 0.24,
+          fontFace: FONT, fontSize: 9.5, bold: true, color: COLORS.muted, align: 'right',
+        });
+        y += 0.32;
+      });
+      // Section gap
+      if (sIdx < cols.length - 1) y += 0.16;
+    });
+  };
+
+  renderColumn(leftSections, 0.85, 5.7);
+  renderColumn(rightSections, 7.0, 5.7);
+};
+
+/**
+ * Decision Frame & Composite Score slide.
+ *
+ * New slide that sits between Contents and the first divider. Splits
+ * into two halves: live decision-frame bullets on the left (the read
+ * the operator sees BEFORE diving in), composite score gauge + weight
+ * breakdown on the right. Replaces the cramped right-card on the old
+ * Contents slide.
+ */
+const renderDecisionFrame = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(pptx, slide, context, 'Decision Frame & Composite Score', pageNumber, totalSlides, `${context.stageLabel} | how to read this deck`);
+
+  // ── Left half — Decision Frame card
+  addCard(pptx, slide, { x: 0.55, y: 1.25, w: 6.05, h: 5.55, bandColor: COLORS.plum, fill: COLORS.white });
+  slide.addText('CURRENT DECISION FRAME', {
+    x: 0.85, y: 1.45, w: 5.6, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
   });
   addBulletList(slide, [
     `${context.dealTypeLabel} opportunity in ${context.locationLine}.`,
     context.recommendations?.label
       ? `Current underwriting call: ${context.recommendations.label}.`
       : 'Current underwriting call is not yet stored.',
-    context.readiness.readiness_pct != null
-      ? context.approvalSummary.required
+    context.readiness?.readiness_pct != null
+      ? context.approvalSummary?.required
         ? `Readiness stands at ${context.readiness.readiness_pct}%, with ${context.approvalSummary.validated || 0}/${context.approvalSummary.required || 0} required approvals validated.`
         : `Readiness stands at ${context.readiness.readiness_pct}%, and required approvals have not yet been fully tagged in REDIP.`
       : 'Readiness inputs are not yet complete.',
     context.structureMismatch
       ? 'Commercial form needs confirmation because the stored deal type and structure do not align.'
-      : `Deck covers ${totalSlides - 2} working slides across opportunity, market, asset, and transaction considerations.`,
+      : `Deck covers ${totalSlides} slides across opportunity, market, asset, and transaction considerations.`,
   ], {
-    x: 7.22,
-    y: 1.95,
-    w: 5.0,
-    h: 2.25,
-    fontSize: 9.5,
-    bulletColor: COLORS.sandDeep,
+    x: 0.85, y: 1.85, w: 5.55, h: 4.7,
+    fontSize: 11,
+    bulletColor: COLORS.plumSoft,
+    lineH: 0.6,
   });
+
+  // ── Right half — Composite Score panel
+  addCard(pptx, slide, { x: 6.85, y: 1.25, w: 5.93, h: 5.55, bandColor: COLORS.plumSoft, fill: COLORS.white });
+  slide.addText('COMPOSITE SCORE', {
+    x: 7.15, y: 1.45, w: 5.55, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  const dealScore = context.precomputed?.dealScore;
+  if (dealScore && context.precomputed?.scoreGaugeDataUri) {
+    // Gauge — left side of the right panel
+    slide.addImage({
+      x: 6.95, y: 1.65, w: 3.0, h: 2.2,
+      data: context.precomputed.scoreGaugeDataUri,
+      altText: 'Composite score gauge',
+    });
+    // Score numeric + band beside the gauge
+    slide.addText(`${dealScore.score} / 100`, {
+      x: 9.95, y: 1.85, w: 2.7, h: 0.5,
+      fontFace: FONT, fontSize: 22, bold: true, color: COLORS.plum, valign: 'top',
+    });
+    slide.addText((dealScore.band || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), {
+      x: 9.95, y: 2.4, w: 2.7, h: 0.32,
+      fontFace: FONT, fontSize: 11, bold: true, color: COLORS.plumSoft,
+    });
+    if (dealScore.benchmark?.assetClass) {
+      slide.addText(`Benchmarked against ${context.assetClassLabel}.`, {
+        x: 9.95, y: 2.78, w: 2.7, h: 0.7,
+        fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, fit: 'shrink',
+      });
+    }
+
+    // Hairline + "Weight Breakdown" eyebrow
+    slide.addShape(pptx.ShapeType.line, {
+      x: 7.15, y: 4.0, w: 5.55, h: 0,
+      line: { color: COLORS.line, pt: 0.6 },
+    });
+    slide.addText('WEIGHT BREAKDOWN', {
+      x: 7.15, y: 4.12, w: 5.55, h: 0.22,
+      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+    });
+
+    // Mini-table rendering breakdown rows
+    const breakdown = (dealScore.breakdown || []).slice(0, 6);
+    breakdown.forEach((row, idx) => {
+      const rowY = 4.42 + idx * 0.36;
+      // Component name
+      slide.addText(row.component || '–', {
+        x: 7.15, y: rowY, w: 3.6, h: 0.32,
+        fontFace: FONT, fontSize: 9, color: COLORS.charcoal, valign: 'mid',
+      });
+      // Awarded / max bar
+      const ratio = row.max > 0 ? row.awarded / row.max : 0;
+      const barTotalW = 1.0;
+      const barFillW = Math.max(0.04, ratio * barTotalW);
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 10.85, y: rowY + 0.09, w: barTotalW, h: 0.14,
+        fill: { color: COLORS.line },
+        line: { color: COLORS.line, pt: 0.1 },
+      });
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 10.85, y: rowY + 0.09, w: barFillW, h: 0.14,
+        fill: { color: ratio >= 0.7 ? COLORS.green : ratio >= 0.4 ? COLORS.amber : COLORS.red },
+        line: { color: ratio >= 0.7 ? COLORS.green : ratio >= 0.4 ? COLORS.amber : COLORS.red, pt: 0.1 },
+      });
+      // Awarded / max numeric
+      slide.addText(`${row.awarded} / ${row.max}`, {
+        x: 11.95, y: rowY, w: 0.78, h: 0.32,
+        fontFace: FONT, fontSize: 9, bold: true, color: COLORS.charcoal, align: 'right', valign: 'mid',
+      });
+    });
+
+    // Disclaimer footer
+    slide.addText('Composite score is a deterministic synthesis of structured deal data only. Not an investment recommendation.', {
+      x: 7.15, y: 6.5, w: 5.55, h: 0.32,
+      fontFace: FONT, fontSize: 7.5, italic: true, color: COLORS.muted, valign: 'top',
+    });
+  } else {
+    slide.addText('Composite score unavailable for this deal.', {
+      x: 7.15, y: 3.5, w: 5.55, h: 0.4,
+      fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center',
+    });
+  }
 };
 
 const renderExecutiveSummary = (pptx, slide, context, pageNumber, totalSlides) => {
@@ -574,17 +728,38 @@ const renderLocationContext = (pptx, slide, context, pageNumber, totalSlides) =>
       x: 0.75, y: 1.42, w: 5.3, h: 0.22,
       fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
     });
-    const reason = context.coordinates
-      ? 'Map provider not configured. Set MAPBOX_TOKEN in the deployment environment to render this site map automatically on every export.'
-      : 'No coordinates on this deal record. Geocode the property address to enable the site map on future exports.';
-    slide.addText(reason, {
-      x: 0.85, y: 3.2, w: 5.1, h: 1.6,
-      fontFace: FONT, fontSize: 11, color: COLORS.charcoal, italic: true, align: 'center', valign: 'mid', fit: 'shrink',
+    // Read structured status from precompute so we can show the actual
+    // reason rather than a generic "not configured" message that lies
+    // when the real cause was a 401 / 403 / 429 from Mapbox.
+    const status = context.precomputed?.siteMapStatus;
+    const detail = context.precomputed?.siteMapError;
+    let headline;
+    let body;
+    if (status === 'no_coords' || !context.coordinates) {
+      headline = 'No coordinates on this deal record';
+      body = 'Geocode the property (Property → Edit → Address) to enable the site map on future exports.';
+    } else if (status === 'no_token') {
+      headline = 'Mapbox token not configured';
+      body = 'Set MAPBOX_TOKEN in the Vercel environment variables (Production + Preview), then redeploy.';
+    } else if (status === 'fetch_failed') {
+      headline = 'Map render failed';
+      body = detail || 'Mapbox call failed. Check Vercel logs for [staticMap.renderSiteMap] entries.';
+    } else {
+      headline = 'Site map unavailable';
+      body = detail || 'Map could not be rendered for this deal.';
+    }
+    slide.addText(headline, {
+      x: 0.85, y: 2.95, w: 5.1, h: 0.36,
+      fontFace: FONT, fontSize: 13, bold: true, color: COLORS.charcoal, align: 'center', valign: 'mid', fit: 'shrink',
+    });
+    slide.addText(body, {
+      x: 0.85, y: 3.45, w: 5.1, h: 1.4,
+      fontFace: FONT, fontSize: 10, italic: true, color: COLORS.muted, align: 'center', valign: 'top', fit: 'shrink',
     });
     if (context.coordinates) {
       slide.addText(context.coordinates, {
-        x: 0.85, y: 4.85, w: 5.1, h: 0.22,
-        fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, align: 'center',
+        x: 0.85, y: 4.95, w: 5.1, h: 0.22,
+        fontFace: FONT, fontSize: 9, bold: true, color: COLORS.charcoal, align: 'center',
       });
     }
   }
@@ -1424,6 +1599,7 @@ const renderProsCons = (pptx, slide, context, pageNumber, totalSlides) => {
 module.exports = {
   renderCover,
   renderContents,
+  renderDecisionFrame,
   renderExecutiveSummary,
   renderInvestmentHighlights,
   renderStructure,

@@ -32,6 +32,7 @@ const { addTopHeader, addSectionDivider } = require('./exports/pptx/primitives')
 const {
   renderCover,
   renderContents,
+  renderDecisionFrame,
   renderExecutiveSummary,
   renderInvestmentHighlights,
   renderStructure,
@@ -54,7 +55,8 @@ const {
 } = require('./exports/pptx/contentBuilders');
 const { computeDealScore } = require('../utils/scoring/dealScore');
 const { renderScoreGaugeDataUri } = require('./exports/shared/svgGauge.service');
-const { renderSiteMap } = require('./exports/shared/staticMap.service');
+const { renderSiteMapDetailed, isMapsEnabled } = require('./exports/shared/staticMap.service');
+const { renderAssetClassArt } = require('./exports/shared/assetClassArt.service');
 const { generateSection } = require('./exports/narrative/exportNarrative.service');
 
 // Format helpers (lightweight — primary formatters live in pptx/_helpers.js).
@@ -124,6 +126,7 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
   switch (slideDef.key) {
     case 'cover': renderCover(pptx, slide, context, totalSlides); return;
     case 'contents': renderContents(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'decisionFrame': renderDecisionFrame(pptx, slide, context, pageNumber, totalSlides); return;
     case 'dividerOpportunity': addSectionDivider(pptx, slide, context, 'The Opportunity', `${context.assetClassLabel} | ${context.dealTypeLabel}`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('opportunity', context) }); return;
     case 'executiveSummary': renderExecutiveSummary(pptx, slide, context, pageNumber, totalSlides); return;
     case 'investmentHighlights': renderInvestmentHighlights(pptx, slide, context, pageNumber, totalSlides); return;
@@ -188,7 +191,7 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
   const lng = Number(exportContext?.deal?.property_lng);
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
 
-  const [prosCons, siteMapBuffer] = await Promise.all([
+  const [prosCons, siteMapResult] = await Promise.all([
     generateSection({
       section: 'prosCons',
       payload: {
@@ -215,9 +218,14 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
       organizationId: orgId,
     }).catch(() => ({ available: false, pros: [], cons: [], reason: 'Narrative call failed' })),
     hasCoords
-      ? renderSiteMap({ lat, lng, zoom: 15, label: baseContext.locationLine || 'Site' }).catch(() => null)
-      : Promise.resolve(null),
+      ? renderSiteMapDetailed({ lat, lng, zoom: 15, label: baseContext.locationLine || 'Site' })
+          .catch((err) => ({ buffer: null, status: 'fetch_failed', error: err?.message || 'Map render threw', httpStatus: null }))
+      : Promise.resolve({ buffer: null, status: 'no_coords', error: 'No coordinates on the deal record.', httpStatus: null }),
   ]);
+  const siteMapBuffer = siteMapResult?.buffer || null;
+  const siteMapStatus = siteMapResult?.status || (hasCoords ? (isMapsEnabled() ? 'fetch_failed' : 'no_token') : 'no_coords');
+  const siteMapError = siteMapResult?.error || null;
+  const siteMapHttpStatus = siteMapResult?.httpStatus || null;
 
   const scoreGaugeDataUri = renderScoreGaugeDataUri({
     score: dealScore.score,
@@ -226,11 +234,24 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
       : 'Composite — generic benchmark',
   });
 
+  // Asset-class artwork for the cover. Pure SVG; never throws.
+  let assetArtDataUri = null;
+  try {
+    const art = renderAssetClassArt(baseContext.assetClass);
+    assetArtDataUri = art.dataUri;
+  } catch {
+    assetArtDataUri = null;
+  }
+
   return {
     scoreGaugeDataUri,
     dealScore,
     prosCons,
     siteMapBuffer,
+    siteMapStatus,
+    siteMapError,
+    siteMapHttpStatus,
+    assetArtDataUri,
   };
 };
 
