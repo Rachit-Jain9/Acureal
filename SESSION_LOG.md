@@ -1853,3 +1853,29 @@ Apply `database/migrations/20260524_deal_audit_log.sql` in Supabase. Idempotent.
 2. Smoke: create a deal, walk it through 3 stage transitions, archive then restore, and verify all 5 mutation events appear on the Audit tab alongside any financial computations.
 3. Future work: an org-wide audit feed at `/admin/audit` keyed on `bulk_id` so admins can see "everything Rachit did in this batch action," and a CSV export of the audit feed for IC packets.
 
+
+## 2026-05-10 — Audit feed UX (PR #216)
+
+### What was worked on
+With the audit log itself live, this batch made the data actually useful: filter chips on the Audit tab so an analyst can focus on either feed, a one-click CSV export of the full merged history for IC packets, and a "View batch" peek on every bulk-event row that lists every other deal touched by the same one-click action.
+
+### Plain-English recap
+- Filter chips at the top of every deal's Audit tab let you flip between All / Financial / Mutations with live counts on each.
+- An "Export CSV" button hands you the full audit history of the deal as a clean spreadsheet — drop it straight into an IC packet.
+- When a deal was changed as part of a bulk action, a small "View batch" link on the row opens a modal listing every other deal that moved in the same click. The current deal is highlighted in the list.
+
+### PRs opened / merged
+- PR #216 — `feat(audit): filter chips, CSV export, bulk-batch peek on AuditTab` — **merged**.
+
+### Operator action required
+None. PR #214's migration was already applied; this PR ships pure UX + read-side endpoints on top of that data.
+
+### Test counts after merge
+- Backend: 1146 tests pass (+6 new in `auditFeedExport.test.js` — header banner shape, CSV escaping, bulk-batch happy path, missing-migration soft-fail, empty bulk_id short-circuit, generic DB rethrow).
+- Frontend: 361 tests pass (+4 new on `AuditTab` — filter chips toggle + counts, CSV export click flow, batch-peek modal opens + populates + tags current deal).
+
+### What's left to do next
+1. Smoke (post-deploy): create a deal, run a financial calc, move 3 deals to a new stage as a bulk action; on each affected deal's Audit tab confirm the chips filter correctly, "Export CSV" downloads a valid file, and "View batch" opens a modal listing all 3 deals with the current one highlighted.
+2. Future work — org-wide `/admin/audit` page that lists every mutation across the org with filters (event_type, actor, date range, bulk_id). Lets compliance reviewers ask "show me everything Rachit deleted in March" without needing to open each deal.
+3. Future work — "Recent activity" widget on the Dashboard, sourced from `deal_audit_log`, so an analyst sees their last 10 actions when they sign in and can pick up where they left off.
+
