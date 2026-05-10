@@ -542,6 +542,140 @@ const renderStructure = (pptx, slide, context, pageNumber, totalSlides) => {
     fontSize: 9.6,
     bulletColor: COLORS.sandDeep,
   });
+
+  // ─── Right-side bottom: Capital Structure / JV Split visualisation
+  // Was: y 3.55 → 6.5 on the right column (~3" of empty canvas).
+  // Now: a visual breakdown of the deal structure — bar segmentation
+  // for JV/JDA splits, pricing waterfall for outright, lease terms for
+  // lease deals. Honest empty-state when not enough data.
+  addCard(pptx, slide, {
+    x: 6.95, y: 3.65, w: 5.83, h: 2.95,
+    bandColor: COLORS.plumSoft, fill: COLORS.white,
+  });
+  slide.addText('CAPITAL STRUCTURE', {
+    x: 7.22, y: 3.78, w: 4.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  const dealStructure = String(context.deal.deal_structure || '').toLowerCase();
+  const developerPct = num(context.deal.jv_split_developer_pct);
+  const landownerPct = num(context.deal.jv_split_landowner_pct);
+  const isJvSplit = (dealStructure === 'jv' || dealStructure === 'jda' || dealStructure === 'da')
+    && developerPct != null && landownerPct != null;
+
+  if (isJvSplit) {
+    // Split bar — Developer (left) vs Landowner (right).
+    slide.addText(`${context.dealStructureLabel} | Profit / Area Split`, {
+      x: 7.22, y: 4.05, w: 5.3, h: 0.22,
+      fontFace: FONT, fontSize: 10, color: COLORS.charcoal,
+    });
+
+    const total = developerPct + landownerPct || 100;
+    const barX = 7.22;
+    const barY = 4.45;
+    const barW = 5.3;
+    const barH = 0.42;
+    const devW = (developerPct / total) * barW;
+
+    // Background
+    slide.addShape(pptx.ShapeType.rect, {
+      x: barX, y: barY, w: barW, h: barH,
+      fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+    });
+    // Developer segment
+    slide.addShape(pptx.ShapeType.rect, {
+      x: barX, y: barY, w: devW, h: barH,
+      fill: { color: COLORS.plum }, line: { color: COLORS.plum, pt: 0 },
+    });
+    // Landowner segment
+    slide.addShape(pptx.ShapeType.rect, {
+      x: barX + devW, y: barY, w: barW - devW, h: barH,
+      fill: { color: COLORS.plumSoft }, line: { color: COLORS.plumSoft, pt: 0 },
+    });
+    // Labels in segments
+    slide.addText(`Developer ${developerPct.toFixed(0)}%`, {
+      x: barX + 0.08, y: barY, w: devW - 0.16, h: barH,
+      fontFace: FONT, fontSize: 10, bold: true, color: COLORS.white,
+      valign: 'mid', fit: 'shrink',
+    });
+    slide.addText(`Landowner ${landownerPct.toFixed(0)}%`, {
+      x: barX + devW + 0.08, y: barY, w: barW - devW - 0.16, h: barH,
+      fontFace: FONT, fontSize: 10, bold: true, color: COLORS.white,
+      valign: 'mid', fit: 'shrink',
+    });
+    // Sub-bullets — anchored on what the split means
+    slide.addText(
+      `Profit / area split is the central commercial term for ${context.dealStructureLabel}. ` +
+      `Lock downside protections (return cap, hurdle, force-majeure, dispute resolution) before close.`,
+      {
+        x: 7.22, y: 5.05, w: 5.3, h: 1.4,
+        fontFace: FONT, fontSize: 10, italic: true, color: COLORS.charcoal,
+        valign: 'top', fit: 'shrink',
+      },
+    );
+  } else if (dealStructure === 'outright' || dealStructure === 'acquisition') {
+    // Outright pricing breakdown — a small "Total acquisition cost" tile
+    // with stamp duty + registration estimates added.
+    const base = num(firstNumber(context.negotiatedPrice, context.askPrice, context.entryValue));
+    if (base != null) {
+      const stampDuty = base * 0.05; // standard 5% in Karnataka
+      const registration = base * 0.01;
+      const allIn = base + stampDuty + registration;
+      const tiles = [
+        { label: 'BASE PRICE',     value: formatCrores(base, 2) || '–',     accent: COLORS.plum },
+        { label: 'STAMP DUTY (5%)', value: formatCrores(stampDuty, 2) || '–', accent: COLORS.plumSoft },
+        { label: 'REGISTRATION (1%)', value: formatCrores(registration, 2) || '–', accent: COLORS.plumSoft },
+        { label: 'ALL-IN ACQUISITION', value: formatCrores(allIn, 2) || '–', accent: COLORS.green },
+      ];
+      const tileW = (5.3 - 0.30) / 2;
+      const tileH = 0.95;
+      tiles.forEach((tile, idx) => {
+        const tx = 7.22 + (idx % 2) * (tileW + 0.10);
+        const ty = 4.10 + Math.floor(idx / 2) * (tileH + 0.10);
+        slide.addShape(pptx.ShapeType.rect, {
+          x: tx, y: ty, w: tileW, h: tileH,
+          fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+        });
+        slide.addShape(pptx.ShapeType.rect, {
+          x: tx, y: ty, w: 0.06, h: tileH,
+          fill: { color: tile.accent }, line: { color: tile.accent, pt: 0 },
+        });
+        slide.addText(tile.label, {
+          x: tx + 0.18, y: ty + 0.10, w: tileW - 0.30, h: 0.20,
+          fontFace: FONT, fontSize: 7.5, bold: true, color: COLORS.muted, charSpace: 1.4,
+        });
+        slide.addText(tile.value, {
+          x: tx + 0.18, y: ty + 0.32, w: tileW - 0.30, h: 0.55,
+          fontFace: FONT, fontSize: 16, bold: true, color: COLORS.charcoal,
+          valign: 'top', fit: 'shrink',
+        });
+      });
+      slide.addText(
+        'Estimated stamp duty / registration applied at standard Karnataka rates. Verify against state-specific schedule before close.',
+        {
+          x: 7.22, y: 6.20, w: 5.3, h: 0.4,
+          fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted, valign: 'top', fit: 'shrink',
+        },
+      );
+    } else {
+      slide.addText(
+        'No base pricing recorded yet. Populate negotiated / ask / entry value on the deal record to surface the all-in acquisition cost (base + stamp duty + registration).',
+        {
+          x: 7.22, y: 4.30, w: 5.3, h: 1.6,
+          fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'mid', fit: 'shrink',
+        },
+      );
+    }
+  } else {
+    // Generic empty-state — structure type doesn't match a known split
+    slide.addText(
+      'Structure detail will populate once deal_structure and split fields are completed on the deal record.',
+      {
+        x: 7.22, y: 4.40, w: 5.3, h: 1.6,
+        fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'mid', fit: 'shrink',
+      },
+    );
+  }
 };
 
 const renderMarketPositioning = (pptx, slide, context, pageNumber, totalSlides) => {
@@ -872,6 +1006,84 @@ const renderAssetSnapshot = (pptx, slide, context, pageNumber, totalSlides) => {
     colW: [1.95, 3.91],
     rowH: 0.4,
   });
+
+  // ─── Bottom strip — Area Composition visual ───────────────────────────
+  // Was: ~1.2" of empty canvas below the two tables (y 5.85 → 7.0).
+  // Now: a horizontal stacked bar showing Land vs Built vs Saleable
+  // proportions, plus three small tiles giving the absolute sqft.
+  const landSqft = num(context.landAreaSqft);
+  const builtSqft = num(context.grossAreaSqft);
+  const saleableSqft = num(context.saleableAreaSqft);
+  const haveAnyArea = [landSqft, builtSqft, saleableSqft].some((v) => v != null && v > 0);
+
+  addCard(pptx, slide, {
+    x: 0.55, y: 5.95, w: 12.23, h: 1.0,
+    bandColor: COLORS.plumSoft, fill: COLORS.white,
+  });
+  slide.addText('AREA COMPOSITION', {
+    x: 0.78, y: 6.05, w: 4.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  if (haveAnyArea) {
+    const total = (landSqft || 0) + (builtSqft || 0) + (saleableSqft || 0);
+    const segments = [
+      { label: 'Land', sqft: landSqft, color: COLORS.plum, textColor: COLORS.white },
+      { label: 'Built / Gross', sqft: builtSqft, color: COLORS.plumSoft, textColor: COLORS.white },
+      { label: 'Saleable', sqft: saleableSqft, color: COLORS.green, textColor: COLORS.white },
+    ].filter((s) => s.sqft != null && s.sqft > 0);
+
+    const barX = 0.78;
+    const barY = 6.32;
+    const barW = 11.7;
+    const barH = 0.34;
+
+    // Background frame
+    slide.addShape(pptx.ShapeType.rect, {
+      x: barX, y: barY, w: barW, h: barH,
+      fill: { color: COLORS.mist }, line: { color: COLORS.line, pt: 0.5 },
+    });
+
+    let cursor = barX;
+    segments.forEach((seg) => {
+      const segW = (seg.sqft / total) * barW;
+      slide.addShape(pptx.ShapeType.rect, {
+        x: cursor, y: barY, w: segW, h: barH,
+        fill: { color: seg.color }, line: { color: seg.color, pt: 0 },
+      });
+      // Inline label only if segment is wide enough to read
+      if (segW > 1.3) {
+        slide.addText(`${seg.label}  ${formatArea(seg.sqft)}`, {
+          x: cursor + 0.10, y: barY, w: segW - 0.20, h: barH,
+          fontFace: FONT, fontSize: 9, bold: true, color: seg.textColor,
+          valign: 'mid', fit: 'shrink',
+        });
+      }
+      cursor += segW;
+    });
+
+    // Below-bar legend — small tiles for narrow segments where the
+    // inline label couldn't fit.
+    const narrowSegs = segments.filter((s) => (s.sqft / total) * barW <= 1.3);
+    if (narrowSegs.length > 0) {
+      narrowSegs.forEach((seg, idx) => {
+        const lx = 0.78 + idx * 3.0;
+        slide.addShape(pptx.ShapeType.rect, {
+          x: lx, y: 6.72, w: 0.14, h: 0.14,
+          fill: { color: seg.color }, line: { color: seg.color, pt: 0 },
+        });
+        slide.addText(`${seg.label}: ${formatArea(seg.sqft)}`, {
+          x: lx + 0.20, y: 6.68, w: 2.5, h: 0.22,
+          fontFace: FONT, fontSize: 8.5, color: COLORS.charcoal, fit: 'shrink',
+        });
+      });
+    }
+  } else {
+    slide.addText('Land / built / saleable area not yet populated. Add the missing fields on the deal record to see the area-composition bar.', {
+      x: 0.78, y: 6.32, w: 11.7, h: 0.5,
+      fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'mid', fit: 'shrink',
+    });
+  }
 };
 
 const renderReadiness = (pptx, slide, context, pageNumber, totalSlides) => {
@@ -1318,6 +1530,81 @@ const renderTransactionSummary = (pptx, slide, context, pageNumber, totalSlides)
     label: 'Revenue Less Cost',
     value: context.valueGapCr != null ? formatCrores(context.valueGapCr) || 'N/A' : 'N/A',
     tone: context.valueGapCr != null && context.valueGapCr < 0 ? COLORS.red : COLORS.green,
+  });
+
+  // ─── Bottom strip — Transaction Milestone Path ────────────────────────
+  // Was: ~1.3" of empty canvas (y 5.7 → 7.0).
+  // Now: a 5-step milestone bar showing where the deal sits in the
+  // life-cycle — Sourcing → DD → IC → Negotiation → Close. Current
+  // stage highlighted; past stages copper-filled; future stages muted.
+  const stageOrder = [
+    { key: 'sourcing',          label: 'Sourcing' },
+    { key: 'screening',         label: 'Screening' },
+    { key: 'site_visit',        label: 'Site Visit' },
+    { key: 'due_diligence',     label: 'Diligence' },
+    { key: 'underwriting',      label: 'Underwriting' },
+    { key: 'ic_review',         label: 'IC Review' },
+    { key: 'negotiation',       label: 'Negotiation' },
+    { key: 'loi',               label: 'LOI' },
+    { key: 'active',            label: 'Active' },
+    { key: 'closed',            label: 'Closed' },
+  ];
+  const compactPath = ['Sourcing', 'Diligence', 'Underwriting', 'IC Review', 'Negotiation', 'Close'];
+  const currentStageRaw = String(context.deal.stage || '').toLowerCase();
+  const currentStageOrderIdx = stageOrder.findIndex((s) => s.key === currentStageRaw);
+  // Map the full stage list onto the 6-step compact path.
+  const stageToCompact = (orderIdx) => {
+    if (orderIdx < 0) return -1;
+    if (orderIdx <= 1) return 0;       // sourcing/screening → Sourcing
+    if (orderIdx === 2 || orderIdx === 3) return 1; // site_visit/dd → Diligence
+    if (orderIdx === 4) return 2;      // underwriting → Underwriting
+    if (orderIdx === 5) return 3;      // ic_review → IC Review
+    if (orderIdx === 6 || orderIdx === 7) return 4; // negotiation/loi → Negotiation
+    if (orderIdx === 8 || orderIdx === 9) return 5; // active/closed → Close
+    return -1;
+  };
+  const currentCompactIdx = stageToCompact(currentStageOrderIdx);
+
+  addCard(pptx, slide, {
+    x: 0.55, y: 5.85, w: 12.23, h: 1.05,
+    bandColor: COLORS.plumSoft, fill: COLORS.white,
+  });
+  slide.addText('DEAL LIFE-CYCLE PATH', {
+    x: 0.78, y: 5.96, w: 4.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addText(currentCompactIdx >= 0 ? `Currently at: ${compactPath[currentCompactIdx]}` : 'Stage not yet set on the deal record', {
+    x: 4.5, y: 5.96, w: 8.1, h: 0.22,
+    fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, align: 'right',
+  });
+
+  // 6 step pills — past = copper, current = navy bold, future = muted
+  const stepW = (12.23 - 0.46 - 5 * 0.08) / 6;
+  const stepY = 6.30;
+  const stepH = 0.42;
+  compactPath.forEach((stepLabel, idx) => {
+    const sx = 0.78 + idx * (stepW + 0.08);
+    const isPast = currentCompactIdx >= 0 && idx < currentCompactIdx;
+    const isCurrent = currentCompactIdx === idx;
+    const fill = isCurrent ? COLORS.plum : isPast ? COLORS.plumSoft : COLORS.mist;
+    const textColor = isCurrent || isPast ? COLORS.white : COLORS.muted;
+    slide.addShape(pptx.ShapeType.rect, {
+      x: sx, y: stepY, w: stepW, h: stepH,
+      fill: { color: fill }, line: { color: fill, pt: 0 },
+    });
+    // Connector arrow tail (chevron) — small triangle on the right edge
+    // for past/current steps. Skipped on the last step.
+    if (idx < compactPath.length - 1) {
+      slide.addShape(pptx.ShapeType.triangle, {
+        x: sx + stepW - 0.02, y: stepY + stepH * 0.20, w: 0.10, h: stepH * 0.60,
+        fill: { color: fill }, line: { color: fill, pt: 0 }, rotate: 90,
+      });
+    }
+    slide.addText(stepLabel, {
+      x: sx, y: stepY, w: stepW, h: stepH,
+      fontFace: FONT, fontSize: 9.5, bold: isCurrent, color: textColor,
+      align: 'center', valign: 'mid', fit: 'shrink',
+    });
   });
 };
 
