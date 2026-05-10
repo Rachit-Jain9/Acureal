@@ -19,6 +19,7 @@ const compsService = require('../services/comps.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
 const { buildDealWorkbookV2 } = require('../services/exports/xlsx/v2/buildWorkbook');
+const { buildDealReportDocx } = require('../services/exports/docx/buildReport');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
 const { buildDealTearSheet } = require('../services/dealTearSheet.service');
 
@@ -1189,6 +1190,56 @@ router.get(
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}${variantSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
       return res.send(xlsxBuffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ─── DOCX Underwriting Report ────────────────────────────────────────────────
+
+// GET /exports/deals/:dealId/docx — investor-grade underwriting report
+// (paid product). Until the paywall scaffold ships, the route is gated
+// behind `DOCX_REPORT_ENABLED=1`. Admins always have access regardless
+// of the env flag (`requireRole('admin')` already restricts the route).
+//
+// Sections: Cover, Executive Summary (AI-Assisted IC opinion + KPIs),
+// Site Information (Mapbox map when MAPBOX_TOKEN set), Overview,
+// Comparables, Financials, Pros & Cons (AI-Assisted), Overall Score
+// (deterministic 0–100), Disclaimer (split into "AI-Assisted" vs
+// "Platform Data" badges per the operator brief).
+router.get(
+  '/deals/:dealId/docx',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const isAdmin = (req.user?.role === 'admin');
+      const enabled = String(process.env.DOCX_REPORT_ENABLED || '').trim() === '1';
+      if (!enabled && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'DOCX underwriting report is not yet available. Contact REDIP support to enable.',
+        });
+      }
+
+      const dealId = req.params.dealId;
+      const exportContext = await getDealExportContext(dealId);
+      if (!exportContext) {
+        return res.status(404).json({ success: false, message: 'Deal not found.' });
+      }
+
+      const docxBuffer = await buildDealReportDocx(exportContext, {
+        brandName: 'REDIP',
+        userName: req.user?.name || 'REDIP',
+        generatedAt: new Date().toISOString(),
+      });
+      const safeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
+        .replace(/[^a-z0-9]/gi, '-')
+        .toLowerCase();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="redip-${safeName}-underwriting-${new Date().toISOString().slice(0, 10)}.docx"`);
+      return res.send(docxBuffer);
     } catch (error) {
       next(error);
     }
