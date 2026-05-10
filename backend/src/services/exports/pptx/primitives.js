@@ -198,6 +198,147 @@ const addSectionDivider = (pptx, slide, context, title, subtitle, pageNumber, to
 };
 
 
+/**
+ * Embed a PNG / JPG / SVG-data-URI image (e.g. Mapbox static map, score
+ * gauge, QR code, server-rendered chart). Caller has already produced the
+ * buffer or data URI; this wrapper handles the framing card + alt text.
+ *
+ * Pass `data` as a `data:image/...;base64,...` URI OR `path` as an absolute
+ * file path. pptxgenjs prefers `data` for our use case (we have buffers,
+ * not files on disk).
+ */
+const addChartImage = (slide, { x, y, w, h, data, path, alt = 'Chart', framed = true }) => {
+  if (!data && !path) return;
+  if (framed) {
+    slide.addShape('rect', {
+      x, y, w, h,
+      fill: { color: COLORS.white },
+      line: { color: COLORS.line, pt: 0.6 },
+    });
+  }
+  slide.addImage({
+    x: x + (framed ? 0.08 : 0),
+    y: y + (framed ? 0.08 : 0),
+    w: w - (framed ? 0.16 : 0),
+    h: h - (framed ? 0.16 : 0),
+    data,
+    path,
+    altText: alt,
+    sizing: { type: 'contain', w: w - (framed ? 0.16 : 0), h: h - (framed ? 0.16 : 0) },
+  });
+};
+
+const addMapImage = (slide, { x, y, w, h, buffer, alt = 'Site map' }) => {
+  if (!buffer) return;
+  const data = `data:image/png;base64,${buffer.toString('base64')}`;
+  addChartImage(slide, { x, y, w, h, data, alt, framed: true });
+};
+
+const addQrCode = (slide, { x, y, size, dataUri, alt = 'Live deal QR code' }) => {
+  if (!dataUri) return;
+  slide.addImage({ x, y, w: size, h: size, data: dataUri, altText: alt });
+};
+
+const addScoreGauge = (slide, { x, y, w, h, dataUri, alt = 'Composite score gauge' }) => {
+  if (!dataUri) return;
+  // No frame around the gauge — its own SVG already includes the background.
+  slide.addImage({ x, y, w, h, data: dataUri, altText: alt });
+};
+
+/**
+ * Two-column Pros / Cons block.
+ *
+ *   ✓ pro one             ✗ con one
+ *   ✓ pro two             ✗ con two
+ *   …                     …
+ *
+ * Bullets use ASCII tick / cross — no decorative emojis (CLAUDE.md rule).
+ */
+const addProsConsColumns = (slide, { x, y, w, h, pros = [], cons = [] }) => {
+  const colGap = 0.36;
+  const colW = (w - colGap) / 2;
+  const headerH = 0.32;
+  const palette = require('../shared/palette');
+  const positive = palette.pptx('dataPositive');
+  const negative = palette.pptx('dataNegative');
+
+  slide.addText('Pros', {
+    x, y, w: colW, h: headerH,
+    fontFace: FONT, fontSize: 11, bold: true, color: positive,
+    charSpace: 1.2,
+  });
+  slide.addText('Cons', {
+    x: x + colW + colGap, y, w: colW, h: headerH,
+    fontFace: FONT, fontSize: 11, bold: true, color: negative,
+    charSpace: 1.2,
+  });
+
+  const listY = y + headerH;
+  const listH = h - headerH;
+  const renderColumn = (items, marker, markerColor, colX) => {
+    if (!items.length) {
+      slide.addText('Not enough data to populate this column.', {
+        x: colX, y: listY, w: colW, h: listH,
+        fontFace: FONT, fontSize: 9, italic: true, color: COLORS.muted,
+      });
+      return;
+    }
+    const rowH = Math.max(0.34, Math.min(0.52, listH / Math.max(items.length, 1)));
+    items.forEach((item, idx) => {
+      const top = listY + idx * rowH;
+      slide.addText(marker, {
+        x: colX, y: top + 0.04, w: 0.22, h: rowH - 0.08,
+        fontFace: FONT, fontSize: 12, bold: true, color: markerColor, align: 'left',
+      });
+      slide.addText(item, {
+        x: colX + 0.24, y: top, w: colW - 0.24, h: rowH,
+        fontFace: FONT, fontSize: 10, color: COLORS.charcoal,
+        valign: 'mid', fit: 'shrink', margin: 0.02,
+      });
+    });
+  };
+
+  renderColumn(pros, '+', positive, x);
+  renderColumn(cons, '−', negative, x + colW + colGap);
+};
+
+/**
+ * Native pptxgenjs chart wrapper. Caller passes a pre-built spec
+ * `{ type, data, opts }`. We add a framing card + the chart object.
+ *
+ * Use this for charts the viewer should be able to edit in PowerPoint —
+ * cash-flow bars, sensitivity heatmap, sources/uses doughnut. For richer
+ * but read-only visuals (tornado, scatter), use `addChartImage` with a
+ * pre-rendered SVG/PNG.
+ */
+const addNativeChart = (pptx, slide, { x, y, w, h, type, data, opts = {} }) => {
+  if (!type || !Array.isArray(data) || data.length === 0) return;
+  slide.addShape(pptx.ShapeType.rect, {
+    x, y, w, h,
+    fill: { color: COLORS.white },
+    line: { color: COLORS.line, pt: 0.6 },
+  });
+  slide.addChart(type, data, {
+    x: x + 0.16,
+    y: y + 0.16,
+    w: w - 0.32,
+    h: h - 0.32,
+    showLegend: true,
+    legendPos: 'b',
+    legendFontSize: 8,
+    legendColor: COLORS.muted,
+    chartColors: [COLORS.plum, COLORS.green, COLORS.amber, COLORS.blue, COLORS.plumSoft],
+    catAxisLabelColor: COLORS.muted,
+    catAxisLabelFontSize: 8,
+    valAxisLabelColor: COLORS.muted,
+    valAxisLabelFontSize: 8,
+    border: { pt: 0, color: COLORS.line },
+    plotArea: { fill: { color: COLORS.white } },
+    showTitle: false,
+    ...opts,
+  });
+};
+
 module.exports = {
   setSlideDefaults,
   addTopHeader,
@@ -206,4 +347,10 @@ module.exports = {
   addBulletList,
   addTable,
   addSectionDivider,
+  addChartImage,
+  addMapImage,
+  addQrCode,
+  addScoreGauge,
+  addProsConsColumns,
+  addNativeChart,
 };

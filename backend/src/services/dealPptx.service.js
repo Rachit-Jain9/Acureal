@@ -45,12 +45,17 @@ const {
   renderTransactionSummary,
   renderRisksMitigants,
   renderNextSteps,
+  renderProsCons,
   renderDisclaimer,
 } = require('./exports/pptx/slides');
 const {
   buildExecutiveSummaryPoints,
   buildInvestmentHighlights,
 } = require('./exports/pptx/contentBuilders');
+const { computeDealScore } = require('../utils/scoring/dealScore');
+const { renderQrDataUri } = require('./exports/shared/qrImage.service');
+const { renderScoreGaugeDataUri } = require('./exports/shared/svgGauge.service');
+const { generateSection } = require('./exports/narrative/exportNarrative.service');
 
 const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) => {
   switch (slideDef.key) {
@@ -72,15 +77,106 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
     case 'cashFlowSensitivity': renderCashFlowSensitivity(pptx, slide, context, pageNumber, totalSlides); return;
     case 'transactionSummary': renderTransactionSummary(pptx, slide, context, pageNumber, totalSlides); return;
     case 'risksMitigants': renderRisksMitigants(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'prosCons': renderProsCons(pptx, slide, context, pageNumber, totalSlides); return;
     case 'nextSteps': renderNextSteps(pptx, slide, context, pageNumber, totalSlides); return;
     case 'disclaimer': renderDisclaimer(pptx, slide, context, pageNumber, totalSlides); return;
     default: addTopHeader(pptx, slide, context, slideDef.title, pageNumber, totalSlides);
   }
 };
 
+/**
+ * Pre-compute the async-fetch dependencies that can't run inside the sync
+ * render loop: QR data URI, score gauge SVG, AI Pros & Cons synthesis.
+ *
+ * Every step is wrapped so a single failure never crashes the deck. If
+ * Gemini is down or unconfigured, prosCons renders deterministically.
+ * If `options.publicUrl` isn't supplied, the QR is omitted.
+ */
+const precomputeDeckAssets = async (exportContext, baseContext, options) => {
+  const dealId = exportContext?.deal?.id || null;
+  const orgId = exportContext?.deal?.organization_id || null;
+  const baseUrl = options.publicUrl || process.env.REDIP_PUBLIC_URL || 'https://redip.vercel.app';
+  const liveDealUrl = dealId ? `${baseUrl.replace(/\/$/, '')}/deals/${dealId}` : null;
+
+  // Risk-count rollup for deal-score input.
+  const riskSummary = exportContext?.risks?.summary || {};
+  const ddSummary = exportContext?.dd?.summary || exportContext?.diligence?.summary || {};
+  const ddTotal = Number(ddSummary.total_required) || Number(ddSummary.total) || 0;
+  const ddDone = Number(ddSummary.completed_required) || Number(ddSummary.completed) || 0;
+  const ddCompletionPct = ddTotal > 0 ? Math.round((ddDone / ddTotal) * 100) : null;
+
+  const scoreInput = {
+    assetClass: baseContext.assetClass,
+    irrPct: baseContext.irr,
+    equityMultiple: baseContext.equityMultiple,
+    grossMarginPct: baseContext.grossMargin,
+    ddCompletionPct,
+    riskCounts: {
+      critical: Number(riskSummary.critical) || 0,
+      high: Number(riskSummary.high) || 0,
+      medium: Number(riskSummary.medium) || 0,
+      low: Number(riskSummary.low) || 0,
+    },
+    financialModelPresent: !!baseContext.hasFinancialModel,
+  };
+  const dealScore = computeDealScore(scoreInput);
+
+  // Run async tasks in parallel — QR generation is local-fast, gauge is
+  // pure synchronous (we wrap it for shape consistency), prosCons is the
+  // potentially-slow remote call.
+  const [qrDataUri, prosCons] = await Promise.all([
+    liveDealUrl
+      ? renderQrDataUri(liveDealUrl, { dark: '#0E1B2C', light: '#FBF9F6' }).catch(() => null)
+      : Promise.resolve(null),
+    generateSection({
+      section: 'prosCons',
+      payload: {
+        kpis: {
+          irrPct: baseContext.irr,
+          npvCr: baseContext.npv,
+          equityMultiple: baseContext.equityMultiple,
+          grossMarginPct: baseContext.grossMargin,
+          totalCostCr: baseContext.totalCost,
+          totalRevenueCr: baseContext.totalRevenue,
+        },
+        dd_progress: { completionPct: ddCompletionPct, openDealBreakers: Number(ddSummary.open_deal_breakers) || 0 },
+        approvals: baseContext.approvalSummary,
+        risk_flags: baseContext.exportContext?.risks?.items?.slice(0, 5) || [],
+        comp_positioning: {
+          benchmarkMedianRate: baseContext.benchmarkMedianRate,
+          modelSellRate: baseContext.modelSellRate,
+        },
+        asset_class: baseContext.assetClass,
+        deal_type: baseContext.dealTypeLabel,
+        locality: baseContext.locationLine,
+      },
+      dealId,
+      organizationId: orgId,
+    }).catch(() => ({ available: false, pros: [], cons: [], reason: 'Narrative call failed' })),
+  ]);
+
+  const scoreGaugeDataUri = renderScoreGaugeDataUri({
+    score: dealScore.score,
+    subline: dealScore.benchmark.assetClass
+      ? `Composite — ${baseContext.assetClassLabel}`
+      : 'Composite — generic benchmark',
+  });
+
+  return {
+    qrDataUri,
+    scoreGaugeDataUri,
+    dealScore,
+    prosCons,
+    liveDealUrl,
+  };
+};
+
 const buildDealDeckPptx = async (exportContext, options = {}) => {
   const pptx = new PptxGenJS();
   const context = buildDeckContext(exportContext, options);
+
+  // Async pre-fetch — never throws; each step has its own fallback.
+  context.precomputed = await precomputeDeckAssets(exportContext, context, options);
 
   pptx.layout = 'LAYOUT_WIDE';
   pptx.author = options.userName || 'REDIP';
@@ -105,5 +201,6 @@ module.exports = {
     buildSlideManifest,
     buildExecutiveSummaryPoints,
     buildInvestmentHighlights,
+    precomputeDeckAssets,
   },
 };
