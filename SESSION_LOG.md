@@ -1827,3 +1827,29 @@ The legal text in `docs/legal/*.md` is structured around DPDP Act 2023, IT Rules
 - ⏸ DPDP §8(4) reasonable safeguards — bcrypt(12) + RLS + HMAC-signed audit log in place; refresh-token rotation, MFA, field-level PII encryption pending (Phase 2/4 of the security roadmap).
 
 ---
+
+## 2026-05-10 — Audit log expansion (PR #214)
+
+### What was worked on
+Built a generic deal_audit_log so the Audit tab on every deal now shows the full lifecycle — not just financial calculations. Stage moves, archives, restores, owner changes, edits, deletions, and bulk batch actions are all captured with a clean before → after diff, the actor's name, and the time. The financial-events tab keeps its HMAC verify/replay buttons untouched. Wiring is fail-graceful — an audit insert error never blocks the underlying mutation.
+
+### Plain-English recap
+- The deal Audit tab now tells the whole story of a deal — every move, archive, owner change, and edit, not just financial recalcs.
+- Bulk actions stamp every affected deal with a shared batch id so an analyst can later see "everything that moved in this one click."
+- If anything breaks the audit insert (network, missing migration), the actual deal change still goes through cleanly. Investor-grade, but never in the way.
+
+### PRs opened / merged
+- PR #214 — `feat(audit): generic deal_audit_log + merged AuditTab timeline` — **merged**.
+
+### Operator action required
+Apply `database/migrations/20260524_deal_audit_log.sql` in Supabase. Idempotent. Until applied, the new wiring soft-fails and the Audit tab continues to show financial events only.
+
+### Test counts after merge
+- Backend: 1140 tests pass (no change in count; `dealAuditLog.service.test.js` adds 8 cases, two existing tests were updated for the CTE-backed bulkReassign UPDATE shape).
+- Frontend: 358 tests pass (+6 new mutation-row tests on AuditTab).
+
+### What's left to do next
+1. Operator: apply `20260524_deal_audit_log.sql` and confirm.
+2. Smoke: create a deal, walk it through 3 stage transitions, archive then restore, and verify all 5 mutation events appear on the Audit tab alongside any financial computations.
+3. Future work: an org-wide audit feed at `/admin/audit` keyed on `bulk_id` so admins can see "everything Rachit did in this batch action," and a CSV export of the audit feed for IC packets.
+
