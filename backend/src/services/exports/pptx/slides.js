@@ -67,32 +67,29 @@ const renderCover = (pptx, slide, context, totalSlides) => {
     line: { color: COLORS.plum, pt: 0.1 },
   });
 
-  // Right half — asset-class artwork on top, score gauge on bottom.
-  // Replaces the decorative blueprint grid + ellipses with a content-rich
-  // visual that's specific to the deal's asset class (multi-story tower
-  // for residential, warehouse for industrial, glass tower for commercial,
-  // master-plan grid for plotted, hotel for hospitality, etc.).
+  // Right half — full-bleed atmospheric asset-class artwork.
+  // Composite score gauge has moved to the Decision Frame slide, so the
+  // cover is now visual-first: a magazine-cover-style artwork specific to
+  // the deal's asset class (residential tower at golden hour, warehouse
+  // at dusk, hotel under evening lights, etc.). No score gauge here.
   if (context.precomputed?.assetArtDataUri) {
-    // Card frame for the artwork
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 6.85, y: 0.65, w: 5.93, h: 3.4,
-      fill: { color: COLORS.white },
-      line: { color: COLORS.line, pt: 0.6 },
+    // Frame the artwork as full-bleed on the right half (no white card
+    // border — let the SVG's own atmospheric background carry).
+    slide.addImage({
+      x: 6.65, y: 0, w: 6.68, h: 7.5,
+      data: context.precomputed.assetArtDataUri,
+      sizing: { type: 'cover', w: 6.68, h: 7.5 },
+      altText: `${context.assetClassLabel} cover illustration`,
     });
+    // Asset-class eyebrow tag overlaid on the artwork (top-right).
     slide.addShape(pptx.ShapeType.rect, {
-      x: 6.85, y: 0.65, w: 5.93, h: 0.06,
-      fill: { color: COLORS.plum },
+      x: 8.65, y: 0.45, w: 4.4, h: 0.42,
+      fill: { color: COLORS.plum, transparency: 8 },
       line: { color: COLORS.plum, pt: 0.1 },
     });
     slide.addText(context.assetClassLabel.toUpperCase(), {
-      x: 7.05, y: 0.82, w: 5.55, h: 0.22,
-      fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
-    });
-    slide.addImage({
-      x: 6.95, y: 1.1, w: 5.75, h: 2.85,
-      data: context.precomputed.assetArtDataUri,
-      sizing: { type: 'contain', w: 5.75, h: 2.85 },
-      altText: `${context.assetClassLabel} silhouette illustration`,
+      x: 8.85, y: 0.5, w: 4.0, h: 0.32,
+      fontFace: FONT, fontSize: 10, bold: true, color: 'FFFFFF', charSpace: 2.2, valign: 'mid',
     });
   } else {
     // Fallback: keep the legacy blueprint grid for back-compat (e.g. unit
@@ -102,26 +99,10 @@ const renderCover = (pptx, slide, context, totalSlides) => {
         x: 6.95 + idx * 0.55,
         y: 0.6,
         w: 0,
-        h: 3.4,
+        h: 6.05,
         line: { color: idx % 2 === 0 ? COLORS.cloud : COLORS.line, pt: 0.4 },
       });
     }
-  }
-
-  // Score gauge — bottom-right
-  if (context.precomputed?.scoreGaugeDataUri) {
-    addScoreGauge(slide, {
-      x: 7.6, y: 4.2, w: 4.55, h: 2.4,
-      dataUri: context.precomputed.scoreGaugeDataUri,
-      alt: 'Composite deal score (0-100)',
-    });
-  } else {
-    // Fallback decorative ellipse
-    slide.addShape(pptx.ShapeType.ellipse, {
-      x: 9.15, y: 4.5, w: 2.55, h: 2.0,
-      fill: { color: 'F6EFE6', transparency: 68 },
-      line: { color: COLORS.sandDeep, pt: 1.3, transparency: 25 },
-    });
   }
 
   slide.addText(context.brandName, {

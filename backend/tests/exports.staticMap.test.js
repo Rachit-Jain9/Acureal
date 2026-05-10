@@ -53,13 +53,57 @@ describe('services/exports/shared/staticMap', () => {
     });
 
     test('embeds a marker correctly', () => {
+      // Multi-char arbitrary labels like "Site" are not valid for Mapbox
+      // markers — only Maki icon names or single alphanumeric chars are
+      // accepted. Anything else is silently dropped to prevent 422
+      // responses. So the URL ends up with no label segment.
       const url = staticMap.buildMapboxUrl({
         lat: 12.97,
         lng: 77.59,
         zoom: 14,
         markers: [{ lat: 12.97, lng: 77.59, color: 'B5793C', label: 'Site', size: 'l' }],
       });
-      expect(url).toMatch(/pin-l-Site\+b5793c\(77\.59,12\.97\)/);
+      expect(url).toMatch(/pin-l\+b5793c\(77\.59,12\.97\)/);
+    });
+
+    test('accepts a Maki icon-name label', () => {
+      const url = staticMap.buildMapboxUrl({
+        lat: 12.97,
+        lng: 77.59,
+        zoom: 14,
+        markers: [{ lat: 12.97, lng: 77.59, color: 'B5793C', label: 'building', size: 'l' }],
+      });
+      expect(url).toMatch(/pin-l-building\+b5793c\(77\.59,12\.97\)/);
+    });
+
+    test('accepts a single alphanumeric label', () => {
+      const url = staticMap.buildMapboxUrl({
+        lat: 12.97,
+        lng: 77.59,
+        zoom: 14,
+        markers: [{ lat: 12.97, lng: 77.59, color: 'B5793C', label: '7', size: 'l' }],
+      });
+      expect(url).toMatch(/pin-l-7\+b5793c/);
+    });
+
+    test('drops a long location-line label that would trigger 422', () => {
+      // Regression test for the actual operator-reported 422: long
+      // location strings encoded as URL components had been triggering
+      // "out of range" responses from Mapbox.
+      const url = staticMap.buildMapboxUrl({
+        lat: 12.97,
+        lng: 77.59,
+        zoom: 14,
+        markers: [{
+          lat: 12.97,
+          lng: 77.59,
+          color: 'B5793C',
+          label: 'block Thyme Park Apartments, No 704 A, Industrial Bypass',
+          size: 'l',
+        }],
+      });
+      expect(url).not.toMatch(/Thyme/);
+      expect(url).toMatch(/pin-l\+b5793c\(/);
     });
 
     test('skips markers with non-finite coords', () => {
