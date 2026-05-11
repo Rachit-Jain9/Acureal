@@ -75,6 +75,53 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
       expect(xml).toMatch(/<c:valAx>/);
     });
 
+    // PR-F: combo chart for the Quarterly Trend Dashboard chart.
+    // Office's combo pattern: barChart + lineChart inside the same
+    // <c:plotArea>, sharing the category axis but with the line series
+    // on a secondary value axis (right side).
+    test('buildComboChartXml renders barChart + lineChart sharing cat axis', () => {
+      const xml = __internal.buildComboChartXml({
+        title: 'Quarterly Trend — Sales / Construction / Cumulative',
+        sheetName: 'Dashboard',
+        categoriesRange: '$A$38:$A$53',
+        barSeries: [
+          { name: 'Sales (Cr)', valuesRange: '$B$38:$B$53', colour: '0F7B5A' },
+          { name: 'Construction (Cr)', valuesRange: '$C$38:$C$53', colour: 'B23A48' },
+        ],
+        lineSeries: [
+          { name: 'Cumulative Net CF (Cr)', valuesRange: '$E$38:$E$53', colour: 'B5793C' },
+        ],
+      });
+
+      // Both chart elements present in one plotArea
+      expect(xml).toMatch(/<c:barChart>/);
+      expect(xml).toMatch(/<c:lineChart>/);
+
+      // Both bar series labels + the line series label
+      expect(xml).toMatch(/<c:v>Sales \(Cr\)<\/c:v>/);
+      expect(xml).toMatch(/<c:v>Construction \(Cr\)<\/c:v>/);
+      expect(xml).toMatch(/<c:v>Cumulative Net CF \(Cr\)<\/c:v>/);
+
+      // Bar palette + line palette
+      expect(xml).toMatch(/<a:srgbClr val="0F7B5A"\/>/);
+      expect(xml).toMatch(/<a:srgbClr val="B23A48"\/>/);
+      expect(xml).toMatch(/<a:srgbClr val="B5793C"\/>/);
+
+      // Three axes (cat + left val + right val with crosses="max")
+      const catAxes = (xml.match(/<c:catAx>/g) || []).length;
+      const valAxes = (xml.match(/<c:valAx>/g) || []).length;
+      expect(catAxes).toBe(1);
+      expect(valAxes).toBe(2);
+      // Right axis crosses="max" → renders on the right side
+      expect(xml).toMatch(/<c:crosses val="max"\/>/);
+
+      // Line series gets markers (circles) for visual continuity
+      expect(xml).toMatch(/<c:marker><c:symbol val="circle"\/>/);
+
+      // Legend at bottom (combo always shows legend)
+      expect(xml).toMatch(/<c:legend>/);
+    });
+
     test('buildBarChartXml omits legend on single-series', () => {
       const xml = __internal.buildBarChartXml({
         title: 'Single Series',

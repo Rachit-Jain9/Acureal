@@ -177,6 +177,117 @@ const buildBarChartXml = (spec) => {
   ].join('');
 };
 
+/**
+ * Combo chart — clustered-column + line in one plot area, sharing the
+ * category axis but with the line series on a secondary value axis on
+ * the right side. The canonical analyst read for a Quarterly Trend
+ * showing period contribution (column) + cumulative trajectory (line)
+ * where the cumulative crossover point is the "deal turns positive"
+ * moment.
+ *
+ * Office's combo chart pattern: barChart element shares axId 111 (cat)
+ * and 222 (left val), lineChart shares axId 111 (cat) and 333 (right
+ * val with crosses="max" so it renders on the right side).
+ *
+ * @param {Object} spec
+ * @param {string} spec.title
+ * @param {string} spec.sheetName
+ * @param {string} spec.categoriesRange
+ * @param {Array<{name: string, valuesRange: string, colour: string}>} spec.barSeries   1+ column series (left axis)
+ * @param {Array<{name: string, valuesRange: string, colour: string}>} spec.lineSeries  1+ line series (right axis)
+ * @returns {string}
+ */
+const buildComboChartXml = (spec) => {
+  const catRef = sheetRefForChart(spec.sheetName, spec.categoriesRange);
+  const barSeries = (spec.barSeries || []).map((s, idx) => [
+    '<c:ser>',
+    `<c:idx val="${idx}"/>`,
+    `<c:order val="${idx}"/>`,
+    `<c:tx><c:v>${escapeXml(s.name || `Bar ${idx + 1}`)}</c:v></c:tx>`,
+    s.colour ? `<c:spPr><a:solidFill><a:srgbClr val="${s.colour}"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>` : '',
+    `<c:cat><c:strRef><c:f>${catRef}</c:f></c:strRef></c:cat>`,
+    `<c:val><c:numRef><c:f>${sheetRefForChart(spec.sheetName, s.valuesRange)}</c:f></c:numRef></c:val>`,
+    '</c:ser>',
+  ].join('')).join('');
+
+  const barCount = (spec.barSeries || []).length;
+  const lineSeries = (spec.lineSeries || []).map((s, idx) => [
+    '<c:ser>',
+    `<c:idx val="${barCount + idx}"/>`,
+    `<c:order val="${barCount + idx}"/>`,
+    `<c:tx><c:v>${escapeXml(s.name || `Line ${idx + 1}`)}</c:v></c:tx>`,
+    s.colour
+      ? `<c:spPr><a:ln w="22225"><a:solidFill><a:srgbClr val="${s.colour}"/></a:solidFill></a:ln></c:spPr>`
+      : '',
+    // Smooth line for visual continuity; markers at each data point
+    `<c:marker><c:symbol val="circle"/><c:size val="6"/>${s.colour ? `<c:spPr><a:solidFill><a:srgbClr val="${s.colour}"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></c:spPr>` : ''}</c:marker>`,
+    `<c:cat><c:strRef><c:f>${catRef}</c:f></c:strRef></c:cat>`,
+    `<c:val><c:numRef><c:f>${sheetRefForChart(spec.sheetName, s.valuesRange)}</c:f></c:numRef></c:val>`,
+    '<c:smooth val="0"/>',
+    '</c:ser>',
+  ].join('')).join('');
+
+  return [
+    chartXmlHeader,
+    '<c:chart>',
+    titleBlock(spec.title),
+    '<c:plotArea>',
+    '<c:layout/>',
+    // ── Bar (column) chart — left value axis (222) ──
+    '<c:barChart>',
+    '<c:barDir val="col"/>',
+    '<c:grouping val="clustered"/>',
+    '<c:varyColors val="0"/>',
+    barSeries,
+    '<c:gapWidth val="80"/>',
+    '<c:axId val="111"/>',
+    '<c:axId val="222"/>',
+    '</c:barChart>',
+    // ── Line chart — right secondary value axis (333) ──
+    '<c:lineChart>',
+    '<c:grouping val="standard"/>',
+    '<c:varyColors val="0"/>',
+    lineSeries,
+    '<c:marker val="1"/>',
+    '<c:axId val="111"/>',
+    '<c:axId val="333"/>',
+    '</c:lineChart>',
+    // ── Category axis (shared) ──
+    '<c:catAx>',
+    '<c:axId val="111"/>',
+    '<c:scaling><c:orientation val="minMax"/></c:scaling>',
+    '<c:delete val="0"/>',
+    '<c:axPos val="b"/>',
+    '<c:crossAx val="222"/>',
+    '</c:catAx>',
+    // ── Left value axis (bars) ──
+    '<c:valAx>',
+    '<c:axId val="222"/>',
+    '<c:scaling><c:orientation val="minMax"/></c:scaling>',
+    '<c:delete val="0"/>',
+    '<c:axPos val="l"/>',
+    '<c:numFmt formatCode="#,##0" sourceLinked="0"/>',
+    '<c:crossAx val="111"/>',
+    '</c:valAx>',
+    // ── Right value axis (cumulative line) ──
+    '<c:valAx>',
+    '<c:axId val="333"/>',
+    '<c:scaling><c:orientation val="minMax"/></c:scaling>',
+    '<c:delete val="0"/>',
+    '<c:axPos val="r"/>',
+    '<c:numFmt formatCode="#,##0" sourceLinked="0"/>',
+    '<c:crossAx val="111"/>',
+    '<c:crosses val="max"/>',
+    '</c:valAx>',
+    '</c:plotArea>',
+    '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>',
+    '<c:plotVisOnly val="1"/>',
+    '<c:dispBlanksAs val="gap"/>',
+    '</c:chart>',
+    chartXmlFooter,
+  ].join('');
+};
+
 // ────────────────────────────────────────────────────────────────────────
 // Drawing XML — anchors all charts on a single sheet. Excel allows multiple
 // charts in one drawing; we emit one <xdr:oneCellAnchor> per chart pointing
@@ -313,6 +424,7 @@ const injectChartsIntoXlsx = async (xlsxBuffer, opts) => {
     let xml;
     if (spec.type === 'doughnut') xml = buildDoughnutChartXml(spec);
     else if (spec.type === 'bar') xml = buildBarChartXml(spec);
+    else if (spec.type === 'combo') xml = buildComboChartXml(spec);
     else throw new Error(`chartInjector: unsupported chart type "${spec.type}"`);
     zip.file(`xl/charts/chart${i + 1}.xml`, xml);
   }
@@ -358,6 +470,7 @@ module.exports = {
   __internal: {
     buildDoughnutChartXml,
     buildBarChartXml,
+    buildComboChartXml,
     buildDrawingXml,
     buildDrawingRels,
     ensureContentTypes,
