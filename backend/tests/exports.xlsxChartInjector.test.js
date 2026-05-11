@@ -122,6 +122,45 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
       expect(xml).toMatch(/<c:legend>/);
     });
 
+    // PR-G: tornado chart on the Dashboard. Office pattern: horizontal
+    // clustered-bar with overlap=100, so the two series (low-case
+    // negative deltas + high-case positive deltas) draw at the same
+    // Y position and extend in opposite directions from 0.
+    test('buildTornadoChartXml renders horizontal bar with overlap=100 + two oppositely-coloured series', () => {
+      const xml = __internal.buildTornadoChartXml({
+        title: 'Driver Impact on Margin',
+        sheetName: 'Dashboard',
+        categoriesRange: '$H$25:$H$26',
+        lowValuesRange: '$I$25:$I$26',
+        highValuesRange: '$J$25:$J$26',
+        lowColour: 'B23A48',
+        highColour: '0F7B5A',
+      });
+
+      // Horizontal bar (barDir="bar"), not vertical
+      expect(xml).toMatch(/<c:barChart>/);
+      expect(xml).toMatch(/<c:barDir val="bar"\/>/);
+
+      // Critical: overlap=100 makes the two series share the same Y
+      // position, producing the tornado pattern
+      expect(xml).toMatch(/<c:overlap val="100"\/>/);
+
+      // Both series labels emitted
+      expect(xml).toMatch(/<c:v>Low Case<\/c:v>/);
+      expect(xml).toMatch(/<c:v>High Case<\/c:v>/);
+
+      // Both colours emitted (red for downside, green for upside)
+      expect(xml).toMatch(/<a:srgbClr val="B23A48"\/>/);
+      expect(xml).toMatch(/<a:srgbClr val="0F7B5A"\/>/);
+
+      // Value axis uses signed-format codes so deltas read as +/-
+      expect(xml).toMatch(/formatCode="\+0\.0;-0\.0;0"/);
+
+      // Both series reference the same categories range
+      const catRefs = (xml.match(/\$H\$25:\$H\$26/g) || []).length;
+      expect(catRefs).toBeGreaterThanOrEqual(2);
+    });
+
     test('buildBarChartXml omits legend on single-series', () => {
       const xml = __internal.buildBarChartXml({
         title: 'Single Series',
@@ -225,7 +264,9 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
         targetSheetName: 'Dashboard',
         targetSheetFile: 'sheet2.xml',
         charts: [{
-          type: 'tornado',   // not yet supported
+          // 'sankey' isn't supported (Office doesn't have a native
+          // sankey chart type, and we haven't built a custom one).
+          type: 'sankey',
           title: 'X',
           anchor: { fromCol: 0, fromRow: 0, widthCols: 1, heightRows: 1 },
         }],

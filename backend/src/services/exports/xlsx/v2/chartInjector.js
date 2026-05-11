@@ -178,6 +178,102 @@ const buildBarChartXml = (spec) => {
 };
 
 /**
+ * Tornado chart — horizontal-bar chart with two overlapping series
+ * (low-case deltas as negative values, high-case deltas as positive
+ * values, both drawn at the same Y position via `<c:overlap val="100"/>`).
+ *
+ * Each category is one sensitivity driver; the two series represent the
+ * downside (red, negative delta) and upside (green, positive delta)
+ * from the base case. Result: each driver row is one horizontal bar
+ * extending left from 0 (low) and right from 0 (high).
+ *
+ * The caller passes pre-computed delta values (low usually negative,
+ * high usually positive). The chart's value axis renders 0 at the
+ * centre, which is the base case the bars deviate from. To make this
+ * read clearly the caller should also include a labelled cell elsewhere
+ * on the sheet showing the base IRR / margin so the reader knows the
+ * 0-axis represents.
+ *
+ * @param {Object} spec
+ * @param {string} spec.title
+ * @param {string} spec.sheetName
+ * @param {string} spec.categoriesRange  driver labels
+ * @param {string} spec.lowValuesRange   negative delta values (low-case)
+ * @param {string} spec.highValuesRange  positive delta values (high-case)
+ * @param {string} spec.lowColour        ARGB hex for the downside bar
+ * @param {string} spec.highColour       ARGB hex for the upside bar
+ * @returns {string}
+ */
+const buildTornadoChartXml = (spec) => {
+  const catRef = sheetRefForChart(spec.sheetName, spec.categoriesRange);
+  const lowRef = sheetRefForChart(spec.sheetName, spec.lowValuesRange);
+  const highRef = sheetRefForChart(spec.sheetName, spec.highValuesRange);
+  const lowColour = spec.lowColour || 'B23A48';   // dataNegative
+  const highColour = spec.highColour || '0F7B5A'; // dataPositive
+
+  return [
+    chartXmlHeader,
+    '<c:chart>',
+    titleBlock(spec.title),
+    '<c:plotArea>',
+    '<c:layout/>',
+    '<c:barChart>',
+    '<c:barDir val="bar"/>',
+    '<c:grouping val="clustered"/>',
+    '<c:varyColors val="0"/>',
+    // Low-case series — negative deltas extend left from 0
+    '<c:ser>',
+    '<c:idx val="0"/>',
+    '<c:order val="0"/>',
+    '<c:tx><c:v>Low Case</c:v></c:tx>',
+    `<c:spPr><a:solidFill><a:srgbClr val="${lowColour}"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>`,
+    `<c:cat><c:strRef><c:f>${catRef}</c:f></c:strRef></c:cat>`,
+    `<c:val><c:numRef><c:f>${lowRef}</c:f></c:numRef></c:val>`,
+    '</c:ser>',
+    // High-case series — positive deltas extend right from 0
+    '<c:ser>',
+    '<c:idx val="1"/>',
+    '<c:order val="1"/>',
+    '<c:tx><c:v>High Case</c:v></c:tx>',
+    `<c:spPr><a:solidFill><a:srgbClr val="${highColour}"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>`,
+    `<c:cat><c:strRef><c:f>${catRef}</c:f></c:strRef></c:cat>`,
+    `<c:val><c:numRef><c:f>${highRef}</c:f></c:numRef></c:val>`,
+    '</c:ser>',
+    // overlap=100 → both series drawn at the same Y position. Since one
+    // is positive and the other negative they extend in opposite
+    // directions, visually producing the tornado.
+    '<c:overlap val="100"/>',
+    '<c:gapWidth val="40"/>',
+    '<c:axId val="111"/>',
+    '<c:axId val="222"/>',
+    '</c:barChart>',
+    // Category axis (vertical, drivers listed top-to-bottom)
+    '<c:catAx>',
+    '<c:axId val="111"/>',
+    '<c:scaling><c:orientation val="minMax"/></c:scaling>',
+    '<c:delete val="0"/>',
+    '<c:axPos val="l"/>',
+    '<c:crossAx val="222"/>',
+    '</c:catAx>',
+    // Value axis (horizontal, signed deltas)
+    '<c:valAx>',
+    '<c:axId val="222"/>',
+    '<c:scaling><c:orientation val="minMax"/></c:scaling>',
+    '<c:delete val="0"/>',
+    '<c:axPos val="b"/>',
+    '<c:numFmt formatCode="+0.0;-0.0;0" sourceLinked="0"/>',
+    '<c:crossAx val="111"/>',
+    '</c:valAx>',
+    '</c:plotArea>',
+    '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>',
+    '<c:plotVisOnly val="1"/>',
+    '<c:dispBlanksAs val="gap"/>',
+    '</c:chart>',
+    chartXmlFooter,
+  ].join('');
+};
+
+/**
  * Combo chart — clustered-column + line in one plot area, sharing the
  * category axis but with the line series on a secondary value axis on
  * the right side. The canonical analyst read for a Quarterly Trend
@@ -425,6 +521,7 @@ const injectChartsIntoXlsx = async (xlsxBuffer, opts) => {
     if (spec.type === 'doughnut') xml = buildDoughnutChartXml(spec);
     else if (spec.type === 'bar') xml = buildBarChartXml(spec);
     else if (spec.type === 'combo') xml = buildComboChartXml(spec);
+    else if (spec.type === 'tornado') xml = buildTornadoChartXml(spec);
     else throw new Error(`chartInjector: unsupported chart type "${spec.type}"`);
     zip.file(`xl/charts/chart${i + 1}.xml`, xml);
   }
@@ -471,6 +568,7 @@ module.exports = {
     buildDoughnutChartXml,
     buildBarChartXml,
     buildComboChartXml,
+    buildTornadoChartXml,
     buildDrawingXml,
     buildDrawingRels,
     ensureContentTypes,
