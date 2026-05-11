@@ -2276,5 +2276,204 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           .toBe('=RetailAnchorRentPerSqftMonth*RetailAnchorSharePct+RetailVanillaRentPerSqftMonth*(1-RetailAnchorSharePct)');
       });
     });
+
+    // ── PR-I11 — Milestone-anchored sale-rate escalation ──────────────
+    describe('PR-I11: Milestone-anchored sale-rate escalation', () => {
+      test('Section appears for residential / villas / mixed_use; hidden otherwise', async () => {
+        const check = async (assetClass, expectVisible) => {
+          const ctx = minimalContext();
+          ctx.deal.asset_class = assetClass;
+          ctx.property.property_type = assetClass;
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const names = (wb.definedNames.model || []).map((n) => n.name);
+          if (expectVisible) expect(names).toContain('MilestoneEscalationModel');
+          else expect(names).not.toContain('MilestoneEscalationModel');
+        };
+        await check('residential_apartments', true);
+        await check('villas', true);
+        await check('mixed_use', true);
+        await check('plotted_development', false);
+        await check('raw_land', false);
+        await check('commercial_office', false);
+      });
+
+      test('Equivalent EscalationPct derived = (1+MilestoneTotal)^(1/years) - 1', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Equivalent EscalationPct')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=(1+MilestoneTotalEscalationPct)^(1/(ProjectMonths/12))-1');
+      });
+    });
+
+    // ── PR-I14 — Plot-level absorption (plotted_development only) ──────
+    describe('PR-I14: Plot-level absorption (plotted_development only)', () => {
+      const plottedCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'plotted_development';
+        ctx.property.property_type = 'plotted_development';
+        return ctx;
+      };
+
+      test('Section + named ranges appear only for plotted_development', async () => {
+        const buffer1 = await buildDealWorkbookV2(minimalContext());
+        const wb1 = new ExcelJS.Workbook();
+        await wb1.xlsx.load(buffer1);
+        expect((wb1.definedNames.model || []).map((n) => n.name)).not.toContain('PlotAbsorptionMonths');
+
+        const buffer2 = await buildDealWorkbookV2(plottedCtx());
+        const wb2 = new ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer2);
+        const names2 = (wb2.definedNames.model || []).map((n) => n.name);
+        for (const n of ['PlotAbsorptionMonths', 'PlotSmallSharePct', 'PlotMidSharePct', 'PlotLargeSharePct', 'PlotSharesCheck']) {
+          expect(names2).toContain(n);
+        }
+      });
+
+      test('PlotSharesCheck DERIVED = sum of 3 plot share rows', async () => {
+        const buffer = await buildDealWorkbookV2(plottedCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Sum Check')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=PlotSmallSharePct+PlotMidSharePct+PlotLargeSharePct');
+      });
+    });
+
+    // ── PR-I15 — Mixed-Use Component Breakdown ─────────────────────────
+    describe('PR-I15: Mixed-Use Component Breakdown (mixed_use / redevelopment only)', () => {
+      const mixedCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'mixed_use';
+        ctx.property.property_type = 'mixed_use';
+        return ctx;
+      };
+
+      test('Section appears for mixed_use + redevelopment; hidden otherwise', async () => {
+        const check = async (assetClass, expectVisible) => {
+          const ctx = minimalContext();
+          ctx.deal.asset_class = assetClass;
+          ctx.property.property_type = assetClass;
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const names = (wb.definedNames.model || []).map((n) => n.name);
+          if (expectVisible) expect(names).toContain('MixUseResiSharePct');
+          else expect(names).not.toContain('MixUseResiSharePct');
+        };
+        await check('mixed_use', true);
+        await check('redevelopment', true);
+        await check('residential_apartments', false);
+        await check('commercial_office', false);
+      });
+
+      test('Blended Sale Rate DERIVED = sum of component_share × component_rate', async () => {
+        const buffer = await buildDealWorkbookV2(mixedCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Blended Sale Rate') && label.includes('derived')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toContain('MixUseResiSharePct*MixUseResiRatePerSqft');
+        expect(formulaValue.formula).toContain('MixUseOfficeSharePct*MixUseOfficeRatePerSqft');
+        expect(formulaValue.formula).toContain('MixUseRetailSharePct*MixUseRetailRatePerSqft');
+        expect(formulaValue.formula).toContain('MixUseHospSharePct*MixUseHospRatePerSqft');
+      });
+
+      test('Defaults sum to 100%: residential 50% + office 30% + retail 15% + hospitality 5%', async () => {
+        const ctx = mixedCtx();
+        ['mixUseResiSharePct','mixUseOfficeSharePct','mixUseRetailSharePct','mixUseHospSharePct']
+          .forEach((k) => { delete ctx.deal.model_params.inputs[k]; });
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Residential Component Share']).toBeCloseTo(0.50, 4);
+        expect(byLabel['Office Component Share']).toBeCloseTo(0.30, 4);
+        expect(byLabel['Retail Component Share']).toBeCloseTo(0.15, 4);
+        expect(byLabel['Hospitality Component Share']).toBeCloseTo(0.05, 4);
+      });
+    });
+
+    // ── PR-I16 — Raw-Land Entitlement Pipeline (raw_land only) ──────────
+    describe('PR-I16: Raw-Land Entitlement Pipeline (raw_land only)', () => {
+      const rawLandCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'raw_land';
+        ctx.property.property_type = 'raw_land';
+        return ctx;
+      };
+
+      test('Section appears only for raw_land', async () => {
+        const buffer1 = await buildDealWorkbookV2(minimalContext());
+        const wb1 = new ExcelJS.Workbook();
+        await wb1.xlsx.load(buffer1);
+        expect((wb1.definedNames.model || []).map((n) => n.name)).not.toContain('RawLandCurrentStage');
+
+        const buffer2 = await buildDealWorkbookV2(rawLandCtx());
+        const wb2 = new ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer2);
+        const names2 = (wb2.definedNames.model || []).map((n) => n.name);
+        for (const n of ['RawLandCurrentStage', 'RawLandTitleMonths', 'RawLandConversionMonths',
+                         'RawLandLayoutMonths', 'RawLandApprovalUpliftPct', 'RawLandTotalPipelineMonths']) {
+          expect(names2).toContain(n);
+        }
+      });
+
+      test('RawLandTotalPipelineMonths DERIVED = title + conversion + layout', async () => {
+        const buffer = await buildDealWorkbookV2(rawLandCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Total Pipeline')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=RawLandTitleMonths+RawLandConversionMonths+RawLandLayoutMonths');
+      });
+
+      test('Defaults: 3 + 6 + 9 = 18 months pipeline; current stage = title_diligence', async () => {
+        const ctx = rawLandCtx();
+        ['rawLandCurrentStage','rawLandTitleMonths','rawLandConversionMonths','rawLandLayoutMonths']
+          .forEach((k) => { delete ctx.deal.model_params.inputs[k]; });
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Current Entitlement Stage']).toBe('title_diligence');
+        expect(byLabel['Title Diligence Duration']).toBe(3);
+        expect(byLabel['Conversion Duration']).toBe(6);
+        expect(byLabel['Layout Approval Duration']).toBe(9);
+      });
+    });
   });
 });
