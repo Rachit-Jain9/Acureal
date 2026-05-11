@@ -4,6 +4,46 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (very late) — Institutional-grade rebuild arc, batch 2 (PR #265 — tornado)
+
+Continuing the institutional-grade XLSX rebuild. Single PR this batch: tornado chart on the Dashboard.
+
+### PR shipped
+
+- **#265 — PR-G: Tornado chart on Dashboard.** Office's tornado pattern = horizontal clustered-bar with `<c:overlap val="100"/>` and two oppositely-signed series. chartInjector extended with new `buildTornadoChartXml` builder. Two driver rows on the Dashboard at H24:M26 feed the chart:
+  - **Selling Rate ±10%** — Low Δ = `=B27-D27`, High Δ = `=F27-D27`
+  - **Construction Cost ±10%** — Low Δ = `=D29-D27` (worst case), High Δ = `=D25-D27` (best case)
+  
+  Both rows reference the existing 5×5 sensitivity grid (B25:F29). Recalc is live — edit any sensitivity-affecting input (SellRate, EscalationPct, ConstructionCostPerSqft, LandCostCr) and BOTH the heatmap AND the tornado update together.
+  
+  Chart anchored at cols N-T (13-19), rows 28-35 — right of the sensitivity heatmap so the analyst sees both visualisations in the same eye span. Net diff +220/-10, 170 tests passing.
+
+### Why this batch was just one PR
+
+PR-G was the last additive (non-restructuring) gap from the roadmap. The remaining three gaps — PR-B (construction vs permanent loan), PR-D (sponsor/LP waterfall), PR-E (unit mix) — each involve either a new sheet with substantial logic OR restructuring the existing Cash Flow row positions. Each warrants its own focused session with operator verification between them, not rapid-fire concurrent shipping.
+
+### Status after batch 2
+
+| PR | Theme | Status |
+|---|---|---|
+| PR-A #261 | Detailed soft cost breakdown | ✅ |
+| PR-B | Construction vs Permanent loan (MIN of LTV/DCR/DY) | Open — biggest remaining depth |
+| PR-C #263 | Amortization Schedule sheet | ✅ |
+| PR-D | Sponsor / LP waterfall | Open |
+| PR-E | Unit mix table | Open |
+| PR-F #262 | Combo chart on Quarterly Trend | ✅ |
+| PR-G #265 | Tornado on Dashboard | ✅ |
+
+4 of 7 PRs in the rebuild arc shipped. The remaining 3 are the structural / restructuring ones.
+
+### Operator verification still pending
+Download a fresh `.xlsx` for any deal and verify:
+1. Dashboard → right of the Sensitivity heatmap (cols H-M, rows 23-27) shows the new "Driver Impact on Project Margin (tornado)" data table
+2. Below that, anchored at cols N-T, rows 28+, is the native tornado chart with red+green horizontal bars centred on 0 = base margin
+3. The tornado recalculates when you edit any input that affects margin (sell rate, escalation, construction cost, land cost, etc.)
+
+---
+
 ## 2026-05-11 (late night) — Institutional-grade rebuild arc, batch 1 (PRs #261, #262, #263)
 
 Continuing from the roadmap doc (PR #260) that mapped 26 gaps vs the operator's reference pro formas (NAIOP, RE-540, RE-508). Operator authorised "do whatever goes well together" — three independent additive PRs shipped + deployed this batch:
