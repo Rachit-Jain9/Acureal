@@ -131,6 +131,31 @@ const buildContext = (exportContext = {}, options = {}) => {
   const INCOME_CLASSES = ['commercial_office', 'retail', 'industrial_warehousing', 'hospitality'];
   const dealFamily = INCOME_CLASSES.includes(assetClass) ? 'income' : 'development';
 
+  // ── Kernel-computed returns ─────────────────────────────────────────────
+  // Per CLAUDE.md: "the deterministic financial kernel is the only source
+  // of numerics in any export." The Reports page in the frontend displays
+  // these stored deal-record values directly (e.g. Jigani IRR 13.6%) — the
+  // XLSX MUST surface the same numbers as the authoritative headline. The
+  // formula-driven model in the Phasing / Cash Flow / Dashboard sheets is
+  // a SENSITIVITY RUN — editable, transparent, but secondary to the
+  // kernel's output for any deal-level reporting purpose.
+  //
+  // Any value here that's null means the kernel hasn't produced it — the
+  // Dashboard renders "–" or falls back to the modeled value with a clear
+  // disclosure.
+  const kernelKpis = {
+    irr: firstNumber(deal.irr_pct, deal.model_params?.kpis?.irr),
+    npv: firstNumber(deal.npv_cr, deal.model_params?.kpis?.npv),
+    equityMultiple: firstNumber(deal.equity_multiple, deal.model_params?.kpis?.equityMultiple),
+    grossMargin: firstNumber(deal.gross_margin_pct, deal.model_params?.kpis?.grossMarginPct),
+    totalRevenue: firstNumber(deal.total_revenue_cr, deal.model_params?.kpis?.totalRevenue),
+    totalCost: firstNumber(deal.total_cost_cr, deal.model_params?.kpis?.totalCost),
+    yieldOnCost: firstNumber(deal.yield_on_cost_pct, deal.model_params?.kpis?.yieldOnCost),
+    noi: firstNumber(deal.noi_cr, deal.stabilized_noi_cr, deal.model_params?.kpis?.noi),
+    exitValue: firstNumber(deal.exit_value_cr, deal.model_params?.kpis?.exitValue),
+    residualLandValue: firstNumber(deal.residual_land_value_cr, deal.model_params?.kpis?.rlv),
+  };
+
   return {
     exportContext,
     deal,
@@ -141,6 +166,7 @@ const buildContext = (exportContext = {}, options = {}) => {
     isIncome: dealFamily === 'income',
     projectMonths,
     totalQuarters,
+    kernelKpis,
     brandName: options.brandName || 'REDIP',
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
     effectiveDate: options.effectiveDate || new Date().toISOString().slice(0, 10),
@@ -947,29 +973,40 @@ const buildDashboardSheet = (workbook, ctx) => {
   };
   const totalCol = colLetter(totalQ + 2);
 
-  // Asset-class-aware KPI tiles. Income deals show NOI / Cap Rate /
-  // DSCR / Cash-on-Cash / Reversion. Development deals show Revenue /
-  // Cost / Net CF / Gross Margin / Min DSCR / Equity CF.
+  // Asset-class-aware KPI tiles. Each tile takes BOTH a kernel-stored
+  // value (deal record) AND a formula fallback. When the kernel has
+  // produced the value, the cell shows that literal — matching the
+  // Reports page in the frontend (CLAUDE.md: "the deterministic financial
+  // kernel is the only source of numerics in any export"). When the
+  // kernel hasn't (or the field isn't applicable to this asset family),
+  // the formula falls back to the modeled value from the sensitivity
+  // run on the Phasing / Cash Flow sheets.
+  //
+  // Operator can still edit Inputs and see the model recompute below —
+  // but the HEADLINE figure stays anchored to what the kernel decided
+  // for this specific deal, so the workbook reconciles with every other
+  // surface (Reports page, PPTX deck, DOCX report).
+  const k = ctx.kernelKpis;
   const kpiCells = ctx.dealFamily === 'income'
     ? [
         // Top row — operating fundamentals
-        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Modeled Cap Rate',              formula: `=IFERROR(${phasing}!${totalCol}18*4/(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr),0)`, format: NUMBER_FORMATS.percent },
-        { row: 4, col: 'E', label: 'Exit Cap Rate',                 formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent },
+        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'C', label: 'Modeled Cap Rate',              kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr),0)`, format: NUMBER_FORMATS.percent },
+        { row: 4, col: 'E', label: 'Exit Cap Rate',                 kernel: null,                  formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent },
         // Bottom row — investor returns
-        { row: 7, col: 'A', label: 'Min DSCR',                      formula: `=${cashflow}!${totalCol}10`,                                                                         format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           formula: `=IFERROR(${cashflow}!C9/((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
-        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    formula: `=${cashflow}!${totalCol}11`,                                                                         format: NUMBER_FORMATS.currency },
+        { row: 7, col: 'A', label: 'Min DSCR',                      kernel: null,                  formula: `=${cashflow}!${totalCol}10`,                                                                         format: NUMBER_FORMATS.multiple },
+        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C9/((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}11`,                                                                         format: NUMBER_FORMATS.currency },
       ]
     : [
-        { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     formula: `=-${cashflow}!${totalCol}6+(-${cashflow}!${totalCol}7)`,                                          format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', formula: `=${cashflow}!${totalCol}8`,                                                                        format: NUMBER_FORMATS.currency },
-        { row: 7, col: 'A', label: 'Gross Margin',                    formula: `=IFERROR(${cashflow}!${totalCol}8/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
-        { row: 7, col: 'C', label: 'Min DSCR',                        formula: `=${cashflow}!${totalCol}13`,                                                                      format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'E', label: 'Equity Cash Flow (INR Cr)',       formula: `=${cashflow}!${totalCol}12`,                                                                      format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         kernel: k.totalRevenue,       formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=-${cashflow}!${totalCol}6+(-${cashflow}!${totalCol}7)`,                                          format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}8`,                                                                        format: NUMBER_FORMATS.currency },
+        { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}8/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'C', label: 'Min DSCR',                        kernel: null,                  formula: `=${cashflow}!${totalCol}13`,                                                                      format: NUMBER_FORMATS.multiple },
+        { row: 7, col: 'E', label: 'Residual Land Value (INR Cr)',    kernel: k.residualLandValue,  formula: `=${cashflow}!${totalCol}12`,                                                                      format: NUMBER_FORMATS.currency },
       ];
-  kpiCells.forEach(({ row, col, label, formula, format }) => {
+  kpiCells.forEach(({ row, col, label, kernel, formula, format }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
     labelCell.value = label;
     labelCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') }, bold: true };
@@ -977,7 +1014,14 @@ const buildDashboardSheet = (workbook, ctx) => {
     labelCell.fill = FILL(palette.xlsx('paper'));
     labelCell.protection = { locked: true };
     const valueCell = sheet.getCell(`${String.fromCharCode(col.charCodeAt(0) + 1)}${row}`);
-    valueCell.value = { formula };
+    if (kernel != null) {
+      // Literal kernel value. For percent-format cells the kernel stores
+      // integer-percent (13.6 = 13.6%) but Excel's `0.0%` format expects
+      // a decimal — convert via toPctDecimal.
+      valueCell.value = format === NUMBER_FORMATS.percent ? toPctDecimal(kernel) : kernel;
+    } else {
+      valueCell.value = { formula };
+    }
     valueCell.numFmt = format;
     valueCell.font = { name: FONT, size: 16, bold: true, color: { argb: palette.xlsx('inkDeep') } };
     valueCell.alignment = { horizontal: 'right' };
@@ -1030,37 +1074,83 @@ const buildDashboardSheet = (workbook, ctx) => {
   const cfRangeProper = `${cashflow}!$${colLetter(2)}$${cfRow}:$${colLetter(totalQ + 1)}$${cfRow}`;
 
   sheet.mergeCells('A19:F19');
-  sheet.getCell('A19').value = 'Returns';
+  sheet.getCell('A19').value = 'Returns — Kernel vs Modeled';
   styleSectionTitle(sheet.getCell('A19'));
   sheet.getRow(19).height = 22;
 
+  // Two rows side-by-side:
+  //   Row 20 = "Kernel" (what the deterministic financial kernel produced
+  //            and stored on the deal record — these are the same figures
+  //            shown on the Reports page in the frontend)
+  //   Row 21 = "Modeled (sensitivity run)" — the IRR/NPV/EM computed from
+  //            the live quarterly cash flow on the Cash Flow sheet, which
+  //            recomputes as the operator edits Inputs. Divergence from
+  //            the kernel row is normal and expected when inputs change.
+  //
+  // This pair makes the two views explicit + honest. Without it the
+  // operator sees a single "Project IRR (modeled)" tile that doesn't
+  // match the Reports page, and credibility collapses.
   const returnsCells = [
-    { row: 20, col: 'A', label: 'Project IRR (modeled)', formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`, format: NUMBER_FORMATS.percent },
-    { row: 20, col: 'C', label: 'NPV (INR Cr)',          formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`, format: NUMBER_FORMATS.currency },
-    { row: 20, col: 'E', label: 'Equity Multiple',       formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`, format: NUMBER_FORMATS.multiple },
+    // Kernel row 20 — authoritative
+    { row: 20, col: 'A', label: 'Project IRR (kernel)',    kernel: k.irr,            formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`,                                            format: NUMBER_FORMATS.percent },
+    { row: 20, col: 'C', label: 'NPV (kernel, INR Cr)',    kernel: k.npv,            formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency },
+    { row: 20, col: 'E', label: 'Equity Multiple (kernel)', kernel: k.equityMultiple, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple },
+    // Modeled row 21 — sensitivity run
+    { row: 21, col: 'A', label: 'Project IRR (modeled)',    kernel: null, formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`,                                            format: NUMBER_FORMATS.percent, secondary: true },
+    { row: 21, col: 'C', label: 'NPV (modeled, INR Cr)',    kernel: null, formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency, secondary: true },
+    { row: 21, col: 'E', label: 'Equity Multiple (modeled)', kernel: null, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple, secondary: true },
   ];
-  returnsCells.forEach(({ row, col, label, formula, format }) => {
+  returnsCells.forEach(({ row, col, label, kernel, formula, format, secondary }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
     labelCell.value = label;
-    labelCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') }, bold: true };
+    // Kernel row gets emphasis; modeled row gets muted styling so the
+    // hierarchy reads at a glance.
+    labelCell.font = {
+      name: FONT,
+      size: secondary ? 8.5 : 9,
+      color: { argb: palette.xlsx(secondary ? 'mutedHigh' : 'inkDeep') },
+      bold: !secondary,
+      italic: !!secondary,
+    };
     labelCell.alignment = { horizontal: 'left' };
     labelCell.fill = FILL(palette.xlsx('paper'));
     labelCell.protection = { locked: true };
     const valueCell = sheet.getCell(`${String.fromCharCode(col.charCodeAt(0) + 1)}${row}`);
-    valueCell.value = { formula };
+    if (kernel != null) {
+      valueCell.value = format === NUMBER_FORMATS.percent ? toPctDecimal(kernel) : kernel;
+    } else {
+      valueCell.value = { formula };
+    }
     valueCell.numFmt = format;
-    valueCell.font = { name: FONT, size: 16, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    valueCell.font = {
+      name: FONT,
+      size: secondary ? 12 : 16,
+      bold: !secondary,
+      color: { argb: palette.xlsx(secondary ? 'mutedHigh' : 'inkDeep') },
+      italic: !!secondary,
+    };
     valueCell.alignment = { horizontal: 'right' };
     valueCell.fill = FILL(palette.xlsx('paperElevated'));
     valueCell.protection = { locked: true };
     valueCell.border = {
       top: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
-      bottom: { style: 'thin', color: { argb: palette.xlsx('accent') } },
+      bottom: { style: 'thin', color: { argb: palette.xlsx(secondary ? 'hairline' : 'accent') } },
       left: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
       right: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
     };
-    sheet.getRow(row).height = 30;
+    sheet.getRow(row).height = secondary ? 22 : 30;
   });
+
+  // ── Disclosure footnote on the Returns block ──────────────────────────
+  // Make the kernel/modeled distinction explicit so an analyst reading
+  // the workbook understands why the two rows differ (and which one
+  // matches the rest of the platform).
+  sheet.mergeCells('A22:F22');
+  sheet.getCell('A22').value = 'KERNEL = stored on the deal record by REDIP\'s deterministic financial kernel; matches the Reports page + PPTX/DOCX exports. MODELED = recomputed live from the Phasing + Cash Flow sheets; edit Inputs to explore scenarios.';
+  sheet.getCell('A22').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A22').alignment = { vertical: 'top', wrapText: true };
+  sheet.getCell('A22').protection = { locked: true };
+  sheet.getRow(22).height = 28;
 
   // ── Sensitivity grid — Project margin under sale-rate × cost variance ──
   // Two-axis 5x5 with conditional formatting (color scale). No native chart
