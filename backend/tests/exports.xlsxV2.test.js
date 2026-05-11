@@ -95,6 +95,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Dashboard',
         'Debt Sizing',
         'Amortization Schedule',
+        'Sponsor LP Waterfall',
         'Calculations',
       ]);
       const calc = wb.getWorksheet('Calculations');
@@ -166,6 +167,61 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // when actual project total is ~266 Cr). The fix: cumulative rows
     // get `totalKind: 'final'` and the Total cell references the LAST
     // quarter's cell instead of summing.
+    // PR-D: Sponsor / LP Waterfall sheet — multi-tier pour-over of
+    // equity proceeds (LP pref + return of capital → promote split).
+    // Reference templates (NAIOP "Waterfall - IRR Hurdles", RE-540
+    // "Waterfall") use exactly this structure.
+    test('Sponsor LP Waterfall sheet computes the 3-tier pour-over', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const wf = wb.getWorksheet('Sponsor LP Waterfall');
+      expect(wf).toBeDefined();
+
+      // Capital Stack block (rows 4-9)
+      expect(String(wf.getCell('A4').value)).toContain('Capital Stack');
+      // Total Equity = Total Cost - Loan
+      expect(wf.getCell('B7').value.formula).toBe('=B5-B6');
+      // LP Equity = Total × LPEquityPct
+      expect(wf.getCell('B8').value.formula).toBe('=B7*LPEquityPct');
+      // GP Equity = Total × GPEquityPct
+      expect(wf.getCell('B9').value.formula).toBe('=B7*GPEquityPct');
+
+      // Proceeds & Pref block (rows 11-16)
+      expect(String(wf.getCell('A11').value)).toContain('Proceeds');
+      // Pref accrual: LP Equity × ((1+pref)^N - 1)
+      expect(wf.getCell('B14').value.formula).toBe('=B8*((1+PrefReturnRate)^B12-1)');
+      // Tier 1 LP distribution = MIN(proceeds, capital + pref)
+      expect(wf.getCell('B15').value.formula).toBe('=MIN(B13,B8+B14)');
+
+      // Promote split block (rows 18-22)
+      expect(String(wf.getCell('A18').value)).toContain('Promote Split');
+      // LP promote = Residual × PromoteLPPct
+      expect(wf.getCell('B19').value.formula).toBe('=B16*PromoteLPPct');
+      // GP promote = Residual × PromoteGPPct
+      expect(wf.getCell('B20').value.formula).toBe('=B16*PromoteGPPct');
+
+      // Final returns block (rows 24-30)
+      expect(String(wf.getCell('A24').value)).toContain('Final Investor Returns');
+      // LP Total = Tier 1 + LP promote
+      expect(wf.getCell('B25').value.formula).toBe('=B15+B19');
+      // LP Equity Multiple = LP Total / LP Equity
+      expect(wf.getCell('B27').value.formula).toBe('=IFERROR(B25/B8,0)');
+      // LP IRR approx = (EM)^(1/years) - 1
+      expect(wf.getCell('B29').value.formula).toBe('=IFERROR((B27)^(1/B12)-1,0)');
+    });
+
+    test('Inputs sheet exposes 5 new waterfall named ranges', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const allDefined = JSON.stringify(wb.definedNames);
+      for (const name of ['LPEquityPct', 'GPEquityPct', 'PrefReturnRate',
+        'PromoteLPPct', 'PromoteGPPct']) {
+        expect(allDefined).toContain(name);
+      }
+    });
+
     // PR-B: Debt Sizing sheet — computes permanent loan as MIN of four
     // lender-approved limits (LTC, LTV, DCR, DY). Reference templates
     // (RE-540 "Permanent Debt Calculation") use exactly this pattern.
