@@ -39,12 +39,14 @@ sessions can pick up where the last left off without re-reading the chat.
 | #250 | **Fix**: XLSX percent-input normalisation (`toPctDecimal`) — kernel-stored integer-percent (5 for 5%) now converted to decimal (0.05) for `0.0%` cells. 24 percent inputs covered | ✅ MERGED |
 | #251 | **Feat**: PPTX sensitivity tornado on slide 16 (replaces 5×5 heatmap table) + rate-vs-distance scatter on slide 9 | ✅ MERGED |
 | #252 | **Feat**: DOCX SVG chart embeds — capital stack donut + quarterly cash flow trend + sensitivity tornado in the Financials section (pure-SVG, no native deps) | ✅ MERGED |
+| #253 | docs: 2026-05-11 batch handoff (PRs #248–#252 docs handoff) | ✅ MERGED |
+| #254 | **Feat**: XLSX native chart objects on Dashboard — new `chartInjector.js` splices doughnut + clustered-column XML into the ExcelJS-written buffer (ExcelJS 4.4.0 has no `addChart`). Asset-class-aware series labels (Sales/Construction vs PGI/NOI). Mirrors the operator's reference-template-pack chart structure | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
 **Status by format**:
 - **PPTX** ✅ feature-complete: editorial palette, asset-class cover artwork, score gauge, Decision Frame, content-rich dividers, density on every slide, Pros & Cons, Key Assumptions appendix, Disclaimer rebuild, Google Maps embed.
-- **XLSX** ✅ feature-complete: 4 visible sheets + hidden Calculations sheet, named ranges, locked formulas, conditional formatting on DSCR/IRR/margin, native IRR/NPV functions, sensitivity heatmap, Bull/Base/Bear scenarios, sources/uses doughnut. v2 is now the default.
+- **XLSX** ✅ feature-complete: 4 visible sheets + hidden Calculations sheet, named ranges, locked formulas, conditional formatting on DSCR/IRR/margin, native IRR/NPV functions, sensitivity heatmap, Bull/Base/Bear scenarios, **native chart objects** (doughnut + clustered-column on Dashboard, live-recalc, asset-class-aware via post-write XML injection in PR #254). v2 is the default.
 - **DOCX** ✅ feature-complete: ~14 sections including all 6 phase-2 sections (Demographics, Why-this-area, Job Growth, Social Infra, Supply & Demand, Better Alternatives). AI-assisted vs Platform Data badges. Behind `DOCX_REPORT_ENABLED` flag.
 - **Paywall** ⏸ deferred per operator ("free for BETA testing").
 

@@ -4,6 +4,39 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (afternoon) — XLSX native chart objects (PR #254)
+
+Operator shared a 10-XLSX template pack ("REDIP_India_Template_*.xlsx", openpyxl-generated) and a Grok roast comparing the templates to JLL/CBRE/Blackstone-grade deliverables. Verified the roast against the actual templates — most of the roast's complaints (no palette, no data bars, sensitivity raw grid, Calculations sheet missing) are wrong about our current generator. The ONE legitimate gap: **no native chart objects** on the XLSX Dashboard. The templates have native chart objects; ours had zero.
+
+Root cause: ExcelJS 4.4.0 has no `addChart` API. Verified empirically — `addChart` is undefined on worksheet instances; no chart-xform module in the library source. The previous `sheet.addChart(...)` call wrapped in a silently-failing try/catch was dead code.
+
+### PR shipped
+- **#254** New `backend/src/services/exports/xlsx/v2/chartInjector.js` (~260 LOC). Post-write XML injector: takes the buffer ExcelJS just wrote + chart specs, unzips via JSZip, splices in chart XML files + drawing XML + drawing rels + worksheet drawing reference + [Content_Types].xml additions. Mirrors the openpyxl reference templates exactly (same element order, same namespaces) so files open without the "Excel found a problem with formulas" repair dialog. Two chart types in v1: doughnut + clustered-column/horizontal bar. Wired into `buildDealWorkbookV2` with try/catch fallback (if injection ever fails, operator still gets un-enhanced workbook rather than an error).
+
+  Two charts auto-render on every workbook:
+  1. **Uses Breakdown doughnut** at Dashboard!H11 — three slices for Land / Construction / Approvals in palette colours
+  2. **Quarterly Trend clustered-column** below the trend table — asset-class-aware:
+       - Development family → Sales (emerald) + Construction (red)
+       - Income family → PGI (navy) + NOI (emerald)
+
+### Tests
+158 export tests passing (was 146, +12: 9 chartInjector unit tests + 3 buildWorkbook integration tests).
+
+### Operator verification needed
+The XML injection is novel work — Excel is the strictest validator. Local roundtrip via ExcelJS succeeds and the XML mirrors the openpyxl template structure, but real Excel hasn't been tested. Operator: open the next downloaded `.xlsx` for any deal. Dashboard sheet should show:
+1. Doughnut chart top-right (Uses breakdown)
+2. Clustered-column chart below the Quarterly Trend table
+
+Both should recalc when an Inputs-sheet cell changes (try editing `SellRatePerSqft` — column heights move). If Excel pops a repair dialog or the charts are missing, share a screenshot and I'll fix the XML structure.
+
+### Out of scope (deferred to follow-up PRs)
+- **Combo chart** (column + line, cumulative on secondary axis) for Quarterly Trend. PPTX has this via pptxgenjs. XLSX combo needs lineChart + barChart sharing axes — extends chartInjector cleanly, separate PR.
+- **Sensitivity bar / tornado in XLSX Dashboard**. Currently a conditional-format heatmap grid. Tornado is in PPTX (#251) + DOCX (#252).
+- **Sparklines** in KPI cells. ExcelJS support is limited; could pursue via XML injection.
+- **Icon-set conditional formatting** on KPI tiles (↑↓ arrows for IRR/NPV vs benchmark).
+
+---
+
 ## 2026-05-11 — Operator's brutal-roast batch: bug fixes + chart density across PPTX / XLSX / DOCX (PRs #248–#252)
 
 Operator downloaded the Jigani Apartments sample exports (XLSX + PPTX) and posted a long roast comparing them to CBRE / JLL / Blackstone-grade deliverables. Took it as a verification exercise — opened both files, separated real bugs from polish wishlist, shipped five themed PRs sequentially.
