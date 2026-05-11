@@ -686,6 +686,59 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Debt Profile / India Lender Ecosystem (PR-I6) ────────────────────
+  // Indian RE debt has a fundamentally different market structure than US:
+  //   - Banks (SBI / HDFC / ICICI / Axis / Bandhan): Repo-linked rates
+  //     since RBI's Oct-2019 mandate. Rate = Repo + Spread bps.
+  //   - NBFCs / RE-focused funds (HDFC Capital / Edelweiss / IIFL /
+  //     Piramal / Kotak): MCLR-linked or fixed-rate. Higher spreads
+  //     (300-500 bps over MCLR) but more flexible covenants.
+  //   - Loan types: Construction Finance (CF), Lease Rental Discounting
+  //     (LRD, for income-producing assets), Project Finance (PF),
+  //     Mezzanine. Each has different rate ranges and covenants.
+  //
+  // Pre-PR-I6 the workbook had a single `DebtRatePct` input with no
+  // context for WHICH lender, WHICH benchmark, or WHICH loan type. Indian
+  // analysts open the file and immediately wonder "is this a bank LRD
+  // or an Edelweiss mezz? They're priced 400 bps apart."
+  //
+  // PR-I6 adds informational categorical fields so the lender choice is
+  // explicit. `DebtRatePct` remains the operator-editable rate (paste in
+  // from the term sheet); the new "Implied All-In Rate" row shows the
+  // effective rate including processing fee amortised over the term.
+  const lenderTypeDefault = ctx.dealFamily === 'income' ? 'HDFC Capital' : 'HDFC Bank';
+  const benchmarkDefault = ctx.dealFamily === 'income' ? 'MCLR' : 'Repo';
+  const loanTypeDefault = ctx.dealFamily === 'income' ? 'LRD (Lease Rental Discounting)' : 'Project Finance';
+  const lenderProfileSection = {
+    title: 'Debt Profile (India Lender Ecosystem)',
+    rows: [
+      ['Lender Type',              'LenderType',
+        ctx.inputs.lenderType || lenderTypeDefault,
+        'e.g. SBI / HDFC / ICICI / Edelweiss / IIFL / Piramal', null],
+      ['Rate Benchmark',           'RateBenchmark',
+        ctx.inputs.rateBenchmark || benchmarkDefault,
+        'Repo / MCLR / Fixed / Marginal', null],
+      ['Spread over Benchmark',    'SpreadBps',
+        firstNumber(ctx.inputs.spreadBps, ctx.inputs.lenderSpreadBps, 280),
+        'bps (basis points)', NUMBER_FORMATS.integer],
+      ['Loan Type',                'LoanType',
+        ctx.inputs.loanType || loanTypeDefault,
+        'Construction / LRD / PF / Mezz', null],
+      ['Processing Fee',           'ProcessingFeePct',
+        toPctDecimal(firstNumber(ctx.inputs.processingFeePct, ctx.inputs.processingFee, 0.005)),
+        '% of loan amount (one-time)', NUMBER_FORMATS.percent],
+      ['Prepayment Penalty',       'PrepaymentPenaltyPct',
+        toPctDecimal(firstNumber(ctx.inputs.prepaymentPenaltyPct, 0)),
+        '% of outstanding (typical 1-2% for RE NBFC)', NUMBER_FORMATS.percent],
+      // Derived: effective all-in rate = DebtRatePct + processing fee amortised
+      // over the loan term. Useful sanity check against the lender's
+      // term-sheet "all-in cost" disclosure.
+      ['Implied All-In Rate',      'ImpliedAllInRate',
+        { formula: '=DebtRatePct+IFERROR(ProcessingFeePct/LoanTermYears,0)' },
+        '% / year (derived: rate + amortised fee)', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── Permanent Debt Sizing inputs (PR-B) ──────────────────────────────
   // Reference institutional pro formas (RE-540 "Permanent Debt Calculation"
   // sheet) size the permanent loan as the MIN of three sub-limits:
@@ -739,6 +792,12 @@ const buildInputsSheet = (workbook, ctx) => {
     ...(ctx.dealFamily === 'development' ? [dealStructureSection] : []),
     scheduleSection,
     capitalSection,
+    // PR-I6: Lender ecosystem informational fields sit BETWEEN Capital
+    // Structure (which carries DebtLTV / DebtRatePct / LoanTerm) and the
+    // Permanent Debt Sizing block (which carries the lender's MIN-of-4
+    // sizing limits). Operator reads top-to-bottom: "loan terms" → "WHO
+    // is the lender" → "what's the sizing test."
+    lenderProfileSection,
     debtSizingSection,
     waterfallSection,
   ];

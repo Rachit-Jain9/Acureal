@@ -1811,69 +1811,92 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
-    // ── PR-I5 — Carpet vs Super-Built-up Area + Loading Factor ─────────
-    // RERA Act 2016 Section 4(2)(h) mandates sale-side marketing in
-    // CARPET area, while construction costs are typically priced on
-    // super built-up. Pre-PR-I5 the model conflated the two by using
-    // SaleableAreaSqft (super built-up) for everything. PR-I5 introduces:
-    //   - `LoadingFactor` (editable, default 1.25 = 80% carpet efficiency)
-    //   - `CarpetAreaSqft` (derived = SaleableAreaSqft / LoadingFactor)
-    // The revenue math continues to use SaleableAreaSqft (no behaviour
-    // change); CarpetAreaSqft becomes available as a named range for any
-    // future RERA-marketing-compliance calculation.
-    describe('PR-I5: Carpet vs Super-Built-up Area + Loading Factor', () => {
-      test('Inputs sheet defines LoadingFactor + CarpetAreaSqft named ranges', async () => {
+    // ── PR-I6 — Lender ecosystem (India Debt Profile) ──────────────────
+    // Indian RE debt has a different structure than US: banks use Repo+spread,
+    // NBFCs use MCLR+spread, loan types vary (Construction / LRD / Project
+    // Finance / Mezz). PR-I6 adds informational categorical fields so the
+    // lender choice is explicit. DebtRatePct stays operator-editable; the
+    // new "Implied All-In Rate" shows DebtRatePct + ProcessingFee amortised.
+    describe('PR-I6: Lender ecosystem (India Debt Profile)', () => {
+      test('Inputs sheet defines lender ecosystem named ranges', async () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const namesList = (wb.definedNames.model || []).map((n) => n.name);
-        expect(namesList).toContain('LoadingFactor');
-        expect(namesList).toContain('CarpetAreaSqft');
+        expect(namesList).toContain('LenderType');
+        expect(namesList).toContain('RateBenchmark');
+        expect(namesList).toContain('SpreadBps');
+        expect(namesList).toContain('LoanType');
+        expect(namesList).toContain('ProcessingFeePct');
+        expect(namesList).toContain('PrepaymentPenaltyPct');
+        expect(namesList).toContain('ImpliedAllInRate');
       });
 
-      test('LoadingFactor default is 1.25 (80% carpet efficiency)', async () => {
+      test('Development family defaults to Repo benchmark + Project Finance loan type', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments dev
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Rate Benchmark']).toBe('Repo');
+        expect(byLabel['Loan Type']).toBe('Project Finance');
+        expect(byLabel['Lender Type']).toBe('HDFC Bank');
+      });
+
+      test('Income family defaults to MCLR benchmark + LRD loan type', async () => {
         const ctx = minimalContext();
-        delete ctx.deal.model_params.inputs.loadingFactor;
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
         const buffer = await buildDealWorkbookV2(ctx);
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const inputs = wb.getWorksheet('Inputs & Assumptions');
-        let seed = null;
+        const byLabel = {};
         inputs.eachRow((row) => {
           const label = String(row.getCell(1).value || '').trim();
-          if (label.includes('Loading Factor')) seed = row.getCell(2).value;
+          if (label) byLabel[label] = row.getCell(2).value;
         });
-        expect(seed).toBeCloseTo(1.25, 3);
+        expect(byLabel['Rate Benchmark']).toBe('MCLR');
+        expect(byLabel['Loan Type']).toContain('LRD');
+        expect(byLabel['Lender Type']).toBe('HDFC Capital');
       });
 
-      test('CarpetAreaSqft is a DERIVED formula = SaleableAreaSqft / LoadingFactor', async () => {
+      test('Spread defaults to 280 bps, ProcessingFee to 0.5%', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.spreadBps;
+        delete ctx.deal.model_params.inputs.processingFeePct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let spreadSeed = null;
+        let feeSeed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Spread over Benchmark') spreadSeed = row.getCell(2).value;
+          if (label === 'Processing Fee') feeSeed = row.getCell(2).value;
+        });
+        expect(spreadSeed).toBe(280);
+        expect(feeSeed).toBeCloseTo(0.005, 4);
+      });
+
+      test('Implied All-In Rate is a DERIVED formula = DebtRatePct + ProcessingFee/LoanTermYears', async () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const inputs = wb.getWorksheet('Inputs & Assumptions');
-        let carpetCellValue = null;
+        let formulaValue = null;
         inputs.eachRow((row) => {
           const label = String(row.getCell(1).value || '').trim();
-          if (label.includes('Carpet Area')) carpetCellValue = row.getCell(2).value;
+          if (label === 'Implied All-In Rate') formulaValue = row.getCell(2).value;
         });
-        expect(carpetCellValue).toBeTruthy();
-        // Formula cells in ExcelJS appear as { formula: '=...', result: ... }
-        expect(carpetCellValue.formula).toBe('=SaleableAreaSqft/LoadingFactor');
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=DebtRatePct+IFERROR(ProcessingFeePct/LoanTermYears,0)');
       });
-
-      test('Saleable area label clarifies the "Super Built-up" convention', async () => {
-        const buffer = await buildDealWorkbookV2(minimalContext());
-        const wb = new ExcelJS.Workbook();
-        await wb.xlsx.load(buffer);
-        const inputs = wb.getWorksheet('Inputs & Assumptions');
-        let foundLabel = false;
-        inputs.eachRow((row) => {
-          const label = String(row.getCell(1).value || '');
-          if (label.includes('Saleable') && label.includes('Super Built-up')) foundLabel = true;
-        });
-        expect(foundLabel).toBe(true);
-      });
-
     });
   });
 });
