@@ -39,6 +39,12 @@ const palette = require('../shared/palette');
 const { computeDealScore } = require('../../../utils/scoring/dealScore');
 const { renderSiteMap } = require('../shared/googleMapsStaticMap.service');
 const { generateSection } = require('../narrative/exportNarrative.service');
+const {
+  renderCapitalStackDonutSvg,
+  renderCashFlowTrendSvg,
+  renderTornadoSvg,
+  FALLBACK_PNG_BUFFER,
+} = require('../shared/chartSvg.service');
 
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
@@ -771,6 +777,23 @@ const buildComparables = (ctx) => {
   return children;
 };
 
+// Embed an SVG string as an inline image. Wraps the SVG in an ImageRun
+// with a 1×1 transparent PNG fallback so viewers without SVG support
+// (older Word, Google Docs preview) still render the rest of the doc
+// without erroring. SVG → buffer-string conversion is intentional — the
+// docx library wants a Buffer for `data`, and converting to base64 first
+// would inflate size by 33%.
+const embedSvgChart = (svgString, { width = 600, height = 280 } = {}) => new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 160, after: 160 },
+  children: [new ImageRun({
+    type: 'svg',
+    data: Buffer.from(svgString, 'utf8'),
+    fallback: { type: 'png', data: FALLBACK_PNG_BUFFER },
+    transformation: { width, height },
+  })],
+});
+
 const buildFinancials = (ctx) => {
   const children = [];
   children.push(sectionHeading('Financials & KPIs'));
@@ -790,6 +813,107 @@ const buildFinancials = (ctx) => {
     labelValueRow('Residual land value',formatCrores(ctx.residualLandValue, 2)),
   ];
   children.push(buildLabelValueTable(rows));
+
+  // ── Capital stack donut ────────────────────────────────────────────────
+  // Was: capital stack lived only inside the KPI row "Capital stack debt X /
+  // equity Y" — invisible at a glance. Donut shows debt vs equity proportion
+  // with INR Cr legend. Pure-SVG render embedded via docx ImageRun (no
+  // canvas / sharp dependency); minimal 1×1 PNG fallback covers viewers
+  // without SVG support.
+  const capStack = ctx.capitalStack;
+  if (capStack && (num(capStack.debtCr) > 0 || num(capStack.equityCr) > 0)) {
+    children.push(blank());
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 80, after: 40 },
+      children: [new TextRun({
+        text: 'CAPITAL STACK',
+        font: FONT, size: 18, bold: true, color: HEX('mutedHigh'),
+        characterSpacing: 32,
+      })],
+    }));
+    children.push(embedSvgChart(
+      renderCapitalStackDonutSvg({ debtCr: capStack.debtCr, equityCr: capStack.equityCr }),
+      { width: 480, height: 220 },
+    ));
+  }
+
+  // ── Quarterly cash flow trend ──────────────────────────────────────────
+  // Period net (columns) + cumulative (line) on independent scales.
+  // Asset-class branching: NOI for income deals, Net CF for development.
+  const cashRows = Array.isArray(ctx.cashRows) ? ctx.cashRows : [];
+  if (cashRows.length >= 2) {
+    const isIncomeAsset = ['commercial_office', 'retail', 'industrial_warehousing', 'hospitality']
+      .includes(String(ctx.assetClass || '').toLowerCase());
+    children.push(blank());
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 80, after: 40 },
+      children: [new TextRun({
+        text: isIncomeAsset ? 'PERIOD NOI & CUMULATIVE' : 'PERIOD NET CASH FLOW & CUMULATIVE',
+        font: FONT, size: 18, bold: true, color: HEX('mutedHigh'),
+        characterSpacing: 32,
+      })],
+    }));
+    children.push(embedSvgChart(
+      renderCashFlowTrendSvg({
+        rows: cashRows,
+        title: isIncomeAsset ? 'Period NOI & Cumulative (INR Cr)' : 'Period Net Cash Flow & Cumulative (INR Cr)',
+      }),
+      { width: 620, height: 280 },
+    ));
+  }
+
+  // ── Sensitivity tornado ─────────────────────────────────────────────────
+  // Drivers ranked by absolute IRR range. Same data + math as the slide-16
+  // tornado in the PPTX — surfaced here as an SVG embed so the DOCX report
+  // gets the same analytical depth.
+  const matrix = ctx.sensitivityMatrix;
+  if (matrix && Array.isArray(matrix.irrGrid) && matrix.irrGrid.length >= 3
+      && Array.isArray(matrix.sellingRates) && matrix.sellingRates.length >= 3
+      && Array.isArray(matrix.constructionCosts) && matrix.constructionCosts.length >= 3) {
+    const midRow = Math.floor(matrix.constructionCosts.length / 2);
+    const midCol = Math.floor(matrix.sellingRates.length / 2);
+    const baseIrr = num(matrix.irrGrid[midRow]?.[midCol]);
+    const sellRow = matrix.irrGrid[midRow] || [];
+    const sellLow = num(sellRow[0]);
+    const sellHigh = num(sellRow[sellRow.length - 1]);
+    const costLow = num(matrix.irrGrid[matrix.irrGrid.length - 1]?.[midCol]);
+    const costHigh = num(matrix.irrGrid[0]?.[midCol]);
+
+    const drivers = [];
+    if (baseIrr != null && sellLow != null && sellHigh != null) {
+      drivers.push({
+        label: 'Selling Rate',
+        subLabel: `${formatNumber(matrix.sellingRates[0], 0)} → ${formatNumber(matrix.sellingRates[matrix.sellingRates.length - 1], 0)} /sqft`,
+        low: sellLow, high: sellHigh,
+      });
+    }
+    if (baseIrr != null && costLow != null && costHigh != null) {
+      drivers.push({
+        label: 'Construction Cost',
+        subLabel: `${formatNumber(matrix.constructionCosts[matrix.constructionCosts.length - 1], 0)} → ${formatNumber(matrix.constructionCosts[0], 0)} /sqft`,
+        low: costLow, high: costHigh,
+      });
+    }
+    if (drivers.length > 0 && baseIrr != null) {
+      children.push(blank());
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 80, after: 40 },
+        children: [new TextRun({
+          text: 'SENSITIVITY — IRR RANGE BY DRIVER',
+          font: FONT, size: 18, bold: true, color: HEX('mutedHigh'),
+          characterSpacing: 32,
+        })],
+      }));
+      children.push(embedSvgChart(
+        renderTornadoSvg({ drivers, baseIrr }),
+        { width: 620, height: 260 },
+      ));
+    }
+  }
+
   return children;
 };
 
@@ -1017,6 +1141,19 @@ const buildReportContext = (exportContext = {}, options = {}) => {
     financialModelPresent: !!(totalCost != null || totalRevenue != null || irr != null),
   });
 
+  // Pull the inputs the new SVG-chart embeds need. capitalStack is on
+  // model_params (kernel attaches it). cashRows / sensitivityMatrix come
+  // straight from the exportContext payload (dealExport.service.js
+  // already attaches them for the PPTX path; we just route them through
+  // for the DOCX path too).
+  const capitalStack = model.capitalStack || {};
+  const cashRows = Array.isArray(exportContext.cashFlows?.quarterly) && exportContext.cashFlows.quarterly.length
+    ? exportContext.cashFlows.quarterly
+    : Array.isArray(exportContext.cashFlows?.yearly)
+      ? exportContext.cashFlows.yearly
+      : [];
+  const sensitivityMatrix = exportContext.sensitivity || null;
+
   return {
     exportContext,
     deal,
@@ -1029,6 +1166,9 @@ const buildReportContext = (exportContext = {}, options = {}) => {
     coordinates: coords ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}` : null,
     assetClass,
     assetClassLabel: ASSET_CLASS_LABELS[assetClass] || assetClass,
+    capitalStack,
+    cashRows,
+    sensitivityMatrix,
     dealTypeLabel: DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || 'Acquisition',
     dealStructureLabel: DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure || '–',
     stageLabel: STAGE_LABELS[deal.stage] || deal.stage || '–',
