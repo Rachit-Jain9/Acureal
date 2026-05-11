@@ -1780,12 +1780,21 @@ const buildDashboardChartSpecs = (ctx) => {
     anchor: { fromCol: 7, fromRow: 10, widthCols: 6, heightRows: 12 },
   });
 
-  // 2. Quarterly Trend column chart — anchored BELOW the data table
-  //    (table is rows 37-53). Asset-class-aware series names.
+  // 2. Quarterly Trend combo chart — clustered columns for period
+  //    contribution + cumulative line on secondary value axis. The
+  //    cumulative-line crossover is the canonical analyst read for
+  //    "when does the deal turn positive."
+  //
+  //    Development family: Sales + Construction columns + Cumulative line
+  //    Income family:      PGI + NOI columns + CF-After-Debt cumulative line
+  //
+  //    Anchored BELOW the data table (rows 37-53). Asset-class-aware
+  //    series labels + colours.
   const trendQuarters = Math.min(ctx.totalQuarters, 16);
   const trendEndRow = 37 + trendQuarters;
   if (trendQuarters >= 2) {
-    const series = ctx.dealFamily === 'income'
+    const isIncome = ctx.dealFamily === 'income';
+    const barSeries = isIncome
       ? [
         { name: 'PGI (Cr)', valuesRange: `$B$38:$B$${trendEndRow}`, colour: '0E1B2C' },
         { name: 'NOI (Cr)', valuesRange: `$D$38:$D$${trendEndRow}`, colour: '0F7B5A' },
@@ -1794,15 +1803,27 @@ const buildDashboardChartSpecs = (ctx) => {
         { name: 'Sales (Cr)',        valuesRange: `$B$38:$B$${trendEndRow}`, colour: '0F7B5A' },
         { name: 'Construction (Cr)', valuesRange: `$C$38:$C$${trendEndRow}`, colour: 'B23A48' },
       ];
+    // Cumulative line lives in column E for both families (Quarterly
+    // Trend table layout: A=Quarter, B=Series1, C=Series2, D=Series3,
+    // E=Cumulative-or-CF-After-Debt). Copper accent ties the line
+    // visually to the editorial palette without competing with the
+    // green/red bar palette.
+    const lineSeries = [
+      {
+        name: isIncome ? 'CF After Debt (cum, Cr)' : 'Cumulative Net CF (Cr)',
+        valuesRange: `$E$38:$E$${trendEndRow}`,
+        colour: 'B5793C',
+      },
+    ];
     specs.push({
-      type: 'bar',
-      barDir: 'col',
-      title: ctx.dealFamily === 'income'
-        ? 'Quarterly Operating Trend — PGI vs NOI'
-        : 'Quarterly Project Trend — Sales vs Construction',
+      type: 'combo',
+      title: isIncome
+        ? 'Quarterly Operating Trend — PGI / NOI / CF After Debt'
+        : 'Quarterly Project Trend — Sales / Construction / Cumulative',
       sheetName: dashName,
       categoriesRange: `$A$38:$A$${trendEndRow}`,
-      series,
+      barSeries,
+      lineSeries,
       anchor: { fromCol: 0, fromRow: trendEndRow + 1, widthCols: 13, heightRows: 14 },
     });
   }

@@ -491,7 +491,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // The Uses Breakdown doughnut always renders. The Quarterly Trend
     // bar renders when totalQuarters >= 2 (which it always is in our
     // test contexts since the minimum is 4).
-    test('Dashboard charts include a doughnut (Uses) + a column bar (Quarterly Trend)', async () => {
+    test('Dashboard charts include a doughnut (Uses) + a combo (Quarterly Trend bar+line)', async () => {
       const JSZip = require('jszip');
       const buffer = await buildDealWorkbookV2(minimalContext());
       const zip = await JSZip.loadAsync(buffer);
@@ -499,9 +499,20 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const chartFiles = Object.keys(zip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
       const xmls = await Promise.all(chartFiles.map((n) => zip.file(n).async('string')));
 
-      // At least one doughnut + at least one bar chart
+      // At least one doughnut
       expect(xmls.some((x) => x.includes('<c:doughnutChart'))).toBe(true);
-      expect(xmls.some((x) => x.includes('<c:barChart'))).toBe(true);
+
+      // The Quarterly Trend chart is now a COMBO — barChart + lineChart
+      // sharing the same plot area. PR-F upgraded this from a single
+      // clustered-column to a combo so the cumulative line is visible
+      // alongside the period-contribution columns.
+      const comboChart = xmls.find((x) =>
+        x.includes('<c:barChart>') && x.includes('<c:lineChart>')
+      );
+      expect(comboChart).toBeDefined();
+      // Two value axes (left for bars, right for cumulative line)
+      const valAxes = (comboChart.match(/<c:valAx>/g) || []).length;
+      expect(valAxes).toBe(2);
 
       // The doughnut targets the Uses cells (Dashboard!A14:A16 / B14:B16)
       const doughnut = xmls.find((x) => x.includes('<c:doughnutChart'));
@@ -512,27 +523,32 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // Asset-class branching for the trend chart: development deals show
     // Sales vs Construction; income deals show PGI vs NOI. The series
     // labels are emitted into the chart XML.
-    test('Quarterly Trend chart series labels switch by asset family', async () => {
+    test('Quarterly Trend combo-chart series labels switch by asset family', async () => {
       const JSZip = require('jszip');
-      // Development deal — series should be Sales + Construction
+      // Development deal — bar series should be Sales + Construction;
+      // line series should be Cumulative Net CF
       const devBuffer = await buildDealWorkbookV2(minimalContext());
       const devZip = await JSZip.loadAsync(devBuffer);
       const devChartFiles = Object.keys(devZip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
       const devXmls = await Promise.all(devChartFiles.map((n) => devZip.file(n).async('string')));
-      const devBar = devXmls.find((x) => x.includes('<c:barChart'));
-      expect(devBar).toMatch(/Sales \(Cr\)/);
-      expect(devBar).toMatch(/Construction \(Cr\)/);
+      const devCombo = devXmls.find((x) => x.includes('<c:barChart') && x.includes('<c:lineChart'));
+      expect(devCombo).toBeDefined();
+      expect(devCombo).toMatch(/Sales \(Cr\)/);
+      expect(devCombo).toMatch(/Construction \(Cr\)/);
+      expect(devCombo).toMatch(/Cumulative Net CF \(Cr\)/);
 
-      // Income deal — series should be PGI + NOI
+      // Income deal — bar series should be PGI + NOI; line should be CF After Debt
       const incomeCtx = minimalContext();
       incomeCtx.deal.asset_class = 'commercial_office';
       const incomeBuffer = await buildDealWorkbookV2(incomeCtx);
       const incomeZip = await JSZip.loadAsync(incomeBuffer);
       const incomeChartFiles = Object.keys(incomeZip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
       const incomeXmls = await Promise.all(incomeChartFiles.map((n) => incomeZip.file(n).async('string')));
-      const incomeBar = incomeXmls.find((x) => x.includes('<c:barChart'));
-      expect(incomeBar).toMatch(/PGI \(Cr\)/);
-      expect(incomeBar).toMatch(/NOI \(Cr\)/);
+      const incomeCombo = incomeXmls.find((x) => x.includes('<c:barChart') && x.includes('<c:lineChart'));
+      expect(incomeCombo).toBeDefined();
+      expect(incomeCombo).toMatch(/PGI \(Cr\)/);
+      expect(incomeCombo).toMatch(/NOI \(Cr\)/);
+      expect(incomeCombo).toMatch(/CF After Debt/);
     });
 
     test('Calculations sheet subtotal + debt formulas have no self-references', async () => {
