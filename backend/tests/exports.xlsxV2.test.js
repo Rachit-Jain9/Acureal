@@ -93,6 +93,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Phasing & Sales Collection',
         'Quarterly Cash Flow & Debt',
         'Dashboard',
+        'Debt Sizing',
         'Amortization Schedule',
         'Calculations',
       ]);
@@ -165,6 +166,71 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // when actual project total is ~266 Cr). The fix: cumulative rows
     // get `totalKind: 'final'` and the Total cell references the LAST
     // quarter's cell instead of summing.
+    // PR-B: Debt Sizing sheet — computes permanent loan as MIN of four
+    // lender-approved limits (LTC, LTV, DCR, DY). Reference templates
+    // (RE-540 "Permanent Debt Calculation") use exactly this pattern.
+    test('Debt Sizing sheet exposes 4 sub-limit methods + final MIN cell (development family)', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const ds = wb.getWorksheet('Debt Sizing');
+      expect(ds).toBeDefined();
+
+      // Sizing Inputs block at rows 5-8
+      expect(String(ds.getCell('A4').value)).toContain('Sizing Inputs');
+      const b5 = ds.getCell('B5').value;
+      expect(b5.formula).toContain('LandCostCr');
+      expect(b5.formula).toContain('ConstructionCostPerSqft');
+
+      // Method 1: LTC (always meaningful, both families)
+      expect(String(ds.getCell('A10').value)).toContain('Loan-to-Cost (LTC)');
+      expect(ds.getCell('B11').value.formula).toBe('=ConstrMaxLTC');
+      expect(ds.getCell('B12').value.formula).toContain('ConstrMaxLTC');
+
+      // Method 2: LTV (development = "Not Applicable")
+      expect(String(ds.getCell('A14').value)).toContain('Loan-to-Value (LTV)');
+
+      // Final MIN cell at B28
+      expect(String(ds.getCell('A28').value)).toContain('Permanent Loan (final)');
+      // Dev family: just LTC-based (=B12), no MIN of all four
+      expect(ds.getCell('B28').value.formula).toBe('=B12');
+    });
+
+    test('Debt Sizing sheet for income asset uses MIN of all four sub-limits', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.deal.stabilized_noi_cr = 14.5;
+      ctx.deal.noi_cr = 14.5;
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const ds = wb.getWorksheet('Debt Sizing');
+
+      // For income family, B6 should carry the NOI value
+      const b6 = ds.getCell('B6').value;
+      expect(b6).toBeTruthy();
+
+      // Final MIN: B12 (LTC) + B16 (LTV) + B21 (DCR) + B25 (DY)
+      expect(ds.getCell('B28').value.formula).toBe('=MIN(B12,B16,B21,B25)');
+
+      // DCR-based implied loan uses PV-of-annuity formula
+      expect(ds.getCell('B21').value.formula).toContain('1-(1+DebtRatePct)');
+      expect(ds.getCell('B21').value.formula).toContain('LoanTermYears');
+
+      // DY-based: =B6/PermMinDY
+      expect(ds.getCell('B25').value.formula).toBe('=B6/PermMinDY');
+    });
+
+    test('Inputs sheet exposes 4 new permanent debt sizing named ranges', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const allDefined = JSON.stringify(wb.definedNames);
+      for (const name of ['PermMaxLTV', 'PermMinDCR', 'PermMinDY', 'ConstrMaxLTC']) {
+        expect(allDefined).toContain(name);
+      }
+    });
+
     // PR-C: standalone Amortization Schedule sheet — quarter-by-quarter
     // debt amortization with Beginning / Payment / Interest / Principal /
     // Ending Balance columns. Standard component of every institutional
@@ -180,11 +246,14 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const a4 = amort.getCell('A4').value;
       expect(String(a4)).toMatch(/Loan Terms/);
 
-      // Loan Amount cell B5 — formula references named ranges
+      // Loan Amount cell B5 — now references the Debt Sizing sheet's
+      // final MIN(LTC, LTV, DCR, DY) cell (B28) rather than the simple
+      // DebtLTV × Total Cost formula. PR-B introduced the Debt Sizing
+      // sheet; the Amortization sheet's Loan Amount references its
+      // result so amortization shows the actual lender-approved amount.
       const b5 = amort.getCell('B5').value;
       expect(b5).toBeTruthy();
-      expect(b5.formula).toContain('DebtLTV');
-      expect(b5.formula).toContain('LandCostCr');
+      expect(b5.formula).toMatch(/'?Debt Sizing'?!B28/);
 
       // Quarterly Rate cell B9 — (1+annual)^(1/4) - 1
       const b9 = amort.getCell('B9').value;
