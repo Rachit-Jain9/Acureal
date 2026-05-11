@@ -4,6 +4,61 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (overnight) — Institutional-grade rebuild arc, FINAL BATCH (PRs #267, #268, #269)
+
+The closing batch of the 7-PR institutional-grade XLSX rebuild arc. All three structural PRs (PR-B, PR-D, PR-E) shipped sequentially with full test coverage.
+
+### PRs shipped
+
+- **#267 — PR-B: Permanent Debt Sizing sheet.** New 'Debt Sizing' sheet computing lender-approved permanent loan as **MIN of four sub-limits** matching the reference templates (RE-540 "Permanent Debt Calculation"):
+  - LTC (Loan-to-Cost) — construction stage
+  - LTV (Loan-to-Value) — permanent stage on stabilised value
+  - DCR (Debt Coverage Ratio) — NOI ÷ DCR ÷ annual PMT factor
+  - DY (Debt Yield) — NOI ÷ minimum yield
+  
+  Asset-class branching: income family uses MIN of all four with stabilised NOI (from kernel `stabilized_noi_cr` → `noi_cr` → modeled Phasing!N18×4 fallback); development family uses LTC only (LTV/DCR/DY render "—" with notes). 4 new named ranges: PermMaxLTV, PermMinDCR, PermMinDY, ConstrMaxLTC. Amortization Schedule's Loan Amount now references `'Debt Sizing'!B28` instead of legacy `DebtLTV × Total Cost`. Net +260/-15, 173 tests.
+
+- **#268 — PR-D: Sponsor / LP Waterfall sheet.** New 'Sponsor LP Waterfall' sheet with 3-tier pour-over (NAIOP "Waterfall - IRR Hurdles" + RE-540 "Waterfall" pattern). Sections:
+  1. **Capital Stack** — Total Cost / Loan / Equity / LP-vs-GP split
+  2. **Proceeds & Pref Accrual** — Project Hold Period, Total Cash, LP Pref Accrual (compounded), Tier 1 LP Distribution = MIN(proceeds, capital + pref), Residual
+  3. **Promote Split** — Residual × PromoteLPPct (default 80%) + PromoteGPPct (default 20%), GP Return of Capital, GP Net Promote
+  4. **Final Investor Returns** — LP Total + GP Total + Equity Multiples + Annualised IRRs (single-exit approximation)
+  
+  5 new named ranges: LPEquityPct, GPEquityPct, PrefReturnRate, PromoteLPPct, PromoteGPPct. Net +220/-10, 175 tests.
+
+- **#269 — PR-E: Unit Mix sheet.** New 'Unit Mix' sheet with asset-class-aware unit-by-unit breakdown (RE-540 Assumptions rows 14-31 / NAIOP "Unit Mix" pattern):
+  - residential_apartments / villas → unit types (Studio / 1-4 BHK or villa types) × Count × SF × Sell Rate
+  - hospitality → 4 key types × Keys × SF × ADR (revenue = ADR × 365 × 65% occupancy)
+  - plotted_development → 4 plot sizes × Count × SF × Sell Rate
+  - commercial_office / retail / industrial_warehousing → 3 floor types per class × Bays × SF × Monthly Rent × 12
+  - mixed_use / redevelopment / raw_land → empty-state note (multi-component or area-driven, doesn't fit unit table)
+  
+  Per-row Total SF + Total Revenue (asset-class-specific formula). Total row at bottom. Summary block comparing Unit-Mix total vs Inputs SaleableAreaSqft. Worksheet-only (NOT flow-through — operator plans here, manually updates Inputs). Net +200/-10, 179 tests.
+
+### Tests
+**179 export tests green** at end of arc (was 170 at start of arc, +9 across PR-B/D/E: 3 Debt Sizing + 2 Waterfall + 4 Unit Mix).
+
+### Total XLSX workbook structure after the 7-PR arc
+
+8 visible sheets + 1 hidden audit trail:
+1. **Inputs & Assumptions** — all editable yellow input cells with named ranges (now 30+ named ranges including the new Permanent Debt Sizing + Waterfall sections)
+2. **Phasing & Sales Collection** — quarterly construction + sales schedule (asset-class-aware: dev gets sales, income gets PGI/EGR/NOI). Now includes 7 detailed soft cost rows from PR-A.
+3. **Quarterly Cash Flow & Debt** — quarterly net CF + debt service
+4. **Dashboard** — kernel-reconciled headlines + 3 native charts (doughnut Uses + combo Trend + tornado Driver Impact)
+5. **Debt Sizing** (NEW PR-B) — LTC / LTV / DCR / DY sub-limits → MIN
+6. **Amortization Schedule** — quarter-by-quarter loan amort, now drives off Debt Sizing!B28
+7. **Sponsor LP Waterfall** (NEW PR-D) — 3-tier pour-over, LP/GP IRRs
+8. **Unit Mix** (NEW PR-E) — asset-class-aware unit breakdown
+9. **Calculations** (hidden) — full audit trail of Revenue Build + Cost Build (14 rows now) + Debt Sculpting
+
+### Roadmap status
+26 gaps identified initially; the 7-PR arc closed the highest-priority ~10. The remaining 16 are lower-priority polish / specialised use cases (monthly CF detail, NNN lease modelling, multi-2D sensitivity, asset-class deep dives like ADR/RevPAR for hospitality, etc.). The workbook is now investor-grade for the core institutional case.
+
+### Operator verification still pending
+Download a fresh `.xlsx` and verify all 8 visible sheets + hidden Calculations sheet render correctly. The Dashboard headlines should still match the Reports page (kernel reconciliation from PR #259). New sheets: Debt Sizing, Sponsor LP Waterfall, Unit Mix all carry live formulas that recalculate when Inputs cells change.
+
+---
+
 ## 2026-05-11 (very late) — Institutional-grade rebuild arc, batch 2 (PR #265 — tornado)
 
 Continuing the institutional-grade XLSX rebuild. Single PR this batch: tornado chart on the Dashboard.

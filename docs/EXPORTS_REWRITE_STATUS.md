@@ -52,6 +52,10 @@ sessions can pick up where the last left off without re-reading the chat.
 | #263 | **PR-C** institutional-grade rebuild: standalone Amortization Schedule sheet — quarter-by-quarter table with Beginning Balance / Payment / Interest / Principal / Ending Balance + Loan Terms summary at the top. Live formulas drive 80 amortization rows (= 20-year cap), all referencing named ranges from the Inputs sheet | ✅ MERGED |
 | #264 | docs: handoff for PRs #261-#263 (institutional-grade rebuild batch 1) | ✅ MERGED |
 | #265 | **PR-G** institutional-grade rebuild: tornado chart on Dashboard — native Office horizontal bar with `overlap=100` and two oppositely-signed series. New driver-impact data table at H24:M26 feeds the chart with low-case + high-case deltas computed live from the 5×5 sensitivity grid. Visual parity with PPTX (#251) + DOCX (#252) tornadoes | ✅ MERGED |
+| #266 | docs: handoff for PR #265 (tornado on Dashboard) | ✅ MERGED |
+| #267 | **PR-B** institutional-grade rebuild: Permanent Debt Sizing sheet — computes lender-approved loan as MIN of four sub-limits (LTC / LTV / DCR / DY). Asset-class-aware: income uses MIN of all four with stabilised NOI, development uses LTC only. Amortization Schedule's Loan Amount now references Debt Sizing!B28 | ✅ MERGED |
+| #268 | **PR-D** institutional-grade rebuild: Sponsor / LP Waterfall sheet — 3-tier pour-over (LP pref + return of capital → promote split). 5 new named ranges (LPEquityPct, GPEquityPct, PrefReturnRate, PromoteLPPct, PromoteGPPct). Computes LP IRR, GP IRR, equity multiples via single-exit approximation | ✅ MERGED |
+| #269 | **PR-E** institutional-grade rebuild: Unit Mix sheet — asset-class-aware unit-by-unit breakdown (residential = Studio/1BHK/2BHK/3BHK/4BHK; hospitality = key types; plotted = plot sizes; commercial/retail/industrial = floor types; mixed-use/raw-land = empty-state). Worksheet-only — operator plans the mix here, manually updates SaleableAreaSqft on Inputs to flow through. **CLOSES THE 7-PR ARC** | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
