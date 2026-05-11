@@ -156,6 +156,62 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // Regression: cumulative rows in the Phasing sheet (construction cost
+    // running total + customer collection running total) used to write
+    // `=SUM(B:Y)` into the Total column. But those cells already contain
+    // running cumulative values — SUM-ing them produces a triangular sum
+    // (operator's roast: "Cumulative construction cost shows 3,198 Cr"
+    // when actual project total is ~266 Cr). The fix: cumulative rows
+    // get `totalKind: 'final'` and the Total cell references the LAST
+    // quarter's cell instead of summing.
+    test('cumulative rows in Phasing use final-value (not SUM) for the Total column', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+      // Find the Total column (last column = column for q=totalQuarters+1)
+      const formulaAt = (cellRef) => {
+        const v = phasing.getCell(cellRef).value;
+        return v && typeof v === 'object' && v.formula ? v.formula : null;
+      };
+
+      // For a 12-quarter project (minimal-context default): B=Q1..M=Q12,
+      // N=Total. Cumulative rows must reference the LAST quarter cell
+      // (=M{row}); non-cumulative rows still use SUM(B{row}:M{row}).
+      expect(formulaAt('N7')).toMatch(/^=M7$/);     // cumulative construction
+      expect(formulaAt('N12')).toMatch(/^=M12$/);   // cumulative collection
+      expect(formulaAt('N6')).toMatch(/^=SUM\(B6:M6\)$/);   // per-quarter construction
+      expect(formulaAt('N9')).toMatch(/^=SUM\(B9:M9\)$/);   // per-quarter sales
+    });
+
+    // Regression: Dashboard headline "Total Revenue" used to pull from the
+    // Phasing quarter-by-quarter sum (593 Cr for Jigani) while the
+    // Calculations audit-trail sheet computed it as mid-period × full
+    // saleable (648 Cr). Operator's roast: "headline numbers don't foot →
+    // entire model unreliable." Both sheets now reference the same source.
+    test('Calculations sheet Revenue reconciles with Dashboard Revenue', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+
+      const dashCell = wb.getWorksheet('Dashboard').getCell('B4').value;
+      const calcCell = wb.getWorksheet('Calculations').getCell('B8').value;
+      const dashFormula = dashCell && typeof dashCell === 'object' ? dashCell.formula : null;
+      const calcFormula = calcCell && typeof calcCell === 'object' ? calcCell.formula : null;
+
+      // Both must reference the SAME Phasing cell — the Total column for
+      // development-family row 9 (Quarter sales). The exact column letter
+      // depends on `totalQuarters` (12 → N9 in the minimal context); the
+      // critical assertion is that both Dashboard B4 and Calculations B8
+      // point at the same cell so headlines reconcile.
+      expect(dashFormula).toMatch(/'Phasing & Sales Collection'!([A-Z]+)9/);
+      expect(calcFormula).toMatch(/'Phasing & Sales Collection'!([A-Z]+)9/);
+      const dashCol = dashFormula.match(/'Phasing & Sales Collection'!([A-Z]+)9/)[1];
+      const calcCol = calcFormula.match(/'Phasing & Sales Collection'!([A-Z]+)9/)[1];
+      expect(dashCol).toBe(calcCol);
+    });
+
     test('Calculations sheet carries the audit-trail blocks', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();

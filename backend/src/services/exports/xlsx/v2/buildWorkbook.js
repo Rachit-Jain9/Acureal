@@ -544,6 +544,7 @@ const buildPhasingSheet = (workbook, ctx) => {
         ? `=${colLetter(q + 1)}20`
         : `=${colLetter(q)}21+${colLetter(q + 1)}20`,
       format: NUMBER_FORMATS.currency,
+      totalKind: 'final', // last quarter holds the cumulative — don't SUM
     },
   ];
 
@@ -565,6 +566,12 @@ const buildPhasingSheet = (workbook, ctx) => {
         ? `=B6`
         : `=${colLetter(q)}7+${colLetter(q + 1)}6`,
       format: NUMBER_FORMATS.currency,
+      // Total column shows the FINAL cumulative value, not a sum across
+      // already-cumulative cells. Without this flag the total column
+      // produces a triangular sum (operator's roast: "Cumulative
+      // construction cost shows 3,198 Cr" when actual project total is
+      // ~266 Cr).
+      totalKind: 'final',
     },
     {
       label: 'Sales launched (% of saleable)',
@@ -597,6 +604,9 @@ const buildPhasingSheet = (workbook, ctx) => {
         : `=${colLetter(q)}12+${colLetter(q + 1)}10`,
       format: NUMBER_FORMATS.currency,
       bold: true,
+      // Same fix as the construction cumulative row above — total cell
+      // shows the final cumulative, not a sum of already-cumulative cells.
+      totalKind: 'final',
     },
   ];
 
@@ -616,11 +626,17 @@ const buildPhasingSheet = (workbook, ctx) => {
       styleOutputCell(cell, rowSpec.format);
       if (rowSpec.bold) cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
     }
-    // Total column — sum of quarters
+    // Total column — sum of quarters EXCEPT for rows marked `totalKind:
+    // 'final'`, which already carry running cumulative values. SUM-ing
+    // those rows produces a triangular sum (operator's roast: 3,198 Cr
+    // when actual project construction is ~266 Cr). For cumulative rows,
+    // the total is the LAST quarter's value, not a sum.
     const totalCell = sheet.getCell(r, ctx.totalQuarters + 2);
     const startCol = colLetter(2); // Q1 is column B
     const endCol = colLetter(ctx.totalQuarters + 1);
-    totalCell.value = { formula: `=SUM(${startCol}${r}:${endCol}${r})` };
+    totalCell.value = rowSpec.totalKind === 'final'
+      ? { formula: `=${endCol}${r}` }
+      : { formula: `=SUM(${startCol}${r}:${endCol}${r})` };
     styleOutputCell(totalCell, rowSpec.format);
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
@@ -1383,12 +1399,45 @@ const buildCalculationsSheet = (workbook, ctx) => {
     row += 1;
   };
 
+  // Revenue Build references the ACTUAL modeled values from the Phasing
+  // sheet rather than a mid-period theoretical (Saleable × Rate × midpoint
+  // escalation). Previously the Calculations Total revenue read ~648 Cr
+  // (mid-period theoretical) while the Dashboard headline pulled from
+  // Phasing!Z9 and read ~593 Cr (actual phased sum). Two methodologies,
+  // two answers, unreconciled — investors see "the headline numbers don't
+  // foot" and treat the entire model as unreliable. Both sheets now share
+  // the same source of truth.
+  // The Phasing sheet has slightly different row positions per asset family.
+  // Development family: row 9 = Quarter sales, row 10 = Customer collection.
+  // Income family: row 11 = EGR (which subsumes both revenue and collected).
+  // The Total column is the one immediately after the last quarter — its
+  // letter depends on ctx.totalQuarters (B=Q1, so Total col = totalQuarters+2).
+  // colLetter is scoped to the individual sheet builders; inline a tiny
+  // copy here so this calc-sheet builder is self-contained.
+  const colLetterLocal = (n) => {
+    let result = '';
+    let v = n;
+    while (v > 0) {
+      const rem = (v - 1) % 26;
+      result = String.fromCharCode(65 + rem) + result;
+      v = Math.floor((v - 1) / 26);
+    }
+    return result;
+  };
+  const totalColLetter = colLetterLocal(ctx.totalQuarters + 2);
+  const revenueRef = ctx.dealFamily === 'income'
+    ? `'${SHEETS.phasing}'!${totalColLetter}11`
+    : `'${SHEETS.phasing}'!${totalColLetter}9`;
+  const collectedRef = ctx.dealFamily === 'income'
+    ? `'${SHEETS.phasing}'!${totalColLetter}11`
+    : `'${SHEETS.phasing}'!${totalColLetter}10`;
+
   writeBlock('Revenue Build', [
     ['Saleable area (sqft)',         '=SaleableAreaSqft',                               'From Inputs & Assumptions'],
     ['Sell rate (INR / sqft)',       '=SellRatePerSqft',                                'From Inputs & Assumptions'],
-    ['Average escalation factor',    '=(1+EscalationPct)^(TotalQuarters/4/2)',          'Mid-period uplift across project'],
-    ['Total revenue (INR Cr)',       '=SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000', 'Saleable × rate × escalation / 1Cr'],
-    ['Customer collected (INR Cr)',  '=SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)*CollectionPct/10000000', '× CollectionPct'],
+    ['Average escalation factor',    '=(1+EscalationPct)^(TotalQuarters/4/2)',          'Mid-period uplift (context only)'],
+    ['Total revenue (INR Cr)',       `=${revenueRef}`,                                  'Sum of phased quarter sales — matches Dashboard'],
+    ['Customer collected (INR Cr)',  `=${collectedRef}`,                                 'Sum of phased customer collection'],
   ]);
 
   // Cost Build occupies rows 12-19:
