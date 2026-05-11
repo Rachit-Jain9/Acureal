@@ -4,6 +4,71 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (late afternoon) — XLSX 7-sheet restructure + India localization I5-I7 (PRs #279, #280, #281, #282)
+
+Operator directive 2026-05-11 (late): *"Dont have so many worksheets. gets confusing. Have maximum 6-7 and dashboard should be first followed by inputs and assumptions and followed by rest. Make it properly structured, organised, well architected and framed."*
+
+Continued the India localization batch with both a structural reorganization (PR-R1) and three new India-context Inputs sections (I5/I6/I7).
+
+### PRs shipped + merged
+
+- **#279 — PR-R1: Consolidate 9 sheets → 7, Dashboard first.** Reordered + physically combined sheets to match the operator directive. New 7-sheet workbook:
+  1. **Dashboard** (was position 4 → now position 1)
+  2. **Inputs & Assumptions** (was position 1 → now position 2)
+  3. **Cash Flow Engine** (NEW combined: was Phasing + Cash Flow as 2 sheets)
+  4. **Debt Sizing & Amortization** (NEW combined: was Debt Sizing + Amortization as 2 sheets)
+  5. **Sponsor LP Waterfall** (unchanged)
+  6. **Unit Mix** (unchanged)
+  7. **Calculations** (hidden, unchanged)
+  
+  Row position shifts: Cash Flow rows moved by `cfOffset` (income +20, dev +26). Amortization rows moved by `amortShift = 30`. Cross-sheet refs `'Phasing & Sales Collection'!` → `'Cash Flow Engine'!`; `'Debt Sizing'!B28` → `'Debt Sizing & Amortization'!B28`. Net +353/-232.
+
+- **#280 — PR-I5: Carpet vs Super-Built-up Area + Loading Factor.** Added `LoadingFactor` (default 1.25) and DERIVED `CarpetAreaSqft` (= SaleableAreaSqft / LoadingFactor) to General Site Information. Existing "Saleable / Leasable Area" relabelled to "Saleable / Leasable Area (Super Built-up)". RERA Section 4(2)(h) compliance — sale-side marketing must be in carpet area. No behaviour change to revenue math. The section writer was extended to apply output styling (locked, paper fill) to derived formula cells.
+
+- **#281 — PR-I6: India Lender Ecosystem — Debt Profile inputs.** Added a "Debt Profile (India Lender Ecosystem)" section with 7 rows: Lender Type, Rate Benchmark (Repo/MCLR/Fixed), Spread bps, Loan Type (Construction/LRD/PF/Mezz), Processing Fee, Prepayment Penalty, and DERIVED Implied All-In Rate. Asset-class-aware defaults — income deals → HDFC Capital / MCLR / LRD; development deals → HDFC Bank / Repo / Project Finance. Informational only; no behaviour change to existing debt math.
+
+- **#282 — PR-I7: Taxation (India) — LTCG / TDS / Indexation inputs.** Added a "Taxation (India)" section at the bottom of Inputs with 5 rows: LTCG Rate (12.5% post-Jul-2024), TDS u/s 194-IA (1%), Indexation Regime (categorical: post_2024_no_indexation default), Effective Holding Period (years), and DERIVED Applicable Capital Gains Rate (branches by hold period — LTCG if ≥ 2 yrs, STCG slab ~30% if < 2). Informational; a future PR can wire EffectiveCGRate into a Dashboard Net-of-Tax IRR row.
+
+### Operational gotchas this session
+
+- **Stacked PR auto-close cascade.** When a PR is merged with `--delete-branch`, any PRs based on it auto-close. PR-I6 had to be rebased onto updated master after PR-I5 merged, and PR-I7 rebased after PR-I6 merged. Each rebase had small test-file end-of-file conflicts (both PRs appended new `describe` blocks).
+- **Merge conflict pattern**: both branches appended `describe('PR-IN', ...)` blocks at the same end-of-file location. Resolution: keep both describe blocks, ordered by PR number.
+
+### Tests
+**200 export tests green** at end of batch (was 199 before R1+I5+I6+I7; net +1 from row-shift consolidation absorbing 4 tests + 14 new India tests).
+
+### India localization batch progress
+
+| # | Status | Title |
+|---|--------|-------|
+| I1 | ✅ | GST + Stamp Duty + Registration as real cost lines |
+| I2 | ✅ | RERA Escrow 70/30 split |
+| I3 | ✅ | JDA / Revenue-Share / Area-Share deal structures |
+| I4 | ✅ | Property Tax BBMP UAV method |
+| I5 | ✅ | Carpet vs Super-Built-up + Loading Factor |
+| I6 | ✅ | India Lender Ecosystem (Debt Profile) |
+| I7 | ✅ | Taxation block (LTCG + TDS + Indexation) |
+| I8 | 🔴 | Khata status (A/B-khata exit haircut) |
+| I9 | 🔴 | Premium FSI / TDR cost line |
+| I10 | 🔴 | Approvals & RERA registration breakdown |
+| I11 | 🔴 | Milestone-anchored sale-rate escalation |
+| I12 | 🔴 | Hospitality ADR/RevPAR with seasonality |
+| I13 | 🔴 | Retail CAM + anchor split |
+| I14 | 🔴 | Plot-level absorption |
+| I15 | 🔴 | Component-level revenue for mixed-use |
+| I16 | 🔴 | Raw-land entitlement milestones |
+
+7 of 16 India items done. The structural restructure (R1) is also done.
+
+### Operator verification still pending
+Download a fresh `.xlsx` and confirm:
+1. 7 tabs total: Dashboard | Inputs & Assumptions | Cash Flow Engine | Debt Sizing & Amortization | Sponsor LP Waterfall | Unit Mix (+ hidden Calculations)
+2. Dashboard opens first; Inputs second
+3. The new General Site row "Carpet Area (RERA marketing area)" computes correctly
+4. The "Debt Profile" + "Taxation (India)" sections render with sensible defaults
+
+---
+
 ## 2026-05-11 (afternoon) — India localization batch I1-I4 (PRs #270, #271, #275, #276, #277)
 
 Operator directive ("make sure everything is catered and specific and relevant to the way pro forma or financial modelling is done for different real estate asset classes and deal structure in India") triggered a pivot from the structural institutional-grade arc to **India-specific correctness** for every line item.
