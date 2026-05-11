@@ -244,7 +244,7 @@ const resolveProviderForTask = (task) => {
 const resolveDefaultModel = (provider) => {
   if (provider === 'gemini') return process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
   if (provider === 'claude') return process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
-  if (provider === 'openai') return process.env.OPENAI_MODEL || 'gpt-5.4';
+  if (provider === 'openai') return process.env.OPENAI_MODEL || 'gpt-4o';
   return 'unknown';
 };
 
