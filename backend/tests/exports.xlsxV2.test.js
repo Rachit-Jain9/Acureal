@@ -83,18 +83,24 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook contains the four visible sheets + hidden Calculations sheet', async () => {
+    test('produced workbook contains the 7-sheet structure (6 visible + 1 hidden Calculations) with Dashboard first, Inputs second', async () => {
+      // Operator-directed 7-sheet restructure (2026-05-11):
+      //   1. Dashboard (FIRST)
+      //   2. Inputs & Assumptions
+      //   3. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
+      //   4. Debt Sizing & Amortization (combined: sizing + amort schedule)
+      //   5. Sponsor LP Waterfall
+      //   6. Unit Mix
+      //   7. Calculations            (hidden audit trail)
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const names = wb.worksheets.map((ws) => ws.name);
       expect(names).toEqual([
-        'Inputs & Assumptions',
-        'Phasing & Sales Collection',
-        'Quarterly Cash Flow & Debt',
         'Dashboard',
-        'Debt Sizing',
-        'Amortization Schedule',
+        'Inputs & Assumptions',
+        'Cash Flow Engine',
+        'Debt Sizing & Amortization',
         'Sponsor LP Waterfall',
         'Unit Mix',
         'Calculations',
@@ -320,7 +326,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const ds = wb.getWorksheet('Debt Sizing');
+      const ds = wb.getWorksheet('Debt Sizing & Amortization');
       expect(ds).toBeDefined();
 
       // Sizing Inputs block at rows 5-8
@@ -351,7 +357,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(ctx);
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const ds = wb.getWorksheet('Debt Sizing');
+      const ds = wb.getWorksheet('Debt Sizing & Amortization');
 
       // For income family, B6 should carry the NOI value
       const b6 = ds.getCell('B6').value;
@@ -382,58 +388,61 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // debt amortization with Beginning / Payment / Interest / Principal /
     // Ending Balance columns. Standard component of every institutional
     // pro forma (NAIOP + RE-540 both have explicit amortization sheets).
-    test('Amortization Schedule sheet renders loan terms + quarter-by-quarter amort table', async () => {
+    test('Amortization Schedule section renders loan terms + quarter-by-quarter amort table (combined Debt Sizing & Amortization sheet)', async () => {
+      // Post-restructure: Amortization rows shifted +30 to live BELOW the
+      // Debt Sizing section on the same worksheet. amortShift = 30.
+      // Loan Terms title was row 4 → now row 34; Loan Amount was B5 → B35;
+      // table header was row 12 → row 42; first amort row was 13 → 43.
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const amort = wb.getWorksheet('Amortization Schedule');
+      const amort = wb.getWorksheet('Debt Sizing & Amortization');
       expect(amort).toBeDefined();
 
-      // Loan Terms block at rows 4-10
-      const a4 = amort.getCell('A4').value;
-      expect(String(a4)).toMatch(/Loan Terms/);
+      // Loan Terms block at rows 34-40 (was 4-10 pre-restructure)
+      const a34 = amort.getCell('A34').value;
+      expect(String(a34)).toMatch(/Loan Terms/);
 
-      // Loan Amount cell B5 — now references the Debt Sizing sheet's
-      // final MIN(LTC, LTV, DCR, DY) cell (B28) rather than the simple
-      // DebtLTV × Total Cost formula. PR-B introduced the Debt Sizing
-      // sheet; the Amortization sheet's Loan Amount references its
-      // result so amortization shows the actual lender-approved amount.
-      const b5 = amort.getCell('B5').value;
-      expect(b5).toBeTruthy();
-      expect(b5.formula).toMatch(/'?Debt Sizing'?!B28/);
+      // Loan Amount cell B35 (was B5) — same-sheet reference to B28
+      // (Debt Sizing section's MIN-of-4 cell) since both sections live on
+      // the same worksheet now.
+      const b35 = amort.getCell('B35').value;
+      expect(b35).toBeTruthy();
+      expect(b35.formula).toBe('=B28');
 
-      // Quarterly Rate cell B9 — (1+annual)^(1/4) - 1
-      const b9 = amort.getCell('B9').value;
-      expect(b9.formula).toMatch(/\(1\+DebtRatePct\)\^\(1\/4\)-1/);
+      // Quarterly Rate cell B39 (was B9) — (1+annual)^(1/4) - 1
+      const b39 = amort.getCell('B39').value;
+      expect(b39.formula).toMatch(/\(1\+DebtRatePct\)\^\(1\/4\)-1/);
 
-      // Quarterly Payment cell B10 — PMT formula
-      const b10 = amort.getCell('B10').value;
-      expect(b10.formula).toMatch(/PMT\(B9,B8,B5\)/);
+      // Quarterly Payment cell B40 (was B10) — PMT formula. The
+      // references B39, B38, B35 reflect the shifted positions of the
+      // rate / periods / amount cells.
+      const b40 = amort.getCell('B40').value;
+      expect(b40.formula).toMatch(/PMT\(B39,B38,B35\)/);
 
-      // Header row at row 12
-      expect(String(amort.getCell('A12').value)).toBe('Period');
-      expect(String(amort.getCell('B12').value)).toBe('Beginning Balance');
-      expect(String(amort.getCell('C12').value)).toBe('Payment');
-      expect(String(amort.getCell('D12').value)).toBe('Interest');
-      expect(String(amort.getCell('E12').value)).toBe('Principal');
-      expect(String(amort.getCell('F12').value)).toBe('Ending Balance');
+      // Header row at row 42 (was 12)
+      expect(String(amort.getCell('A42').value)).toBe('Period');
+      expect(String(amort.getCell('B42').value)).toBe('Beginning Balance');
+      expect(String(amort.getCell('C42').value)).toBe('Payment');
+      expect(String(amort.getCell('D42').value)).toBe('Interest');
+      expect(String(amort.getCell('E42').value)).toBe('Principal');
+      expect(String(amort.getCell('F42').value)).toBe('Ending Balance');
 
-      // Row 13 (Period 1): Beginning Balance = $B$5 (Loan Amount)
-      const b13 = amort.getCell('B13').value;
-      expect(b13.formula).toBe('=$B$5');
+      // Row 43 (Period 1, was row 13): Beginning Balance = $B$35 (Loan Amount, was $B$5)
+      const b43 = amort.getCell('B43').value;
+      expect(b43.formula).toBe('=$B$35');
 
-      // Row 14 (Period 2): Beginning Balance = previous-row Ending Balance
-      const b14 = amort.getCell('B14').value;
-      expect(b14.formula).toMatch(/F13/);
+      // Row 44 (Period 2, was row 14): Beginning Balance = previous-row Ending Balance
+      const b44 = amort.getCell('B44').value;
+      expect(b44.formula).toMatch(/F43/);
 
-      // Interest formula = Beginning × Quarterly Rate
-      const d13 = amort.getCell('D13').value;
-      expect(d13.formula).toContain('B13*$B$9');
+      // Interest formula = Beginning × Quarterly Rate (B$39 was B$9 pre-shift)
+      const d43 = amort.getCell('D43').value;
+      expect(d43.formula).toContain('B43*$B$39');
 
-      // Ending Balance = MAX(Beginning - Principal, 0) — guards against
-      // negative balance in the final period
-      const f13 = amort.getCell('F13').value;
-      expect(f13.formula).toContain('MAX(B13-E13,0)');
+      // Ending Balance = MAX(Beginning - Principal, 0)
+      const f43 = amort.getCell('F43').value;
+      expect(f43.formula).toContain('MAX(B43-E43,0)');
     });
 
     // PR-A institutional-grade soft cost breakdown: reference pro formas
@@ -460,7 +469,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      const phasing = wb.getWorksheet('Cash Flow Engine');
 
       // Pre-PR-I2 rows were 13-19 (Detailed Soft Costs). PR-I2 inserted
       // 5 RERA Escrow ledger rows between Customer Collection (row 10)
@@ -638,7 +647,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      const phasing = wb.getWorksheet('Cash Flow Engine');
 
       // Row 10 = Customer collection. Pick Q5 (col F) as the test cell.
       const f10 = phasing.getCell('F10').value;
@@ -660,7 +669,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      const phasing = wb.getWorksheet('Cash Flow Engine');
 
       // Find the Total column (last column = column for q=totalQuarters+1)
       const formulaAt = (cellRef) => {
@@ -700,10 +709,10 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // depends on `totalQuarters` (12 → N9 in the minimal context); the
       // critical assertion is that both Dashboard B4 and Calculations B8
       // point at the same cell so headlines reconcile.
-      expect(dashFormula).toMatch(/'Phasing & Sales Collection'!([A-Z]+)9/);
-      expect(calcFormula).toMatch(/'Phasing & Sales Collection'!([A-Z]+)9/);
-      const dashCol = dashFormula.match(/'Phasing & Sales Collection'!([A-Z]+)9/)[1];
-      const calcCol = calcFormula.match(/'Phasing & Sales Collection'!([A-Z]+)9/)[1];
+      expect(dashFormula).toMatch(/'Cash Flow Engine'!([A-Z]+)9/);
+      expect(calcFormula).toMatch(/'Cash Flow Engine'!([A-Z]+)9/);
+      const dashCol = dashFormula.match(/'Cash Flow Engine'!([A-Z]+)9/)[1];
+      const calcCol = calcFormula.match(/'Cash Flow Engine'!([A-Z]+)9/)[1];
       expect(dashCol).toBe(calcCol);
     });
 
@@ -944,7 +953,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const cf = wb.getWorksheet('Quarterly Cash Flow & Debt');
+      const cf = wb.getWorksheet('Cash Flow Engine');
       // The DSCR label should appear in column A.
       let hasDscr = false;
       cf.eachRow((row) => {
@@ -1000,7 +1009,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
 
-      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      const phasing = wb.getWorksheet('Cash Flow Engine');
       expect(phasing).toBeDefined();
       const phasingText = [];
       phasing.eachRow((row) => row.eachCell((cell) => {
@@ -1013,8 +1022,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(phasingJoined).toMatch(/NOI/);
       expect(phasingJoined).toMatch(/Property Tax/);
       expect(phasingJoined).toMatch(/CapEx Reserves/);
-      // Title is asset-aware
-      expect(phasingJoined).toMatch(/Lease-up & Operating/);
+      // Post-restructure: title says "Cash Flow Engine — Operating Schedule..."
+      // (was "Lease-up & Operating Schedule" pre-restructure).
+      expect(phasingJoined).toMatch(/Cash Flow Engine.*Operating Schedule/);
 
       const dash = wb.getWorksheet('Dashboard');
       const dashText = [];
@@ -1032,7 +1042,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments default
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+      const phasing = wb.getWorksheet('Cash Flow Engine');
       const text = [];
       phasing.eachRow((row) => row.eachCell((cell) => {
         if (typeof cell.value === 'string') text.push(cell.value);
@@ -1040,7 +1050,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const joined = text.join(' | ');
       expect(joined).toMatch(/Construction cost/);
       expect(joined).toMatch(/Customer collection/);
-      expect(joined).toMatch(/Construction Phasing & Sales/);
+      // Post-restructure: title says "Cash Flow Engine — Phasing + Sales..."
+      // (was "Construction Phasing & Sales Collection" pre-restructure).
+      expect(joined).toMatch(/Cash Flow Engine.*Phasing.*Sales Collection/);
       // Should NOT have income-asset rows
       expect(joined).not.toMatch(/PGI/);
       expect(joined).not.toMatch(/Property Tax/);
@@ -1248,7 +1260,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+        const phasing = wb.getWorksheet('Cash Flow Engine');
 
         // Collect rows by label so we don't depend on exact row numbers.
         const rowByLabel = {};
@@ -1323,7 +1335,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         // so each sheet is self-contained). After PR-I1 both must include
         // the LandCostCr*StampRegPct + Construction*GstPct levies; without
         // it those sheets would understate cost vs the Calculations sheet.
-        const debtSizing = wb.getWorksheet('Debt Sizing');
+        const debtSizing = wb.getWorksheet('Debt Sizing & Amortization');
         const waterfall = wb.getWorksheet('Sponsor LP Waterfall');
 
         const findCellByLabel = (sheet, expectedLabel) => {
@@ -1390,7 +1402,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+        const phasing = wb.getWorksheet('Cash Flow Engine');
 
         const rowByLabel = {};
         phasing.eachRow((row, rowIdx) => {
@@ -1426,7 +1438,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+        const phasing = wb.getWorksheet('Cash Flow Engine');
 
         // Q1 (col B) formulas
         const b11 = phasing.getCell('B11').value;
@@ -1461,7 +1473,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const cf = wb.getWorksheet('Quarterly Cash Flow & Debt');
+        const cf = wb.getWorksheet('Cash Flow Engine');
 
         let inflowRow = null;
         cf.eachRow((row, rowIdx) => {
@@ -1473,7 +1485,14 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
         // Q1 formula should reference Phasing row 15 (Net developer cash)
         const q1Cell = cf.getCell(inflowRow, 2);
-        expect(q1Cell.value.formula).toMatch(/Phasing & Sales Collection'!B15/);
+        // Post-restructure: phasing + cash flow on same sheet (Cash Flow
+        // Engine). Phasing rows didn't shift; Cash Flow rows did. Row 15
+        // (Net developer cash from sales) stays at row 15 because it's in
+        // the Phasing section, above the Cash Flow rows.
+        // But the inflow row itself (which REFERENCES row 15) is now in
+        // the Cash Flow section (shifted) so the formula contains the
+        // same Cash Flow Engine sheet name.
+        expect(q1Cell.value.formula).toContain('B15');
       });
 
       test('Setting RERAEscrowPct = 0 collapses escrow to gross (preserves pre-PR-I2 behaviour for non-RERA deals)', async () => {
@@ -1601,7 +1620,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+        const phasing = wb.getWorksheet('Cash Flow Engine');
 
         // Row 15 = Net developer cash from sales (post-RERA, post-landowner share)
         // Formula = (Row12 + Row13) × (1 - LandownerSharePct)
@@ -1728,7 +1747,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(ctx);
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+        const phasing = wb.getWorksheet('Cash Flow Engine');
 
         // Find Property Tax row by label
         let ptRow = null;
@@ -1751,7 +1770,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const buffer = await buildDealWorkbookV2(ctx);
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
-        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+        const phasing = wb.getWorksheet('Cash Flow Engine');
 
         let ptRow = null;
         phasing.eachRow((row, rowIdx) => {
