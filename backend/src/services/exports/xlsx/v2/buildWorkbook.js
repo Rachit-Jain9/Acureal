@@ -834,6 +834,125 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Sale-Rate Escalation Model (PR-I11) ───────────────────────────────
+  // BLR residential developers price on milestone-anchored escalation:
+  // ~25-35% cumulative lift launch-to-handover. The continuous compound
+  // model understates early-quarter pricing. PR-I11 adds disclosure-only
+  // inputs + a derived equivalent continuous-compound rate the operator
+  // can paste into EscalationPct. Visible for residential / villas /
+  // mixed_use (where milestone pricing is conventional).
+  const milestoneEscalationSection = {
+    title: 'Sale-Rate Escalation Model (Milestone Pricing)',
+    rows: [
+      ['Escalation Model',                  'MilestoneEscalationModel',
+        ctx.inputs.milestoneEscalationModel || 'continuous_per_year',
+        'continuous_per_year / milestone_anchored_blr', null],
+      ['Total Launch-to-Handover Escalation','MilestoneTotalEscalationPct',
+        toPctDecimal(firstNumber(ctx.inputs.milestoneTotalEscalationPct, 0.25)),
+        '% cumulative (typical 20-35% BLR residential)', NUMBER_FORMATS.percent],
+      ['Equivalent EscalationPct (derived)','MilestoneEquivalentEscalationPct',
+        { formula: '=(1+MilestoneTotalEscalationPct)^(1/(ProjectMonths/12))-1' },
+        '% / year (paste into EscalationPct above)', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  // ── Plot-Level Absorption (PR-I14) ────────────────────────────────────
+  // Plotted developments sell plot-by-plot — big plots clear slower,
+  // small plots clear fast. The uniform SalesVelocityPct misrepresents
+  // premium plot mixes. PR-I14 adds disclosure inputs documenting the
+  // plot-size distribution + absorption period. Visible only for
+  // plotted_development.
+  const plotAbsorptionSection = {
+    title: 'Plot-Level Absorption (Plotted Development)',
+    rows: [
+      ['Avg. Absorption Period',     'PlotAbsorptionMonths',
+        firstNumber(ctx.inputs.plotAbsorptionMonths, 24),
+        'months (typical 18-36 BLR plotted)', NUMBER_FORMATS.integer],
+      ['Small Plot Share',           'PlotSmallSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.plotSmallSharePct, 0.40)),
+        '% of saleable area (< 1500 sqft)', NUMBER_FORMATS.percent],
+      ['Mid Plot Share',             'PlotMidSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.plotMidSharePct, 0.40)),
+        '% of saleable area (1500-3000 sqft)', NUMBER_FORMATS.percent],
+      ['Large Plot Share',           'PlotLargeSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.plotLargeSharePct, 0.20)),
+        '% of saleable area (> 3000 sqft)', NUMBER_FORMATS.percent],
+      ['Sum Check (should = 100%)',  'PlotSharesCheck',
+        { formula: '=PlotSmallSharePct+PlotMidSharePct+PlotLargeSharePct' },
+        '% (derived — verify allocation)', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  // ── Mixed-Use Component Breakdown (PR-I15) ────────────────────────────
+  // Mixed-use deals combine residential + office + retail + hospitality
+  // on a single parcel. A single SellRatePerSqft can't capture this.
+  // PR-I15 adds disclosure inputs for each component's share + revenue
+  // rate. Visible only for mixed_use / redevelopment.
+  const mixedUseSection = {
+    title: 'Mixed-Use Component Breakdown',
+    rows: [
+      ['Residential Component Share',     'MixUseResiSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.mixUseResiSharePct, 0.50)),
+        '% of saleable area', NUMBER_FORMATS.percent],
+      ['Residential Sell Rate',           'MixUseResiRatePerSqft',
+        firstNumber(ctx.inputs.mixUseResiRatePerSqft, 12000),
+        'INR / sqft (sale)', NUMBER_FORMATS.integer],
+      ['Office Component Share',          'MixUseOfficeSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.mixUseOfficeSharePct, 0.30)),
+        '% of leasable area', NUMBER_FORMATS.percent],
+      ['Office Capitalised Sale Rate',    'MixUseOfficeRatePerSqft',
+        firstNumber(ctx.inputs.mixUseOfficeRatePerSqft, 15000),
+        'INR / sqft (NOI ÷ cap, exit)', NUMBER_FORMATS.integer],
+      ['Retail Component Share',          'MixUseRetailSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.mixUseRetailSharePct, 0.15)),
+        '% of leasable area', NUMBER_FORMATS.percent],
+      ['Retail Capitalised Sale Rate',    'MixUseRetailRatePerSqft',
+        firstNumber(ctx.inputs.mixUseRetailRatePerSqft, 18000),
+        'INR / sqft (NOI ÷ cap, exit)', NUMBER_FORMATS.integer],
+      ['Hospitality Component Share',     'MixUseHospSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.mixUseHospSharePct, 0.05)),
+        '% of saleable area', NUMBER_FORMATS.percent],
+      ['Hospitality Capitalised Sale Rate','MixUseHospRatePerSqft',
+        firstNumber(ctx.inputs.mixUseHospRatePerSqft, 20000),
+        'INR / sqft (exit)', NUMBER_FORMATS.integer],
+      ['Sum of component shares',         'MixUseSharesSumCheck',
+        { formula: '=MixUseResiSharePct+MixUseOfficeSharePct+MixUseRetailSharePct+MixUseHospSharePct' },
+        '% (derived — verify = 100%)', NUMBER_FORMATS.percent],
+      ['Blended Sale Rate (derived)',     'MixUseBlendedRatePerSqft',
+        { formula: '=MixUseResiSharePct*MixUseResiRatePerSqft+MixUseOfficeSharePct*MixUseOfficeRatePerSqft+MixUseRetailSharePct*MixUseRetailRatePerSqft+MixUseHospSharePct*MixUseHospRatePerSqft' },
+        'INR / sqft (derived — paste into SellRatePerSqft)', NUMBER_FORMATS.integer],
+    ],
+  };
+
+  // ── Raw-Land Entitlement Stages (PR-I16) ──────────────────────────────
+  // Raw-land deals are pre-construction: buy at one price, hold through
+  // 1-3 entitlement stages (title diligence → conversion → layout approval
+  // → sale-ready), resell at approval-uplift price. PR-I16 adds disclosure
+  // inputs documenting the entitlement pipeline. Visible only for raw_land.
+  const rawLandSection = {
+    title: 'Raw-Land Entitlement Pipeline',
+    rows: [
+      ['Current Entitlement Stage',  'RawLandCurrentStage',
+        ctx.inputs.rawLandCurrentStage || 'title_diligence',
+        'title_diligence / conversion / layout_approval / sale_ready', null],
+      ['Title Diligence Duration',   'RawLandTitleMonths',
+        firstNumber(ctx.inputs.rawLandTitleMonths, 3),
+        'months (typical 2-6)', NUMBER_FORMATS.integer],
+      ['Conversion Duration',        'RawLandConversionMonths',
+        firstNumber(ctx.inputs.rawLandConversionMonths, 6),
+        'months (agri → non-agri, typical 4-12)', NUMBER_FORMATS.integer],
+      ['Layout Approval Duration',   'RawLandLayoutMonths',
+        firstNumber(ctx.inputs.rawLandLayoutMonths, 9),
+        'months (BDA/BMRDA, typical 6-18)', NUMBER_FORMATS.integer],
+      ['Approval Uplift on Resale',  'RawLandApprovalUpliftPct',
+        toPctDecimal(firstNumber(ctx.inputs.rawLandApprovalUpliftPct, 1.0)),
+        '% lift on land value at sale-ready', NUMBER_FORMATS.percent],
+      ['Total Pipeline (derived)',   'RawLandTotalPipelineMonths',
+        { formula: '=RawLandTitleMonths+RawLandConversionMonths+RawLandLayoutMonths' },
+        'months (derived — sum of stage durations)', NUMBER_FORMATS.integer],
+    ],
+  };
+
   // ── Sponsor / LP Waterfall inputs (PR-D) ─────────────────────────────
   // Institutional deals split equity proceeds between the Sponsor (GP)
   // and the LP investors via a multi-tier waterfall. Standard structure:
@@ -994,6 +1113,17 @@ const buildInputsSheet = (workbook, ctx) => {
     // PR-I13: Retail anchor / vanilla rent split + CAM recovery — only
     // when the deal's asset class is retail.
     ...(ctx.assetClass === 'retail' ? [retailSection] : []),
+    // PR-I11: Milestone-anchored sale-rate escalation — visible for
+    // residential / villas / mixed_use (where milestone pricing is
+    // conventional). Plotted / raw_land sell at fixed rates.
+    ...((['residential_apartments', 'villas', 'mixed_use'].includes(ctx.assetClass)) ? [milestoneEscalationSection] : []),
+    // PR-I14: Plot-level absorption — only for plotted_development.
+    ...(ctx.assetClass === 'plotted_development' ? [plotAbsorptionSection] : []),
+    // PR-I15: Mixed-use component breakdown — only for mixed_use /
+    // redevelopment (which often has multi-component nature).
+    ...((['mixed_use', 'redevelopment'].includes(ctx.assetClass)) ? [mixedUseSection] : []),
+    // PR-I16: Raw-land entitlement stages — only for raw_land.
+    ...(ctx.assetClass === 'raw_land' ? [rawLandSection] : []),
   ];
 
   let row = 5;
