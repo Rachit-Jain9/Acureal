@@ -37,17 +37,32 @@ const palette = require('../../shared/palette');
 
 const FONT = palette.FONTS.body;
 
-// Sheet display names — explicitly NO `WS1`/`WS2` prefixes per operator
-// instruction 2026-05-10. Names must fit Excel's 31-character cap; the
-// phasing sheet's full name "Construction Phasing & Sales Collection"
-// is 39 chars, so we trim to "Phasing & Sales Collection" (26).
+// Sheet display names — operator-directed 7-sheet structure (2026-05-11):
+//
+//   1. Dashboard                          (investor-facing KPIs + charts; FIRST)
+//   2. Inputs & Assumptions               (yellow editable cells; SECOND)
+//   3. Cash Flow Engine                   (combined: Phasing operating P&L
+//                                          + Quarterly Cash Flow + Debt)
+//   4. Debt Sizing & Amortization         (combined: MIN-of-4 sizing
+//                                          + 80-row amort schedule)
+//   5. Sponsor LP Waterfall               (3-tier pour-over equity returns)
+//   6. Unit Mix                           (asset-class-aware unit table)
+//   7. Calculations                       (hidden audit trail)
+//
+// Pre-2026-05-11 we had 9 sheets (8 visible + 1 hidden). Operator: "Dont
+// have so many worksheets. gets confusing. Have maximum 6-7." Consolidated
+// by physically combining (a) Phasing + Cash Flow → Cash Flow Engine, and
+// (b) Debt Sizing + Amortization → Debt Sizing & Amortization. The 3-tier
+// Waterfall + Unit Mix stay standalone because they're conceptually
+// distinct (equity returns ≠ debt; unit mix ≠ either).
+//
+// Names must fit Excel's 31-character cap. Longest is "Debt Sizing &
+// Amortization" at 26 chars.
 const SHEETS = {
-  inputs: 'Inputs & Assumptions',
-  phasing: 'Phasing & Sales Collection',
-  cashflow: 'Quarterly Cash Flow & Debt',
   dashboard: 'Dashboard',
-  debtSizing: 'Debt Sizing',
-  amortization: 'Amortization Schedule',
+  inputs: 'Inputs & Assumptions',
+  cashFlowEngine: 'Cash Flow Engine',
+  debtAndAmort: 'Debt Sizing & Amortization',
   waterfall: 'Sponsor LP Waterfall',
   unitMix: 'Unit Mix',
   calculations: 'Calculations',
@@ -749,11 +764,17 @@ const buildInputsSheet = (workbook, ctx) => {
 };
 
 /**
- * Construction Phasing & Sales Collection sheet.
- * Quarterly columns Q1..Qn, rows for cumulative cost / sales / collection.
+ * Operating Schedule section of the Cash Flow Engine sheet.
+ *
+ * Pre-2026-05-11: this rendered as its own "Phasing & Sales Collection" worksheet.
+ * Post-2026-05-11 restructure: phasing is the TOP section of the combined
+ * "Cash Flow Engine" sheet. The Cash Flow + Debt rows render BELOW phasing
+ * in the same worksheet (via buildCashFlowSection, below).
+ *
+ * Returns the last row written so the Cash Flow section knows where to start.
  */
 const buildPhasingSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.phasing, {
+  const sheet = workbook.addWorksheet(SHEETS.cashFlowEngine, {
     views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
   });
   const cols = [{ width: 32 }];
@@ -773,11 +794,11 @@ const buildPhasingSheet = (workbook, ctx) => {
     return s;
   };
 
-  // Title row — asset-class-aware
+  // Title row — single banner covers the whole sheet (both sections).
   sheet.mergeCells(1, 1, 1, ctx.totalQuarters + 2);
   sheet.getCell(1, 1).value = ctx.dealFamily === 'income'
-    ? `${ctx.brandName} | Lease-up & Operating Schedule`
-    : `${ctx.brandName} | Construction Phasing & Sales Collection`;
+    ? `${ctx.brandName} | Cash Flow Engine — Operating Schedule + Cash Flow + Debt`
+    : `${ctx.brandName} | Cash Flow Engine — Phasing + Sales Collection + Cash Flow + Debt`;
   styleSectionTitle(sheet.getCell(1, 1));
   sheet.getRow(1).height = 26;
 
@@ -1196,8 +1217,10 @@ const buildPhasingSheet = (workbook, ctx) => {
 
   const rows = ctx.dealFamily === 'income' ? incomeRows : developmentRows;
 
+  let lastRow = 4;
   rows.forEach((rowSpec, rowIdx) => {
     const r = 5 + rowIdx;
+    lastRow = r;
     sheet.getCell(r, 1).value = rowSpec.label;
     styleLabelCell(sheet.getCell(r, 1));
 
@@ -1228,35 +1251,37 @@ const buildPhasingSheet = (workbook, ctx) => {
   // Sheet protection intentionally disabled — the operator owns this
   // file once it's downloaded and shouldn't be blocked from editing
   // any cell. Yellow input cells are still visually obvious.
-  return sheet;
+  //
+  // Return the last row written so the Cash Flow section knows where to
+  // start. The Cash Flow rows render BELOW these phasing rows, on the
+  // SAME worksheet (post-2026-05-11 7-sheet restructure).
+  return { sheet, lastRow };
 };
 
 /**
- * Quarterly Cash Flow & Debt sheet.
+ * Cash Flow & Debt section of the Cash Flow Engine sheet.
+ *
+ * Pre-2026-05-11: this was a standalone "Quarterly Cash Flow & Debt" sheet.
+ * Post-restructure (7-sheet directive): rendered BELOW the phasing rows
+ * on the same "Cash Flow Engine" worksheet.
+ *
+ * Row offset: cash flow rows start at `phasingLastRow + 4` (one blank row,
+ * one section title row, one blank row, then rows). All formula row
+ * references that previously assumed Inflow at row 5 now shift by
+ * `cfOffset` (cashFlowStartRow - 5). Phasing references become same-sheet
+ * (no sheet prefix).
  */
-const buildCashFlowSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.cashflow, {
-    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
-  });
-  const cols = [{ width: 32 }];
-  for (let i = 0; i < ctx.totalQuarters; i += 1) cols.push({ width: 14 });
-  cols.push({ width: 16 });
-  sheet.columns = cols;
+const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
+  const sheet = workbook.getWorksheet(SHEETS.cashFlowEngine);
+  if (!sheet) throw new Error('Cash Flow Engine sheet must be created by buildPhasingSheet first');
 
-  sheet.mergeCells(1, 1, 1, ctx.totalQuarters + 2);
-  sheet.getCell(1, 1).value = `${ctx.brandName} | Quarterly Cash Flow & Debt`;
-  styleSectionTitle(sheet.getCell(1, 1));
-  sheet.getRow(1).height = 26;
-
-  sheet.mergeCells(2, 1, 2, ctx.totalQuarters + 2);
-  sheet.getCell(2, 1).value = `DSCR conditional formatting: red < 1.20, amber 1.20–1.50, green > 1.50.`;
-  sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell(2, 1).protection = { locked: true };
-
-  sheet.getCell(4, 1).value = 'Line item';
-  for (let q = 1; q <= ctx.totalQuarters; q += 1) sheet.getCell(4, 1 + q).value = `Q${q}`;
-  sheet.getCell(4, ctx.totalQuarters + 2).value = 'Total';
-  styleHeader(sheet.getRow(4));
+  const phasingLastRow = opts.phasingLastRow != null ? opts.phasingLastRow : 27;
+  // Layout after phasing: row+1 blank, row+2 section divider title, row+3 column header (Line item / Q1..Qn / Total),
+  // row+4 = first Cash Flow row.
+  const cashFlowSectionTitleRow = phasingLastRow + 2;
+  const cashFlowHeaderRow = phasingLastRow + 3;
+  const cashFlowStartRow = phasingLastRow + 4;
+  const cfOffset = cashFlowStartRow - 5; // shift for legacy formula refs that assumed row 5 = first row
 
   const colLetter = (n) => {
     let s = '';
@@ -1269,20 +1294,44 @@ const buildCashFlowSheet = (workbook, ctx) => {
     return s;
   };
 
+  // Section divider title
+  sheet.mergeCells(cashFlowSectionTitleRow, 1, cashFlowSectionTitleRow, ctx.totalQuarters + 2);
+  sheet.getCell(cashFlowSectionTitleRow, 1).value =
+    `Cash Flow & Debt Service — DSCR conditional formatting: red < 1.20, amber 1.20–1.50, green > 1.50.`;
+  styleSectionTitle(sheet.getCell(cashFlowSectionTitleRow, 1));
+  sheet.getRow(cashFlowSectionTitleRow).height = 22;
+
+  // Column header (Line item / Q1..Qn / Total) for the cash flow section
+  sheet.getCell(cashFlowHeaderRow, 1).value = 'Line item';
+  for (let q = 1; q <= ctx.totalQuarters; q += 1) sheet.getCell(cashFlowHeaderRow, 1 + q).value = `Q${q}`;
+  sheet.getCell(cashFlowHeaderRow, ctx.totalQuarters + 2).value = 'Total';
+  styleHeader(sheet.getRow(cashFlowHeaderRow));
+
   // Pre-build the column letter for each quarter
   const colLetters = [];
   for (let q = 1; q <= ctx.totalQuarters; q += 1) colLetters.push(colLetter(q + 1));
 
-  // Helper to reference the phasing sheet for revenue / cost
-  const phasing = `'${SHEETS.phasing}'`;
+  // Shift legacy Cash Flow row references (5-13) into post-restructure
+  // positions. Pre-2026-05-11 the Cash Flow sheet stood alone and Cash
+  // Flow row 5 = Inflow. After combining with Phasing on the same sheet,
+  // Cash Flow row 5 sits at `5 + cfOffset` (after the Phasing rows + a
+  // section divider). cfOffset varies by family:
+  //   income family:      cfStart = 24 → cfOffset = 19
+  //   development family: cfStart = 30 → cfOffset = 25
+  //
+  // Phasing references (e.g. Phasing row 20 for income CF Before Debt,
+  // row 6 for dev Construction) don't shift — they're already in the
+  // upper section of the combined sheet. They just lose their sheet
+  // prefix (no more `'Phasing & Sales Collection'!`).
+  const cf = (legacyRow) => legacyRow + cfOffset;
 
   // Income deal cash flow rows — pulls Cash Flow Before Debt from
-  // Phasing!{col}20 (the new Operating P&L), adds debt service.
+  // Phasing row 20 (same sheet now), adds debt service.
   // Reversion in the final period uses NOI / Cap Rate.
   const incomeRows = [
     {
       label: 'Cash Flow Before Debt Service (from Operating P&L)',
-      formula: (q) => `=${phasing}!${colLetters[q - 1]}20`,
+      formula: (q) => `=${colLetters[q - 1]}20`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
@@ -1290,109 +1339,107 @@ const buildCashFlowSheet = (workbook, ctx) => {
       label: 'Less: Interest expense',
       formula: (q) => {
         // Interest = (LTV × Total Cost − cumulative principal paid) × rate / 4
+        // The Principal-row SUM reference (was $B$7:..7) shifts to cf(7).
         if (q === 1) return `=-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV*DebtRatePct/4`;
-        return `=-((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV-IFERROR(SUM($B$7:${colLetters[q - 2]}7),0))*DebtRatePct/4`;
+        return `=-((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV-IFERROR(SUM($B$${cf(7)}:${colLetters[q - 2]}${cf(7)}),0))*DebtRatePct/4`;
       },
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Less: Principal repayment',
       formula: (q) =>
-        `=IF(AND(${q}>MoratoriumMonths/3,${colLetters[q - 1]}5+${colLetters[q - 1]}6>0),MIN(${colLetters[q - 1]}5+${colLetters[q - 1]}6,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV/(LoanTermYears*4)),0)`,
+        `=IF(AND(${q}>MoratoriumMonths/3,${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)}>0),MIN(${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)},(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV/(LoanTermYears*4)),0)`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Total Debt Service',
-      formula: (q) => `=${colLetters[q - 1]}6+${colLetters[q - 1]}7`,
+      formula: (q) => `=${colLetters[q - 1]}${cf(6)}+${colLetters[q - 1]}${cf(7)}`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
     {
       label: 'Cash Flow After Debt Service',
-      formula: (q) => `=${colLetters[q - 1]}5+${colLetters[q - 1]}8`,
+      formula: (q) => `=${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(8)}`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
     {
       label: 'DSCR',
-      formula: (q) => `=IFERROR(${colLetters[q - 1]}5/-${colLetters[q - 1]}8,"–")`,
+      formula: (q) => `=IFERROR(${colLetters[q - 1]}${cf(5)}/-${colLetters[q - 1]}${cf(8)},"–")`,
       format: NUMBER_FORMATS.multiple,
       conditional: 'dscr',
     },
     {
       label: 'Reversion — Net Sale Proceeds (final period)',
       formula: (q) => q === ctx.totalQuarters
-        ? `=IFERROR(${phasing}!${colLetters[q - 1]}18*4/ExitCapRate*(1-SellingCostPct),0)`
+        ? `=IFERROR(${colLetters[q - 1]}18*4/ExitCapRate*(1-SellingCostPct),0)`
         : `=0`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Total Cash Flow Including Reversion',
-      formula: (q) => `=${colLetters[q - 1]}9+${colLetters[q - 1]}11`,
+      formula: (q) => `=${colLetters[q - 1]}${cf(9)}+${colLetters[q - 1]}${cf(11)}`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
   ];
 
-  // Development deal cash flow rows — existing structure.
+  // Development deal cash flow rows — combined-sheet refs.
   const developmentRows = [
     {
       // PR-I2: references Phasing row 15 (Net developer cash from sales)
-      // instead of row 10 (Gross customer collection). Row 15 nets the
-      // 70% RERA escrow against the matched construction drawdowns,
-      // showing what the developer ACTUALLY receives. When the operator
-      // sets RERAEscrowPct = 0 (e.g. for pre-RERA / non-residential
-      // deals), row 15 collapses to gross collection — preserving the
-      // pre-PR-I2 cash-flow profile.
+      // in the SAME sheet now (was 'Phasing!{col}15' pre-restructure).
+      // Row 15 nets the 70% RERA escrow against matched construction
+      // drawdowns, showing what the developer ACTUALLY receives.
       label: 'Inflow — Net developer cash from sales (INR Cr)',
-      formula: (q) => `=${phasing}!${colLetters[q - 1]}15`,
+      formula: (q) => `=${colLetters[q - 1]}15`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Outflow — Construction cost (INR Cr)',
-      formula: (q) => `=-${phasing}!${colLetters[q - 1]}6`,
+      formula: (q) => `=-${colLetters[q - 1]}6`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Outflow — Marketing & Finance (INR Cr)',
-      formula: (q) => `=-${phasing}!${colLetters[q - 1]}9*(MarketingCostPct+FinanceCostPct)`,
+      formula: (q) => `=-${colLetters[q - 1]}9*(MarketingCostPct+FinanceCostPct)`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Project net cash flow (INR Cr)',
-      formula: (q) => `=${colLetters[q - 1]}5+${colLetters[q - 1]}6+${colLetters[q - 1]}7`,
+      formula: (q) => `=${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)}+${colLetters[q - 1]}${cf(7)}`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
     {
       label: 'Debt drawn (INR Cr)',
       formula: (q) =>
-        `=IF(${colLetters[q - 1]}8<0,MIN(-${colLetters[q - 1]}8*DebtLTV,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000)*DebtLTV-IFERROR(SUM($B$9:${colLetters[q - 2] || colLetters[0]}9),0)),0)`,
+        `=IF(${colLetters[q - 1]}${cf(8)}<0,MIN(-${colLetters[q - 1]}${cf(8)}*DebtLTV,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000)*DebtLTV-IFERROR(SUM($B$${cf(9)}:${colLetters[q - 2] || colLetters[0]}${cf(9)}),0)),0)`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Interest (INR Cr)',
       formula: (q) => {
-        if (q === 1) return `=-${colLetters[q - 1]}9*DebtRatePct/4`;
-        return `=-(SUM($B$9:${colLetters[q - 2]}9)-IFERROR(SUM($B$11:${colLetters[q - 2]}11),0))*DebtRatePct/4`;
+        if (q === 1) return `=-${colLetters[q - 1]}${cf(9)}*DebtRatePct/4`;
+        return `=-(SUM($B$${cf(9)}:${colLetters[q - 2]}${cf(9)})-IFERROR(SUM($B$${cf(11)}:${colLetters[q - 2]}${cf(11)}),0))*DebtRatePct/4`;
       },
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Principal repayment (INR Cr)',
       formula: (q) =>
-        `=IF(${colLetters[q - 1]}8>0,MIN(${colLetters[q - 1]}8,IFERROR(SUM($B$9:${colLetters[q - 1]}9),0)-IFERROR(SUM($B$11:${colLetters[q - 2] || colLetters[0]}11),0)),0)`,
+        `=IF(${colLetters[q - 1]}${cf(8)}>0,MIN(${colLetters[q - 1]}${cf(8)},IFERROR(SUM($B$${cf(9)}:${colLetters[q - 1]}${cf(9)}),0)-IFERROR(SUM($B$${cf(11)}:${colLetters[q - 2] || colLetters[0]}${cf(11)}),0)),0)`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Equity cash flow (INR Cr)',
-      formula: (q) => `=${colLetters[q - 1]}8+${colLetters[q - 1]}9+${colLetters[q - 1]}10+${colLetters[q - 1]}11`,
+      formula: (q) => `=${colLetters[q - 1]}${cf(8)}+${colLetters[q - 1]}${cf(9)}+${colLetters[q - 1]}${cf(10)}+${colLetters[q - 1]}${cf(11)}`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
     {
       label: 'DSCR',
-      formula: (q) => `=IF((-${colLetters[q - 1]}10-${colLetters[q - 1]}11)=0,"–",(${colLetters[q - 1]}5+${colLetters[q - 1]}6+${colLetters[q - 1]}7)/(-${colLetters[q - 1]}10-${colLetters[q - 1]}11))`,
+      formula: (q) => `=IF((-${colLetters[q - 1]}${cf(10)}-${colLetters[q - 1]}${cf(11)})=0,"–",(${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)}+${colLetters[q - 1]}${cf(7)})/(-${colLetters[q - 1]}${cf(10)}-${colLetters[q - 1]}${cf(11)}))`,
       format: NUMBER_FORMATS.multiple,
       conditional: 'dscr',
     },
@@ -1401,7 +1448,7 @@ const buildCashFlowSheet = (workbook, ctx) => {
   const rows = ctx.dealFamily === 'income' ? incomeRows : developmentRows;
 
   rows.forEach((rowSpec, rowIdx) => {
-    const r = 5 + rowIdx;
+    const r = cashFlowStartRow + rowIdx;
     sheet.getCell(r, 1).value = rowSpec.label;
     styleLabelCell(sheet.getCell(r, 1));
     if (rowSpec.bold) sheet.getCell(r, 1).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
@@ -1426,10 +1473,11 @@ const buildCashFlowSheet = (workbook, ctx) => {
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
 
-  // Conditional formatting on DSCR row (row 13)
+  // Conditional formatting on DSCR row (shifted by cfOffset into the
+  // combined Cash Flow Engine sheet).
   const dscrRowIdx = rows.findIndex((r) => r.conditional === 'dscr');
   if (dscrRowIdx >= 0) {
-    const dscrRow = 5 + dscrRowIdx;
+    const dscrRow = cashFlowStartRow + dscrRowIdx;
     const startCell = `${colLetter(2)}${dscrRow}`;
     const endCell = `${colLetter(ctx.totalQuarters + 2)}${dscrRow}`;
     sheet.addConditionalFormatting({
@@ -1493,9 +1541,25 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getRow(2).height = 22;
 
-  // Three rows of KPI cards
-  const phasing = `'${SHEETS.phasing}'`;
-  const cashflow = `'${SHEETS.cashflow}'`;
+  // Three rows of KPI cards. Post-restructure: phasing + cash flow are
+  // on the SAME sheet (Cash Flow Engine). Both prefixes resolve to the
+  // same worksheet — kept as separate variables for code clarity since
+  // the row positions they reference differ (phasing = upper section,
+  // cashflow = lower section, shifted by cfOffset).
+  //
+  // cfOffset must mirror what buildCashFlowSheet computes:
+  //   phasingLastRow + 4 = cashFlowStartRow
+  //   cfOffset = cashFlowStartRow - 5
+  // Income family phasing runs to row 21; dev family to row 27.
+  const phasing = `'${SHEETS.cashFlowEngine}'`;
+  const cashflow = `'${SHEETS.cashFlowEngine}'`;
+  const dashPhasingLastRow = ctx.dealFamily === 'income' ? 21 : 27;
+  const dashCfOffset = dashPhasingLastRow + 4 - 5; // income=20, dev=26... wait
+  // Actually: cashFlowStartRow = phasingLastRow + 4, cfOffset = cashFlowStartRow - 5
+  // income: cashFlowStartRow = 21 + 4 = 25, cfOffset = 25 - 5 = 20
+  // dev:    cashFlowStartRow = 27 + 4 = 31, cfOffset = 31 - 5 = 26
+  // NB: this must stay in lockstep with buildCashFlowSheet's cfStart math.
+  const cfShift = (legacyRow) => legacyRow + dashCfOffset;
   const totalQ = ctx.totalQuarters;
   const colLetter = (n) => {
     let s = '';
@@ -1525,22 +1589,28 @@ const buildDashboardSheet = (workbook, ctx) => {
   const k = ctx.kernelKpis;
   const kpiCells = ctx.dealFamily === 'income'
     ? [
-        // Top row — operating fundamentals
+        // Top row — operating fundamentals (Phasing section: rows unchanged
+        // by restructure; e.g. NOI is at row 18 in the upper Phasing block).
         { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency },
         { row: 4, col: 'C', label: 'Modeled Cap Rate',              kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr),0)`, format: NUMBER_FORMATS.percent },
         { row: 4, col: 'E', label: 'Exit Cap Rate',                 kernel: null,                  formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent },
-        // Bottom row — investor returns
-        { row: 7, col: 'A', label: 'Min DSCR',                      kernel: null,                  formula: `=${cashflow}!${totalCol}10`,                                                                         format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C9/((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
-        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}11`,                                                                         format: NUMBER_FORMATS.currency },
+        // Bottom row — investor returns. Cash Flow section: rows shift by
+        // cfShift (income cfOffset=20 → row 10 becomes row 30, row 9 → 29,
+        // row 11 → 31).
+        { row: 7, col: 'A', label: 'Min DSCR',                      kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(10)}`,                                                                         format: NUMBER_FORMATS.multiple },
+        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C${cfShift(9)}/((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}${cfShift(11)}`,                                                                         format: NUMBER_FORMATS.currency },
       ]
     : [
+        // Development family. Phasing row 9 = Quarter sales; Cash Flow
+        // rows shifted by cfShift (dev cfOffset=26 → row 6 → 32, row 7 → 33,
+        // row 8 → 34, row 12 → 38, row 13 → 39).
         { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         kernel: k.totalRevenue,       formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=-${cashflow}!${totalCol}6+(-${cashflow}!${totalCol}7)`,                                          format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}8`,                                                                        format: NUMBER_FORMATS.currency },
-        { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}8/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
-        { row: 7, col: 'C', label: 'Min DSCR',                        kernel: null,                  formula: `=${cashflow}!${totalCol}13`,                                                                      format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'E', label: 'Residual Land Value (INR Cr)',    kernel: k.residualLandValue,  formula: `=${cashflow}!${totalCol}12`,                                                                      format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=-${cashflow}!${totalCol}${cfShift(6)}+(-${cashflow}!${totalCol}${cfShift(7)})`,                                          format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}${cfShift(8)}`,                                                                        format: NUMBER_FORMATS.currency },
+        { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}${cfShift(8)}/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'C', label: 'Min DSCR',                        kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(13)}`,                                                                      format: NUMBER_FORMATS.multiple },
+        { row: 7, col: 'E', label: 'Residual Land Value (INR Cr)',    kernel: k.residualLandValue,  formula: `=${cashflow}!${totalCol}${cfShift(12)}`,                                                                      format: NUMBER_FORMATS.currency },
       ];
   kpiCells.forEach(({ row, col, label, kernel, formula, format }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
@@ -1606,7 +1676,9 @@ const buildDashboardSheet = (workbook, ctx) => {
   //   - Development:  row 8  = "Project net cash flow"
   // Excel's IRR() expects a contiguous range; NPV() takes a quarterly rate
   // because the cash flows are quarterly.
-  const cfRow = ctx.dealFamily === 'income' ? 11 : 8;
+  //
+  // Post-restructure: shift by cfOffset (income: 11→31, dev: 8→34).
+  const cfRow = cfShift(ctx.dealFamily === 'income' ? 11 : 8);
   const cfRangeProper = `${cashflow}!$${colLetter(2)}$${cfRow}:$${colLetter(totalQ + 1)}$${cfRow}`;
 
   sheet.mergeCells('A19:F19');
@@ -1982,12 +2054,13 @@ const buildDashboardSheet = (workbook, ctx) => {
     const qCol = colLetter(q + 1); // q=1 → B on phasing/cashflow
 
     if (ctx.dealFamily === 'income') {
-      // PGI = Phasing!{qCol}8, EGR = row 11, NOI = row 18, CFAfterDebt = Cash Flow row 9
+      // Phasing section refs (rows unchanged): PGI=row 8, EGR=11, NOI=18.
+      // Cash Flow section refs shifted by cfOffset (income: row 9 → 29).
       const formulas = [
         `=${phasing}!${qCol}8`,
         `=${phasing}!${qCol}11`,
         `=${phasing}!${qCol}18`,
-        `=${cashflow}!${qCol}9`,
+        `=${cashflow}!${qCol}${cfShift(9)}`,
       ];
       formulas.forEach((f, idx) => {
         const cell = sheet.getCell(r, idx + 2);
@@ -1997,13 +2070,14 @@ const buildDashboardSheet = (workbook, ctx) => {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
       });
     } else {
-      // Sales = Phasing!{qCol}9, Construction = row 6, Net CF = Cash Flow row 8, Cum = Cash Flow!{qCol}8 cumulative via SUMIF
+      // Phasing section refs (unchanged): Sales=row 9, Construction=row 6.
+      // Cash Flow section refs shifted by cfOffset (dev: row 8 → 34).
       const startCol = colLetter(2);
       const formulas = [
         `=${phasing}!${qCol}9`,
         `=${phasing}!${qCol}6`,
-        `=${cashflow}!${qCol}8`,
-        `=SUM(${cashflow}!$${startCol}$8:${qCol}8)`,
+        `=${cashflow}!${qCol}${cfShift(8)}`,
+        `=SUM(${cashflow}!$${startCol}$${cfShift(8)}:${qCol}${cfShift(8)})`,
       ];
       formulas.forEach((f, idx) => {
         const cell = sheet.getCell(r, idx + 2);
@@ -2159,7 +2233,7 @@ const buildDashboardSheet = (workbook, ctx) => {
  * actual lender-approved amount rather than the simple Total Cost × DebtLTV.
  */
 const buildDebtSizingSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.debtSizing, {
+  const sheet = workbook.addWorksheet(SHEETS.debtAndAmort, {
     views: [{ showGridLines: false }],
   });
   sheet.columns = [
@@ -2168,9 +2242,10 @@ const buildDebtSizingSheet = (workbook, ctx) => {
     { width: 32 }, // C: Note
   ];
 
-  // Title
+  // Title — combined sheet covers BOTH sizing and amortization. Section
+  // headers below carve up the worksheet visually.
   sheet.mergeCells('A1:C1');
-  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Debt Sizing`;
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Debt Sizing & Amortization`;
   styleSectionTitle(sheet.getCell('A1'));
   sheet.getRow(1).height = 26;
 
@@ -2209,7 +2284,7 @@ const buildDebtSizingSheet = (workbook, ctx) => {
   const noiSource = ctx.dealFamily === 'income'
     ? (firstNumber(ctx.deal.stabilized_noi_cr, ctx.deal.noi_cr, ctx.kernelKpis?.noi) != null
         ? String(firstNumber(ctx.deal.stabilized_noi_cr, ctx.deal.noi_cr, ctx.kernelKpis?.noi))
-        : `'${SHEETS.phasing}'!N18*4`) // fallback to phased modeled NOI × 4 (annualised)
+        : `'${SHEETS.cashFlowEngine}'!N18*4`) // fallback to phased modeled NOI × 4 (annualised)
     : null;
 
   const inputsSummary = [
@@ -2396,55 +2471,62 @@ const buildDebtSizingSheet = (workbook, ctx) => {
  *     cost as if compounding monthly / continuously.
  */
 const buildAmortizationSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.amortization, {
-    views: [{ showGridLines: false }],
-  });
-  sheet.columns = [
-    { width: 10 }, // A: Period
-    { width: 22 }, // B: Beginning Balance
-    { width: 18 }, // C: Payment
-    { width: 16 }, // D: Interest
-    { width: 16 }, // E: Principal
-    { width: 22 }, // F: Ending Balance
-  ];
+  // Post-restructure: amortization renders on the SAME sheet as Debt Sizing
+  // (sheet name = SHEETS.debtAndAmort). The amortization section starts at
+  // row 32 (after Debt Sizing's MIN-of-4 calculations end around row 28).
+  const sheet = workbook.getWorksheet(SHEETS.debtAndAmort);
+  if (!sheet) throw new Error('Debt Sizing & Amortization sheet must be created by buildDebtSizingSheet first');
 
-  // Title
-  sheet.mergeCells('A1:F1');
-  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Amortization Schedule`;
-  styleSectionTitle(sheet.getCell('A1'));
-  sheet.getRow(1).height = 26;
+  // Column widths set by buildDebtSizingSheet (A=32, B=22, C=32). The
+  // amortization table needs 6 columns (Period / BegBal / Payment /
+  // Interest / Principal / EndBal). Extend columns D-F to match the
+  // amortization width.
+  if (sheet.getColumn(4).width == null) sheet.getColumn(4).width = 16;
+  if (sheet.getColumn(5).width == null) sheet.getColumn(5).width = 16;
+  if (sheet.getColumn(6).width == null) sheet.getColumn(6).width = 22;
 
-  sheet.mergeCells('A2:F2');
-  sheet.getCell('A2').value = 'Quarter-by-quarter debt amortization. All values recalculate from the named ranges on the Inputs sheet — edit LandCostCr, ConstructionCostPerSqft, DebtLTV, DebtRatePct, or LoanTermYears to flow through.';
-  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
-  sheet.getRow(2).height = 22;
+  // amortShift translates legacy Amortization sheet rows (which assumed
+  // section title at row 4, loan amount at row 5, table header at row 12)
+  // into their post-consolidation positions (row 34 title, row 35 loan
+  // amount, row 42 table header). Shift = 30.
+  const AMORT_BASE = 32; // section header row
+  const amortShift = AMORT_BASE - 2; // 30
 
-  // ── Loan Terms summary block (rows 4-10) ──────────────────────────────
-  sheet.mergeCells('A4:F4');
-  sheet.getCell('A4').value = 'Loan Terms';
-  styleSectionTitle(sheet.getCell('A4'));
-  sheet.getRow(4).height = 22;
+  // Section divider for the Amortization Schedule block
+  sheet.mergeCells(`A${AMORT_BASE}:F${AMORT_BASE}`);
+  sheet.getCell(`A${AMORT_BASE}`).value = 'Amortization Schedule';
+  styleSectionTitle(sheet.getCell(`A${AMORT_BASE}`));
+  sheet.getRow(AMORT_BASE).height = 24;
+
+  sheet.mergeCells(`A${AMORT_BASE + 1}:F${AMORT_BASE + 1}`);
+  sheet.getCell(`A${AMORT_BASE + 1}`).value = 'Quarter-by-quarter debt amortization. All values recalculate from the named ranges on the Inputs sheet — edit LandCostCr, ConstructionCostPerSqft, DebtLTV, DebtRatePct, or LoanTermYears to flow through.';
+  sheet.getCell(`A${AMORT_BASE + 1}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${AMORT_BASE + 1}`).alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(AMORT_BASE + 1).height = 22;
+
+  // ── Loan Terms summary block (was rows 4-10; now AMORT_BASE+2 to AMORT_BASE+8)
+  const termsTitleRow = AMORT_BASE + 2; // 34
+  sheet.mergeCells(`A${termsTitleRow}:F${termsTitleRow}`);
+  sheet.getCell(`A${termsTitleRow}`).value = 'Loan Terms';
+  styleSectionTitle(sheet.getCell(`A${termsTitleRow}`));
+  sheet.getRow(termsTitleRow).height = 22;
 
   // Loan Amount = lender-approved permanent loan from the Debt Sizing
-  // sheet (= MIN of LTC / LTV / DCR / DY for income deals; LTC only for
-  // development). This is the AMORTISED amount — what the borrower
-  // actually repays month after month.
-  //
-  // PR-B introduced the Debt Sizing sheet; this Loan Amount formula
-  // now references its final MIN cell (B28). Operators can still see
-  // the legacy "DebtLTV × Total Cost" for comparison in Debt Sizing!B29.
-  const debtSizingRef = `'${SHEETS.debtSizing}'`;
+  // section above (= MIN of LTC / LTV / DCR / DY for income deals; LTC
+  // only for development). Same-sheet ref since post-restructure both
+  // sections live on the SAME worksheet (Debt Sizing & Amortization).
+  // The MIN cell stayed at row 28 since the Debt Sizing section itself
+  // wasn't restructured.
   const termsRows = [
-    ['Loan Amount (INR Cr)',         `=${debtSizingRef}!B28`,                              NUMBER_FORMATS.currency],
+    ['Loan Amount (INR Cr)',         `=B28`,                                               NUMBER_FORMATS.currency],
     ['Annual Interest Rate',         '=DebtRatePct',                                       NUMBER_FORMATS.percent],
     ['Loan Term (years)',            '=LoanTermYears',                                     NUMBER_FORMATS.integer],
     ['Quarterly Periods',            '=LoanTermYears*4',                                   NUMBER_FORMATS.integer],
     ['Effective Quarterly Rate',     '=(1+DebtRatePct)^(1/4)-1',                            NUMBER_FORMATS.percent],
-    ['Quarterly Payment (INR Cr)',   '=-PMT(B9,B8,B5)',                                    NUMBER_FORMATS.currency],
+    ['Quarterly Payment (INR Cr)',   `=-PMT(B${9 + amortShift},B${8 + amortShift},B${5 + amortShift})`, NUMBER_FORMATS.currency],
   ];
   termsRows.forEach(([label, formula, fmt], idx) => {
-    const r = 5 + idx;
+    const r = (5 + amortShift) + idx;
     sheet.getCell(`A${r}`).value = label;
     styleLabelCell(sheet.getCell(`A${r}`));
     const cell = sheet.getCell(`B${r}`);
@@ -2453,8 +2535,8 @@ const buildAmortizationSheet = (workbook, ctx) => {
     cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
 
-  // ── Amortization table header (row 12) ─────────────────────────────────
-  const headerRow = 12;
+  // ── Amortization table header (was row 12; now row 42) ─────────────────
+  const headerRow = 12 + amortShift; // 42
   ['Period', 'Beginning Balance', 'Payment', 'Interest', 'Principal', 'Ending Balance']
     .forEach((label, idx) => {
       const cell = sheet.getCell(headerRow, idx + 1);
@@ -2471,34 +2553,34 @@ const buildAmortizationSheet = (workbook, ctx) => {
   // The schedule shows periods 1..N; if LoanTermYears is small, later
   // rows show #N/A naturally (Period > term).
   //
-  // For each row:
+  // For each row (post-restructure: all row refs shift by amortShift=30):
   //   Beginning Balance:
-  //     - Period 1: = Loan Amount (B5)
+  //     - Period 1: = Loan Amount (B35; was B5 pre-restructure)
   //     - Period N: = Ending Balance of previous row
-  //   Payment:        = Quarterly Payment (B10) for all periods
-  //   Interest:       = Beginning Balance × Quarterly Rate (B9)
+  //   Payment:        = Quarterly Payment (B40) for all periods
+  //   Interest:       = Beginning Balance × Quarterly Rate (B39)
   //   Principal:      = Payment − Interest
   //   Ending Balance: = Beginning Balance − Principal
   // IFERROR everywhere so that out-of-term rows stay blank rather than
   // showing error values.
   const maxRows = Math.min(80, 80); // hard cap; LoanTermYears reflects actual
   for (let i = 0; i < maxRows; i += 1) {
-    const r = 13 + i;
+    const r = (13 + amortShift) + i; // 43 + i
     const period = i + 1;
     // Period column
-    sheet.getCell(`A${r}`).value = { formula: `=IF(${period}<=$B$8,${period},"")` };
+    sheet.getCell(`A${r}`).value = { formula: `=IF(${period}<=$B$${8 + amortShift},${period},"")` };
     sheet.getCell(`A${r}`).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
     sheet.getCell(`A${r}`).alignment = { horizontal: 'center' };
     // Beginning Balance
     sheet.getCell(`B${r}`).value = {
-      formula: i === 0 ? '=$B$5' : `=IF($A${r}="","",F${r - 1})`,
+      formula: i === 0 ? `=$B$${5 + amortShift}` : `=IF($A${r}="","",F${r - 1})`,
     };
     sheet.getCell(`B${r}`).numFmt = NUMBER_FORMATS.currency;
     // Payment
-    sheet.getCell(`C${r}`).value = { formula: `=IF($A${r}="","",$B$10)` };
+    sheet.getCell(`C${r}`).value = { formula: `=IF($A${r}="","",$B$${10 + amortShift})` };
     sheet.getCell(`C${r}`).numFmt = NUMBER_FORMATS.currency;
     // Interest
-    sheet.getCell(`D${r}`).value = { formula: `=IF($A${r}="","",B${r}*$B$9)` };
+    sheet.getCell(`D${r}`).value = { formula: `=IF($A${r}="","",B${r}*$B$${9 + amortShift})` };
     sheet.getCell(`D${r}`).numFmt = NUMBER_FORMATS.currency;
     // Principal
     sheet.getCell(`E${r}`).value = { formula: `=IF($A${r}="","",C${r}-D${r})` };
@@ -2515,7 +2597,7 @@ const buildAmortizationSheet = (workbook, ctx) => {
   }
 
   // Footer disclosure
-  const footerRow = 13 + maxRows + 1;
+  const footerRow = (13 + amortShift) + maxRows + 1;
   sheet.mergeCells(`A${footerRow}:F${footerRow}`);
   sheet.getCell(`A${footerRow}`).value =
     'Amortization shown at the effective quarterly rate ((1+annual)^(1/4)−1). Moratorium input MoratoriumMonths is currently not modelled here — once PR-B splits construction vs permanent loan, this schedule will show the permanent loan post-moratorium. Verify against the lender term sheet before use.';
@@ -2606,7 +2688,7 @@ const buildWaterfallSheet = (workbook, ctx) => {
 
   const capitalRows = [
     ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              'Hard + Soft + India Statutory Levies (matches Calculations!B28)'],
-    ['Lender-Approved Loan (INR Cr)',   `='${SHEETS.debtSizing}'!B28`,                'MIN of LTC/LTV/DCR/DY from Debt Sizing'],
+    ['Lender-Approved Loan (INR Cr)',   `='${SHEETS.debtAndAmort}'!B28`,              'MIN of LTC/LTV/DCR/DY from Debt Sizing section'],
     ['Total Equity (INR Cr)',           '=B5-B6',                                    'Project cost − loan'],
     ['LP Equity (INR Cr)',              '=B7*LPEquityPct',                           'LP share × total equity'],
     ['GP / Sponsor Equity (INR Cr)',    '=B7*GPEquityPct',                           'GP share × total equity'],
@@ -2637,7 +2719,7 @@ const buildWaterfallSheet = (workbook, ctx) => {
   const proceedsRows = [
     ['Project Hold Period (years)',      '=LoanTermYears',                                          'Pref compounding period'],
     ['Total Cash Available to Equity',   ctx.dealFamily === 'income'
-      ? `=MAX(0,${totalCost}+'${SHEETS.phasing}'!N18*4*LoanTermYears-B6)`  // income: NOI × yrs − loan
+      ? `=MAX(0,${totalCost}+'${SHEETS.cashFlowEngine}'!N18*4*LoanTermYears-B6)`  // income: NOI × yrs − loan
       : `=MAX(0,(SaleableAreaSqft*SellRatePerSqft/10000000)-${totalCost})+B6`, // dev: revenue − cost + loan amount returned
       'After debt service across hold period'],
     ['LP Pref Accrual (compounded)',     '=B8*((1+PrefReturnRate)^B12-1)',                          'LP Equity × ((1+pref)^N − 1)'],
@@ -3054,11 +3136,11 @@ const buildCalculationsSheet = (workbook, ctx) => {
   };
   const totalColLetter = colLetterLocal(ctx.totalQuarters + 2);
   const revenueRef = ctx.dealFamily === 'income'
-    ? `'${SHEETS.phasing}'!${totalColLetter}11`
-    : `'${SHEETS.phasing}'!${totalColLetter}9`;
+    ? `'${SHEETS.cashFlowEngine}'!${totalColLetter}11`
+    : `'${SHEETS.cashFlowEngine}'!${totalColLetter}9`;
   const collectedRef = ctx.dealFamily === 'income'
-    ? `'${SHEETS.phasing}'!${totalColLetter}11`
-    : `'${SHEETS.phasing}'!${totalColLetter}10`;
+    ? `'${SHEETS.cashFlowEngine}'!${totalColLetter}11`
+    : `'${SHEETS.cashFlowEngine}'!${totalColLetter}10`;
 
   writeBlock('Revenue Build', [
     ['Saleable area (sqft)',         '=SaleableAreaSqft',                               'From Inputs & Assumptions'],
@@ -3149,10 +3231,30 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   workbook.description = 'REDIP investor-grade workbook (v2). Investor-grade — verify all inputs.';
   workbook.company = ctx.brandName;
 
-  const { definedNames } = buildInputsSheet(workbook, ctx);
-  buildPhasingSheet(workbook, ctx);
-  buildCashFlowSheet(workbook, ctx);
+  // Sheet build order matches the post-restructure 7-sheet directive:
+  //   1. Dashboard               (investor-facing KPIs + charts; FIRST)
+  //   2. Inputs & Assumptions
+  //   3. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
+  //   4. Debt Sizing & Amortization (combined: sizing + 80-row amort)
+  //   5. Sponsor LP Waterfall
+  //   6. Unit Mix
+  //   7. Calculations            (hidden audit trail)
+  //
+  // Workbook tab order follows the order in which `addWorksheet` is called.
+  // We build Inputs FIRST (to populate definedNames) but PHYSICALLY move
+  // the Dashboard tab to position 0 after all sheets exist via the
+  // workbook.worksheets array reorder below — ExcelJS's `addWorksheet`
+  // appends; reordering requires direct array manipulation.
   buildDashboardSheet(workbook, ctx);
+  const { definedNames } = buildInputsSheet(workbook, ctx);
+
+  // Cash Flow Engine combines (a) Phasing operating schedule + (b) Cash
+  // Flow & Debt rows on the SAME worksheet. buildPhasingSheet returns the
+  // last row it wrote; buildCashFlowSheet picks up from there +3 rows
+  // (section divider + header).
+  const { lastRow: phasingLastRow } = buildPhasingSheet(workbook, ctx);
+  buildCashFlowSheet(workbook, ctx, { phasingLastRow });
+
   buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);
   buildWaterfallSheet(workbook, ctx);
