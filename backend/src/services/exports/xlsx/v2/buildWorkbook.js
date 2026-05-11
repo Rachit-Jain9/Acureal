@@ -368,7 +368,33 @@ const buildInputsSheet = (workbook, ctx) => {
   const incomeOpExSection = {
     title: 'Operating Expenses (Income Asset)',
     rows: [
-      ['Property Tax',            'PropertyTaxPct',      toPctDecimal(firstNumber(ctx.inputs.propertyTaxPct, 0.015)),                                                '% of EGR', NUMBER_FORMATS.percent],
+      // PR-I4: Property tax is computed via the **BBMP UAV method** (Unit
+      // Area Value, the methodology mandated by Karnataka Municipal
+      // Corporations Act). Each property gets a per-sqft annual tax rate
+      // based on its zone (A through F) and use category. Pre-PR-I4 the
+      // model used "% of EGR" which scales tax with rent — wrong for
+      // India, where tax scales with area regardless of rental income.
+      //
+      // BBMP Bengaluru zone-A commercial rates as of 2026-05: ₹40-60/sqft/yr.
+      // Default 40 (mid-range Zone A commercial). Operators can override
+      // for residential (₹3-8/sqft/yr) or different zones.
+      //
+      // Backward-compat: legacy `propertyTaxPct` (% of EGR) is no longer
+      // used directly — operator must set the per-sqft figure. The named
+      // range is renamed to `PropertyTaxPerSqftYr` (was `PropertyTaxPct`).
+      // Existing kernel emissions with `propertyTaxPct` will lose their
+      // value; we attempt a heuristic conversion (pct × typical rent) but
+      // it's approximate.
+      ['Property Tax (BBMP UAV)', 'PropertyTaxPerSqftYr',
+        firstNumber(
+          ctx.inputs.propertyTaxPerSqftYr,
+          ctx.inputs.propertyTaxPerSqft,
+          // Heuristic backward-compat: convert legacy % × typical rent
+          // (₹100/sqft/mo × 12 = ₹1200/yr) to per-sqft annual.
+          ctx.inputs.propertyTaxPct ? toPctDecimal(ctx.inputs.propertyTaxPct) * 1200 : null,
+          40,
+        ),
+        'INR / sqft / year', NUMBER_FORMATS.integer],
       ['Insurance',               'InsurancePct',        toPctDecimal(firstNumber(ctx.inputs.insurancePct, 0.01)),                                                   '% of EGR', NUMBER_FORMATS.percent],
       ['Property Management Fee', 'PropMgmtPct',         toPctDecimal(firstNumber(ctx.inputs.propMgmtPct, ctx.inputs.managementFeePct, 0.03)),                       '% of EGR', NUMBER_FORMATS.percent],
       ['Utilities',               'UtilitiesPct',        toPctDecimal(firstNumber(ctx.inputs.utilitiesPct, 0.04)),                                                   '% of EGR', NUMBER_FORMATS.percent],
@@ -812,8 +838,12 @@ const buildPhasingSheet = (workbook, ctx) => {
       bold: true,
     },
     {
-      label: 'Less: Property Tax',
-      formula: (q) => `=-${colLetter(q + 1)}11*PropertyTaxPct`,
+      label: 'Less: Property Tax (BBMP UAV method)',
+      // PR-I4: BBMP Unit Area Value method — INR/sqft/yr × area, not
+      // % of EGR. Annualised figure / 4 = quarterly. /10000000 = INR → Cr.
+      // Formula no longer references the quarterly EGR cell (col q+1, row
+      // 11) since tax is area-driven, not revenue-driven.
+      formula: () => `=-SaleableAreaSqft*PropertyTaxPerSqftYr/4/10000000`,
       format: NUMBER_FORMATS.currency,
     },
     {

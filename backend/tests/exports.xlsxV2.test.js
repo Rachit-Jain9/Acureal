@@ -1659,5 +1659,137 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(foundSection).toBe(false);
       });
     });
+
+    // ── PR-I4 — Property Tax (BBMP UAV method, INR/sqft/yr) ────────────
+    // Pre-PR-I4 the income asset OpEx section had a "Property Tax" row
+    // expressed as "% of EGR" — wrong methodology for India. BBMP /
+    // BMC / MCGM / other Indian municipal corporations all use the
+    // Unit Area Value method: built-up area × per-sqft annual rate
+    // (varies by zone), regardless of rental income.
+    //
+    // PR-I4 swaps `PropertyTaxPct` (% of EGR) for `PropertyTaxPerSqftYr`
+    // (INR/sqft/year). Default ₹40 (mid-range Zone A commercial BLR).
+    // The Phasing formula computes `SaleableAreaSqft × rate / 4` per
+    // quarter, in INR Cr.
+    describe('PR-I4: Property Tax — BBMP UAV method (INR/sqft/yr)', () => {
+      test('Income asset Inputs sheet has PropertyTaxPerSqftYr named range (INR/sqft/yr unit)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('PropertyTaxPerSqftYr');
+
+        // The label should say "BBMP UAV" so operator knows the method
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let labelFound = false;
+        let unitFound = false;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Property Tax') && label.includes('BBMP UAV')) {
+            labelFound = true;
+            const unit = String(row.getCell(3).value || '');
+            if (unit.includes('INR') && unit.includes('sqft') && unit.includes('year')) {
+              unitFound = true;
+            }
+          }
+        });
+        expect(labelFound).toBe(true);
+        expect(unitFound).toBe(true);
+      });
+
+      test('PropertyTaxPerSqftYr default is 40 (mid-range Zone A commercial BLR)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        delete ctx.deal.model_params.inputs.propertyTaxPct;
+        delete ctx.deal.model_params.inputs.propertyTaxPerSqftYr;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Property Tax') && label.includes('BBMP UAV')) {
+            seed = row.getCell(2).value;
+          }
+        });
+        expect(seed).toBe(40);
+      });
+
+      test('Phasing Property Tax formula uses BBMP UAV method (area × rate / 4 / 10000000)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+        // Find Property Tax row by label
+        let ptRow = null;
+        phasing.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '');
+          if (label.includes('Property Tax') && label.includes('BBMP UAV')) ptRow = rowIdx;
+        });
+        expect(ptRow).toBeDefined();
+        expect(ptRow).not.toBeNull();
+
+        // Q1 (col B) formula = -SaleableAreaSqft × rate / 4 / 10000000
+        const q1Cell = phasing.getCell(ptRow, 2);
+        expect(q1Cell.value.formula).toBe('=-SaleableAreaSqft*PropertyTaxPerSqftYr/4/10000000');
+      });
+
+      test('Property tax is area-driven, not revenue-driven (doesn\'t scale with EGR or occupancy)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+        let ptRow = null;
+        phasing.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '');
+          if (label.includes('Property Tax') && label.includes('BBMP UAV')) ptRow = rowIdx;
+        });
+
+        // Property tax formula must NOT contain references to EGR rows
+        // (rows 11 historically), occupancy (row 6), or any quarter-
+        // sensitive cell that scales with rental income. It should be
+        // a constant per-quarter value (area × rate / 4) — the same in
+        // Q1 and Q12.
+        const q1Formula = phasing.getCell(ptRow, 2).value.formula;
+        const q12Formula = phasing.getCell(ptRow, 13).value.formula;
+        expect(q1Formula).toBe(q12Formula);
+        expect(q1Formula).not.toMatch(/PropertyTaxPct/);
+      });
+
+      test('Legacy propertyTaxPct (% of EGR) input is heuristically converted to PerSqftYr', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        ctx.deal.model_params.inputs.propertyTaxPct = 0.015; // 1.5% of EGR (legacy)
+        delete ctx.deal.model_params.inputs.propertyTaxPerSqftYr;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Property Tax') && label.includes('BBMP UAV')) {
+            seed = row.getCell(2).value;
+          }
+        });
+        // Heuristic: 0.015 × ₹1200/sqft/yr typical rent = ₹18/sqft/yr.
+        expect(seed).toBeCloseTo(18, 1);
+      });
+    });
   });
 });
