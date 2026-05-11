@@ -164,6 +164,40 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // when actual project total is ~266 Cr). The fix: cumulative rows
     // get `totalKind: 'final'` and the Total cell references the LAST
     // quarter's cell instead of summing.
+    // Regression: customer collection used to compute as
+    // `=B9*CollectionPct` for each quarter — same-quarter as the sale.
+    // For Indian residential this is wrong (RERA / construction-milestone-
+    // linked payment schedule means collection follows construction). The
+    // bug produced a front-loaded-positive cash-flow profile and a
+    // negative IRR despite positive net cumulative cash flow (operator's
+    // roast verified: IRR -15% on a 593 Cr revenue project with 30%
+    // gross margin).
+    //
+    // The fix: collection_q = totalContractedSales × CollectionPct ×
+    // constructionThisQuarter / totalConstruction. Each quarter's
+    // collection mirrors construction progress proportionally.
+    test('customer collection follows construction progress (RERA-milestone-linked, not same-quarter)', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+      // Row 10 = Customer collection. Pick Q5 (col F) as the test cell.
+      const f10 = phasing.getCell('F10').value;
+      const formula = f10 && typeof f10 === 'object' ? f10.formula : null;
+
+      // Must reference SUM of all sales (not just same-quarter sales)
+      expect(formula).toMatch(/SUM\(\$B\$9:\$[A-Z]+\$9\)/);
+      // Must reference SUM of all construction
+      expect(formula).toMatch(/SUM\(\$B\$6:\$[A-Z]+\$6\)/);
+      // Must reference THIS quarter's construction cell (col F, row 6)
+      expect(formula).toMatch(/F6/);
+      // Must multiply by CollectionPct named range
+      expect(formula).toMatch(/CollectionPct/);
+      // Must NOT use the old `=F9*CollectionPct` shape
+      expect(formula).not.toMatch(/^=F9\*CollectionPct$/);
+    });
+
     test('cumulative rows in Phasing use final-value (not SUM) for the Total column', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
