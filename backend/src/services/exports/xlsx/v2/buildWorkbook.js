@@ -588,8 +588,37 @@ const buildPhasingSheet = (workbook, ctx) => {
       format: NUMBER_FORMATS.currency,
     },
     {
+      // Customer collection is RERA / construction-milestone-linked in
+      // Indian residential — buyers pay incrementally as construction
+      // progresses (typical schedule: 10% on booking + 80% across
+      // construction milestones + 10% on possession). Previous model
+      // collected the full sale × CollectionPct in the SAME quarter as
+      // the sale, which produced a front-loaded-positive cash-flow
+      // profile (Q1-Q5 large positives, Q6-Q24 sustained negatives) →
+      // negative IRR despite positive net cash flow. Operator's roast
+      // verified: "IRR -15% despite positive net CF — fundamentally
+      // wrong."
+      //
+      // Construction-progress-linked model:
+      //   collection_q = totalContractedSales × CollectionPct
+      //                  × constructionThisQuarter / totalConstruction
+      //
+      // i.e. the operator collects CollectionPct of total contracted
+      // sales, distributed evenly across construction quarters in
+      // proportion to construction progress. This produces the
+      // conventional pattern (negative-early, positive-mid, taper-late)
+      // that yields a positive IRR matching the underlying margin.
       label: 'Customer collection (INR Cr)',
-      formula: (q) => `=${colLetter(q + 1)}9*CollectionPct`,
+      formula: (q) => {
+        const lastCol = colLetter(ctx.totalQuarters + 1);
+        const thisCol = colLetter(q + 1);
+        const totalSales = `SUM($B$9:$${lastCol}$9)`;
+        const totalConstruction = `SUM($B$6:$${lastCol}$6)`;
+        const thisConstruction = `${thisCol}6`;
+        // Guard against div-by-zero before construction starts
+        // (totalConstruction is constant; only zero in degenerate cases).
+        return `=IFERROR(${totalSales}*CollectionPct*${thisConstruction}/${totalConstruction},0)`;
+      },
       format: NUMBER_FORMATS.currency,
     },
     {
