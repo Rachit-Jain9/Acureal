@@ -325,6 +325,97 @@ describe('dealPptx.service', () => {
     expect(titles.some((t) => /Period (Net Cash Flow|NOI) (&|&amp;) Cumulative/.test(t))).toBe(true);
   });
 
+  // Slide 9 (City Benchmarking) previously rendered a single-series
+  // horizontal bar chart of comp mid-point pricing. When the comp service
+  // attaches distance_km (nearby-coordinate query), a scatter shows where
+  // each comp sits relative to the site — far more useful for an analyst
+  // than a sorted list of rates. The deal's modeled rate is plotted at
+  // distance = 0 so the reader can see the price gap visually.
+  test('renders a rate-vs-distance scatter on slide 9 when comp distances are present', () => {
+    const script = `
+      const JSZip = require('jszip');
+      const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+      const ctx = ${JSON.stringify(createExportContext())};
+      ctx.deal.selling_rate_per_sqft = 28;
+      ctx.market.exportComps = [
+        { project_name: 'Park A', rate_per_sqft: 31, distance_km: 1.4, is_verified: true },
+        { project_name: 'Park B', rate_per_sqft: 28, distance_km: 2.6, is_verified: true },
+        { project_name: 'Park C', rate_per_sqft: 29, distance_km: 3.8, is_verified: true },
+      ];
+      (async () => {
+        const buffer = await buildDealDeckPptx(ctx, {
+          brandName: 'REDIP', userName: 'Test', generatedAt: '2026-05-11T00:00:00Z',
+        });
+        const zip = await JSZip.loadAsync(buffer);
+        const chartFiles = Object.keys(zip.files).filter((n) => /^ppt\\/charts\\/chart\\d+\\.xml$/.test(n));
+        const chartTypes = await Promise.all(chartFiles.map(async (name) => {
+          const xml = await zip.files[name].async('string');
+          const types = (xml.match(/<c:(barChart|pieChart|doughnutChart|lineChart|scatterChart|areaChart)/g) || []).map((m) => m.slice(3));
+          const hasRateVsDistance = /Rate vs Distance/.test(xml);
+          return { types: [...new Set(types)], hasRateVsDistance };
+        }));
+        process.stdout.write(JSON.stringify({ chartTypes }));
+      })().catch((error) => { console.error(error); process.exit(1); });
+    `;
+    const output = execFileSync(process.execPath, ['-e', script], {
+      cwd: require('path').resolve(__dirname, '..'), encoding: 'utf8',
+    });
+    const result = JSON.parse(output);
+
+    // At least one chart must be a scatter, and must be the
+    // rate-vs-distance one (not some other scatter we might add later).
+    const scatterCharts = result.chartTypes.filter((c) =>
+      c.types.includes('scatterChart') && c.hasRateVsDistance
+    );
+    expect(scatterCharts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Slide 16 (Cash Flow & Sensitivity) previously rendered a 5×5 numeric
+  // heatmap table of IRR by selling-rate × construction-cost combinations.
+  // Informative but reads as a spreadsheet, not a chart. The tornado
+  // (built from shape primitives — pptxgenjs has no native tornado type)
+  // shows the same driver-impact ranges as horizontal bars centred on
+  // base IRR, sorted by absolute impact.
+  test('renders a sensitivity tornado on slide 16 (driver bars + base IRR axis)', () => {
+    const script = `
+      const JSZip = require('jszip');
+      const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+      const ctx = ${JSON.stringify(createExportContext())};
+      ctx.sensitivity = {
+        constructionCosts: [1800, 1900, 2000, 2100, 2200],
+        sellingRates: [6000, 6200, 6400, 6600, 6800],
+        irrGrid: [
+          [14.2, 15.0, 15.9, 16.8, 17.6],
+          [13.4, 14.2, 15.1, 15.9, 16.8],
+          [12.7, 13.5, 14.3, 15.2, 16.0],
+          [11.9, 12.7, 13.5, 14.4, 15.2],
+          [11.1, 11.9, 12.8, 13.6, 14.4],
+        ],
+      };
+      (async () => {
+        const buffer = await buildDealDeckPptx(ctx, {
+          brandName: 'REDIP', userName: 'Test', generatedAt: '2026-05-11T00:00:00Z',
+        });
+        const zip = await JSZip.loadAsync(buffer);
+        const slideNames = Object.keys(zip.files).filter((n) => /^ppt\\/slides\\/slide\\d+\\.xml$/.test(n));
+        const xmls = await Promise.all(slideNames.map((n) => zip.files[n].async('string')));
+        const tornadoSlide = xmls.find((xml) =>
+          xml.includes('SENSITIVITY')
+          && xml.includes('Selling Rate')
+          && xml.includes('Construction Cost')
+          && /Base IRR/.test(xml)
+        );
+        process.stdout.write(JSON.stringify({ hasTornado: !!tornadoSlide }));
+      })().catch((error) => { console.error(error); process.exit(1); });
+    `;
+    const output = execFileSync(process.execPath, ['-e', script], {
+      cwd: require('path').resolve(__dirname, '..'), encoding: 'utf8',
+    });
+    const result = JSON.parse(output);
+
+    expect(result.hasTornado).toBe(true);
+  });
+
   // Capital stack (debt vs equity) used to appear only as a comma-
   // separated text row inside the commercial-terms table on the
   // Transaction Summary slide. Reader couldn't see the proportion
