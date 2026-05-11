@@ -140,8 +140,10 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Marketing & Sales':       0.05,
         'Finance / Treasury Cost': 0.12,
         'Contingency':             0.04,
-        'GST':                     0.18,
-        'Stamp Duty':              0.05,
+        // PR-I1: GST + Stamp Duty moved into the new "India Statutory
+        // Levies" section with explicit India-context labels.
+        'GST on Construction (Net of ITC)': 0.18,
+        'Stamp Duty + Registration':        0.05,
         'Debt %':                  0.50,
         'Interest Rate':           0.12,
         'Discount Rate':           0.14,
@@ -868,23 +870,29 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         return v && typeof v === 'object' && v.formula ? v.formula : null;
       };
 
-      // Cost Build (rows 12–25 — expanded for the detailed soft cost
-      // breakdown PR). Hard subtotal at R15, soft subtotal at R24,
-      // total project cost at R25.
+      // Cost Build (rows 12–28 — expanded for the detailed soft cost
+      // breakdown PR + India Statutory Levies PR-I1).
+      //   R15 = Hard subtotal · R24 = Soft subtotal
+      //   R25-R26 = Stamp Duty + Reg · GST on Construction (PR-I1 lines)
+      //   R27 = India Statutory Levies subtotal
+      //   R28 = Total project cost (Hard + Soft + Statutory)
       expect(formulaAt('B15')).toBe('=B12+B13+B14');                      // Hard cost = Land + Construction + Approvals
       expect(formulaAt('B24')).toBe('=B16+B17+B18+B19+B20+B21+B22+B23');  // Soft cost = all 8 line items
-      expect(formulaAt('B25')).toBe('=B15+B24');                          // Total cost = Hard + Soft
+      expect(formulaAt('B25')).toBe('=LandCostCr*StampRegPct');           // Stamp Duty + Registration on Land (PR-I1)
+      expect(formulaAt('B26')).toBe('=B13*GstPct');                       // GST on Construction (Net of ITC) (PR-I1)
+      expect(formulaAt('B27')).toBe('=B25+B26');                          // India Statutory Levies subtotal (PR-I1)
+      expect(formulaAt('B28')).toBe('=B15+B24+B27');                      // Total cost = Hard + Soft + Statutory
 
-      // Debt Sculpting (rows 28–33). Total debt envelope refs B25
-      // (Total project cost in the expanded Cost Build).
-      expect(formulaAt('B29')).toBe('=B25*DebtLTV');                      // Total debt envelope
-      expect(formulaAt('B30')).toBe('=B25*(1-DebtLTV)');                  // Equity envelope
-      expect(formulaAt('B31')).toBe('=B29*DebtRatePct');                  // Annualised interest
-      expect(formulaAt('B32')).toBe('=B31/4');                            // Quarterly accrual
-      expect(formulaAt('B33')).toBe('=B31/SaleableAreaSqft*10000000');    // Per-sqft proxy
+      // Debt Sculpting (rows 31–36). Total debt envelope refs B28
+      // (Total project cost including India Statutory Levies, PR-I1).
+      expect(formulaAt('B32')).toBe('=B28*DebtLTV');                      // Total debt envelope
+      expect(formulaAt('B33')).toBe('=B28*(1-DebtLTV)');                  // Equity envelope
+      expect(formulaAt('B34')).toBe('=B32*DebtRatePct');                  // Annualised interest
+      expect(formulaAt('B35')).toBe('=B34/4');                            // Quarterly accrual
+      expect(formulaAt('B36')).toBe('=B34/SaleableAreaSqft*10000000');    // Per-sqft proxy
 
       // None of those formulas should reference their own cell.
-      ['B15', 'B24', 'B25', 'B29', 'B30', 'B31', 'B32', 'B33'].forEach((cellRef) => {
+      ['B15', 'B24', 'B25', 'B26', 'B27', 'B28', 'B32', 'B33', 'B34', 'B35', 'B36'].forEach((cellRef) => {
         const formula = formulaAt(cellRef) || '';
         expect(formula).not.toMatch(new RegExp(`\\b${cellRef}\\b`));
       });
@@ -1118,6 +1126,223 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         // sheetProtection.sheet === true would mean protection is active
         const isProtected = ws.sheetProtection && ws.sheetProtection.sheet === true;
         expect(isProtected).toBeFalsy();
+      });
+    });
+
+    // ── PR-I1 — India Statutory Levies as REAL cost lines ──────────────
+    // The first PR in the post-arc India localization batch. Closes the
+    // biggest correctness hole: GST + Stamp Duty + Registration used to
+    // be inputs on the Inputs sheet that didn't flow into ANY formula
+    // (purely decorative). Now they:
+    //   1. Live in a dedicated "India Statutory Levies" section on Inputs
+    //   2. Have asset-class-aware defaults (residential 5% GST; commercial
+    //      0% net of ITC; plotted 0%)
+    //   3. Materialise as 3 new rows on Phasing (Stamp+Reg Q1-only, GST
+    //      construction-spread, Total Statutory Levies)
+    //   4. Roll into the Calculations Cost Build at rows 25-27
+    //   5. Are reflected in the Total Project Cost (B28 in Calc; Total
+    //      Cost rollups on Debt Sizing + Waterfall sheets)
+    describe('PR-I1: India Statutory Levies — GST + Stamp Duty + Registration', () => {
+      test('Inputs sheet defines StampRegPct + GstPct named ranges in India Statutory Levies section', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const names = wb.definedNames.matrixMap || {};
+        // Both named ranges must exist as workbook-level names so the
+        // Phasing + Calculations sheets can reference them as named
+        // ranges (not hard-coded cell addresses).
+        const allNameRefs = wb.definedNames.model || [];
+        const namesList = allNameRefs.map((n) => n.name);
+        expect(namesList).toContain('StampRegPct');
+        expect(namesList).toContain('GstPct');
+
+        // The section header should appear on the Inputs sheet.
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let foundSection = false;
+        inputs.eachRow((row) => {
+          const v = String(row.getCell(1).value || '');
+          if (v.includes('India Statutory Levies')) foundSection = true;
+        });
+        expect(foundSection).toBe(true);
+      });
+
+      test('GST default is 5% for residential, 0% for commercial, 0% for plotted', async () => {
+        const getGstSeed = async (ctx) => {
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const inputs = wb.getWorksheet('Inputs & Assumptions');
+          let seed = null;
+          inputs.eachRow((row) => {
+            const label = String(row.getCell(1).value || '').trim();
+            if (label === 'GST on Construction (Net of ITC)') seed = row.getCell(2).value;
+          });
+          return seed;
+        };
+
+        // Build contexts that DON'T set gstPct so we exercise the
+        // asset-class default path (`indiaGstDefaultForClass`).
+        const baseCtx = minimalContext();
+        const stripGst = (c) => {
+          const next = JSON.parse(JSON.stringify(c));
+          delete next.deal.model_params.inputs.gstPct;
+          return next;
+        };
+        const residentialCtx = stripGst(baseCtx);
+        const commercialCtx = stripGst(baseCtx);
+        commercialCtx.deal.asset_class = 'commercial_office';
+        commercialCtx.property.property_type = 'commercial_office';
+        const plottedCtx = stripGst(baseCtx);
+        plottedCtx.deal.asset_class = 'plotted_development';
+        plottedCtx.property.property_type = 'plotted_development';
+
+        const [resGst, comGst, plotGst] = await Promise.all([
+          getGstSeed(residentialCtx),
+          getGstSeed(commercialCtx),
+          getGstSeed(plottedCtx),
+        ]);
+
+        expect(resGst).toBeCloseTo(0.05, 4); // residential — output GST collected, no ITC, developer eats net 5% of construction
+        expect(comGst).toBeCloseTo(0, 4);    // commercial — output GST collected from buyer fully offset by ITC on inputs
+        expect(plotGst).toBeCloseTo(0, 4);   // plotted — land transfer, no GST applicable
+      });
+
+      test('StampRegPct defaults to 0.066 (Karnataka 5.6% + 1%) when no input provided', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.stampDutyPct;
+        delete ctx.deal.model_params.inputs.stampRegPct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Stamp Duty + Registration') seed = row.getCell(2).value;
+        });
+        expect(seed).toBeCloseTo(0.066, 4);
+      });
+
+      test('StampRegPct combines legacy stampDutyPct + registrationPct when both are present', async () => {
+        const ctx = minimalContext();
+        ctx.deal.model_params.inputs.stampDutyPct = 0.05;
+        ctx.deal.model_params.inputs.registrationPct = 0.01;
+        delete ctx.deal.model_params.inputs.stampRegPct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Stamp Duty + Registration') seed = row.getCell(2).value;
+        });
+        expect(seed).toBeCloseTo(0.06, 4); // 5% + 1% = 6%
+      });
+
+      test('Phasing sheet has Stamp Duty Q1-only and GST construction-spread rows', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+        // Collect rows by label so we don't depend on exact row numbers.
+        const rowByLabel = {};
+        phasing.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) rowByLabel[label] = rowIdx;
+        });
+
+        // Three new rows from PR-I1 must exist on a development-family deal.
+        expect(rowByLabel['Stamp Duty + Registration on Land (INR Cr)']).toBeDefined();
+        expect(rowByLabel['GST on Construction — Net Cost (INR Cr)']).toBeDefined();
+        expect(rowByLabel['Total India Statutory Levies (INR Cr)']).toBeDefined();
+
+        // Stamp Duty + Registration row: Q1 (col B) carries the formula
+        // LandCostCr*StampRegPct; Q2-Q12 (cols C..M) are all literal 0.
+        const stampRow = rowByLabel['Stamp Duty + Registration on Land (INR Cr)'];
+        const q1Cell = phasing.getCell(stampRow, 2); // B = Q1
+        expect(q1Cell.value && q1Cell.value.formula).toBe('=LandCostCr*StampRegPct');
+        // Q2 (col C) onward are literal 0 (Stamp is paid up-front, not amortised)
+        for (let q = 2; q <= 6; q += 1) {
+          const cell = phasing.getCell(stampRow, 1 + q); // col B=Q1=2, so col C=Q2=3
+          const formula = cell.value && cell.value.formula;
+          expect(formula).toBe('=0');
+        }
+
+        // GST row: every quarter has the same IF-construction-window formula
+        // (spread across construction quarters), keyed to ConstructionLagQ
+        // and TotalQuarters. The formula text is identical per quarter
+        // except for the `q` numeric literal.
+        const gstRow = rowByLabel['GST on Construction — Net Cost (INR Cr)'];
+        for (let q = 1; q <= 4; q += 1) {
+          const cell = phasing.getCell(gstRow, 1 + q);
+          const f = (cell.value && cell.value.formula) || '';
+          expect(f).toContain('GstPct');
+          expect(f).toContain('ConstructionLagQ');
+          expect(f).toContain('TotalQuarters');
+        }
+      });
+
+      test('Calculations Cost Build includes Stamp+Reg + GST + Statutory subtotal + new Total cost at B28', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const calc = wb.getWorksheet('Calculations');
+
+        const formulaAt = (cellRef) => {
+          const v = calc.getCell(cellRef).value;
+          return v && typeof v === 'object' && v.formula ? v.formula : null;
+        };
+        const labelAt = (cellRef) => String(calc.getCell(cellRef).value || '');
+
+        // PR-I1 lines on the Calculations Cost Build
+        expect(labelAt('A25')).toContain('Stamp Duty');
+        expect(formulaAt('B25')).toBe('=LandCostCr*StampRegPct');
+        expect(labelAt('A26')).toContain('GST');
+        expect(formulaAt('B26')).toBe('=B13*GstPct');
+        expect(labelAt('A27')).toContain('India Statutory Levies');
+        expect(formulaAt('B27')).toBe('=B25+B26');
+
+        // Total project cost now rolls up Hard + Soft + Statutory.
+        expect(labelAt('A28')).toContain('Total project cost');
+        expect(formulaAt('B28')).toBe('=B15+B24+B27');
+      });
+
+      test('Debt Sizing + Waterfall Total Project Cost formulas include India Statutory Levies', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        // Both the Debt Sizing and Sponsor LP Waterfall sheets carry a
+        // local "Total Project Cost" formula (built up from named ranges
+        // so each sheet is self-contained). After PR-I1 both must include
+        // the LandCostCr*StampRegPct + Construction*GstPct levies; without
+        // it those sheets would understate cost vs the Calculations sheet.
+        const debtSizing = wb.getWorksheet('Debt Sizing');
+        const waterfall = wb.getWorksheet('Sponsor LP Waterfall');
+
+        const findCellByLabel = (sheet, expectedLabel) => {
+          let found = null;
+          sheet.eachRow((row, rowIdx) => {
+            const labelCell = row.getCell(1);
+            const label = String(labelCell.value || '');
+            if (label.includes(expectedLabel) && !found) {
+              const valCell = row.getCell(2);
+              const f = valCell.value && valCell.value.formula;
+              found = f || null;
+            }
+          });
+          return found;
+        };
+
+        const debtTotalCostFormula = findCellByLabel(debtSizing, 'Total Project Cost');
+        const wfTotalCostFormula = findCellByLabel(waterfall, 'Total Project Cost');
+
+        expect(debtTotalCostFormula).toMatch(/StampRegPct/);
+        expect(debtTotalCostFormula).toMatch(/GstPct/);
+        expect(wfTotalCostFormula).toMatch(/StampRegPct/);
+        expect(wfTotalCostFormula).toMatch(/GstPct/);
       });
     });
   });

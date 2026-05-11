@@ -97,6 +97,47 @@ const toPctDecimal = (value) => {
   return n > 1 ? n / 100 : n;
 };
 
+// ── India GST default by asset class ───────────────────────────────────
+// Per India GST regime (as of 2026-05-11): the developer's NET GST cost
+// (output GST collected from buyer / paid by developer, minus available
+// Input Tax Credit on construction inputs) depends on what's being sold:
+//
+//   residential / villas → 5% net cost. Under-construction residential
+//     attracts 5% GST collected from buyer + paid to govt; ITC on
+//     construction inputs is NOT available (Section 17(5)(d) / Notification
+//     03/2019). So the developer absorbs the input-side GST as construction
+//     cost and the 5% on the sale is a wash (collected + paid). Effective
+//     net GST cost to the developer ≈ 5% of construction value (matches
+//     industry rule-of-thumb from Anarock / JLL India reports).
+//
+//   plotted_development / raw_land / redevelopment → 0%. Plot sale = land
+//     transfer = no GST applicable (Schedule III, Item 5). Redevelopment
+//     for the rehab portion = no consideration = no GST.
+//
+//   commercial_office / retail / industrial_warehousing / mixed_use → 0%
+//     net cost. Output GST on under-construction commercial sale = 12%;
+//     full ITC available on construction inputs (Section 16 / Rule 38).
+//     Output GST is collected from buyer + paid to govt; ITC offsets
+//     input-side GST. Net cost to developer ≈ 0 in steady state.
+//
+//   hospitality → 0% net. Service GST on room nights / F&B = 12-18% with
+//     ITC available against construction-input GST. Net cost ≈ 0 over
+//     the hold period.
+//
+// Operators can always override the seeded default on the Inputs sheet.
+// The default reflects the modal behaviour; specific deals (e.g. an
+// affordable-residential project with 1% GST regime, or a long-lease
+// commercial where ITC reversal kicks in) need an explicit override.
+const indiaGstDefaultForClass = (assetClass) => {
+  switch (assetClass) {
+    case 'residential_apartments':
+    case 'villas':
+      return 0.05;
+    default:
+      return 0;
+  }
+};
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 /**
@@ -352,8 +393,62 @@ const buildInputsSheet = (workbook, ctx) => {
       ]),
       ['Finance / Treasury Cost', 'FinanceCostPct',      toPctDecimal(firstNumber(ctx.inputs.financeCostPct, 0.02)),                                                   '% of revenue', NUMBER_FORMATS.percent],
       ['Contingency',             'ContingencyPct',      toPctDecimal(firstNumber(ctx.inputs.contingencyPct, 0.05)),                                                   '% of cost', NUMBER_FORMATS.percent],
-      ['GST',                     'GstPct',              toPctDecimal(firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, 0.05)),                                    '%', NUMBER_FORMATS.percent],
-      ['Stamp Duty',              'StampDutyPct',        toPctDecimal(firstNumber(ctx.inputs.stampDutyPct, 0.05)),                                                     '%', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  // ── India Statutory Levies (PR-I1) ────────────────────────────────────
+  // Stamp Duty + Registration on land acquisition: Karnataka regime as of
+  // 2026-05 is 5% stamp duty + 1% registration + 0.5% surcharge ≈ 6.6%
+  // total on conveyance deeds for non-agricultural land. Combined as one
+  // input row "Stamp Duty + Registration" mapped to named range
+  // `StampRegPct`. Operators in other states (Maharashtra 5-6%, Tamil
+  // Nadu 7%, Telangana 7.5%) override the seeded default.
+  //
+  // GST on construction: asset-class-aware net cost (see
+  // `indiaGstDefaultForClass` above for the regime mapping). Stored as a
+  // single `% of hard cost` input; the Phasing sheet spreads it across
+  // construction quarters and feeds the Calculations cost build.
+  //
+  // Both inputs were previously buried in the Cost Structure section as
+  // generic "%" rows that didn't flow into any formula — purely
+  // decorative. This block surfaces them as their own section, with
+  // explicit India-context labels and units, and the Phasing /
+  // Calculations sheets now use them as real cost lines.
+  // Backward-compat resolution for StampRegPct (PR-I1):
+  //   1. Prefer explicit `stampRegPct` if the kernel emits it.
+  //   2. Else, if BOTH `stampDutyPct` + `registrationPct` are present,
+  //      add them — the kernel started breaking them out per India.
+  //   3. Else, treat a legacy `stampDutyPct` alone AS the combined rate
+  //      (kernels emitting only this field historically meant "the total
+  //      stamp + registration outflow" — e.g. a 5% test input meant 5%
+  //      combined, not 5% stamp + an extra 1% added by us).
+  //   4. Else, default to 0.066 (Karnataka 5.6% + 1% = 6.6%).
+  const legacyStampDuty = toPctDecimal(ctx.inputs.stampDutyPct);
+  const legacyRegistration = toPctDecimal(ctx.inputs.registrationPct);
+  let resolvedStampRegPct;
+  if (ctx.inputs.stampRegPct != null) {
+    resolvedStampRegPct = toPctDecimal(ctx.inputs.stampRegPct);
+  } else if (legacyStampDuty != null && legacyRegistration != null) {
+    resolvedStampRegPct = legacyStampDuty + legacyRegistration;
+  } else if (legacyStampDuty != null) {
+    resolvedStampRegPct = legacyStampDuty; // legacy: stampDutyPct alone meant the combined rate
+  } else {
+    resolvedStampRegPct = 0.066; // Karnataka default
+  }
+
+  const indiaStatutoryLeviesSection = {
+    title: 'India Statutory Levies (GST + Stamp Duty + Registration)',
+    rows: [
+      ['Stamp Duty + Registration', 'StampRegPct',
+        resolvedStampRegPct,
+        '% of land cost', NUMBER_FORMATS.percent],
+      ['GST on Construction (Net of ITC)', 'GstPct',
+        toPctDecimal(firstNumber(
+          ctx.inputs.gstPct,
+          ctx.inputs.gstRatePct,
+          indiaGstDefaultForClass(ctx.assetClass),
+        )),
+        '% of hard cost', NUMBER_FORMATS.percent],
     ],
   };
 
@@ -461,15 +556,25 @@ const buildInputsSheet = (workbook, ctx) => {
   };
 
   // Compose the sections list with asset-class branching.
-  // Detailed Soft Costs section sits right after the headline Cost
-  // Structure block so operators see the drilldown adjacent to its
-  // parent figures. Debt Sizing inputs come right after Capital Structure
-  // so the LTV/DCR/DY/LTC sub-limits sit next to the headline debt %.
+  // Order matters — sections appear top-to-bottom on the Inputs sheet:
+  //   1. General Site
+  //   2. Revenue (Development) OR (Income Revenue + Income OpEx)
+  //   3. Cost Structure (Land / Construction / Approvals / Marketing / Finance / Contingency)
+  //   4. Detailed Soft Costs (A&E / Legal / Appraisal / Insurance / PropTax-during-construction / Developer Overhead)
+  //   5. India Statutory Levies (Stamp+Reg on Land, GST on Construction Net of ITC) — PR-I1
+  //   6. Project Schedule
+  //   7. Capital Structure & Returns
+  //   8. Permanent Debt Sizing
+  //   9. Sponsor / LP Waterfall
+  // Statutory Levies sits between Detailed Soft Costs and Project Schedule
+  // because operators read the Inputs sheet top-to-bottom following the
+  // cost-then-schedule mental model.
   const sections = [
     generalSection,
     ...(ctx.dealFamily === 'income' ? [incomeRevenueSection, incomeOpExSection] : [developmentRevenueSection]),
     costSection,
     detailedSoftCostsSection,
+    indiaStatutoryLeviesSection,
     scheduleSection,
     capitalSection,
     debtSizingSection,
@@ -822,6 +927,50 @@ const buildPhasingSheet = (workbook, ctx) => {
       formula: (q) => {
         const c = colLetter(q + 1);
         return `=${c}13+${c}14+${c}15+${c}16+${c}17+${c}18`;
+      },
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    // ── India Statutory Levies (PR-I1) ──────────────────────────────────
+    // Three rows materialising what were previously decorative inputs:
+    //
+    //   Row 20  Stamp Duty + Registration on Land (Q1-only) — paid up-
+    //           front at acquisition. Karnataka default 6.6% of LandCostCr.
+    //           Modeled as a single-quarter outflow at Q1 to match the
+    //           legal-economic reality of conveyance: stamp duty + reg
+    //           cleared at deed registration, not amortised.
+    //
+    //   Row 21  GST on Construction (Net Cost) — spread evenly across
+    //           construction quarters (Q[lag+1] .. Q[total]). Net cost
+    //           defaults are asset-class-aware (see
+    //           `indiaGstDefaultForClass`):
+    //             residential/villas   = 5% of hard cost (no ITC)
+    //             commercial/retail/IW = 0% (ITC offsets output GST)
+    //             plotted/raw_land     = 0% (no GST on land transfer)
+    //
+    //   Row 22  Total India Statutory Levies — sum of rows 20 + 21 per
+    //           quarter, totalled in the Total column.
+    //
+    // These rows feed the Calculations Cost Build (rows 25-27) so the
+    // Dashboard Total Cost reflects the full India regulatory load.
+    {
+      label: 'Stamp Duty + Registration on Land (INR Cr)',
+      formula: (q) => q === 1
+        ? `=LandCostCr*StampRegPct`
+        : `=0`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'GST on Construction — Net Cost (INR Cr)',
+      formula: (q) =>
+        `=IF(AND(${q}>ConstructionLagQ,${q}<=TotalQuarters),(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct/MAX(TotalQuarters-ConstructionLagQ,1),0)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Total India Statutory Levies (INR Cr)',
+      formula: (q) => {
+        const c = colLetter(q + 1);
+        return `=${c}20+${c}21`;
       },
       format: NUMBER_FORMATS.currency,
       bold: true,
@@ -1824,7 +1973,11 @@ const buildDebtSizingSheet = (workbook, ctx) => {
 
   const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
   const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
-  const totalCost = `${hardCost}+${softCost}`;
+  // India Statutory Levies (PR-I1): Stamp+Reg on land at acquisition,
+  // plus net-of-ITC GST on construction value. Asset-class-aware via the
+  // GstPct + StampRegPct named ranges seeded on the Inputs sheet.
+  const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
+  const totalCost = `${hardCost}+${softCost}+${indiaLevies}`;
 
   // NOI driver — income family uses kernel-stored stabilised NOI when
   // available; development family uses a residual-land-value proxy.
@@ -1836,7 +1989,7 @@ const buildDebtSizingSheet = (workbook, ctx) => {
     : null;
 
   const inputsSummary = [
-    ['Total Project Cost (INR Cr)', `=${totalCost}`,                                   'Hard + Soft + Revenue-driven costs (matches Calculations!B25)'],
+    ['Total Project Cost (INR Cr)', `=${totalCost}`,                                   'Hard + Soft + India Statutory Levies (matches Calculations!B28)'],
     ['Stabilised NOI (INR Cr / yr)', ctx.dealFamily === 'income'
       ? (noiSource && /^[0-9.-]+$/.test(noiSource) ? `=${noiSource}` : `=${noiSource}`)
       : '"—"',
@@ -2221,10 +2374,14 @@ const buildWaterfallSheet = (workbook, ctx) => {
 
   const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
   const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
-  const totalCost = `${hardCost}+${softCost}`;
+  // India Statutory Levies (PR-I1): Stamp+Reg on land at acquisition,
+  // plus net-of-ITC GST on construction value. Asset-class-aware via the
+  // GstPct + StampRegPct named ranges seeded on the Inputs sheet.
+  const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
+  const totalCost = `${hardCost}+${softCost}+${indiaLevies}`;
 
   const capitalRows = [
-    ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              'Hard + Soft costs (matches Calculations!B25)'],
+    ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              'Hard + Soft + India Statutory Levies (matches Calculations!B28)'],
     ['Lender-Approved Loan (INR Cr)',   `='${SHEETS.debtSizing}'!B28`,                'MIN of LTC/LTV/DCR/DY from Debt Sizing'],
     ['Total Equity (INR Cr)',           '=B5-B6',                                    'Project cost − loan'],
     ['LP Equity (INR Cr)',              '=B7*LPEquityPct',                           'LP share × total equity'],
@@ -2687,16 +2844,20 @@ const buildCalculationsSheet = (workbook, ctx) => {
     ['Customer collected (INR Cr)',  `=${collectedRef}`,                                 'Sum of phased customer collection'],
   ]);
 
-  // Cost Build (rows 12–25) — full institutional-grade breakdown.
+  // Cost Build (rows 12–28) — full institutional-grade breakdown.
   // Hard cost block (rows 12-15):
   //   R12 Land · R13 Construction · R14 Approvals · R15 Hard subtotal
-  // Detailed soft cost block (rows 16-23) — references the named ranges
+  // Detailed soft cost block (rows 16-24) — references the named ranges
   // defined on the Inputs sheet for the 8 distinct soft cost line items
   // the operator's reference pro formas (NAIOP, RE-540) break out:
   //   R16 A&E · R17 Legal · R18 Appraisal · R19 Insurance during Const ·
   //   R20 Property Taxes during Const · R21 Developer Overhead ·
-  //   R22 Marketing & Sales (revenue-driven) · R23 Finance / Treasury (revenue-driven)
-  // R24 Soft cost subtotal · R25 Total project cost
+  //   R22 Marketing & Sales (revenue-driven) · R23 Finance / Treasury (revenue-driven) ·
+  //   R24 Soft cost subtotal
+  // India Statutory Levies block (rows 25-27) — PR-I1:
+  //   R25 Stamp Duty + Registration on Land · R26 GST on Construction (Net of ITC) ·
+  //   R27 India Statutory Levies subtotal
+  // R28 Total project cost = Hard + Soft + Statutory.
   writeBlock('Cost Build', [
     ['Land cost (INR Cr)',                   '=LandCostCr',                                                       'From Inputs & Assumptions'],
     ['Construction cost (INR Cr)',           '=ConstructionCostPerSqft*SaleableAreaSqft/10000000',                 'Construction rate × saleable area'],
@@ -2711,18 +2872,22 @@ const buildCalculationsSheet = (workbook, ctx) => {
     ['Marketing & sales (INR Cr)',           '=B8*MarketingCostPct',                                              'Total revenue × MarketingCostPct'],
     ['Finance / treasury (INR Cr)',          '=B8*FinanceCostPct',                                                'Total revenue × FinanceCostPct'],
     ['Soft cost subtotal',                   '=B16+B17+B18+B19+B20+B21+B22+B23',                                  'All 8 soft cost line items'],
-    ['Total project cost (INR Cr)',          '=B15+B24',                                                          'Hard + Soft costs'],
+    ['Stamp Duty + Registration on Land',    '=LandCostCr*StampRegPct',                                            'Karnataka default 6.6% × Land (PR-I1)'],
+    ['GST on Construction (Net of ITC)',     '=B13*GstPct',                                                        'Asset-class-aware net cost (PR-I1)'],
+    ['India Statutory Levies subtotal',      '=B25+B26',                                                           'Stamp+Reg + GST'],
+    ['Total project cost (INR Cr)',          '=B15+B24+B27',                                                       'Hard + Soft + Statutory'],
   ]);
 
-  // Debt Sculpting block now sits at rows 27–32 (shifted down due to
-  // the expanded Cost Build).
+  // Debt Sculpting block now sits at rows 30–35 (shifted down due to
+  // the expanded Cost Build with India Statutory Levies). Total project
+  // cost lives at row 28 (was 25 pre-PR-I1).
   writeBlock('Debt Sculpting', [
     ['Debt LTV (% of cost)',         '=DebtLTV',                                        'From Inputs & Assumptions'],
-    ['Total debt envelope (INR Cr)', '=B25*DebtLTV',                                    'Total project cost × LTV (B25 = Total cost at expanded Cost Build)'],
-    ['Equity envelope (INR Cr)',     '=B25*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
-    ['Annualised interest cost',     '=B29*DebtRatePct',                                'Debt envelope × rate (peak proxy)'],
-    ['Quarterly interest accrual',   '=B31/4',                                          'Annualised ÷ 4 (sanity check vs Cash Flow row 10)'],
-    ['Effective debt cost / unit',   '=B31/SaleableAreaSqft*10000000',                  'Per-sqft cost-of-capital proxy (Cr → INR ÷ sqft)'],
+    ['Total debt envelope (INR Cr)', '=B28*DebtLTV',                                    'Total project cost × LTV (B28 = Total cost incl. India Statutory Levies)'],
+    ['Equity envelope (INR Cr)',     '=B28*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
+    ['Annualised interest cost',     '=B32*DebtRatePct',                                'Debt envelope × rate (peak proxy)'],
+    ['Quarterly interest accrual',   '=B34/4',                                          'Annualised ÷ 4 (sanity check vs Cash Flow row 10)'],
+    ['Effective debt cost / unit',   '=B34/SaleableAreaSqft*10000000',                  'Per-sqft cost-of-capital proxy (Cr → INR ÷ sqft)'],
   ]);
 
   writeBlock('Returns Inputs (for Dashboard IRR/NPV)', [
