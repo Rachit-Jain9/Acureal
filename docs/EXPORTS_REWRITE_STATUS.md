@@ -1,7 +1,7 @@
 # Exports rewrite — status tracker
 
 _Source plan: `~/.claude/plans/lets-work-on-exports-harmonic-backus.md`._
-_Last updated: 2026-05-10 (late session). Update at the bottom of each session._
+_Last updated: 2026-05-11 (six-PR batch addressing operator's brutal-roast feedback). Update at the bottom of each session._
 
 This file tracks the multi-PR investor-grade exports rebuild so future
 sessions can pick up where the last left off without re-reading the chat.
@@ -34,6 +34,11 @@ sessions can pick up where the last left off without re-reading the chat.
 | #245 | **XLSX asset-class restructure**: full Operating P&L for income deals (PGI / Vacancy / EGR / OpEx breakdown / NOI / CapEx / Debt Service / Reversion) + sheet-protection popups removed | ✅ MERGED |
 | #246 | **XLSX Dashboard restructure**: 14-column grid, asset-aware Quarterly Trend table with conditional-format data bars, IRR/NPV cash-flow row fixed for income deals | ✅ MERGED |
 | #247 | **XLSX JV / JDA profit waterfall** on Dashboard (Total Profit → Developer Share → Landowner Share) | ✅ MERGED |
+| #248 | **Fix**: XLSX Calculations sheet circular refs (8 off-by-one row references) + Circle Rate "0" displays as "–" in PPTX/DOCX when missing | ✅ MERGED |
+| #249 | **Feat**: PPTX cash flow combo chart (column + line) on slide 16 + capital stack horizontal bar on slide 17 | ✅ MERGED |
+| #250 | **Fix**: XLSX percent-input normalisation (`toPctDecimal`) — kernel-stored integer-percent (5 for 5%) now converted to decimal (0.05) for `0.0%` cells. 24 percent inputs covered | ✅ MERGED |
+| #251 | **Feat**: PPTX sensitivity tornado on slide 16 (replaces 5×5 heatmap table) + rate-vs-distance scatter on slide 9 | ✅ MERGED |
+| #252 | **Feat**: DOCX SVG chart embeds — capital stack donut + quarterly cash flow trend + sensitivity tornado in the Financials section (pure-SVG, no native deps) | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
@@ -94,8 +99,27 @@ sessions can pick up where the last left off without re-reading the chat.
 - International deals / multi-currency (REDIP is Bengaluru-first)
 - Server-side chart rasterisation via `chartjs-node-canvas` (avoided to
   keep Vercel cold start fast; native pptxgenjs / ExcelJS charts are
-  used instead)
+  used instead). PR #252 added pure-SVG charts via `chartSvg.service.js`
+  that work for PPTX + DOCX without any native deps; XLSX chart embeds
+  would still need raster conversion (ExcelJS doesn't accept SVG via
+  addImage) — re-open if operator decides to take the cold-start hit.
 - DOCX cover artwork as native shapes (the docx library lacks the same
   shape primitives as pptxgenjs; current DOCX cover is editorial
   typography + score-gauge would require a different image-generation
   path. Low-priority — DOCX is a written report, not a presentation).
+- **Kernel-side percent normalisation in `financial.service.js` and
+  `packages/financial-kernel/`.** Investigated 2026-05-11 — kernel uses
+  MIXED conventions per-input: most percent fields are integer-form
+  (e.g. `marketingCostPct = 5` for 5%, kernel does `/100` internally),
+  but some are decimal-form (`constLoanLTC = 0.55`, kernel uses raw).
+  A blanket normalizer would break decimal-form fields; per-field
+  convention audit + migration of mis-stored deal data + frontend
+  coordination required. The export-write-layer fix in PR #250 already
+  covers the surfaced symptom (Excel `0.0%` cells render as 5% not
+  500% even when kernel hands us 5). Re-open when operator wants the
+  full upstream cleanup.
+- **Multi-driver tornado** (occupancy, debt rate, escalation, exit
+  cap). PR #251 + #252 ship a 2-driver tornado (selling rate +
+  construction cost) extracted from the existing 2D sensitivity matrix.
+  A 1D sensitivity per individual driver would let the tornado span
+  5+ drivers — needs kernel work to emit per-driver curves.

@@ -4,6 +4,34 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 — Operator's brutal-roast batch: bug fixes + chart density across PPTX / XLSX / DOCX (PRs #248–#252)
+
+Operator downloaded the Jigani Apartments sample exports (XLSX + PPTX) and posted a long roast comparing them to CBRE / JLL / Blackstone-grade deliverables. Took it as a verification exercise — opened both files, separated real bugs from polish wishlist, shipped five themed PRs sequentially.
+
+### PRs shipped
+- **#248** _Fix_: XLSX Calculations sheet had eight off-by-one row references creating circular formulas (e.g. `Hard cost subtotal = B13+B14+B15` self-referencing B15). Excel popped a circular-reference warning on every file open and zeroed every cost figure. Plus: `formatRate(0)` was emitting "INR 0 / sqft" on the Asset Snapshot slide when the deal had no circle rate — now falls through to "–". Regression test locks the eight cell formulas in.
+- **#249** _Feat_: PPTX slide 16 (Cash Flow & Sensitivity) upgraded from single-series net-cf bar to a **combo chart** (column for period net + line for cumulative on a secondary axis, asset-class-aware title). Slide 17 (Transaction Summary) got a **capital stack horizontal bar** with proportional debt/equity segments + inline percent labels + INR Cr legend.
+- **#250** _Fix_: XLSX percent normalisation. Kernel stores some percentages as integer (5 for 5%) and others as decimal (0.05). Excel's `0.0%` format multiplies by 100 for display, so integer-stored values rendered as 500% AND every formula like `=Revenue * MarketingCostPct` produced 5× revenue. New `toPctDecimal()` helper applied to 24 percent inputs; defaults already-decimal pass through unchanged.
+- **#251** _Feat_: PPTX slide 16's 5×5 sensitivity heatmap table replaced with a **driver-impact tornado** built from shape primitives. Slide 9's bar chart replaced with a **rate-vs-distance scatter** when comps have `distance_km` populated (with the deal's modeled rate at distance = 0 for anchoring).
+- **#252** _Feat_: DOCX gets analytical visuals. New `chartSvg.service.js` (pure-JS SVG renderer, no native deps) supplies three charts now embedded in the DOCX Financials section: **capital stack donut** + **quarterly cash flow trend** (period bars + cumulative line) + **sensitivity tornado**. All ImageRun embeds with 1×1 PNG fallback.
+
+### Tests
+146 export tests green (was 132 at start of batch): +1 Calculations regression (#248), +2 combo + capital stack tests (#249), +1 percent-normalisation regression (#250), +2 tornado + scatter tests (#251), +14 DOCX chart embeds + chartSvg unit tests (#252).
+
+### Investigated + deferred
+- **Kernel-side percent fix** (`packages/financial-kernel/`). Audited — kernel uses MIXED conventions per-input (most fields integer-form with internal `/100`; a few decimal-form used raw). A blanket normalizer would break legitimate decimal-form inputs like `constLoanLTC = 0.55`. Safe fix requires per-field convention audit + stored-deal data migration + frontend coordination. The export-write-layer fix in PR #250 covers the surfaced Excel symptom; upstream cleanup deferred to a dedicated focused effort.
+- **XLSX Dashboard chart objects**: ExcelJS 4.4.0 has no `addChart` API (confirmed `addChart` is undefined). Library swap (xlsx-js-style / node-xlsx — both build on SheetJS, neither writes native charts in the free version). The pure-SVG path that works for PPTX + DOCX doesn't work for XLSX because ExcelJS `addImage` doesn't accept SVG. Adding raster conversion would require `canvas` / `sharp` / `resvg-js` — explicitly avoided per project policy ("kept Vercel cold start fast"). Re-open if operator decides to take the cold-start hit.
+- **Multi-driver tornado** (occupancy, debt rate, escalation, exit cap): 2-driver tornado (selling rate + construction cost) ships in #251 + #252 using the existing 2D sensitivity matrix. Going beyond 2 drivers needs the kernel to emit per-driver 1D curves.
+
+### Operator manual actions outstanding
+- Apply migration `database/migrations/20260527_export_events.sql` via Supabase SQL Editor (export-events audit ledger — exports work without it).
+- Optional: `DOCX_REPORT_ENABLED=1` to expose the DOCX underwriting report to non-admin users.
+
+### Honest framing for the operator
+Roast called for CBRE / JLL / Blackstone-grade outputs. The hard correctness bugs (circular references, percent normalisation, missing-data zeros) are fixed and won't recur. The visual depth gaps the roast called out — tornado, capital stack visual, scatter, cash-flow combo — are now native chart objects in PPTX and SVG embeds in DOCX. XLSX Dashboard remains text-and-data-bar-heavy because the library doesn't support live chart objects; the analytical depth there is in the Calculations sheet + named ranges + conditional formatting, not chart visuals.
+
+---
+
 ## 2026-05-10 (late late session) — XLSX restructure for income assets (PRs #244–#247)
 
 Continuation of the same long day. Operator pushed back hard on the v2 workbook ("ugly, incompetent, no PGI / EGR / OpEx / NOI / CapEx / Debt Service / NPV") — fair criticism, the v2 was development-focused even for income deals. Three more PRs land tonight.
