@@ -46,6 +46,7 @@ const SHEETS = {
   phasing: 'Phasing & Sales Collection',
   cashflow: 'Quarterly Cash Flow & Debt',
   dashboard: 'Dashboard',
+  debtSizing: 'Debt Sizing',
   amortization: 'Amortization Schedule',
   calculations: 'Calculations',
 };
@@ -407,10 +408,34 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Permanent Debt Sizing inputs (PR-B) ──────────────────────────────
+  // Reference institutional pro formas (RE-540 "Permanent Debt Calculation"
+  // sheet) size the permanent loan as the MIN of three sub-limits:
+  //   - LTV-based: MaxLTV × Stabilised Value (= NOI ÷ Cap Rate)
+  //   - DCR-based: NOI ÷ MinDCR ÷ Annual Payment Factor
+  //   - DY-based:  NOI ÷ MinDY
+  // The MIN is the lender-approved loan amount. For construction, lenders
+  // also size against Loan-to-Cost (LTC) — typically tighter than LTV at
+  // the construction stage when value hasn't been created yet.
+  //
+  // Defaults match Indian institutional lender benchmarks (HDFC, ICICI,
+  // Edelweiss): conservative MaxLTV 65%, MinDCR 1.30, MinDY 9%, MaxLTC 75%.
+  // Operator can override on the Inputs sheet.
+  const debtSizingSection = {
+    title: 'Permanent Debt Sizing (LTV / DCR / DY / LTC limits)',
+    rows: [
+      ['Maximum LTV (Permanent)', 'PermMaxLTV',  toPctDecimal(firstNumber(ctx.inputs.permMaxLTV, ctx.inputs.maxLTV, 0.65)),     '% of stabilised value', NUMBER_FORMATS.percent],
+      ['Minimum DCR (Permanent)', 'PermMinDCR',  firstNumber(ctx.inputs.permMinDCR, ctx.inputs.minDCR, 1.30),                    'multiple',              NUMBER_FORMATS.multiple],
+      ['Minimum Debt Yield',      'PermMinDY',   toPctDecimal(firstNumber(ctx.inputs.permMinDY, ctx.inputs.minDebtYield, 0.09)), '% NOI/loan',            NUMBER_FORMATS.percent],
+      ['Maximum LTC (Construction)', 'ConstrMaxLTC', toPctDecimal(firstNumber(ctx.inputs.constrMaxLTC, ctx.inputs.maxLTC, 0.75)), '% of total cost',     NUMBER_FORMATS.percent],
+    ],
+  };
+
   // Compose the sections list with asset-class branching.
   // Detailed Soft Costs section sits right after the headline Cost
   // Structure block so operators see the drilldown adjacent to its
-  // parent figures.
+  // parent figures. Debt Sizing inputs come right after Capital Structure
+  // so the LTV/DCR/DY/LTC sub-limits sit next to the headline debt %.
   const sections = [
     generalSection,
     ...(ctx.dealFamily === 'income' ? [incomeRevenueSection, incomeOpExSection] : [developmentRevenueSection]),
@@ -418,6 +443,7 @@ const buildInputsSheet = (workbook, ctx) => {
     detailedSoftCostsSection,
     scheduleSection,
     capitalSection,
+    debtSizingSection,
   ];
 
   let row = 5;
@@ -1698,6 +1724,244 @@ const buildDashboardSheet = (workbook, ctx) => {
  * the audit trail recalculates in lockstep with operator edits.
  */
 /**
+ * Debt Sizing sheet (PR-B) — computes the lender-approved permanent loan
+ * amount as the MIN of four sub-limits, matching the reference pro
+ * formas (RE-540 "Permanent Debt Calculation" sheet):
+ *   - Loan-to-Cost (LTC) — construction-stage limit
+ *   - Loan-to-Value (LTV) — permanent-stage limit on stabilised value
+ *   - Debt Coverage Ratio (DCR) — cash-flow coverage on debt service
+ *   - Debt Yield (DY) — pure NOI-to-loan ratio
+ *
+ * Why MIN of four: each lender computes their own conservative loan ceiling
+ * three different ways (LTV / DCR / DY) and applies the tightest. The
+ * resulting "permanent loan" is what the borrower actually receives.
+ * Construction lenders additionally cap at LTC during the build phase.
+ *
+ * Asset-class branching:
+ *   - INCOME family (commercial_office / retail / industrial_warehousing /
+ *     hospitality): all four metrics meaningful. Uses the kernel's
+ *     stabilised NOI (deal.stabilized_noi_cr or deal.noi_cr) as the
+ *     NOI driver; falls back to Phasing!Z18 × 4 (= annualised modeled NOI
+ *     from the operating P&L) if the kernel hasn't stored one.
+ *   - DEVELOPMENT family (residential_apartments / villas / plotted_dev /
+ *     mixed_use / redevelopment / raw_land): development deals don't
+ *     typically have permanent debt — they use construction loan only,
+ *     repaid from sales proceeds. Sheet shows LTC-based sizing prominent;
+ *     LTV/DCR/DY computed for reference but tagged "Not Applicable" with
+ *     a note.
+ *
+ * Output: a single cell named `PermLoanSized` (NAMED RANGE pointing at
+ * the MIN of the four). The Amortization Schedule's Loan Amount formula
+ * references this named range when it exists, so amortization shows the
+ * actual lender-approved amount rather than the simple Total Cost × DebtLTV.
+ */
+const buildDebtSizingSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.debtSizing, {
+    views: [{ showGridLines: false }],
+  });
+  sheet.columns = [
+    { width: 32 }, // A: Label
+    { width: 22 }, // B: Value
+    { width: 32 }, // C: Note
+  ];
+
+  // Title
+  sheet.mergeCells('A1:C1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Debt Sizing`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+
+  sheet.mergeCells('A2:C2');
+  sheet.getCell('A2').value =
+    'Permanent loan amount = MIN of four lender-approved limits (LTV / DCR / DY / LTC). '
+    + (ctx.dealFamily === 'income'
+      ? 'Income asset uses stabilised NOI as the cash-flow driver for DCR + DY tests.'
+      : 'Development deal — LTC is the binding constraint during construction; LTV / DCR / DY are reference-only (no stabilised NOI yet).');
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 28;
+
+  // ── Inputs Summary (rows 4-7) ──────────────────────────────────────────
+  // Total Cost and NOI are the two drivers of every sizing test. Show
+  // them at the top so the analyst sees what's feeding the MIN calcs.
+  // Total Cost formula mirrors the expanded Cost Build from PR-A:
+  //   Hard cost + Detailed soft costs + Revenue-driven soft costs
+  // NOI source is asset-class-aware (income vs development).
+  sheet.mergeCells('A4:C4');
+  sheet.getCell('A4').value = 'Sizing Inputs';
+  styleSectionTitle(sheet.getCell('A4'));
+  sheet.getRow(4).height = 22;
+
+  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
+  const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
+  const totalCost = `${hardCost}+${softCost}`;
+
+  // NOI driver — income family uses kernel-stored stabilised NOI when
+  // available; development family uses a residual-land-value proxy.
+  // Kernel stores in INR Cr; reference templates use INR Cr for both.
+  const noiSource = ctx.dealFamily === 'income'
+    ? (firstNumber(ctx.deal.stabilized_noi_cr, ctx.deal.noi_cr, ctx.kernelKpis?.noi) != null
+        ? String(firstNumber(ctx.deal.stabilized_noi_cr, ctx.deal.noi_cr, ctx.kernelKpis?.noi))
+        : `'${SHEETS.phasing}'!N18*4`) // fallback to phased modeled NOI × 4 (annualised)
+    : null;
+
+  const inputsSummary = [
+    ['Total Project Cost (INR Cr)', `=${totalCost}`,                                   'Hard + Soft + Revenue-driven costs (matches Calculations!B25)'],
+    ['Stabilised NOI (INR Cr / yr)', ctx.dealFamily === 'income'
+      ? (noiSource && /^[0-9.-]+$/.test(noiSource) ? `=${noiSource}` : `=${noiSource}`)
+      : '"—"',
+      ctx.dealFamily === 'income' ? 'Kernel-stored or modeled annualised NOI' : 'Not applicable — development deal'],
+    ['Stabilised Value (INR Cr)',   ctx.dealFamily === 'income' ? '=B6/ExitCapRate' : '"—"',
+      ctx.dealFamily === 'income' ? 'NOI ÷ Exit Cap Rate' : 'Not applicable — development deal'],
+    ['Loan Interest Rate (annual)', '=DebtRatePct',                                    'From Capital Structure inputs'],
+  ];
+  inputsSummary.forEach(([label, value, note], idx) => {
+    const r = 5 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const cell = sheet.getCell(`B${r}`);
+    if (value.startsWith('=')) cell.value = { formula: value };
+    else cell.value = value.replace(/^"|"$/g, '');
+    styleOutputCell(cell, label.includes('Rate') ? NUMBER_FORMATS.percent : NUMBER_FORMATS.currency);
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    sheet.getCell(`C${r}`).value = note;
+    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`C${r}`).protection = { locked: true };
+  });
+
+  // ── 4 sizing methods (rows 10-25) ──────────────────────────────────────
+  // Each method block:
+  //   Row N:   Block title (merged A:C)
+  //   Row N+1: Maximum threshold (e.g., "Maximum LTV") with its named-range input
+  //   Row N+2: Implied loan amount (formula)
+  //   Row N+3: Implied debt / cost or yield ratio (a sanity-check derivative)
+  sheet.mergeCells('A10:C10');
+  sheet.getCell('A10').value = 'Method 1 — Loan-to-Cost (LTC) [Construction stage]';
+  styleSectionTitle(sheet.getCell('A10'));
+  sheet.getRow(10).height = 22;
+  const m1Rows = [
+    ['Maximum LTC',                'ConstrMaxLTC',          '=ConstrMaxLTC',                            NUMBER_FORMATS.percent, 'From Inputs!ConstrMaxLTC'],
+    ['Implied loan amount (INR Cr)', null,                  `=ConstrMaxLTC*${totalCost}`,                NUMBER_FORMATS.currency, 'Max LTC × Total Project Cost'],
+  ];
+
+  sheet.mergeCells('A14:C14');
+  sheet.getCell('A14').value = 'Method 2 — Loan-to-Value (LTV) [Permanent stage]';
+  styleSectionTitle(sheet.getCell('A14'));
+  sheet.getRow(14).height = 22;
+  const m2Rows = ctx.dealFamily === 'income'
+    ? [
+        ['Maximum LTV',                'PermMaxLTV',         '=PermMaxLTV',                              NUMBER_FORMATS.percent,  'From Inputs!PermMaxLTV'],
+        ['Implied loan amount (INR Cr)', null,               '=PermMaxLTV*B7',                            NUMBER_FORMATS.currency, 'Max LTV × Stabilised Value'],
+      ]
+    : [
+        ['Maximum LTV',                'PermMaxLTV',         '=PermMaxLTV',                              NUMBER_FORMATS.percent,  'Reference only — no stabilised value'],
+        ['Implied loan amount (INR Cr)', null,               '"—"',                                       null,                    'Development deals exit via sales not refinance'],
+      ];
+
+  sheet.mergeCells('A18:C18');
+  sheet.getCell('A18').value = 'Method 3 — Debt Coverage Ratio (DCR)';
+  styleSectionTitle(sheet.getCell('A18'));
+  sheet.getRow(18).height = 22;
+  // DCR-based loan = NOI / DCR / annual payment factor
+  // Annual payment factor = (1 - (1+r)^-n) / r — present-value annuity factor
+  const m3Rows = ctx.dealFamily === 'income'
+    ? [
+        ['Minimum DCR',                'PermMinDCR',         '=PermMinDCR',                                NUMBER_FORMATS.multiple, 'From Inputs!PermMinDCR'],
+        ['Annual max debt service',    null,                  '=B6/PermMinDCR',                            NUMBER_FORMATS.currency, 'NOI ÷ DCR'],
+        ['Implied loan amount (INR Cr)', null,                '=IFERROR(B20*(1-(1+DebtRatePct)^(-LoanTermYears))/DebtRatePct,0)', NUMBER_FORMATS.currency, 'PV of annual debt service'],
+      ]
+    : [
+        ['Minimum DCR',                'PermMinDCR',         '=PermMinDCR',                                NUMBER_FORMATS.multiple, 'Reference only — no stabilised NOI'],
+        ['Annual max debt service',    null,                  '"—"',                                       null,                    'Not applicable'],
+        ['Implied loan amount (INR Cr)', null,                '"—"',                                       null,                    'Not applicable'],
+      ];
+
+  sheet.mergeCells('A23:C23');
+  sheet.getCell('A23').value = 'Method 4 — Debt Yield (DY)';
+  styleSectionTitle(sheet.getCell('A23'));
+  sheet.getRow(23).height = 22;
+  const m4Rows = ctx.dealFamily === 'income'
+    ? [
+        ['Minimum Debt Yield',         'PermMinDY',          '=PermMinDY',                                 NUMBER_FORMATS.percent,  'From Inputs!PermMinDY'],
+        ['Implied loan amount (INR Cr)', null,               '=B6/PermMinDY',                              NUMBER_FORMATS.currency, 'NOI ÷ Debt Yield'],
+      ]
+    : [
+        ['Minimum Debt Yield',         'PermMinDY',          '=PermMinDY',                                 NUMBER_FORMATS.percent,  'Reference only — no stabilised NOI'],
+        ['Implied loan amount (INR Cr)', null,               '"—"',                                       null,                    'Not applicable'],
+      ];
+
+  // Write each block's rows
+  const writeBlock = (startRow, rows) => {
+    rows.forEach(([label, namedRange, formula, fmt, note], idx) => {
+      const r = startRow + idx;
+      sheet.getCell(`A${r}`).value = label;
+      styleLabelCell(sheet.getCell(`A${r}`));
+      const cell = sheet.getCell(`B${r}`);
+      if (formula.startsWith('=')) cell.value = { formula };
+      else cell.value = formula.replace(/^"|"$/g, '');
+      styleOutputCell(cell, fmt);
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      sheet.getCell(`C${r}`).value = note;
+      sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`C${r}`).protection = { locked: true };
+    });
+  };
+  writeBlock(11, m1Rows);
+  writeBlock(15, m2Rows);
+  writeBlock(19, m3Rows);
+  writeBlock(24, m4Rows);
+
+  // ── Final MIN cell (row 27) — LENDER-APPROVED LOAN AMOUNT ─────────────
+  // For income deals: MIN of all four (LTC, LTV, DCR, DY). For development
+  // deals: just the LTC-based amount since LTV/DCR/DY all return "—".
+  sheet.mergeCells('A27:C27');
+  sheet.getCell('A27').value = 'Lender-Approved Loan Amount';
+  styleSectionTitle(sheet.getCell('A27'));
+  sheet.getRow(27).height = 22;
+
+  sheet.getCell('A28').value = 'Permanent Loan (final)';
+  styleLabelCell(sheet.getCell('A28'));
+  const finalCell = sheet.getCell('B28');
+  // MIN of the four implied loan amounts. For development family, LTV/
+  // DCR/DY cells contain "—" strings — wrap with IFERROR so MIN
+  // skips them gracefully.
+  if (ctx.dealFamily === 'income') {
+    finalCell.value = { formula: '=MIN(B12,B16,B21,B25)' };
+  } else {
+    finalCell.value = { formula: '=B12' }; // LTC-based only for dev family
+  }
+  styleOutputCell(finalCell, NUMBER_FORMATS.currency);
+  finalCell.font = { name: FONT, size: 14, bold: true, color: { argb: palette.xlsx('dataPositive') } };
+
+  sheet.getCell('C28').value = ctx.dealFamily === 'income'
+    ? 'MIN of LTC / LTV / DCR / DY — the tightest constraint wins'
+    : 'LTC-based only — development deals use construction loan, exit via sales';
+  sheet.getCell('C28').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+
+  // Comparison to simple "DebtLTV × Total Cost" (the legacy formula)
+  sheet.getCell('A29').value = 'For comparison: DebtLTV × Total Cost (legacy)';
+  sheet.getCell('A29').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  const legacyCell = sheet.getCell('B29');
+  legacyCell.value = { formula: `=DebtLTV*${totalCost}` };
+  styleOutputCell(legacyCell, NUMBER_FORMATS.currency);
+  legacyCell.font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('C29').value = 'Pre-PR-B sizing for reference';
+  sheet.getCell('C29').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+
+  // Footer disclosure
+  sheet.mergeCells('A31:C31');
+  sheet.getCell('A31').value =
+    'NOI sourced from kernel-stored stabilised_noi_cr when populated (income family). '
+    + 'Annual payment factor uses simple ordinary annuity — moratorium not modelled. '
+    + 'For development deals, lender sizing in practice depends on residual land value + sales receivable assignment — model treats LTC as binding for simplicity.';
+  sheet.getCell('A31').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A31').alignment = { vertical: 'top', wrapText: true };
+  sheet.getRow(31).height = 36;
+
+  return sheet;
+};
+
+/**
  * Amortization Schedule sheet — quarter-by-quarter debt amortization with
  * Beginning Balance / Payment / Interest / Principal / Ending Balance
  * columns. This is the standard "Amortization Schedule" sheet in every
@@ -1755,16 +2019,17 @@ const buildAmortizationSheet = (workbook, ctx) => {
   styleSectionTitle(sheet.getCell('A4'));
   sheet.getRow(4).height = 22;
 
-  // Loan Amount = (Total Cost) × DebtLTV. Total Cost = Hard + detailed
-  // soft costs (matching the expanded Calculations sheet Cost Build).
-  // Note: this is the "pure-LTV" loan amount; once PR-B ships, the
-  // permanent loan will be MIN(LTV-based, DCR-based, DY-based).
-  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
-  const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
-  const totalCost = `${hardCost}+${softCost}`;
-
+  // Loan Amount = lender-approved permanent loan from the Debt Sizing
+  // sheet (= MIN of LTC / LTV / DCR / DY for income deals; LTC only for
+  // development). This is the AMORTISED amount — what the borrower
+  // actually repays month after month.
+  //
+  // PR-B introduced the Debt Sizing sheet; this Loan Amount formula
+  // now references its final MIN cell (B28). Operators can still see
+  // the legacy "DebtLTV × Total Cost" for comparison in Debt Sizing!B29.
+  const debtSizingRef = `'${SHEETS.debtSizing}'`;
   const termsRows = [
-    ['Loan Amount (INR Cr)',         `=(${totalCost})*DebtLTV`,                            NUMBER_FORMATS.currency],
+    ['Loan Amount (INR Cr)',         `=${debtSizingRef}!B28`,                              NUMBER_FORMATS.currency],
     ['Annual Interest Rate',         '=DebtRatePct',                                       NUMBER_FORMATS.percent],
     ['Loan Term (years)',            '=LoanTermYears',                                     NUMBER_FORMATS.integer],
     ['Quarterly Periods',            '=LoanTermYears*4',                                   NUMBER_FORMATS.integer],
@@ -2015,6 +2280,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   buildPhasingSheet(workbook, ctx);
   buildCashFlowSheet(workbook, ctx);
   buildDashboardSheet(workbook, ctx);
+  buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);
   buildCalculationsSheet(workbook, ctx); // hidden audit trail
 
