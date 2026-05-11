@@ -125,6 +125,72 @@ describe('services/exports/docx/buildReport', () => {
       expect(buffer.length).toBeGreaterThan(5000);
     }, 30000);
 
+    // SVG chart embeds (capital stack donut + cash flow trend + sensitivity
+    // tornado) — added so the DOCX report has the same analytical visual
+    // depth as the PPTX deck. Embedded via docx ImageRun with type 'svg'
+    // and a 1×1 transparent PNG fallback (no canvas / sharp dep).
+    test('embeds capital stack + cash flow trend + sensitivity tornado SVG charts in Financials', async () => {
+      const JSZip = require('jszip');
+      const ctx = minimalContext();
+      ctx.deal.model_params = { capitalStack: { debtCr: 110, equityCr: 331 } };
+      ctx.cashFlows = {
+        quarterly: [
+          { net: -50, label: 'Q1' }, { net: -80, label: 'Q2' },
+          { net: 30,  label: 'Q3' }, { net: 60,  label: 'Q4' },
+          { net: 100, label: 'Q5' }, { net: 120, label: 'Q6' },
+        ],
+      };
+      ctx.sensitivity = {
+        constructionCosts: [1800, 1900, 2000, 2100, 2200],
+        sellingRates:      [6000, 6200, 6400, 6600, 6800],
+        irrGrid: [
+          [14.2, 15.0, 15.9, 16.8, 17.6],
+          [13.4, 14.2, 15.1, 15.9, 16.8],
+          [12.7, 13.5, 14.3, 15.2, 16.0],
+          [11.9, 12.7, 13.5, 14.4, 15.2],
+          [11.1, 11.9, 12.8, 13.6, 14.4],
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const zip = await JSZip.loadAsync(buffer);
+
+      const mediaPaths = Object.keys(zip.files).filter((n) => /^word\/media\/.*\.svg$/i.test(n));
+      // Three SVG charts: capital stack donut, cash flow trend, sensitivity tornado.
+      expect(mediaPaths.length).toBeGreaterThanOrEqual(3);
+
+      const docXml = await zip.file('word/document.xml').async('string');
+      expect(docXml).toMatch(/CAPITAL STACK/);
+      expect(docXml).toMatch(/PERIOD NET CASH FLOW &amp; CUMULATIVE|PERIOD NOI &amp; CUMULATIVE/);
+      expect(docXml).toMatch(/SENSITIVITY/);
+    }, 30000);
+
+    // Income-asset deal → cash-flow chart title swaps to NOI variant.
+    test('cash flow trend chart title swaps to NOI for income-asset deals', async () => {
+      const JSZip = require('jszip');
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.cashFlows = {
+        quarterly: [
+          { net: 12, label: 'Q1' }, { net: 14, label: 'Q2' },
+          { net: 16, label: 'Q3' }, { net: 18, label: 'Q4' },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml').async('string');
+      expect(docXml).toMatch(/PERIOD NOI &amp; CUMULATIVE/);
+    }, 30000);
+
+    // Honest empty-state: when none of the chart inputs are populated, the
+    // Financials section still renders the KPI table — just no SVG embeds.
+    test('Financials renders without chart embeds when no chart data is provided', async () => {
+      const JSZip = require('jszip');
+      const buffer = await buildDealReportDocx(minimalContext()); // no model_params, no cashFlows, no sensitivity
+      const zip = await JSZip.loadAsync(buffer);
+      const mediaPaths = Object.keys(zip.files).filter((n) => /^word\/media\/.*\.svg$/i.test(n));
+      expect(mediaPaths.length).toBe(0);
+    }, 30000);
+
     test('phase-2 sections render when data is populated', async () => {
       const ctx = minimalContext();
       ctx.market.demographics = {
