@@ -31,6 +31,7 @@
  */
 
 const ExcelJS = require('exceljs');
+const { injectChartsIntoXlsx } = require('./chartInjector');
 const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
 
@@ -968,22 +969,11 @@ const buildDashboardSheet = (workbook, ctx) => {
     styleOutputCell(v, NUMBER_FORMATS.currency);
   });
 
-  // Native Excel chart referencing the Sources & Uses cells.
-  // ExcelJS supports addChart but with limited options — we provide a
-  // doughnut chart referencing A12:B16.
-  try {
-    sheet.addChart({
-      type: 'doughnut',
-      title: { name: 'Sources & Uses' },
-      cat: { values: `'${SHEETS.dashboard}'!$A$12:$A$16` },
-      val: { values: `'${SHEETS.dashboard}'!$B$12:$B$16` },
-      tl: { col: 2, row: 11 },
-      br: { col: 6, row: 22 },
-    });
-  } catch {
-    // ExcelJS chart support is patchy across versions; if it throws we
-    // skip the chart and the data remains visible in the cells.
-  }
+  // Native chart objects on the Sources & Uses + Quarterly Trend blocks
+  // are now injected post-write via `chartInjector.js` (ExcelJS 4.4.0 has
+  // no native `addChart` API — confirmed `addChart` is undefined on the
+  // worksheet instance). See `buildDashboardChartSpecs()` below for the
+  // exact cell ranges + chart specs each chart targets.
 
   // ── Returns block — IRR / NPV via native Excel functions ─────────────
   // Cash flow row used for IRR / NPV is asset-class-aware:
@@ -1477,12 +1467,99 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
 };
 
 /**
+ * Build the chart specs that get injected onto the Dashboard after
+ * ExcelJS finishes writing the workbook. Asset-class-aware: development
+ * deals see Sales/Construction columns; income deals see PGI/NOI.
+ *
+ * Cell positions here MUST stay in sync with buildDashboardSheet() —
+ * the chart formulas point at exact cells produced by that builder.
+ * Any movement of the Sources & Uses block (rows 12-16) or the Quarterly
+ * Trend table (rows 37-53) needs to be reflected here.
+ */
+const buildDashboardChartSpecs = (ctx) => {
+  const specs = [];
+  const dashName = SHEETS.dashboard;
+
+  // 1. Uses Breakdown doughnut (always populated — Land + Construction +
+  //    Approvals at rows 14-16). Sources at rows 12-13 are intentionally
+  //    excluded from the doughnut; "Sources & Uses" as a 5-slice donut
+  //    mixes the inflow side with the outflow side and reads poorly.
+  specs.push({
+    type: 'doughnut',
+    title: 'Uses Breakdown',
+    sheetName: dashName,
+    categoriesRange: '$A$14:$A$16',
+    valuesRange: '$B$14:$B$16',
+    colours: ['0E1B2C', 'B5793C', '0F7B5A'], // inkDeep / accent / dataPositive
+    anchor: { fromCol: 7, fromRow: 10, widthCols: 6, heightRows: 12 },
+  });
+
+  // 2. Quarterly Trend column chart — anchored BELOW the data table
+  //    (table is rows 37-53). Asset-class-aware series names.
+  const trendQuarters = Math.min(ctx.totalQuarters, 16);
+  const trendEndRow = 37 + trendQuarters;
+  if (trendQuarters >= 2) {
+    const series = ctx.dealFamily === 'income'
+      ? [
+        { name: 'PGI (Cr)', valuesRange: `$B$38:$B$${trendEndRow}`, colour: '0E1B2C' },
+        { name: 'NOI (Cr)', valuesRange: `$D$38:$D$${trendEndRow}`, colour: '0F7B5A' },
+      ]
+      : [
+        { name: 'Sales (Cr)',        valuesRange: `$B$38:$B$${trendEndRow}`, colour: '0F7B5A' },
+        { name: 'Construction (Cr)', valuesRange: `$C$38:$C$${trendEndRow}`, colour: 'B23A48' },
+      ];
+    specs.push({
+      type: 'bar',
+      barDir: 'col',
+      title: ctx.dealFamily === 'income'
+        ? 'Quarterly Operating Trend — PGI vs NOI'
+        : 'Quarterly Project Trend — Sales vs Construction',
+      sheetName: dashName,
+      categoriesRange: `$A$38:$A$${trendEndRow}`,
+      series,
+      anchor: { fromCol: 0, fromRow: trendEndRow + 1, widthCols: 13, heightRows: 14 },
+    });
+  }
+
+  return specs;
+};
+
+/**
  * Build and return the workbook as a Buffer (for the route handler).
+ * Two-stage: ExcelJS writes cells / formulas / conditional formatting,
+ * then chartInjector.js splices in native chart XML for the Dashboard
+ * (ExcelJS has no addChart API in 4.4.0). The final buffer is what the
+ * operator downloads — native charts that recalc when inputs change.
  */
 const buildDealWorkbookV2 = async (exportContext, options = {}) => {
+  const ctx = buildContext(exportContext, options);
   const workbook = buildDealWorkbookV2Workbook(exportContext, options);
-  const buffer = await workbook.xlsx.writeBuffer();
-  return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  const raw = await workbook.xlsx.writeBuffer();
+  const xlsxBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+
+  const chartSpecs = buildDashboardChartSpecs(ctx);
+  if (chartSpecs.length === 0) return xlsxBuffer;
+
+  try {
+    // Dashboard is always the 4th sheet in our generator (Inputs / Phasing
+    // / Cash Flow / Dashboard / Calculations). ExcelJS assigns sheet files
+    // by position so this maps deterministically to xl/worksheets/sheet4.xml.
+    return await injectChartsIntoXlsx(xlsxBuffer, {
+      targetSheetName: SHEETS.dashboard,
+      targetSheetFile: 'sheet4.xml',
+      charts: chartSpecs,
+    });
+  } catch (err) {
+    // Chart injection is best-effort. If anything goes wrong (a future
+    // template change shifts the sheet position, an XML structure shifts,
+    // etc.) we fall back to the un-injected workbook so the operator
+    // still gets a working file rather than an error.
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[xlsx.v2] chart injection failed, returning un-enhanced workbook:', err.message);
+    }
+    return xlsxBuffer;
+  }
 };
 
 module.exports = {
@@ -1491,6 +1568,7 @@ module.exports = {
   __internal: {
     buildContext,
     buildDealWorkbookV2Workbook,
+    buildDashboardChartSpecs,
     SHEETS,
     NUMBER_FORMATS,
   },
