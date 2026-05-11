@@ -448,6 +448,14 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
       ['Construction Cost / sqft','ConstructionCostPerSqft', firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0), 'INR/sqft', NUMBER_FORMATS.integer],
       ['Approval & Fees',         'ApprovalCostCr',      firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),                           'INR Cr', NUMBER_FORMATS.currency],
+      // PR-I9: Premium FSI / TDR cost line. Bengaluru operators buy
+      // premium FSI from BBMP/BDA when their base FSI is insufficient
+      // (typically ₹1-5 Cr/acre depending on zone). Mumbai operators
+      // buy TDR (Transferable Development Rights) for similar reasons.
+      // Defaults to 0 — operator sets when applicable. When > 0, the
+      // value flows into Total Project Cost via the Calculations Cost
+      // Build + Debt Sizing / Waterfall totalCost formulas.
+      ['Premium FSI / TDR Cost',  'PremiumFSICostCr',    firstNumber(ctx.inputs.premiumFSICostCr, ctx.inputs.tdrCostCr, 0),                                'INR Cr (one-time)', NUMBER_FORMATS.currency],
       ...(ctx.dealFamily === 'development' ? [
         ['Marketing & Sales',       'MarketingCostPct',    toPctDecimal(firstNumber(ctx.inputs.marketingCostPct, 0.04)),                                                '% of revenue', NUMBER_FORMATS.percent],
       ] : [
@@ -702,6 +710,72 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Approvals & RERA Registration breakdown (PR-I10) ──────────────────
+  // Karnataka / Bengaluru-specific approval line items. The headline
+  // `ApprovalCostCr` in Cost Structure is the rollup used by downstream
+  // formulas; this section breaks it out so an IC reviewer can see the
+  // individual permit costs. Each row is operator-editable and defaults
+  // to 0 — operator fills in based on actual quotes from consultants /
+  // liaison agents. Typical BBMP ranges noted in the unit column.
+  //
+  // Derived "Sum of detailed approvals" row at the bottom — operator
+  // should sanity-check against the headline ApprovalCostCr above. The
+  // breakdown does NOT auto-overwrite the headline to avoid losing
+  // operator-pasted lender-quote values.
+  const approvalsBreakdownSection = {
+    title: 'Approvals & RERA Registration (Karnataka / Bengaluru breakdown)',
+    rows: [
+      ['Khata conversion (BBMP)',          'ApprKhataCr',         firstNumber(ctx.inputs.apprKhataCr, 0),         'INR Cr (typical 0.5-2 Cr by plot)', NUMBER_FORMATS.currency],
+      ['BDA layout approval',              'ApprBDALayoutCr',     firstNumber(ctx.inputs.apprBDALayoutCr, 0),     'INR Cr (1-5 Cr by plot)', NUMBER_FORMATS.currency],
+      ['BBMP plan sanction',               'ApprBBMPSanctionCr',  firstNumber(ctx.inputs.apprBBMPSanctionCr, 0),  'INR Cr (0.5-2% of construction)', NUMBER_FORMATS.currency],
+      ['BWSSB water connection',           'ApprBWSSBCr',         firstNumber(ctx.inputs.apprBWSSBCr, 0),         'INR Cr (0.3-1 Cr)', NUMBER_FORMATS.currency],
+      ['BESCOM electricity sanction',      'ApprBESCOMCr',        firstNumber(ctx.inputs.apprBESCOMCr, 0),        'INR Cr (0.2-0.8 Cr)', NUMBER_FORMATS.currency],
+      ['KSPCB consent (environmental)',    'ApprKSPCBCr',         firstNumber(ctx.inputs.apprKSPCBCr, 0),         'INR Cr (0.1-0.5 Cr)', NUMBER_FORMATS.currency],
+      ['Airport Authority NOC',            'ApprAirportNOCCr',    firstNumber(ctx.inputs.apprAirportNOCCr, 0),    'INR Cr (only funnel zones)', NUMBER_FORMATS.currency],
+      ['Fire Department NOC',              'ApprFireNOCCr',       firstNumber(ctx.inputs.apprFireNOCCr, 0),       'INR Cr (0.1-0.3 Cr)', NUMBER_FORMATS.currency],
+      ['Lift / Elevator NOC',              'ApprLiftNOCCr',       firstNumber(ctx.inputs.apprLiftNOCCr, 0),       'INR Cr (0.05-0.2 Cr)', NUMBER_FORMATS.currency],
+      ['RERA registration + renewal',      'ApprRERACr',          firstNumber(ctx.inputs.apprRERACr, 0),          'INR Cr (0.05-0.2 Cr per project)', NUMBER_FORMATS.currency],
+      ['Occupancy Certificate (OC)',       'ApprOCCr',            firstNumber(ctx.inputs.apprOCCr, 0),            'INR Cr (0.1-0.3 Cr)', NUMBER_FORMATS.currency],
+      ['Completion Certificate (CC)',      'ApprCCCr',            firstNumber(ctx.inputs.apprCCCr, 0),            'INR Cr (0.05-0.1 Cr)', NUMBER_FORMATS.currency],
+      // Derived rollup so the operator can sanity-check vs the headline
+      // ApprovalCostCr in the Cost Structure section above.
+      ['Sum of detailed approvals',        'ApprovalsBreakdownSumCr',
+        { formula: '=ApprKhataCr+ApprBDALayoutCr+ApprBBMPSanctionCr+ApprBWSSBCr+ApprBESCOMCr+ApprKSPCBCr+ApprAirportNOCCr+ApprFireNOCCr+ApprLiftNOCCr+ApprRERACr+ApprOCCr+ApprCCCr' },
+        'INR Cr (derived — compare vs ApprovalCostCr above)', NUMBER_FORMATS.currency],
+    ],
+  };
+
+  // ── Title & Khata Status (PR-I8) ──────────────────────────────────────
+  // A-khata vs B-khata is a major Bengaluru-specific valuation factor.
+  // A-khata: full title, eligible for bank financing, building approval,
+  //          and OC. Trades at full market value.
+  // B-khata: irregular title, NOT eligible for bank financing, no OC,
+  //          tradable at a 15-25% discount to A-khata equivalents.
+  // Mixed / Not Applicable: for raw land or multi-parcel deals.
+  //
+  // Informational fields only — operator manually adjusts SellRatePerSqft
+  // or ExitCapRate to reflect any B-khata discount. The derived
+  // "Suggested Exit Adjustment" row flags whether a haircut would apply
+  // so IC reviewers can sanity-check the modeled exit value.
+  const khataStatusSection = {
+    title: 'Title & Khata Status (Bengaluru)',
+    rows: [
+      ['Khata Status',                  'KhataStatus',
+        ctx.inputs.khataStatus || 'A_khata',
+        'A_khata / B_khata / mixed / not_applicable', null],
+      ['B-Khata Exit Haircut',          'BKhataExitHaircutPct',
+        toPctDecimal(firstNumber(ctx.inputs.bKhataExitHaircutPct, ctx.inputs.bKhataDiscountPct, 0.15)),
+        '% applied to exit if B-khata', NUMBER_FORMATS.percent],
+      // Derived: 1.0 if A-khata or N/A; (1 - haircut) if B-khata or mixed.
+      // Multiplicative form so an operator can paste =ExitValue *
+      // KhataExitMultiplier into their own scenario sheet to get the
+      // adjusted figure quickly.
+      ['Suggested Exit Multiplier',     'KhataExitMultiplier',
+        { formula: '=IF(OR(KhataStatus="B_khata",KhataStatus="mixed"),1-BKhataExitHaircutPct,1)' },
+        'derived — multiply exit value by this for B-khata haircut', NUMBER_FORMATS.multiple],
+    ],
+  };
+
   // ── Sponsor / LP Waterfall inputs (PR-D) ─────────────────────────────
   // Institutional deals split equity proceeds between the Sponsor (GP)
   // and the LP investors via a multi-tier waterfall. Standard structure:
@@ -843,10 +917,19 @@ const buildInputsSheet = (workbook, ctx) => {
     lenderProfileSection,
     debtSizingSection,
     waterfallSection,
-    // PR-I7: Taxation (India) sits at the BOTTOM of the Inputs sheet —
-    // it's investor-disclosure data, not modeling primary inputs. Visually
-    // separated from operational inputs above.
+    // ── Investor-disclosure / Bengaluru-specific land + tax data ──
+    // The four sections below sit at the BOTTOM of the Inputs sheet —
+    // they're disclosure / reference data for IC reviewers, not modeling
+    // primary inputs (no formula uses these for revenue or cost calcs
+    // beyond PremiumFSICostCr which is in the Cost Structure block above).
+    // Visually separated from operational inputs.
     taxationSection,
+    // PR-I10: Approvals & RERA Registration breakdown — Karnataka /
+    // Bengaluru-specific line items. Operator-editable; sum is derived.
+    approvalsBreakdownSection,
+    // PR-I8: Title & Khata Status — A-khata vs B-khata is a major BLR
+    // valuation factor. Informational + derived multiplier.
+    khataStatusSection,
   ];
 
   let row = 5;
@@ -2407,7 +2490,11 @@ const buildDebtSizingSheet = (workbook, ctx) => {
   styleSectionTitle(sheet.getCell('A4'));
   sheet.getRow(4).height = 22;
 
-  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
+  // PR-I9: PremiumFSICostCr added to hardCost so it flows through the
+  // entire Total Project Cost roll-up (Calc Cost Build, Debt Sizing,
+  // Waterfall). When the named range is 0 (default), the math is
+  // unchanged from pre-PR-I9.
+  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr+PremiumFSICostCr)';
   const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
   // India Statutory Levies (PR-I1): Stamp+Reg on land at acquisition,
   // plus net-of-ITC GST on construction value. Asset-class-aware via the
@@ -2815,7 +2902,11 @@ const buildWaterfallSheet = (workbook, ctx) => {
   styleSectionTitle(sheet.getCell('A4'));
   sheet.getRow(4).height = 22;
 
-  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
+  // PR-I9: PremiumFSICostCr added to hardCost so it flows through the
+  // entire Total Project Cost roll-up (Calc Cost Build, Debt Sizing,
+  // Waterfall). When the named range is 0 (default), the math is
+  // unchanged from pre-PR-I9.
+  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr+PremiumFSICostCr)';
   const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
   // India Statutory Levies (PR-I1): Stamp+Reg on land at acquisition,
   // plus net-of-ITC GST on construction value. Asset-class-aware via the
@@ -3304,8 +3395,13 @@ const buildCalculationsSheet = (workbook, ctx) => {
   writeBlock('Cost Build', [
     ['Land cost (INR Cr)',                   '=LandCostCr',                                                       'From Inputs & Assumptions'],
     ['Construction cost (INR Cr)',           '=ConstructionCostPerSqft*SaleableAreaSqft/10000000',                 'Construction rate × saleable area'],
-    ['Approval & fees (INR Cr)',             '=ApprovalCostCr',                                                   'From Inputs & Assumptions'],
-    ['Hard cost subtotal',                   '=B12+B13+B14',                                                       'Land + Construction + Approvals'],
+    // Combine Approval & Fees + Premium FSI/TDR on row B14 — these
+    // are both one-time approval/regulatory costs to keep the row
+    // count stable for downstream formulas (B15 Hard subtotal = B12+B13+B14).
+    // PR-I9 added PremiumFSICostCr which defaults to 0; the formula
+    // is unchanged from pre-PR-I9 when PremiumFSICostCr is left at 0.
+    ['Approval & fees + Premium FSI (INR Cr)','=ApprovalCostCr+PremiumFSICostCr',                                 'Approvals + Premium FSI/TDR (PR-I9)'],
+    ['Hard cost subtotal',                   '=B12+B13+B14',                                                       'Land + Construction + Approvals + Premium FSI'],
     ['A&E fees (INR Cr)',                    '=B13*ArchitectFeePct',                                              'Construction × ArchitectFeePct'],
     ['Legal fees (INR Cr)',                  '=B13*LegalFeePct',                                                  'Construction × LegalFeePct'],
     ['Appraisal & title (INR Cr)',           '=B13*AppraisalFeePct',                                              'Construction × AppraisalFeePct'],

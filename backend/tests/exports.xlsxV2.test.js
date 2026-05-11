@@ -1979,5 +1979,179 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(formulaValue.formula).toBe('=IF(EffectiveHoldYears>=2,LTCGRate,0.3)');
       });
     });
+
+    // ── PR-I9 — Premium FSI / TDR cost line ────────────────────────────
+    // Bengaluru operators buy premium FSI from BBMP/BDA when base FSI is
+    // insufficient. Mumbai operators buy TDR. One-time cost that flows
+    // into Total Project Cost. Defaults to 0; when > 0 it lifts the
+    // headline Total Cost on Dashboard / Debt Sizing / Waterfall.
+    describe('PR-I9: Premium FSI / TDR cost line', () => {
+      test('Inputs sheet defines PremiumFSICostCr in Cost Structure', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('PremiumFSICostCr');
+      });
+
+      test('PremiumFSICostCr defaults to 0 (no premium FSI purchased)', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.premiumFSICostCr;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Premium FSI')) seed = row.getCell(2).value;
+        });
+        expect(seed).toBe(0);
+      });
+
+      test('Total Project Cost formula on Debt Sizing + Waterfall includes PremiumFSICostCr', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        const findCellByLabel = (sheet, expectedLabel) => {
+          let found = null;
+          sheet.eachRow((row) => {
+            const label = String(row.getCell(1).value || '');
+            if (label.includes(expectedLabel) && !found) {
+              const valCell = row.getCell(2);
+              found = (valCell.value && valCell.value.formula) || null;
+            }
+          });
+          return found;
+        };
+
+        const debtSizing = wb.getWorksheet('Debt Sizing & Amortization');
+        const waterfall = wb.getWorksheet('Sponsor LP Waterfall');
+        expect(findCellByLabel(debtSizing, 'Total Project Cost')).toMatch(/PremiumFSICostCr/);
+        expect(findCellByLabel(waterfall, 'Total Project Cost')).toMatch(/PremiumFSICostCr/);
+      });
+
+      test('Calculations B14 row combines ApprovalCostCr + PremiumFSICostCr', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const calc = wb.getWorksheet('Calculations');
+        const b14 = calc.getCell('B14').value;
+        expect(b14.formula).toBe('=ApprovalCostCr+PremiumFSICostCr');
+      });
+    });
+
+    // ── PR-I10 — Approvals & RERA Registration breakdown (BBMP/Karnataka)
+    // 12 Karnataka-specific approval line items as separate inputs +
+    // derived sum. Operator-editable per-row for IC disclosure clarity.
+    describe('PR-I10: Approvals & RERA Registration breakdown (Karnataka)', () => {
+      test('Inputs sheet defines all 12 detailed approval named ranges', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        const expected = [
+          'ApprKhataCr', 'ApprBDALayoutCr', 'ApprBBMPSanctionCr', 'ApprBWSSBCr',
+          'ApprBESCOMCr', 'ApprKSPCBCr', 'ApprAirportNOCCr', 'ApprFireNOCCr',
+          'ApprLiftNOCCr', 'ApprRERACr', 'ApprOCCr', 'ApprCCCr',
+        ];
+        for (const name of expected) {
+          expect(namesList).toContain(name);
+        }
+      });
+
+      test('Sum of detailed approvals is a DERIVED formula adding all 12 line items', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('ApprovalsBreakdownSumCr');
+
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Sum of detailed approvals') formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toContain('ApprKhataCr');
+        expect(formulaValue.formula).toContain('ApprBDALayoutCr');
+        expect(formulaValue.formula).toContain('ApprCCCr');
+      });
+
+      test('Approvals breakdown section header is present + 12 items default to 0', async () => {
+        const ctx = minimalContext();
+        // Strip any operator overrides so we test the defaults
+        ['apprKhataCr','apprBDALayoutCr','apprBBMPSanctionCr','apprBWSSBCr','apprBESCOMCr',
+         'apprKSPCBCr','apprAirportNOCCr','apprFireNOCCr','apprLiftNOCCr','apprRERACr',
+         'apprOCCr','apprCCCr'].forEach((k) => { delete ctx.deal.model_params.inputs[k]; });
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let sectionFound = false;
+        let zeroCount = 0;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '');
+          if (label.includes('Approvals & RERA Registration')) sectionFound = true;
+          // Count zero-defaulted approval rows by their characteristic
+          // "approval" / "NOC" / "Certificate" / "registration" label.
+          if (/^(Khata conversion|BDA layout|BBMP plan|BWSSB|BESCOM|KSPCB|Airport Authority|Fire Department|Lift \/ Elevator|RERA registration|Occupancy Certificate|Completion Certificate)/.test(label)) {
+            if (row.getCell(2).value === 0) zeroCount += 1;
+          }
+        });
+        expect(sectionFound).toBe(true);
+        expect(zeroCount).toBe(12);
+      });
+    });
+
+    // ── PR-I8 — Title & Khata Status (Bengaluru) ───────────────────────
+    // A-khata vs B-khata is a major BLR valuation factor (B-khata trades
+    // at 15-25% discount). Informational fields + derived exit multiplier.
+    describe('PR-I8: Title & Khata Status (Bengaluru)', () => {
+      test('Inputs sheet defines KhataStatus + BKhataExitHaircutPct + derived multiplier', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('KhataStatus');
+        expect(namesList).toContain('BKhataExitHaircutPct');
+        expect(namesList).toContain('KhataExitMultiplier');
+      });
+
+      test('KhataStatus defaults to "A_khata"; haircut defaults to 15%', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.khataStatus;
+        delete ctx.deal.model_params.inputs.bKhataExitHaircutPct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let khata = null;
+        let haircut = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Khata Status') khata = row.getCell(2).value;
+          if (label.includes('B-Khata Exit Haircut')) haircut = row.getCell(2).value;
+        });
+        expect(khata).toBe('A_khata');
+        expect(haircut).toBeCloseTo(0.15, 4);
+      });
+
+      test('KhataExitMultiplier is a DERIVED formula that branches on B_khata / mixed', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Suggested Exit Multiplier') formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=IF(OR(KhataStatus="B_khata",KhataStatus="mixed"),1-BKhataExitHaircutPct,1)');
+      });
+    });
   });
 });
