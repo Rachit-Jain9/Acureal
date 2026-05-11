@@ -1979,5 +1979,137 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(formulaValue.formula).toBe('=IF(EffectiveHoldYears>=2,LTCGRate,0.3)');
       });
     });
+
+    // ── PR-I12 — Hospitality ADR / Occupancy / RevPAR with seasonality ──
+    // Hospitality assets in India price on ADR × Occupancy × Keys × 365,
+    // not on INR/sqft/month. PR-I12 adds explicit ADR + Occupancy + RevPAR
+    // + seasonality inputs as informational + derived disclosure rows.
+    // Section appears only when asset_class = hospitality.
+    describe('PR-I12: Hospitality ADR / Occupancy / RevPAR (income asset family only)', () => {
+      const hospitalityCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'hospitality';
+        ctx.property.property_type = 'hospitality';
+        return ctx;
+      };
+
+      test('Hospitality section + named ranges appear only when asset_class = hospitality', async () => {
+        const buffer1 = await buildDealWorkbookV2(minimalContext());
+        const wb1 = new ExcelJS.Workbook();
+        await wb1.xlsx.load(buffer1);
+        const names1 = (wb1.definedNames.model || []).map((n) => n.name);
+        expect(names1).not.toContain('HospitalityKeys');
+
+        const buffer2 = await buildDealWorkbookV2(hospitalityCtx());
+        const wb2 = new ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer2);
+        const names2 = (wb2.definedNames.model || []).map((n) => n.name);
+        for (const n of ['HospitalityKeys', 'HospitalityADRBase', 'HospitalityADRPeak', 'HospitalityPeakShare', 'HospitalityBlendedADR', 'HospitalityRevPAR', 'HospitalityImpliedRevenueCr']) {
+          expect(names2).toContain(n);
+        }
+      });
+
+      test('Hospitality defaults: 100 keys, ₹6000 base ADR, ₹9000 peak ADR, 30% peak share', async () => {
+        const ctx = hospitalityCtx();
+        ['hospitalityKeys','hospitalityADRBase','hospitalityADRPeak','hospitalityPeakShare']
+          .forEach((k) => { delete ctx.deal.model_params.inputs[k]; });
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Number of Keys']).toBe(100);
+        expect(byLabel['ADR — Base / Off-Season']).toBe(6000);
+        expect(byLabel['ADR — Peak Season']).toBe(9000);
+        expect(byLabel['Peak Season Share']).toBeCloseTo(0.30, 4);
+      });
+
+      test('Blended ADR + RevPAR + Implied Revenue are DERIVED formulas', async () => {
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Blended ADR (derived)'].formula)
+          .toBe('=HospitalityADRBase*(1-HospitalityPeakShare)+HospitalityADRPeak*HospitalityPeakShare');
+        expect(byLabel['RevPAR (derived)'].formula)
+          .toBe('=HospitalityBlendedADR*OccupancyPct');
+        expect(byLabel['Implied annual revenue (Cr)'].formula)
+          .toBe('=HospitalityRevPAR*HospitalityKeys*365/10000000');
+      });
+    });
+
+    // ── PR-I13 — Retail CAM + Anchor / Vanilla rent split ──────────────
+    // Anchor tenants in Indian malls (Lifestyle / Westside / Big Bazaar)
+    // price at ₹60-90/sqft/mo + minimal CAM; vanilla tenants at ₹150-300
+    // + full CAM. PR-I13 adds explicit anchor share / rents / CAM recovery
+    // as informational inputs + derived blended rent. Section appears only
+    // when asset_class = retail.
+    describe('PR-I13: Retail CAM + Anchor / Vanilla Rent Split (income asset family only)', () => {
+      const retailCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'retail';
+        ctx.property.property_type = 'retail';
+        return ctx;
+      };
+
+      test('Retail section + named ranges appear only when asset_class = retail', async () => {
+        const buffer1 = await buildDealWorkbookV2(minimalContext());
+        const wb1 = new ExcelJS.Workbook();
+        await wb1.xlsx.load(buffer1);
+        const names1 = (wb1.definedNames.model || []).map((n) => n.name);
+        expect(names1).not.toContain('RetailAnchorSharePct');
+
+        const buffer2 = await buildDealWorkbookV2(retailCtx());
+        const wb2 = new ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer2);
+        const names2 = (wb2.definedNames.model || []).map((n) => n.name);
+        for (const n of ['RetailAnchorSharePct', 'RetailAnchorRentPerSqftMonth', 'RetailVanillaRentPerSqftMonth', 'RetailCAMRecoveryPct', 'RetailBlendedRentPerSqftMonth']) {
+          expect(names2).toContain(n);
+        }
+      });
+
+      test('Retail defaults: 40% anchor share, ₹60 anchor rent, ₹180 vanilla rent, 95% CAM recovery', async () => {
+        const ctx = retailCtx();
+        ['retailAnchorSharePct','retailAnchorRentPerSqftMonth','retailVanillaRentPerSqftMonth','retailCAMRecoveryPct']
+          .forEach((k) => { delete ctx.deal.model_params.inputs[k]; });
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Anchor Share of Leasable Area']).toBeCloseTo(0.40, 4);
+        expect(byLabel['Anchor Rent / sqft / month']).toBe(60);
+        expect(byLabel['Vanilla Rent / sqft / month']).toBe(180);
+        expect(byLabel['CAM Recovery %']).toBeCloseTo(0.95, 4);
+      });
+
+      test('Blended Rent is a DERIVED formula = anchor × share + vanilla × (1-share)', async () => {
+        const buffer = await buildDealWorkbookV2(retailCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Blended Rent') && label.includes('derived')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula)
+          .toBe('=RetailAnchorRentPerSqftMonth*RetailAnchorSharePct+RetailVanillaRentPerSqftMonth*(1-RetailAnchorSharePct)');
+      });
+    });
   });
 });

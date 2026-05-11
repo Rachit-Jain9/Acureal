@@ -702,6 +702,87 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Hospitality Operating Metrics (PR-I12) ────────────────────────────
+  // Hospitality assets in India price on ADR (Average Daily Rate) ×
+  // Occupancy × Keys × 365, not on INR/sqft/month like commercial.
+  // Pre-PR-I12 the workbook fudged this by using BaseRentPerSqftMonth —
+  // operator had to back-solve ADR from rent, which never reconciled
+  // with how hotel investors look at deals.
+  //
+  // PR-I12 adds explicit ADR + Occupancy + RevPAR + seasonality inputs
+  // for hospitality. Informational disclosure (the Phasing P&L continues
+  // to use BaseRentPerSqftMonth — operator sets that to match implied
+  // RevPAR). The derived RevPAR + Blended ADR rows let an IC reviewer
+  // cross-check the implied rate against STAR-report benchmarks.
+  //
+  // Section appears only for hospitality asset class.
+  const hospitalitySection = {
+    title: 'Hospitality Operating Metrics (ADR / Occupancy / RevPAR)',
+    rows: [
+      ['Number of Keys',              'HospitalityKeys',
+        firstNumber(ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, 100),
+        'count (rooms)', NUMBER_FORMATS.integer],
+      ['ADR — Base / Off-Season',     'HospitalityADRBase',
+        firstNumber(ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, 6000),
+        'INR / room / night', NUMBER_FORMATS.integer],
+      ['ADR — Peak Season',           'HospitalityADRPeak',
+        firstNumber(ctx.inputs.hospitalityADRPeak, ctx.inputs.hospitalityHighSeasonADR, 9000),
+        'INR / room / night', NUMBER_FORMATS.integer],
+      ['Peak Season Share',           'HospitalityPeakShare',
+        toPctDecimal(firstNumber(ctx.inputs.hospitalityPeakShare, ctx.inputs.hospitalityHighSeasonShare, 0.30)),
+        '% of year (Oct-Mar wedding/winter)', NUMBER_FORMATS.percent],
+      // Derived: blended ADR = base × (1-peakShare) + peak × peakShare.
+      ['Blended ADR (derived)',       'HospitalityBlendedADR',
+        { formula: '=HospitalityADRBase*(1-HospitalityPeakShare)+HospitalityADRPeak*HospitalityPeakShare' },
+        'INR / room / night (derived)', NUMBER_FORMATS.integer],
+      // Derived: RevPAR = Blended ADR × Stabilised Occupancy. Industry-
+      // standard metric — hotel investors look at this first.
+      ['RevPAR (derived)',            'HospitalityRevPAR',
+        { formula: '=HospitalityBlendedADR*OccupancyPct' },
+        'INR / room / night (derived)', NUMBER_FORMATS.integer],
+      // Derived: implied annual revenue at stabilisation. Sanity-check
+      // vs the modeled PGI on the Cash Flow Engine.
+      ['Implied annual revenue (Cr)', 'HospitalityImpliedRevenueCr',
+        { formula: '=HospitalityRevPAR*HospitalityKeys*365/10000000' },
+        'INR Cr / year (derived)', NUMBER_FORMATS.currency],
+    ],
+  };
+
+  // ── Retail CAM + Anchor / Vanilla split (PR-I13) ──────────────────────
+  // Indian mall economics are anchor-driven: a Lifestyle / Westside / Big
+  // Bazaar anchors at ₹60-90/sqft/month with minimal CAM contribution,
+  // while vanilla tenants pay ₹150-300/sqft/month + CAM passthrough.
+  // The current model's single BaseRentPerSqftMonth misrepresents both
+  // ends.
+  //
+  // PR-I13 adds anchor share + anchor rent + vanilla rent + CAM recovery
+  // inputs. Derived blended rent gives the operator a sanity check that
+  // they can paste into BaseRentPerSqftMonth. Informational only.
+  //
+  // Section appears only for retail asset class.
+  const retailSection = {
+    title: 'Retail CAM + Anchor / Vanilla Rent Split',
+    rows: [
+      ['Anchor Share of Leasable Area', 'RetailAnchorSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.retailAnchorSharePct, ctx.inputs.anchorSharePct, 0.40)),
+        '% (typical 30-50% in India malls)', NUMBER_FORMATS.percent],
+      ['Anchor Rent / sqft / month',    'RetailAnchorRentPerSqftMonth',
+        firstNumber(ctx.inputs.retailAnchorRentPerSqftMonth, 60),
+        'INR / sqft / month (typical 50-90)', NUMBER_FORMATS.integer],
+      ['Vanilla Rent / sqft / month',   'RetailVanillaRentPerSqftMonth',
+        firstNumber(ctx.inputs.retailVanillaRentPerSqftMonth, 180),
+        'INR / sqft / month (typical 150-300)', NUMBER_FORMATS.integer],
+      ['CAM Recovery %',                'RetailCAMRecoveryPct',
+        toPctDecimal(firstNumber(ctx.inputs.retailCAMRecoveryPct, 0.95)),
+        '% of CAM cost recovered from tenants', NUMBER_FORMATS.percent],
+      // Derived blended rent — operator pastes this into BaseRentPerSqftMonth
+      // on the Operating Revenue Inputs section above for the model to use.
+      ['Blended Rent / sqft / month (derived)', 'RetailBlendedRentPerSqftMonth',
+        { formula: '=RetailAnchorRentPerSqftMonth*RetailAnchorSharePct+RetailVanillaRentPerSqftMonth*(1-RetailAnchorSharePct)' },
+        'INR / sqft / month (derived — paste into BaseRentPerSqftMonth)', NUMBER_FORMATS.integer],
+    ],
+  };
+
   // ── Sponsor / LP Waterfall inputs (PR-D) ─────────────────────────────
   // Institutional deals split equity proceeds between the Sponsor (GP)
   // and the LP investors via a multi-tier waterfall. Standard structure:
@@ -847,6 +928,12 @@ const buildInputsSheet = (workbook, ctx) => {
     // it's investor-disclosure data, not modeling primary inputs. Visually
     // separated from operational inputs above.
     taxationSection,
+    // PR-I12: Hospitality-specific ADR / Occupancy / RevPAR — only when
+    // the deal's asset class is hospitality.
+    ...(ctx.assetClass === 'hospitality' ? [hospitalitySection] : []),
+    // PR-I13: Retail anchor / vanilla rent split + CAM recovery — only
+    // when the deal's asset class is retail.
+    ...(ctx.assetClass === 'retail' ? [retailSection] : []),
   ];
 
   let row = 5;
