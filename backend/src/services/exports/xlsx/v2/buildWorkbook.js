@@ -46,6 +46,7 @@ const SHEETS = {
   phasing: 'Phasing & Sales Collection',
   cashflow: 'Quarterly Cash Flow & Debt',
   dashboard: 'Dashboard',
+  amortization: 'Amortization Schedule',
   calculations: 'Calculations',
 };
 
@@ -1581,6 +1582,163 @@ const buildDashboardSheet = (workbook, ctx) => {
  * All formulas reference named ranges from `Inputs & Assumptions` so
  * the audit trail recalculates in lockstep with operator edits.
  */
+/**
+ * Amortization Schedule sheet — quarter-by-quarter debt amortization with
+ * Beginning Balance / Payment / Interest / Principal / Ending Balance
+ * columns. This is the standard "Amortization Schedule" sheet in every
+ * institutional pro forma (NAIOP, RE-540 both have explicit amort sheets).
+ *
+ * Loan terms section at the top (rows 4-10) summarises the inputs that
+ * drive the schedule — Loan Amount (= Total Cost × DebtLTV), annualised
+ * Interest Rate, Loan Term in years, computed Quarterly Rate, computed
+ * Quarterly Payment (Excel PMT formula).
+ *
+ * Schedule table (rows 12+) emits one row per quarter for the full loan
+ * term. Capped at 80 quarters (= 20-year term) for readability; longer
+ * loans are uncommon in Indian residential.
+ *
+ * Limitations called out in-sheet:
+ *   - Single-loan model (PR-C ships before PR-B which splits construction
+ *     vs permanent loan). Once PR-B lands, this schedule will show the
+ *     PERMANENT loan amortization specifically, not the blended.
+ *   - Moratorium currently ignored — the input MoratoriumMonths exists on
+ *     the Inputs sheet but the standard PMT formula doesn't model it.
+ *     Operator can override the schedule manually or wait for PR-B's
+ *     proper debt sculpting.
+ *   - Interest computed at the effective quarterly rate
+ *     ((1+annual)^(1/4) - 1) so an analyst sees the same total finance
+ *     cost as if compounding monthly / continuously.
+ */
+const buildAmortizationSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.amortization, {
+    views: [{ showGridLines: false }],
+  });
+  sheet.columns = [
+    { width: 10 }, // A: Period
+    { width: 22 }, // B: Beginning Balance
+    { width: 18 }, // C: Payment
+    { width: 16 }, // D: Interest
+    { width: 16 }, // E: Principal
+    { width: 22 }, // F: Ending Balance
+  ];
+
+  // Title
+  sheet.mergeCells('A1:F1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Amortization Schedule`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+
+  sheet.mergeCells('A2:F2');
+  sheet.getCell('A2').value = 'Quarter-by-quarter debt amortization. All values recalculate from the named ranges on the Inputs sheet — edit LandCostCr, ConstructionCostPerSqft, DebtLTV, DebtRatePct, or LoanTermYears to flow through.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 22;
+
+  // ── Loan Terms summary block (rows 4-10) ──────────────────────────────
+  sheet.mergeCells('A4:F4');
+  sheet.getCell('A4').value = 'Loan Terms';
+  styleSectionTitle(sheet.getCell('A4'));
+  sheet.getRow(4).height = 22;
+
+  // Loan Amount = (Total Cost) × DebtLTV. Total Cost = Hard + detailed
+  // soft costs (matching the expanded Calculations sheet Cost Build).
+  // Note: this is the "pure-LTV" loan amount; once PR-B ships, the
+  // permanent loan will be MIN(LTV-based, DCR-based, DY-based).
+  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
+  const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
+  const totalCost = `${hardCost}+${softCost}`;
+
+  const termsRows = [
+    ['Loan Amount (INR Cr)',         `=(${totalCost})*DebtLTV`,                            NUMBER_FORMATS.currency],
+    ['Annual Interest Rate',         '=DebtRatePct',                                       NUMBER_FORMATS.percent],
+    ['Loan Term (years)',            '=LoanTermYears',                                     NUMBER_FORMATS.integer],
+    ['Quarterly Periods',            '=LoanTermYears*4',                                   NUMBER_FORMATS.integer],
+    ['Effective Quarterly Rate',     '=(1+DebtRatePct)^(1/4)-1',                            NUMBER_FORMATS.percent],
+    ['Quarterly Payment (INR Cr)',   '=-PMT(B9,B8,B5)',                                    NUMBER_FORMATS.currency],
+  ];
+  termsRows.forEach(([label, formula, fmt], idx) => {
+    const r = 5 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const cell = sheet.getCell(`B${r}`);
+    cell.value = { formula };
+    styleOutputCell(cell, fmt);
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  });
+
+  // ── Amortization table header (row 12) ─────────────────────────────────
+  const headerRow = 12;
+  ['Period', 'Beginning Balance', 'Payment', 'Interest', 'Principal', 'Ending Balance']
+    .forEach((label, idx) => {
+      const cell = sheet.getCell(headerRow, idx + 1);
+      cell.value = label;
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = FILL(palette.xlsx('inkDeep'));
+      cell.protection = { locked: true };
+    });
+  sheet.getRow(headerRow).height = 24;
+
+  // ── Schedule rows ──────────────────────────────────────────────────────
+  // Cap at min(LoanTerm*4, 80) — Indian residential rarely runs > 20 years.
+  // The schedule shows periods 1..N; if LoanTermYears is small, later
+  // rows show #N/A naturally (Period > term).
+  //
+  // For each row:
+  //   Beginning Balance:
+  //     - Period 1: = Loan Amount (B5)
+  //     - Period N: = Ending Balance of previous row
+  //   Payment:        = Quarterly Payment (B10) for all periods
+  //   Interest:       = Beginning Balance × Quarterly Rate (B9)
+  //   Principal:      = Payment − Interest
+  //   Ending Balance: = Beginning Balance − Principal
+  // IFERROR everywhere so that out-of-term rows stay blank rather than
+  // showing error values.
+  const maxRows = Math.min(80, 80); // hard cap; LoanTermYears reflects actual
+  for (let i = 0; i < maxRows; i += 1) {
+    const r = 13 + i;
+    const period = i + 1;
+    // Period column
+    sheet.getCell(`A${r}`).value = { formula: `=IF(${period}<=$B$8,${period},"")` };
+    sheet.getCell(`A${r}`).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${r}`).alignment = { horizontal: 'center' };
+    // Beginning Balance
+    sheet.getCell(`B${r}`).value = {
+      formula: i === 0 ? '=$B$5' : `=IF($A${r}="","",F${r - 1})`,
+    };
+    sheet.getCell(`B${r}`).numFmt = NUMBER_FORMATS.currency;
+    // Payment
+    sheet.getCell(`C${r}`).value = { formula: `=IF($A${r}="","",$B$10)` };
+    sheet.getCell(`C${r}`).numFmt = NUMBER_FORMATS.currency;
+    // Interest
+    sheet.getCell(`D${r}`).value = { formula: `=IF($A${r}="","",B${r}*$B$9)` };
+    sheet.getCell(`D${r}`).numFmt = NUMBER_FORMATS.currency;
+    // Principal
+    sheet.getCell(`E${r}`).value = { formula: `=IF($A${r}="","",C${r}-D${r})` };
+    sheet.getCell(`E${r}`).numFmt = NUMBER_FORMATS.currency;
+    // Ending Balance
+    sheet.getCell(`F${r}`).value = { formula: `=IF($A${r}="","",MAX(B${r}-E${r},0))` };
+    sheet.getCell(`F${r}`).numFmt = NUMBER_FORMATS.currency;
+    // Light banding — alternate rows with a subtle fill
+    if (i % 2 === 1) {
+      ['A', 'B', 'C', 'D', 'E', 'F'].forEach((col) => {
+        sheet.getCell(`${col}${r}`).fill = FILL(palette.xlsx('paperSubtle'));
+      });
+    }
+  }
+
+  // Footer disclosure
+  const footerRow = 13 + maxRows + 1;
+  sheet.mergeCells(`A${footerRow}:F${footerRow}`);
+  sheet.getCell(`A${footerRow}`).value =
+    'Amortization shown at the effective quarterly rate ((1+annual)^(1/4)−1). Moratorium input MoratoriumMonths is currently not modelled here — once PR-B splits construction vs permanent loan, this schedule will show the permanent loan post-moratorium. Verify against the lender term sheet before use.';
+  sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${footerRow}`).alignment = { vertical: 'top', wrapText: true };
+  sheet.getRow(footerRow).height = 36;
+
+  return sheet;
+};
+
 const buildCalculationsSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.calculations, {
     state: 'hidden', // power users can unhide via right-click
@@ -1742,6 +1900,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   buildPhasingSheet(workbook, ctx);
   buildCashFlowSheet(workbook, ctx);
   buildDashboardSheet(workbook, ctx);
+  buildAmortizationSheet(workbook, ctx);
   buildCalculationsSheet(workbook, ctx); // hidden audit trail
 
   // Register defined names AFTER all sheets exist so the references resolve.

@@ -93,6 +93,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Phasing & Sales Collection',
         'Quarterly Cash Flow & Debt',
         'Dashboard',
+        'Amortization Schedule',
         'Calculations',
       ]);
       const calc = wb.getWorksheet('Calculations');
@@ -164,6 +165,61 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // when actual project total is ~266 Cr). The fix: cumulative rows
     // get `totalKind: 'final'` and the Total cell references the LAST
     // quarter's cell instead of summing.
+    // PR-C: standalone Amortization Schedule sheet — quarter-by-quarter
+    // debt amortization with Beginning / Payment / Interest / Principal /
+    // Ending Balance columns. Standard component of every institutional
+    // pro forma (NAIOP + RE-540 both have explicit amortization sheets).
+    test('Amortization Schedule sheet renders loan terms + quarter-by-quarter amort table', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const amort = wb.getWorksheet('Amortization Schedule');
+      expect(amort).toBeDefined();
+
+      // Loan Terms block at rows 4-10
+      const a4 = amort.getCell('A4').value;
+      expect(String(a4)).toMatch(/Loan Terms/);
+
+      // Loan Amount cell B5 — formula references named ranges
+      const b5 = amort.getCell('B5').value;
+      expect(b5).toBeTruthy();
+      expect(b5.formula).toContain('DebtLTV');
+      expect(b5.formula).toContain('LandCostCr');
+
+      // Quarterly Rate cell B9 — (1+annual)^(1/4) - 1
+      const b9 = amort.getCell('B9').value;
+      expect(b9.formula).toMatch(/\(1\+DebtRatePct\)\^\(1\/4\)-1/);
+
+      // Quarterly Payment cell B10 — PMT formula
+      const b10 = amort.getCell('B10').value;
+      expect(b10.formula).toMatch(/PMT\(B9,B8,B5\)/);
+
+      // Header row at row 12
+      expect(String(amort.getCell('A12').value)).toBe('Period');
+      expect(String(amort.getCell('B12').value)).toBe('Beginning Balance');
+      expect(String(amort.getCell('C12').value)).toBe('Payment');
+      expect(String(amort.getCell('D12').value)).toBe('Interest');
+      expect(String(amort.getCell('E12').value)).toBe('Principal');
+      expect(String(amort.getCell('F12').value)).toBe('Ending Balance');
+
+      // Row 13 (Period 1): Beginning Balance = $B$5 (Loan Amount)
+      const b13 = amort.getCell('B13').value;
+      expect(b13.formula).toBe('=$B$5');
+
+      // Row 14 (Period 2): Beginning Balance = previous-row Ending Balance
+      const b14 = amort.getCell('B14').value;
+      expect(b14.formula).toMatch(/F13/);
+
+      // Interest formula = Beginning × Quarterly Rate
+      const d13 = amort.getCell('D13').value;
+      expect(d13.formula).toContain('B13*$B$9');
+
+      // Ending Balance = MAX(Beginning - Principal, 0) — guards against
+      // negative balance in the final period
+      const f13 = amort.getCell('F13').value;
+      expect(f13.formula).toContain('MAX(B13-E13,0)');
+    });
+
     // PR-A institutional-grade soft cost breakdown: reference pro formas
     // (NAIOP, RE-540) break soft costs into ~8 distinct line items.
     // Previous generator collapsed everything into Marketing + Finance.
