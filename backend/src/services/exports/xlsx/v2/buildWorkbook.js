@@ -659,6 +659,49 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Taxation (India) (PR-I7) ──────────────────────────────────────────
+  // Indian tax regime affecting RE exit / disposal economics, in force
+  // as of 2026-05:
+  //   - LTCG on land/building held > 24 months: 12.5% (post Jul-2024
+  //     budget; previously 20% with indexation). Operator can override
+  //     for affordable housing (some exemptions) or short-hold deals.
+  //   - TDS u/s 194-IA: 1% withheld at sale on every immovable property
+  //     transaction > ₹50 lakh. Buyer deducts and remits to govt; seller
+  //     claims credit. Affects working-capital timing at exit.
+  //   - Indexation benefit: NOT available post Jul-2024 for new
+  //     acquisitions. Pre-Jul-2024 acquisitions retain optional indexation
+  //     at 20%. Categorical toggle reflects this.
+  //   - GST on rentals: commercial leases attract 18% output GST (with
+  //     ITC); residential leases are exempt. Modeled via the Cash Flow
+  //     Engine's existing input plumbing for income deals.
+  //
+  // PR-I7 adds the LTCG / TDS / Indexation inputs as informational fields.
+  // The derived "Applicable Capital Gains Rate" cell branches on holding
+  // period: ≥ 2 yrs → LTCG (12.5%); < 2 yrs → STCG (slab ~30% approximation).
+  // A future PR can wire these into a Net-of-Tax IRR on the Dashboard.
+  const taxationSection = {
+    title: 'Taxation (India)',
+    rows: [
+      ['LTCG Rate on disposal',     'LTCGRate',
+        toPctDecimal(firstNumber(ctx.inputs.ltcgRate, ctx.inputs.ltcgPct, 0.125)),
+        '% on long-term gain (post Jul-2024 budget)', NUMBER_FORMATS.percent],
+      ['TDS u/s 194-IA',           'TDSRate',
+        toPctDecimal(firstNumber(ctx.inputs.tdsRate, 0.01)),
+        '% withheld at sale > ₹50 lakh', NUMBER_FORMATS.percent],
+      ['Indexation Regime',         'IndexationRegime',
+        ctx.inputs.indexationRegime || 'post_2024_no_indexation',
+        'post_2024_no_indexation / pre_2024_with_indexation', null],
+      ['Effective Holding Period',  'EffectiveHoldYears',
+        firstNumber(ctx.inputs.effectiveHoldYears, ctx.inputs.loanTermYears, 7),
+        'years (drives LTCG eligibility ≥ 2 yrs)', NUMBER_FORMATS.integer],
+      // Derived: long-term vs short-term capital gain branching by hold
+      // period. < 2 years → STCG slab rate (modeled at 30% approximation).
+      ['Applicable Capital Gains Rate', 'EffectiveCGRate',
+        { formula: '=IF(EffectiveHoldYears>=2,LTCGRate,0.3)' },
+        '% (derived — LTCG if ≥ 2yr, else STCG slab ~30%)', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── Sponsor / LP Waterfall inputs (PR-D) ─────────────────────────────
   // Institutional deals split equity proceeds between the Sponsor (GP)
   // and the LP investors via a multi-tier waterfall. Standard structure:
@@ -800,6 +843,10 @@ const buildInputsSheet = (workbook, ctx) => {
     lenderProfileSection,
     debtSizingSection,
     waterfallSection,
+    // PR-I7: Taxation (India) sits at the BOTTOM of the Inputs sheet —
+    // it's investor-disclosure data, not modeling primary inputs. Visually
+    // separated from operational inputs above.
+    taxationSection,
   ];
 
   let row = 5;
