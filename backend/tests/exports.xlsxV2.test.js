@@ -1810,5 +1810,70 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(seed).toBeCloseTo(18, 1);
       });
     });
+
+    // ── PR-I5 — Carpet vs Super-Built-up Area + Loading Factor ─────────
+    // RERA Act 2016 Section 4(2)(h) mandates sale-side marketing in
+    // CARPET area, while construction costs are typically priced on
+    // super built-up. Pre-PR-I5 the model conflated the two by using
+    // SaleableAreaSqft (super built-up) for everything. PR-I5 introduces:
+    //   - `LoadingFactor` (editable, default 1.25 = 80% carpet efficiency)
+    //   - `CarpetAreaSqft` (derived = SaleableAreaSqft / LoadingFactor)
+    // The revenue math continues to use SaleableAreaSqft (no behaviour
+    // change); CarpetAreaSqft becomes available as a named range for any
+    // future RERA-marketing-compliance calculation.
+    describe('PR-I5: Carpet vs Super-Built-up Area + Loading Factor', () => {
+      test('Inputs sheet defines LoadingFactor + CarpetAreaSqft named ranges', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('LoadingFactor');
+        expect(namesList).toContain('CarpetAreaSqft');
+      });
+
+      test('LoadingFactor default is 1.25 (80% carpet efficiency)', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.loadingFactor;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Loading Factor')) seed = row.getCell(2).value;
+        });
+        expect(seed).toBeCloseTo(1.25, 3);
+      });
+
+      test('CarpetAreaSqft is a DERIVED formula = SaleableAreaSqft / LoadingFactor', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let carpetCellValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Carpet Area')) carpetCellValue = row.getCell(2).value;
+        });
+        expect(carpetCellValue).toBeTruthy();
+        // Formula cells in ExcelJS appear as { formula: '=...', result: ... }
+        expect(carpetCellValue.formula).toBe('=SaleableAreaSqft/LoadingFactor');
+      });
+
+      test('Saleable area label clarifies the "Super Built-up" convention', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let foundLabel = false;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '');
+          if (label.includes('Saleable') && label.includes('Super Built-up')) foundLabel = true;
+        });
+        expect(foundLabel).toBe(true);
+      });
+
+    });
   });
 });

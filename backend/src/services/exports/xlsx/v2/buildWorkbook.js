@@ -353,7 +353,28 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Deal Family',             'DealFamily',          ctx.dealFamily,                              '',      null],
       ['Locality',                'Locality',            ctx.deal.city || ctx.property.city || 'Bengaluru', '', null],
       ['Land Area',               'LandAreaSqft',        firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0), 'sqft', NUMBER_FORMATS.integer],
-      ['Saleable / Leasable Area','SaleableAreaSqft',    firstNumber(ctx.property.saleable_area_sqft, ctx.deal.saleable_area_sqft, ctx.inputs.saleableAreaSqft, ctx.inputs.leasableAreaSqft, 0), 'sqft', NUMBER_FORMATS.integer],
+      ['Saleable / Leasable Area (Super Built-up)', 'SaleableAreaSqft',
+        firstNumber(ctx.property.saleable_area_sqft, ctx.deal.saleable_area_sqft, ctx.inputs.saleableAreaSqft, ctx.inputs.leasableAreaSqft, 0),
+        'sqft', NUMBER_FORMATS.integer],
+      // PR-I5: Loading Factor + derived Carpet Area. RERA Act 2016 mandates
+      // sale-side marketing in CARPET area (Section 4(2)(h)); construction
+      // costs are typically on super built-up. Loading Factor = super
+      // built-up ÷ carpet area; typical India range 1.20-1.40 (1.25 default
+      // = ~80% carpet efficiency). Operators can override per project.
+      //
+      // CarpetAreaSqft is a DERIVED named range (formula), not editable.
+      // The model's revenue formulas continue to use SaleableAreaSqft
+      // (super built-up) since that's how the operator's sale rate was
+      // historically set; PR-I5 makes the carpet-area number explicit and
+      // available for any future RERA-marketing-compliance calculation
+      // (carpet × sale rate, RERA disclosures, etc.) without changing the
+      // revenue math.
+      ['Loading Factor (Super Built-up ÷ Carpet)', 'LoadingFactor',
+        firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio, 1.25),
+        'ratio', NUMBER_FORMATS.multiple],
+      ['Carpet Area (RERA marketing area)', 'CarpetAreaSqft',
+        { formula: '=SaleableAreaSqft/LoadingFactor' },
+        'sqft (derived)', NUMBER_FORMATS.integer],
       ['Floor Space Index (FSI)', 'FSI',                 firstNumber(ctx.property.existing_fsi, ctx.inputs.fsi, 1.5), 'ratio', NUMBER_FORMATS.multiple],
     ],
   };
@@ -736,8 +757,18 @@ const buildInputsSheet = (workbook, ctx) => {
       styleLabelCell(sheet.getCell(`A${row}`));
       const valueCell = sheet.getCell(`B${row}`);
       valueCell.value = value;
-      styleInputCell(valueCell);
-      if (format) valueCell.numFmt = format;
+      // Derived rows (value is a formula object) get OUTPUT styling — not
+      // the yellow editable fill. PR-I5 introduced this pattern for the
+      // derived "Carpet Area (RERA marketing area)" row computed via
+      // =SaleableAreaSqft/LoadingFactor. The named range still resolves so
+      // downstream sheets can reference the derived value.
+      const isDerivedFormula = value && typeof value === 'object' && typeof value.formula === 'string';
+      if (isDerivedFormula) {
+        styleOutputCell(valueCell, format);
+      } else {
+        styleInputCell(valueCell);
+        if (format) valueCell.numFmt = format;
+      }
       sheet.getCell(`C${row}`).value = unit;
       styleLabelCell(sheet.getCell(`C${row}`));
       sheet.getCell(`C${row}`).font = { name: FONT, size: 10, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
