@@ -547,7 +547,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // The Uses Breakdown doughnut always renders. The Quarterly Trend
     // bar renders when totalQuarters >= 2 (which it always is in our
     // test contexts since the minimum is 4).
-    test('Dashboard charts include a doughnut (Uses) + a combo (Quarterly Trend bar+line)', async () => {
+    test('Dashboard charts include doughnut + combo + tornado', async () => {
       const JSZip = require('jszip');
       const buffer = await buildDealWorkbookV2(minimalContext());
       const zip = await JSZip.loadAsync(buffer);
@@ -555,13 +555,13 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const chartFiles = Object.keys(zip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
       const xmls = await Promise.all(chartFiles.map((n) => zip.file(n).async('string')));
 
-      // At least one doughnut
+      // Three charts on the Dashboard now
+      expect(chartFiles.length).toBeGreaterThanOrEqual(3);
+
+      // 1) Doughnut for Uses Breakdown
       expect(xmls.some((x) => x.includes('<c:doughnutChart'))).toBe(true);
 
-      // The Quarterly Trend chart is now a COMBO — barChart + lineChart
-      // sharing the same plot area. PR-F upgraded this from a single
-      // clustered-column to a combo so the cumulative line is visible
-      // alongside the period-contribution columns.
+      // 2) Combo (barChart + lineChart in one plotArea) for Quarterly Trend
       const comboChart = xmls.find((x) =>
         x.includes('<c:barChart>') && x.includes('<c:lineChart>')
       );
@@ -570,10 +570,46 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const valAxes = (comboChart.match(/<c:valAx>/g) || []).length;
       expect(valAxes).toBe(2);
 
-      // The doughnut targets the Uses cells (Dashboard!A14:A16 / B14:B16)
+      // 3) Tornado (horizontal bar with overlap=100) for Driver Impact
+      const tornado = xmls.find((x) =>
+        x.includes('<c:barDir val="bar"/>') && x.includes('<c:overlap val="100"/>')
+      );
+      expect(tornado).toBeDefined();
+      // Tornado references the H/I/J columns where the driver data lives
+      expect(tornado).toMatch(/\$H\$25:\$H\$26/);  // categories (driver labels)
+      expect(tornado).toMatch(/\$I\$25:\$I\$26/);  // low-case deltas
+      expect(tornado).toMatch(/\$J\$25:\$J\$26/);  // high-case deltas
+
+      // Doughnut targets the Uses cells
       const doughnut = xmls.find((x) => x.includes('<c:doughnutChart'));
       expect(doughnut).toMatch(/\$A\$14:\$A\$16/);
       expect(doughnut).toMatch(/\$B\$14:\$B\$16/);
+    });
+
+    test('Dashboard tornado data table emits two driver rows with delta formulas', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+
+      // Row 24 = headers
+      expect(String(dash.getCell('H24').value)).toBe('Driver');
+      expect(String(dash.getCell('I24').value)).toBe('Low Case Δ');
+      expect(String(dash.getCell('J24').value)).toBe('High Case Δ');
+
+      // Row 25 = Selling Rate driver
+      expect(String(dash.getCell('H25').value)).toContain('Selling Rate');
+      // Low delta = grid[middle row][leftmost col] - base = B27 - D27
+      expect(dash.getCell('I25').value.formula).toBe('=B27-D27');
+      // High delta = grid[middle row][rightmost col] - base = F27 - D27
+      expect(dash.getCell('J25').value.formula).toBe('=F27-D27');
+
+      // Row 26 = Construction Cost driver
+      expect(String(dash.getCell('H26').value)).toContain('Construction Cost');
+      // High cost = low margin → I26 (low delta) = D29 - D27
+      expect(dash.getCell('I26').value.formula).toBe('=D29-D27');
+      // Low cost = high margin → J26 (high delta) = D25 - D27
+      expect(dash.getCell('J26').value.formula).toBe('=D25-D27');
     });
 
     // Asset-class branching for the trend chart: development deals show

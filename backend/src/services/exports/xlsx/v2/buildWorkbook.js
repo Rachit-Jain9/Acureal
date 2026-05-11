@@ -1341,6 +1341,121 @@ const buildDashboardSheet = (workbook, ctx) => {
     }],
   });
 
+  // ── Tornado driver-impact table (right of sensitivity grid) ───────────
+  // Drives the Tornado chart anchored at H27. Uses cell references into
+  // the existing 5×5 sensitivity grid (B25:F29) so the deltas recalculate
+  // live as the kernel inputs change. Base case is D27 (centre of the
+  // 5×5 grid — sale-rate variance = 0%, construction-cost variance = 0%).
+  //
+  // Driver impact derivation:
+  //   Selling Rate ±10% → varies the SALE rate, holds construction cost
+  //     at base. Low-case = B27 (rate -10%) minus base; High-case = F27
+  //     (rate +10%) minus base. Low usually negative, high usually
+  //     positive (more revenue → higher margin).
+  //   Construction Cost ±10% → varies COST, holds rate at base. High
+  //     cost = D29 (cost +10%) is the LOW-margin case; low cost = D25
+  //     (cost -10%) is the HIGH-margin case. So our "Low Case Δ" for
+  //     this driver = D29 - D27 (negative); "High Case Δ" = D25 - D27
+  //     (positive).
+  sheet.mergeCells('H23:M23');
+  sheet.getCell('H23').value = 'Driver Impact on Project Margin (tornado)';
+  styleSectionTitle(sheet.getCell('H23'));
+  sheet.getRow(23).height = 22;
+
+  // Header row for the data table
+  const tornadoHeaders = [
+    { col: 'H', label: 'Driver' },
+    { col: 'I', label: 'Low Case Δ' },
+    { col: 'J', label: 'High Case Δ' },
+    { col: 'K', label: 'Low Case Margin' },
+    { col: 'L', label: 'High Case Margin' },
+    { col: 'M', label: 'Total Range' },
+  ];
+  tornadoHeaders.forEach(({ col, label }) => {
+    const cell = sheet.getCell(`${col}24`);
+    cell.value = label;
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.protection = { locked: true };
+  });
+  sheet.getRow(24).height = 22;
+
+  // Row 25: Selling Rate driver; Row 26: Construction Cost driver.
+  // Order: longest-range driver on top. Since the grid is symmetric in
+  // its sale-rate and cost-rate dimensions but margin maths is asymmetric
+  // (revenue × (1+rate) vs cost × (1+cost)), the sale-rate driver tends
+  // to dominate. We let the chart render in the data-row order without
+  // dynamic sorting.
+  const drivers = [
+    {
+      row: 25,
+      label: 'Selling Rate ±10%',
+      lowDeltaFormula: '=B27-D27',     // rate -10% margin minus base margin
+      highDeltaFormula: '=F27-D27',    // rate +10% margin minus base margin
+      lowMarginRef: 'B27',
+      highMarginRef: 'F27',
+    },
+    {
+      row: 26,
+      label: 'Construction Cost ±10%',
+      lowDeltaFormula: '=D29-D27',     // cost +10% margin minus base margin (worst case)
+      highDeltaFormula: '=D25-D27',    // cost -10% margin minus base margin (best case)
+      lowMarginRef: 'D29',
+      highMarginRef: 'D25',
+    },
+  ];
+  drivers.forEach(({ row, label, lowDeltaFormula, highDeltaFormula, lowMarginRef, highMarginRef }) => {
+    // Driver name (col H)
+    const labelCell = sheet.getCell(`H${row}`);
+    labelCell.value = label;
+    labelCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    labelCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    labelCell.fill = FILL(palette.xlsx('paperSubtle'));
+    labelCell.protection = { locked: true };
+
+    // Low Case Δ (col I) — negative
+    const lowDelta = sheet.getCell(`I${row}`);
+    lowDelta.value = { formula: lowDeltaFormula };
+    lowDelta.numFmt = '+0.0%;-0.0%;0.0%';
+    lowDelta.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('dataNegative') } };
+    lowDelta.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // High Case Δ (col J) — positive
+    const highDelta = sheet.getCell(`J${row}`);
+    highDelta.value = { formula: highDeltaFormula };
+    highDelta.numFmt = '+0.0%;-0.0%;0.0%';
+    highDelta.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('dataPositive') } };
+    highDelta.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // Reference cells (Low/High absolute margin from the 5×5 grid)
+    const lowAbs = sheet.getCell(`K${row}`);
+    lowAbs.value = { formula: `=${lowMarginRef}` };
+    lowAbs.numFmt = NUMBER_FORMATS.percent;
+    lowAbs.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+    lowAbs.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    const highAbs = sheet.getCell(`L${row}`);
+    highAbs.value = { formula: `=${highMarginRef}` };
+    highAbs.numFmt = NUMBER_FORMATS.percent;
+    highAbs.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+    highAbs.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    const range = sheet.getCell(`M${row}`);
+    range.value = { formula: `=J${row}-I${row}` };
+    range.numFmt = NUMBER_FORMATS.percent;
+    range.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('ink') } };
+    range.alignment = { horizontal: 'right', vertical: 'middle' };
+  });
+
+  // Base IRR / Base Margin label below the data table — anchors what
+  // the chart's 0 axis represents.
+  sheet.mergeCells('H27:M27');
+  sheet.getCell('H27').value = 'Bars centred on Base Case (sale-rate 0% × cost 0%). Bars extend left (downside) and right (upside) from that base.';
+  sheet.getCell('H27').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('H27').alignment = { vertical: 'top', wrapText: true };
+  sheet.getRow(27).height = 26;
+
   // ── Scenario strip (Bull / Base / Bear) ──────────────────────────────
   sheet.mergeCells('A31:F31');
   sheet.getCell('A31').value = 'Scenario Comparison (modeled)';
@@ -1986,6 +2101,25 @@ const buildDashboardChartSpecs = (ctx) => {
       anchor: { fromCol: 0, fromRow: trendEndRow + 1, widthCols: 13, heightRows: 14 },
     });
   }
+
+  // 3. Tornado chart — Driver Impact on Project Margin. Native Office
+  //    pattern: clustered horizontal bar with overlap=100. Low-case
+  //    deltas (negative) extend left from 0; high-case deltas (positive)
+  //    extend right. The driver data table at H24:M26 feeds the chart.
+  //    Anchored at columns N-T (cols 13-19), rows 23-29 — to the right
+  //    of the sensitivity heatmap so the analyst sees the heatmap AND
+  //    the driver-impact tornado in the same eye span.
+  specs.push({
+    type: 'tornado',
+    title: 'Sensitivity — Driver Impact (Δ from base margin)',
+    sheetName: dashName,
+    categoriesRange: '$H$25:$H$26',
+    lowValuesRange: '$I$25:$I$26',
+    highValuesRange: '$J$25:$J$26',
+    lowColour: 'B23A48',  // dataNegative
+    highColour: '0F7B5A', // dataPositive
+    anchor: { fromCol: 13, fromRow: 28, widthCols: 7, heightRows: 8 },
+  });
 
   return specs;
 };
