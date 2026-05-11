@@ -83,7 +83,7 @@ export default function DealAnalysisPanel({ dealId }) {
         if (err?.name === 'AbortError') return;
         setAiError(
           err?.message ||
-            'Analysis failed. Check that ANTHROPIC_API_KEY is configured.',
+            'Analysis failed. Check that OPENAI_API_KEY is configured.',
         );
       })
       .finally(() => {

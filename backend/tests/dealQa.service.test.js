@@ -9,7 +9,7 @@ jest.mock('../src/services/numericalVerifier.service', () => ({
   verifyDealAnalysis: jest.fn(() => ({ drifts: [], verifiedAt: '2026-05-09T00:00:00Z' })),
 }));
 jest.mock('../src/services/ai/providerRegistry', () => ({
-  getProviderAvailability: jest.fn(() => ({ claude: true })),
+  getProviderAvailability: jest.fn(() => ({ claude: true, gpt_compatible: true })),
 }));
 jest.mock('../src/services/ai/aiRouter', () => ({
   runAIWithSchema: jest.fn(),

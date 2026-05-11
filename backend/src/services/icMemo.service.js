@@ -309,8 +309,13 @@ const persistMemoArtifact = async ({
 };
 
 const generate = async (dealId) => {
-  if (!getProviderAvailability().claude) {
-    return { memo: null, reason: 'ANTHROPIC_API_KEY not configured' };
+  // Operator directive 2026-05-11: switched from Claude (Anthropic) to
+  // OpenAI (GPT-5.4) due to Anthropic credit limits. `runClaudeReasoning`
+  // in aiRouter is now routing-aware — dispatches to OpenAI when the
+  // routing config / env var says so. Gate keeps the same shape but
+  // checks for OpenAI availability.
+  if (!getProviderAvailability().gpt_compatible) {
+    return { memo: null, reason: 'OPENAI_API_KEY not configured' };
   }
   const input = await buildIcMemoInput(dealId);
   if (input.error) return { memo: null, reason: input.error };
@@ -366,8 +371,8 @@ const generate = async (dealId) => {
 // the streamDealAnalysis pattern from intelligence.service.js so the
 // route handler that consumes both paths is symmetric.
 const stream = async (dealId) => {
-  if (!getProviderAvailability().claude) {
-    return { error: 'ANTHROPIC_API_KEY not configured', status: 503 };
+  if (!getProviderAvailability().gpt_compatible) {
+    return { error: 'OPENAI_API_KEY not configured', status: 503 };
   }
   const input = await buildIcMemoInput(dealId);
   if (input.error) return { error: input.error, status: 404 };

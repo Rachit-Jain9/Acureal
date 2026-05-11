@@ -20,8 +20,13 @@ const getRoutingConfig = () => ({
   document_classification: process.env.AI_PROVIDER_DOCUMENT_CLASSIFICATION || 'gemini',
   document_extraction: process.env.AI_PROVIDER_DOCUMENT_EXTRACTION || 'gemini',
   translation: process.env.AI_PROVIDER_TRANSLATION || 'gemini',
-  reasoning: process.env.AI_PROVIDER_REASONING || 'claude',
-  market_synthesis: process.env.AI_PROVIDER_MARKET_SYNTHESIS || 'claude',
+  // Operator directive 2026-05-11: switched the reasoning + market-synthesis
+  // defaults from Claude to OpenAI (GPT-5.4) due to Anthropic credit limits.
+  // The aiRouter's typed Claude wrappers are routing-aware — they dispatch
+  // to providerRegistry.runOpenAIReasoning(Stream) when this config says
+  // 'openai', keeping all 11 narrative call sites unchanged.
+  reasoning: process.env.AI_PROVIDER_REASONING || 'openai',
+  market_synthesis: process.env.AI_PROVIDER_MARKET_SYNTHESIS || 'openai',
 });
 
 const getGeminiClient = () => {
@@ -306,6 +311,94 @@ const runOpenAIReasoning = async ({
   return { result: text, raw };
 };
 
+// OpenAI streaming reasoning. Mirrors `runClaudeReasoningStream`'s contract:
+// returns `{ onText, done, abort }`. Used by the SSE endpoints for IC memo,
+// deal Q&A, and per-deal narrative when the routing config picks openai.
+//
+// `stream_options.include_usage: true` is required to get token counts in the
+// final chunk — without it, `raw.usage` ends up undefined and the cost cap
+// telemetry silently breaks for streamed calls.
+const runOpenAIReasoningStream = async ({
+  systemPrompt,
+  payload,
+  model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+  maxTokens = 700,
+}) => {
+  const client = getOpenAIClient();
+  const controller = new AbortController();
+
+  const stream = await client.chat.completions.create(
+    {
+      model,
+      max_tokens: maxTokens,
+      stream: true,
+      stream_options: { include_usage: true },
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        {
+          role: 'user',
+          content: typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2),
+        },
+      ],
+    },
+    { signal: controller.signal },
+  );
+
+  const textListeners = [];
+  let accumulated = '';
+  let finalUsage = null;
+
+  // Drive the iteration in the background so onText fires as chunks arrive.
+  // `done()` awaits the same Promise; safe to call multiple times.
+  const completionPromise = (async () => {
+    for await (const chunk of stream) {
+      // OpenAI's final usage chunk has no `choices` — just `usage`.
+      if (chunk.usage) {
+        finalUsage = chunk.usage;
+        continue;
+      }
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (!delta) continue;
+      accumulated += delta;
+      for (const cb of textListeners) {
+        try {
+          cb(delta);
+        } catch (err) {
+          // A throwing listener must not kill the stream — log + continue.
+          // eslint-disable-next-line no-console
+          console.warn('[ai.stream] text listener threw:', err.message);
+        }
+      }
+    }
+    return {
+      result: accumulated || null,
+      // Translate OpenAI's usage shape into Anthropic's so the router's
+      // shared token extractor handles it without provider-specific branching.
+      raw: finalUsage
+        ? {
+            usage: {
+              input_tokens: finalUsage.prompt_tokens,
+              output_tokens: finalUsage.completion_tokens,
+            },
+            model,
+          }
+        : { model },
+    };
+  })();
+
+  return {
+    onText(cb) {
+      if (typeof cb === 'function') textListeners.push(cb);
+    },
+    async done() {
+      return completionPromise;
+    },
+    abort() {
+      try { controller.abort(); } catch { /* swallow — best-effort */ }
+    },
+  };
+};
+
 // OpenAI embeddings. Returns `{ embedding: number[], dimensions, raw }`.
 // Wired up but not yet called by any service; lands the dependency so when
 // Tier 4.1 (pgvector) ships, the embedding plumbing is one import away.
@@ -354,5 +447,6 @@ module.exports = {
   runClaudeReasoningStream,
   runClaudeWithDocument,
   runOpenAIReasoning,
+  runOpenAIReasoningStream,
   runOpenAIEmbedding,
 };

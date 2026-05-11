@@ -282,11 +282,16 @@ function pickBestStructuredFields(primaryFields, secondaryFields) {
 }
 
 async function normalizeStructuredFieldsWithClaude({ docType, rawText, structuredFields, language = null }) {
-  if (!structuredFields || !getProviderAvailability().claude) {
+  // Function name retained for backward compatibility — the call inside now
+  // routes via `runClaudeReasoning` (routing-aware) so it dispatches to
+  // OpenAI when the env says openai. Renaming the function would touch 4+
+  // call sites; the internal logic is what matters.
+  if (!structuredFields || !getProviderAvailability().gpt_compatible) {
     return null;
   }
-  // Skip the Claude pass for doc types where Gemini already returns clean
-  // tabular structure. The marginal quality lift isn't worth the extra hop.
+  // Skip the LLM-normalization pass for doc types where Gemini already
+  // returns clean tabular structure. The marginal quality lift isn't worth
+  // the extra hop.
   if (docType && CLAUDE_NORMALIZATION_SKIP_DOC_TYPES.has(docType)) {
     return null;
   }

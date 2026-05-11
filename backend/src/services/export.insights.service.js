@@ -178,8 +178,8 @@ const generateDealInsights = async ({
       'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
   });
 
-  if (!getProviderAvailability().claude) {
-    return unavailable('Claude API key not configured');
+  if (!getProviderAvailability().gpt_compatible) {
+    return unavailable('OpenAI API key not configured');
   }
 
   const payload = buildPayload({

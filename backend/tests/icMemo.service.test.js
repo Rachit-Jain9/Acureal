@@ -2,7 +2,7 @@
 
 jest.mock('../src/config/database', () => ({ query: jest.fn() }));
 jest.mock('../src/services/ai/providerRegistry', () => ({
-  getProviderAvailability: jest.fn(() => ({ claude: false })),
+  getProviderAvailability: jest.fn(() => ({ claude: false, gpt_compatible: false })),
 }));
 jest.mock('../src/services/ai/aiRouter', () => ({
   runClaudeReasoning: jest.fn(),
@@ -145,15 +145,18 @@ describe('buildIcMemoInput', () => {
 });
 
 describe('generate', () => {
-  test('returns reason when Claude not configured', async () => {
-    getProviderAvailability.mockReturnValueOnce({ claude: false });
+  test('returns reason when OpenAI not configured', async () => {
+    // Post 2026-05-11: reasoning routes through OpenAI (GPT-5.4) by default.
+    // The gate checks `getProviderAvailability().gpt_compatible` and the
+    // error message references OPENAI_API_KEY.
+    getProviderAvailability.mockReturnValueOnce({ claude: false, gpt_compatible: false });
     const r = await icMemo.generate('d1');
     expect(r.memo).toBeNull();
-    expect(r.reason).toMatch(/ANTHROPIC_API_KEY/);
+    expect(r.reason).toMatch(/OPENAI_API_KEY/);
   });
 
   test('returns deal-not-found error when deal missing', async () => {
-    getProviderAvailability.mockReturnValueOnce({ claude: true });
+    getProviderAvailability.mockReturnValueOnce({ claude: true, gpt_compatible: true });
     mockQueriesInOrder([{ rows: [] }]);
     const r = await icMemo.generate('missing');
     expect(r.memo).toBeNull();

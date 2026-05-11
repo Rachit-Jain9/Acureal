@@ -646,34 +646,65 @@ const runGeminiInline = async (args = {}) => {
 };
 
 /**
- * Drop-in replacement for `providerRegistry.runClaudeReasoning`. Default task
- * is `reasoning` to match the routing config. Callers that perform market
- * synthesis should pass `task: 'market_synthesis'` so the cost dashboards
- * split correctly.
+ * Reasoning entry point. Historically named `runClaudeReasoning` because
+ * Claude was the original default — kept as the canonical name so the 11
+ * narrative call sites across the backend don't need touching. Post-2026-05-11
+ * (operator directive: switch to ChatGPT due to Anthropic credit limits) this
+ * is ROUTING-AWARE: it dispatches to OpenAI when the routing config / env var
+ * says so, and only falls back to Claude when ANTHROPIC_API_KEY is configured
+ * AND the routing explicitly picks claude.
+ *
+ * Default task is `reasoning`. Pass `task: 'market_synthesis'` for daily
+ * market briefs so the cost dashboards split correctly.
+ *
+ * `cachePrompt` is honoured on Claude (Anthropic ephemeral cache) and
+ * silently ignored on OpenAI (which has its own automatic caching and
+ * different ergonomics).
  */
 const runClaudeReasoning = async (args = {}) => {
-  const { task = 'reasoning', attach, metadata, ...passthrough } = args;
+  const { task = 'reasoning', attach, metadata, retry, cache, ...passthrough } = args;
   return runAIResult({
     task,
-    provider: 'claude',
+    // No explicit provider — let routing config (runtime table → env →
+    // code default) pick. After 2026-05-11 the env default is 'openai'.
     model: passthrough.model,
     attach,
     metadata,
-    run: async ({ providers, model }) =>
-      providers.runClaudeReasoning({ ...passthrough, model }),
+    retry,
+    cache,
+    run: async ({ providers, provider, model }) => {
+      if (provider === 'openai') {
+        // OpenAI doesn't support Anthropic's ephemeral prompt cache.
+        // Strip cachePrompt before forwarding — it's a no-op and the
+        // OpenAI SDK would reject the unknown key in strict mode.
+        const { cachePrompt: _drop, ...openaiArgs } = passthrough;
+        return providers.runOpenAIReasoning({ ...openaiArgs, model });
+      }
+      return providers.runClaudeReasoning({ ...passthrough, model });
+    },
   });
 };
 
 /**
- * Send a PDF / image to Claude as a document content block. Used as the
- * fallback path for document extraction when Gemini is throttled or fails
- * permanently. Telemetry is recorded under task='document_extraction' with
- * provider='claude' so the cost dashboards split correctly.
+ * Document extraction with a PDF / image attached. Routing-aware as of
+ * 2026-05-11. Claude historically owned this path because it had the
+ * cleanest native document-content-block API; OpenAI now accepts the same
+ * via image_url chat content. When the routing config picks 'openai' and
+ * the request includes base64Data we currently still throw — operators
+ * should keep ANTHROPIC_API_KEY configured for this rare fallback path
+ * (Gemini handles the primary extraction; this only fires on Gemini failure).
+ *
+ * Telemetry recorded under task='document_extraction' so the cost
+ * dashboards split correctly.
  */
 const runClaudeWithDocument = async (args = {}) => {
   const { task = 'document_extraction', attach, metadata, cache, ...passthrough } = args;
   return runAIResult({
     task,
+    // Force Claude for the document-extraction fallback path. OpenAI
+    // multimodal works too but isn't wired through providerRegistry yet;
+    // tracked as a follow-up. For now keep ANTHROPIC_API_KEY available
+    // for this rare path only.
     provider: 'claude',
     model: passthrough.model,
     attach,
@@ -717,8 +748,13 @@ const runClaudeReasoningStream = async ({
   attach = {},
   metadata = {},
 } = {}) => {
-  const resolvedProvider = 'claude';
-  const resolvedModel = model || resolveDefaultModel(resolvedProvider);
+  // Routing-aware as of 2026-05-11 (operator directive: switch to OpenAI).
+  // Resolve the provider via the runtime routing table → env → code default.
+  // If the resolution is 'openai', stream via runOpenAIReasoningStream and
+  // drop the unused cachePrompt arg. Otherwise stream via Claude as before.
+  const routing = await resolveTaskRouting(task);
+  const resolvedProvider = routing.provider;
+  const resolvedModel = model || routing.model || resolveDefaultModel(resolvedProvider);
   const start = Date.now();
 
   // Cost-cap pre-check. Same logic as runAI but inlined because the streaming
@@ -727,13 +763,20 @@ const runClaudeReasoningStream = async ({
   const orgIdForCap = attach?.organizationId ?? ctx.organizationId ?? null;
   await assertWithinDailyCap({ organizationId: orgIdForCap });
 
-  const stream = await providerRegistry.runClaudeReasoningStream({
-    systemPrompt,
-    payload,
-    model: resolvedModel,
-    maxTokens,
-    cachePrompt,
-  });
+  const stream = resolvedProvider === 'openai'
+    ? await providerRegistry.runOpenAIReasoningStream({
+        systemPrompt,
+        payload,
+        model: resolvedModel,
+        maxTokens,
+      })
+    : await providerRegistry.runClaudeReasoningStream({
+        systemPrompt,
+        payload,
+        model: resolvedModel,
+        maxTokens,
+        cachePrompt,
+      });
 
   // Promise that resolves with the call_id once we've persisted the log
   // row at finalization. Callers that need to attach evidence_facts to the
