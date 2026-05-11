@@ -1898,5 +1898,86 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(formulaValue.formula).toBe('=DebtRatePct+IFERROR(ProcessingFeePct/LoanTermYears,0)');
       });
     });
+
+    // ── PR-I7 — Taxation (India): LTCG / TDS / Indexation ──────────────
+    // Indian tax regime affecting RE exit economics (in force as of 2026-05):
+    //   - LTCG on land held > 24 months: 12.5% (post Jul-2024 budget)
+    //   - TDS u/s 194-IA: 1% on sale > ₹50 lakh
+    //   - Indexation: NOT available post-Jul-2024 for new acquisitions
+    // PR-I7 adds these as informational inputs + a derived "Applicable
+    // Capital Gains Rate" that branches by EffectiveHoldYears (≥ 2 yrs →
+    // LTCG, < 2 yrs → STCG slab @ 30% approximation).
+    describe('PR-I7: Taxation (India) — LTCG / TDS / Indexation', () => {
+      test('Inputs sheet defines taxation named ranges', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('LTCGRate');
+        expect(namesList).toContain('TDSRate');
+        expect(namesList).toContain('IndexationRegime');
+        expect(namesList).toContain('EffectiveHoldYears');
+        expect(namesList).toContain('EffectiveCGRate');
+      });
+
+      test('LTCGRate defaults to 12.5% (post Jul-2024 budget)', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.ltcgRate;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('LTCG Rate')) seed = row.getCell(2).value;
+        });
+        expect(seed).toBeCloseTo(0.125, 4);
+      });
+
+      test('TDSRate defaults to 1% (Section 194-IA)', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.tdsRate;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('TDS')) seed = row.getCell(2).value;
+        });
+        expect(seed).toBeCloseTo(0.01, 4);
+      });
+
+      test('IndexationRegime defaults to post_2024_no_indexation', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.indexationRegime;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Indexation Regime')) seed = row.getCell(2).value;
+        });
+        expect(seed).toBe('post_2024_no_indexation');
+      });
+
+      test('EffectiveCGRate is a DERIVED formula branching on holding period (LTCG ≥ 2yr, STCG slab < 2yr)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Applicable Capital Gains Rate')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=IF(EffectiveHoldYears>=2,LTCGRate,0.3)');
+      });
+    });
   });
 });
