@@ -452,6 +452,40 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── RERA Compliance & Escrow (PR-I2) ──────────────────────────────────
+  // Indian RERA Act 2016 mandates that 70% of every customer payment on a
+  // RERA-registered residential project must be deposited into a project-
+  // specific escrow account. Withdrawals from the escrow are allowed only
+  // against actual construction expenses, certified by a CA + Engineer +
+  // Architect. The remaining 30% is freely available to the developer.
+  //
+  // This materially affects working capital and the developer's effective
+  // cash inflow timing — without modelling escrow, an Indian residential
+  // pro forma is wrong by orders of magnitude (it shows the developer
+  // receiving the full sale value as soon as customer pays, when in
+  // reality 70% is trapped in escrow until construction milestones).
+  //
+  // Default 70% matches the Act. Operators can override to 0% for:
+  //   - pre-2016 grandfathered projects (no RERA registration)
+  //   - non-residential deals where escrow doesn't apply
+  //   - simplification when the operator wants to model gross cash flow
+  //
+  // The Phasing sheet implements a quarterly escrow ledger (balance,
+  // additions, drawdowns matched to construction) and feeds the Cash
+  // Flow sheet a "Net developer cash from sales" row that nets escrow.
+  const reraSection = {
+    title: 'RERA Compliance & Escrow',
+    rows: [
+      ['RERA Escrow Allocation', 'RERAEscrowPct',
+        toPctDecimal(firstNumber(
+          ctx.inputs.reraEscrowPct,
+          ctx.inputs.escrowPct,
+          0.70,
+        )),
+        '% of customer collection', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── Detailed Soft Costs (institutional-grade drilldown) ────────────────
   // The reference pro formas (NAIOP, RE-540) break soft costs into ~8
   // distinct line items. Current generator collapses everything into a
@@ -575,6 +609,10 @@ const buildInputsSheet = (workbook, ctx) => {
     costSection,
     detailedSoftCostsSection,
     indiaStatutoryLeviesSection,
+    // RERA Escrow only meaningful for development-family deals (residential,
+    // villas, plotted, mixed-use, raw land). Income deals don't have
+    // customer collection at all (rent-paying tenants, no escrow regime).
+    ...(ctx.dealFamily === 'development' ? [reraSection] : []),
     scheduleSection,
     capitalSection,
     debtSizingSection,
@@ -842,16 +880,88 @@ const buildPhasingSheet = (workbook, ctx) => {
       },
       format: NUMBER_FORMATS.currency,
     },
+    // ── RERA Escrow ledger (PR-I2) ──────────────────────────────────────
+    // Indian RERA Act 2016 mandates 70% of every customer payment goes
+    // into a project-specific escrow, releasable only against certified
+    // construction. The 30% is freely available to the developer.
+    //
+    //   Row 11  To RERA Escrow (70%)       = Row 10 × RERAEscrowPct
+    //   Row 12  Free cash to developer (30%) = Row 10 × (1 - RERAEscrowPct)
+    //   Row 13  RERA Escrow drawdown         = MIN(balance, construction)
+    //   Row 14  RERA Escrow balance EOQ      = running balance
+    //   Row 15  Net developer cash from sales = Row 12 + Row 13
+    //
+    // Row 15 is what the Cash Flow sheet now treats as the developer's
+    // actual sales inflow (vs Row 10 gross pre-PR-I2). When the operator
+    // overrides RERAEscrowPct to 0, the math collapses: To Escrow = 0,
+    // Free Cash = Gross, Drawdown = 0, Net = Free = Gross — preserving
+    // the pre-PR-I2 behaviour for non-RERA / pre-2016 / income-only deals.
+    {
+      label: '→ To RERA Escrow (restricted 70%)',
+      formula: (q) => `=${colLetter(q + 1)}10*RERAEscrowPct`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: '→ Free cash to developer (30%)',
+      formula: (q) => `=${colLetter(q + 1)}10*(1-RERAEscrowPct)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'RERA Escrow drawdown (against construction)',
+      // Drawdown is MIN of (balance entering quarter + escrow additions
+      // this quarter, construction cost this quarter). For Q1 there's no
+      // prior balance, so drawdown is MIN of (additions, construction).
+      formula: (q) => {
+        const thisCol = colLetter(q + 1);
+        if (q === 1) return `=MIN(${thisCol}11,${thisCol}6)`;
+        const prevCol = colLetter(q);
+        return `=MIN(${prevCol}14+${thisCol}11,${thisCol}6)`;
+      },
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'RERA Escrow balance — end of quarter',
+      // Running balance: prior balance + additions - drawdowns. Tracks
+      // money trapped in escrow until construction matches it.
+      formula: (q) => {
+        const thisCol = colLetter(q + 1);
+        if (q === 1) return `=${thisCol}11-${thisCol}13`;
+        const prevCol = colLetter(q);
+        return `=${prevCol}14+${thisCol}11-${thisCol}13`;
+      },
+      format: NUMBER_FORMATS.currency,
+      // Final column shows the FINAL balance (which should taper to ~0
+      // by project end as construction completes and escrow releases).
+      // SUM of running balances would be nonsensical.
+      totalKind: 'final',
+    },
+    {
+      label: 'Net developer cash from sales (INR Cr)',
+      // This is what the developer ACTUALLY receives per quarter:
+      //   Free Cash (30%, unrestricted) + Escrow Drawdown (matched to construction)
+      // Cash Flow sheet treats this as the inflow row (vs Row 10 gross
+      // pre-PR-I2 which overstated developer cash by ~70%).
+      formula: (q) => {
+        const thisCol = colLetter(q + 1);
+        return `=${thisCol}12+${thisCol}13`;
+      },
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
     {
       label: 'Marketing & Sales spend (INR Cr)',
+      // Row position shifted from 11 → 16 due to PR-I2 RERA block.
       formula: (q) => `=${colLetter(q + 1)}9*MarketingCostPct`,
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Cumulative customer collection',
+      // Row position shifted from 12 → 17 due to PR-I2 RERA block.
+      // Self-reference (rolling cumulative) updates: references this row
+      // (was 12 → 17) and gross customer collection at row 10 (unchanged).
       formula: (q) => q === 1
         ? `=${colLetter(q + 1)}10`
-        : `=${colLetter(q)}12+${colLetter(q + 1)}10`,
+        : `=${colLetter(q)}17+${colLetter(q + 1)}10`,
       format: NUMBER_FORMATS.currency,
       bold: true,
       // Same fix as the construction cumulative row above — total cell
@@ -859,10 +969,11 @@ const buildPhasingSheet = (workbook, ctx) => {
       totalKind: 'final',
     },
     // ── Detailed Soft Cost Schedule ──────────────────────────────────────
-    // Adds rows 13-19 on the Phasing sheet. These rows match the soft-cost
-    // line items the operator's reference pro formas (NAIOP, RE-540)
-    // break out, and reference the named ranges defined on the Inputs
-    // sheet (ArchitectFeePct, LegalFeePct, AppraisalFeePct,
+    // Adds rows 18-24 on the Phasing sheet (was rows 13-19 pre-PR-I2;
+    // shifted +5 by RERA Escrow ledger block). These rows match the
+    // soft-cost line items the operator's reference pro formas (NAIOP,
+    // RE-540) break out, and reference the named ranges defined on the
+    // Inputs sheet (ArchitectFeePct, LegalFeePct, AppraisalFeePct,
     // InsuranceConstPct, PropTaxConstPct, DeveloperOverheadPct).
     //
     // Phasing assumptions per industry convention:
@@ -924,23 +1035,26 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'Total Detailed Soft Costs (INR Cr)',
+      // Sums the 6 individual detailed soft cost rows. Rows shifted +5
+      // by PR-I2 RERA block, so formula references B18..B23 (was 13..18).
       formula: (q) => {
         const c = colLetter(q + 1);
-        return `=${c}13+${c}14+${c}15+${c}16+${c}17+${c}18`;
+        return `=${c}18+${c}19+${c}20+${c}21+${c}22+${c}23`;
       },
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
     // ── India Statutory Levies (PR-I1) ──────────────────────────────────
-    // Three rows materialising what were previously decorative inputs:
+    // Three rows materialising what were previously decorative inputs.
+    // Row positions shifted +5 by PR-I2 RERA block (was 20-22 → now 25-27).
     //
-    //   Row 20  Stamp Duty + Registration on Land (Q1-only) — paid up-
+    //   Row 25  Stamp Duty + Registration on Land (Q1-only) — paid up-
     //           front at acquisition. Karnataka default 6.6% of LandCostCr.
     //           Modeled as a single-quarter outflow at Q1 to match the
     //           legal-economic reality of conveyance: stamp duty + reg
     //           cleared at deed registration, not amortised.
     //
-    //   Row 21  GST on Construction (Net Cost) — spread evenly across
+    //   Row 26  GST on Construction (Net Cost) — spread evenly across
     //           construction quarters (Q[lag+1] .. Q[total]). Net cost
     //           defaults are asset-class-aware (see
     //           `indiaGstDefaultForClass`):
@@ -948,7 +1062,7 @@ const buildPhasingSheet = (workbook, ctx) => {
     //             commercial/retail/IW = 0% (ITC offsets output GST)
     //             plotted/raw_land     = 0% (no GST on land transfer)
     //
-    //   Row 22  Total India Statutory Levies — sum of rows 20 + 21 per
+    //   Row 27  Total India Statutory Levies — sum of rows 25 + 26 per
     //           quarter, totalled in the Total column.
     //
     // These rows feed the Calculations Cost Build (rows 25-27) so the
@@ -968,9 +1082,11 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'Total India Statutory Levies (INR Cr)',
+      // Stamp Duty + Reg (row 25) + GST (row 26). Rows shifted +5 by
+      // PR-I2 RERA block.
       formula: (q) => {
         const c = colLetter(q + 1);
-        return `=${c}20+${c}21`;
+        return `=${c}25+${c}26`;
       },
       format: NUMBER_FORMATS.currency,
       bold: true,
@@ -1120,8 +1236,15 @@ const buildCashFlowSheet = (workbook, ctx) => {
   // Development deal cash flow rows — existing structure.
   const developmentRows = [
     {
-      label: 'Inflow — Customer collection (INR Cr)',
-      formula: (q) => `=${phasing}!${colLetters[q - 1]}10`,
+      // PR-I2: references Phasing row 15 (Net developer cash from sales)
+      // instead of row 10 (Gross customer collection). Row 15 nets the
+      // 70% RERA escrow against the matched construction drawdowns,
+      // showing what the developer ACTUALLY receives. When the operator
+      // sets RERAEscrowPct = 0 (e.g. for pre-RERA / non-residential
+      // deals), row 15 collapses to gross collection — preserving the
+      // pre-PR-I2 cash-flow profile.
+      label: 'Inflow — Net developer cash from sales (INR Cr)',
+      formula: (q) => `=${phasing}!${colLetters[q - 1]}15`,
       format: NUMBER_FORMATS.currency,
     },
     {

@@ -456,22 +456,24 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       }
     });
 
-    test('Phasing sheet renders 7 detailed soft cost rows (rows 13-19) for development family', async () => {
+    test('Phasing sheet renders 7 detailed soft cost rows (rows 18-24) for development family', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const phasing = wb.getWorksheet('Phasing & Sales Collection');
 
-      // Row 13 = A&E; row 14 = Legal; row 15 = Appraisal; row 16 = Insurance during Const;
-      // row 17 = Property Taxes during Const; row 18 = Developer Overhead; row 19 = Total Detailed.
+      // Pre-PR-I2 rows were 13-19 (Detailed Soft Costs). PR-I2 inserted
+      // 5 RERA Escrow ledger rows between Customer Collection (row 10)
+      // and Marketing & Sales spend, shifting the detailed soft costs
+      // down by 5 to rows 18-24.
       const labels = [
-        [13, 'A&E spend'],
-        [14, 'Legal fees spend'],
-        [15, 'Appraisal & title spend'],
-        [16, 'Insurance during construction'],
-        [17, 'Property taxes during construction'],
-        [18, 'Developer overhead'],
-        [19, 'Total Detailed Soft Costs'],
+        [18, 'A&E spend'],
+        [19, 'Legal fees spend'],
+        [20, 'Appraisal & title spend'],
+        [21, 'Insurance during construction'],
+        [22, 'Property taxes during construction'],
+        [23, 'Developer overhead'],
+        [24, 'Total Detailed Soft Costs'],
       ];
       for (const [row, expectedLabelPrefix] of labels) {
         const labelCell = phasing.getCell(`A${row}`).value;
@@ -482,20 +484,19 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       }
 
       // Each soft cost row Q1 (column B) carries a formula referencing
-      // the appropriate named range
-      const b13 = phasing.getCell('B13').value;
-      expect(b13.formula).toContain('ArchitectFeePct');
-      const b16 = phasing.getCell('B16').value;
-      expect(b16.formula).toContain('InsuranceConstPct');
-      const b17 = phasing.getCell('B17').value;
-      expect(b17.formula).toContain('PropTaxConstPct');
-      const b17Formula = b17.formula;
+      // the appropriate named range (positions shifted +5 by PR-I2).
+      const b18 = phasing.getCell('B18').value;
+      expect(b18.formula).toContain('ArchitectFeePct');
+      const b21 = phasing.getCell('B21').value;
+      expect(b21.formula).toContain('InsuranceConstPct');
+      const b22 = phasing.getCell('B22').value;
+      expect(b22.formula).toContain('PropTaxConstPct');
       // Property taxes apply to LandCostCr (Karnataka method), not hard cost
-      expect(b17Formula).toContain('LandCostCr');
+      expect(b22.formula).toContain('LandCostCr');
 
-      // Row 19 total = sum of rows 13-18
-      const b19 = phasing.getCell('B19').value;
-      expect(b19.formula).toMatch(/=B13\+B14\+B15\+B16\+B17\+B18/);
+      // Row 24 total = sum of rows 18-23 (shifted +5 by PR-I2)
+      const b24 = phasing.getCell('B24').value;
+      expect(b24.formula).toMatch(/=B18\+B19\+B20\+B21\+B22\+B23/);
     });
 
     test('Calculations Cost Build now shows 14 rows including 8-line-item soft cost breakdown', async () => {
@@ -670,8 +671,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // For a 12-quarter project (minimal-context default): B=Q1..M=Q12,
       // N=Total. Cumulative rows must reference the LAST quarter cell
       // (=M{row}); non-cumulative rows still use SUM(B{row}:M{row}).
-      expect(formulaAt('N7')).toMatch(/^=M7$/);     // cumulative construction
-      expect(formulaAt('N12')).toMatch(/^=M12$/);   // cumulative collection
+      expect(formulaAt('N7')).toMatch(/^=M7$/);     // cumulative construction (unchanged)
+      // PR-I2: Cumulative customer collection shifted from row 12 → 17
+      // (5 new RERA escrow rows inserted between Customer Collection row 10
+      // and Marketing & Sales spend).
+      expect(formulaAt('N17')).toMatch(/^=M17$/);   // cumulative collection (was N12 pre-PR-I2)
       expect(formulaAt('N6')).toMatch(/^=SUM\(B6:M6\)$/);   // per-quarter construction
       expect(formulaAt('N9')).toMatch(/^=SUM\(B9:M9\)$/);   // per-quarter sales
     });
@@ -1343,6 +1347,175 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(debtTotalCostFormula).toMatch(/GstPct/);
         expect(wfTotalCostFormula).toMatch(/StampRegPct/);
         expect(wfTotalCostFormula).toMatch(/GstPct/);
+      });
+    });
+
+    // ── PR-I2 — RERA Escrow 70/30 split on customer collections ────────
+    // Indian RERA Act 2016 mandates that 70% of every customer payment on a
+    // RERA-registered residential project must be deposited into a project-
+    // specific escrow account, releasable only against certified construction.
+    // The remaining 30% is freely available to the developer.
+    //
+    // Pre-PR-I2 the Cash Flow sheet showed the developer receiving the FULL
+    // sale value as soon as the customer paid — overstating cash inflow by
+    // ~70% and producing a too-rosy IRR. PR-I2 inserts a 5-row escrow
+    // ledger (To Escrow / Free Cash / Drawdown / Balance / Net) on the
+    // Phasing sheet and switches the Cash Flow sheet's sales inflow to the
+    // Net developer cash row.
+    describe('PR-I2: RERA Escrow 70/30 split', () => {
+      test('Inputs sheet defines RERAEscrowPct in a RERA Compliance section (default 0.70)', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.model_params.inputs.reraEscrowPct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('RERAEscrowPct');
+
+        // Default value should be 0.70 (the RERA Act mandate)
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        let sectionFound = false;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('RERA Compliance')) sectionFound = true;
+          if (label === 'RERA Escrow Allocation') seed = row.getCell(2).value;
+        });
+        expect(sectionFound).toBe(true);
+        expect(seed).toBeCloseTo(0.70, 4);
+      });
+
+      test('Phasing sheet has the 5-row RERA Escrow ledger (rows 11-15) on development family', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+        const rowByLabel = {};
+        phasing.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) rowByLabel[label] = rowIdx;
+        });
+
+        // Five new RERA ledger rows
+        const escrowRow = rowByLabel['→ To RERA Escrow (restricted 70%)'];
+        const freeCashRow = rowByLabel['→ Free cash to developer (30%)'];
+        const drawdownRow = rowByLabel['RERA Escrow drawdown (against construction)'];
+        const balanceRow = rowByLabel['RERA Escrow balance — end of quarter'];
+        const netRow = rowByLabel['Net developer cash from sales (INR Cr)'];
+
+        expect(escrowRow).toBeDefined();
+        expect(freeCashRow).toBeDefined();
+        expect(drawdownRow).toBeDefined();
+        expect(balanceRow).toBeDefined();
+        expect(netRow).toBeDefined();
+
+        // Block is contiguous (rows 11-15) immediately after Customer Collection (row 10)
+        expect(escrowRow).toBe(11);
+        expect(freeCashRow).toBe(12);
+        expect(drawdownRow).toBe(13);
+        expect(balanceRow).toBe(14);
+        expect(netRow).toBe(15);
+      });
+
+      test('RERA Escrow formulas split gross 70/30 and net escrow drawdown', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+        // Q1 (col B) formulas
+        const b11 = phasing.getCell('B11').value;
+        expect(b11.formula).toBe('=B10*RERAEscrowPct');
+
+        const b12 = phasing.getCell('B12').value;
+        expect(b12.formula).toBe('=B10*(1-RERAEscrowPct)');
+
+        // Drawdown Q1: MIN(escrow additions, construction this quarter)
+        const b13 = phasing.getCell('B13').value;
+        expect(b13.formula).toBe('=MIN(B11,B6)');
+
+        // Balance Q1: additions - drawdown (no prior balance)
+        const b14 = phasing.getCell('B14').value;
+        expect(b14.formula).toBe('=B11-B13');
+
+        // Net developer cash: Free Cash + Drawdown
+        const b15 = phasing.getCell('B15').value;
+        expect(b15.formula).toBe('=B12+B13');
+
+        // Q2 (col C) — drawdown + balance use rolling state
+        const c13 = phasing.getCell('C13').value;
+        expect(c13.formula).toBe('=MIN(B14+C11,C6)'); // prev balance + this addition vs construction
+        const c14 = phasing.getCell('C14').value;
+        expect(c14.formula).toBe('=B14+C11-C13'); // prev balance + addition - drawdown
+      });
+
+      test('Cash Flow Inflow row now references Net developer cash (Phasing row 15), not Gross (row 10)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cf = wb.getWorksheet('Quarterly Cash Flow & Debt');
+
+        let inflowRow = null;
+        cf.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '');
+          if (label.includes('Net developer cash from sales')) inflowRow = rowIdx;
+        });
+        expect(inflowRow).toBeDefined();
+        expect(inflowRow).not.toBeNull();
+
+        // Q1 formula should reference Phasing row 15 (Net developer cash)
+        const q1Cell = cf.getCell(inflowRow, 2);
+        expect(q1Cell.value.formula).toMatch(/Phasing & Sales Collection'!B15/);
+      });
+
+      test('Setting RERAEscrowPct = 0 collapses escrow to gross (preserves pre-PR-I2 behaviour for non-RERA deals)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.model_params.inputs.reraEscrowPct = 0;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'RERA Escrow Allocation') seed = row.getCell(2).value;
+        });
+        expect(seed).toBeCloseTo(0, 4);
+
+        // Formulas themselves don't change — the escrow ledger still
+        // renders, but with RERAEscrowPct = 0:
+        //   To Escrow (row 11) = 0; Free Cash (row 12) = full Gross;
+        //   Drawdown (row 13) = MIN(0, construction) = 0;
+        //   Balance (row 14) = 0; Net (row 15) = Free Cash + 0 = Gross
+        // ExcelJS doesn't evaluate the formulas — we verify only that
+        // the seeded input is 0; the operator opening the file sees the
+        // escrow rows show all-zeroes and Net = Gross.
+      });
+
+      test('Income family deals do NOT get the RERA section (no customer collection at all)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        // Income deals don't need RERA escrow modelling (no buyers, no
+        // collections, just operating lease income). The named range
+        // shouldn't exist for income family deals.
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).not.toContain('RERAEscrowPct');
+
+        // And the Inputs sheet doesn't carry the section header
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let foundSection = false;
+        inputs.eachRow((row) => {
+          const v = String(row.getCell(1).value || '');
+          if (v.includes('RERA Compliance')) foundSection = true;
+        });
+        expect(foundSection).toBe(false);
       });
     });
   });
