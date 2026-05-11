@@ -7,7 +7,11 @@ let anthropicClient = null;
 let openaiClient = null;
 
 const DEFAULT_GEMINI_MODEL = 'gemini-3-flash-preview';
-const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
+// 2026-05-11 fix: was 'gpt-5.4' (placeholder from when the OpenAI adapter
+// was first wired in — that model name doesn't exist on OpenAI's API and
+// triggers a 400 BadRequest on every call). Production fix: switch to
+// 'gpt-4o' which is OpenAI's actual flagship multimodal model.
+const DEFAULT_OPENAI_MODEL = 'gpt-4o';
 const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
 const getProviderAvailability = () => ({
