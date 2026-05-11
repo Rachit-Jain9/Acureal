@@ -48,6 +48,7 @@ const SHEETS = {
   dashboard: 'Dashboard',
   debtSizing: 'Debt Sizing',
   amortization: 'Amortization Schedule',
+  waterfall: 'Sponsor LP Waterfall',
   calculations: 'Calculations',
 };
 
@@ -408,6 +409,33 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Sponsor / LP Waterfall inputs (PR-D) ─────────────────────────────
+  // Institutional deals split equity proceeds between the Sponsor (GP)
+  // and the LP investors via a multi-tier waterfall. Standard structure:
+  //   Tier 1: LP gets their preferred return on outstanding equity
+  //   Tier 2: LP capital returned in full
+  //   Tier 3: Sponsor "catch-up" — until they've earned a target % of profits
+  //   Tier 4: Promote / carry split above the pref hurdle
+  //   Tier 5 (optional): Bigger promote above a second hurdle (12% / 15%)
+  //
+  // For v1 we model a simplified 3-tier structure: Pref + RoC, then a
+  // single promote split above the pref. Hurdle-laddered splits (Tier 5)
+  // are deferred to a follow-up PR — they require dynamic IRR-tier
+  // pour-through logic that's expensive in Excel formulas.
+  //
+  // Defaults match Indian institutional equity benchmarks: LP/GP ratio
+  // 90/10 (heavy LP), 8% pref, 80/20 promote split above pref.
+  const waterfallSection = {
+    title: 'Sponsor / LP Waterfall',
+    rows: [
+      ['LP Equity Share',          'LPEquityPct',     toPctDecimal(firstNumber(ctx.inputs.lpEquityPct, ctx.inputs.lpSharePct, 0.90)),         '% of total equity', NUMBER_FORMATS.percent],
+      ['Sponsor Equity Share',     'GPEquityPct',     toPctDecimal(firstNumber(ctx.inputs.gpEquityPct, ctx.inputs.sponsorSharePct, 0.10)),    '% of total equity', NUMBER_FORMATS.percent],
+      ['Preferred Return Rate',    'PrefReturnRate',  toPctDecimal(firstNumber(ctx.inputs.prefReturnRate, ctx.inputs.preferredReturn, 0.08)), '% / year', NUMBER_FORMATS.percent],
+      ['Promote Split — LP Share', 'PromoteLPPct',    toPctDecimal(firstNumber(ctx.inputs.promoteLPPct, 0.80)),                                '% above pref', NUMBER_FORMATS.percent],
+      ['Promote Split — GP Share', 'PromoteGPPct',    toPctDecimal(firstNumber(ctx.inputs.promoteGPPct, 0.20)),                                '% above pref', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── Permanent Debt Sizing inputs (PR-B) ──────────────────────────────
   // Reference institutional pro formas (RE-540 "Permanent Debt Calculation"
   // sheet) size the permanent loan as the MIN of three sub-limits:
@@ -444,6 +472,7 @@ const buildInputsSheet = (workbook, ctx) => {
     scheduleSection,
     capitalSection,
     debtSizingSection,
+    waterfallSection,
   ];
 
   let row = 5;
@@ -2119,6 +2148,205 @@ const buildAmortizationSheet = (workbook, ctx) => {
   return sheet;
 };
 
+/**
+ * Sponsor / LP Waterfall sheet (PR-D) — multi-tier pour-over of project
+ * equity proceeds between Sponsor (GP) and Limited Partners (LP),
+ * matching the reference pro formas (NAIOP "Waterfall - IRR Hurdles"
+ * sheet, RE-540 "Waterfall" sheet).
+ *
+ * Standard structure modelled here (v1 — simplified 3-tier):
+ *   Tier 1: LP Preferred Return on outstanding equity (8% / year compounded)
+ *   Tier 2: Return of LP Capital (LP gets capital back in full)
+ *   Tier 3: Promote split — residual cash above pref+RoC split per the
+ *           PromoteLPPct / PromoteGPPct named ranges (default 80/20)
+ *
+ * Deferred (separate PR): Sponsor catch-up tier (between RoC and promote)
+ * and hurdle-laddered promote splits (e.g., 70/30 above 12% IRR, 60/40
+ * above 15% IRR). Those require dynamic IRR-tier pour-through logic that's
+ * expensive in Excel formulas — most early-stage operators don't model
+ * past the simple promote anyway.
+ *
+ * Calculation method (single-exit approximation):
+ *   Project Life N = LoanTermYears (proxy for hold period)
+ *   Total Equity = Total Project Cost − Lender-Approved Loan (Debt Sizing!B28)
+ *   LP Equity = Total Equity × LPEquityPct
+ *   GP Equity = Total Equity × GPEquityPct
+ *   LP Pref Cumulative = LP Equity × ((1 + PrefRate)^N − 1)
+ *   Total Equity Proceeds = MAX(0, Total Revenue − Total Cost + Net Debt)
+ *
+ *   Distribution:
+ *     Step 1: LP receives MIN(Proceeds, LP Equity + LP Pref Accrued)
+ *             [pref + return of capital]
+ *     Step 2: After Step 1, residual = Proceeds − Step 1 payout
+ *             Promote split: LP × PromoteLPPct, GP × PromoteGPPct
+ *     Step 3: GP also gets back GP Equity (return of GP capital) from
+ *             their share of the promote split.
+ *
+ * Result rows: LP total return, GP total return, LP IRR (approx),
+ * GP IRR (approx), LP equity multiple, GP equity multiple. The IRRs
+ * are computed as ((1+gain)^(1/N))-1 single-period approximations.
+ */
+const buildWaterfallSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.waterfall, {
+    views: [{ showGridLines: false }],
+  });
+  sheet.columns = [
+    { width: 32 }, // A: Label
+    { width: 22 }, // B: Value
+    { width: 38 }, // C: Note
+  ];
+
+  // Title
+  sheet.mergeCells('A1:C1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Sponsor / LP Waterfall`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+
+  sheet.mergeCells('A2:C2');
+  sheet.getCell('A2').value =
+    'Multi-tier pour-over of project equity proceeds. Tier 1: LP preferred return + return of capital. '
+    + 'Tier 2: Promote split (default 80% LP / 20% GP) on residual cash. Single-exit approximation; '
+    + 'institutional models use quarter-by-quarter pour-through.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 32;
+
+  // ── Step 1 — Capital Stack (rows 4-9) ───────────────────────────────
+  // Total equity = Total Cost − Loan. LP/GP shares from named ranges.
+  sheet.mergeCells('A4:C4');
+  sheet.getCell('A4').value = 'Capital Stack';
+  styleSectionTitle(sheet.getCell('A4'));
+  sheet.getRow(4).height = 22;
+
+  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)';
+  const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
+  const totalCost = `${hardCost}+${softCost}`;
+
+  const capitalRows = [
+    ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              'Hard + Soft costs (matches Calculations!B25)'],
+    ['Lender-Approved Loan (INR Cr)',   `='${SHEETS.debtSizing}'!B28`,                'MIN of LTC/LTV/DCR/DY from Debt Sizing'],
+    ['Total Equity (INR Cr)',           '=B5-B6',                                    'Project cost − loan'],
+    ['LP Equity (INR Cr)',              '=B7*LPEquityPct',                           'LP share × total equity'],
+    ['GP / Sponsor Equity (INR Cr)',    '=B7*GPEquityPct',                           'GP share × total equity'],
+  ];
+  capitalRows.forEach(([label, formula, note], idx) => {
+    const r = 5 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const cell = sheet.getCell(`B${r}`);
+    cell.value = { formula };
+    styleOutputCell(cell, NUMBER_FORMATS.currency);
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    sheet.getCell(`C${r}`).value = note;
+    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`C${r}`).protection = { locked: true };
+  });
+
+  // ── Step 2 — Proceeds + Pref Accrual (rows 11-16) ───────────────────
+  // Total proceeds = project net cash flow. Pref accrues for N years.
+  sheet.mergeCells('A11:C11');
+  sheet.getCell('A11').value = 'Proceeds & Pref Return Accrual';
+  styleSectionTitle(sheet.getCell('A11'));
+  sheet.getRow(11).height = 22;
+
+  // Project life used for pref compounding — LoanTermYears as a proxy.
+  // For development deals this is typically ProjectMonths/12; for
+  // income deals it's hold-period. Operator can edit on the Inputs sheet.
+  const proceedsRows = [
+    ['Project Hold Period (years)',      '=LoanTermYears',                                          'Pref compounding period'],
+    ['Total Cash Available to Equity',   ctx.dealFamily === 'income'
+      ? `=MAX(0,${totalCost}+'${SHEETS.phasing}'!N18*4*LoanTermYears-B6)`  // income: NOI × yrs − loan
+      : `=MAX(0,(SaleableAreaSqft*SellRatePerSqft/10000000)-${totalCost})+B6`, // dev: revenue − cost + loan amount returned
+      'After debt service across hold period'],
+    ['LP Pref Accrual (compounded)',     '=B8*((1+PrefReturnRate)^B12-1)',                          'LP Equity × ((1+pref)^N − 1)'],
+    ['Tier 1 LP Distribution',           '=MIN(B13,B8+B14)',                                        'LP gets capital + pref (capped at proceeds)'],
+    ['Residual after Tier 1 (INR Cr)',   '=MAX(0,B13-B15)',                                         'Cash available for promote split'],
+  ];
+  proceedsRows.forEach(([label, formula, note], idx) => {
+    const r = 12 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const cell = sheet.getCell(`B${r}`);
+    cell.value = { formula };
+    if (label.includes('years')) {
+      styleOutputCell(cell, NUMBER_FORMATS.integer);
+    } else {
+      styleOutputCell(cell, NUMBER_FORMATS.currency);
+    }
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    sheet.getCell(`C${r}`).value = note;
+    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  });
+
+  // ── Step 3 — Promote Split (rows 18-22) ─────────────────────────────
+  // Above pref+RoC, residual splits per the promote ladder (default 80/20).
+  sheet.mergeCells('A18:C18');
+  sheet.getCell('A18').value = 'Tier 2 — Promote Split (above Pref + Return of Capital)';
+  styleSectionTitle(sheet.getCell('A18'));
+  sheet.getRow(18).height = 22;
+
+  const promoteRows = [
+    ['Promote — LP Allocation',     '=B16*PromoteLPPct',                                       'Residual × PromoteLPPct (default 80%)'],
+    ['Promote — GP Allocation',     '=B16*PromoteGPPct',                                       'Residual × PromoteGPPct (default 20%)'],
+    ['GP Return of Capital',         '=MIN(B9,B20)',                                          'GP also recovers their initial equity'],
+    ['GP Net Promote (after RoC)',  '=B20-B21',                                              'GP carry above capital recovery'],
+  ];
+  promoteRows.forEach(([label, formula, note], idx) => {
+    const r = 19 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const cell = sheet.getCell(`B${r}`);
+    cell.value = { formula };
+    styleOutputCell(cell, NUMBER_FORMATS.currency);
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    sheet.getCell(`C${r}`).value = note;
+    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  });
+
+  // ── Step 4 — Final Returns (rows 24-30) ─────────────────────────────
+  sheet.mergeCells('A24:C24');
+  sheet.getCell('A24').value = 'Final Investor Returns';
+  styleSectionTitle(sheet.getCell('A24'));
+  sheet.getRow(24).height = 22;
+
+  // LP total = Tier 1 distribution (capital + pref) + LP promote share
+  // GP total = GP RoC + GP net promote
+  const returnsRows = [
+    ['LP Total Distribution (INR Cr)',  '=B15+B19',                                              'Tier 1 (pref + capital) + Tier 2 LP share'],
+    ['GP Total Distribution (INR Cr)',  '=B20',                                                  'Tier 2 GP share (includes capital + promote)'],
+    ['LP Equity Multiple',               '=IFERROR(B25/B8,0)',                                    'Total LP cash returned / LP capital invested'],
+    ['GP Equity Multiple',               '=IFERROR(B26/B9,0)',                                    'Total GP cash returned / GP capital invested'],
+    ['LP IRR (annualised, approx)',     '=IFERROR((B27)^(1/B12)-1,0)',                            'Single-exit approximation: (EM)^(1/years)−1'],
+    ['GP IRR (annualised, approx)',     '=IFERROR((B28)^(1/B12)-1,0)',                            'Single-exit approximation: (EM)^(1/years)−1'],
+  ];
+  returnsRows.forEach(([label, formula, note], idx) => {
+    const r = 25 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const cell = sheet.getCell(`B${r}`);
+    cell.value = { formula };
+    const fmt = label.includes('Multiple') ? NUMBER_FORMATS.multiple
+      : label.includes('IRR') ? NUMBER_FORMATS.percent
+      : NUMBER_FORMATS.currency;
+    styleOutputCell(cell, fmt);
+    cell.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx(label.includes('IRR') || label.includes('Multiple') ? 'dataPositive' : 'inkDeep') } };
+    sheet.getCell(`C${r}`).value = note;
+    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  });
+
+  // Footer disclosure
+  sheet.mergeCells('A32:C32');
+  sheet.getCell('A32').value =
+    'Single-exit approximation: all cash assumed to arrive at end of hold period. Institutional templates '
+    + '(NAIOP, RE-540) use quarter-by-quarter pour-through with hurdle laddering (e.g., 70/30 above 12% IRR, '
+    + '60/40 above 15% IRR). Catch-up tier not modelled in this v1 — operator can add via Excel scenarios.';
+  sheet.getCell('A32').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A32').alignment = { vertical: 'top', wrapText: true };
+  sheet.getRow(32).height = 36;
+
+  return sheet;
+};
+
 const buildCalculationsSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.calculations, {
     state: 'hidden', // power users can unhide via right-click
@@ -2282,6 +2510,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   buildDashboardSheet(workbook, ctx);
   buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);
+  buildWaterfallSheet(workbook, ctx);
   buildCalculationsSheet(workbook, ctx); // hidden audit trail
 
   // Register defined names AFTER all sheets exist so the references resolve.
