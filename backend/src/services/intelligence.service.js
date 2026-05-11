@@ -100,7 +100,9 @@ const getNotesMap = async () => {
  * Sections: Deal of the Day, Market Signals, Risk Signals, Strategic Takeaways
  */
 const generateClaudeBrief = async (dealData, pipelineStats, notes, benchmarks, recentTx, topComps) => {
-  if (!getProviderAvailability().claude) return null;
+  // Function name retained for back-compat. The inner runClaudeReasoning
+  // call is routing-aware (2026-05-11 switch to OpenAI by default).
+  if (!getProviderAvailability().gpt_compatible) return null;
 
   const hasNotes = notes.micro_market?.length || notes.slowdown?.length || notes.strategic?.length;
 
@@ -437,8 +439,8 @@ Rules:
 };
 
 const getDealAnalysis = async (dealId) => {
-  if (!getProviderAvailability().claude) {
-    return { analysis: null, reason: 'ANTHROPIC_API_KEY not configured' };
+  if (!getProviderAvailability().gpt_compatible) {
+    return { analysis: null, reason: 'OPENAI_API_KEY not configured' };
   }
   const input = await buildDealAnalysisInput(dealId);
   if (input.error) return { analysis: null, reason: input.error };
@@ -493,8 +495,8 @@ const getCachedDealAnalysis = async (dealId) => {
 //   }
 //   res.end();
 const streamDealAnalysis = async (dealId) => {
-  if (!getProviderAvailability().claude) {
-    return { error: 'ANTHROPIC_API_KEY not configured', status: 503 };
+  if (!getProviderAvailability().gpt_compatible) {
+    return { error: 'OPENAI_API_KEY not configured', status: 503 };
   }
   const input = await buildDealAnalysisInput(dealId);
   if (input.error) return { error: input.error, status: 404 };

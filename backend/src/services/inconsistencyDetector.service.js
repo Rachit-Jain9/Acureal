@@ -413,7 +413,7 @@ Rules:
 - Output ONLY markdown. No preamble.`;
 
 async function buildNarrative(findings, dealName) {
-  if (!getProviderAvailability().claude || findings.length === 0) {
+  if (!getProviderAvailability().gpt_compatible || findings.length === 0) {
     return null;
   }
   try {

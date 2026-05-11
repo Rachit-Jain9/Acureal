@@ -121,8 +121,8 @@ const generateNarrative = async ({ propertyId, userId = null, dealId = null }) =
     throw createError('propertyId is required.', 400);
   }
 
-  if (!getProviderAvailability().claude) {
-    throw createError('Claude is not configured. Set ANTHROPIC_API_KEY to enable parcel narrative generation.', 503);
+  if (!getProviderAvailability().gpt_compatible) {
+    throw createError('OpenAI is not configured. Set OPENAI_API_KEY to enable parcel narrative generation.', 503);
   }
 
   const intelligence = await getParcelIntelligence(propertyId, userId);
@@ -134,7 +134,8 @@ const generateNarrative = async ({ propertyId, userId = null, dealId = null }) =
 
   const { result, callId, latencyMs, cost, tokens } = await runAI({
     task: 'reasoning',
-    provider: 'claude',
+    // No explicit provider — routing config decides (post 2026-05-11: openai
+    // by default; Claude available if ANTHROPIC_API_KEY is set + env says so).
     attach: {
       userId,
       dealId,
@@ -147,18 +148,24 @@ const generateNarrative = async ({ propertyId, userId = null, dealId = null }) =
       verdict_label: payload.verdict?.label,
       confidence_pct: payload.verdict?.confidence_pct,
     },
-    run: async ({ providers, model }) => {
+    run: async ({ providers, provider, model }) => {
       // providerRegistry returns { result, raw } envelope. Pass `raw`
       // through so aiRouter.extractTokenUsage can lift cache_* token counts
-      // (PR #152) into ai_call_logs.metadata. Stable SYSTEM_PROMPT across
-      // narratives → opt into prompt cache.
-      const envelope = await providers.runClaudeReasoning({
-        systemPrompt: SYSTEM_PROMPT,
-        cachePrompt: true,
-        payload,
-        model,
-        maxTokens: 500,
-      });
+      // into ai_call_logs.metadata.
+      const envelope = provider === 'openai'
+        ? await providers.runOpenAIReasoning({
+            systemPrompt: SYSTEM_PROMPT,
+            payload,
+            model,
+            maxTokens: 500,
+          })
+        : await providers.runClaudeReasoning({
+            systemPrompt: SYSTEM_PROMPT,
+            cachePrompt: true,
+            payload,
+            model,
+            maxTokens: 500,
+          });
       return { result: envelope?.result ?? null, raw: envelope?.raw ?? { usage: null } };
     },
   });

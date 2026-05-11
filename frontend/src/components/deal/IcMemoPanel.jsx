@@ -104,7 +104,7 @@ export default function IcMemoPanel({ dealId, dealName }) {
         if (err?.name === 'AbortError') return;
         setError(
           err?.message ||
-            'IC memo generation failed. Check that ANTHROPIC_API_KEY is configured and the deal has financials + risk flags populated.',
+            'IC memo generation failed. Check that OPENAI_API_KEY is configured and the deal has financials + risk flags populated.',
         );
       })
       .finally(() => {

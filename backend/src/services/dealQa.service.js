@@ -378,8 +378,8 @@ const computeSnapshotHash = ({ question, chunks }) => {
  *   • Citation validation failure  → 502 (after one reprompt)
  */
 async function askQuestion({ dealId, question, userId = null, organizationId = null }) {
-  if (!getProviderAvailability().claude) {
-    throw Object.assign(new Error('ANTHROPIC_API_KEY not configured.'), { statusCode: 503 });
+  if (!getProviderAvailability().gpt_compatible) {
+    throw Object.assign(new Error('OPENAI_API_KEY not configured.'), { statusCode: 503 });
   }
 
   const trimmed = String(question || '').trim();
@@ -561,8 +561,8 @@ async function askQuestion({ dealId, question, userId = null, organizationId = n
  * row in one shot via `cacheHit: true` in the return.
  */
 async function streamQuestion({ dealId, question, userId = null, organizationId = null }) {
-  if (!getProviderAvailability().claude) {
-    return { error: 'ANTHROPIC_API_KEY not configured', status: 503 };
+  if (!getProviderAvailability().gpt_compatible) {
+    return { error: 'OPENAI_API_KEY not configured', status: 503 };
   }
 
   const trimmed = String(question || '').trim();
