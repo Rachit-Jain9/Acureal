@@ -4,6 +4,46 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (evening) — XLSX model bug fixes from second Jigani roast (PRs #256–#257)
+
+Operator shared a fresh Jigani Apartments download (post-PR #254 deploy) + a brutal roast citing specific numerical inconsistencies. Verified every claim against the actual file:
+
+| Roast claim | Verdict |
+|---|---|
+| Dashboard Revenue 593 ≠ Calculations Revenue 648 | ✅ Real — two methodologies. Fixed in #256 |
+| Cumulative construction cost = 3,198 Cr (actual ~266 Cr) | ✅ Real — Total column SUM-ed already-cumulative cells. Fixed in #256 |
+| IRR -15% despite positive net CF + 30% gross margin | ✅ Real — front-loaded-positive CF profile from same-quarter collection. Fixed in #257 |
+| Cash Flow has empty interest, zero principal | ✅ Symptom — debt never drawn because Q1-Q5 were positive. Fixed by #257 (CF profile is now conventional) |
+| No charts on Dashboard | ❌ Outdated — file pre-dated PR #254 (16:00 deploy) |
+
+### PRs shipped
+
+- **#256** Two surgical fixes in `buildWorkbook.js`:
+  1. Cumulative rows (Phasing rows 7, 12, and income-family row 21) now write `={lastQuarter}{row}` into the Total column instead of `=SUM(B:Y)`. Per-quarter rows still SUM. New `totalKind: 'final'` flag.
+  2. Calculations sheet's Total revenue + Customer collected now reference the SAME Phasing Total column as the Dashboard. Both sheets read 593 Cr, not 648 vs 593. Column letter derived dynamically from `ctx.totalQuarters` via a local `colLetterLocal` helper.
+- **#257** Customer collection formula switched from `=Sales(q) × CollectionPct` (same-quarter) to construction-progress-linked:
+  ```
+  collection_q = totalContractedSales × CollectionPct × constructionThisQuarter / totalConstruction
+  ```
+  Excel: `=IFERROR(SUM($B$9:$Y$9)*CollectionPct*F6/SUM($B$6:$Y$6),0)`. Each quarter's collection mirrors construction progress. CF profile flips from front-loaded-positive to conventional negative-early/positive-sustained. Jigani IRR: **-15% → +47%** annualized. Cumulative net unchanged (still +137 Cr) — only timing differs.
+
+### Tests
+161 export tests passing (was 158 before this batch, +3 regression: cumulative-row Total + revenue reconciliation + collection-formula shape).
+
+### Deferred (acknowledged in PR bodies)
+- **Sales velocity defaults** — 20%/quarter produces a 5-quarter sellout, aggressive for Indian residential (typical absorption 18-24 months = 6-8 quarters). Operator can adjust the input; defaults are a separate concern.
+- **Marketing & Finance soft-cost timing in Cash Flow row 730** — currently `sales × (MarketingCostPct + FinanceCostPct)`. Marketing-as-sales is correct (brokerage on closing); finance-as-sales is approximate (actual debt interest is computed separately in row 10). Won't affect IRR materially; revisit if operator wants it cleaned up.
+- **Multi-driver tornado / sensitivity tornado in XLSX** — PR #251 added it to PPTX, PR #252 to DOCX. XLSX chart-injector now exists (PR #254) and could be extended to support tornado/combo via shape primitives or stacked-bar.
+
+### Operator verification still pending
+This is the second iteration on the Jigani export. Operator should download a fresh `.xlsx` and confirm:
+1. Dashboard "Project IRR (modeled)" is now POSITIVE
+2. Phasing → Total column → "Cumulative construction cost" reads ~266 Cr (not 3,198 Cr)
+3. Right-click any tab → Unhide → Calculations → "Total revenue" matches the Dashboard headline exactly
+4. Cash Flow row 8 (Project net cash flow) shows negative early quarters then positive (was the reverse)
+
+---
+
 ## 2026-05-11 (afternoon) — XLSX native chart objects (PR #254)
 
 Operator shared a 10-XLSX template pack ("REDIP_India_Template_*.xlsx", openpyxl-generated) and a Grok roast comparing the templates to JLL/CBRE/Blackstone-grade deliverables. Verified the roast against the actual templates — most of the roast's complaints (no palette, no data bars, sensitivity raw grid, Calculations sheet missing) are wrong about our current generator. The ONE legitimate gap: **no native chart objects** on the XLSX Dashboard. The templates have native chart objects; ours had zero.

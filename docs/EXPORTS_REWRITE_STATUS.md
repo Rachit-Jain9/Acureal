@@ -41,6 +41,9 @@ sessions can pick up where the last left off without re-reading the chat.
 | #252 | **Feat**: DOCX SVG chart embeds — capital stack donut + quarterly cash flow trend + sensitivity tornado in the Financials section (pure-SVG, no native deps) | ✅ MERGED |
 | #253 | docs: 2026-05-11 batch handoff (PRs #248–#252 docs handoff) | ✅ MERGED |
 | #254 | **Feat**: XLSX native chart objects on Dashboard — new `chartInjector.js` splices doughnut + clustered-column XML into the ExcelJS-written buffer (ExcelJS 4.4.0 has no `addChart`). Asset-class-aware series labels (Sales/Construction vs PGI/NOI). Mirrors the operator's reference-template-pack chart structure | ✅ MERGED |
+| #255 | docs: PR #254 handoff | ✅ MERGED |
+| #256 | **Fix**: Phasing cumulative-row Total column bug (was producing 3,198 Cr triangular sum where actual cumulative is 266 Cr) + Dashboard Revenue / Calculations Revenue reconciliation (was 593 vs 648, different methodologies — now share source of truth) | ✅ MERGED |
+| #257 | **Fix**: Customer collection now follows construction progress (RERA-milestone-linked), not same-quarter as sale. Operator's "IRR -15% despite positive net cash flow" complaint — fixed. Jigani IRR went from -15% to +47% (with conventional negative-early / positive-sustained CF profile) | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
