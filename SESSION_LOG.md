@@ -4,6 +4,46 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (night) — Kernel reconciliation + institutional-grade rebuild roadmap (PR #259 + roadmap doc)
+
+Operator shared the Reports-page screenshot showing **Jigani IRR 13.6%** on the frontend, then five reference institutional pro formas (NAIOP, RE-540, RE-508 + their own 10-template benchmark pack) and a brutal roast: "This is fucking basic. Forget all rules. Best pro forma possible."
+
+Verified the critical issue first: the Reports page IRR (13.6%, kernel-stored on the deal record) didn't match what the XLSX would produce (different formula recompute). Per CLAUDE.md the deterministic financial kernel is the single source of numerics; the XLSX was operating as a SEPARATE model — headlines didn't reconcile across surfaces. Credibility-destroying regardless of polish.
+
+### PR shipped
+
+- **#259** Dashboard KPI tiles now use kernel-stored values from the deal record when populated. New `ctx.kernelKpis` block pulls IRR, NPV, EM, gross margin, total revenue, total cost, yield-on-cost, NOI, exit value, RLV. At write time: kernel populated → literal; kernel null → formula fallback. Returns block split into two rows: row 20 "Project IRR (kernel)" with the literal authoritative value matching the Reports page, row 21 "Project IRR (modeled)" with the live formula recompute (responds to Inputs edits). Row 22 footnote disclosure of the distinction. Net diff +120/-25, 163 export tests passing.
+
+### Roadmap doc
+
+Spent meaningful time reading three reference pro formas:
+- **NAIOP** (2 MB, 16 sheets, Excel Solver-based, sponsor/LP waterfall, monthly + annual CF)
+- **RE-540** (Scenario Summary / Permanent Debt MIN(LTV, DCR, DY) / Construction & Lease Up monthly draws / Waterfall)
+- **RE-508** (3-sheet multi-project monthly CF + reversion modelling)
+
+Captured 26 specific gaps vs current REDIP generator in `docs/XLSX_INSTITUTIONAL_GRADE_ROADMAP.md`. Top-tier institutional depth requires multi-PR work:
+- PR-A: Detailed soft cost breakdown (A&E + Legal + Appraisal + Marketing + Insurance during Construction + Property Taxes during Construction + Developer Overhead + Contingency — 8 line items instead of current 2)
+- PR-B: Construction loan vs Permanent loan (Permanent loan sized as MIN of LTV / DCR / Debt-Yield sub-limits)
+- PR-C: Amortization schedule sheet
+- PR-D: Sponsor / LP waterfall (pref + return of capital + catch-up + promote at 8/12/15% IRR hurdles)
+- PR-E: Unit mix table (residential / hospitality only)
+- PR-F: Combo chart (column + line cumulative on secondary axis) — extend chartInjector
+- PR-G: Tornado on Dashboard (embedded image since no native tornado type)
+
+Asset-class specific gaps: ADR/Occupancy/RevPAR for hospitality, CAM reconciliation for retail, entitlement milestones for raw land, component-level revenue for mixed-use.
+
+### Stopped here for direction
+
+The kernel-reconciliation fix is the credibility precondition — without it the rest of the polish was being applied to mismatched headlines. Now that the foundation is set, asking the operator which gap matters most for their target buyer persona before committing to PR-A vs PR-B vs PR-D sequentially. Each is independent and could ship in any order.
+
+### Honest framing for the operator
+
+The roast set a high bar ("Blackstone / CBRE / JLL / Brookfield analyst won't rebuild from scratch"). Closing the gap to that bar is multi-week work, not multi-PR-in-one-session work. Realistic interim target: close gaps #1 (soft costs) + #2 (loan split) + #4 (waterfall) + #5 (unit mix) over a focused arc — that's the institutional-core-four. Beyond that, asymptotic returns: gaps #10-#26 progressively matter less.
+
+REDIP's value is *deterministic, audit-trail-able pro forma generation* — it saves the analyst skeleton-building hours, doesn't replace their underwriting judgement. Set buyer expectations accordingly.
+
+---
+
 ## 2026-05-11 (evening) — XLSX model bug fixes from second Jigani roast (PRs #256–#257)
 
 Operator shared a fresh Jigani Apartments download (post-PR #254 deploy) + a brutal roast citing specific numerical inconsistencies. Verified every claim against the actual file:

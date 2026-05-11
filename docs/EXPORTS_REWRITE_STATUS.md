@@ -44,6 +44,8 @@ sessions can pick up where the last left off without re-reading the chat.
 | #255 | docs: PR #254 handoff | ✅ MERGED |
 | #256 | **Fix**: Phasing cumulative-row Total column bug (was producing 3,198 Cr triangular sum where actual cumulative is 266 Cr) + Dashboard Revenue / Calculations Revenue reconciliation (was 593 vs 648, different methodologies — now share source of truth) | ✅ MERGED |
 | #257 | **Fix**: Customer collection now follows construction progress (RERA-milestone-linked), not same-quarter as sale. Operator's "IRR -15% despite positive net cash flow" complaint — fixed. Jigani IRR went from -15% to +47% (with conventional negative-early / positive-sustained CF profile) | ✅ MERGED |
+| #258 | docs: handoff for PRs #256 + #257 | ✅ MERGED |
+| #259 | **Fix**: Dashboard headline KPIs (Total Revenue, IRR, NPV, EM, Gross Margin) now display kernel-stored values from the deal record when populated — reconciles with the Reports page in the frontend (operator's roast showed Jigani IRR 13.6% on the page vs different number in the XLSX → unacceptable inconsistency). Modeled (sensitivity-run) figures preserved as a secondary row | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
