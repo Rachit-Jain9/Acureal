@@ -46,6 +46,10 @@ sessions can pick up where the last left off without re-reading the chat.
 | #257 | **Fix**: Customer collection now follows construction progress (RERA-milestone-linked), not same-quarter as sale. Operator's "IRR -15% despite positive net cash flow" complaint — fixed. Jigani IRR went from -15% to +47% (with conventional negative-early / positive-sustained CF profile) | ✅ MERGED |
 | #258 | docs: handoff for PRs #256 + #257 | ✅ MERGED |
 | #259 | **Fix**: Dashboard headline KPIs (Total Revenue, IRR, NPV, EM, Gross Margin) now display kernel-stored values from the deal record when populated — reconciles with the Reports page in the frontend (operator's roast showed Jigani IRR 13.6% on the page vs different number in the XLSX → unacceptable inconsistency). Modeled (sensitivity-run) figures preserved as a secondary row | ✅ MERGED |
+| #260 | docs: XLSX_INSTITUTIONAL_GRADE_ROADMAP.md capturing 26 gaps vs the operator's reference pro formas | ✅ MERGED |
+| #261 | **PR-A** institutional-grade rebuild: detailed soft cost breakdown — 6 new line items (A&E / Legal / Appraisal / Insurance during Construction / Property Taxes during Construction / Developer Overhead) on Inputs sheet + Phasing schedule rows 13-19 + expanded Calculations Cost Build (8 soft cost rows, total at R25) | ✅ MERGED |
+| #262 | **PR-F** institutional-grade rebuild: combo chart on Quarterly Trend — chartInjector extended with `buildComboChartXml` (barChart + lineChart in one plotArea, secondary value axis on right). Dashboard's Quarterly Trend chart now shows period contribution columns PLUS copper cumulative line. Asset-class-aware (dev: Sales+Construction+Cumulative; income: PGI+NOI+CF After Debt) | ✅ MERGED |
+| #263 | **PR-C** institutional-grade rebuild: standalone Amortization Schedule sheet — quarter-by-quarter table with Beginning Balance / Payment / Interest / Principal / Ending Balance + Loan Terms summary at the top. Live formulas drive 80 amortization rows (= 20-year cap), all referencing named ranges from the Inputs sheet | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
