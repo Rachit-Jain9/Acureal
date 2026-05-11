@@ -96,6 +96,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Debt Sizing',
         'Amortization Schedule',
         'Sponsor LP Waterfall',
+        'Unit Mix',
         'Calculations',
       ]);
       const calc = wb.getWorksheet('Calculations');
@@ -167,6 +168,94 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // when actual project total is ~266 Cr). The fix: cumulative rows
     // get `totalKind: 'final'` and the Total cell references the LAST
     // quarter's cell instead of summing.
+    // PR-E: Unit Mix sheet — asset-class-aware unit-by-unit breakdown
+    // matching reference templates (RE-540 Assumptions rows 14-31,
+    // NAIOP Unit Mix sheet). Worksheet-only (no flow-through to
+    // SaleableAreaSqft) — operator updates Inputs manually after
+    // planning the mix.
+    test('Unit Mix sheet renders 5 residential unit types for development family', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext()); // default = residential_apartments
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const um = wb.getWorksheet('Unit Mix');
+      expect(um).toBeDefined();
+
+      // Headers at row 4
+      expect(String(um.getCell('A4').value)).toBe('Unit Type');
+      expect(String(um.getCell('B4').value)).toBe('Count');
+      expect(String(um.getCell('C4').value)).toBe('SF / Unit');
+      expect(String(um.getCell('D4').value)).toBe('Total SF');
+      expect(String(um.getCell('E4').value)).toContain('Sell Rate');
+
+      // Row 5 should be Studio
+      expect(String(um.getCell('A5').value)).toBe('Studio');
+      expect(typeof um.getCell('B5').value).toBe('number'); // count
+      expect(typeof um.getCell('C5').value).toBe('number'); // SF/unit
+      // Total SF = count × SF/unit (formula)
+      expect(um.getCell('D5').value.formula).toBe('=B5*C5');
+      // Revenue formula for residential: total SF × per-sqft rate / 1Cr
+      expect(um.getCell('F5').value.formula).toBe('=D5*E5/10000000');
+
+      // 5 unit types (Studio / 1BHK / 2BHK / 3BHK / 4BHK) → 5 data rows + 1 total row
+      const totalRow = 10; // 5 data rows at 5-9, total at row 10
+      expect(String(um.getCell(`A${totalRow}`).value)).toBe('TOTAL');
+    });
+
+    test('Unit Mix sheet for hospitality uses ADR × 365 × occupancy revenue formula', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'hospitality';
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const um = wb.getWorksheet('Unit Mix');
+      expect(um).toBeDefined();
+
+      // Headers should be Keys / SF per key / ADR
+      expect(String(um.getCell('A4').value)).toBe('Key Type');
+      expect(String(um.getCell('B4').value)).toBe('Keys');
+      expect(String(um.getCell('E4').value)).toContain('ADR');
+
+      // Revenue formula for hospitality: Keys × ADR × 365 × 0.65 / 1Cr
+      expect(um.getCell('F5').value.formula).toContain('365');
+      expect(um.getCell('F5').value.formula).toContain('0.65');
+    });
+
+    test('Unit Mix sheet for commercial uses monthly rent × 12 revenue formula', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const um = wb.getWorksheet('Unit Mix');
+      expect(um).toBeDefined();
+
+      // Header should reference monthly rent
+      expect(String(um.getCell('E4').value)).toContain('Rent');
+      expect(String(um.getCell('E4').value)).toContain('mo');
+
+      // Revenue formula: total SF × monthly rent × 12 / 1Cr (annualised)
+      expect(um.getCell('F5').value.formula).toBe('=D5*E5*12/10000000');
+    });
+
+    test('Unit Mix sheet renders empty-state for mixed_use / raw_land', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'mixed_use';
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const um = wb.getWorksheet('Unit Mix');
+      expect(um).toBeDefined();
+
+      // Should NOT have the standard headers — just an empty-state note
+      const a4 = um.getCell('A4').value;
+      // Empty-state path doesn't write headers; A4 should be null/undefined
+      expect(a4 == null || String(a4).includes('Unit mix')).toBe(true);
+
+      // The note in A5 should explain why the table isn't rendered
+      const a5 = um.getCell('A5').value;
+      expect(String(a5)).toContain("isn't cleanly applicable");
+    });
+
     // PR-D: Sponsor / LP Waterfall sheet — multi-tier pour-over of
     // equity proceeds (LP pref + return of capital → promote split).
     // Reference templates (NAIOP "Waterfall - IRR Hurdles", RE-540
