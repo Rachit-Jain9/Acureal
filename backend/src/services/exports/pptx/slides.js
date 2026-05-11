@@ -691,7 +691,66 @@ const renderMarketPositioning = (pptx, slide, context, pageNumber, totalSlides) 
         value: num(row.rate_per_sqft),
       })).filter((row) => row.value !== null);
 
-  if (benchmarkSeries.length >= 2) {
+  // Prefer a rate-vs-distance scatter when the comp service has attached
+  // distance_km (i.e., we ran a nearby-coordinate query, not the city-wide
+  // fallback). The scatter shows where each comp sits relative to the
+  // site, with the deal's modeled rate plotted at distance = 0 for visual
+  // anchoring. Falls back to the bar chart of mid-point pricing when only
+  // city-level benchmarks are available.
+  const compsWithDistance = (context.compRows || [])
+    .map((c) => ({
+      label: truncate(c.project_name || c.locality || 'Comparable', 22),
+      rate: num(c.rate_per_sqft),
+      distance: num(c.distance_km),
+    }))
+    .filter((c) => c.rate != null && c.distance != null);
+
+  if (compsWithDistance.length >= 2 && context.modelSellRate != null) {
+    // Sort by distance for cleaner scatter rendering
+    compsWithDistance.sort((a, b) => a.distance - b.distance);
+    const compDistances = compsWithDistance.map((c) => c.distance);
+    const compRates = compsWithDistance.map((c) => c.rate);
+
+    slide.addChart(
+      pptx.ChartType.scatter,
+      [
+        { name: 'Distance (km)', values: [0, ...compDistances] },
+        // Deal sits at distance 0 — first Y. Empty for the rest of the
+        // deal-marker series; the comp series fills in the rest.
+        { name: 'Deal (modeled)', values: [num(context.modelSellRate), ...compDistances.map(() => null)] },
+        { name: 'Verified comps', values: [null, ...compRates] },
+      ],
+      {
+        x: 0.55, y: 1.3, w: 6.2, h: 3.85,
+        chartColors: [COLORS.sandDeep, COLORS.plum],
+        lineSize: 0,
+        lineDataSymbol: 'circle',
+        lineDataSymbolSize: 12,
+        lineDataSymbolLineSize: 0,
+        showValue: false,
+        showLegend: true,
+        legendPos: 'b',
+        legendFontSize: 8,
+        legendColor: COLORS.muted,
+        catAxisLabelFontSize: 8,
+        valAxisLabelFontSize: 8,
+        catAxisTitle: 'Distance from site (km)',
+        catAxisTitleFontSize: 9,
+        catAxisTitleColor: COLORS.muted,
+        showCatAxisTitle: true,
+        valAxisTitle: 'INR / sqft',
+        valAxisTitleFontSize: 9,
+        valAxisTitleColor: COLORS.muted,
+        showValAxisTitle: true,
+        valGridLine: { style: 'none' },
+        title: 'Verified Comps — Rate vs Distance',
+        titleFontFace: FONT,
+        titleFontSize: 10,
+        titleColor: COLORS.charcoal,
+        showTitle: true,
+      }
+    );
+  } else if (benchmarkSeries.length >= 2) {
     slide.addChart(pptx.ChartType.bar, [{
       name: 'Verified market context',
       labels: benchmarkSeries.map((row) => row.label),
@@ -1463,31 +1522,149 @@ const renderCashFlowSensitivity = (pptx, slide, context, pageNumber, totalSlides
     );
   }
 
-  const hasSensitivity = Array.isArray(context.sensitivityMatrix?.irrGrid) && context.sensitivityMatrix.irrGrid.length > 0;
+  // ─── Sensitivity tornado (replaces the old 5×5 heatmap table) ─────────
+  // Was: a 5×5 numeric table heat-tinted by IRR — informative but reads as
+  // a spreadsheet, not a chart. Operator's brutal-roast asked for a
+  // tornado: drivers ranked by impact, centred on base IRR, low/high deltas
+  // visible at a glance. Built from shape primitives because pptxgenjs has
+  // no native tornado type.
+  const hasSensitivity = Array.isArray(context.sensitivityMatrix?.irrGrid)
+    && context.sensitivityMatrix.irrGrid.length >= 3
+    && Array.isArray(context.sensitivityMatrix.sellingRates)
+    && context.sensitivityMatrix.sellingRates.length >= 3
+    && Array.isArray(context.sensitivityMatrix.constructionCosts)
+    && context.sensitivityMatrix.constructionCosts.length >= 3;
   if (hasSensitivity) {
-    const sensitivityRows = [
-      [
-        { text: 'Cost \\ Price', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum } } },
-        ...context.sensitivityMatrix.sellingRates.slice(0, 5).map((value) => ({
-          text: formatNumber(value, 0) || 'N/A',
-          options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, align: 'center', fontSize: 7.5 },
-        })),
-      ],
-      ...context.sensitivityMatrix.irrGrid.slice(0, 5).map((row, rowIndex) => [
-        { text: formatNumber(context.sensitivityMatrix.constructionCosts[rowIndex], 0) || 'N/A', options: { bold: true, fill: { color: COLORS.mist }, fontSize: 7.5 } },
-        ...row.slice(0, 5).map((value) => ({
-          text: value != null ? `${formatNumber(value, 1)}%` : 'N/A',
-          options: { align: 'center', fill: { color: getHeatFill(value) }, fontSize: 7.5 },
-        })),
-      ]),
-    ];
-    addTable(slide, sensitivityRows, {
-      x: 7.2,
-      y: 1.3,
-      w: 5.58,
-      colW: [1.3, 0.86, 0.86, 0.86, 0.86, 0.84],
-      rowH: 0.42,
-    });
+    const grid = context.sensitivityMatrix.irrGrid;
+    const sellRates = context.sensitivityMatrix.sellingRates;
+    const constCosts = context.sensitivityMatrix.constructionCosts;
+    const mid = (arr) => Math.floor(arr.length / 2);
+    const sellMid = mid(sellRates);
+    const costMid = mid(constCosts);
+    const baseIrr = num(grid[costMid]?.[sellMid]);
+
+    // Driver 1: selling rate (vary column, hold row=middle construction cost).
+    // Low column → low selling rate → lower IRR (negative delta).
+    const sellRow = grid[costMid] || [];
+    const sellLowIrr = num(sellRow[0]);
+    const sellHighIrr = num(sellRow[sellRow.length - 1]);
+
+    // Driver 2: construction cost (vary row, hold column=middle selling rate).
+    // Low row → low construction cost → higher IRR (positive delta).
+    // High row → high construction cost → lower IRR (negative delta).
+    const costLowIrr = num(grid[grid.length - 1]?.[sellMid]); // high-cost case
+    const costHighIrr = num(grid[0]?.[sellMid]);              // low-cost case
+
+    const drivers = [];
+    if (baseIrr != null && sellLowIrr != null && sellHighIrr != null) {
+      drivers.push({
+        label: 'Selling Rate',
+        low: sellLowIrr,
+        high: sellHighIrr,
+        lowLabel: `${formatNumber(sellRates[0], 0)} / sqft`,
+        highLabel: `${formatNumber(sellRates[sellRates.length - 1], 0)} / sqft`,
+      });
+    }
+    if (baseIrr != null && costLowIrr != null && costHighIrr != null) {
+      drivers.push({
+        label: 'Construction Cost',
+        // Construction cost: low cost → high IRR, high cost → low IRR.
+        // Show as (worst IRR ... best IRR) so the bar reads consistently.
+        low: costLowIrr,     // worst-case IRR (under high construction cost)
+        high: costHighIrr,   // best-case IRR (under low construction cost)
+        lowLabel: `${formatNumber(constCosts[constCosts.length - 1], 0)} / sqft`,
+        highLabel: `${formatNumber(constCosts[0], 0)} / sqft`,
+      });
+    }
+
+    if (drivers.length >= 1 && baseIrr != null) {
+      // Sort by absolute range so the most impactful driver renders on top.
+      drivers.sort((a, b) => Math.abs(b.high - b.low) - Math.abs(a.high - a.low));
+
+      // Compute the symmetric scale so both drivers share an x-axis range.
+      const allDeltas = drivers.flatMap((d) => [d.low - baseIrr, d.high - baseIrr]);
+      const maxAbs = Math.max(0.5, ...allDeltas.map((v) => Math.abs(v)));
+
+      // Layout
+      const panelX = 7.2;
+      const panelY = 1.3;
+      const panelW = 5.58;
+      const eyebrowY = panelY;
+      const baseLabelY = panelY + 0.26;
+      const rowsTop = panelY + 0.62;
+      const rowH = 0.72;
+
+      slide.addText('SENSITIVITY — IRR RANGE BY DRIVER', {
+        x: panelX, y: eyebrowY, w: panelW, h: 0.20,
+        fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+      });
+      slide.addText(`Base IRR ${formatNumber(baseIrr, 1)}%  ·  variables held independent`, {
+        x: panelX, y: baseLabelY, w: panelW, h: 0.18,
+        fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted,
+      });
+
+      // Bar geometry
+      const labelW = 1.50;
+      const barAreaX = panelX + labelW + 0.10;
+      const barAreaW = panelW - labelW - 0.10;
+      const centerX = barAreaX + barAreaW / 2;
+
+      // Centre tick (base IRR axis)
+      slide.addShape(pptx.ShapeType.line, {
+        x: centerX, y: rowsTop, w: 0, h: rowH * drivers.length + 0.15,
+        line: { color: COLORS.muted, pt: 1, dashType: 'dash' },
+      });
+      slide.addText(`${formatNumber(baseIrr, 1)}%`, {
+        x: centerX - 0.30, y: rowsTop + rowH * drivers.length + 0.05, w: 0.60, h: 0.20,
+        fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, align: 'center',
+      });
+
+      drivers.forEach((driver, idx) => {
+        const rowY = rowsTop + idx * rowH;
+        const lowDelta = driver.low - baseIrr;  // typically negative
+        const highDelta = driver.high - baseIrr; // typically positive
+        const halfW = barAreaW / 2;
+        const lowW = (Math.abs(lowDelta) / maxAbs) * halfW;
+        const highW = (Math.abs(highDelta) / maxAbs) * halfW;
+        const barH = 0.36;
+        const barY = rowY + 0.06;
+
+        // Driver label
+        slide.addText(driver.label, {
+          x: panelX, y: rowY + 0.04, w: labelW, h: 0.22,
+          fontFace: FONT, fontSize: 10, bold: true, color: COLORS.charcoal, valign: 'top',
+        });
+        slide.addText(`${driver.lowLabel} → ${driver.highLabel}`, {
+          x: panelX, y: rowY + 0.28, w: labelW, h: 0.18,
+          fontFace: FONT, fontSize: 7.5, italic: true, color: COLORS.muted, valign: 'top',
+        });
+
+        // Low-side bar (extends LEFT from centre — typically red for worse-IRR)
+        if (lowDelta < 0 && lowW > 0.02) {
+          slide.addShape(pptx.ShapeType.rect, {
+            x: centerX - lowW, y: barY, w: lowW, h: barH,
+            fill: { color: COLORS.red }, line: { color: COLORS.red, pt: 0 },
+          });
+          slide.addText(`${formatNumber(driver.low, 1)}%`, {
+            x: centerX - lowW - 0.55, y: barY, w: 0.55, h: barH,
+            fontFace: FONT, fontSize: 8.5, bold: true, color: COLORS.charcoal,
+            align: 'right', valign: 'mid',
+          });
+        }
+        // High-side bar (extends RIGHT from centre — green for better-IRR)
+        if (highDelta > 0 && highW > 0.02) {
+          slide.addShape(pptx.ShapeType.rect, {
+            x: centerX, y: barY, w: highW, h: barH,
+            fill: { color: COLORS.green }, line: { color: COLORS.green, pt: 0 },
+          });
+          slide.addText(`${formatNumber(driver.high, 1)}%`, {
+            x: centerX + highW, y: barY, w: 0.55, h: barH,
+            fontFace: FONT, fontSize: 8.5, bold: true, color: COLORS.charcoal,
+            align: 'left', valign: 'mid',
+          });
+        }
+      });
+    }
   }
 
   // ─── Bottom strip — Scenario comparison (Base / Bull / Bear) ─────────
