@@ -164,6 +164,92 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // when actual project total is ~266 Cr). The fix: cumulative rows
     // get `totalKind: 'final'` and the Total cell references the LAST
     // quarter's cell instead of summing.
+    // PR-A institutional-grade soft cost breakdown: reference pro formas
+    // (NAIOP, RE-540) break soft costs into ~8 distinct line items.
+    // Previous generator collapsed everything into Marketing + Finance.
+    // This regression test asserts the 6 new soft cost line items exist
+    // on the Inputs sheet (as named ranges + cells), on the Phasing sheet
+    // (as scheduled-by-quarter rows 13-19), and on the Calculations sheet
+    // Cost Build block (as the expanded rows 16-23 + new soft subtotal).
+    test('Inputs sheet exposes 6 detailed soft cost named ranges', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+
+      // ExcelJS exposes defined-name targets via wb.definedNames.matrixMap
+      const allDefined = JSON.stringify(wb.definedNames);
+      for (const name of ['ArchitectFeePct', 'LegalFeePct', 'AppraisalFeePct',
+        'InsuranceConstPct', 'PropTaxConstPct', 'DeveloperOverheadPct']) {
+        expect(allDefined).toContain(name);
+      }
+    });
+
+    test('Phasing sheet renders 7 detailed soft cost rows (rows 13-19) for development family', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+      // Row 13 = A&E; row 14 = Legal; row 15 = Appraisal; row 16 = Insurance during Const;
+      // row 17 = Property Taxes during Const; row 18 = Developer Overhead; row 19 = Total Detailed.
+      const labels = [
+        [13, 'A&E spend'],
+        [14, 'Legal fees spend'],
+        [15, 'Appraisal & title spend'],
+        [16, 'Insurance during construction'],
+        [17, 'Property taxes during construction'],
+        [18, 'Developer overhead'],
+        [19, 'Total Detailed Soft Costs'],
+      ];
+      for (const [row, expectedLabelPrefix] of labels) {
+        const labelCell = phasing.getCell(`A${row}`).value;
+        const labelStr = labelCell && typeof labelCell === 'object' && labelCell.richText
+          ? labelCell.richText.map((r) => r.text).join('')
+          : String(labelCell || '');
+        expect(labelStr).toContain(expectedLabelPrefix);
+      }
+
+      // Each soft cost row Q1 (column B) carries a formula referencing
+      // the appropriate named range
+      const b13 = phasing.getCell('B13').value;
+      expect(b13.formula).toContain('ArchitectFeePct');
+      const b16 = phasing.getCell('B16').value;
+      expect(b16.formula).toContain('InsuranceConstPct');
+      const b17 = phasing.getCell('B17').value;
+      expect(b17.formula).toContain('PropTaxConstPct');
+      const b17Formula = b17.formula;
+      // Property taxes apply to LandCostCr (Karnataka method), not hard cost
+      expect(b17Formula).toContain('LandCostCr');
+
+      // Row 19 total = sum of rows 13-18
+      const b19 = phasing.getCell('B19').value;
+      expect(b19.formula).toMatch(/=B13\+B14\+B15\+B16\+B17\+B18/);
+    });
+
+    test('Calculations Cost Build now shows 14 rows including 8-line-item soft cost breakdown', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const calc = wb.getWorksheet('Calculations');
+
+      // Verify the expanded Cost Build labels exist
+      const text = [];
+      calc.eachRow((row) => row.eachCell((cell) => {
+        if (typeof cell.value === 'string') text.push(cell.value);
+      }));
+      const joined = text.join(' | ');
+      expect(joined).toMatch(/A&E fees/);
+      expect(joined).toMatch(/Legal fees/);
+      expect(joined).toMatch(/Appraisal & title/);
+      expect(joined).toMatch(/Insurance during construction/);
+      expect(joined).toMatch(/Property taxes during construction/);
+      expect(joined).toMatch(/Developer overhead/);
+
+      // Soft cost subtotal (row 24) sums all 8 line items
+      const b24 = calc.getCell('B24').value;
+      expect(b24.formula).toBe('=B16+B17+B18+B19+B20+B21+B22+B23');
+    });
+
     // Regression: customer collection used to compute as
     // `=B9*CollectionPct` for each quarter — same-quarter as the sale.
     // For Indian residential this is wrong (RERA / construction-milestone-
@@ -460,20 +546,23 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         return v && typeof v === 'object' && v.formula ? v.formula : null;
       };
 
-      // Cost Build (rows 12–19)
-      expect(formulaAt('B15')).toBe('=B12+B13+B14');          // Hard cost = Land + Construction + Approvals
-      expect(formulaAt('B18')).toBe('=B16+B17');              // Soft cost = Marketing + Finance
-      expect(formulaAt('B19')).toBe('=B15+B18');              // Total cost = Hard + Soft
+      // Cost Build (rows 12–25 — expanded for the detailed soft cost
+      // breakdown PR). Hard subtotal at R15, soft subtotal at R24,
+      // total project cost at R25.
+      expect(formulaAt('B15')).toBe('=B12+B13+B14');                      // Hard cost = Land + Construction + Approvals
+      expect(formulaAt('B24')).toBe('=B16+B17+B18+B19+B20+B21+B22+B23');  // Soft cost = all 8 line items
+      expect(formulaAt('B25')).toBe('=B15+B24');                          // Total cost = Hard + Soft
 
-      // Debt Sculpting (rows 22–27)
-      expect(formulaAt('B23')).toBe('=B19*DebtLTV');          // Total debt envelope
-      expect(formulaAt('B24')).toBe('=B19*(1-DebtLTV)');      // Equity envelope
-      expect(formulaAt('B25')).toBe('=B23*DebtRatePct');      // Annualised interest
-      expect(formulaAt('B26')).toBe('=B25/4');                // Quarterly accrual
-      expect(formulaAt('B27')).toBe('=B25/SaleableAreaSqft*10000000'); // Per-sqft proxy
+      // Debt Sculpting (rows 28–33). Total debt envelope refs B25
+      // (Total project cost in the expanded Cost Build).
+      expect(formulaAt('B29')).toBe('=B25*DebtLTV');                      // Total debt envelope
+      expect(formulaAt('B30')).toBe('=B25*(1-DebtLTV)');                  // Equity envelope
+      expect(formulaAt('B31')).toBe('=B29*DebtRatePct');                  // Annualised interest
+      expect(formulaAt('B32')).toBe('=B31/4');                            // Quarterly accrual
+      expect(formulaAt('B33')).toBe('=B31/SaleableAreaSqft*10000000');    // Per-sqft proxy
 
-      // None of those formulas should reference their own cell
-      ['B15', 'B18', 'B19', 'B23', 'B24', 'B25', 'B26', 'B27'].forEach((cellRef) => {
+      // None of those formulas should reference their own cell.
+      ['B15', 'B24', 'B25', 'B29', 'B30', 'B31', 'B32', 'B33'].forEach((cellRef) => {
         const formula = formulaAt(cellRef) || '';
         expect(formula).not.toMatch(new RegExp(`\\b${cellRef}\\b`));
       });
