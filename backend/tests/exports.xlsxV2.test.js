@@ -178,6 +178,88 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // self-referencing). Excel surfaced this as a "circular reference" warning
     // on file open and zero values throughout the audit trail. Lock the
     // intended row references in.
+    // Native chart objects were absent from every previous v2 build —
+    // ExcelJS 4.4.0 has no `addChart` API (verified empirically). The
+    // chart-injector now post-processes the buffer to splice in chart
+    // XML matching the operator's reference template pack
+    // (REDIP_India_Template_*.xlsx, openpyxl-generated). When a Dashboard
+    // is built, the output buffer must contain at least one chart entry
+    // under xl/charts/ and a drawing on the Dashboard sheet referencing
+    // those charts.
+    test('Dashboard ships native chart objects via post-write injection', async () => {
+      const JSZip = require('jszip');
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const zip = await JSZip.loadAsync(buffer);
+
+      // Chart XML files present
+      const chartFiles = Object.keys(zip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
+      expect(chartFiles.length).toBeGreaterThanOrEqual(1);
+
+      // Drawing file present + references each chart
+      const drawingXml = await zip.file('xl/drawings/drawing1.xml').async('string');
+      expect(drawingXml).toMatch(/<xdr:oneCellAnchor>/);
+
+      // Dashboard sheet references the drawing
+      const sheetXml = await zip.file('xl/worksheets/sheet4.xml').async('string');
+      expect(sheetXml).toMatch(/<drawing\s+r:id="rId\d+"\s*\/>/);
+
+      // Sheet rels include the drawing rel
+      const sheetRels = await zip.file('xl/worksheets/_rels/sheet4.xml.rels').async('string');
+      expect(sheetRels).toMatch(/drawings\/drawing1\.xml/);
+
+      // Content types declares each chart + the drawing
+      const contentTypes = await zip.file('[Content_Types].xml').async('string');
+      expect(contentTypes).toMatch(/\/xl\/drawings\/drawing1\.xml/);
+      expect(contentTypes).toMatch(/\/xl\/charts\/chart1\.xml/);
+    });
+
+    // The Uses Breakdown doughnut always renders. The Quarterly Trend
+    // bar renders when totalQuarters >= 2 (which it always is in our
+    // test contexts since the minimum is 4).
+    test('Dashboard charts include a doughnut (Uses) + a column bar (Quarterly Trend)', async () => {
+      const JSZip = require('jszip');
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const zip = await JSZip.loadAsync(buffer);
+
+      const chartFiles = Object.keys(zip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
+      const xmls = await Promise.all(chartFiles.map((n) => zip.file(n).async('string')));
+
+      // At least one doughnut + at least one bar chart
+      expect(xmls.some((x) => x.includes('<c:doughnutChart'))).toBe(true);
+      expect(xmls.some((x) => x.includes('<c:barChart'))).toBe(true);
+
+      // The doughnut targets the Uses cells (Dashboard!A14:A16 / B14:B16)
+      const doughnut = xmls.find((x) => x.includes('<c:doughnutChart'));
+      expect(doughnut).toMatch(/\$A\$14:\$A\$16/);
+      expect(doughnut).toMatch(/\$B\$14:\$B\$16/);
+    });
+
+    // Asset-class branching for the trend chart: development deals show
+    // Sales vs Construction; income deals show PGI vs NOI. The series
+    // labels are emitted into the chart XML.
+    test('Quarterly Trend chart series labels switch by asset family', async () => {
+      const JSZip = require('jszip');
+      // Development deal — series should be Sales + Construction
+      const devBuffer = await buildDealWorkbookV2(minimalContext());
+      const devZip = await JSZip.loadAsync(devBuffer);
+      const devChartFiles = Object.keys(devZip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
+      const devXmls = await Promise.all(devChartFiles.map((n) => devZip.file(n).async('string')));
+      const devBar = devXmls.find((x) => x.includes('<c:barChart'));
+      expect(devBar).toMatch(/Sales \(Cr\)/);
+      expect(devBar).toMatch(/Construction \(Cr\)/);
+
+      // Income deal — series should be PGI + NOI
+      const incomeCtx = minimalContext();
+      incomeCtx.deal.asset_class = 'commercial_office';
+      const incomeBuffer = await buildDealWorkbookV2(incomeCtx);
+      const incomeZip = await JSZip.loadAsync(incomeBuffer);
+      const incomeChartFiles = Object.keys(incomeZip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
+      const incomeXmls = await Promise.all(incomeChartFiles.map((n) => incomeZip.file(n).async('string')));
+      const incomeBar = incomeXmls.find((x) => x.includes('<c:barChart'));
+      expect(incomeBar).toMatch(/PGI \(Cr\)/);
+      expect(incomeBar).toMatch(/NOI \(Cr\)/);
+    });
+
     test('Calculations sheet subtotal + debt formulas have no self-references', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
