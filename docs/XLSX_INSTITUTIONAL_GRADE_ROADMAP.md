@@ -78,15 +78,24 @@ _Status as of 2026-05-11._ This doc tracks the multi-PR effort to elevate REDIP'
 
 After PR #259 (kernel reconciliation) — proposed order:
 
-1. **PR-A: Detailed soft cost breakdown** (gap #1). Highest-impact depth addition; foundational for everything downstream (waterfall sponsor capital tracking, accurate total cost). ~150-200 LOC.
-2. **PR-B: Construction loan vs Permanent loan structure** (#2, couples with #7). Adds a "Permanent Debt Calc" sheet computing MIN(LTV, DCR, DY) loan amount. ~300-400 LOC.
-3. **PR-C: Amortization schedule sheet** (#3). Quick win once #B exists. ~80 LOC.
-4. **PR-D: Sponsor/LP waterfall sheet** (#4). 4-tier pour-over (pref → return of capital → catch-up → promote). ~250-350 LOC.
-5. **PR-E: Unit mix table** (#5). Asset-class-aware; residential / hospitality / hotels get the table. ~150 LOC.
-6. **PR-F: Combo chart support + Quarterly Trend gets cumulative line** (#13, #23). ~100 LOC.
-7. **PR-G: Tornado chart on Dashboard via embedded image** (#14). ~150 LOC.
+1. **PR-A: Detailed soft cost breakdown** (gap #1). ✅ **SHIPPED in PR #261** — 6 new line items + Phasing schedule rows 13-19 + expanded Calculations Cost Build to 14 rows.
+2. **PR-B: Construction loan vs Permanent loan structure** (#2, couples with #7). Adds a "Permanent Debt Calc" sheet computing MIN(LTV, DCR, DY) loan amount. ~300-400 LOC. _Open._
+3. **PR-C: Amortization schedule sheet** (#3). ✅ **SHIPPED in PR #263** — standalone sheet with quarter-by-quarter Beg Bal / Payment / Interest / Principal / End Bal + Loan Terms summary. 80 rows = 20-year cap.
+4. **PR-D: Sponsor/LP waterfall sheet** (#4). 4-tier pour-over (pref → return of capital → catch-up → promote). ~250-350 LOC. _Open._
+5. **PR-E: Unit mix table** (#5). Asset-class-aware; residential / hospitality / hotels get the table. ~150 LOC. _Open._
+6. **PR-F: Combo chart support + Quarterly Trend gets cumulative line** (#13, #23). ✅ **SHIPPED in PR #262** — chartInjector extended with `buildComboChartXml` (barChart + lineChart in one plotArea, secondary value axis); Dashboard Quarterly Trend chart now shows period contribution columns plus copper cumulative line.
+7. **PR-G: Tornado chart on Dashboard via embedded image** (#14). ~150 LOC. _Open._
 
 Each PR keeps the existing chart injector + kernel reconciliation logic intact.
+
+### Remaining open PRs by priority
+
+After PR #261 + #262 + #263 landed in the 2026-05-11 night session, the next-highest-leverage gaps are:
+
+- **PR-B (Construction vs Permanent loan with MIN sizing)** — biggest remaining depth gap. Once it lands, PR-C's Amortization sheet automatically shows the PERMANENT loan amortization (the in-sheet footer already acknowledges this).
+- **PR-D (Sponsor / LP waterfall)** — critical for institutional deals with promote economics.
+- **PR-G (Tornado on Dashboard)** — visual parity with PPTX (#251) + DOCX (#252).
+- **PR-E (Unit mix table)** — residential / hospitality specifically.
 
 ---
 

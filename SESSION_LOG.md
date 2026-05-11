@@ -4,6 +4,44 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (late night) — Institutional-grade rebuild arc, batch 1 (PRs #261, #262, #263)
+
+Continuing from the roadmap doc (PR #260) that mapped 26 gaps vs the operator's reference pro formas (NAIOP, RE-540, RE-508). Operator authorised "do whatever goes well together" — three independent additive PRs shipped + deployed this batch:
+
+### PRs shipped
+
+- **#261 — PR-A: Detailed soft cost breakdown.** Inputs sheet gets a new "Detailed Soft Costs (institutional breakdown)" section with 6 named-range inputs: ArchitectFeePct, LegalFeePct, AppraisalFeePct, InsuranceConstPct, PropTaxConstPct, DeveloperOverheadPct. Defaults calibrated to Anarock / JLL Bengaluru benchmarks. Phasing sheet gets 7 new schedule rows (13-19) phasing each line item per industry convention (A&E Q1-Q4, Legal Q1-Q2, Appraisal Q1, Insurance + Property Taxes spread across construction quarters, Developer Overhead spread evenly). Calculations Cost Build expanded from 8 to 14 rows showing full institutional breakdown. Debt Sculpting block formulas updated to reference new Total at R25. +200/-25, 166 tests.
+
+- **#262 — PR-F: Combo chart on Quarterly Trend.** chartInjector extended with new `buildComboChartXml(spec)` builder. Office's combo pattern: barChart + lineChart in one plotArea, sharing cat axis, line on secondary value axis (right side via `crosses="max"`). Dashboard's Quarterly Trend chart was a clustered-column; now shows period-contribution columns PLUS copper cumulative line. Asset-class-aware (dev: Sales+Construction+Cumulative; income: PGI+NOI+CF After Debt). +138/-23, 167 tests.
+
+- **#263 — PR-C: Standalone Amortization Schedule sheet.** New visible sheet between Dashboard and (hidden) Calculations. Loan Terms summary block at top (Loan Amount = Total Cost × DebtLTV, Annual Rate, Term, Quarterly Periods, Effective Quarterly Rate, Quarterly Payment via PMT). 80-row amortization table with Beg Bal / Payment / Interest / Principal / End Bal. Alternate-row banding. Every formula references named ranges from Inputs sheet — full live recalc. Limitations footer calls out single-loan model (improves once PR-B ships construction-vs-permanent split) + moratorium not yet modelled. +160/-3, 168 tests.
+
+### Tests
+168 export tests green at end of batch (was 163 at start, +5: 3 soft cost + 1 combo chart + 1 amortization schedule regression tests).
+
+### Roadmap doc updated
+`docs/XLSX_INSTITUTIONAL_GRADE_ROADMAP.md` table updated to mark PR-A, PR-F, PR-C as ✅ shipped. Remaining open PRs in the arc:
+- **PR-B**: Construction loan (LTC) vs Permanent loan (MIN of LTV/DCR/DY) — biggest remaining depth gap
+- **PR-D**: Sponsor / LP waterfall (4-tier pour-over: pref → return of capital → catch-up → promote)
+- **PR-G**: Tornado chart on Dashboard (visual parity with PPTX/DOCX)
+- **PR-E**: Unit mix table (residential / hospitality)
+
+### Why this set went well together
+All three PRs are ADDITIVE — no existing formulas restructured, no row positions shifted on the Cash Flow sheet (which IRR / NPV / Dashboard references depend on), no risk to the kernel-reconciliation precondition shipped in #259. Each PR is independently verifiable:
+- Soft costs (PR-A) visible as new Inputs rows + Phasing schedule + Calculations expansion
+- Combo chart (PR-F) visible on Dashboard
+- Amortization (PR-C) visible as a new tab
+
+### Operator verification still pending
+Download a fresh `.xlsx` for any deal and verify:
+1. Inputs sheet has the new "Detailed Soft Costs" section with 6 yellow-cell inputs
+2. Phasing sheet has 7 new soft cost rows (13-19) phasing each line item
+3. Dashboard → Quarterly Trend chart now shows the copper cumulative LINE overlaid on the bar columns
+4. New 'Amortization Schedule' tab between Dashboard and (hidden) Calculations
+5. Calculations sheet → Cost Build block shows full 14-row breakdown with detailed soft cost line items
+
+---
+
 ## 2026-05-11 (night) — Kernel reconciliation + institutional-grade rebuild roadmap (PR #259 + roadmap doc)
 
 Operator shared the Reports-page screenshot showing **Jigani IRR 13.6%** on the frontend, then five reference institutional pro formas (NAIOP, RE-540, RE-508 + their own 10-template benchmark pack) and a brutal roast: "This is fucking basic. Forget all rules. Best pro forma possible."
