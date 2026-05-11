@@ -745,6 +745,64 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Hospitality Operating Metrics (PR-I12) ────────────────────────────
+  // Hospitality assets in India price on ADR × Occupancy × Keys × 365,
+  // not on INR/sqft/month like commercial. PR-I12 adds explicit ADR +
+  // Occupancy + RevPAR + seasonality inputs as informational disclosure.
+  // Section appears only for hospitality asset class.
+  const hospitalitySection = {
+    title: 'Hospitality Operating Metrics (ADR / Occupancy / RevPAR)',
+    rows: [
+      ['Number of Keys',              'HospitalityKeys',
+        firstNumber(ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, 100),
+        'count (rooms)', NUMBER_FORMATS.integer],
+      ['ADR — Base / Off-Season',     'HospitalityADRBase',
+        firstNumber(ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, 6000),
+        'INR / room / night', NUMBER_FORMATS.integer],
+      ['ADR — Peak Season',           'HospitalityADRPeak',
+        firstNumber(ctx.inputs.hospitalityADRPeak, ctx.inputs.hospitalityHighSeasonADR, 9000),
+        'INR / room / night', NUMBER_FORMATS.integer],
+      ['Peak Season Share',           'HospitalityPeakShare',
+        toPctDecimal(firstNumber(ctx.inputs.hospitalityPeakShare, ctx.inputs.hospitalityHighSeasonShare, 0.30)),
+        '% of year (Oct-Mar wedding/winter)', NUMBER_FORMATS.percent],
+      ['Blended ADR (derived)',       'HospitalityBlendedADR',
+        { formula: '=HospitalityADRBase*(1-HospitalityPeakShare)+HospitalityADRPeak*HospitalityPeakShare' },
+        'INR / room / night (derived)', NUMBER_FORMATS.integer],
+      ['RevPAR (derived)',            'HospitalityRevPAR',
+        { formula: '=HospitalityBlendedADR*OccupancyPct' },
+        'INR / room / night (derived)', NUMBER_FORMATS.integer],
+      ['Implied annual revenue (Cr)', 'HospitalityImpliedRevenueCr',
+        { formula: '=HospitalityRevPAR*HospitalityKeys*365/10000000' },
+        'INR Cr / year (derived)', NUMBER_FORMATS.currency],
+    ],
+  };
+
+  // ── Retail CAM + Anchor / Vanilla split (PR-I13) ──────────────────────
+  // Indian mall economics: anchors at ₹60-90/sqft/mo + minimal CAM;
+  // vanilla tenants at ₹150-300 + full CAM. PR-I13 adds anchor share +
+  // anchor/vanilla rents + CAM recovery inputs. Section appears only for
+  // retail asset class.
+  const retailSection = {
+    title: 'Retail CAM + Anchor / Vanilla Rent Split',
+    rows: [
+      ['Anchor Share of Leasable Area', 'RetailAnchorSharePct',
+        toPctDecimal(firstNumber(ctx.inputs.retailAnchorSharePct, ctx.inputs.anchorSharePct, 0.40)),
+        '% (typical 30-50% in India malls)', NUMBER_FORMATS.percent],
+      ['Anchor Rent / sqft / month',    'RetailAnchorRentPerSqftMonth',
+        firstNumber(ctx.inputs.retailAnchorRentPerSqftMonth, 60),
+        'INR / sqft / month (typical 50-90)', NUMBER_FORMATS.integer],
+      ['Vanilla Rent / sqft / month',   'RetailVanillaRentPerSqftMonth',
+        firstNumber(ctx.inputs.retailVanillaRentPerSqftMonth, 180),
+        'INR / sqft / month (typical 150-300)', NUMBER_FORMATS.integer],
+      ['CAM Recovery %',                'RetailCAMRecoveryPct',
+        toPctDecimal(firstNumber(ctx.inputs.retailCAMRecoveryPct, 0.95)),
+        '% of CAM cost recovered from tenants', NUMBER_FORMATS.percent],
+      ['Blended Rent / sqft / month (derived)', 'RetailBlendedRentPerSqftMonth',
+        { formula: '=RetailAnchorRentPerSqftMonth*RetailAnchorSharePct+RetailVanillaRentPerSqftMonth*(1-RetailAnchorSharePct)' },
+        'INR / sqft / month (derived — paste into BaseRentPerSqftMonth)', NUMBER_FORMATS.integer],
+    ],
+  };
+
   // ── Title & Khata Status (PR-I8) ──────────────────────────────────────
   // A-khata vs B-khata is a major Bengaluru-specific valuation factor.
   // A-khata: full title, eligible for bank financing, building approval,
@@ -930,6 +988,12 @@ const buildInputsSheet = (workbook, ctx) => {
     // PR-I8: Title & Khata Status — A-khata vs B-khata is a major BLR
     // valuation factor. Informational + derived multiplier.
     khataStatusSection,
+    // PR-I12: Hospitality-specific ADR / Occupancy / RevPAR — only when
+    // the deal's asset class is hospitality.
+    ...(ctx.assetClass === 'hospitality' ? [hospitalitySection] : []),
+    // PR-I13: Retail anchor / vanilla rent split + CAM recovery — only
+    // when the deal's asset class is retail.
+    ...(ctx.assetClass === 'retail' ? [retailSection] : []),
   ];
 
   let row = 5;
