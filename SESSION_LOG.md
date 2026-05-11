@@ -4,6 +4,70 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (afternoon) — India localization batch I1-I4 (PRs #270, #271, #275, #276, #277)
+
+Operator directive ("make sure everything is catered and specific and relevant to the way pro forma or financial modelling is done for different real estate asset classes and deal structure in India") triggered a pivot from the structural institutional-grade arc to **India-specific correctness** for every line item.
+
+### Roadmap pivot (PR #270)
+- Dropped US-centric items (Forward SOFR rate curve)
+- Added new "India localization batch" section with 16 prioritised gaps (I1-I16)
+- Top 4 (I1-I4) shipped same session; I5-I16 documented for next phase
+
+### PRs shipped + merged
+
+- **#271 — PR-I1: GST + Stamp Duty + Registration as REAL cost lines.** Previously decorative inputs that didn't flow into any formula. Now:
+  - New "India Statutory Levies" section on Inputs sheet with `StampRegPct` (Karnataka 6.6% default) and `GstPct` (asset-class-aware: residential 5%, commercial 0% net of ITC, plotted 0%)
+  - Phasing sheet: 3 new rows (Stamp Duty Q1-only, GST construction-spread, Total Statutory Levies)
+  - Calculations Cost Build: Total cost now = Hard + Soft + Statutory (B28, was B25)
+  - Debt Sizing + Waterfall Total Project Cost formulas include the levies
+  - 7 new tests. Closes biggest correctness hole.
+
+- **#275 — PR-I2: RERA Escrow 70/30 split** (originally #272, re-opened after stack rebase). Indian RERA Act 2016 mandates 70% of customer payments go to escrow. Pre-PR-I2 the model overstated developer cash inflow by ~70%. Now:
+  - New `RERAEscrowPct` input (default 0.70)
+  - Phasing sheet: 5-row escrow ledger (To Escrow / Free Cash / Drawdown / Balance / Net) between rows 11-15
+  - Drawdown matches construction quarter-by-quarter
+  - Cash Flow Inflow row now references Net (row 15), not Gross (row 10)
+  - 6 new tests + 2 existing tests updated for row shifts
+
+- **#276 — PR-I3: JDA / Revenue-Share / Area-Share deal structures** (originally #273, re-opened). 40-60% of Bengaluru residential is JDA-structured but pre-PR-I3 the model showed developer keeping 100% of revenue. Now:
+  - New "Deal Structure" section (development family only) with categorical text + `LandownerSharePct` input
+  - Auto-derives structure from kernel `deal.deal_structure` ("jda" / "jv" / "JDA Revenue Share" / "jda area share" / "DM" → mapped labels)
+  - Auto-seeds LandownerSharePct from kernel's `jv_split_landowner_pct` when structure is JDA-like
+  - Phasing row 15 formula multiplies by `(1 - LandownerSharePct)` — reducing developer's effective inflow
+  - 6 new tests
+
+- **#277 — PR-I4: Property Tax BBMP UAV method** (originally #274, re-opened). Pre-PR-I4 used "% of EGR" which is wrong for India. BBMP / BMC / MCGM all use Unit Area Value method (INR/sqft/year × area). Now:
+  - `PropertyTaxPct` → `PropertyTaxPerSqftYr` (default ₹40 = mid-range Zone A commercial BLR)
+  - Phasing formula: `=-SaleableAreaSqft*PropertyTaxPerSqftYr/4/10000000` (area-driven, not revenue-driven)
+  - Same value every quarter (property tax doesn't scale with occupancy)
+  - Backward-compat: legacy `propertyTaxPct` heuristically converts (1.5% × ₹1200 typical rent → ~₹18)
+  - 5 new tests
+
+### Merge complications
+PRs I2/I3/I4 were initially opened as stacked PRs (each based on the previous). When PR-I1 was squash-merged with --delete-branch, GitHub auto-closed PR-I2 because its base branch was gone. Same cascade for I3+I4 after I2 closed.
+
+Resolution: cherry-picked each commit (5315151, 5249827, 4bcdf36) onto fresh `-v2` branches based on current master, opened new PRs (#275, #276, #277), each CI-green and merged in sequence. Final result identical to what stacked merge would have produced — just with new PR numbers in the audit trail.
+
+### Tests
+**190 export tests green** at end of batch (was 173 before I1; +17 across the four PRs: 7 + 6 + 6 + 5 minus 7 from row shifts + label updates).
+
+### What's still NOT done — India batch
+12 more India-localization items in the roadmap (I5-I16), in priority order:
+- I5 Carpet vs Super-Built-up + Loading Factor (RERA marketing compliance)
+- I6 Lender ecosystem (SBI / HDFC / ICICI / Edelweiss; Repo + spread / MCLR)
+- I7 Taxation block (LTCG 12.5%, TDS 1%, Net-of-Tax IRR)
+- I10 Approvals & RERA registration breakdown (Khata / BDA / BBMP / BWSSB / etc.)
+- I8 Khata status (A / B-khata exit haircut)
+- I12 Hospitality ADR / Occupancy / RevPAR with seasonality
+- I13 Retail CAM + anchor-vs-vanilla rent split
+- I9 Premium FSI / TDR cost line
+- I11 Milestone-anchored sale-rate escalation
+- I14 Plot-level absorption
+- I15 Component-level revenue for mixed-use
+- I16 Raw-land entitlement milestones
+
+---
+
 ## 2026-05-11 (overnight) — Institutional-grade rebuild arc, FINAL BATCH (PRs #267, #268, #269)
 
 The closing batch of the 7-PR institutional-grade XLSX rebuild arc. All three structural PRs (PR-B, PR-D, PR-E) shipped sequentially with full test coverage.
