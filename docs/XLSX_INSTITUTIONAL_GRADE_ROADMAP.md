@@ -90,11 +90,34 @@ Each PR keeps the existing chart injector + kernel reconciliation logic intact.
 
 ### Remaining open PRs by priority
 
-After PR #261 + #262 + #263 + #265 landed (rebuild batches 1 + 2), the next-highest-leverage gaps are:
+**ARC COMPLETE — all 7 PRs merged + deployed as of 2026-05-11.**
 
-- **PR-B (Construction vs Permanent loan with MIN sizing)** — biggest remaining depth gap. Once it lands, PR-C's Amortization sheet automatically shows the PERMANENT loan amortization (the in-sheet footer already acknowledges this). Suggested split: PR-B.1 adds the input rows + "Permanent Debt Calc" sheet computing MIN of three sizing methods (additive, safe); PR-B.2 restructures Cash Flow to model construction loan drawdowns + permanent loan takeout (invasive, needs careful row-position management).
-- **PR-D (Sponsor / LP waterfall)** — critical for institutional deals with promote economics. New sheet with 4-tier pour-over (pref → return of capital → catch-up → promote at 8/12/15% IRR hurdles).
-- **PR-E (Unit mix table)** — residential / hospitality specifically. Needs design decision: visibility-only (operator-edits as worksheet, no flow-through) vs flow-through (Unit Mix total SF feeds SaleableAreaSqft on Inputs — changes how an existing input behaves).
+The roadmap's recommended PR sequence (PR-A through PR-G) shipped in this order:
+1. PR-A #261 — Detailed soft cost breakdown
+2. PR-F #262 — Combo chart (Quarterly Trend)
+3. PR-C #263 — Amortization Schedule sheet
+4. PR-G #265 — Tornado on Dashboard
+5. PR-B #267 — Permanent Debt Sizing (MIN of LTC/LTV/DCR/DY)
+6. PR-D #268 — Sponsor / LP Waterfall
+7. PR-E #269 — Unit Mix table
+
+Each independently verifiable, each adds institutional-grade depth without breaking the kernel-reconciliation precondition (PR #259).
+
+### What's still NOT done (beyond the 7-PR arc)
+
+The roadmap captured 26 gaps; the 7-PR arc closed the highest-priority ~10 of them. Remaining items from the roadmap (lower priority / specialised use cases):
+
+- **#6 Monthly cash flow detail** (currently quarterly only). NAIOP separates MonthlyCF + AnnualCF. Large refactor — 36-72 columns instead of 4-32 quarters; chart injector ranges + Dashboard refs all change. **Open.**
+- **#7 Construction draws month-by-month** — couples with monthly CF detail. **Open.**
+- **#8 NNN vs FS lease-type modelling for commercial / retail** — recoverable expenses pass through with adjustments for vacancy. Moderate; new Inputs row + EGR calc adjustment. **Open.**
+- **#9 Reversion / exit value modelling polish** — current generator has Exit Cap Rate input; references show full reversion with NOI growth, selling costs (broker, legal, taxes). **Open — low priority.**
+- **#10 2D sensitivity data tables** — multiple tables (e.g., IRR vs Cap Rate × Sale Price) plus tornado per axis. Current generator has one 5×5 grid + the new tornado from PR-G. **Open — medium priority.**
+- **#11 Excel built-in Scenario Manager** — ExcelJS doesn't expose Scenarios API. **Blocked at library level.**
+- **#12 Forward SOFR rate curve / debt-cost projection** — requires external rate feed. **Open — low priority.**
+- **#15 Sparklines in KPI cells** — ExcelJS doesn't support natively. Could pursue via XML injection extension. **Open — visual polish.**
+- **#16 KPI icon-set conditional formatting** (↑↓ arrows on margin / IRR vs benchmark). ExcelJS supports iconSet rules. **Open — visual polish, easy.**
+- **#17 Premium colour theme refinement** — current palette is solid; references have slightly richer styling (row stripe shading, larger title typography). **Open — low priority.**
+- **#18-22 Asset-class specific depth** — ADR/RevPAR detail for hospitality, CAM reconciliation for retail, entitlement milestones for raw land, component-level revenue for mixed-use, plot-level absorption for plotted dev. Each is its own focused work. **Open.**
 
 ---
 
