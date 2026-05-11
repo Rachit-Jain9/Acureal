@@ -353,6 +353,35 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Detailed Soft Costs (institutional-grade drilldown) ────────────────
+  // The reference pro formas (NAIOP, RE-540) break soft costs into ~8
+  // distinct line items. Current generator collapses everything into a
+  // single Marketing + Finance pair which reads as amateur. This block
+  // adds the 6 missing line items as separate inputs + named ranges; the
+  // Phasing sheet uses them to add a full soft-cost schedule.
+  //
+  // Defaults calibrated to Indian residential developer benchmarks
+  // (Anarock / JLL Bengaluru reports). Operators can override any of
+  // them on the Inputs sheet without touching code.
+  //
+  // Convention: each pct applies to the cost base named in the unit
+  // column, matching how reference pro formas express these:
+  //   - A&E / Legal / Appraisal / Insurance during Const / Developer
+  //     Overhead → % of hard construction cost
+  //   - Property Taxes during Construction → % of land cost (matches
+  //     Karnataka property-tax assessment method)
+  const detailedSoftCostsSection = {
+    title: 'Detailed Soft Costs (institutional breakdown)',
+    rows: [
+      ['Architectural & Engineering', 'ArchitectFeePct',     toPctDecimal(firstNumber(ctx.inputs.architectFeePct, ctx.inputs.architectPctOfHard, 0.05)),    '% of hard cost', NUMBER_FORMATS.percent],
+      ['Legal Fees',                  'LegalFeePct',         toPctDecimal(firstNumber(ctx.inputs.legalFeePct, ctx.inputs.legalPctOfHard, 0.01)),            '% of hard cost', NUMBER_FORMATS.percent],
+      ['Appraisal & Title',           'AppraisalFeePct',     toPctDecimal(firstNumber(ctx.inputs.appraisalFeePct, ctx.inputs.appraisalPctOfHard, 0.005)),   '% of hard cost', NUMBER_FORMATS.percent],
+      ['Insurance during Construction','InsuranceConstPct',  toPctDecimal(firstNumber(ctx.inputs.insuranceConstPct, ctx.inputs.insuranceDuringConstructionPct, 0.005)), '% of hard cost', NUMBER_FORMATS.percent],
+      ['Property Taxes during Construction', 'PropTaxConstPct', toPctDecimal(firstNumber(ctx.inputs.propTaxConstPct, ctx.inputs.propertyTaxesDuringConstructionPct, 0.02)), '% of land cost', NUMBER_FORMATS.percent],
+      ['Developer Overhead',          'DeveloperOverheadPct', toPctDecimal(firstNumber(ctx.inputs.developerOverheadPct, ctx.inputs.developerOverheadPctOfHard, 0.03)), '% of hard cost', NUMBER_FORMATS.percent],
+    ],
+  };
+
   const scheduleSection = {
     title: 'Project Schedule',
     rows: [
@@ -378,10 +407,14 @@ const buildInputsSheet = (workbook, ctx) => {
   };
 
   // Compose the sections list with asset-class branching.
+  // Detailed Soft Costs section sits right after the headline Cost
+  // Structure block so operators see the drilldown adjacent to its
+  // parent figures.
   const sections = [
     generalSection,
     ...(ctx.dealFamily === 'income' ? [incomeRevenueSection, incomeOpExSection] : [developmentRevenueSection]),
     costSection,
+    detailedSoftCostsSection,
     scheduleSection,
     capitalSection,
   ];
@@ -662,6 +695,79 @@ const buildPhasingSheet = (workbook, ctx) => {
       // Same fix as the construction cumulative row above — total cell
       // shows the final cumulative, not a sum of already-cumulative cells.
       totalKind: 'final',
+    },
+    // ── Detailed Soft Cost Schedule ──────────────────────────────────────
+    // Adds rows 13-19 on the Phasing sheet. These rows match the soft-cost
+    // line items the operator's reference pro formas (NAIOP, RE-540)
+    // break out, and reference the named ranges defined on the Inputs
+    // sheet (ArchitectFeePct, LegalFeePct, AppraisalFeePct,
+    // InsuranceConstPct, PropTaxConstPct, DeveloperOverheadPct).
+    //
+    // Phasing assumptions per industry convention:
+    //   - A&E (design-phase): paid evenly Q1-Q4 (first year of project)
+    //   - Legal Fees (closing + period docs): paid evenly Q1-Q2
+    //   - Appraisal & Title: one-time at Q1
+    //   - Insurance during Construction: spread evenly across construction
+    //     quarters (Q[lag+1] through Q[total])
+    //   - Property Taxes during Construction: same construction spread
+    //   - Developer Overhead: spread evenly across the entire project
+    //     (Q1-Q[total])
+    //
+    // Each row's per-quarter formula uses HardCost = construction cost ×
+    // saleable area / 1Cr as the cost base (matches "% of hard cost"
+    // convention on the Inputs sheet). PropTaxConstPct alone uses
+    // LandCostCr as the base, matching Karnataka property-tax method.
+    //
+    // Row 19 is the per-quarter sum of all 6 detailed soft costs — used
+    // by the Calculations sheet's full Cost Build breakdown and (in a
+    // follow-up PR) by the Cash Flow sheet to replace the aggregate
+    // Marketing & Finance outflow row.
+    {
+      label: 'A&E spend (INR Cr)',
+      formula: (q) =>
+        `=IF(${q}<=4,(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*ArchitectFeePct/4,0)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Legal fees spend (INR Cr)',
+      formula: (q) =>
+        `=IF(${q}<=2,(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*LegalFeePct/2,0)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Appraisal & title spend (INR Cr)',
+      formula: (q) =>
+        q === 1
+          ? `=(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*AppraisalFeePct`
+          : `=0`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Insurance during construction (INR Cr)',
+      formula: (q) =>
+        `=IF(AND(${q}>ConstructionLagQ,${q}<=TotalQuarters),(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*InsuranceConstPct/MAX(TotalQuarters-ConstructionLagQ,1),0)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Property taxes during construction (INR Cr)',
+      formula: (q) =>
+        `=IF(AND(${q}>ConstructionLagQ,${q}<=TotalQuarters),LandCostCr*PropTaxConstPct/MAX(TotalQuarters-ConstructionLagQ,1),0)`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Developer overhead (INR Cr)',
+      formula: (q) =>
+        `=(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*DeveloperOverheadPct/TotalQuarters`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Total Detailed Soft Costs (INR Cr)',
+      formula: (q) => {
+        const c = colLetter(q + 1);
+        return `=${c}13+${c}14+${c}15+${c}16+${c}17+${c}18`;
+      },
+      format: NUMBER_FORMATS.currency,
+      bold: true,
     },
   ];
 
@@ -1559,30 +1665,42 @@ const buildCalculationsSheet = (workbook, ctx) => {
     ['Customer collected (INR Cr)',  `=${collectedRef}`,                                 'Sum of phased customer collection'],
   ]);
 
-  // Cost Build occupies rows 12-19:
+  // Cost Build (rows 12–25) — full institutional-grade breakdown.
+  // Hard cost block (rows 12-15):
   //   R12 Land · R13 Construction · R14 Approvals · R15 Hard subtotal
-  //   R16 Marketing · R17 Finance · R18 Soft subtotal · R19 Total project cost
+  // Detailed soft cost block (rows 16-23) — references the named ranges
+  // defined on the Inputs sheet for the 8 distinct soft cost line items
+  // the operator's reference pro formas (NAIOP, RE-540) break out:
+  //   R16 A&E · R17 Legal · R18 Appraisal · R19 Insurance during Const ·
+  //   R20 Property Taxes during Const · R21 Developer Overhead ·
+  //   R22 Marketing & Sales (revenue-driven) · R23 Finance / Treasury (revenue-driven)
+  // R24 Soft cost subtotal · R25 Total project cost
   writeBlock('Cost Build', [
-    ['Land cost (INR Cr)',           '=LandCostCr',                                     'From Inputs & Assumptions'],
-    ['Construction cost (INR Cr)',   '=ConstructionCostPerSqft*SaleableAreaSqft/10000000', 'Construction rate × saleable area'],
-    ['Approval & fees (INR Cr)',     '=ApprovalCostCr',                                 'From Inputs & Assumptions'],
-    ['Hard cost subtotal',           '=B12+B13+B14',                                    'Land + Construction + Approvals'],
-    ['Marketing & sales (INR Cr)',   '=B8*MarketingCostPct',                            'Total revenue × MarketingCostPct'],
-    ['Finance / treasury (INR Cr)',  '=B8*FinanceCostPct',                              'Total revenue × FinanceCostPct'],
-    ['Soft cost subtotal',           '=B16+B17',                                        'Marketing + Finance'],
-    ['Total project cost (INR Cr)',  '=B15+B18',                                        'Hard + Soft costs'],
+    ['Land cost (INR Cr)',                   '=LandCostCr',                                                       'From Inputs & Assumptions'],
+    ['Construction cost (INR Cr)',           '=ConstructionCostPerSqft*SaleableAreaSqft/10000000',                 'Construction rate × saleable area'],
+    ['Approval & fees (INR Cr)',             '=ApprovalCostCr',                                                   'From Inputs & Assumptions'],
+    ['Hard cost subtotal',                   '=B12+B13+B14',                                                       'Land + Construction + Approvals'],
+    ['A&E fees (INR Cr)',                    '=B13*ArchitectFeePct',                                              'Construction × ArchitectFeePct'],
+    ['Legal fees (INR Cr)',                  '=B13*LegalFeePct',                                                  'Construction × LegalFeePct'],
+    ['Appraisal & title (INR Cr)',           '=B13*AppraisalFeePct',                                              'Construction × AppraisalFeePct'],
+    ['Insurance during construction (INR Cr)','=B13*InsuranceConstPct',                                           'Construction × InsuranceConstPct'],
+    ['Property taxes during construction',   '=LandCostCr*PropTaxConstPct',                                       'Land × PropTaxConstPct (Karnataka method)'],
+    ['Developer overhead (INR Cr)',          '=B13*DeveloperOverheadPct',                                         'Construction × DeveloperOverheadPct'],
+    ['Marketing & sales (INR Cr)',           '=B8*MarketingCostPct',                                              'Total revenue × MarketingCostPct'],
+    ['Finance / treasury (INR Cr)',          '=B8*FinanceCostPct',                                                'Total revenue × FinanceCostPct'],
+    ['Soft cost subtotal',                   '=B16+B17+B18+B19+B20+B21+B22+B23',                                  'All 8 soft cost line items'],
+    ['Total project cost (INR Cr)',          '=B15+B24',                                                          'Hard + Soft costs'],
   ]);
 
-  // Debt Sculpting occupies rows 21-27:
-  //   R22 LTV · R23 Total debt · R24 Equity · R25 Annual interest
-  //   R26 Quarterly accrual · R27 Per-sqft proxy
+  // Debt Sculpting block now sits at rows 27–32 (shifted down due to
+  // the expanded Cost Build).
   writeBlock('Debt Sculpting', [
     ['Debt LTV (% of cost)',         '=DebtLTV',                                        'From Inputs & Assumptions'],
-    ['Total debt envelope (INR Cr)', '=B19*DebtLTV',                                    'Total project cost × LTV'],
-    ['Equity envelope (INR Cr)',     '=B19*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
-    ['Annualised interest cost',     '=B23*DebtRatePct',                                'Debt envelope × rate (peak proxy)'],
-    ['Quarterly interest accrual',   '=B25/4',                                          'Annualised ÷ 4 (sanity check vs Cash Flow row 10)'],
-    ['Effective debt cost / unit',   '=B25/SaleableAreaSqft*10000000',                  'Per-sqft cost-of-capital proxy (Cr → INR ÷ sqft)'],
+    ['Total debt envelope (INR Cr)', '=B25*DebtLTV',                                    'Total project cost × LTV (B25 = Total cost at expanded Cost Build)'],
+    ['Equity envelope (INR Cr)',     '=B25*(1-DebtLTV)',                                'Total project cost × (1-LTV)'],
+    ['Annualised interest cost',     '=B29*DebtRatePct',                                'Debt envelope × rate (peak proxy)'],
+    ['Quarterly interest accrual',   '=B31/4',                                          'Annualised ÷ 4 (sanity check vs Cash Flow row 10)'],
+    ['Effective debt cost / unit',   '=B31/SaleableAreaSqft*10000000',                  'Per-sqft cost-of-capital proxy (Cr → INR ÷ sqft)'],
   ]);
 
   writeBlock('Returns Inputs (for Dashboard IRR/NPV)', [
