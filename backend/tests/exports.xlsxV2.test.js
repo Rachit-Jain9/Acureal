@@ -1398,12 +1398,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label) rowByLabel[label] = rowIdx;
         });
 
-        // Five new RERA ledger rows
+        // Five new RERA ledger rows. The Net row's label evolved across
+        // PRs: PR-I2 added it as "Net developer cash from sales (INR Cr)";
+        // PR-I3 expanded it to "(post-RERA, post-landowner share)" once
+        // the JDA landowner-share factor entered the formula.
         const escrowRow = rowByLabel['→ To RERA Escrow (restricted 70%)'];
         const freeCashRow = rowByLabel['→ Free cash to developer (30%)'];
         const drawdownRow = rowByLabel['RERA Escrow drawdown (against construction)'];
         const balanceRow = rowByLabel['RERA Escrow balance — end of quarter'];
-        const netRow = rowByLabel['Net developer cash from sales (INR Cr)'];
+        const netRow = rowByLabel['Net developer cash from sales (post-RERA, post-landowner share)'];
 
         expect(escrowRow).toBeDefined();
         expect(freeCashRow).toBeDefined();
@@ -1440,9 +1443,12 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const b14 = phasing.getCell('B14').value;
         expect(b14.formula).toBe('=B11-B13');
 
-        // Net developer cash: Free Cash + Drawdown
+        // Net developer cash: (Free Cash + Drawdown) × (1 - LandownerSharePct).
+        // PR-I3 introduced the landowner-share factor for JDA structures;
+        // when LandownerSharePct = 0 (default outright purchase) the
+        // formula collapses to Free Cash + Drawdown.
         const b15 = phasing.getCell('B15').value;
-        expect(b15.formula).toBe('=B12+B13');
+        expect(b15.formula).toBe('=(B12+B13)*(1-LandownerSharePct)');
 
         // Q2 (col C) — drawdown + balance use rolling state
         const c13 = phasing.getCell('C13').value;
@@ -1514,6 +1520,141 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         inputs.eachRow((row) => {
           const v = String(row.getCell(1).value || '');
           if (v.includes('RERA Compliance')) foundSection = true;
+        });
+        expect(foundSection).toBe(false);
+      });
+    });
+
+    // ── PR-I3 — JDA / Revenue-Share / Area-Share deal structures ───────
+    // Indian RE deals are commonly structured as JDAs where the landowner
+    // contributes land in exchange for a share of revenue (or saleable
+    // area). The developer pays no upfront land cost but the landowner
+    // takes a fraction of the customer collections. Common in Bengaluru:
+    // 40-60% of residential development is JDA-structured.
+    //
+    // Pre-PR-I3 the model assumed outright_purchase and showed developer
+    // keeping 100% of revenue — overstating returns for any JDA deal.
+    //
+    // Mechanics: `LandownerSharePct` named range (default 0 = outright)
+    // multiplies into the Phasing "Net developer cash" row. Setting it
+    // to >0 reduces the developer's effective inflow per quarter.
+    describe('PR-I3: JDA / Revenue-Share / Area-Share deal structures', () => {
+      test('Inputs sheet defines LandownerSharePct + DealStructureLabel in Deal Structure section', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).toContain('LandownerSharePct');
+        expect(namesList).toContain('DealStructureLabel');
+
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let sectionFound = false;
+        inputs.eachRow((row) => {
+          const v = String(row.getCell(1).value || '');
+          if (v.includes('Deal Structure') && v.includes('JDA')) sectionFound = true;
+        });
+        expect(sectionFound).toBe(true);
+      });
+
+      test('LandownerSharePct default is 0 for outright_purchase (no kernel deal_structure set)', async () => {
+        const ctx = minimalContext();
+        delete ctx.deal.deal_structure;
+        delete ctx.deal.deal_type;
+        delete ctx.deal.model_params.inputs.landownerSharePct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        let structureLabel = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Landowner Revenue Share') seed = row.getCell(2).value;
+          if (label === 'Deal Structure') structureLabel = String(row.getCell(2).value || '');
+        });
+        expect(seed).toBeCloseTo(0, 4);
+        expect(structureLabel).toBe('outright_purchase');
+      });
+
+      test('LandownerSharePct seeds from kernel jv_split_landowner_pct when deal_structure is JDA', async () => {
+        const ctx = minimalContext();
+        ctx.deal.deal_structure = 'jda';
+        ctx.deal.jv_split_landowner_pct = 0.40;
+        delete ctx.deal.model_params.inputs.landownerSharePct;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let seed = null;
+        let structureLabel = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Landowner Revenue Share') seed = row.getCell(2).value;
+          if (label === 'Deal Structure') structureLabel = String(row.getCell(2).value || '');
+        });
+        expect(seed).toBeCloseTo(0.40, 4);
+        expect(structureLabel).toBe('jda_revenue_share');
+      });
+
+      test('Phasing Net developer cash formula deducts LandownerSharePct', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const phasing = wb.getWorksheet('Phasing & Sales Collection');
+
+        // Row 15 = Net developer cash from sales (post-RERA, post-landowner share)
+        // Formula = (Row12 + Row13) × (1 - LandownerSharePct)
+        const b15 = phasing.getCell('B15').value;
+        expect(b15.formula).toBe('=(B12+B13)*(1-LandownerSharePct)');
+
+        // Q2 column reuses the same formula pattern with prefix column letter shift
+        const c15 = phasing.getCell('C15').value;
+        expect(c15.formula).toBe('=(C12+C13)*(1-LandownerSharePct)');
+      });
+
+      test('Deal Structure label maps from kernel deal_structure correctly', async () => {
+        const cases = [
+          [{ deal_structure: 'outright' }, 'outright_purchase'],
+          [{ deal_structure: 'jda' },      'jda_revenue_share'],
+          [{ deal_structure: 'jv' },       'jda_revenue_share'],
+          [{ deal_structure: 'JDA Revenue Share' }, 'jda_revenue_share'],
+          [{ deal_structure: 'jda area share' },    'jda_area_share'],
+          [{ deal_structure: 'development management' }, 'development_management'],
+          [{ deal_structure: 'DM' },       'development_management'],
+        ];
+        for (const [dealOverride, expectedLabel] of cases) {
+          const ctx = minimalContext();
+          ctx.deal = { ...ctx.deal, ...dealOverride };
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const inputs = wb.getWorksheet('Inputs & Assumptions');
+          let label = null;
+          inputs.eachRow((row) => {
+            const labelText = String(row.getCell(1).value || '').trim();
+            if (labelText === 'Deal Structure') label = String(row.getCell(2).value || '');
+          });
+          expect(label).toBe(expectedLabel);
+        }
+      });
+
+      test('Income family deals do NOT get the Deal Structure section', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        const namesList = (wb.definedNames.model || []).map((n) => n.name);
+        expect(namesList).not.toContain('LandownerSharePct');
+
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let foundSection = false;
+        inputs.eachRow((row) => {
+          const v = String(row.getCell(1).value || '');
+          if (v.includes('Deal Structure') && v.includes('JDA')) foundSection = true;
         });
         expect(foundSection).toBe(false);
       });

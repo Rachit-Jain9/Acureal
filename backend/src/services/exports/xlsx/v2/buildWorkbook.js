@@ -452,6 +452,64 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Deal Structure (JDA / Outright / Development Management) (PR-I3) ──
+  // Indian real estate uses four common deal structures:
+  //   - outright_purchase: developer pays LandCostCr up-front, owns 100%
+  //     of revenue.
+  //   - jda_revenue_share: landowner contributes land, takes a % of
+  //     gross customer collection. Developer pays NO land cost.
+  //     Landowner bears market risk.
+  //   - jda_area_share: landowner contributes land, takes a % of saleable
+  //     area (which they sell separately). Developer's effective revenue
+  //     is reduced by the landowner's area-equivalent share.
+  //   - development_management: developer earns a fee on revenue but
+  //     doesn't take equity risk. Different model entirely; use
+  //     LandownerSharePct = (1 - DM fee %) for a quick approximation.
+  //
+  // Common in Bengaluru: 40-60% of residential development is structured
+  // as JDA. Pre-PR-I3 the model assumed outright purchase only and showed
+  // the developer keeping 100% of revenue — overstating returns for any
+  // JDA-structured deal.
+  //
+  // Mechanics: `LandownerSharePct` (default 0 = outright) is multiplied
+  // into the Phasing "Net developer cash from sales" row, reducing the
+  // developer's effective inflow. For JDA structures, the operator
+  // additionally sets LandCostCr = 0 on the Inputs sheet (because there
+  // is no upfront land payment).
+  //
+  // The dropdown "Deal Structure" label is informational text — visible
+  // to the operator but not referenced in any formula. The actual
+  // mechanical effect is driven by LandownerSharePct alone.
+  const dealStructureLabel = (() => {
+    const raw = String(ctx.deal.deal_structure || '').toLowerCase();
+    if (raw.includes('revenue')) return 'jda_revenue_share';
+    if (raw.includes('area')) return 'jda_area_share';
+    if (raw === 'jda' || raw === 'jv' || raw === 'da') return 'jda_revenue_share';
+    if (raw.includes('management') || raw === 'dm') return 'development_management';
+    return 'outright_purchase';
+  })();
+
+  const dealStructureSection = {
+    title: 'Deal Structure (JDA / Outright / DM)',
+    rows: [
+      ['Deal Structure', 'DealStructureLabel',
+        dealStructureLabel,
+        'outright / jda_revenue / jda_area / dm', null],
+      ['Landowner Revenue Share', 'LandownerSharePct',
+        toPctDecimal(firstNumber(
+          ctx.inputs.landownerSharePct,
+          ctx.inputs.landownerRevenueShare,
+          // Auto-seed from kernel's JVLandPct when present and structure
+          // is JDA-like (since the existing JV waterfall already uses it).
+          (dealStructureLabel !== 'outright_purchase' && ctx.deal.jv_split_landowner_pct != null)
+            ? ctx.deal.jv_split_landowner_pct
+            : null,
+          0,
+        )),
+        '% of net developer cash → landowner', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── RERA Compliance & Escrow (PR-I2) ──────────────────────────────────
   // Indian RERA Act 2016 mandates that 70% of every customer payment on a
   // RERA-registered residential project must be deposited into a project-
@@ -613,6 +671,10 @@ const buildInputsSheet = (workbook, ctx) => {
     // villas, plotted, mixed-use, raw land). Income deals don't have
     // customer collection at all (rent-paying tenants, no escrow regime).
     ...(ctx.dealFamily === 'development' ? [reraSection] : []),
+    // Deal Structure (PR-I3) — JDA / Outright / DM. Only meaningful for
+    // development family — income family acquisitions don't have a
+    // landowner-share concept (the seller takes the full sale price).
+    ...(ctx.dealFamily === 'development' ? [dealStructureSection] : []),
     scheduleSection,
     capitalSection,
     debtSizingSection,
@@ -936,14 +998,23 @@ const buildPhasingSheet = (workbook, ctx) => {
       totalKind: 'final',
     },
     {
-      label: 'Net developer cash from sales (INR Cr)',
+      label: 'Net developer cash from sales (post-RERA, post-landowner share)',
       // This is what the developer ACTUALLY receives per quarter:
-      //   Free Cash (30%, unrestricted) + Escrow Drawdown (matched to construction)
-      // Cash Flow sheet treats this as the inflow row (vs Row 10 gross
-      // pre-PR-I2 which overstated developer cash by ~70%).
+      //   (Free Cash 30% + Escrow Drawdown) × (1 - LandownerSharePct)
+      //
+      // PR-I2 introduced the RERA escrow split: Free Cash + Escrow
+      // Drawdown = what hits the developer's account.
+      //
+      // PR-I3 adds JDA support: in revenue-share JDA the landowner
+      // takes a fraction of every collection. Multiplying by
+      // (1 - LandownerSharePct) reduces the developer's net inflow.
+      // For outright_purchase (default), LandownerSharePct = 0 and the
+      // formula collapses to (Free Cash + Drawdown).
+      //
+      // Cash Flow sheet treats this as the sales inflow row.
       formula: (q) => {
         const thisCol = colLetter(q + 1);
-        return `=${thisCol}12+${thisCol}13`;
+        return `=(${thisCol}12+${thisCol}13)*(1-LandownerSharePct)`;
       },
       format: NUMBER_FORMATS.currency,
       bold: true,
