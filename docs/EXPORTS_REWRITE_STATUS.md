@@ -50,6 +50,8 @@ sessions can pick up where the last left off without re-reading the chat.
 | #261 | **PR-A** institutional-grade rebuild: detailed soft cost breakdown — 6 new line items (A&E / Legal / Appraisal / Insurance during Construction / Property Taxes during Construction / Developer Overhead) on Inputs sheet + Phasing schedule rows 13-19 + expanded Calculations Cost Build (8 soft cost rows, total at R25) | ✅ MERGED |
 | #262 | **PR-F** institutional-grade rebuild: combo chart on Quarterly Trend — chartInjector extended with `buildComboChartXml` (barChart + lineChart in one plotArea, secondary value axis on right). Dashboard's Quarterly Trend chart now shows period contribution columns PLUS copper cumulative line. Asset-class-aware (dev: Sales+Construction+Cumulative; income: PGI+NOI+CF After Debt) | ✅ MERGED |
 | #263 | **PR-C** institutional-grade rebuild: standalone Amortization Schedule sheet — quarter-by-quarter table with Beginning Balance / Payment / Interest / Principal / Ending Balance + Loan Terms summary at the top. Live formulas drive 80 amortization rows (= 20-year cap), all referencing named ranges from the Inputs sheet | ✅ MERGED |
+| #264 | docs: handoff for PRs #261-#263 (institutional-grade rebuild batch 1) | ✅ MERGED |
+| #265 | **PR-G** institutional-grade rebuild: tornado chart on Dashboard — native Office horizontal bar with `overlap=100` and two oppositely-signed series. New driver-impact data table at H24:M26 feeds the chart with low-case + high-case deltas computed live from the 5×5 sensitivity grid. Visual parity with PPTX (#251) + DOCX (#252) tornadoes | ✅ MERGED |
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 

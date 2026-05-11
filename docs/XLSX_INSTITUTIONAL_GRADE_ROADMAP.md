@@ -84,18 +84,17 @@ After PR #259 (kernel reconciliation) — proposed order:
 4. **PR-D: Sponsor/LP waterfall sheet** (#4). 4-tier pour-over (pref → return of capital → catch-up → promote). ~250-350 LOC. _Open._
 5. **PR-E: Unit mix table** (#5). Asset-class-aware; residential / hospitality / hotels get the table. ~150 LOC. _Open._
 6. **PR-F: Combo chart support + Quarterly Trend gets cumulative line** (#13, #23). ✅ **SHIPPED in PR #262** — chartInjector extended with `buildComboChartXml` (barChart + lineChart in one plotArea, secondary value axis); Dashboard Quarterly Trend chart now shows period contribution columns plus copper cumulative line.
-7. **PR-G: Tornado chart on Dashboard via embedded image** (#14). ~150 LOC. _Open._
+7. **PR-G: Tornado chart on Dashboard** (#14). ✅ **SHIPPED in PR #265** — instead of an embedded image, native Office horizontal bar with `overlap=100` and two oppositely-signed series. Driver-impact data table at H24:M26 feeds the chart with low/high deltas computed live from the existing sensitivity grid.
 
 Each PR keeps the existing chart injector + kernel reconciliation logic intact.
 
 ### Remaining open PRs by priority
 
-After PR #261 + #262 + #263 landed in the 2026-05-11 night session, the next-highest-leverage gaps are:
+After PR #261 + #262 + #263 + #265 landed (rebuild batches 1 + 2), the next-highest-leverage gaps are:
 
-- **PR-B (Construction vs Permanent loan with MIN sizing)** — biggest remaining depth gap. Once it lands, PR-C's Amortization sheet automatically shows the PERMANENT loan amortization (the in-sheet footer already acknowledges this).
-- **PR-D (Sponsor / LP waterfall)** — critical for institutional deals with promote economics.
-- **PR-G (Tornado on Dashboard)** — visual parity with PPTX (#251) + DOCX (#252).
-- **PR-E (Unit mix table)** — residential / hospitality specifically.
+- **PR-B (Construction vs Permanent loan with MIN sizing)** — biggest remaining depth gap. Once it lands, PR-C's Amortization sheet automatically shows the PERMANENT loan amortization (the in-sheet footer already acknowledges this). Suggested split: PR-B.1 adds the input rows + "Permanent Debt Calc" sheet computing MIN of three sizing methods (additive, safe); PR-B.2 restructures Cash Flow to model construction loan drawdowns + permanent loan takeout (invasive, needs careful row-position management).
+- **PR-D (Sponsor / LP waterfall)** — critical for institutional deals with promote economics. New sheet with 4-tier pour-over (pref → return of capital → catch-up → promote at 8/12/15% IRR hurdles).
+- **PR-E (Unit mix table)** — residential / hospitality specifically. Needs design decision: visibility-only (operator-edits as worksheet, no flow-through) vs flow-through (Unit Mix total SF feeds SaleableAreaSqft on Inputs — changes how an existing input behaves).
 
 ---
 
