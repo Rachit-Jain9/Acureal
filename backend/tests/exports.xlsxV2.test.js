@@ -176,6 +176,105 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // The fix: collection_q = totalContractedSales × CollectionPct ×
     // constructionThisQuarter / totalConstruction. Each quarter's
     // collection mirrors construction progress proportionally.
+    // Regression: Dashboard headline KPIs (Total Revenue, Total Cost,
+    // Gross Margin, IRR, NPV, Equity Multiple, etc.) used to be FORMULA
+    // recomputes from the Phasing + Cash Flow sheets — divergent from
+    // the kernel-stored values on the deal record, which is what the
+    // Reports page in the frontend displays. Per CLAUDE.md, the kernel
+    // is the single source of numerics for any export. The fix: when
+    // the deal record carries a kernel value, write it as a literal in
+    // the Dashboard cell; otherwise fall back to the formula recompute.
+    test('Dashboard KPI tiles use kernel-stored values when populated', async () => {
+      const ctx = minimalContext();
+      ctx.deal = {
+        ...ctx.deal,
+        irr_pct: 13.6,
+        npv_cr: -3.89,
+        equity_multiple: 1.55,
+        gross_margin_pct: 30.6,
+        total_revenue_cr: 637.01,
+        total_cost_cr: 442.04,
+        residual_land_value_cr: 227.37,
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+
+      // Total Revenue (B4) — kernel value, NOT a formula
+      const b4 = dash.getCell('B4').value;
+      expect(typeof b4).toBe('number');
+      expect(b4).toBeCloseTo(637.01, 2);
+
+      // Total Project Cost (D4) — kernel value
+      const d4 = dash.getCell('D4').value;
+      expect(typeof d4).toBe('number');
+      expect(d4).toBeCloseTo(442.04, 2);
+
+      // Net CF (F4) — derived from kernel revenue/cost (literal)
+      const f4 = dash.getCell('F4').value;
+      expect(typeof f4).toBe('number');
+      expect(f4).toBeCloseTo(637.01 - 442.04, 2);
+
+      // Gross Margin (B7) — kernel value, converted to decimal for 0.0% format
+      const b7 = dash.getCell('B7').value;
+      expect(typeof b7).toBe('number');
+      expect(b7).toBeCloseTo(0.306, 4);
+
+      // Min DSCR (D7) — no kernel field, stays as formula
+      const d7 = dash.getCell('D7').value;
+      expect(typeof d7).toBe('object');
+      expect(d7.formula).toBeTruthy();
+
+      // Project IRR (kernel) at row 20 — must be the literal kernel value
+      const b20 = dash.getCell('B20').value;
+      expect(typeof b20).toBe('number');
+      expect(b20).toBeCloseTo(0.136, 4);
+
+      // NPV (kernel) at row 20 — literal
+      const d20 = dash.getCell('D20').value;
+      expect(typeof d20).toBe('number');
+      expect(d20).toBeCloseTo(-3.89, 2);
+
+      // Equity Multiple (kernel) — literal
+      const f20 = dash.getCell('F20').value;
+      expect(typeof f20).toBe('number');
+      expect(f20).toBeCloseTo(1.55, 2);
+
+      // Row 21 — the modeled (sensitivity-run) IRR/NPV/EM stays as
+      // formulas so operator can edit Inputs and see them recompute.
+      const b21 = dash.getCell('B21').value;
+      expect(typeof b21).toBe('object');
+      expect(b21.formula).toMatch(/IRR\(/);
+      const d21 = dash.getCell('D21').value;
+      expect(typeof d21).toBe('object');
+      expect(d21.formula).toMatch(/NPV\(/);
+    });
+
+    test('Dashboard KPI tiles fall back to formula when kernel value is missing', async () => {
+      // Deal record without any kernel-computed KPIs
+      const ctx = minimalContext();
+      delete ctx.deal.irr_pct;
+      delete ctx.deal.npv_cr;
+      delete ctx.deal.equity_multiple;
+      delete ctx.deal.gross_margin_pct;
+      delete ctx.deal.total_revenue_cr;
+      delete ctx.deal.total_cost_cr;
+      delete ctx.deal.residual_land_value_cr;
+
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+
+      // Every KPI tile should be a formula (no kernel literals)
+      for (const ref of ['B4', 'D4', 'F4', 'B7', 'F7', 'B20', 'D20', 'F20']) {
+        const v = dash.getCell(ref).value;
+        expect(typeof v).toBe('object');
+        expect(v.formula).toBeTruthy();
+      }
+    });
+
     test('customer collection follows construction progress (RERA-milestone-linked, not same-quarter)', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
