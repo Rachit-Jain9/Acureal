@@ -4,6 +4,66 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-11 (evening) — Claude→OpenAI provider switch + India batch I8-I16 closed (PRs #284, #285, #286, #289, #290)
+
+Two operator directives this session:
+1. *"USe ChatGPT AI (5.4) API everywhere in the website wherever it is using Claude"* — frontend was hitting "Anthropic credit balance too low" on Deal Analysis.
+2. *"Pls continue with next steps, phase, tiers, tasks"* — close out the remaining 9 India localization items (I8-I16).
+
+### Provider switch (Claude → OpenAI)
+
+- **#284 — refactor(ai): switch reasoning + market synthesis from Claude to OpenAI GPT-5.4.** Flipped routing defaults in `providerRegistry.getRoutingConfig`. Rewired the typed `runClaudeReasoning` / `runClaudeReasoningStream` wrappers in `aiRouter.js` to be routing-aware. Added `runOpenAIReasoningStream` to providerRegistry. 11 service-level gate checks flipped from `getProviderAvailability().claude` to `.gpt_compatible`.
+- **#285 — fix(ai): default OpenAI model to gpt-4o.** After #284 routed to OpenAI, the deal-analysis panel returned 400 BadRequest because `gpt-5.4` was a placeholder name. Switched code defaults + DB rows to the real `gpt-4o`. Router cache hot-reloaded in 60s, no deploy required.
+- **Operator manual action**: added `AI_PROVIDER_REASONING=openai`, `AI_PROVIDER_MARKET_SYNTHESIS=openai`, `OPENAI_MODEL=gpt-4o` to Vercel env vars (belt-and-suspenders; DB wins anyway).
+
+### India localization batch — final 9 items (I8-I16)
+
+- **#286 — PR-I8/I9/I10: BLR Land & Approvals.** Premium FSI / TDR (`PremiumFSICostCr` flows into hardCost) + Title & Khata Status (BLR-specific A vs B + derived multiplier) + 12-row Karnataka approval breakdown (Khata / BDA / BBMP / BWSSB / BESCOM / KSPCB / Airport NOC / Fire / Lift / RERA / OC / CC + derived sum).
+- **#289 — PR-I12/I13: Income-asset depth.** Re-opened from original #287 after rebasing to clear section-list conflicts. Hospitality (ADR base + peak + Peak Share + derived Blended ADR / RevPAR / Implied Revenue, only for hospitality) + Retail (Anchor share + anchor/vanilla rents + CAM recovery + derived Blended Rent, only for retail).
+- **#290 — PR-I11/I14/I15/I16: Sales mechanics + multi-component assets.** Re-opened from #288. Milestone escalation (residential/villas/mixed_use) + Plot-level absorption (plotted_development) + Mixed-Use Component Breakdown (mixed_use/redevelopment) + Raw-Land Entitlement Pipeline (raw_land). Each section visible only for its target asset class.
+
+### India roadmap status — CLOSED ✅
+
+All 16 items shipped (I1-I7 prior sessions; I8-I16 this session):
+
+| # | Title | PR | Status |
+|---|-------|----|----|
+| I1 | GST + Stamp Duty + Registration | #271 | ✅ |
+| I2 | RERA Escrow 70/30 split | #275 | ✅ |
+| I3 | JDA / Revenue / Area-share | #276 | ✅ |
+| I4 | Property Tax BBMP UAV | #277 | ✅ |
+| I5 | Carpet vs Super-Built-up + Loading | #280 | ✅ |
+| I6 | Lender ecosystem | #281 | ✅ |
+| I7 | Taxation block | #282 | ✅ |
+| I8 | Khata status | #286 | ✅ |
+| I9 | Premium FSI / TDR | #286 | ✅ |
+| I10 | Approvals & RERA breakdown | #286 | ✅ |
+| I11 | Milestone escalation | #290 | ✅ |
+| I12 | Hospitality ADR / RevPAR | #289 | ✅ |
+| I13 | Retail CAM + anchor split | #289 | ✅ |
+| I14 | Plot-level absorption | #290 | ✅ |
+| I15 | Mixed-use components | #290 | ✅ |
+| I16 | Raw-land entitlement | #290 | ✅ |
+
+### Tests
+
+226 export tests passing at end of session (was 199 at start of evening, +27 across the PRs).
+
+### Production XLSX verified
+
+Downloaded the Jigani Apartments XLSX from production. Confirmed 7 sheets in correct order; Dashboard opens first; Total Revenue ₹637 Cr matches Reports page.
+
+### What's next (out of scope this session)
+
+- Monthly cash flow detail (vs current quarterly) — large refactor
+- 2D sensitivity tables beyond the current 5×5
+- KPI icon-sets + sparklines
+- Premium colour theme refinement
+- Wire `KhataExitMultiplier` and `MixUseBlendedRatePerSqft` into Phasing P&L (currently operator pastes derived values into primary inputs)
+- Auto-sync `ApprovalsBreakdownSumCr` ↔ `ApprovalCostCr` (currently operator manually reconciles)
+
+---
+
 ## 2026-05-11 (late afternoon) — XLSX 7-sheet restructure + India localization I5-I7 (PRs #279, #280, #281, #282)
 
 Operator directive 2026-05-11 (late): *"Dont have so many worksheets. gets confusing. Have maximum 6-7 and dashboard should be first followed by inputs and assumptions and followed by rest. Make it properly structured, organised, well architected and framed."*
