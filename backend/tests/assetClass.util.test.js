@@ -76,4 +76,38 @@ describe('assetClass utility', () => {
     });
     expect(assetClass).toBe(expected);
   });
+
+  // 2026-05-11 inference upgrade: catch corporate / industrial / energy /
+  // pharma deal names that previously fell through to residential default.
+  // Operator-reported: "Pointec Pens and Energy Private Limited" was being
+  // exported as residential_apartments which broke the entire Dashboard
+  // (Revenue 85 Cr vs Cost 203 Cr — negative Net CF). Now classified as
+  // industrial_warehousing via the Private Limited / energy keyword rules.
+  describe.each([
+    ['Pointec Pens and Energy Private Limited',   'industrial_warehousing'],
+    ['Sundaram Steel Manufacturing Pvt Ltd',     'industrial_warehousing'],
+    ['Bharat Pharma Biotech Park',                'industrial_warehousing'],
+    ['Reliance Chemical Plant',                   'industrial_warehousing'],
+    ['Wipro Manufacturing Facility',              'industrial_warehousing'],
+    ['Tata Cement Factory Hoskote',               'industrial_warehousing'],
+    ['Indus Foundry Pvt Ltd',                     'industrial_warehousing'],
+  ])('industrial / corporate keyword inference: "%s" → %s', (name, expected) => {
+    test(`"${name}" → ${expected}`, () => {
+      expect(inferAssetClass({ deal: { name, asset_class: 'residential_apartments' } })).toBe(expected);
+    });
+  });
+
+  // Guard: "Energy" / "Power" should NOT mis-classify clearly-residential
+  // complexes that use those words as marketing. The inference checks for
+  // residential descriptor words (tower / apartment / residence / villa /
+  // park / garden) and falls through to residential when present.
+  describe.each([
+    ['Sunshine Energy Towers',          'residential_apartments'],
+    ['Powerhouse Residences',           'residential_apartments'],
+    ['Green Energy Garden Apartments',  'residential_apartments'],
+  ])('residential-marketing names that contain "energy"/"power": "%s" → %s', (name, expected) => {
+    test(`"${name}" → ${expected}`, () => {
+      expect(inferAssetClass({ deal: { name } })).toBe(expected);
+    });
+  });
 });

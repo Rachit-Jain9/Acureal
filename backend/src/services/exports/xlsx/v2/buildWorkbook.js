@@ -1955,6 +1955,25 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getRow(2).height = 22;
 
+  // ── Deal Sanity Check banner (row 3) ──────────────────────────────────
+  // Single-cell IF-chain flags obvious issues (empty inputs, negative margin,
+  // low DSCR) so an IC reviewer sees the state at-a-glance without scanning
+  // every tile. Operator-edit-driven — recalculates whenever Inputs change.
+  //
+  // Family-conditional: development uses Total Revenue B4 + Total Cost D4 +
+  // Gross Margin B7 + Min DSCR D7. Income family uses NOI B4 + Modeled Cap
+  // Rate D4 + Min DSCR B7.
+  sheet.mergeCells('A3:N3');
+  const sanityCheckFormula = ctx.dealFamily === 'income'
+    ? '=IF(IFERROR(B4,0)=0,"⚠ Set SaleableAreaSqft + BaseRentPerSqftMonth on the Inputs sheet to populate the Dashboard.",IF(IFERROR(B7,99)<1.2,"⚠ Min DSCR below 1.20 — review debt sizing inputs (PermMaxLTV / PermMinDCR / DebtRatePct).","✓ Deal status: Modeled operating returns look healthy. Edit Inputs sheet to run sensitivities."))'
+    : '=IF(IFERROR(B4,0)=0,"⚠ Set SaleableAreaSqft + SellRatePerSqft on the Inputs sheet to populate the Dashboard.",IF(IFERROR(D4,0)=0,"⚠ Set LandCostCr + ConstructionCostPerSqft on the Inputs sheet to populate cost.",IF(IFERROR(B7,0)<0,"⚠ Negative gross margin — review revenue or cost inputs.",IF(IFERROR(B7,0)<0.10,"⚠ Gross margin below 10% — stress-test SellRatePerSqft / construction cost.","✓ Deal status: Modeled returns look healthy. Edit Inputs sheet to run sensitivities."))))';
+  sheet.getCell('A3').value = { formula: sanityCheckFormula };
+  sheet.getCell('A3').font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  sheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet.getCell('A3').fill = FILL(palette.xlsx('paperSubtle'));
+  sheet.getCell('A3').protection = { locked: true };
+  sheet.getRow(3).height = 24;
+
   // Three rows of KPI cards. Post-restructure: phasing + cash flow are
   // on the SAME sheet (Cash Flow Engine). Both prefixes resolve to the
   // same worksheet — kept as separate variables for code clarity since
@@ -2034,13 +2053,21 @@ const buildDashboardSheet = (workbook, ctx) => {
     labelCell.fill = FILL(palette.xlsx('paper'));
     labelCell.protection = { locked: true };
     const valueCell = sheet.getCell(`${String.fromCharCode(col.charCodeAt(0) + 1)}${row}`);
-    if (kernel != null) {
-      // Literal kernel value. For percent-format cells the kernel stores
-      // integer-percent (13.6 = 13.6%) but Excel's `0.0%` format expects
-      // a decimal — convert via toPctDecimal.
+    // Operator directive 2026-05-11: "Use formulas, cell references, linkages
+    // and locking of cells wherever possible". Headline KPI tiles ALWAYS use
+    // the formula now — when the operator edits Inputs, the Dashboard tiles
+    // update live. Pre-fix: kernel-stored value was a literal; edits to
+    // Inputs didn't flow through. Kernel reconciliation moved to the
+    // Returns block (rows 19-22) which shows kernel-vs-modeled side-by-side.
+    if (formula) {
+      valueCell.value = { formula };
+    } else if (kernel != null) {
+      // No formula available (e.g. some KPIs that the kernel computes but
+      // the workbook can't replicate). Fall back to kernel literal.
       valueCell.value = format === NUMBER_FORMATS.percent ? toPctDecimal(kernel) : kernel;
     } else {
-      valueCell.value = { formula };
+      // Neither formula nor kernel value — leave blank rather than #N/A.
+      valueCell.value = null;
     }
     valueCell.numFmt = format;
     valueCell.font = { name: FONT, size: 16, bold: true, color: { argb: palette.xlsx('inkDeep') } };
