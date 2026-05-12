@@ -3,6 +3,18 @@
 const ExcelJS = require('exceljs');
 const { buildDealWorkbookV2, __internal } = require('../src/services/exports/xlsx/v2/buildWorkbook');
 
+const normalizeFormula = (formula) => String(formula || '').replace(/^=/, '');
+
+expect.extend({
+  toBeFormula(received, expected) {
+    const pass = normalizeFormula(received) === normalizeFormula(expected);
+    return {
+      pass,
+      message: () => `expected formula ${received} ${pass ? 'not ' : ''}to equal ${expected}`,
+    };
+  },
+});
+
 const minimalContext = () => ({
   deal: {
     id: 1,
@@ -200,9 +212,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(typeof um.getCell('B5').value).toBe('number'); // count
       expect(typeof um.getCell('C5').value).toBe('number'); // SF/unit
       // Total SF = count × SF/unit (formula)
-      expect(um.getCell('D5').value.formula).toBe('=B5*C5');
+      expect(um.getCell('D5').value.formula).toBeFormula('=B5*C5');
       // Revenue formula for residential: total SF × per-sqft rate / 1Cr
-      expect(um.getCell('F5').value.formula).toBe('=D5*E5/10000000');
+      expect(um.getCell('F5').value.formula).toBeFormula('=D5*E5/10000000');
 
       // 5 unit types (Studio / 1BHK / 2BHK / 3BHK / 4BHK) → 5 data rows + 1 total row
       const totalRow = 10; // 5 data rows at 5-9, total at row 10
@@ -242,7 +254,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(String(um.getCell('E4').value)).toContain('mo');
 
       // Revenue formula: total SF × monthly rent × 12 / 1Cr (annualised)
-      expect(um.getCell('F5').value.formula).toBe('=D5*E5*12/10000000');
+      expect(um.getCell('F5').value.formula).toBeFormula('=D5*E5*12/10000000');
     });
 
     test('Unit Mix sheet renders empty-state for mixed_use / raw_land', async () => {
@@ -278,34 +290,34 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // Capital Stack block (rows 4-9)
       expect(String(wf.getCell('A4').value)).toContain('Capital Stack');
       // Total Equity = Total Cost - Loan
-      expect(wf.getCell('B7').value.formula).toBe('=B5-B6');
+      expect(wf.getCell('B7').value.formula).toBeFormula('=B5-B6');
       // LP Equity = Total × LPEquityPct
-      expect(wf.getCell('B8').value.formula).toBe('=B7*LPEquityPct');
+      expect(wf.getCell('B8').value.formula).toBeFormula('=B7*LPEquityPct');
       // GP Equity = Total × GPEquityPct
-      expect(wf.getCell('B9').value.formula).toBe('=B7*GPEquityPct');
+      expect(wf.getCell('B9').value.formula).toBeFormula('=B7*GPEquityPct');
 
       // Proceeds & Pref block (rows 11-16)
       expect(String(wf.getCell('A11').value)).toContain('Proceeds');
       // Pref accrual: LP Equity × ((1+pref)^N - 1)
-      expect(wf.getCell('B14').value.formula).toBe('=B8*((1+PrefReturnRate)^B12-1)');
+      expect(wf.getCell('B14').value.formula).toBeFormula('=B8*((1+PrefReturnRate)^B12-1)');
       // Tier 1 LP distribution = MIN(proceeds, capital + pref)
-      expect(wf.getCell('B15').value.formula).toBe('=MIN(B13,B8+B14)');
+      expect(wf.getCell('B15').value.formula).toBeFormula('=MIN(B13,B8+B14)');
 
       // Promote split block (rows 18-22)
       expect(String(wf.getCell('A18').value)).toContain('Promote Split');
       // LP promote = Residual × PromoteLPPct
-      expect(wf.getCell('B19').value.formula).toBe('=B16*PromoteLPPct');
+      expect(wf.getCell('B19').value.formula).toBeFormula('=B16*PromoteLPPct');
       // GP promote = Residual × PromoteGPPct
-      expect(wf.getCell('B20').value.formula).toBe('=B16*PromoteGPPct');
+      expect(wf.getCell('B20').value.formula).toBeFormula('=B16*PromoteGPPct');
 
       // Final returns block (rows 24-30)
       expect(String(wf.getCell('A24').value)).toContain('Final Investor Returns');
       // LP Total = Tier 1 + LP promote
-      expect(wf.getCell('B25').value.formula).toBe('=B15+B19');
+      expect(wf.getCell('B25').value.formula).toBeFormula('=B15+B19');
       // LP Equity Multiple = LP Total / LP Equity
-      expect(wf.getCell('B27').value.formula).toBe('=IFERROR(B25/B8,0)');
+      expect(wf.getCell('B27').value.formula).toBeFormula('=IFERROR(B25/B8,0)');
       // LP IRR approx = (EM)^(1/years) - 1
-      expect(wf.getCell('B29').value.formula).toBe('=IFERROR((B27)^(1/B12)-1,0)');
+      expect(wf.getCell('B29').value.formula).toBeFormula('=IFERROR((B27)^(1/B12)-1,0)');
     });
 
     test('Inputs sheet exposes 5 new waterfall named ranges', async () => {
@@ -337,7 +349,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
       // Method 1: LTC (always meaningful, both families)
       expect(String(ds.getCell('A10').value)).toContain('Loan-to-Cost (LTC)');
-      expect(ds.getCell('B11').value.formula).toBe('=ConstrMaxLTC');
+      expect(ds.getCell('B11').value.formula).toBeFormula('=ConstrMaxLTC');
       expect(ds.getCell('B12').value.formula).toContain('ConstrMaxLTC');
 
       // Method 2: LTV (development = "Not Applicable")
@@ -346,7 +358,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // Final MIN cell at B28
       expect(String(ds.getCell('A28').value)).toContain('Permanent Loan (final)');
       // Dev family: just LTC-based (=B12), no MIN of all four
-      expect(ds.getCell('B28').value.formula).toBe('=B12');
+      expect(ds.getCell('B28').value.formula).toBeFormula('=B12');
     });
 
     test('Debt Sizing sheet for income asset uses MIN of all four sub-limits', async () => {
@@ -364,14 +376,14 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(b6).toBeTruthy();
 
       // Final MIN: B12 (LTC) + B16 (LTV) + B21 (DCR) + B25 (DY)
-      expect(ds.getCell('B28').value.formula).toBe('=MIN(B12,B16,B21,B25)');
+      expect(ds.getCell('B28').value.formula).toBeFormula('=MIN(B12,B16,B21,B25)');
 
       // DCR-based implied loan uses PV-of-annuity formula
       expect(ds.getCell('B21').value.formula).toContain('1-(1+DebtRatePct)');
       expect(ds.getCell('B21').value.formula).toContain('LoanTermYears');
 
       // DY-based: =B6/PermMinDY
-      expect(ds.getCell('B25').value.formula).toBe('=B6/PermMinDY');
+      expect(ds.getCell('B25').value.formula).toBeFormula('=B6/PermMinDY');
     });
 
     test('Inputs sheet exposes 4 new permanent debt sizing named ranges', async () => {
@@ -408,7 +420,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // the same worksheet now.
       const b35 = amort.getCell('B35').value;
       expect(b35).toBeTruthy();
-      expect(b35.formula).toBe('=B28');
+      expect(b35.formula).toBeFormula('=B28');
 
       // Quarterly Rate cell B39 (was B9) — (1+annual)^(1/4) - 1
       const b39 = amort.getCell('B39').value;
@@ -430,7 +442,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
       // Row 43 (Period 1, was row 13): Beginning Balance = $B$35 (Loan Amount, was $B$5)
       const b43 = amort.getCell('B43').value;
-      expect(b43.formula).toBe('=$B$35');
+      expect(b43.formula).toBeFormula('=$B$35');
 
       // Row 44 (Period 2, was row 14): Beginning Balance = previous-row Ending Balance
       const b44 = amort.getCell('B44').value;
@@ -505,7 +517,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
       // Row 24 total = sum of rows 18-23 (shifted +5 by PR-I2)
       const b24 = phasing.getCell('B24').value;
-      expect(b24.formula).toMatch(/=B18\+B19\+B20\+B21\+B22\+B23/);
+      expect(b24.formula).toBeFormula('=B18+B19+B20+B21+B22+B23');
     });
 
     test('Calculations Cost Build now shows 14 rows including 8-line-item soft cost breakdown', async () => {
@@ -529,7 +541,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
       // Soft cost subtotal (row 24) sums all 8 line items
       const b24 = calc.getCell('B24').value;
-      expect(b24.formula).toBe('=B16+B17+B18+B19+B20+B21+B22+B23');
+      expect(b24.formula).toBeFormula('=B16+B17+B18+B19+B20+B21+B22+B23');
     });
 
     // Regression: customer collection used to compute as
@@ -572,10 +584,10 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(typeof b4).toBe('object');
       expect(b4.formula).toMatch(/Cash Flow Engine/);
 
-      // Total Project Cost (D4) — FORMULA referencing Cash Flow Engine outflows
+      // Total Project Cost (D4) — FORMULA referencing the canonical cost named range
       const d4 = dash.getCell('D4').value;
       expect(typeof d4).toBe('object');
-      expect(d4.formula).toMatch(/Cash Flow Engine/);
+      expect(d4.formula).toBeFormula('=TotalProjectCostCr');
 
       // Net CF (F4) — FORMULA referencing Cash Flow Engine Project net CF row
       const f4 = dash.getCell('F4').value;
@@ -624,7 +636,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const dash = wb.getWorksheet('Dashboard');
       const a3 = dash.getCell('A3').value;
       expect(typeof a3).toBe('object');
-      expect(a3.formula).toMatch(/^=IF\(IFERROR\(B4,0\)=0/);
+      expect(normalizeFormula(a3.formula)).toMatch(/^IF\(IFERROR\(B4,0\)=0/);
       // Healthy path branch ends with checkmark
       expect(a3.formula).toMatch(/✓ Deal status/);
       // Negative-margin warning branch
@@ -674,7 +686,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // Must multiply by CollectionPct named range
       expect(formula).toMatch(/CollectionPct/);
       // Must NOT use the old `=F9*CollectionPct` shape
-      expect(formula).not.toMatch(/^=F9\*CollectionPct$/);
+      expect(normalizeFormula(formula)).not.toMatch(/^F9\*CollectionPct$/);
     });
 
     test('cumulative rows in Phasing use final-value (not SUM) for the Total column', async () => {
@@ -692,13 +704,13 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // For a 12-quarter project (minimal-context default): B=Q1..M=Q12,
       // N=Total. Cumulative rows must reference the LAST quarter cell
       // (=M{row}); non-cumulative rows still use SUM(B{row}:M{row}).
-      expect(formulaAt('N7')).toMatch(/^=M7$/);     // cumulative construction (unchanged)
+      expect(formulaAt('N7')).toBeFormula('=M7');     // cumulative construction (unchanged)
       // PR-I2: Cumulative customer collection shifted from row 12 → 17
       // (5 new RERA escrow rows inserted between Customer Collection row 10
       // and Marketing & Sales spend).
-      expect(formulaAt('N17')).toMatch(/^=M17$/);   // cumulative collection (was N12 pre-PR-I2)
-      expect(formulaAt('N6')).toMatch(/^=SUM\(B6:M6\)$/);   // per-quarter construction
-      expect(formulaAt('N9')).toMatch(/^=SUM\(B9:M9\)$/);   // per-quarter sales
+      expect(formulaAt('N17')).toBeFormula('=M17');   // cumulative collection (was N12 pre-PR-I2)
+      expect(formulaAt('N6')).toBeFormula('=SUM(B6:M6)');   // per-quarter construction
+      expect(formulaAt('N9')).toBeFormula('=SUM(B9:M9)');   // per-quarter sales
     });
 
     // Regression: Dashboard headline "Total Revenue" used to pull from the
@@ -772,17 +784,30 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(drawingXml).toMatch(/<xdr:oneCellAnchor>/);
 
       // Dashboard sheet references the drawing
-      const sheetXml = await zip.file('xl/worksheets/sheet4.xml').async('string');
+      const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
       expect(sheetXml).toMatch(/<drawing\s+r:id="rId\d+"\s*\/>/);
 
       // Sheet rels include the drawing rel
-      const sheetRels = await zip.file('xl/worksheets/_rels/sheet4.xml.rels').async('string');
+      const sheetRels = await zip.file('xl/worksheets/_rels/sheet1.xml.rels').async('string');
       expect(sheetRels).toMatch(/drawings\/drawing1\.xml/);
 
       // Content types declares each chart + the drawing
       const contentTypes = await zip.file('[Content_Types].xml').async('string');
       expect(contentTypes).toMatch(/\/xl\/drawings\/drawing1\.xml/);
       expect(contentTypes).toMatch(/\/xl\/charts\/chart1\.xml/);
+    });
+
+    test('workbook XML is parser-safe: no leading equals in formula nodes and no undefined colors', async () => {
+      const JSZip = require('jszip');
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const zip = await JSZip.loadAsync(buffer);
+      const worksheetFiles = Object.keys(zip.files).filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
+
+      for (const name of worksheetFiles) {
+        const xml = await zip.file(name).async('string');
+        expect(xml).not.toMatch(/<f(?:\s[^>]*)?>=/);
+        expect(xml).not.toContain('FFundefined');
+      }
     });
 
     // The Uses Breakdown doughnut always renders. The Quarterly Trend
@@ -825,8 +850,8 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
       // Doughnut targets the Uses cells
       const doughnut = xmls.find((x) => x.includes('<c:doughnutChart'));
-      expect(doughnut).toMatch(/\$A\$14:\$A\$16/);
-      expect(doughnut).toMatch(/\$B\$14:\$B\$16/);
+      expect(doughnut).toMatch(/\$A\$14:\$A\$18/);
+      expect(doughnut).toMatch(/\$B\$14:\$B\$18/);
     });
 
     test('Dashboard tornado data table emits two driver rows with delta formulas', async () => {
@@ -848,16 +873,16 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // Row 26 = Selling Rate driver
       expect(String(dash.getCell('H26').value)).toContain('Selling Rate');
       // Low delta = grid[middle row][leftmost col] - base = B28 - D28
-      expect(dash.getCell('I26').value.formula).toBe('=B28-D28');
+      expect(dash.getCell('I26').value.formula).toBeFormula('=B28-D28');
       // High delta = grid[middle row][rightmost col] - base = F28 - D28
-      expect(dash.getCell('J26').value.formula).toBe('=F28-D28');
+      expect(dash.getCell('J26').value.formula).toBeFormula('=F28-D28');
 
-      // Row 27 = Construction Cost driver
-      expect(String(dash.getCell('H27').value)).toContain('Construction Cost');
+      // Row 27 = Project Cost driver
+      expect(String(dash.getCell('H27').value)).toContain('Project Cost');
       // High cost = low margin → I27 (low delta) = D30 - D28
-      expect(dash.getCell('I27').value.formula).toBe('=D30-D28');
+      expect(dash.getCell('I27').value.formula).toBeFormula('=D30-D28');
       // Low cost = high margin → J27 (high delta) = D26 - D28
-      expect(dash.getCell('J27').value.formula).toBe('=D26-D28');
+      expect(dash.getCell('J27').value.formula).toBeFormula('=D26-D28');
     });
 
     // Asset-class branching for the trend chart: development deals show
@@ -908,20 +933,20 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       //   R25-R26 = Stamp Duty + Reg · GST on Construction (PR-I1 lines)
       //   R27 = India Statutory Levies subtotal
       //   R28 = Total project cost (Hard + Soft + Statutory)
-      expect(formulaAt('B15')).toBe('=B12+B13+B14');                      // Hard cost = Land + Construction + Approvals
-      expect(formulaAt('B24')).toBe('=B16+B17+B18+B19+B20+B21+B22+B23');  // Soft cost = all 8 line items
-      expect(formulaAt('B25')).toBe('=LandCostCr*StampRegPct');           // Stamp Duty + Registration on Land (PR-I1)
-      expect(formulaAt('B26')).toBe('=B13*GstPct');                       // GST on Construction (Net of ITC) (PR-I1)
-      expect(formulaAt('B27')).toBe('=B25+B26');                          // India Statutory Levies subtotal (PR-I1)
-      expect(formulaAt('B28')).toBe('=B15+B24+B27');                      // Total cost = Hard + Soft + Statutory
+      expect(formulaAt('B15')).toBeFormula('=B12+B13+B14');                      // Hard cost = Land + Construction + Approvals
+      expect(formulaAt('B24')).toBeFormula('=B16+B17+B18+B19+B20+B21+B22+B23');  // Soft cost = all 8 line items
+      expect(formulaAt('B25')).toBeFormula('=LandCostCr*StampRegPct');           // Stamp Duty + Registration on Land (PR-I1)
+      expect(formulaAt('B26')).toBeFormula('=B13*GstPct');                       // GST on Construction (Net of ITC) (PR-I1)
+      expect(formulaAt('B27')).toBeFormula('=B25+B26');                          // India Statutory Levies subtotal (PR-I1)
+      expect(formulaAt('B28')).toBeFormula('=B15+B24+B27');                      // Total cost = Hard + Soft + Statutory
 
       // Debt Sculpting (rows 31–36). Total debt envelope refs B28
       // (Total project cost including India Statutory Levies, PR-I1).
-      expect(formulaAt('B32')).toBe('=B28*DebtLTV');                      // Total debt envelope
-      expect(formulaAt('B33')).toBe('=B28*(1-DebtLTV)');                  // Equity envelope
-      expect(formulaAt('B34')).toBe('=B32*DebtRatePct');                  // Annualised interest
-      expect(formulaAt('B35')).toBe('=B34/4');                            // Quarterly accrual
-      expect(formulaAt('B36')).toBe('=B34/SaleableAreaSqft*10000000');    // Per-sqft proxy
+      expect(formulaAt('B32')).toBeFormula('=B28*DebtLTV');                      // Total debt envelope
+      expect(formulaAt('B33')).toBeFormula('=B28*(1-DebtLTV)');                  // Equity envelope
+      expect(formulaAt('B34')).toBeFormula('=B32*DebtRatePct');                  // Annualised interest
+      expect(formulaAt('B35')).toBeFormula('=B34/4');                            // Quarterly accrual
+      expect(formulaAt('B36')).toBeFormula('=B34/SaleableAreaSqft*10000000');    // Per-sqft proxy
 
       // None of those formulas should reference their own cell.
       ['B15', 'B24', 'B25', 'B26', 'B27', 'B28', 'B32', 'B33', 'B34', 'B35', 'B36'].forEach((cellRef) => {
@@ -972,7 +997,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const dash = wb.getWorksheet('Dashboard');
-        expect(dash.getCell('B22').value.formula).toBe('=IFERROR(B21*(1-EffectiveCGRate),"–")');
+        expect(dash.getCell('B22').value.formula).toBeFormula('=IFERROR(B21*(1-EffectiveCGRate),"–")');
       });
 
       test('D22 echoes EffectiveCGRate, F22 echoes EffectiveHoldYears (traceability)', async () => {
@@ -980,8 +1005,8 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const dash = wb.getWorksheet('Dashboard');
-        expect(dash.getCell('D22').value.formula).toBe('=EffectiveCGRate');
-        expect(dash.getCell('F22').value.formula).toBe('=EffectiveHoldYears');
+        expect(dash.getCell('D22').value.formula).toBeFormula('=EffectiveCGRate');
+        expect(dash.getCell('F22').value.formula).toBeFormula('=EffectiveHoldYears');
       });
 
       test('disclosure footnote (now at A23) mentions POST-TAX', async () => {
@@ -1042,6 +1067,26 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(foundUnlocked).toBe(true);
     });
 
+    test('LoadingFactor rejects zero input and CarpetAreaSqft stays guarded', async () => {
+      const ctx = minimalContext();
+      ctx.deal.model_params.inputs.loadingFactor = 0;
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+      let loadingFactorValue = null;
+      let carpetFormula = null;
+
+      inputs.eachRow((row) => {
+        const label = String(row.getCell(1).value || '');
+        if (label.includes('Loading Factor')) loadingFactorValue = row.getCell(2).value;
+        if (label.includes('Carpet Area')) carpetFormula = row.getCell(2).value.formula;
+      });
+
+      expect(loadingFactorValue).toBe(1.25);
+      expect(carpetFormula).toBeFormula('=IFERROR(SaleableAreaSqft/LoadingFactor,0)');
+    });
+
     test('Cash Flow sheet has DSCR row with conditional formatting referenced', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
@@ -1070,6 +1115,22 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(text).toMatch(/Sources & Uses/);
       expect(text).toMatch(/Source: Equity/);
       expect(text).toMatch(/Use: Land/);
+    });
+
+    test('Dashboard uses one canonical TotalProjectCostCr for KPI and Sources & Uses formulas', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+      const namesList = (wb.definedNames.model || []).map((n) => n.name);
+
+      expect(namesList).toContain('TotalProjectCostCr');
+      expect(dash.getCell('D4').value.formula).toBeFormula('=TotalProjectCostCr');
+      expect(dash.getCell('B12').value.formula).toBeFormula('=MAX(0,TotalProjectCostCr*(1-DebtLTV))');
+      expect(dash.getCell('B13').value.formula).toBeFormula('=TotalProjectCostCr*DebtLTV');
+      expect(dash.getCell('B16').value.formula).toBeFormula('=ApprovalCostCr+PremiumFSICostCr');
+      expect(dash.getCell('B17').value.formula).toBeFormula("='Calculations'!$B$24");
+      expect(dash.getCell('B18').value.formula).toBeFormula("='Calculations'!$B$27");
     });
 
     test('survives a mostly-empty exportContext without throwing', async () => {
@@ -1127,8 +1188,36 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const dashJoined = dashText.join(' | ');
       // Income KPI tiles
       expect(dashJoined).toMatch(/Stabilised NOI/);
-      expect(dashJoined).toMatch(/Modeled Cap Rate/);
+      expect(dashJoined).toMatch(/Stabilized Yield on Cost/);
       expect(dashJoined).toMatch(/Cash-on-Cash/);
+    }, 30000);
+
+    test('income asset model uses occupancy/rent logic instead of development sale-rate logic', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'retail';
+      ctx.property.property_type = 'retail';
+      ctx.deal.model_params.inputs.baseRentPerSqftMonth = 95;
+      ctx.deal.model_params.inputs.occupancyPct = 0.88;
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+
+      const cashFlow = wb.getWorksheet('Cash Flow Engine');
+      expect(cashFlow.getCell('B9').value.formula).toBeFormula('=-B8*B6*VacancyPct');
+      expect(cashFlow.getCell('B11').value.formula).toBeFormula('=B8*B6+B9+B10');
+
+      const dash = wb.getWorksheet('Dashboard');
+      expect(String(dash.getCell('A24').value)).toContain('Yield on Cost');
+      expect(String(dash.getCell('A25').value)).toContain('Occupancy');
+      expect(String(dash.getCell('H26').value)).toContain('Rent');
+      expect(String(dash.getCell('H27').value)).toContain('Occupancy');
+      expect(String(dash.getCell('A34').value)).toBe('Yield on Cost');
+      expect(String(dash.getCell('A35').value)).toBe('Annual NOI (Cr)');
+      const sensitivityFormula = dash.getCell('B26').value.formula;
+      expect(sensitivityFormula).toContain('BaseRentPerSqftMonth');
+      expect(sensitivityFormula).toContain('OccupancyPct');
+      expect(sensitivityFormula).not.toContain('SellRatePerSqft');
+      expect(sensitivityFormula).not.toContain('ConstructionCostPerSqft');
     }, 30000);
 
     test('development asset (residential_apartments) keeps Sales Collection rows', async () => {
@@ -1371,12 +1460,12 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         // LandCostCr*StampRegPct; Q2-Q12 (cols C..M) are all literal 0.
         const stampRow = rowByLabel['Stamp Duty + Registration on Land (INR Cr)'];
         const q1Cell = phasing.getCell(stampRow, 2); // B = Q1
-        expect(q1Cell.value && q1Cell.value.formula).toBe('=LandCostCr*StampRegPct');
+        expect(q1Cell.value && q1Cell.value.formula).toBeFormula('=LandCostCr*StampRegPct');
         // Q2 (col C) onward are literal 0 (Stamp is paid up-front, not amortised)
         for (let q = 2; q <= 6; q += 1) {
           const cell = phasing.getCell(stampRow, 1 + q); // col B=Q1=2, so col C=Q2=3
           const formula = cell.value && cell.value.formula;
-          expect(formula).toBe('=0');
+          expect(formula).toBeFormula('=0');
         }
 
         // GST row: every quarter has the same IF-construction-window formula
@@ -1407,15 +1496,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
         // PR-I1 lines on the Calculations Cost Build
         expect(labelAt('A25')).toContain('Stamp Duty');
-        expect(formulaAt('B25')).toBe('=LandCostCr*StampRegPct');
+        expect(formulaAt('B25')).toBeFormula('=LandCostCr*StampRegPct');
         expect(labelAt('A26')).toContain('GST');
-        expect(formulaAt('B26')).toBe('=B13*GstPct');
+        expect(formulaAt('B26')).toBeFormula('=B13*GstPct');
         expect(labelAt('A27')).toContain('India Statutory Levies');
-        expect(formulaAt('B27')).toBe('=B25+B26');
+        expect(formulaAt('B27')).toBeFormula('=B25+B26');
 
         // Total project cost now rolls up Hard + Soft + Statutory.
         expect(labelAt('A28')).toContain('Total project cost');
-        expect(formulaAt('B28')).toBe('=B15+B24+B27');
+        expect(formulaAt('B28')).toBeFormula('=B15+B24+B27');
       });
 
       test('Debt Sizing + Waterfall Total Project Cost formulas include India Statutory Levies', async () => {
@@ -1535,31 +1624,31 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
         // Q1 (col B) formulas
         const b11 = phasing.getCell('B11').value;
-        expect(b11.formula).toBe('=B10*RERAEscrowPct');
+        expect(b11.formula).toBeFormula('=B10*RERAEscrowPct');
 
         const b12 = phasing.getCell('B12').value;
-        expect(b12.formula).toBe('=B10*(1-RERAEscrowPct)');
+        expect(b12.formula).toBeFormula('=B10*(1-RERAEscrowPct)');
 
         // Drawdown Q1: MIN(escrow additions, construction this quarter)
         const b13 = phasing.getCell('B13').value;
-        expect(b13.formula).toBe('=MIN(B11,B6)');
+        expect(b13.formula).toBeFormula('=MIN(B11,B6)');
 
         // Balance Q1: additions - drawdown (no prior balance)
         const b14 = phasing.getCell('B14').value;
-        expect(b14.formula).toBe('=B11-B13');
+        expect(b14.formula).toBeFormula('=B11-B13');
 
         // Net developer cash: (Free Cash + Drawdown) × (1 - LandownerSharePct).
         // PR-I3 introduced the landowner-share factor for JDA structures;
         // when LandownerSharePct = 0 (default outright purchase) the
         // formula collapses to Free Cash + Drawdown.
         const b15 = phasing.getCell('B15').value;
-        expect(b15.formula).toBe('=(B12+B13)*(1-LandownerSharePct)');
+        expect(b15.formula).toBeFormula('=(B12+B13)*(1-LandownerSharePct)');
 
         // Q2 (col C) — drawdown + balance use rolling state
         const c13 = phasing.getCell('C13').value;
-        expect(c13.formula).toBe('=MIN(B14+C11,C6)'); // prev balance + this addition vs construction
+        expect(c13.formula).toBeFormula('=MIN(B14+C11,C6)'); // prev balance + this addition vs construction
         const c14 = phasing.getCell('C14').value;
-        expect(c14.formula).toBe('=B14+C11-C13'); // prev balance + addition - drawdown
+        expect(c14.formula).toBeFormula('=B14+C11-C13'); // prev balance + addition - drawdown
       });
 
       test('Cash Flow Inflow row now references Net developer cash (Phasing row 15), not Gross (row 10)', async () => {
@@ -1718,11 +1807,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         // Row 15 = Net developer cash from sales (post-RERA, post-landowner share)
         // Formula = (Row12 + Row13) × (1 - LandownerSharePct)
         const b15 = phasing.getCell('B15').value;
-        expect(b15.formula).toBe('=(B12+B13)*(1-LandownerSharePct)');
+        expect(b15.formula).toBeFormula('=(B12+B13)*(1-LandownerSharePct)');
 
         // Q2 column reuses the same formula pattern with prefix column letter shift
         const c15 = phasing.getCell('C15').value;
-        expect(c15.formula).toBe('=(C12+C13)*(1-LandownerSharePct)');
+        expect(c15.formula).toBeFormula('=(C12+C13)*(1-LandownerSharePct)');
       });
 
       test('Deal Structure label maps from kernel deal_structure correctly', async () => {
@@ -1853,7 +1942,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
         // Q1 (col B) formula = -SaleableAreaSqft × rate / 4 / 10000000
         const q1Cell = phasing.getCell(ptRow, 2);
-        expect(q1Cell.value.formula).toBe('=-SaleableAreaSqft*PropertyTaxPerSqftYr/4/10000000');
+        expect(q1Cell.value.formula).toBeFormula('=-SaleableAreaSqft*PropertyTaxPerSqftYr/4/10000000');
       });
 
       test('Property tax is area-driven, not revenue-driven (doesn\'t scale with EGR or occupancy)', async () => {
@@ -1988,7 +2077,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label === 'Implied All-In Rate') formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=DebtRatePct+IFERROR(ProcessingFeePct/LoanTermYears,0)');
+        expect(formulaValue.formula).toBeFormula('=DebtRatePct+IFERROR(ProcessingFeePct/LoanTermYears,0)');
       });
     });
 
@@ -2069,7 +2158,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label.includes('Applicable Capital Gains Rate')) formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=IF(EffectiveHoldYears>=2,LTCGRate,0.3)');
+        expect(formulaValue.formula).toBeFormula('=IF(EffectiveHoldYears>=2,LTCGRate,0.3)');
       });
     });
 
@@ -2131,7 +2220,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         await wb.xlsx.load(buffer);
         const calc = wb.getWorksheet('Calculations');
         const b14 = calc.getCell('B14').value;
-        expect(b14.formula).toBe('=ApprovalCostCr+PremiumFSICostCr');
+        expect(b14.formula).toBeFormula('=ApprovalCostCr+PremiumFSICostCr');
       });
     });
 
@@ -2243,7 +2332,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label === 'Suggested Exit Multiplier') formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=IF(OR(KhataStatus="B_khata",KhataStatus="mixed"),1-BKhataExitHaircutPct,1)');
+        expect(formulaValue.formula).toBeFormula('=IF(OR(KhataStatus="B_khata",KhataStatus="mixed"),1-BKhataExitHaircutPct,1)');
       });
     });
 
@@ -2302,11 +2391,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label) byLabel[label] = row.getCell(2).value;
         });
         expect(byLabel['Blended ADR (derived)'].formula)
-          .toBe('=HospitalityADRBase*(1-HospitalityPeakShare)+HospitalityADRPeak*HospitalityPeakShare');
+          .toBeFormula('=HospitalityADRBase*(1-HospitalityPeakShare)+HospitalityADRPeak*HospitalityPeakShare');
         expect(byLabel['RevPAR (derived)'].formula)
-          .toBe('=HospitalityBlendedADR*OccupancyPct');
+          .toBeFormula('=HospitalityBlendedADR*OccupancyPct');
         expect(byLabel['Implied annual revenue (Cr)'].formula)
-          .toBe('=HospitalityRevPAR*HospitalityKeys*365/10000000');
+          .toBeFormula('=HospitalityRevPAR*HospitalityKeys*365/10000000');
       });
     });
 
@@ -2366,7 +2455,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         });
         expect(formulaValue).toBeTruthy();
         expect(formulaValue.formula)
-          .toBe('=RetailAnchorRentPerSqftMonth*RetailAnchorSharePct+RetailVanillaRentPerSqftMonth*(1-RetailAnchorSharePct)');
+          .toBeFormula('=RetailAnchorRentPerSqftMonth*RetailAnchorSharePct+RetailVanillaRentPerSqftMonth*(1-RetailAnchorSharePct)');
       });
     });
 
@@ -2403,7 +2492,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label.includes('Equivalent EscalationPct')) formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=(1+MilestoneTotalEscalationPct)^(1/(ProjectMonths/12))-1');
+        expect(formulaValue.formula).toBeFormula('=(1+MilestoneTotalEscalationPct)^(1/(ProjectMonths/12))-1');
       });
     });
 
@@ -2442,7 +2531,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label.includes('Sum Check')) formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=PlotSmallSharePct+PlotMidSharePct+PlotLargeSharePct');
+        expect(formulaValue.formula).toBeFormula('=PlotSmallSharePct+PlotMidSharePct+PlotLargeSharePct');
       });
     });
 
@@ -2546,7 +2635,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label.includes('Total Pipeline')) formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=RawLandTitleMonths+RawLandConversionMonths+RawLandLayoutMonths');
+        expect(formulaValue.formula).toBeFormula('=RawLandTitleMonths+RawLandConversionMonths+RawLandLayoutMonths');
       });
 
       test('Defaults: 3 + 6 + 9 = 18 months pipeline; current stage = title_diligence', async () => {
@@ -2643,7 +2732,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label.includes('Total Exit Cost')) formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe('=SellingCostPct+ExitBrokerFeePct+ExitLegalFeePct');
+        expect(formulaValue.formula).toBeFormula('=SellingCostPct+ExitBrokerFeePct+ExitLegalFeePct');
       });
 
       test('Development family — EffectiveExitFactor DERIVED branches on ExitStrategyType', async () => {
@@ -2657,7 +2746,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           if (label.includes('Effective Exit Factor')) formulaValue = row.getCell(2).value;
         });
         expect(formulaValue).toBeTruthy();
-        expect(formulaValue.formula).toBe(
+        expect(formulaValue.formula).toBeFormula(
           '=IF(ExitStrategyType="bulk_exit_completion",(1-BulkExitDiscountPct)*(1-ExitBrokerFeePct),(1-ExitBrokerFeePct))'
         );
       });
