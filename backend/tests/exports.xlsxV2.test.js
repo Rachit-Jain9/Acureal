@@ -2580,6 +2580,115 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           '=IF(ExitStrategyType="bulk_exit_completion",(1-BulkExitDiscountPct)*(1-ExitBrokerFeePct),(1-ExitBrokerFeePct))'
         );
       });
+
+      // Bug fix: Implied Net Exit Value (income family) previously used
+      // `B6` thinking it was NOI, but B6 on the Inputs sheet is the Asset
+      // Class text cell. IFERROR collapsed the result to 0 silently. Fix:
+      // use INDEX into the Cash Flow Engine NOI row (row 18) at column
+      // TotalQuarters+1 (last quarter), × 4 for annualised.
+      test('Income family — ImpliedNetExitValueCr uses INDEX into Cash Flow Engine NOI row', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Implied Net Exit Value')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toContain('INDEX');
+        expect(formulaValue.formula).toContain("'Cash Flow Engine'!18:18");
+        expect(formulaValue.formula).toContain('TotalQuarters+1');
+        expect(formulaValue.formula).toContain('TotalExitCostPct');
+        // Should NOT contain the buggy B6 reference
+        expect(formulaValue.formula).not.toMatch(/B6\b/);
+      });
+    });
+
+    // ── Reversion formula wiring (PR-EX wiring) ─────────────────────────
+    // Income family Reversion row previously used `(1-SellingCostPct)` —
+    // narrow definition (just the on-exit selling cost). PR-EX added the
+    // Exit Strategy section with broker + legal fees + derived
+    // TotalExitCostPct = SellingCostPct + ExitBrokerFeePct + ExitLegalFeePct.
+    // The Reversion formula now uses the broader TotalExitCostPct so all
+    // three components flow through. For default inputs this lifts effective
+    // exit costs from 2% → 4.5%.
+    describe('Reversion formula wiring (TotalExitCostPct)', () => {
+      test('Income family Reversion uses TotalExitCostPct instead of bare SellingCostPct', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cfe = wb.getWorksheet('Cash Flow Engine');
+        // Find the Reversion row specifically — there's also a "Total Cash
+        // Flow Including Reversion" sum row which matches the broader
+        // "Reversion" substring. Anchor the match on "Net Sale Proceeds".
+        let reversionRow = null;
+        cfe.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Reversion') && label.includes('Net Sale Proceeds')) {
+            reversionRow = rowIdx;
+          }
+        });
+        expect(reversionRow).toBeDefined();
+        expect(reversionRow).not.toBeNull();
+        // The final-quarter column holds the active formula (the rest of the
+        // quarters return '=0'). For the default 12-quarter project, that's
+        // column M.
+        const totalQuarters = 12;
+        const finalQCol = String.fromCharCode(65 + totalQuarters); // M for 12Q
+        const cell = cfe.getCell(`${finalQCol}${reversionRow}`);
+        expect(cell.value.formula).toContain('TotalExitCostPct');
+        // Confirms the swap — bare SellingCostPct no longer appears in
+        // the reversion (it lives only inside TotalExitCostPct now).
+        expect(cell.value.formula).not.toMatch(/\bSellingCostPct\b/);
+      });
+    });
+
+    // ── Conditional formatting on KPI tiles ────────────────────────────
+    // Red/amber/green coloring on key health metrics so an IC reviewer
+    // reads the state at a glance. Same palette as the Cash Flow DSCR
+    // conditional formatting — consistency across the workbook.
+    describe('Dashboard KPI conditional formatting', () => {
+      test('Development family — B7 (Gross Margin), D7 (Min DSCR), F4 (Net CF) have CF rules', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext()); // dev family
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        // ExcelJS exposes conditional formatting via worksheet._conditionalFormattings
+        // (internal-ish but stable). Each entry has { ref, rules }.
+        const cfList = dash.conditionalFormattings || [];
+        const refsCovered = new Set();
+        cfList.forEach((cf) => refsCovered.add(cf.ref));
+        // The three dev-family tiles should be covered
+        expect(refsCovered.has('B7:B7')).toBe(true);
+        expect(refsCovered.has('D7:D7')).toBe(true);
+        expect(refsCovered.has('F4:F4')).toBe(true);
+      });
+
+      test('Income family — B4 (Stabilised NOI), B7 (Min DSCR) have CF rules', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const cfList = dash.conditionalFormattings || [];
+        const refsCovered = new Set();
+        cfList.forEach((cf) => refsCovered.add(cf.ref));
+        expect(refsCovered.has('B4:B4')).toBe(true);
+        expect(refsCovered.has('B7:B7')).toBe(true);
+        // Development-only refs should NOT be in income family
+        expect(refsCovered.has('D7:D7')).toBe(false);
+        expect(refsCovered.has('F4:F4')).toBe(false);
+      });
     });
   });
 });

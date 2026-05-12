@@ -997,9 +997,17 @@ const buildInputsSheet = (workbook, ctx) => {
         { formula: '=SellingCostPct+ExitBrokerFeePct+ExitLegalFeePct' },
         '% of sale value (derived)', NUMBER_FORMATS.percent],
       // Derived net exit value at the modeled stabilised value.
+      // Bug fix: pre-fix formula referenced B6 which is the Asset Class
+      // text cell, not NOI — produced 0 via IFERROR. Now uses INDEX to
+      // pick the last-quarter NOI cell on the Cash Flow Engine sheet (row
+      // 18 = NOI for income family; INDEX picks column TotalQuarters+1
+      // which is the last quarter regardless of project duration), × 4
+      // for annualised stabilised NOI, ÷ ExitCapRate for terminal value,
+      // × (1 − total exit cost) for net proceeds. IFERROR-guarded so
+      // empty inputs or div-by-zero collapse to 0 cleanly.
       ['Implied Net Exit Value (Cr)','ImpliedNetExitValueCr',
-        { formula: '=IFERROR((B6/ExitCapRate)*(1-TotalExitCostPct),0)' },
-        'INR Cr (NOI ÷ cap × (1 − total exit cost))', NUMBER_FORMATS.currency],
+        { formula: `=IFERROR(INDEX('${SHEETS.cashFlowEngine}'!18:18,TotalQuarters+1)*4/ExitCapRate*(1-TotalExitCostPct),0)` },
+        'INR Cr (last-Q NOI × 4 ÷ cap × (1 − exit cost))', NUMBER_FORMATS.currency],
     ],
   };
 
@@ -1863,8 +1871,15 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
     },
     {
       label: 'Reversion — Net Sale Proceeds (final period)',
+      // PR-EX wiring: replace the narrow SellingCostPct with the broader
+      // TotalExitCostPct (= SellingCost + ExitBrokerFee + ExitLegalFee).
+      // When PR-EX's Exit Strategy section is present (income family),
+      // TotalExitCostPct exists as a derived named range and captures the
+      // full exit-cost stack. For deals where the new exit-strategy fields
+      // are at defaults (broker 2% / legal 0.5%), this lifts effective
+      // exit costs from 2% → 4.5% — more realistic for institutional sales.
       formula: (q) => q === ctx.totalQuarters
-        ? `=IFERROR(${colLetters[q - 1]}18*4/ExitCapRate*(1-SellingCostPct),0)`
+        ? `=IFERROR(${colLetters[q - 1]}18*4/ExitCapRate*(1-TotalExitCostPct),0)`
         : `=0`,
       format: NUMBER_FORMATS.currency,
     },
@@ -2160,6 +2175,70 @@ const buildDashboardSheet = (workbook, ctx) => {
     };
     sheet.getRow(row).height = 30;
   });
+
+  // ── Conditional formatting on the KPI tiles ──────────────────────────
+  // Operator directive 2026-05-11: make the Dashboard "informative,
+  // impactful" — colour the tiles by health so an IC reviewer reads the
+  // state in 2 seconds, not 20. Red = bad, amber = watch, green = OK.
+  //
+  // Same red / amber / green palette as the DSCR conditional formatting
+  // on the Cash Flow Engine sheet (consistency across the workbook).
+  const cfStyle = (fillColor) => ({
+    fill: FILL(palette.xlsx(fillColor)),
+    font: { color: { argb: palette.xlsx('paperElevated') }, bold: true, size: 16 },
+  });
+  if (ctx.dealFamily === 'income') {
+    // Income family layout: B4 = Stabilised NOI, B7 = Min DSCR.
+    // Stabilised NOI — green when positive, red when zero or negative
+    // (zero NOI = inputs not set OR cost structure overwhelming revenue).
+    sheet.addConditionalFormatting({
+      ref: 'B4:B4',
+      rules: [
+        { type: 'cellIs', operator: 'lessThanOrEqual', formulae: [0], style: cfStyle('dataNegative'), priority: 1 },
+        { type: 'cellIs', operator: 'greaterThan',     formulae: [0], style: cfStyle('dataPositive'), priority: 2 },
+      ],
+    });
+    // Min DSCR — same thresholds as Cash Flow DSCR row (red < 1.20, amber
+    // 1.20-1.50, green > 1.50). Matches institutional-grade convention.
+    sheet.addConditionalFormatting({
+      ref: 'B7:B7',
+      rules: [
+        { type: 'cellIs', operator: 'lessThan',     formulae: [1.2],     style: cfStyle('dataNegative'), priority: 1 },
+        { type: 'cellIs', operator: 'between',      formulae: [1.2, 1.5], style: cfStyle('dataWarning'),  priority: 2 },
+        { type: 'cellIs', operator: 'greaterThan',  formulae: [1.5],     style: cfStyle('dataPositive'), priority: 3 },
+      ],
+    });
+  } else {
+    // Development family layout: B7 = Gross Margin, D7 = Min DSCR,
+    // F4 = Project Net Cash Flow.
+    // Gross Margin — red if negative, amber if < 10%, green if ≥ 10%.
+    // 10% threshold matches the sanity-check banner's threshold.
+    sheet.addConditionalFormatting({
+      ref: 'B7:B7',
+      rules: [
+        { type: 'cellIs', operator: 'lessThan',         formulae: [0],    style: cfStyle('dataNegative'), priority: 1 },
+        { type: 'cellIs', operator: 'between',          formulae: [0, 0.10], style: cfStyle('dataWarning'),  priority: 2 },
+        { type: 'cellIs', operator: 'greaterThanOrEqual', formulae: [0.10], style: cfStyle('dataPositive'), priority: 3 },
+      ],
+    });
+    // Project Net Cash Flow (F4) — red negative, green positive.
+    sheet.addConditionalFormatting({
+      ref: 'F4:F4',
+      rules: [
+        { type: 'cellIs', operator: 'lessThan',     formulae: [0], style: cfStyle('dataNegative'), priority: 1 },
+        { type: 'cellIs', operator: 'greaterThanOrEqual', formulae: [0], style: cfStyle('dataPositive'), priority: 2 },
+      ],
+    });
+    // Min DSCR (D7) — same red/amber/green thresholds as Cash Flow.
+    sheet.addConditionalFormatting({
+      ref: 'D7:D7',
+      rules: [
+        { type: 'cellIs', operator: 'lessThan',     formulae: [1.2],     style: cfStyle('dataNegative'), priority: 1 },
+        { type: 'cellIs', operator: 'between',      formulae: [1.2, 1.5], style: cfStyle('dataWarning'),  priority: 2 },
+        { type: 'cellIs', operator: 'greaterThan',  formulae: [1.5],     style: cfStyle('dataPositive'), priority: 3 },
+      ],
+    });
+  }
 
   // Sources & Uses block — labels + values for the chart
   sheet.getCell('A11').value = 'Sources & Uses';
