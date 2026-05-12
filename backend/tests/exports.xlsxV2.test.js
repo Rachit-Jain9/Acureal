@@ -2487,5 +2487,99 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(byLabel['Layout Approval Duration']).toBe(9);
       });
     });
+
+    // ── PR-EX — Exit Strategy (family-conditional) ─────────────────────
+    // Closes the last gap from the 2026-05-11 directive ("deal structure
+    // and exit strategy"). Both families get an Exit Strategy section,
+    // but the labels and inputs differ by family:
+    //   - Income: REIT / strategic sale / refinance + broker/legal fees
+    //   - Development: progressive / bulk / hold + bulk discount + hold yrs
+    describe('PR-EX: Exit Strategy (family-conditional)', () => {
+      test('Development family — section appears with dev-specific options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext()); // default residential = dev
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const names = (wb.definedNames.model || []).map((n) => n.name);
+        for (const n of ['ExitStrategyType', 'BulkExitDiscountPct', 'HoldPostCompletionYears',
+                         'ExitBrokerFeePct', 'EffectiveExitFactor']) {
+          expect(names).toContain(n);
+        }
+        // Should NOT have income-specific named ranges
+        expect(names).not.toContain('ExitYearFromAcq');
+        expect(names).not.toContain('TotalExitCostPct');
+        expect(names).not.toContain('ImpliedNetExitValueCr');
+
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Exit Strategy Type']).toBe('outright_progressive');
+        expect(byLabel['Bulk Exit Discount']).toBeCloseTo(0.10, 4);
+        expect(byLabel['Hold Post-Completion Period']).toBe(1);
+      });
+
+      test('Income family — section appears with income-specific options', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const names = (wb.definedNames.model || []).map((n) => n.name);
+        for (const n of ['ExitStrategyType', 'ExitYearFromAcq', 'ExitBrokerFeePct',
+                         'ExitLegalFeePct', 'TotalExitCostPct', 'ImpliedNetExitValueCr']) {
+          expect(names).toContain(n);
+        }
+        // Should NOT have dev-specific named ranges
+        expect(names).not.toContain('BulkExitDiscountPct');
+        expect(names).not.toContain('HoldPostCompletionYears');
+        expect(names).not.toContain('EffectiveExitFactor');
+
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const byLabel = {};
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label) byLabel[label] = row.getCell(2).value;
+        });
+        expect(byLabel['Exit Strategy Type']).toBe('strategic_sale');
+        expect(byLabel['Broker Fee on Exit']).toBeCloseTo(0.02, 4);
+        expect(byLabel['Legal + DD Fee on Exit']).toBeCloseTo(0.005, 4);
+      });
+
+      test('Income family — Total Exit Cost is DERIVED = SellingCost + Broker + Legal', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Total Exit Cost')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe('=SellingCostPct+ExitBrokerFeePct+ExitLegalFeePct');
+      });
+
+      test('Development family — EffectiveExitFactor DERIVED branches on ExitStrategyType', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        let formulaValue = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Effective Exit Factor')) formulaValue = row.getCell(2).value;
+        });
+        expect(formulaValue).toBeTruthy();
+        expect(formulaValue.formula).toBe(
+          '=IF(ExitStrategyType="bulk_exit_completion",(1-BulkExitDiscountPct)*(1-ExitBrokerFeePct),(1-ExitBrokerFeePct))'
+        );
+      });
+    });
   });
 });

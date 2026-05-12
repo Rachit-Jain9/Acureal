@@ -953,6 +953,80 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ── Exit Strategy (PR-EX) ─────────────────────────────────────────────
+  // Operator directive 2026-05-11: make sheets specific to deal type / asset
+  // class / "deal structure and exit strategy". Pre-PR-EX the workbook had
+  // an "Exit Cap Rate" + "Selling Cost on Exit" pair buried inside the
+  // income-family OpEx section but no coherent exit-strategy disclosure.
+  //
+  // Indian institutional capital evaluates four broad exit paths:
+  //   • Income family:
+  //     - hold_to_perpetuity — operating asset held indefinitely (HNI portfolios)
+  //     - reit_exit          — sale into a REIT vehicle at stabilisation
+  //                            (Embassy / Mindspace / Brookfield REIT model)
+  //     - strategic_sale     — sale to another operator (typical 7-10yr hold)
+  //     - refinance_hold     — refinance debt at stabilisation, hold + cash out
+  //   • Development family:
+  //     - outright_progressive — sell units during construction (default)
+  //     - bulk_exit_completion — sell remaining inventory at OC at a discount
+  //     - hold_post_completion — complete then sell as a stabilised block
+  //
+  // PR-EX adds the strategy label + key exit-cost inputs + a derived
+  // "Total Exit Cost" disclosure. Informational only — the Phasing P&L
+  // continues to use the existing SellingCostPct + ExitCapRate. Operators
+  // explicitly pick the strategy so IC reviewers can sanity-check the
+  // model's implicit assumption against the stated plan.
+  const exitStrategyIncomeSection = {
+    title: 'Exit Strategy (Income Asset)',
+    rows: [
+      ['Exit Strategy Type',         'ExitStrategyType',
+        ctx.inputs.exitStrategyType || 'strategic_sale',
+        'hold_to_perpetuity / reit_exit / strategic_sale / refinance_hold', null],
+      ['Exit Year (from acquisition)','ExitYearFromAcq',
+        firstNumber(ctx.inputs.exitYearFromAcq, ctx.inputs.loanTermYears, 7),
+        'years (typical 7-10 BLR commercial)', NUMBER_FORMATS.integer],
+      ['Broker Fee on Exit',         'ExitBrokerFeePct',
+        toPctDecimal(firstNumber(ctx.inputs.exitBrokerFeePct, 0.02)),
+        '% of sale value (typical 1-3%)', NUMBER_FORMATS.percent],
+      ['Legal + DD Fee on Exit',     'ExitLegalFeePct',
+        toPctDecimal(firstNumber(ctx.inputs.exitLegalFeePct, 0.005)),
+        '% of sale value (typical 0.3-1%)', NUMBER_FORMATS.percent],
+      // Derived total: includes existing SellingCostPct + new broker + legal.
+      // Operator references this when sanity-checking the modeled reversion.
+      ['Total Exit Cost (derived)',  'TotalExitCostPct',
+        { formula: '=SellingCostPct+ExitBrokerFeePct+ExitLegalFeePct' },
+        '% of sale value (derived)', NUMBER_FORMATS.percent],
+      // Derived net exit value at the modeled stabilised value.
+      ['Implied Net Exit Value (Cr)','ImpliedNetExitValueCr',
+        { formula: '=IFERROR((B6/ExitCapRate)*(1-TotalExitCostPct),0)' },
+        'INR Cr (NOI ÷ cap × (1 − total exit cost))', NUMBER_FORMATS.currency],
+    ],
+  };
+
+  const exitStrategyDevSection = {
+    title: 'Exit Strategy (Development Asset)',
+    rows: [
+      ['Exit Strategy Type',         'ExitStrategyType',
+        ctx.inputs.exitStrategyType || 'outright_progressive',
+        'outright_progressive / bulk_exit_completion / hold_post_completion', null],
+      ['Bulk Exit Discount',         'BulkExitDiscountPct',
+        toPctDecimal(firstNumber(ctx.inputs.bulkExitDiscountPct, 0.10)),
+        '% discount on remaining inventory at OC (if bulk)', NUMBER_FORMATS.percent],
+      ['Hold Post-Completion Period','HoldPostCompletionYears',
+        firstNumber(ctx.inputs.holdPostCompletionYears, 1),
+        'years (typical 0-3 for hold_post_completion)', NUMBER_FORMATS.integer],
+      ['Broker Fee on Exit',         'ExitBrokerFeePct',
+        toPctDecimal(firstNumber(ctx.inputs.exitBrokerFeePct, 0.02)),
+        '% of unit sale (typical 1-3% in BLR resi)', NUMBER_FORMATS.percent],
+      // Derived: effective exit factor combines bulk discount + broker fee.
+      // When operator picks outright_progressive (default), bulk discount
+      // doesn't apply and the factor approximates (1 - broker).
+      ['Effective Exit Factor (derived)','EffectiveExitFactor',
+        { formula: '=IF(ExitStrategyType="bulk_exit_completion",(1-BulkExitDiscountPct)*(1-ExitBrokerFeePct),(1-ExitBrokerFeePct))' },
+        '% of gross revenue retained (derived)', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── Sponsor / LP Waterfall inputs (PR-D) ─────────────────────────────
   // Institutional deals split equity proceeds between the Sponsor (GP)
   // and the LP investors via a multi-tier waterfall. Standard structure:
@@ -1124,6 +1198,10 @@ const buildInputsSheet = (workbook, ctx) => {
     ...((['mixed_use', 'redevelopment'].includes(ctx.assetClass)) ? [mixedUseSection] : []),
     // PR-I16: Raw-land entitlement stages — only for raw_land.
     ...(ctx.assetClass === 'raw_land' ? [rawLandSection] : []),
+    // PR-EX: Exit Strategy — family-conditional. Income family sees the
+    // income variant (REIT / strategic sale / refinance / hold); development
+    // family sees the development variant (progressive / bulk / hold).
+    ...(ctx.dealFamily === 'income' ? [exitStrategyIncomeSection] : [exitStrategyDevSection]),
   ];
 
   let row = 5;
