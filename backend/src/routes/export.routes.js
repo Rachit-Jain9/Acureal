@@ -1186,6 +1186,7 @@ router.get(
         brandName: 'REDIP',
         userName: req.user?.name || 'REDIP',
         generatedAt: new Date().toISOString(),
+        strictValidation: useV2,
       });
       const xlsxSafeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
         .replace(/[^a-z0-9]/gi, '-')
