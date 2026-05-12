@@ -2609,3 +2609,25 @@ Reviewed ChatGPT/Grok remarks and the three REDIP workbook exports for Pointec, 
 ### What's left to do
 Monitor the next real REDIP export from production and compare it against the three sample cases; no manual user action is required for this patch.
 
+
+## 2026-05-12 — XLSX export QA, provenance, and hard-stop gate (PR #299)
+
+### What was worked on
+Finished the remaining ChatGPT/Grok XLSX export remarks as one institutional-grade export batch. The v2 Excel export now blocks misleading downloads when core underwriting inputs are missing, adds a visible QA and Sources tab, records source/provenance comments on input cells, adds filterable source tables, preserves cached values for key formula cells, adds date-based XIRR/XNPV checks, and validates the generated XLSX package before sending it to the browser.
+
+### Plain-English recap
+- Incomplete models like Pointec can no longer download as if they are decision-ready when area, rent, or core cost inputs are missing.
+- Every exported workbook now has a QA and Sources tab where reviewers can filter checks and see where key inputs came from.
+- Input cells now carry source/provenance comments, and source links appear when REDIP has a usable URL.
+- Date-based XIRR/XNPV checks now sit inside the cash-flow engine so returns are not limited to simple quarterly IRR/NPV rows.
+
+### PRs opened / merged
+- PR #299 — `fix(exports): add XLSX QA provenance gate` — opened from `codex/xlsx-export-qa-provenance`; CI/merge/deploy handled from the same branch after this log entry.
+
+### Validation
+- XLSX v2 focused suite: 136 tests passed.
+- Full backend suite: 1,506 tests passed.
+
+### What's left to do
+No manual user action is required for this patch. The next useful check is downloading one real production workbook after deploy and confirming the QA and Sources tab reads cleanly for a complete model.
+
