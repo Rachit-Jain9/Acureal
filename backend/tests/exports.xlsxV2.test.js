@@ -2690,5 +2690,140 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(refsCovered.has('F4:F4')).toBe(false);
       });
     });
+
+    // ── Categorical dropdowns (data validation) ────────────────────────
+    // Operator directive 2026-05-11: "everything accurate, specific,
+    // credible, precise, relevant, correct, reliable." All categorical
+    // input cells get Excel-native list validation so operators can't
+    // typo a category and downstream IF-formulas can't surface invalid
+    // branches silently.
+    describe('Inputs sheet categorical input dropdowns (dataValidation)', () => {
+      // Helper: find the value cell of a row by its named range / label.
+      const findValueCellByLabel = (inputsSheet, expectedLabel) => {
+        let cell = null;
+        inputsSheet.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === expectedLabel && !cell) cell = row.getCell(2);
+        });
+        return cell;
+      };
+
+      test('Khata Status — dropdown with 4 options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Khata Status');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation).toBeTruthy();
+        expect(cell.dataValidation.type).toBe('list');
+        expect(cell.dataValidation.formulae[0]).toBe('"A_khata,B_khata,mixed,not_applicable"');
+      });
+
+      test('Indexation Regime (Taxation) — dropdown with 2 options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Indexation Regime');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation).toBeTruthy();
+        expect(cell.dataValidation.formulae[0])
+          .toBe('"post_2024_no_indexation,pre_2024_with_indexation"');
+      });
+
+      test('Rate Benchmark — dropdown with 4 options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Rate Benchmark');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation.formulae[0]).toBe('"Repo,MCLR,Fixed,Marginal"');
+      });
+
+      test('Deal Structure label — dropdown for development family', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext()); // residential = dev
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Deal Structure');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation.formulae[0])
+          .toBe('"outright_purchase,jda_revenue_share,jda_area_share,development_management"');
+      });
+
+      test('Exit Strategy Type — income family has income-specific options', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Exit Strategy Type');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation.formulae[0])
+          .toBe('"strategic_sale,reit_exit,hold_to_perpetuity,refinance_hold"');
+      });
+
+      test('Exit Strategy Type — development family has dev-specific options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext()); // dev
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Exit Strategy Type');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation.formulae[0])
+          .toBe('"outright_progressive,bulk_exit_completion,hold_post_completion"');
+      });
+
+      test('Loan Type — dropdown with 4 options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Loan Type');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation.formulae[0])
+          .toBe('"Construction Finance,LRD (Lease Rental Discounting),Project Finance,Mezzanine"');
+      });
+
+      test('Lender Type — dropdown with 11 options', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Lender Type');
+        expect(cell).toBeTruthy();
+        const formulae = cell.dataValidation.formulae[0];
+        // Includes a representative sample
+        expect(formulae).toContain('HDFC Bank');
+        expect(formulae).toContain('Edelweiss');
+        expect(formulae).toContain('Piramal');
+        expect(formulae).toContain('Other');
+      });
+
+      test('Numeric cells (e.g. Land Cost) do NOT get a dropdown', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Land Cost');
+        expect(cell).toBeTruthy();
+        expect(cell.dataValidation).toBeFalsy();
+      });
+
+      test('Dropdown surfaces a friendly error when an invalid value is entered', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Khata Status');
+        expect(cell.dataValidation.showErrorMessage).toBe(true);
+        expect(cell.dataValidation.errorTitle).toBe('Invalid option');
+        expect(cell.dataValidation.error).toContain('A_khata');
+      });
+    });
   });
 });

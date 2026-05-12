@@ -70,6 +70,44 @@ const SHEETS = {
 
 const FILL = (color) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: color } });
 
+// ── Categorical input dropdowns (data validation lists) ─────────────────
+// Operator directive 2026-05-11: "Make sure everything is accurate,
+// specific, credible, precise, relevant, correct, reliable." Adding
+// Excel-native dropdown lists to all categorical input cells prevents
+// typos, makes valid options explicit at the cell level, and gives
+// operators autocomplete inside Excel.
+//
+// Keyed by the workbook named-range — when a section row's `name` lands
+// in this map, the input-section render loop applies dataValidation
+// (type: 'list') with the listed options. Empty/missing entries skip
+// the dropdown (numeric or free-form text inputs).
+//
+// Excel's list-validation formula syntax: each option enclosed in
+// double quotes, joined by commas, wrapped in a single string with
+// surrounding quotes: `"option1,option2,option3"`. ExcelJS expects this
+// as a one-element array in `formulae`.
+const CATEGORICAL_OPTIONS = {
+  // Khata status (PR-I8) — A-khata vs B-khata is a major BLR valuation
+  // factor; categorical fixed.
+  KhataStatus: ['A_khata', 'B_khata', 'mixed', 'not_applicable'],
+  // Deal structure (PR-I3) — JDA / outright / DM.
+  DealStructureLabel: ['outright_purchase', 'jda_revenue_share', 'jda_area_share', 'development_management'],
+  // Lender ecosystem (PR-I6) — Indian RE debt providers.
+  LenderType: ['HDFC Bank', 'HDFC Capital', 'ICICI Bank', 'SBI', 'Axis Bank', 'Edelweiss', 'IIFL', 'Piramal', 'Kotak', 'Bandhan', 'Other'],
+  RateBenchmark: ['Repo', 'MCLR', 'Fixed', 'Marginal'],
+  LoanType: ['Construction Finance', 'LRD (Lease Rental Discounting)', 'Project Finance', 'Mezzanine'],
+  // Taxation (PR-I7) — pre/post-Jul-2024 indexation regime.
+  IndexationRegime: ['post_2024_no_indexation', 'pre_2024_with_indexation'],
+  // Milestone escalation (PR-I11) — residential/villas/mixed_use only.
+  MilestoneEscalationModel: ['continuous_per_year', 'milestone_anchored_blr'],
+  // Raw-land entitlement (PR-I16) — pipeline stage.
+  RawLandCurrentStage: ['title_diligence', 'conversion', 'layout_approval', 'sale_ready'],
+  // Exit strategy (PR-EX) — family-conditional. Income variant.
+  // Development family overrides this map entry at section-build time
+  // (see resolveExitStrategyOptions below).
+  ExitStrategyType: ['strategic_sale', 'reit_exit', 'hold_to_perpetuity', 'refinance_hold', 'outright_progressive', 'bulk_exit_completion', 'hold_post_completion'],
+};
+
 const NUMBER_FORMATS = {
   currency: '#,##0.00;[Red](#,##0.00);–',
   percent: '0.0%;[Red](0.0%);–',
@@ -1237,6 +1275,28 @@ const buildInputsSheet = (workbook, ctx) => {
       } else {
         styleInputCell(valueCell);
         if (format) valueCell.numFmt = format;
+      }
+      // Categorical dropdown (PR-DD) — when the named range is one of the
+      // entries in CATEGORICAL_OPTIONS, apply Excel's list-validation
+      // so operators get a dropdown arrow + autocomplete + no-typo guarantee.
+      // ExitStrategyType has two sets of options depending on family; use
+      // a context-aware resolution that picks the right subset.
+      let options = CATEGORICAL_OPTIONS[name];
+      if (name === 'ExitStrategyType') {
+        options = ctx.dealFamily === 'income'
+          ? ['strategic_sale', 'reit_exit', 'hold_to_perpetuity', 'refinance_hold']
+          : ['outright_progressive', 'bulk_exit_completion', 'hold_post_completion'];
+      }
+      if (options && !isDerivedFormula) {
+        valueCell.dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`"${options.join(',')}"`],
+          showErrorMessage: true,
+          errorStyle: 'warning',
+          errorTitle: 'Invalid option',
+          error: `Pick one of: ${options.join(' / ')}`,
+        };
       }
       sheet.getCell(`C${row}`).value = unit;
       styleLabelCell(sheet.getCell(`C${row}`));
