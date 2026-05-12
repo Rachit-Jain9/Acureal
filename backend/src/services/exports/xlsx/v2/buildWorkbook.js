@@ -31,6 +31,7 @@
  */
 
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const { injectChartsIntoXlsx } = require('./chartInjector');
 const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
@@ -128,6 +129,11 @@ const firstNumber = (...values) => {
     if (parsed !== null) return parsed;
   }
   return null;
+};
+
+const positiveOrDefault = (value, fallback) => {
+  const parsed = num(value);
+  return parsed && parsed > 0 ? parsed : fallback;
 };
 
 // Normalize a percent-typed input to its decimal-fraction representation.
@@ -408,10 +414,10 @@ const buildInputsSheet = (workbook, ctx) => {
       // (carpet × sale rate, RERA disclosures, etc.) without changing the
       // revenue math.
       ['Loading Factor (Super Built-up ÷ Carpet)', 'LoadingFactor',
-        firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio, 1.25),
+        positiveOrDefault(firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio), 1.25),
         'ratio', NUMBER_FORMATS.multiple],
       ['Carpet Area (RERA marketing area)', 'CarpetAreaSqft',
-        { formula: '=SaleableAreaSqft/LoadingFactor' },
+        { formula: '=IFERROR(SaleableAreaSqft/LoadingFactor,0)' },
         'sqft (derived)', NUMBER_FORMATS.integer],
       ['Floor Space Index (FSI)', 'FSI',                 firstNumber(ctx.property.existing_fsi, ctx.inputs.fsi, 1.5), 'ratio', NUMBER_FORMATS.multiple],
     ],
@@ -1404,7 +1410,7 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'Less: Vacancy & Credit Loss',
-      formula: (q) => `=-${colLetter(q + 1)}8*VacancyPct*(1-${colLetter(q + 1)}6)`,
+      formula: (q) => `=-${colLetter(q + 1)}8*${colLetter(q + 1)}6*VacancyPct`,
       format: NUMBER_FORMATS.currency,
     },
     {
@@ -1414,7 +1420,7 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'EGR — Effective Gross Revenue',
-      formula: (q) => `=${colLetter(q + 1)}8+${colLetter(q + 1)}9+${colLetter(q + 1)}10`,
+      formula: (q) => `=${colLetter(q + 1)}8*${colLetter(q + 1)}6+${colLetter(q + 1)}9+${colLetter(q + 1)}10`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
@@ -2158,6 +2164,7 @@ const buildDashboardSheet = (workbook, ctx) => {
     return s;
   };
   const totalCol = colLetter(totalQ + 2);
+  const totalProjectCostRef = 'TotalProjectCostCr';
 
   // Asset-class-aware KPI tiles. Each tile takes BOTH a kernel-stored
   // value (deal record) AND a formula fallback. When the kernel has
@@ -2178,13 +2185,13 @@ const buildDashboardSheet = (workbook, ctx) => {
         // Top row — operating fundamentals (Phasing section: rows unchanged
         // by restructure; e.g. NOI is at row 18 in the upper Phasing block).
         { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Modeled Cap Rate',              kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr),0)`, format: NUMBER_FORMATS.percent },
+        { row: 4, col: 'C', label: 'Stabilized Yield on Cost',      kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/${totalProjectCostRef},0)`, format: NUMBER_FORMATS.percent },
         { row: 4, col: 'E', label: 'Exit Cap Rate',                 kernel: null,                  formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent },
         // Bottom row — investor returns. Cash Flow section: rows shift by
         // cfShift (income cfOffset=20 → row 10 becomes row 30, row 9 → 29,
         // row 11 → 31).
         { row: 7, col: 'A', label: 'Min DSCR',                      kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(10)}`,                                                                         format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C${cfShift(9)}/((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
+        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C${cfShift(9)}/(${totalProjectCostRef}*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
         { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}${cfShift(11)}`,                                                                         format: NUMBER_FORMATS.currency },
       ]
     : [
@@ -2192,7 +2199,7 @@ const buildDashboardSheet = (workbook, ctx) => {
         // rows shifted by cfShift (dev cfOffset=26 → row 6 → 32, row 7 → 33,
         // row 8 → 34, row 12 → 38, row 13 → 39).
         { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         kernel: k.totalRevenue,       formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=-${cashflow}!${totalCol}${cfShift(6)}+(-${cashflow}!${totalCol}${cfShift(7)})`,                                          format: NUMBER_FORMATS.currency },
+        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=${totalProjectCostRef}`,                                          format: NUMBER_FORMATS.currency },
         { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}${cfShift(8)}`,                                                                        format: NUMBER_FORMATS.currency },
         { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}${cfShift(8)}/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
         { row: 7, col: 'C', label: 'Min DSCR',                        kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(13)}`,                                                                      format: NUMBER_FORMATS.multiple },
@@ -2307,11 +2314,13 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getRow(11).height = 22;
 
   const su = [
-    ['Source: Equity',    `=MAX(0,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1-DebtLTV))`],
-    ['Source: Debt',      `=(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV`],
-    ['Use: Land',         `=LandCostCr`],
-    ['Use: Construction', `=ConstructionCostPerSqft*SaleableAreaSqft/10000000`],
-    ['Use: Approvals',    `=ApprovalCostCr`],
+    ['Source: Equity',             `=MAX(0,${totalProjectCostRef}*(1-DebtLTV))`],
+    ['Source: Debt',               `=${totalProjectCostRef}*DebtLTV`],
+    ['Use: Land',                  `=LandCostCr`],
+    ['Use: Construction',          `=ConstructionCostPerSqft*SaleableAreaSqft/10000000`],
+    ['Use: Approvals + Premium',   `=ApprovalCostCr+PremiumFSICostCr`],
+    ['Use: Soft Costs',            `='${SHEETS.calculations}'!$B$24`],
+    ['Use: Statutory Levies',      `='${SHEETS.calculations}'!$B$27`],
   ];
   su.forEach(([label, formula], idx) => {
     const r = 12 + idx;
@@ -2428,12 +2437,33 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getCell('A23').protection = { locked: true };
   sheet.getRow(23).height = 28;
 
+  const isIncomeDashboard = ctx.dealFamily === 'income';
+  const incomeNoiCrFormula = (rentVariance, occupancyVariance, annualized = false) => {
+    const occupancy = `MAX(0,MIN(1,OccupancyPct*(1+${occupancyVariance})))`;
+    const pgi = `(SaleableAreaSqft*BaseRentPerSqftMonth*(1+${rentVariance})*3/10000000)`;
+    const otherIncome = `(SaleableAreaSqft*OtherIncomePerSqft*${occupancy}/4/10000000)`;
+    const egr = `(${pgi}*${occupancy}*(1-VacancyPct)+${otherIncome})`;
+    const opex = `(${egr}*(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct+CapExReservePct)+SaleableAreaSqft*PropertyTaxPerSqftYr/4/10000000)`;
+    const noi = `(${egr}-${opex})`;
+    return annualized ? `(${noi}*4)` : noi;
+  };
+  const developmentRevenueCrFormula = (rateVariance) => `((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateVariance}))`;
+  const sensitivityFormula = (columnVariance, rowVariance) => {
+    if (isIncomeDashboard) {
+      return `=IFERROR(${incomeNoiCrFormula(columnVariance, rowVariance, true)}/${totalProjectCostRef},0)`;
+    }
+    const revenue = developmentRevenueCrFormula(columnVariance);
+    return `=IFERROR((${revenue}-${totalProjectCostRef}*(1+${rowVariance}))/${revenue},0)`;
+  };
+
   // ── Sensitivity grid — Project margin under sale-rate × cost variance ──
   // Two-axis 5x5 with conditional formatting (color scale). No native chart
   // (ExcelJS chart support is patchy); a coloured cell grid renders
   // identically in every Excel version and prints correctly.
   sheet.mergeCells('A24:F24');
-  sheet.getCell('A24').value = 'Sensitivity — Project Margin (sale-rate × construction-cost variance)';
+  sheet.getCell('A24').value = isIncomeDashboard
+    ? 'Sensitivity — Stabilized Yield on Cost (rent × occupancy variance)'
+    : 'Sensitivity — Project Margin (sale-rate × project-cost variance)';
   styleSectionTitle(sheet.getCell('A24'));
   sheet.getRow(24).height = 22;
 
@@ -2442,7 +2472,7 @@ const buildDashboardSheet = (workbook, ctx) => {
   const costVariances = [-0.10, -0.05, 0, 0.05, 0.10]; // constr cost variance
 
   // Top-left cell — corner label
-  sheet.getCell('A25').value = 'Cost ↓ × Rate →';
+  sheet.getCell('A25').value = isIncomeDashboard ? 'Occupancy x Rent' : 'Cost x Rate';
   sheet.getCell('A25').font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
   sheet.getCell('A25').alignment = { vertical: 'middle', horizontal: 'center' };
   sheet.getCell('A25').fill = FILL(palette.xlsx('inkDeep'));
@@ -2472,12 +2502,7 @@ const buildDashboardSheet = (workbook, ctx) => {
 
     saleVariances.forEach((rateV, cIdx) => {
       const cell = sheet.getCell(r, 2 + cIdx);
-      // Margin = (Revenue × (1 + saleVar) − Cost × (1 + costVar)) / Revenue × (1 + saleVar)
-      const formula =
-        `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateV})` +
-        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+IF(ROW()-26=${rIdx},${costVariances[rIdx]},0))) ` +
-        `/((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateV})),0)`;
-      cell.value = { formula };
+      cell.value = { formula: sensitivityFormula(rateV, costVariances[rIdx]) };
       cell.numFmt = NUMBER_FORMATS.percent;
       cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('ink') } };
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -2521,13 +2546,15 @@ const buildDashboardSheet = (workbook, ctx) => {
   //     at base. Low-case = B28 (rate -10%) minus base; High-case = F28
   //     (rate +10%) minus base. Low usually negative, high usually
   //     positive (more revenue → higher margin).
-  //   Construction Cost ±10% → varies COST, holds rate at base. High
+  //   Project Cost ±10% → varies COST, holds rate at base. High
   //     cost = D30 (cost +10%) is the LOW-margin case; low cost = D26
   //     (cost -10%) is the HIGH-margin case. So our "Low Case Δ" for
   //     this driver = D30 - D28 (negative); "High Case Δ" = D26 - D28
   //     (positive).
   sheet.mergeCells('H24:M24');
-  sheet.getCell('H24').value = 'Driver Impact on Project Margin (tornado)';
+  sheet.getCell('H24').value = isIncomeDashboard
+    ? 'Driver Impact on Stabilized Yield on Cost (tornado)'
+    : 'Driver Impact on Project Margin (tornado)';
   styleSectionTitle(sheet.getCell('H24'));
   sheet.getRow(24).height = 22;
 
@@ -2550,30 +2577,49 @@ const buildDashboardSheet = (workbook, ctx) => {
   });
   sheet.getRow(25).height = 22;
 
-  // Row 26: Selling Rate driver; Row 27: Construction Cost driver.
+  // Row 26: Selling Rate/Rent driver; Row 27: Project Cost/Occupancy driver.
   // Order: longest-range driver on top. Since the grid is symmetric in
   // its sale-rate and cost-rate dimensions but margin maths is asymmetric
   // (revenue × (1+rate) vs cost × (1+cost)), the sale-rate driver tends
   // to dominate. We let the chart render in the data-row order without
   // dynamic sorting.
-  const drivers = [
-    {
-      row: 26,
-      label: 'Selling Rate ±10%',
-      lowDeltaFormula: '=B28-D28',     // rate -10% margin minus base margin
-      highDeltaFormula: '=F28-D28',    // rate +10% margin minus base margin
-      lowMarginRef: 'B28',
-      highMarginRef: 'F28',
-    },
-    {
-      row: 27,
-      label: 'Construction Cost ±10%',
-      lowDeltaFormula: '=D30-D28',     // cost +10% margin minus base margin (worst case)
-      highDeltaFormula: '=D26-D28',    // cost -10% margin minus base margin (best case)
-      lowMarginRef: 'D30',
-      highMarginRef: 'D26',
-    },
-  ];
+  const drivers = isIncomeDashboard
+    ? [
+      {
+        row: 26,
+        label: 'Rent +/-10%',
+        lowDeltaFormula: '=B28-D28',
+        highDeltaFormula: '=F28-D28',
+        lowMarginRef: 'B28',
+        highMarginRef: 'F28',
+      },
+      {
+        row: 27,
+        label: 'Occupancy +/-10%',
+        lowDeltaFormula: '=D26-D28',
+        highDeltaFormula: '=D30-D28',
+        lowMarginRef: 'D26',
+        highMarginRef: 'D30',
+      },
+    ]
+    : [
+      {
+        row: 26,
+        label: 'Selling Rate +/-10%',
+        lowDeltaFormula: '=B28-D28',
+        highDeltaFormula: '=F28-D28',
+        lowMarginRef: 'B28',
+        highMarginRef: 'F28',
+      },
+      {
+        row: 27,
+        label: 'Project Cost +/-10%',
+        lowDeltaFormula: '=D30-D28',
+        highDeltaFormula: '=D26-D28',
+        lowMarginRef: 'D30',
+        highMarginRef: 'D26',
+      },
+    ];
   drivers.forEach(({ row, label, lowDeltaFormula, highDeltaFormula, lowMarginRef, highMarginRef }) => {
     // Driver name (col H)
     const labelCell = sheet.getCell(`H${row}`);
@@ -2620,7 +2666,9 @@ const buildDashboardSheet = (workbook, ctx) => {
   // Base IRR / Base Margin label below the data table — anchors what
   // the chart's 0 axis represents.
   sheet.mergeCells('H28:M28');
-  sheet.getCell('H28').value = 'Bars centred on Base Case (sale-rate 0% × cost 0%). Bars extend left (downside) and right (upside) from that base.';
+  sheet.getCell('H28').value = isIncomeDashboard
+    ? 'Bars centred on Base Case (rent 0% x occupancy 0%). Bars extend left (downside) and right (upside) from that base.'
+    : 'Bars centred on Base Case (sale-rate 0% x cost 0%). Bars extend left (downside) and right (upside) from that base.';
   sheet.getCell('H28').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell('H28').alignment = { vertical: 'top', wrapText: true };
   sheet.getRow(28).height = 26;
@@ -2637,6 +2685,12 @@ const buildDashboardSheet = (workbook, ctx) => {
     { col: 'E', name: 'BEAR CASE',  rate: -0.10, cost: 0.10,  accent: palette.xlsx('dataNegative') },
   ];
   scenarios.forEach((sc) => {
+    const scenarioMetricFormula = isIncomeDashboard
+      ? `=IFERROR(${incomeNoiCrFormula(sc.rate, sc.cost, true)}/${totalProjectCostRef},0)`
+      : `=IFERROR((${developmentRevenueCrFormula(sc.rate)}-${totalProjectCostRef}*(1+${sc.cost}))/${developmentRevenueCrFormula(sc.rate)},0)`;
+    const scenarioValueFormula = isIncomeDashboard
+      ? `=${incomeNoiCrFormula(sc.rate, sc.cost, true)}`
+      : `=${developmentRevenueCrFormula(sc.rate)}-${totalProjectCostRef}*(1+${sc.cost})`;
     // Header
     const hdr = sheet.getCell(`${sc.col}33`);
     hdr.value = sc.name;
@@ -2648,18 +2702,13 @@ const buildDashboardSheet = (workbook, ctx) => {
 
     // Margin
     const marginLabel = sheet.getCell(`${sc.col}34`);
-    marginLabel.value = 'Margin';
+    marginLabel.value = isIncomeDashboard ? 'Yield on Cost' : 'Margin';
     marginLabel.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
     marginLabel.alignment = { horizontal: 'left' };
     marginLabel.fill = FILL(palette.xlsx('paper'));
     marginLabel.protection = { locked: true };
     const marginVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}34`);
-    marginVal.value = {
-      formula:
-        `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})` +
-        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+${sc.cost})) ` +
-        `/((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})),0)`,
-    };
+    marginVal.value = { formula: scenarioMetricFormula };
     marginVal.numFmt = NUMBER_FORMATS.percent;
     marginVal.font = { name: FONT, size: 14, bold: true, color: { argb: sc.accent } };
     marginVal.alignment = { horizontal: 'right' };
@@ -2668,17 +2717,13 @@ const buildDashboardSheet = (workbook, ctx) => {
 
     // Profit
     const profitLabel = sheet.getCell(`${sc.col}35`);
-    profitLabel.value = 'Profit (Cr)';
+    profitLabel.value = isIncomeDashboard ? 'Annual NOI (Cr)' : 'Profit (Cr)';
     profitLabel.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
     profitLabel.alignment = { horizontal: 'left' };
     profitLabel.fill = FILL(palette.xlsx('paper'));
     profitLabel.protection = { locked: true };
     const profitVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}35`);
-    profitVal.value = {
-      formula:
-        `=(SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})` +
-        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+${sc.cost})`,
-    };
+    profitVal.value = { formula: scenarioValueFormula };
     profitVal.numFmt = NUMBER_FORMATS.currency;
     profitVal.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('ink') } };
     profitVal.alignment = { horizontal: 'right' };
@@ -2759,7 +2804,6 @@ const buildDashboardSheet = (workbook, ctx) => {
 
   // Conditional-format data bars on each metric column — inline bar chart
   // per cell. ExcelJS data-bar config requires `cfvo` min/max anchors.
-  const dataBarColors = [palette.xlsx('plum'), palette.xlsx('accent'), palette.xlsx('dataPositive'), palette.xlsx('mutedHigh')];
   for (let col = 2; col <= 5; col += 1) {
     const startCell = `${colLetter(col)}39`;
     const endCell = `${colLetter(col)}${38 + trendQuarters}`;
@@ -2772,7 +2816,7 @@ const buildDashboardSheet = (workbook, ctx) => {
             { type: 'min' },
             { type: 'max' },
           ],
-          color: { argb: palette.xlsx(['plum', 'accent', 'dataPositive', 'mutedHigh'][col - 2]) },
+          color: { argb: palette.xlsx(['inkDeep', 'accent', 'dataPositive', 'mutedHigh'][col - 2]) },
           gradient: true,
           priority: col,
         }],
@@ -2801,7 +2845,7 @@ const buildDashboardSheet = (workbook, ctx) => {
 
     const wfRows = [
       ['Total Project Profit (modeled)',
-        `=(SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)`,
+        `=${developmentRevenueCrFormula(0)}-${totalProjectCostRef}`,
         'Total profit before split — base case, mid-period escalation',
       ],
       ['Developer Share',
@@ -2826,7 +2870,7 @@ const buildDashboardSheet = (workbook, ctx) => {
       const valCell = sheet.getCell(`B${r}`);
       valCell.value = { formula };
       valCell.numFmt = NUMBER_FORMATS.currency;
-      valCell.font = { name: FONT, size: idx === 0 ? 12 : 11, bold: true, color: { argb: idx === 1 ? palette.xlsx('plum') : idx === 2 ? palette.xlsx('accent') : palette.xlsx('inkDeep') } };
+      valCell.font = { name: FONT, size: idx === 0 ? 12 : 11, bold: true, color: { argb: idx === 1 ? palette.xlsx('inkDeep') : idx === 2 ? palette.xlsx('accent') : palette.xlsx('inkDeep') } };
       valCell.alignment = { horizontal: 'right' };
       valCell.fill = FILL(palette.xlsx('paperElevated'));
       sheet.getCell(`C${r}`).value = note;
@@ -3911,6 +3955,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   workbook.subject = `${ctx.assetClass || 'Generic'} financial model`;
   workbook.description = 'REDIP investor-grade workbook (v2). Investor-grade — verify all inputs.';
   workbook.company = ctx.brandName;
+  workbook.calcProperties.fullCalcOnLoad = true;
 
   // Sheet build order matches the post-restructure 7-sheet directive:
   //   1. Dashboard               (investor-facing KPIs + charts; FIRST)
@@ -3946,6 +3991,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   definedNames.forEach(({ name, ref }) => {
     workbook.definedNames.add(ref, name);
   });
+  workbook.definedNames.add(`'${SHEETS.calculations}'!$B$28`, 'TotalProjectCostCr');
 
   return workbook;
 };
@@ -3957,7 +4003,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
  *
  * Cell positions here MUST stay in sync with buildDashboardSheet() —
  * the chart formulas point at exact cells produced by that builder.
- * Any movement of the Sources & Uses block (rows 12-16) or the Quarterly
+ * Any movement of the Sources & Uses block (rows 12-18) or the Quarterly
  * Trend table (rows 37-53) needs to be reflected here.
  */
 const buildDashboardChartSpecs = (ctx) => {
@@ -3965,16 +4011,16 @@ const buildDashboardChartSpecs = (ctx) => {
   const dashName = SHEETS.dashboard;
 
   // 1. Uses Breakdown doughnut (always populated — Land + Construction +
-  //    Approvals at rows 14-16). Sources at rows 12-13 are intentionally
+  //    Approvals/FSI + Soft Costs + Statutory Levies at rows 14-18). Sources at rows 12-13 are intentionally
   //    excluded from the doughnut; "Sources & Uses" as a 5-slice donut
   //    mixes the inflow side with the outflow side and reads poorly.
   specs.push({
     type: 'doughnut',
     title: 'Uses Breakdown',
     sheetName: dashName,
-    categoriesRange: '$A$14:$A$16',
-    valuesRange: '$B$14:$B$16',
-    colours: ['0E1B2C', 'B5793C', '0F7B5A'], // inkDeep / accent / dataPositive
+    categoriesRange: '$A$14:$A$18',
+    valuesRange: '$B$14:$B$18',
+    colours: ['0E1B2C', 'B5793C', '0F7B5A', '6B7280', 'B23A48'], // inkDeep / accent / dataPositive / muted / dataNegative
     anchor: { fromCol: 7, fromRow: 10, widthCols: 6, heightRows: 12 },
   });
 
@@ -4035,7 +4081,9 @@ const buildDashboardChartSpecs = (ctx) => {
   //    the driver-impact tornado in the same eye span.
   specs.push({
     type: 'tornado',
-    title: 'Sensitivity — Driver Impact (Δ from base margin)',
+    title: ctx.dealFamily === 'income'
+      ? 'Sensitivity — Driver Impact (delta from base yield)'
+      : 'Sensitivity — Driver Impact (delta from base margin)',
     sheetName: dashName,
     categoriesRange: '$H$26:$H$27',
     lowValuesRange: '$I$26:$I$27',
@@ -4046,6 +4094,24 @@ const buildDashboardChartSpecs = (ctx) => {
   });
 
   return specs;
+};
+
+const stripLeadingEqualsFromWorksheetFormulas = async (xlsxBuffer) => {
+  const zip = await JSZip.loadAsync(xlsxBuffer);
+  const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
+  let changed = false;
+
+  await Promise.all(sheetFiles.map(async (file) => {
+    const xml = await file.async('string');
+    const next = xml.replace(/(<f(?:\s[^>]*)?>)=/g, '$1');
+    if (next !== xml) {
+      zip.file(file.name, next);
+      changed = true;
+    }
+  }));
+
+  if (!changed) return xlsxBuffer;
+  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
 };
 
 /**
@@ -4062,17 +4128,17 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const xlsxBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
 
   const chartSpecs = buildDashboardChartSpecs(ctx);
-  if (chartSpecs.length === 0) return xlsxBuffer;
+  if (chartSpecs.length === 0) return stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
 
   try {
-    // Dashboard is always the 4th sheet in our generator (Inputs / Phasing
-    // / Cash Flow / Dashboard / Calculations). ExcelJS assigns sheet files
-    // by position so this maps deterministically to xl/worksheets/sheet4.xml.
-    return await injectChartsIntoXlsx(xlsxBuffer, {
+    // Dashboard is intentionally the first worksheet, so ExcelJS maps it to
+    // xl/worksheets/sheet1.xml.
+    const withCharts = await injectChartsIntoXlsx(xlsxBuffer, {
       targetSheetName: SHEETS.dashboard,
-      targetSheetFile: 'sheet4.xml',
+      targetSheetFile: 'sheet1.xml',
       charts: chartSpecs,
     });
+    return stripLeadingEqualsFromWorksheetFormulas(withCharts);
   } catch (err) {
     // Chart injection is best-effort. If anything goes wrong (a future
     // template change shifts the sheet position, an XML structure shifts,
@@ -4082,7 +4148,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       // eslint-disable-next-line no-console
       console.warn('[xlsx.v2] chart injection failed, returning un-enhanced workbook:', err.message);
     }
-    return xlsxBuffer;
+    return stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
   }
 };
 
@@ -4093,6 +4159,7 @@ module.exports = {
     buildContext,
     buildDealWorkbookV2Workbook,
     buildDashboardChartSpecs,
+    stripLeadingEqualsFromWorksheetFormulas,
     SHEETS,
     NUMBER_FORMATS,
   },

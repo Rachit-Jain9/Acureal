@@ -2583,3 +2583,29 @@ After this batch, the original handoff doc has only the operator-paused Tier 1 #
    - Workspace / Team page + invite flow for adding user #2.
    - Existing-user re-acceptance modal when a new legal-doc version publishes.
 
+
+## 2026-05-12 — XLSX export integrity fixes (PR #298)
+
+### What was worked on
+Reviewed ChatGPT/Grok remarks and the three REDIP workbook exports for Pointec, Jigani, and Commercial Retail. Fixed the highest-risk workbook credibility issues: bad workbook XML/color output, broken carpet-area math when loading factor is zero, mismatched Dashboard project-cost formulas, income-asset sensitivity logic that still behaved like a development model, and chart injection targeting the wrong worksheet.
+
+### Plain-English recap
+- Excel exports should now open more reliably in spreadsheet tools.
+- Jigani-style exports no longer turn zero loading factor into a broken carpet-area calculation.
+- Dashboard cost numbers now point to one project-cost source instead of disagreeing across tiles and Sources & Uses.
+- Income deals now show rent, occupancy, annual NOI, and yield-on-cost logic instead of apartment sale-rate/profit logic.
+
+### PRs opened / merged
+- PR #298 — `fix(exports): harden XLSX workbook integrity` — opened; CI/merge/deploy handled from the same branch after this log entry.
+
+### Validation
+- Backend: 1,501 tests passed.
+- XLSX v2 focused suite: 131 tests passed.
+- Generated Jigani-like, Pointec-like, and retail-like workbooks passed XML/openpyxl checks.
+- Frontend build passed; frontend tests passed (360).
+- Financial kernel build passed; financial kernel tests passed (410 passed, 1 skipped).
+- Migration lint passed; high/critical npm audits passed.
+
+### What's left to do
+Monitor the next real REDIP export from production and compare it against the three sample cases; no manual user action is required for this patch.
+
