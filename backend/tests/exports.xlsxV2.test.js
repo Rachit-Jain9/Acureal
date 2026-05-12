@@ -544,15 +544,13 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // The fix: collection_q = totalContractedSales × CollectionPct ×
     // constructionThisQuarter / totalConstruction. Each quarter's
     // collection mirrors construction progress proportionally.
-    // Regression: Dashboard headline KPIs (Total Revenue, Total Cost,
-    // Gross Margin, IRR, NPV, Equity Multiple, etc.) used to be FORMULA
-    // recomputes from the Phasing + Cash Flow sheets — divergent from
-    // the kernel-stored values on the deal record, which is what the
-    // Reports page in the frontend displays. Per CLAUDE.md, the kernel
-    // is the single source of numerics for any export. The fix: when
-    // the deal record carries a kernel value, write it as a literal in
-    // the Dashboard cell; otherwise fall back to the formula recompute.
-    test('Dashboard KPI tiles use kernel-stored values when populated', async () => {
+    // Operator directive 2026-05-11: "Use formulas, cell references,
+    // linkages and locking of cells wherever possible". Headline KPI tiles
+    // (rows 4 + 7) are now ALWAYS formula-driven so editing Inputs flows
+    // through to the Dashboard live. Pre-fix the kernel-stored values
+    // were written as literals which froze the tiles. Kernel-vs-modeled
+    // reconciliation moved entirely to the Returns block (rows 20-22).
+    test('Dashboard KPI tiles are formula-driven (recalc when Inputs edit)', async () => {
       const ctx = minimalContext();
       ctx.deal = {
         ...ctx.deal,
@@ -569,32 +567,33 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       await wb.xlsx.load(buffer);
       const dash = wb.getWorksheet('Dashboard');
 
-      // Total Revenue (B4) — kernel value, NOT a formula
+      // Total Revenue (B4) — FORMULA referencing Cash Flow Engine
       const b4 = dash.getCell('B4').value;
-      expect(typeof b4).toBe('number');
-      expect(b4).toBeCloseTo(637.01, 2);
+      expect(typeof b4).toBe('object');
+      expect(b4.formula).toMatch(/Cash Flow Engine/);
 
-      // Total Project Cost (D4) — kernel value
+      // Total Project Cost (D4) — FORMULA referencing Cash Flow Engine outflows
       const d4 = dash.getCell('D4').value;
-      expect(typeof d4).toBe('number');
-      expect(d4).toBeCloseTo(442.04, 2);
+      expect(typeof d4).toBe('object');
+      expect(d4.formula).toMatch(/Cash Flow Engine/);
 
-      // Net CF (F4) — derived from kernel revenue/cost (literal)
+      // Net CF (F4) — FORMULA referencing Cash Flow Engine Project net CF row
       const f4 = dash.getCell('F4').value;
-      expect(typeof f4).toBe('number');
-      expect(f4).toBeCloseTo(637.01 - 442.04, 2);
+      expect(typeof f4).toBe('object');
+      expect(f4.formula).toMatch(/Cash Flow Engine/);
 
-      // Gross Margin (B7) — kernel value, converted to decimal for 0.0% format
+      // Gross Margin (B7) — FORMULA with IFERROR guard
       const b7 = dash.getCell('B7').value;
-      expect(typeof b7).toBe('number');
-      expect(b7).toBeCloseTo(0.306, 4);
+      expect(typeof b7).toBe('object');
+      expect(b7.formula).toMatch(/IFERROR/);
 
-      // Min DSCR (D7) — no kernel field, stays as formula
+      // Min DSCR (D7) — FORMULA referencing Cash Flow Engine DSCR total
       const d7 = dash.getCell('D7').value;
       expect(typeof d7).toBe('object');
       expect(d7.formula).toBeTruthy();
 
-      // Project IRR (kernel) at row 20 — must be the literal kernel value
+      // Returns block (row 20) — kernel literals for explicit reconciliation
+      // against the Reports page. These intentionally stay as literals.
       const b20 = dash.getCell('B20').value;
       expect(typeof b20).toBe('number');
       expect(b20).toBeCloseTo(0.136, 4);
@@ -609,14 +608,27 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(typeof f20).toBe('number');
       expect(f20).toBeCloseTo(1.55, 2);
 
-      // Row 21 — the modeled (sensitivity-run) IRR/NPV/EM stays as
-      // formulas so operator can edit Inputs and see them recompute.
+      // Row 21 — modeled IRR/NPV/EM (formula-driven)
       const b21 = dash.getCell('B21').value;
       expect(typeof b21).toBe('object');
       expect(b21.formula).toMatch(/IRR\(/);
       const d21 = dash.getCell('D21').value;
       expect(typeof d21).toBe('object');
       expect(d21.formula).toMatch(/NPV\(/);
+    });
+
+    test('Dashboard row 3 — Deal Sanity Check banner renders an IFERROR-guarded formula', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+      const a3 = dash.getCell('A3').value;
+      expect(typeof a3).toBe('object');
+      expect(a3.formula).toMatch(/^=IF\(IFERROR\(B4,0\)=0/);
+      // Healthy path branch ends with checkmark
+      expect(a3.formula).toMatch(/✓ Deal status/);
+      // Negative-margin warning branch
+      expect(a3.formula).toMatch(/Negative gross margin/);
     });
 
     test('Dashboard KPI tiles fall back to formula when kernel value is missing', async () => {

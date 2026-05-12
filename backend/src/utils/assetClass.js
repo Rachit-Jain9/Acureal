@@ -51,7 +51,32 @@ const resolveAssetClass = (value) => {
   if (ASSET_CLASS_ALIASES[normalized]) return ASSET_CLASS_ALIASES[normalized];
   if (normalized.includes('retail') || normalized.includes('mall') || normalized.includes('shopping')) return 'retail';
   if (normalized.includes('office') || normalized.includes('workspace') || normalized.includes('business_park')) return 'commercial_office';
+  // Industrial / manufacturing / energy / pharma keywords — catches deals like
+  // "Pointec Pens and Energy Private Limited" or "Sundaram Steel Manufacturing"
+  // that previously fell through to the residential default. Order before
+  // 'energy' match (which is broad and could mis-trigger on residential names
+  // like "Sunshine Energy Towers") so the more-specific 'tower' / 'apartment'
+  // / 'residences' aliases match first.
   if (normalized.includes('warehouse') || normalized.includes('warehousing') || normalized.includes('logistics') || normalized.includes('industrial')) return 'industrial_warehousing';
+  if (normalized.includes('manufacturing') || normalized.includes('factory') || normalized.includes('foundry')) return 'industrial_warehousing';
+  if (normalized.includes('pharma') || normalized.includes('biotech') || normalized.includes('lifesci')) return 'industrial_warehousing';
+  if (normalized.includes('steel') || normalized.includes('cement') || normalized.includes('chemical') || normalized.includes('petrochem')) return 'industrial_warehousing';
+  // 'energy' / 'power' only when paired with industrial-style descriptors
+  // (not just any name containing 'energy' — residential complexes use
+  // 'Energy' as a marketing word). Guard against false positives.
+  if ((normalized.includes('energy') || normalized.includes('power')) &&
+      !normalized.includes('tower') && !normalized.includes('apartment') &&
+      !normalized.includes('residence') && !normalized.includes('villa') &&
+      !normalized.includes('park') && !normalized.includes('garden')) {
+    return 'industrial_warehousing';
+  }
+  // 'Private Limited' / 'Pvt Ltd' suffix in deal name — strong signal of a
+  // corporate-entity / operating-company deal (e.g. "Pointec Pens and Energy
+  // Private Limited"). Most REDIP deals are project-named ("Whitefield Phase 2"
+  // / "Jigani Apartments"); a Pvt Ltd suffix suggests operating-company or
+  // industrial-asset acquisition. Tag as industrial as the conservative
+  // default. Operator can still override via the asset_class dropdown.
+  if (normalized.includes('private_limited') || normalized.includes('pvt_ltd')) return 'industrial_warehousing';
   if (normalized.includes('hotel') || normalized.includes('hospitality')) return 'hospitality';
   if (normalized.includes('villa')) return 'villas';
   if (normalized.includes('plot')) return 'plotted_development';
