@@ -4,6 +4,42 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-12 — XLSX Excel polish batch: formula-driven tiles, Exit Strategy, dropdowns, Post-Tax IRR (PRs #292, #293, #294, #295, #296)
+
+Operator directive: *"Pls make the excel sheets specific and relevant to each deal type and its asset class with different deal structure and exit strategy. Hardcode values and numbers only where necessary. Use formulas, cell references, linkages and locking of cells wherever possible, applicable and required. Make sure there are no errors or bugs or problems and nothing breaks in the excel sheet with no invalid value."*
+
+Two operator-provided downloads as the starting evidence:
+- `redip-Jigani-_Apartments (4).xlsx` (residential / development family)
+- `redip-Pointec_Pens_and_Energy_Private_Limited (1).xlsx` (industrial via PR-292 inference)
+
+### PRs shipped + merged
+
+- **#292 — fix(exports/xlsx): formula-driven Dashboard tiles + sanity-check banner + stronger asset-class inference.** Headline KPI tiles now ALWAYS prefer formula over kernel literal (live recalc on Inputs edits). Sanity banner at row 3 catches negative margin / negative cash flow. Asset-class inference upgraded with industrial / corporate / energy / pharma keyword rules + Private Limited / Pvt Ltd suffix → industrial. Residential-marketing guard rejects "Sunshine Energy Towers" / "Powerhouse Residences" from mis-classifying as industrial.
+- **#293 — feat(exports/xlsx): Exit Strategy section — family-conditional (PR-EX).** New Inputs section: Development family gets `ExitStrategyType` dropdown (outright_sale, hold_to_lease, partial_sale_partial_hold) → `EffectiveExitFactor` derived. Income family gets `ExitStrategyType` (sale_to_institutional, refinance, hold_forever) + Total Exit Cost composition (selling + broker + legal). `ImpliedNetExitValueCr` formula = NOI ÷ Cap × (1 − TotalExitCost).
+- **#294 — fix(exports/xlsx): Implied Net Exit Value bug + Reversion wiring + Dashboard CF rules.** Critical bug fix: `ImpliedNetExitValueCr` was referencing B6 (Asset Class text) instead of NOI — IFERROR collapsed it silently to ₹0 Cr. Replaced with `INDEX('Cash Flow Engine'!18:18, TotalQuarters+1)` for the last-quarter NOI. Reversion row updated to use `(1-TotalExitCostPct)` instead of bare `(1-SellingCostPct)`. Dashboard KPI tiles added red/amber/green conditional formatting per family (B4/B7 income vs B7/D7/F4 dev).
+- **#295 — feat(exports/xlsx): Excel-native dropdowns on all categorical input cells (PR-DD).** Every categorical input gets a `dataValidation type='list'` dropdown — KhataStatus, DealStructureLabel, LenderType (11 options), RateBenchmark, LoanType, IndexationRegime, MilestoneEscalationModel, RawLandCurrentStage, ExitStrategyType (family-conditional list). Friendly error popup on invalid entry. Numeric cells confirmed unaffected.
+- **#296 — feat(exports/xlsx): Dashboard Post-Tax IRR row (India LTCG/STCG-adjusted) — PR-NX.** New row 22 on every Dashboard: Post-Tax IRR = B21 × (1 − EffectiveCGRate). Effective rate (12.5% LTCG ≥ 2yr, 30% STCG slab < 2yr) and the hold-period driver echoed in C22/E22 for traceability. Cascade-shifted every row below 22 (+1): disclosure footnote, sensitivity grid, tornado driver formulas + chart anchor + chart spec ranges, scenario strip, Quarterly Trend table + combo chart series refs, JV waterfall offsets.
+
+### Tests
+
+1497 backend tests passing at end of session (was 1472 at the start of the day, +25 tests across PR-292/293/294/295/296).
+
+127 of those are XLSX V2 tests (up from 110). New test coverage:
+- 7 Post-Tax IRR row tests (label / formula / disclosure / shifted titles)
+- 10 dropdown tests (per categorical option group)
+- 4 conditional formatting tests (red/amber/green per KPI)
+- 4+ ImpliedNetExitValueCr / Reversion / sanity-banner formula tests
+
+### What's next (deferred follow-ups)
+
+- Wire `EffectiveExitFactor` into dev-family Quarter sales formula (currently sits in Inputs as derived but doesn't feed Phasing)
+- Wire `MixUseBlendedRatePerSqft` into `SellRatePerSqft` default for mixed_use (operator currently pastes derived into primary input)
+- Wire `KhataExitMultiplier` into Phasing P&L
+- Auto-sync `ApprovalsBreakdownSumCr` ↔ `ApprovalCostCr`
+- Monthly cash flow detail (vs current quarterly) — large refactor
+
+---
+
 ## 2026-05-11 (evening) — Claude→OpenAI provider switch + India batch I8-I16 closed (PRs #284, #285, #286, #289, #290)
 
 Two operator directives this session:
