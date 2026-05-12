@@ -816,10 +816,12 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         x.includes('<c:barDir val="bar"/>') && x.includes('<c:overlap val="100"/>')
       );
       expect(tornado).toBeDefined();
-      // Tornado references the H/I/J columns where the driver data lives
-      expect(tornado).toMatch(/\$H\$25:\$H\$26/);  // categories (driver labels)
-      expect(tornado).toMatch(/\$I\$25:\$I\$26/);  // low-case deltas
-      expect(tornado).toMatch(/\$J\$25:\$J\$26/);  // high-case deltas
+      // Tornado references the H/I/J columns where the driver data lives.
+      // Driver rows shifted +1 in PR-NX (Post-Tax IRR row inserted at A22),
+      // so the data table that was on rows 25-26 now lives on 26-27.
+      expect(tornado).toMatch(/\$H\$26:\$H\$27/);  // categories (driver labels)
+      expect(tornado).toMatch(/\$I\$26:\$I\$27/);  // low-case deltas
+      expect(tornado).toMatch(/\$J\$26:\$J\$27/);  // high-case deltas
 
       // Doughnut targets the Uses cells
       const doughnut = xmls.find((x) => x.includes('<c:doughnutChart'));
@@ -833,24 +835,29 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       await wb.xlsx.load(buffer);
       const dash = wb.getWorksheet('Dashboard');
 
-      // Row 24 = headers
-      expect(String(dash.getCell('H24').value)).toBe('Driver');
-      expect(String(dash.getCell('I24').value)).toBe('Low Case Δ');
-      expect(String(dash.getCell('J24').value)).toBe('High Case Δ');
+      // PR-NX shifted tornado table +1: headers were row 24 → row 25;
+      // driver rows were 25-26 → 26-27. Sensitivity grid that anchors
+      // the deltas shifted from B25:F29 → B26:F30, so the base-case
+      // centre cell is D28 (was D27).
 
-      // Row 25 = Selling Rate driver
-      expect(String(dash.getCell('H25').value)).toContain('Selling Rate');
-      // Low delta = grid[middle row][leftmost col] - base = B27 - D27
-      expect(dash.getCell('I25').value.formula).toBe('=B27-D27');
-      // High delta = grid[middle row][rightmost col] - base = F27 - D27
-      expect(dash.getCell('J25').value.formula).toBe('=F27-D27');
+      // Row 25 = headers
+      expect(String(dash.getCell('H25').value)).toBe('Driver');
+      expect(String(dash.getCell('I25').value)).toBe('Low Case Δ');
+      expect(String(dash.getCell('J25').value)).toBe('High Case Δ');
 
-      // Row 26 = Construction Cost driver
-      expect(String(dash.getCell('H26').value)).toContain('Construction Cost');
-      // High cost = low margin → I26 (low delta) = D29 - D27
-      expect(dash.getCell('I26').value.formula).toBe('=D29-D27');
-      // Low cost = high margin → J26 (high delta) = D25 - D27
-      expect(dash.getCell('J26').value.formula).toBe('=D25-D27');
+      // Row 26 = Selling Rate driver
+      expect(String(dash.getCell('H26').value)).toContain('Selling Rate');
+      // Low delta = grid[middle row][leftmost col] - base = B28 - D28
+      expect(dash.getCell('I26').value.formula).toBe('=B28-D28');
+      // High delta = grid[middle row][rightmost col] - base = F28 - D28
+      expect(dash.getCell('J26').value.formula).toBe('=F28-D28');
+
+      // Row 27 = Construction Cost driver
+      expect(String(dash.getCell('H27').value)).toContain('Construction Cost');
+      // High cost = low margin → I27 (low delta) = D30 - D28
+      expect(dash.getCell('I27').value.formula).toBe('=D30-D28');
+      // Low cost = high margin → J27 (high delta) = D26 - D28
+      expect(dash.getCell('J27').value.formula).toBe('=D26-D28');
     });
 
     // Asset-class branching for the trend chart: development deals show
@@ -941,6 +948,80 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).toMatch(/Scenario Comparison/);
       expect(joined).toMatch(/BULL CASE/);
       expect(joined).toMatch(/BEAR CASE/);
+    });
+
+    // PR-NX (2026-05-12): Dashboard now exposes a Post-Tax IRR row at A22
+    // so IC reviewers can read the India LTCG/STCG-adjusted IRR alongside
+    // the gross modeled IRR (row 21). The Effective CG Rate that's applied
+    // (12.5% LTCG ≥ 2yr, 30% STCG slab < 2yr) and the Hold Period that
+    // drives the LT/ST branch are echoed in C22/E22 for traceability.
+    describe('Dashboard Post-Tax IRR row (PR-NX — India LTCG/STCG-adjusted)', () => {
+      test('row 22 labels exist on every deal family', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        expect(String(dash.getCell('A22').value)).toContain('Post-Tax IRR');
+        expect(String(dash.getCell('A22').value)).toContain('LTCG');
+        expect(String(dash.getCell('C22').value)).toContain('Effective CG Rate');
+        expect(String(dash.getCell('E22').value)).toContain('Hold Period');
+      });
+
+      test('B22 (Post-Tax IRR) formula = B21 × (1 − EffectiveCGRate)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        expect(dash.getCell('B22').value.formula).toBe('=IFERROR(B21*(1-EffectiveCGRate),"–")');
+      });
+
+      test('D22 echoes EffectiveCGRate, F22 echoes EffectiveHoldYears (traceability)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        expect(dash.getCell('D22').value.formula).toBe('=EffectiveCGRate');
+        expect(dash.getCell('F22').value.formula).toBe('=EffectiveHoldYears');
+      });
+
+      test('disclosure footnote (now at A23) mentions POST-TAX', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const note = String(dash.getCell('A23').value);
+        expect(note).toContain('KERNEL');
+        expect(note).toContain('MODELED');
+        expect(note).toContain('POST-TAX');
+      });
+
+      test('sensitivity grid title moved to A24 (was A23)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        expect(String(dash.getCell('A24').value)).toContain('Sensitivity');
+        // Header corner cell moved to A25 (was A24)
+        expect(String(dash.getCell('A25').value)).toContain('Cost');
+      });
+
+      test('Scenario Comparison title moved to A32 (was A31)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        expect(String(dash.getCell('A32').value)).toContain('Scenario Comparison');
+      });
+
+      test('Quarterly Trend title moved to A37 (was A36)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const title = String(dash.getCell('A37').value);
+        // Asset-class-aware: dev family says "Project Trend", income says "Operating Trend"
+        expect(title).toMatch(/Quarterly (Operating|Project) Trend/);
+      });
     });
 
     test('Inputs sheet has the input zone unlocked', async () => {
