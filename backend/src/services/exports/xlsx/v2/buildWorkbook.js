@@ -2365,6 +2365,16 @@ const buildDashboardSheet = (workbook, ctx) => {
     { row: 21, col: 'A', label: 'Project IRR (modeled)',    kernel: null, formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`,                                            format: NUMBER_FORMATS.percent, secondary: true },
     { row: 21, col: 'C', label: 'NPV (modeled, INR Cr)',    kernel: null, formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency, secondary: true },
     { row: 21, col: 'E', label: 'Equity Multiple (modeled)', kernel: null, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple, secondary: true },
+    // Post-Tax IRR row 22 — India LTCG/STCG-adjusted IRR. Multiplies the
+    // modeled gross IRR (B21) by (1 - EffectiveCGRate). EffectiveCGRate
+    // is a derived named range on Inputs that switches LTCG (12.5% post-
+    // Jul-2024) when EffectiveHoldYears ≥ 2, else STCG slab (~30%).
+    // This is the headline number an Indian IC committee actually
+    // underwrites against — gross IRR overstates returns because India
+    // levies capital gains on disposal of real-estate equity.
+    { row: 22, col: 'A', label: 'Post-Tax IRR (modeled, India LTCG-adjusted)', kernel: null, formula: `=IFERROR(B21*(1-EffectiveCGRate),"–")`, format: NUMBER_FORMATS.percent, secondary: true },
+    { row: 22, col: 'C', label: 'Effective CG Rate (applied)',                  kernel: null, formula: `=EffectiveCGRate`,                     format: NUMBER_FORMATS.percent, secondary: true },
+    { row: 22, col: 'E', label: 'Hold Period (yrs, drives LT vs ST)',           kernel: null, formula: `=EffectiveHoldYears`,                  format: NUMBER_FORMATS.integer, secondary: true },
   ];
   returnsCells.forEach(({ row, col, label, kernel, formula, format, secondary }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
@@ -2411,36 +2421,36 @@ const buildDashboardSheet = (workbook, ctx) => {
   // Make the kernel/modeled distinction explicit so an analyst reading
   // the workbook understands why the two rows differ (and which one
   // matches the rest of the platform).
-  sheet.mergeCells('A22:F22');
-  sheet.getCell('A22').value = 'KERNEL = stored on the deal record by REDIP\'s deterministic financial kernel; matches the Reports page + PPTX/DOCX exports. MODELED = recomputed live from the Phasing + Cash Flow sheets; edit Inputs to explore scenarios.';
-  sheet.getCell('A22').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A22').alignment = { vertical: 'top', wrapText: true };
-  sheet.getCell('A22').protection = { locked: true };
-  sheet.getRow(22).height = 28;
+  sheet.mergeCells('A23:F23');
+  sheet.getCell('A23').value = 'KERNEL = stored on the deal record by REDIP\'s deterministic financial kernel; matches the Reports page + PPTX/DOCX exports. MODELED = recomputed live from the Phasing + Cash Flow sheets; edit Inputs to explore scenarios. POST-TAX = MODELED gross IRR × (1 − Effective CG Rate); switches LTCG/STCG based on hold period.';
+  sheet.getCell('A23').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A23').alignment = { vertical: 'top', wrapText: true };
+  sheet.getCell('A23').protection = { locked: true };
+  sheet.getRow(23).height = 28;
 
   // ── Sensitivity grid — Project margin under sale-rate × cost variance ──
   // Two-axis 5x5 with conditional formatting (color scale). No native chart
   // (ExcelJS chart support is patchy); a coloured cell grid renders
   // identically in every Excel version and prints correctly.
-  sheet.mergeCells('A23:F23');
-  sheet.getCell('A23').value = 'Sensitivity — Project Margin (sale-rate × construction-cost variance)';
-  styleSectionTitle(sheet.getCell('A23'));
-  sheet.getRow(23).height = 22;
+  sheet.mergeCells('A24:F24');
+  sheet.getCell('A24').value = 'Sensitivity — Project Margin (sale-rate × construction-cost variance)';
+  styleSectionTitle(sheet.getCell('A24'));
+  sheet.getRow(24).height = 22;
 
   // Column headers — sale rate variance (-10% to +10%)
   const saleVariances = [-0.10, -0.05, 0, 0.05, 0.10];
   const costVariances = [-0.10, -0.05, 0, 0.05, 0.10]; // constr cost variance
 
   // Top-left cell — corner label
-  sheet.getCell('A24').value = 'Cost ↓ × Rate →';
-  sheet.getCell('A24').font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-  sheet.getCell('A24').alignment = { vertical: 'middle', horizontal: 'center' };
-  sheet.getCell('A24').fill = FILL(palette.xlsx('inkDeep'));
-  sheet.getCell('A24').protection = { locked: true };
+  sheet.getCell('A25').value = 'Cost ↓ × Rate →';
+  sheet.getCell('A25').font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  sheet.getCell('A25').alignment = { vertical: 'middle', horizontal: 'center' };
+  sheet.getCell('A25').fill = FILL(palette.xlsx('inkDeep'));
+  sheet.getCell('A25').protection = { locked: true };
 
   // Sale-rate variance column headers (cols B → F)
   saleVariances.forEach((v, idx) => {
-    const cell = sheet.getCell(24, 2 + idx);
+    const cell = sheet.getCell(25, 2 + idx);
     cell.value = v;
     cell.numFmt = '+0%;-0%;"base"';
     cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
@@ -2449,9 +2459,9 @@ const buildDashboardSheet = (workbook, ctx) => {
     cell.protection = { locked: true };
   });
 
-  // Row labels — construction cost variance (rows 25 → 29)
+  // Row labels — construction cost variance (rows 26 → 30)
   costVariances.forEach((v, rIdx) => {
-    const r = 25 + rIdx;
+    const r = 26 + rIdx;
     const labelCell = sheet.getCell(`A${r}`);
     labelCell.value = v;
     labelCell.numFmt = '+0%;-0%;"base"';
@@ -2465,7 +2475,7 @@ const buildDashboardSheet = (workbook, ctx) => {
       // Margin = (Revenue × (1 + saleVar) − Cost × (1 + costVar)) / Revenue × (1 + saleVar)
       const formula =
         `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateV})` +
-        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+IF(ROW()-25=${rIdx},${costVariances[rIdx]},0))) ` +
+        `-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*(1+IF(ROW()-26=${rIdx},${costVariances[rIdx]},0))) ` +
         `/((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateV})),0)`;
       cell.value = { formula };
       cell.numFmt = NUMBER_FORMATS.percent;
@@ -2481,9 +2491,9 @@ const buildDashboardSheet = (workbook, ctx) => {
     });
   });
 
-  // Color scale on the heatmap range B25:F29 — red (negative) → amber (0) → green (high)
+  // Color scale on the heatmap range B26:F30 — red (negative) → amber (0) → green (high)
   sheet.addConditionalFormatting({
-    ref: 'B25:F29',
+    ref: 'B26:F30',
     rules: [{
       type: 'colorScale',
       cfvo: [
@@ -2501,25 +2511,25 @@ const buildDashboardSheet = (workbook, ctx) => {
   });
 
   // ── Tornado driver-impact table (right of sensitivity grid) ───────────
-  // Drives the Tornado chart anchored at H27. Uses cell references into
-  // the existing 5×5 sensitivity grid (B25:F29) so the deltas recalculate
-  // live as the kernel inputs change. Base case is D27 (centre of the
+  // Drives the Tornado chart anchored at H28. Uses cell references into
+  // the existing 5×5 sensitivity grid (B26:F30) so the deltas recalculate
+  // live as the kernel inputs change. Base case is D28 (centre of the
   // 5×5 grid — sale-rate variance = 0%, construction-cost variance = 0%).
   //
   // Driver impact derivation:
   //   Selling Rate ±10% → varies the SALE rate, holds construction cost
-  //     at base. Low-case = B27 (rate -10%) minus base; High-case = F27
+  //     at base. Low-case = B28 (rate -10%) minus base; High-case = F28
   //     (rate +10%) minus base. Low usually negative, high usually
   //     positive (more revenue → higher margin).
   //   Construction Cost ±10% → varies COST, holds rate at base. High
-  //     cost = D29 (cost +10%) is the LOW-margin case; low cost = D25
+  //     cost = D30 (cost +10%) is the LOW-margin case; low cost = D26
   //     (cost -10%) is the HIGH-margin case. So our "Low Case Δ" for
-  //     this driver = D29 - D27 (negative); "High Case Δ" = D25 - D27
+  //     this driver = D30 - D28 (negative); "High Case Δ" = D26 - D28
   //     (positive).
-  sheet.mergeCells('H23:M23');
-  sheet.getCell('H23').value = 'Driver Impact on Project Margin (tornado)';
-  styleSectionTitle(sheet.getCell('H23'));
-  sheet.getRow(23).height = 22;
+  sheet.mergeCells('H24:M24');
+  sheet.getCell('H24').value = 'Driver Impact on Project Margin (tornado)';
+  styleSectionTitle(sheet.getCell('H24'));
+  sheet.getRow(24).height = 22;
 
   // Header row for the data table
   const tornadoHeaders = [
@@ -2531,16 +2541,16 @@ const buildDashboardSheet = (workbook, ctx) => {
     { col: 'M', label: 'Total Range' },
   ];
   tornadoHeaders.forEach(({ col, label }) => {
-    const cell = sheet.getCell(`${col}24`);
+    const cell = sheet.getCell(`${col}25`);
     cell.value = label;
     cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     cell.fill = FILL(palette.xlsx('inkDeep'));
     cell.protection = { locked: true };
   });
-  sheet.getRow(24).height = 22;
+  sheet.getRow(25).height = 22;
 
-  // Row 25: Selling Rate driver; Row 26: Construction Cost driver.
+  // Row 26: Selling Rate driver; Row 27: Construction Cost driver.
   // Order: longest-range driver on top. Since the grid is symmetric in
   // its sale-rate and cost-rate dimensions but margin maths is asymmetric
   // (revenue × (1+rate) vs cost × (1+cost)), the sale-rate driver tends
@@ -2548,20 +2558,20 @@ const buildDashboardSheet = (workbook, ctx) => {
   // dynamic sorting.
   const drivers = [
     {
-      row: 25,
+      row: 26,
       label: 'Selling Rate ±10%',
-      lowDeltaFormula: '=B27-D27',     // rate -10% margin minus base margin
-      highDeltaFormula: '=F27-D27',    // rate +10% margin minus base margin
-      lowMarginRef: 'B27',
-      highMarginRef: 'F27',
+      lowDeltaFormula: '=B28-D28',     // rate -10% margin minus base margin
+      highDeltaFormula: '=F28-D28',    // rate +10% margin minus base margin
+      lowMarginRef: 'B28',
+      highMarginRef: 'F28',
     },
     {
-      row: 26,
+      row: 27,
       label: 'Construction Cost ±10%',
-      lowDeltaFormula: '=D29-D27',     // cost +10% margin minus base margin (worst case)
-      highDeltaFormula: '=D25-D27',    // cost -10% margin minus base margin (best case)
-      lowMarginRef: 'D29',
-      highMarginRef: 'D25',
+      lowDeltaFormula: '=D30-D28',     // cost +10% margin minus base margin (worst case)
+      highDeltaFormula: '=D26-D28',    // cost -10% margin minus base margin (best case)
+      lowMarginRef: 'D30',
+      highMarginRef: 'D26',
     },
   ];
   drivers.forEach(({ row, label, lowDeltaFormula, highDeltaFormula, lowMarginRef, highMarginRef }) => {
@@ -2609,17 +2619,17 @@ const buildDashboardSheet = (workbook, ctx) => {
 
   // Base IRR / Base Margin label below the data table — anchors what
   // the chart's 0 axis represents.
-  sheet.mergeCells('H27:M27');
-  sheet.getCell('H27').value = 'Bars centred on Base Case (sale-rate 0% × cost 0%). Bars extend left (downside) and right (upside) from that base.';
-  sheet.getCell('H27').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('H27').alignment = { vertical: 'top', wrapText: true };
-  sheet.getRow(27).height = 26;
+  sheet.mergeCells('H28:M28');
+  sheet.getCell('H28').value = 'Bars centred on Base Case (sale-rate 0% × cost 0%). Bars extend left (downside) and right (upside) from that base.';
+  sheet.getCell('H28').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('H28').alignment = { vertical: 'top', wrapText: true };
+  sheet.getRow(28).height = 26;
 
   // ── Scenario strip (Bull / Base / Bear) ──────────────────────────────
-  sheet.mergeCells('A31:F31');
-  sheet.getCell('A31').value = 'Scenario Comparison (modeled)';
-  styleSectionTitle(sheet.getCell('A31'));
-  sheet.getRow(31).height = 22;
+  sheet.mergeCells('A32:F32');
+  sheet.getCell('A32').value = 'Scenario Comparison (modeled)';
+  styleSectionTitle(sheet.getCell('A32'));
+  sheet.getRow(32).height = 22;
 
   const scenarios = [
     { col: 'A', name: 'BULL CASE',  rate: 0.10,  cost: -0.05, accent: palette.xlsx('dataPositive') },
@@ -2628,22 +2638,22 @@ const buildDashboardSheet = (workbook, ctx) => {
   ];
   scenarios.forEach((sc) => {
     // Header
-    const hdr = sheet.getCell(`${sc.col}32`);
+    const hdr = sheet.getCell(`${sc.col}33`);
     hdr.value = sc.name;
     hdr.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') }, charSpace: 1.6 };
     hdr.alignment = { horizontal: 'center', vertical: 'middle' };
     hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.accent } };
     hdr.protection = { locked: true };
-    sheet.mergeCells(`${sc.col}32:${String.fromCharCode(sc.col.charCodeAt(0) + 1)}32`);
+    sheet.mergeCells(`${sc.col}33:${String.fromCharCode(sc.col.charCodeAt(0) + 1)}33`);
 
     // Margin
-    const marginLabel = sheet.getCell(`${sc.col}33`);
+    const marginLabel = sheet.getCell(`${sc.col}34`);
     marginLabel.value = 'Margin';
     marginLabel.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
     marginLabel.alignment = { horizontal: 'left' };
     marginLabel.fill = FILL(palette.xlsx('paper'));
     marginLabel.protection = { locked: true };
-    const marginVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}33`);
+    const marginVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}34`);
     marginVal.value = {
       formula:
         `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})` +
@@ -2657,13 +2667,13 @@ const buildDashboardSheet = (workbook, ctx) => {
     marginVal.protection = { locked: true };
 
     // Profit
-    const profitLabel = sheet.getCell(`${sc.col}34`);
+    const profitLabel = sheet.getCell(`${sc.col}35`);
     profitLabel.value = 'Profit (Cr)';
     profitLabel.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
     profitLabel.alignment = { horizontal: 'left' };
     profitLabel.fill = FILL(palette.xlsx('paper'));
     profitLabel.protection = { locked: true };
-    const profitVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}34`);
+    const profitVal = sheet.getCell(`${String.fromCharCode(sc.col.charCodeAt(0) + 1)}35`);
     profitVal.value = {
       formula:
         `=(SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${sc.rate})` +
@@ -2681,30 +2691,30 @@ const buildDashboardSheet = (workbook, ctx) => {
   // Excel version — more reliable than ExcelJS chart objects)
   // Income deals: Quarter | PGI | EGR | NOI | Cash Flow After Debt
   // Development: Quarter | Sales | Construction Cost | Net Cash Flow | Cumulative
-  sheet.mergeCells('A36:N36');
-  sheet.getCell('A36').value = ctx.dealFamily === 'income'
+  sheet.mergeCells('A37:N37');
+  sheet.getCell('A37').value = ctx.dealFamily === 'income'
     ? 'Quarterly Operating Trend (PGI / EGR / NOI / CF After Debt)'
     : 'Quarterly Project Trend (Sales / Construction / Net CF / Cumulative)';
-  styleSectionTitle(sheet.getCell('A36'));
-  sheet.getRow(36).height = 22;
+  styleSectionTitle(sheet.getCell('A37'));
+  sheet.getRow(37).height = 22;
 
   // Header row
   const trendHeaders = ctx.dealFamily === 'income'
     ? ['Quarter', 'PGI (Cr)', 'EGR (Cr)', 'NOI (Cr)', 'CF After Debt (Cr)']
     : ['Quarter', 'Sales (Cr)', 'Construction (Cr)', 'Net CF (Cr)', 'Cumulative (Cr)'];
   trendHeaders.forEach((h, idx) => {
-    const cell = sheet.getCell(37, idx + 1);
+    const cell = sheet.getCell(38, idx + 1);
     cell.value = h;
     cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     cell.fill = FILL(palette.xlsx('inkDeep'));
   });
-  sheet.getRow(37).height = 22;
+  sheet.getRow(38).height = 22;
 
   // Source rows on Phasing / Cash Flow sheet — asset-class-aware
   const trendQuarters = Math.min(ctx.totalQuarters, 16); // cap at 16 for readability
   for (let q = 1; q <= trendQuarters; q += 1) {
-    const r = 37 + q;
+    const r = 38 + q;
     sheet.getCell(r, 1).value = `Q${q}`;
     sheet.getCell(r, 1).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
     sheet.getCell(r, 1).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -2751,8 +2761,8 @@ const buildDashboardSheet = (workbook, ctx) => {
   // per cell. ExcelJS data-bar config requires `cfvo` min/max anchors.
   const dataBarColors = [palette.xlsx('plum'), palette.xlsx('accent'), palette.xlsx('dataPositive'), palette.xlsx('mutedHigh')];
   for (let col = 2; col <= 5; col += 1) {
-    const startCell = `${colLetter(col)}38`;
-    const endCell = `${colLetter(col)}${37 + trendQuarters}`;
+    const startCell = `${colLetter(col)}39`;
+    const endCell = `${colLetter(col)}${38 + trendQuarters}`;
     try {
       sheet.addConditionalFormatting({
         ref: `${startCell}:${endCell}`,
@@ -2781,9 +2791,9 @@ const buildDashboardSheet = (workbook, ctx) => {
   // total profit.
   const dealStructure = String(ctx.deal.deal_structure || '').toLowerCase();
   const isJv = ['jv', 'jda', 'da'].includes(dealStructure);
-  let waterfallEndRow = 37 + trendQuarters; // baseline if waterfall not shown
+  let waterfallEndRow = 38 + trendQuarters; // baseline if waterfall not shown
   if (isJv) {
-    const wfStartRow = 37 + trendQuarters + 2;
+    const wfStartRow = 38 + trendQuarters + 2;
     sheet.mergeCells(`A${wfStartRow}:N${wfStartRow}`);
     sheet.getCell(`A${wfStartRow}`).value = `Profit Waterfall — ${ctx.deal.deal_structure ? ctx.deal.deal_structure.toUpperCase() : 'JV'} structure`;
     styleSectionTitle(sheet.getCell(`A${wfStartRow}`));
@@ -3979,17 +3989,17 @@ const buildDashboardChartSpecs = (ctx) => {
   //    Anchored BELOW the data table (rows 37-53). Asset-class-aware
   //    series labels + colours.
   const trendQuarters = Math.min(ctx.totalQuarters, 16);
-  const trendEndRow = 37 + trendQuarters;
+  const trendEndRow = 38 + trendQuarters;
   if (trendQuarters >= 2) {
     const isIncome = ctx.dealFamily === 'income';
     const barSeries = isIncome
       ? [
-        { name: 'PGI (Cr)', valuesRange: `$B$38:$B$${trendEndRow}`, colour: '0E1B2C' },
-        { name: 'NOI (Cr)', valuesRange: `$D$38:$D$${trendEndRow}`, colour: '0F7B5A' },
+        { name: 'PGI (Cr)', valuesRange: `$B$39:$B$${trendEndRow}`, colour: '0E1B2C' },
+        { name: 'NOI (Cr)', valuesRange: `$D$39:$D$${trendEndRow}`, colour: '0F7B5A' },
       ]
       : [
-        { name: 'Sales (Cr)',        valuesRange: `$B$38:$B$${trendEndRow}`, colour: '0F7B5A' },
-        { name: 'Construction (Cr)', valuesRange: `$C$38:$C$${trendEndRow}`, colour: 'B23A48' },
+        { name: 'Sales (Cr)',        valuesRange: `$B$39:$B$${trendEndRow}`, colour: '0F7B5A' },
+        { name: 'Construction (Cr)', valuesRange: `$C$39:$C$${trendEndRow}`, colour: 'B23A48' },
       ];
     // Cumulative line lives in column E for both families (Quarterly
     // Trend table layout: A=Quarter, B=Series1, C=Series2, D=Series3,
@@ -3999,7 +4009,7 @@ const buildDashboardChartSpecs = (ctx) => {
     const lineSeries = [
       {
         name: isIncome ? 'CF After Debt (cum, Cr)' : 'Cumulative Net CF (Cr)',
-        valuesRange: `$E$38:$E$${trendEndRow}`,
+        valuesRange: `$E$39:$E$${trendEndRow}`,
         colour: 'B5793C',
       },
     ];
@@ -4009,7 +4019,7 @@ const buildDashboardChartSpecs = (ctx) => {
         ? 'Quarterly Operating Trend — PGI / NOI / CF After Debt'
         : 'Quarterly Project Trend — Sales / Construction / Cumulative',
       sheetName: dashName,
-      categoriesRange: `$A$38:$A$${trendEndRow}`,
+      categoriesRange: `$A$39:$A$${trendEndRow}`,
       barSeries,
       lineSeries,
       anchor: { fromCol: 0, fromRow: trendEndRow + 1, widthCols: 13, heightRows: 14 },
@@ -4019,20 +4029,20 @@ const buildDashboardChartSpecs = (ctx) => {
   // 3. Tornado chart — Driver Impact on Project Margin. Native Office
   //    pattern: clustered horizontal bar with overlap=100. Low-case
   //    deltas (negative) extend left from 0; high-case deltas (positive)
-  //    extend right. The driver data table at H24:M26 feeds the chart.
-  //    Anchored at columns N-T (cols 13-19), rows 23-29 — to the right
+  //    extend right. The driver data table at H25:M27 feeds the chart.
+  //    Anchored at columns N-T (cols 13-19), rows 24-30 — to the right
   //    of the sensitivity heatmap so the analyst sees the heatmap AND
   //    the driver-impact tornado in the same eye span.
   specs.push({
     type: 'tornado',
     title: 'Sensitivity — Driver Impact (Δ from base margin)',
     sheetName: dashName,
-    categoriesRange: '$H$25:$H$26',
-    lowValuesRange: '$I$25:$I$26',
-    highValuesRange: '$J$25:$J$26',
+    categoriesRange: '$H$26:$H$27',
+    lowValuesRange: '$I$26:$I$27',
+    highValuesRange: '$J$26:$J$27',
     lowColour: 'B23A48',  // dataNegative
     highColour: '0F7B5A', // dataPositive
-    anchor: { fromCol: 13, fromRow: 28, widthCols: 7, heightRows: 8 },
+    anchor: { fromCol: 13, fromRow: 29, widthCols: 7, heightRows: 8 },
   });
 
   return specs;
