@@ -1,9 +1,19 @@
 'use strict';
 
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const { buildDealWorkbookV2, __internal } = require('../src/services/exports/xlsx/v2/buildWorkbook');
 
 const normalizeFormula = (formula) => String(formula || '').replace(/^=/, '');
+
+const findValueCellByLabel = (sheet, expectedLabel) => {
+  let found = null;
+  sheet.eachRow((row) => {
+    const label = String(row.getCell(1).value || '').trim();
+    if (label === expectedLabel) found = row.getCell(2);
+  });
+  return found;
+};
 
 expect.extend({
   toBeFormula(received, expected) {
@@ -95,21 +105,23 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook contains the 7-sheet structure (6 visible + 1 hidden Calculations) with Dashboard first, Inputs second', async () => {
+    test('produced workbook contains the 8-sheet structure (7 visible + 1 hidden Calculations) with Dashboard first, QA second, Inputs third', async () => {
       // Operator-directed 7-sheet restructure (2026-05-11):
       //   1. Dashboard (FIRST)
-      //   2. Inputs & Assumptions
-      //   3. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
-      //   4. Debt Sizing & Amortization (combined: sizing + amort schedule)
-      //   5. Sponsor LP Waterfall
-      //   6. Unit Mix
-      //   7. Calculations            (hidden audit trail)
+      //   2. Export QA & Sources
+      //   3. Inputs & Assumptions
+      //   4. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
+      //   5. Debt Sizing & Amortization (combined: sizing + amort schedule)
+      //   6. Sponsor LP Waterfall
+      //   7. Unit Mix
+      //   8. Calculations            (hidden audit trail)
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const names = wb.worksheets.map((ws) => ws.name);
       expect(names).toEqual([
         'Dashboard',
+        'Export QA & Sources',
         'Inputs & Assumptions',
         'Cash Flow Engine',
         'Debt Sizing & Amortization',
@@ -121,6 +133,135 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(calc).toBeDefined();
       // Hidden by default — power users right-click → Unhide
       expect(calc.state).toBe('hidden');
+    });
+
+    test('Export QA & Sources sheet carries filterable QA/source tables, hyperlinks, and input comments', async () => {
+      const ctx = minimalContext();
+      ctx.deal.id = 42;
+      ctx.market = {
+        exportComps: [
+          {
+            source: 'https://example.com/verified-comp',
+            is_verified: true,
+            data_period: '2026 Q1',
+          },
+        ],
+      };
+      ctx.documents = {
+        items: [
+          { id: 'doc-1', name: 'Sale deed.pdf', created_at: '2026-05-01T00:00:00Z' },
+        ],
+      };
+
+      const buffer = await buildDealWorkbookV2(ctx, { appBaseUrl: 'https://redip.test' });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+
+      const qa = wb.getWorksheet('Export QA & Sources');
+      expect(qa).toBeDefined();
+      expect(String(qa.getCell('A1').value)).toContain('Export QA & Sources');
+
+      const zip = await JSZip.loadAsync(buffer);
+      expect(zip.file(/^xl\/tables\/table\d+\.xml$/).length).toBeGreaterThanOrEqual(2);
+
+      let hasHyperlink = false;
+      qa.eachRow((row) => row.eachCell((cell) => {
+        if (cell.value && typeof cell.value === 'object' && cell.value.hyperlink) hasHyperlink = true;
+      }));
+      expect(hasHyperlink).toBe(true);
+
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+      const saleable = findValueCellByLabel(inputs, 'Saleable / Leasable Area (Super Built-up)');
+      expect(String(saleable.note || '')).toContain('Source:');
+      expect(String(saleable.note || '')).toContain('Provenance:');
+    });
+
+    test('strict validation blocks incomplete income workbooks before download', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.property.property_type = 'commercial_office';
+      ctx.property.saleable_area_sqft = 0;
+      ctx.deal.model_params.inputs = {
+        ...ctx.deal.model_params.inputs,
+        landCostCr: 100,
+        constructionCostPerSqft: 0,
+        baseRentPerSqftMonth: 0,
+      };
+
+      await expect(buildDealWorkbookV2(ctx, { strictValidation: true }))
+        .rejects
+        .toMatchObject({
+          name: 'XlsxExportValidationError',
+          statusCode: 422,
+        });
+    });
+
+    test('strict validation passes representative asset classes, deal structures, and exit strategies', async () => {
+      const cases = [
+        { asset: 'residential_apartments', exit: 'outright_progressive' },
+        { asset: 'plotted_development', exit: 'bulk_exit_completion' },
+        { asset: 'villas', exit: 'hold_post_completion' },
+        { asset: 'redevelopment', exit: 'outright_progressive', dealStructure: 'jda', landownerSharePct: 0.45, landCostCr: 0 },
+        { asset: 'mixed_use', exit: 'bulk_exit_completion' },
+        { asset: 'raw_land', exit: 'hold_post_completion', constructionCostPerSqft: 0 },
+        { asset: 'commercial_office', exit: 'strategic_sale', income: true },
+        { asset: 'retail', exit: 'reit_exit', income: true },
+        { asset: 'industrial_warehousing', exit: 'refinance_hold', income: true },
+        { asset: 'hospitality', exit: 'hold_to_perpetuity', income: true },
+      ];
+
+      for (const item of cases) {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = item.asset;
+        ctx.property.property_type = item.asset;
+        ctx.property.saleable_area_sqft = 420000;
+        ctx.deal.deal_structure = item.dealStructure || 'outright';
+        ctx.deal.model_params.inputs = {
+          ...ctx.deal.model_params.inputs,
+          exitStrategyType: item.exit,
+          landownerSharePct: item.landownerSharePct ?? 0,
+          landCostCr: item.landCostCr ?? 80,
+          constructionCostPerSqft: item.constructionCostPerSqft ?? 4500,
+          baseRentPerSqftMonth: item.income ? 110 : undefined,
+          occupancyPct: item.income ? 0.9 : undefined,
+          exitCapRate: item.income ? 0.08 : undefined,
+        };
+        await expect(buildDealWorkbookV2(ctx, { strictValidation: true })).resolves.toEqual(expect.any(Buffer));
+      }
+    }, 30000);
+
+    test('Cash Flow Engine exposes quarter-end dates plus XIRR/XNPV return rows', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const cash = wb.getWorksheet('Cash Flow Engine');
+
+      expect(cash.getCell('B3').value.formula).toBeFormula('=EDATE(EffectiveDate,3)');
+
+      let xirr = null;
+      let xnpv = null;
+      cash.eachRow((row) => {
+        const label = String(row.getCell(1).value || '');
+        if (label === 'XIRR (modeled, dated)') xirr = row.getCell(2).value.formula;
+        if (label === 'XNPV (modeled, INR Cr)') xnpv = row.getCell(2).value.formula;
+      });
+      expect(xirr).toContain('XIRR');
+      expect(xirr).toContain('$B$3');
+      expect(xnpv).toContain('XNPV');
+      expect(xnpv).toContain('DiscountRatePct');
+    });
+
+    test('Dashboard formula cells include cached values for non-Excel viewers where deterministic', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const dash = wb.getWorksheet('Dashboard');
+
+      expect(dash.getCell('D4').value.formula).toBeFormula('=TotalProjectCostCr');
+      expect(typeof dash.getCell('D4').value.result).toBe('number');
+      expect(dash.getCell('D4').value.result).toBeGreaterThan(0);
+      expect(typeof dash.getCell('B12').value.result).toBe('number');
+      expect(typeof dash.getCell('B13').value.result).toBe('number');
     });
 
     // Regression: kernel stores some percents as integer (5 = 5%) and

@@ -61,6 +61,7 @@ const FONT = palette.FONTS.body;
 // Amortization" at 26 chars.
 const SHEETS = {
   dashboard: 'Dashboard',
+  qaSources: 'Export QA & Sources',
   inputs: 'Inputs & Assumptions',
   cashFlowEngine: 'Cash Flow Engine',
   debtAndAmort: 'Debt Sizing & Amortization',
@@ -199,6 +200,399 @@ const indiaGstDefaultForClass = (assetClass) => {
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+const asFiniteNumber = (value) => {
+  const parsed = num(value);
+  return parsed === null ? null : parsed;
+};
+
+const formulaValue = (formula, result) => {
+  const parsed = asFiniteNumber(result);
+  return parsed === null ? { formula } : { formula, result: parsed };
+};
+
+const addMonths = (value, months) => {
+  const base = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(base.getTime())) return null;
+  const next = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
+};
+
+const normalizeUrl = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  try {
+    const url = new URL(text.startsWith('http') ? text : `https://${text}`);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveAppBaseUrl = (options = {}) =>
+  normalizeUrl(
+    options.appBaseUrl
+    || process.env.APP_URL
+    || process.env.FRONTEND_URL
+    || process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
+  );
+
+const resolveDealStructureLabel = (ctx) => {
+  const raw = String(ctx.deal.deal_structure || '').toLowerCase();
+  if (raw.includes('revenue')) return 'jda_revenue_share';
+  if (raw.includes('area')) return 'jda_area_share';
+  if (raw === 'jda' || raw === 'jv' || raw === 'da') return 'jda_revenue_share';
+  if (raw.includes('management') || raw === 'dm') return 'development_management';
+  return 'outright_purchase';
+};
+
+const resolveExitStrategyType = (ctx) => {
+  const fallback = ctx.dealFamily === 'income' ? 'strategic_sale' : 'outright_progressive';
+  return String(ctx.inputs.exitStrategyType || fallback).trim() || fallback;
+};
+
+const getCoreInputSnapshot = (ctx) => {
+  const dealStructureLabel = resolveDealStructureLabel(ctx);
+  const landownerSharePct = toPctDecimal(firstNumber(
+    ctx.inputs.landownerSharePct,
+    ctx.inputs.landownerRevenueShare,
+    (dealStructureLabel !== 'outright_purchase' && ctx.deal.jv_split_landowner_pct != null)
+      ? ctx.deal.jv_split_landowner_pct
+      : null,
+    0,
+  ));
+
+  return {
+    assetClass: ctx.assetClass,
+    dealFamily: ctx.dealFamily,
+    dealStructureLabel,
+    exitStrategyType: resolveExitStrategyType(ctx),
+    effectiveDate: ctx.effectiveDate,
+    saleableAreaSqft: firstNumber(
+      ctx.property.saleable_area_sqft,
+      ctx.deal.saleable_area_sqft,
+      ctx.inputs.saleableAreaSqft,
+      ctx.inputs.leasableAreaSqft,
+      0,
+    ),
+    landAreaSqft: firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0),
+    loadingFactor: positiveOrDefault(firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio), 1.25),
+    sellRatePerSqft: firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft, 0),
+    baseRentPerSqftMonth: firstNumber(ctx.inputs.baseRentPerSqftMonth, ctx.inputs.rentPerSqftMonth, 0),
+    occupancyPct: toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),
+    exitCapRate: toPctDecimal(firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08)),
+    landCostCr: firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),
+    constructionCostPerSqft: firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0),
+    approvalCostCr: firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),
+    premiumFsiCostCr: firstNumber(ctx.inputs.premiumFSICostCr, ctx.inputs.tdrCostCr, 0),
+    debtLTV: toPctDecimal(firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55)),
+    debtRatePct: toPctDecimal(firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115)),
+    discountRatePct: toPctDecimal(firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16)),
+    projectMonths: ctx.projectMonths,
+    totalQuarters: ctx.totalQuarters,
+    landownerSharePct,
+    bulkExitDiscountPct: toPctDecimal(firstNumber(ctx.inputs.bulkExitDiscountPct, 0.10)),
+    holdPostCompletionYears: firstNumber(ctx.inputs.holdPostCompletionYears, 1),
+    exitYearFromAcq: firstNumber(ctx.inputs.exitYearFromAcq, ctx.inputs.loanTermYears, 7),
+  };
+};
+
+const computeCachedCostSnapshot = (ctx) => {
+  const core = getCoreInputSnapshot(ctx);
+  const hardCostCr = Math.max(0, (core.constructionCostPerSqft || 0) * (core.saleableAreaSqft || 0) / 10000000);
+  const landCostCr = Math.max(0, core.landCostCr || 0);
+  const approvalCostCr = Math.max(0, core.approvalCostCr || 0);
+  const premiumFsiCostCr = Math.max(0, core.premiumFsiCostCr || 0);
+  const softPct = [
+    ['architectFeePct', 0.05],
+    ['legalFeePct', 0.01],
+    ['appraisalFeePct', 0.005],
+    ['insuranceConstPct', 0.005],
+    ['developerOverheadPct', 0.03],
+  ]
+    .map(([key, fallback]) => toPctDecimal(firstNumber(ctx.inputs[key], fallback)))
+    .filter((value) => value !== null)
+    .reduce((sum, value) => sum + value, 0);
+  const propTaxConstPct = toPctDecimal(firstNumber(ctx.inputs.propTaxConstPct, ctx.inputs.propertyTaxesDuringConstructionPct, 0.02)) || 0;
+  const softCostsCr = hardCostCr * softPct + landCostCr * propTaxConstPct;
+  const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.066)) || 0;
+  const gstPct = toPctDecimal(firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, indiaGstDefaultForClass(ctx.assetClass))) || 0;
+  const statutoryCr = landCostCr * stampRegPct + hardCostCr * gstPct;
+  const totalProjectCostCr = landCostCr + hardCostCr + approvalCostCr + premiumFsiCostCr + softCostsCr + statutoryCr;
+
+  return {
+    hardCostCr,
+    landCostCr,
+    approvalCostCr,
+    premiumFsiCostCr,
+    softCostsCr,
+    statutoryCr,
+    totalProjectCostCr,
+  };
+};
+
+const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
+  const dealUrl = options.dealUrl || null;
+  if (isDerivedFormula) {
+    return {
+      sourceType: 'Workbook formula',
+      sourceName: 'Derived inside XLSX',
+      url: null,
+      freshness: ctx.generatedAt,
+      confidence: 'formula-derived',
+      provenance: name,
+      notes: 'Recalculates in Excel from named input cells.',
+    };
+  }
+
+  const modelInputAliases = {
+    SaleableAreaSqft: ['saleableAreaSqft', 'leasableAreaSqft'],
+    SellRatePerSqft: ['sellingRatePerSqft'],
+    BaseRentPerSqftMonth: ['baseRentPerSqftMonth', 'rentPerSqftMonth'],
+    ConstructionCostPerSqft: ['constructionCostPerSqft'],
+    LandCostCr: ['landCostCr'],
+    DebtLTV: ['debtLTV', 'debtPct'],
+    DebtRatePct: ['debtRatePct', 'interestRatePct'],
+    DiscountRatePct: ['discountRatePct'],
+    ExitStrategyType: ['exitStrategyType'],
+    DealStructureLabel: ['dealStructureLabel'],
+  };
+  const propertyAliases = {
+    SaleableAreaSqft: ['saleable_area_sqft'],
+    LandAreaSqft: ['land_area_sqft'],
+    FSI: ['existing_fsi'],
+    Locality: ['city', 'micro_market'],
+  };
+  const dealAliases = {
+    SellRatePerSqft: ['selling_rate_per_sqft'],
+    LandCostCr: ['land_cost_cr'],
+    ConstructionCostPerSqft: ['construction_cost_per_sqft'],
+    ApprovalCostCr: ['approval_cost_cr'],
+    ProjectMonths: ['project_duration_months'],
+    DiscountRatePct: ['discount_rate_pct'],
+    AssetClass: ['asset_class', 'financial_asset_class'],
+    DealType: ['deal_type'],
+  };
+
+  const hasOwnValue = (obj, keys = []) => keys.some((key) => obj?.[key] !== undefined && obj?.[key] !== null && obj?.[key] !== '');
+  if (hasOwnValue(ctx.inputs, modelInputAliases[name])) {
+    return {
+      sourceType: 'Financial model input',
+      sourceName: 'REDIP financial model',
+      url: dealUrl,
+      freshness: ctx.generatedAt,
+      confidence: 'stored-input',
+      provenance: `deal.model_params.inputs.${name}`,
+      notes: 'Operator-entered or imported model input. Verify against source documents before IC use.',
+    };
+  }
+  if (hasOwnValue(ctx.deal, dealAliases[name])) {
+    return {
+      sourceType: 'Deal financial record',
+      sourceName: 'REDIP deal financials',
+      url: dealUrl,
+      freshness: ctx.generatedAt,
+      confidence: 'stored-financial',
+      provenance: `financials.${name}`,
+      notes: 'Stored deterministic financial output or normalized underwriting input.',
+    };
+  }
+  if (hasOwnValue(ctx.property, propertyAliases[name])) {
+    return {
+      sourceType: 'Property record',
+      sourceName: 'REDIP property table',
+      url: dealUrl,
+      freshness: ctx.generatedAt,
+      confidence: ctx.property.geocode_confidence ? `stored-property (${ctx.property.geocode_confidence})` : 'stored-property',
+      provenance: `properties.${name}`,
+      notes: 'Property-level field. Verify measured areas against uploaded survey/title documents.',
+    };
+  }
+
+  return {
+    sourceType: 'Workbook default or manual entry',
+    sourceName: 'No verified source feed available',
+    url: dealUrl,
+    freshness: 'No verified freshness date',
+    confidence: value === null || value === undefined || value === '' ? 'missing' : 'low',
+    provenance: name,
+    notes: 'Manual verification required before circulation outside the deal team.',
+  };
+};
+
+const buildSourceRegister = (ctx, options = {}) => {
+  const core = getCoreInputSnapshot(ctx);
+  const dealUrl = ctx.deal.id && options.appBaseUrl ? `${options.appBaseUrl.replace(/\/$/, '')}/deals/${ctx.deal.id}` : null;
+  const fields = [
+    ['AssetClass', 'Asset class', core.assetClass],
+    ['DealStructureLabel', 'Deal structure', core.dealStructureLabel],
+    ['ExitStrategyType', 'Exit strategy', core.exitStrategyType],
+    ['SaleableAreaSqft', 'Saleable / leasable area', core.saleableAreaSqft],
+    ['LandAreaSqft', 'Land area', core.landAreaSqft],
+    ['SellRatePerSqft', 'Selling rate', core.sellRatePerSqft],
+    ['BaseRentPerSqftMonth', 'Base rent', core.baseRentPerSqftMonth],
+    ['OccupancyPct', 'Stabilised occupancy', core.occupancyPct],
+    ['LandCostCr', 'Land cost', core.landCostCr],
+    ['ConstructionCostPerSqft', 'Construction cost per sqft', core.constructionCostPerSqft],
+    ['DebtLTV', 'Debt percentage', core.debtLTV],
+    ['DebtRatePct', 'Debt rate', core.debtRatePct],
+    ['DiscountRatePct', 'Discount rate', core.discountRatePct],
+  ];
+
+  const rows = fields.map(([field, label, value]) => ({
+    field,
+    label,
+    value,
+    ...namedRangeSource(ctx, field, value, false, { dealUrl }),
+  }));
+
+  const comps = Array.isArray(ctx.exportContext?.market?.exportComps)
+    ? ctx.exportContext.market.exportComps
+    : [];
+  if (comps.length) {
+    const verifiedCount = comps.filter((comp) => comp.is_verified).length;
+    const firstUrl = normalizeUrl(comps.find((comp) => normalizeUrl(comp.source))?.source);
+    rows.push({
+      field: 'MarketComps',
+      label: 'Market comps used in export',
+      value: `${comps.length} comps (${verifiedCount} verified)`,
+      sourceType: 'Comparable transactions / listings',
+      sourceName: comps[0]?.source || 'REDIP comps table',
+      url: firstUrl,
+      freshness: comps[0]?.data_period || comps[0]?.possession_year || 'No verified freshness date',
+      confidence: verifiedCount ? 'mixed-verified' : 'unverified-context-only',
+      provenance: 'exportContext.market.exportComps',
+      notes: 'Context only. Do not quote as authoritative unless each comp is verified.',
+    });
+  } else {
+    rows.push({
+      field: 'MarketComps',
+      label: 'Market comps used in export',
+      value: 'No verified comps included',
+      sourceType: 'Market data',
+      sourceName: 'No verified feed available',
+      url: null,
+      freshness: 'No verified freshness date',
+      confidence: 'missing',
+      provenance: 'exportContext.market.exportComps',
+      notes: 'Workbook must not be treated as market-backed until verified comps are attached.',
+    });
+  }
+
+  const documents = Array.isArray(ctx.exportContext?.documents?.items)
+    ? ctx.exportContext.documents.items
+    : [];
+  rows.push({
+    field: 'Documents',
+    label: 'Uploaded deal documents',
+    value: `${documents.length} documents`,
+    sourceType: 'Document evidence',
+    sourceName: documents.length ? documents.slice(0, 3).map((doc) => doc.name).join('; ') : 'No documents uploaded',
+    url: dealUrl,
+    freshness: documents[0]?.created_at || ctx.generatedAt,
+    confidence: documents.length ? 'available-for-review' : 'missing',
+    provenance: 'exportContext.documents.items',
+    notes: documents.length ? 'Review source documents before legal/title/RERA conclusions.' : 'No document-backed evidence is present in this export context.',
+  });
+
+  return rows;
+};
+
+const buildExportQa = (ctx, options = {}) => {
+  const core = getCoreInputSnapshot(ctx);
+  const issues = [];
+  const addIssue = (severity, check, field, message, action, scope = 'all') => {
+    issues.push({ severity, check, field, message, action, scope });
+  };
+  const positive = (field, value, label, action, scope) => {
+    if (!(asFiniteNumber(value) > 0)) {
+      addIssue('blocker', 'Core input present', field, `${label} must be greater than zero.`, action, scope);
+    }
+  };
+  const pctRange = (field, value, label, min, max, action) => {
+    const parsed = asFiniteNumber(value);
+    if (parsed === null || parsed < min || parsed > max) {
+      addIssue('blocker', 'Percentage range', field, `${label} must be between ${min} and ${max}.`, action, 'all');
+    }
+  };
+
+  const allowedDevExit = new Set(['outright_progressive', 'bulk_exit_completion', 'hold_post_completion']);
+  const allowedIncomeExit = new Set(['strategic_sale', 'reit_exit', 'hold_to_perpetuity', 'refinance_hold']);
+  const allowedDealStructures = new Set(['outright_purchase', 'jda_revenue_share', 'jda_area_share', 'development_management']);
+  const allowedExit = ctx.dealFamily === 'income' ? allowedIncomeExit : allowedDevExit;
+
+  positive('SaleableAreaSqft', core.saleableAreaSqft, 'Saleable / leasable area', 'Fill the property area or model saleable/leasable area before export.', 'all asset classes');
+  positive('LoadingFactor', core.loadingFactor, 'Loading factor', 'Set a positive loading factor so carpet area can be derived.', 'all asset classes');
+  positive('DebtRatePct', core.debtRatePct, 'Debt rate', 'Set the lender interest rate before export.', 'all capital structures');
+  positive('DiscountRatePct', core.discountRatePct, 'Discount rate', 'Set the discount rate before export.', 'all return metrics');
+  pctRange('DebtLTV', core.debtLTV, 'Debt percentage', 0, 1, 'Set Debt % as a decimal or percent between 0% and 100%.');
+
+  if (!allowedDealStructures.has(core.dealStructureLabel)) {
+    addIssue('blocker', 'Deal structure option', 'DealStructureLabel', `Deal structure "${core.dealStructureLabel}" is not supported.`, 'Pick a supported deal structure.', 'development deal structures');
+  }
+  if (!allowedExit.has(core.exitStrategyType)) {
+    addIssue('blocker', 'Exit strategy option', 'ExitStrategyType', `Exit strategy "${core.exitStrategyType}" is not valid for ${ctx.dealFamily} deals.`, 'Pick the exit strategy from the workbook dropdown.', 'exit strategies');
+  }
+
+  if (ctx.dealFamily === 'income') {
+    positive('BaseRentPerSqftMonth', core.baseRentPerSqftMonth, 'Base rent per sqft per month', 'Fill BaseRentPerSqftMonth so the operating P&L can compute PGI/NOI.', 'income asset classes');
+    positive('OccupancyPct', core.occupancyPct, 'Stabilised occupancy', 'Fill OccupancyPct so the operating P&L can compute EGR/NOI.', 'income asset classes');
+    positive('ConstructionCostPerSqft', core.constructionCostPerSqft, 'Construction cost per sqft', 'Fill ConstructionCostPerSqft so cost, debt sizing, and yield-on-cost are credible.', 'income asset classes');
+    positive('ExitCapRate', core.exitCapRate, 'Exit cap rate', 'Fill ExitCapRate so terminal value and exit proceeds are credible.', 'income exit strategies');
+    if (!(asFiniteNumber(core.landCostCr) >= 0)) {
+      addIssue('blocker', 'Core input present', 'LandCostCr', 'Land cost must be zero or positive.', 'Fill LandCostCr or explicitly set 0 for no land acquisition cost.', 'income asset classes');
+    }
+  } else {
+    positive('SellRatePerSqft', core.sellRatePerSqft, 'Selling rate per sqft', 'Fill SellRatePerSqft so sales and margin can compute.', 'development asset classes');
+    if (ctx.assetClass === 'raw_land') {
+      positive('LandCostCr', core.landCostCr, 'Land cost', 'Fill LandCostCr so raw-land entitlement economics are grounded.', 'raw_land');
+    } else {
+      positive('ConstructionCostPerSqft', core.constructionCostPerSqft, 'Construction cost per sqft', 'Fill ConstructionCostPerSqft so development costs are grounded.', 'development asset classes');
+    }
+    if (core.dealStructureLabel === 'outright_purchase') {
+      positive('LandCostCr', core.landCostCr, 'Land cost', 'Fill LandCostCr for outright-purchase structures.', 'outright_purchase');
+    } else if (!(asFiniteNumber(core.landownerSharePct) > 0 && asFiniteNumber(core.landownerSharePct) < 1)) {
+      addIssue('blocker', 'Deal structure economics', 'LandownerSharePct', 'JDA / development-management structures need a landowner share between 0% and 100%.', 'Set LandownerSharePct so developer cash flow is not overstated.', core.dealStructureLabel);
+    }
+    if (core.exitStrategyType === 'bulk_exit_completion') {
+      pctRange('BulkExitDiscountPct', core.bulkExitDiscountPct, 'Bulk exit discount', 0, 0.9, 'Set a bulk-exit discount below 90%.');
+    }
+  }
+
+  if (!Array.isArray(ctx.exportContext?.documents?.items) || ctx.exportContext.documents.items.length === 0) {
+    addIssue('warn', 'Evidence coverage', 'Documents', 'No uploaded deal documents are attached to this export context.', 'Attach source documents before treating title/RERA/approval fields as verified.', 'source provenance');
+  }
+  if (!Array.isArray(ctx.exportContext?.market?.exportComps) || ctx.exportContext.market.exportComps.length === 0) {
+    addIssue('warn', 'Market coverage', 'MarketComps', 'No verified comparable feed is present.', 'Attach verified comps or show the workbook as an internal sensitivity file only.', 'market data');
+  }
+
+  const blockers = issues.filter((issue) => issue.severity === 'blocker');
+  return {
+    status: blockers.length ? 'BLOCKED' : issues.length ? 'PASS_WITH_WARNINGS' : 'PASS',
+    generatedAt: ctx.generatedAt,
+    core,
+    issues,
+    blockers,
+    sourceRegister: buildSourceRegister(ctx, options),
+  };
+};
+
+class XlsxExportValidationError extends Error {
+  constructor(qa) {
+    super(`XLSX export blocked: ${qa.blockers.length} required input${qa.blockers.length === 1 ? '' : 's'} missing or invalid.`);
+    this.name = 'XlsxExportValidationError';
+    this.statusCode = 422;
+    this.errors = qa.blockers.map((issue) => ({
+      field: issue.field,
+      message: issue.message,
+      action: issue.action,
+      scope: issue.scope,
+    }));
+    this.qa = qa;
+  }
+}
+
 /**
  * Build the deck workbook context. Reuses `inferAssetClass` for class
  * detection; everything else is read straight off the export context.
@@ -275,6 +669,19 @@ const buildContext = (exportContext = {}, options = {}) => {
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
     effectiveDate: options.effectiveDate || new Date().toISOString().slice(0, 10),
   };
+};
+
+const prepareWorkbookContext = (exportContext = {}, options = {}) => {
+  const ctx = buildContext(exportContext, options);
+  const appBaseUrl = resolveAppBaseUrl(options);
+  const qa = buildExportQa(ctx, { appBaseUrl });
+  ctx.exportQa = qa;
+  const strictValidation = options.strictValidation === true
+    || (options.strictValidation !== false && process.env.NODE_ENV !== 'test');
+  if (strictValidation && qa.blockers.length) {
+    throw new XlsxExportValidationError(qa);
+  }
+  return ctx;
 };
 
 /**
@@ -594,14 +1001,7 @@ const buildInputsSheet = (workbook, ctx) => {
   // The dropdown "Deal Structure" label is informational text — visible
   // to the operator but not referenced in any formula. The actual
   // mechanical effect is driven by LandownerSharePct alone.
-  const dealStructureLabel = (() => {
-    const raw = String(ctx.deal.deal_structure || '').toLowerCase();
-    if (raw.includes('revenue')) return 'jda_revenue_share';
-    if (raw.includes('area')) return 'jda_area_share';
-    if (raw === 'jda' || raw === 'jv' || raw === 'da') return 'jda_revenue_share';
-    if (raw.includes('management') || raw === 'dm') return 'development_management';
-    return 'outright_purchase';
-  })();
+  const dealStructureLabel = resolveDealStructureLabel(ctx);
 
   const dealStructureSection = {
     title: 'Deal Structure (JDA / Outright / DM)',
@@ -1282,6 +1682,14 @@ const buildInputsSheet = (workbook, ctx) => {
         styleInputCell(valueCell);
         if (format) valueCell.numFmt = format;
       }
+      const source = namedRangeSource(ctx, name, value, isDerivedFormula);
+      valueCell.note = [
+        `Source: ${source.sourceName}`,
+        `Confidence: ${source.confidence}`,
+        `Freshness: ${source.freshness}`,
+        `Provenance: ${source.provenance}`,
+        source.notes,
+      ].filter(Boolean).join('\n');
       // Categorical dropdown (PR-DD) — when the named range is one of the
       // entries in CATEGORICAL_OPTIONS, apply Excel's list-validation
       // so operators get a dropdown arrow + autocomplete + no-typo guarantee.
@@ -1329,6 +1737,182 @@ const buildInputsSheet = (workbook, ctx) => {
   return { sheet, definedNames };
 };
 
+const styleTableHeaderRow = (sheet, rowNumber, columnCount) => {
+  const row = sheet.getRow(rowNumber);
+  for (let col = 1; col <= columnCount; col += 1) {
+    const cell = row.getCell(col);
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  }
+  row.height = 24;
+};
+
+const styleQaBodyRows = (sheet, startRow, rowCount, columnCount) => {
+  for (let r = startRow; r < startRow + rowCount; r += 1) {
+    for (let c = 1; c <= columnCount; c += 1) {
+      const cell = sheet.getCell(r, c);
+      cell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('ink') } };
+      cell.alignment = { horizontal: c === 2 || c === 5 || c === 9 ? 'left' : 'center', vertical: 'top', wrapText: true };
+      cell.fill = FILL(r % 2 === 0 ? 'FFFFFFFF' : palette.xlsx('paperSubtle'));
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      };
+    }
+    sheet.getRow(r).height = 32;
+  }
+};
+
+const buildQaSourcesSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.qaSources, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 5 }],
+  });
+  sheet.columns = [
+    { width: 18 },
+    { width: 26 },
+    { width: 24 },
+    { width: 30 },
+    { width: 42 },
+    { width: 24 },
+    { width: 22 },
+    { width: 28 },
+    { width: 48 },
+  ];
+
+  sheet.mergeCells('A1:I1');
+  sheet.getCell('A1').value = `${ctx.brandName} | Export QA & Sources`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 28;
+
+  sheet.mergeCells('A2:I2');
+  sheet.getCell('A2').value = `${ctx.exportQa.status} | ${ctx.exportQa.blockers.length} blockers | ${ctx.exportQa.issues.length - ctx.exportQa.blockers.length} warnings/info | Generated ${ctx.generatedAt}`;
+  sheet.getCell('A2').font = {
+    name: FONT,
+    size: 10,
+    bold: true,
+    color: { argb: ctx.exportQa.blockers.length ? palette.xlsx('dataNegative') : palette.xlsx('dataPositive') },
+  };
+  sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet.getCell('A2').fill = FILL(palette.xlsx('paperSubtle'));
+  sheet.getRow(2).height = 22;
+
+  const qaHeaderRow = 4;
+  const qaRows = ctx.exportQa.issues.length
+    ? ctx.exportQa.issues.map((issue) => [
+      issue.severity.toUpperCase(),
+      issue.check,
+      issue.field,
+      issue.message,
+      issue.action,
+      issue.scope,
+    ])
+    : [['PASS', 'Workbook readiness', 'All', 'No blocking QA issues detected.', 'Continue normal review.', 'all']];
+
+  sheet.addTable({
+    name: 'ExportQaChecks',
+    ref: `A${qaHeaderRow}`,
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: 'TableStyleMedium2',
+      showRowStripes: true,
+    },
+    columns: [
+      { name: 'Severity' },
+      { name: 'Check' },
+      { name: 'Field' },
+      { name: 'Finding' },
+      { name: 'Action' },
+      { name: 'Scope' },
+    ],
+    rows: qaRows,
+  });
+  styleTableHeaderRow(sheet, qaHeaderRow, 6);
+  styleQaBodyRows(sheet, qaHeaderRow + 1, qaRows.length, 6);
+  qaRows.forEach((row, idx) => {
+    const cell = sheet.getCell(qaHeaderRow + 1 + idx, 1);
+    const severity = String(row[0]);
+    cell.font = {
+      name: FONT,
+      size: 9,
+      bold: true,
+      color: {
+        argb: severity === 'BLOCKER'
+          ? palette.xlsx('dataNegative')
+          : severity === 'WARN'
+            ? palette.xlsx('dataWarning')
+            : palette.xlsx('dataPositive'),
+      },
+    };
+  });
+
+  const sourceHeaderRow = qaHeaderRow + qaRows.length + 4;
+  sheet.mergeCells(sourceHeaderRow - 2, 1, sourceHeaderRow - 2, 9);
+  sheet.getCell(sourceHeaderRow - 2, 1).value = 'Source Register';
+  styleSectionTitle(sheet.getCell(sourceHeaderRow - 2, 1));
+  sheet.getRow(sourceHeaderRow - 2).height = 22;
+
+  const sourceRows = ctx.exportQa.sourceRegister.map((row) => [
+    row.field,
+    row.label,
+    row.value === null || row.value === undefined || row.value === '' ? 'Missing' : row.value,
+    row.sourceType,
+    row.sourceName,
+    row.url || 'No link available',
+    row.freshness || 'No verified freshness date',
+    row.confidence || 'unknown',
+    row.notes || '',
+  ]);
+
+  sheet.addTable({
+    name: 'ExportSourceRegister',
+    ref: `A${sourceHeaderRow}`,
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: 'TableStyleMedium9',
+      showRowStripes: true,
+    },
+    columns: [
+      { name: 'Field' },
+      { name: 'Label' },
+      { name: 'Current Value' },
+      { name: 'Source Type' },
+      { name: 'Source Name' },
+      { name: 'Source Link' },
+      { name: 'Freshness' },
+      { name: 'Confidence' },
+      { name: 'Notes' },
+    ],
+    rows: sourceRows,
+  });
+  styleTableHeaderRow(sheet, sourceHeaderRow, 9);
+  styleQaBodyRows(sheet, sourceHeaderRow + 1, sourceRows.length, 9);
+
+  ctx.exportQa.sourceRegister.forEach((row, idx) => {
+    const excelRow = sourceHeaderRow + 1 + idx;
+    const linkCell = sheet.getCell(excelRow, 6);
+    if (row.url) {
+      linkCell.value = { text: row.url, hyperlink: row.url };
+      linkCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('accent') }, underline: true };
+    }
+    sheet.getCell(excelRow, 8).note = [
+      `Provenance: ${row.provenance}`,
+      `Freshness: ${row.freshness}`,
+      row.notes,
+    ].filter(Boolean).join('\n');
+  });
+
+  sheet.mergeCells(sourceHeaderRow + sourceRows.length + 2, 1, sourceHeaderRow + sourceRows.length + 2, 9);
+  sheet.getCell(sourceHeaderRow + sourceRows.length + 2, 1).value =
+    'AI-assisted narratives and market context require human review. No legal, title, RERA, zoning, approval, comp, or market claim should be quoted externally without source-document verification.';
+  sheet.getCell(sourceHeaderRow + sourceRows.length + 2, 1).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(sourceHeaderRow + sourceRows.length + 2, 1).alignment = { wrapText: true, vertical: 'top' };
+  sheet.getRow(sourceHeaderRow + sourceRows.length + 2).height = 28;
+
+  return sheet;
+};
+
 /**
  * Operating Schedule section of the Cash Flow Engine sheet.
  *
@@ -1374,6 +1958,19 @@ const buildPhasingSheet = (workbook, ctx) => {
     : `Quarters driven by ProjectMonths input. All formulas reference Inputs & Assumptions named ranges.`;
   sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(2, 1).alignment = { vertical: 'middle' };
+
+  sheet.getCell(3, 1).value = 'Quarter end date';
+  styleLabelCell(sheet.getCell(3, 1));
+  for (let q = 1; q <= ctx.totalQuarters; q += 1) {
+    const dateCell = sheet.getCell(3, 1 + q);
+    dateCell.value = {
+      formula: `EDATE(EffectiveDate,${q * 3})`,
+      result: addMonths(ctx.effectiveDate, q * 3),
+    };
+    styleOutputCell(dateCell, NUMBER_FORMATS.date);
+  }
+  sheet.getCell(3, ctx.totalQuarters + 2).value = '';
+  sheet.getRow(3).height = 18;
 
   // Header row 4
   sheet.getCell(4, 1).value = 'Line item';
@@ -2046,6 +2643,38 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
 
+  const datedReturnTitleRow = cashFlowStartRow + rows.length + 2;
+  const datedReturnStartRow = datedReturnTitleRow + 1;
+  const dateStartCol = colLetter(2);
+  const dateEndCol = colLetter(ctx.totalQuarters + 1);
+  const returnCfLegacyRow = ctx.dealFamily === 'income' ? 11 : 8;
+  const datedCashFlowRow = cf(returnCfLegacyRow);
+  const datedCashFlowRange = `$${dateStartCol}$${datedCashFlowRow}:$${dateEndCol}$${datedCashFlowRow}`;
+  const datedDateRange = `$${dateStartCol}$3:$${dateEndCol}$3`;
+
+  sheet.mergeCells(datedReturnTitleRow, 1, datedReturnTitleRow, ctx.totalQuarters + 2);
+  sheet.getCell(datedReturnTitleRow, 1).value = 'Date-based return checks — XIRR / XNPV';
+  styleSectionTitle(sheet.getCell(datedReturnTitleRow, 1));
+  sheet.getRow(datedReturnTitleRow).height = 22;
+
+  [
+    ['XIRR (modeled, dated)', `=IFERROR(XIRR(${datedCashFlowRange},${datedDateRange}),"–")`, NUMBER_FORMATS.percent, 'Annual return using quarter-end dates from row 3.'],
+    ['XNPV (modeled, INR Cr)', `=IFERROR(XNPV(DiscountRatePct,${datedCashFlowRange},${datedDateRange}),0)`, NUMBER_FORMATS.currency, 'Date-aware present value using DiscountRatePct.'],
+    ['Cash-flow row used', `="Row ${datedCashFlowRow} | ${ctx.dealFamily === 'income' ? 'Total cash flow including reversion' : 'Project net cash flow'}"`, null, 'Matches the modeled return row used on the Dashboard.'],
+  ].forEach(([label, formula, format, note], idx) => {
+    const r = datedReturnStartRow + idx;
+    sheet.getCell(r, 1).value = label;
+    styleLabelCell(sheet.getCell(r, 1));
+    const valueCell = sheet.getCell(r, 2);
+    valueCell.value = { formula };
+    styleOutputCell(valueCell, format || NUMBER_FORMATS.integer);
+    if (format) valueCell.numFmt = format;
+    sheet.mergeCells(r, 3, r, Math.min(ctx.totalQuarters + 2, 8));
+    sheet.getCell(r, 3).value = note;
+    styleLabelCell(sheet.getCell(r, 3));
+    sheet.getCell(r, 3).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  });
+
   // Conditional formatting on DSCR row (shifted by cfOffset into the
   // combined Cash Flow Engine sheet).
   const dscrRowIdx = rows.findIndex((r) => r.conditional === 'dscr');
@@ -2180,32 +2809,33 @@ const buildDashboardSheet = (workbook, ctx) => {
   // for this specific deal, so the workbook reconciles with every other
   // surface (Reports page, PPTX deck, DOCX report).
   const k = ctx.kernelKpis;
+  const cachedCosts = computeCachedCostSnapshot(ctx);
   const kpiCells = ctx.dealFamily === 'income'
     ? [
         // Top row — operating fundamentals (Phasing section: rows unchanged
         // by restructure; e.g. NOI is at row 18 in the upper Phasing block).
-        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Stabilized Yield on Cost',      kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/${totalProjectCostRef},0)`, format: NUMBER_FORMATS.percent },
-        { row: 4, col: 'E', label: 'Exit Cap Rate',                 kernel: null,                  formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent },
+        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency, cached: k.noi },
+        { row: 4, col: 'C', label: 'Stabilized Yield on Cost',      kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/${totalProjectCostRef},0)`, format: NUMBER_FORMATS.percent, cached: k.yieldOnCost },
+        { row: 4, col: 'E', label: 'Exit Cap Rate',                 kernel: null,                  formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent, cached: getCoreInputSnapshot(ctx).exitCapRate },
         // Bottom row — investor returns. Cash Flow section: rows shift by
         // cfShift (income cfOffset=20 → row 10 becomes row 30, row 9 → 29,
         // row 11 → 31).
         { row: 7, col: 'A', label: 'Min DSCR',                      kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(10)}`,                                                                         format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C${cfShift(9)}/(${totalProjectCostRef}*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent },
-        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}${cfShift(11)}`,                                                                         format: NUMBER_FORMATS.currency },
+        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C${cfShift(9)}/(${totalProjectCostRef}*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent, cached: k.yieldOnCost },
+        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}${cfShift(11)}`,                                                                         format: NUMBER_FORMATS.currency, cached: k.exitValue },
       ]
     : [
         // Development family. Phasing row 9 = Quarter sales; Cash Flow
         // rows shifted by cfShift (dev cfOffset=26 → row 6 → 32, row 7 → 33,
         // row 8 → 34, row 12 → 38, row 13 → 39).
-        { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         kernel: k.totalRevenue,       formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=${totalProjectCostRef}`,                                          format: NUMBER_FORMATS.currency },
-        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}${cfShift(8)}`,                                                                        format: NUMBER_FORMATS.currency },
-        { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}${cfShift(8)}/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent },
+        { row: 4, col: 'A', label: 'Total Revenue (INR Cr)',         kernel: k.totalRevenue,       formula: `=${phasing}!${totalCol}9`,                                                                       format: NUMBER_FORMATS.currency, cached: k.totalRevenue },
+        { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=${totalProjectCostRef}`,                                          format: NUMBER_FORMATS.currency, cached: cachedCosts.totalProjectCostCr },
+        { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}${cfShift(8)}`,                                                                        format: NUMBER_FORMATS.currency, cached: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null },
+        { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}${cfShift(8)}/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent, cached: k.grossMargin },
         { row: 7, col: 'C', label: 'Min DSCR',                        kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(13)}`,                                                                      format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'E', label: 'Residual Land Value (INR Cr)',    kernel: k.residualLandValue,  formula: `=${cashflow}!${totalCol}${cfShift(12)}`,                                                                      format: NUMBER_FORMATS.currency },
+        { row: 7, col: 'E', label: 'Residual Land Value (INR Cr)',    kernel: k.residualLandValue,  formula: `=${cashflow}!${totalCol}${cfShift(12)}`,                                                                      format: NUMBER_FORMATS.currency, cached: k.residualLandValue },
       ];
-  kpiCells.forEach(({ row, col, label, kernel, formula, format }) => {
+  kpiCells.forEach(({ row, col, label, kernel, formula, format, cached }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
     labelCell.value = label;
     labelCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') }, bold: true };
@@ -2220,7 +2850,7 @@ const buildDashboardSheet = (workbook, ctx) => {
     // Inputs didn't flow through. Kernel reconciliation moved to the
     // Returns block (rows 19-22) which shows kernel-vs-modeled side-by-side.
     if (formula) {
-      valueCell.value = { formula };
+      valueCell.value = formulaValue(formula, format === NUMBER_FORMATS.percent ? toPctDecimal(cached) : cached);
     } else if (kernel != null) {
       // No formula available (e.g. some KPIs that the kernel computes but
       // the workbook can't replicate). Fall back to kernel literal.
@@ -2314,20 +2944,20 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getRow(11).height = 22;
 
   const su = [
-    ['Source: Equity',             `=MAX(0,${totalProjectCostRef}*(1-DebtLTV))`],
-    ['Source: Debt',               `=${totalProjectCostRef}*DebtLTV`],
-    ['Use: Land',                  `=LandCostCr`],
-    ['Use: Construction',          `=ConstructionCostPerSqft*SaleableAreaSqft/10000000`],
-    ['Use: Approvals + Premium',   `=ApprovalCostCr+PremiumFSICostCr`],
-    ['Use: Soft Costs',            `='${SHEETS.calculations}'!$B$24`],
-    ['Use: Statutory Levies',      `='${SHEETS.calculations}'!$B$27`],
+    ['Source: Equity',             `=MAX(0,${totalProjectCostRef}*(1-DebtLTV))`, Math.max(0, cachedCosts.totalProjectCostCr * (1 - (getCoreInputSnapshot(ctx).debtLTV || 0)))],
+    ['Source: Debt',               `=${totalProjectCostRef}*DebtLTV`, cachedCosts.totalProjectCostCr * (getCoreInputSnapshot(ctx).debtLTV || 0)],
+    ['Use: Land',                  `=LandCostCr`, cachedCosts.landCostCr],
+    ['Use: Construction',          `=ConstructionCostPerSqft*SaleableAreaSqft/10000000`, cachedCosts.hardCostCr],
+    ['Use: Approvals + Premium',   `=ApprovalCostCr+PremiumFSICostCr`, cachedCosts.approvalCostCr + cachedCosts.premiumFsiCostCr],
+    ['Use: Soft Costs',            `='${SHEETS.calculations}'!$B$24`, cachedCosts.softCostsCr],
+    ['Use: Statutory Levies',      `='${SHEETS.calculations}'!$B$27`, cachedCosts.statutoryCr],
   ];
-  su.forEach(([label, formula], idx) => {
+  su.forEach(([label, formula, cached], idx) => {
     const r = 12 + idx;
     sheet.getCell(`A${r}`).value = label;
     styleLabelCell(sheet.getCell(`A${r}`));
     const v = sheet.getCell(`B${r}`);
-    v.value = { formula };
+    v.value = formulaValue(formula, cached);
     styleOutputCell(v, NUMBER_FORMATS.currency);
   });
 
@@ -3945,7 +4575,7 @@ const buildCalculationsSheet = (workbook, ctx) => {
  * Build the v2 workbook. Returns an ExcelJS Workbook ready to write.
  */
 const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
-  const ctx = buildContext(exportContext, options);
+  const ctx = options.__preparedContext || prepareWorkbookContext(exportContext, options);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = options.userName || ctx.brandName;
   workbook.lastModifiedBy = options.userName || ctx.brandName;
@@ -3972,6 +4602,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // workbook.worksheets array reorder below — ExcelJS's `addWorksheet`
   // appends; reordering requires direct array manipulation.
   buildDashboardSheet(workbook, ctx);
+  buildQaSourcesSheet(workbook, ctx);
   const { definedNames } = buildInputsSheet(workbook, ctx);
 
   // Cash Flow Engine combines (a) Phasing operating schedule + (b) Cash
@@ -4114,6 +4745,64 @@ const stripLeadingEqualsFromWorksheetFormulas = async (xlsxBuffer) => {
   return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
 };
 
+const validateXlsxBufferForDownload = async (xlsxBuffer) => {
+  const zip = await JSZip.loadAsync(xlsxBuffer);
+  const issues = [];
+  const add = (field, message, action) => {
+    issues.push({
+      severity: 'blocker',
+      check: 'Workbook structure',
+      field,
+      message,
+      action,
+      scope: 'xlsx package',
+    });
+  };
+
+  if (!zip.file('[Content_Types].xml')) add('[Content_Types].xml', 'Workbook content types part is missing.', 'Regenerate the workbook.');
+  const workbookXmlFile = zip.file('xl/workbook.xml');
+  if (!workbookXmlFile) {
+    add('xl/workbook.xml', 'Workbook definition is missing.', 'Regenerate the workbook.');
+  } else {
+    const workbookXml = await workbookXmlFile.async('string');
+    if (!workbookXml.includes('Export QA &amp; Sources') && !workbookXml.includes('Export QA & Sources')) {
+      add(SHEETS.qaSources, 'Export QA & Sources sheet is missing from the workbook.', 'Regenerate the workbook with the QA sheet enabled.');
+    }
+  }
+
+  const tableFiles = zip.file(/^xl\/tables\/table\d+\.xml$/);
+  if (tableFiles.length < 2) {
+    add('xl/tables', 'Expected Excel tables for QA checks and source register are missing.', 'Regenerate the workbook so reviewers get filterable QA/source tables.');
+  }
+
+  const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
+  await Promise.all(sheetFiles.map(async (file) => {
+    const xml = await file.async('string');
+    if (xml.includes('FFundefined')) {
+      add(file.name, 'Workbook XML contains an invalid undefined ARGB color.', 'Fix the style token before download.');
+    }
+    if (/(<f(?:\s[^>]*)?>)=/.test(xml)) {
+      add(file.name, 'Workbook XML contains formulas with a leading equals sign.', 'Strip leading equals signs from formula XML before download.');
+    }
+  }));
+
+  if (issues.length) {
+    throw new XlsxExportValidationError({
+      status: 'BLOCKED',
+      blockers: issues,
+      issues,
+      sourceRegister: [],
+    });
+  }
+  return true;
+};
+
+const finalizeWorkbookBuffer = async (xlsxBuffer) => {
+  const stripped = await stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
+  await validateXlsxBufferForDownload(stripped);
+  return stripped;
+};
+
 /**
  * Build and return the workbook as a Buffer (for the route handler).
  * Two-stage: ExcelJS writes cells / formulas / conditional formatting,
@@ -4122,13 +4811,13 @@ const stripLeadingEqualsFromWorksheetFormulas = async (xlsxBuffer) => {
  * operator downloads — native charts that recalc when inputs change.
  */
 const buildDealWorkbookV2 = async (exportContext, options = {}) => {
-  const ctx = buildContext(exportContext, options);
-  const workbook = buildDealWorkbookV2Workbook(exportContext, options);
+  const ctx = prepareWorkbookContext(exportContext, options);
+  const workbook = buildDealWorkbookV2Workbook(exportContext, { ...options, __preparedContext: ctx });
   const raw = await workbook.xlsx.writeBuffer();
   const xlsxBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
 
   const chartSpecs = buildDashboardChartSpecs(ctx);
-  if (chartSpecs.length === 0) return stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
+  if (chartSpecs.length === 0) return finalizeWorkbookBuffer(xlsxBuffer);
 
   try {
     // Dashboard is intentionally the first worksheet, so ExcelJS maps it to
@@ -4138,7 +4827,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       targetSheetFile: 'sheet1.xml',
       charts: chartSpecs,
     });
-    return stripLeadingEqualsFromWorksheetFormulas(withCharts);
+    return finalizeWorkbookBuffer(withCharts);
   } catch (err) {
     // Chart injection is best-effort. If anything goes wrong (a future
     // template change shifts the sheet position, an XML structure shifts,
@@ -4148,7 +4837,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       // eslint-disable-next-line no-console
       console.warn('[xlsx.v2] chart injection failed, returning un-enhanced workbook:', err.message);
     }
-    return stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
+    return finalizeWorkbookBuffer(xlsxBuffer);
   }
 };
 
@@ -4157,9 +4846,13 @@ module.exports = {
   // Internal exports for tests.
   __internal: {
     buildContext,
+    prepareWorkbookContext,
+    buildExportQa,
     buildDealWorkbookV2Workbook,
     buildDashboardChartSpecs,
     stripLeadingEqualsFromWorksheetFormulas,
+    validateXlsxBufferForDownload,
+    XlsxExportValidationError,
     SHEETS,
     NUMBER_FORMATS,
   },
