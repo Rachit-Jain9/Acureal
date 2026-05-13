@@ -2631,3 +2631,26 @@ Finished the remaining ChatGPT/Grok XLSX export remarks as one institutional-gra
 ### What's left to do
 No manual user action is required for this patch. The next useful check is downloading one real production workbook after deploy and confirming the QA and Sources tab reads cleanly for a complete model.
 
+
+## 2026-05-13 - XLSX monthly institutional underwriting tier
+
+### What was worked on
+Continued the XLSX export remarks, skipping live paid/official feed integrations and expert legal/tax validation per instruction. Added a deeper institutional workbook tier for monthly underwriting, income lease rolls, development drawdowns, source/use reconciliation, and larger sensitivity/stress analysis across development and income deal families.
+
+### Plain-English recap
+- Exports now include a monthly cash-flow view instead of leaving reviewers with only quarterly timing.
+- Development deals now show a construction drawdown with monthly S-curve funding, debt draws, and capitalized interest.
+- Income deals now include a lease roll view with rent resets, WALE, and expiry concentration.
+- Reviewers now get a dedicated Sources & Uses sheet, a larger sensitivity/stress sheet, and dashboard health icons/trend strips.
+
+### PRs opened / merged
+- PR pending from `codex/monthly-underwriting-tier` - `feat(exports): add monthly underwriting workbook tier`.
+
+### Validation
+- Backend XLSX v2 focused suite: 144 tests passed.
+- XLSX chart injector suite: 11 tests passed.
+- Full backend suite: 1,514 tests passed.
+
+### What's left to do
+No manual user action is required for this patch. Paid/official data feeds and expert legal/tax validation remain intentionally skipped for now.
+

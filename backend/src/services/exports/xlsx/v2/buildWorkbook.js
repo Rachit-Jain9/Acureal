@@ -64,6 +64,11 @@ const SHEETS = {
   qaSources: 'Export QA & Sources',
   inputs: 'Inputs & Assumptions',
   cashFlowEngine: 'Cash Flow Engine',
+  sourcesUses: 'Sources & Uses',
+  monthlyCashFlow: 'Monthly Cash Flow',
+  leaseRoll: 'Lease Roll',
+  constructionDrawdown: 'Construction Drawdown',
+  sensitivityStress: 'Sensitivity & Stress',
   debtAndAmort: 'Debt Sizing & Amortization',
   waterfall: 'Sponsor LP Waterfall',
   unitMix: 'Unit Mix',
@@ -218,6 +223,17 @@ const addMonths = (value, months) => {
   return next;
 };
 
+const excelCol = (n) => {
+  let s = '';
+  let v = n;
+  while (v > 0) {
+    const r = (v - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    v = Math.floor((v - r) / 26);
+  }
+  return s;
+};
+
 const normalizeUrl = (value) => {
   const text = String(value || '').trim();
   if (!text) return null;
@@ -250,6 +266,17 @@ const resolveDealStructureLabel = (ctx) => {
 const resolveExitStrategyType = (ctx) => {
   const fallback = ctx.dealFamily === 'income' ? 'strategic_sale' : 'outright_progressive';
   return String(ctx.inputs.exitStrategyType || fallback).trim() || fallback;
+};
+
+const getWorkbookModelMonths = (ctx) => {
+  const baseMonths = firstNumber(ctx.projectMonths, 36) || 36;
+  const holdYears = ctx.dealFamily === 'income'
+    ? firstNumber(ctx.inputs.exitYearFromAcq, ctx.inputs.holdPeriodYears, ctx.inputs.loanTermYears, 7)
+    : firstNumber(ctx.inputs.holdPostCompletionYears, 0);
+  const fullMonths = ctx.dealFamily === 'income'
+    ? Math.max(baseMonths, Math.round((holdYears || 7) * 12))
+    : baseMonths + Math.max(0, Math.round((holdYears || 0) * 12));
+  return clamp(fullMonths, 12, 120);
 };
 
 const getCoreInputSnapshot = (ctx) => {
@@ -1913,6 +1940,440 @@ const buildQaSourcesSheet = (workbook, ctx) => {
   return sheet;
 };
 
+const buildSourcesUsesSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.sourcesUses, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 5 }],
+  });
+  sheet.columns = [
+    { width: 34 },
+    { width: 18 },
+    { width: 20 },
+    { width: 54 },
+  ];
+
+  sheet.mergeCells('A1:D1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Sources & Uses`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 28;
+
+  sheet.mergeCells('A2:D2');
+  sheet.getCell('A2').value = 'Dedicated capital stack view. Sources must equal uses before the model is circulated.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+
+  ['Line item', 'INR Cr', 'INR / sqft', 'Source / note'].forEach((label, idx) => {
+    sheet.getCell(4, idx + 1).value = label;
+  });
+  styleHeader(sheet.getRow(4));
+
+  const landownerContributionFormula = ctx.dealFamily === 'development'
+    ? '=IF(DealStructureLabel="outright_purchase",0,LandCostCr)'
+    : '=0';
+  const rows = [
+    ['Sources', '', '', ''],
+    ['Sponsor / LP equity', '=MAX(0,TotalProjectCostCr*(1-DebtLTV))', '=IFERROR(B6*10000000/SaleableAreaSqft,0)', 'Residual source after senior debt.'],
+    ['Senior debt', '=TotalProjectCostCr*DebtLTV', '=IFERROR(B7*10000000/SaleableAreaSqft,0)', 'Uses DebtLTV from Inputs; Debt Sizing sheet gives lender-constrained amount.'],
+    ['Landowner contribution / JDA land', landownerContributionFormula, '=IFERROR(B8*10000000/SaleableAreaSqft,0)', 'Reference only; cash land cost remains driven by LandCostCr.'],
+    ['Total sources', '=SUM(B6:B8)', '=IFERROR(B9*10000000/SaleableAreaSqft,0)', 'Should reconcile to total uses.'],
+    ['', '', '', ''],
+    ['Uses', '', '', ''],
+    ['Land acquisition', '=LandCostCr', '=IFERROR(B12*10000000/SaleableAreaSqft,0)', 'From Inputs.'],
+    ['Stamp duty + registration', '=LandCostCr*StampRegPct', '=IFERROR(B13*10000000/SaleableAreaSqft,0)', 'India statutory levy on acquisition.'],
+    ['Construction hard cost', '=ConstructionCostPerSqft*SaleableAreaSqft/10000000', '=ConstructionCostPerSqft', 'Built area x hard cost.'],
+    ['GST on construction', '=B14*GstPct', '=IFERROR(B15*10000000/SaleableAreaSqft,0)', 'Net-of-ITC model input by asset class.'],
+    ['Approvals + premium FSI / TDR', '=ApprovalCostCr+PremiumFSICostCr', '=IFERROR(B16*10000000/SaleableAreaSqft,0)', 'Approval cost plus optional premium FAR/TDR.'],
+    ['Detailed soft costs', `='${SHEETS.calculations}'!$B$24`, '=IFERROR(B17*10000000/SaleableAreaSqft,0)', 'A&E, legal, appraisal, insurance, property tax during construction, overhead, marketing, finance.'],
+    ['Total uses', '=SUM(B12:B17)', '=IFERROR(B18*10000000/SaleableAreaSqft,0)', 'Matches TotalProjectCostCr when inputs are complete.'],
+    ['Source / use gap', '=B9-B18', '=IFERROR(B19*10000000/SaleableAreaSqft,0)', 'Zero means the capital stack balances.'],
+  ];
+
+  rows.forEach(([label, amount, perSqft, note], idx) => {
+    const r = 5 + idx;
+    const isSection = label === 'Sources' || label === 'Uses';
+    if (isSection) {
+      sheet.mergeCells(`A${r}:D${r}`);
+      sheet.getCell(`A${r}`).value = label;
+      styleSectionTitle(sheet.getCell(`A${r}`));
+      sheet.getRow(r).height = 22;
+      return;
+    }
+    if (!label) {
+      sheet.getRow(r).height = 8;
+      return;
+    }
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    const amountCell = sheet.getCell(`B${r}`);
+    amountCell.value = { formula: amount };
+    styleOutputCell(amountCell, NUMBER_FORMATS.currency);
+    const perSqftCell = sheet.getCell(`C${r}`);
+    perSqftCell.value = { formula: perSqft };
+    styleOutputCell(perSqftCell, NUMBER_FORMATS.integer);
+    sheet.getCell(`D${r}`).value = note;
+    styleLabelCell(sheet.getCell(`D${r}`));
+    sheet.getCell(`D${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    if (label.startsWith('Total') || label.includes('gap')) {
+      ['A', 'B', 'C', 'D'].forEach((col) => {
+        sheet.getCell(`${col}${r}`).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+        sheet.getCell(`${col}${r}`).fill = FILL(palette.xlsx('paperSubtle'));
+      });
+    }
+  });
+
+  sheet.addConditionalFormatting({
+    ref: 'B19:B19',
+    rules: [
+      { type: 'cellIs', operator: 'notBetween', formulae: [-0.01, 0.01], style: { fill: FILL(palette.xlsx('dataNegative')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 1 },
+      { type: 'cellIs', operator: 'between', formulae: [-0.01, 0.01], style: { fill: FILL(palette.xlsx('dataPositive')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 2 },
+    ],
+  });
+
+  return sheet;
+};
+
+const buildMonthlyCashFlowSheet = (workbook, ctx) => {
+  const months = getWorkbookModelMonths(ctx);
+  const totalCol = excelCol(months + 2);
+  const sheet = workbook.addWorksheet(SHEETS.monthlyCashFlow, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
+  });
+  sheet.columns = [{ width: 34 }, ...Array.from({ length: months }, () => ({ width: 12 })), { width: 16 }];
+
+  sheet.mergeCells(1, 1, 1, months + 2);
+  sheet.getCell(1, 1).value = `${ctx.brandName} | Monthly Cash Flow Detail`;
+  styleSectionTitle(sheet.getCell(1, 1));
+  sheet.getRow(1).height = 26;
+  sheet.mergeCells(2, 1, 2, months + 2);
+  sheet.getCell(2, 1).value = ctx.dealFamily === 'income'
+    ? 'Monthly operating cash flow from construction through hold / exit period.'
+    : 'Monthly development cash flow with S-curve construction, RERA escrow, debt draw, IDC, and equity cash flow.';
+  sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+
+  sheet.getCell(3, 1).value = 'Month end date';
+  styleLabelCell(sheet.getCell(3, 1));
+  sheet.getCell(4, 1).value = 'Line item';
+  for (let m = 1; m <= months; m += 1) {
+    const col = excelCol(m + 1);
+    const dateCell = sheet.getCell(3, m + 1);
+    dateCell.value = { formula: `EDATE(EffectiveDate,${m})`, result: addMonths(ctx.effectiveDate, m) };
+    styleOutputCell(dateCell, NUMBER_FORMATS.date);
+    sheet.getCell(4, m + 1).value = `M${m}`;
+  }
+  sheet.getCell(3, months + 2).value = '';
+  sheet.getCell(4, months + 2).value = 'Total';
+  styleHeader(sheet.getRow(4));
+
+  const devRows = [
+    { label: 'Construction S-curve raw weight', row: 5, format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ConstructionLagQ*3,0,MAX(0.01,SIN(PI()*(${m}-ConstructionLagQ*3)/MAX(ProjectMonths-ConstructionLagQ*3,1))))`, total: 'blank' },
+    { label: 'Land + stamp / registration', row: 6, format: NUMBER_FORMATS.currency, formula: (m) => m === 1 ? '=LandCostCr*(1+StampRegPct)' : '=0' },
+    { label: 'Construction draw', row: 7, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR((ConstructionCostPerSqft*SaleableAreaSqft/10000000)*${col}5/SUM($B$5:$${totalCol}$5),0)` },
+    { label: 'Soft + approvals + premium draw', row: 8, format: NUMBER_FORMATS.currency, formula: () => `=(${`'${SHEETS.calculations}'!$B$24`}+ApprovalCostCr+PremiumFSICostCr)/${months}` },
+    { label: 'GST draw', row: 9, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR((ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct*${col}5/SUM($B$5:$${totalCol}$5),0)` },
+    { label: 'Total development uses', row: 10, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}6+${col}7+${col}8+${col}9`, bold: true },
+    { label: 'Monthly sales absorption', row: 11, format: NUMBER_FORMATS.percent, formula: (m, col, prevCol) => m === 1 ? '=IF(1<=SalesLagQ*3,0,MIN(SalesVelocityPct/3,1))' : `=IF(${m}<=SalesLagQ*3,0,MAX(0,MIN(SalesVelocityPct/3,1-SUM($B$11:${prevCol}$11))))`, total: 'final' },
+    { label: 'Gross sales booked', row: 12, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*SellRatePerSqft*${col}11*(1+EscalationPct)^(${m}/12)/10000000` },
+    { label: 'Customer collection', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR(SUM($B$12:$${totalCol}$12)*CollectionPct*${col}7/SUM($B$7:$${totalCol}$7),0)` },
+    { label: 'To RERA escrow', row: 14, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}13*RERAEscrowPct` },
+    { label: 'Escrow drawdown', row: 15, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=MIN(${col}14,${col}7)` : `=MIN(${prevCol}16+${col}14,${col}7)` },
+    { label: 'Escrow balance', row: 16, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}14-${col}15` : `=${prevCol}16+${col}14-${col}15`, total: 'final' },
+    { label: 'Net developer cash receipts', row: 17, format: NUMBER_FORMATS.currency, formula: (m, col) => `=(${col}13*(1-RERAEscrowPct)+${col}15)*(1-LandownerSharePct)`, bold: true },
+    { label: 'Debt draw', row: 18, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}10>${col}17,MAX(0,MIN((${col}10-${col}17)*DebtLTV,TotalProjectCostCr*DebtLTV-${m === 1 ? '0' : `SUM($B$18:${prevCol}$18)`})),0)` },
+    { label: 'Interest during construction capitalised', row: 19, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=-MAX(0,(${m === 1 ? '0' : `SUM($B$18:${prevCol}$18)+ABS(SUM($B$19:${prevCol}$19))+SUM($B$20:${prevCol}$20)`}+${col}18))*DebtRatePct/12` },
+    { label: 'Principal repayment', row: 20, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}17-${col}10+${col}19>0,-MIN(${col}17-${col}10+${col}19,SUM($B$18:${col}$18)+ABS(SUM($B$19:${col}$19))+${m === 1 ? '0' : `SUM($B$20:${prevCol}$20)`}),0)` },
+    { label: 'Equity cash flow', row: 21, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}17-${col}10+${col}18+${col}19+${col}20`, bold: true },
+    { label: 'Cumulative equity cash flow', row: 22, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}21` : `=${prevCol}22+${col}21`, total: 'final' },
+  ];
+
+  const incomeRows = [
+    { label: 'Effective occupancy', row: 5, format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ProjectMonths,0,MIN(OccupancyPct,OccupancyPct*(${m}-ProjectMonths)/MAX(LeaseUpQuarters*3,1)))` },
+    { label: 'Effective rent / sqft / month', row: 6, format: NUMBER_FORMATS.integer, formula: (m) => `=BaseRentPerSqftMonth*(1+RentEscalationPct)^(MAX(0,${m}-ProjectMonths)/12)` },
+    { label: 'Potential gross income', row: 7, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*${col}6/10000000` },
+    { label: 'Vacancy / credit loss', row: 8, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}7*${col}5*VacancyPct` },
+    { label: 'Other income', row: 9, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*OtherIncomePerSqft*${col}5/12/10000000` },
+    { label: 'Effective gross revenue', row: 10, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7*${col}5+${col}8+${col}9`, bold: true },
+    { label: 'Operating expenses', row: 11, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-(${col}10*(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct)+SaleableAreaSqft*PropertyTaxPerSqftYr/12/10000000)` },
+    { label: 'NOI', row: 12, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}10+${col}11`, bold: true },
+    { label: 'CapEx reserve', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}10*CapExReservePct` },
+    { label: 'Cash flow before debt', row: 14, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}12+${col}13`, bold: true },
+    { label: 'Construction / lease-up uses', row: 15, format: NUMBER_FORMATS.currency, formula: (m) => `=IF(${m}<=ProjectMonths,TotalProjectCostCr/ProjectMonths,0)` },
+    { label: 'Debt draw', row: 16, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}15>${col}14,MAX(0,MIN((${col}15-${col}14)*DebtLTV,TotalProjectCostCr*DebtLTV-${m === 1 ? '0' : `SUM($B$16:${prevCol}$16)`})),0)` },
+    { label: 'Interest / debt service', row: 17, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=-MAX(0,(${m === 1 ? '0' : `SUM($B$16:${prevCol}$16)+ABS(SUM($B$17:${prevCol}$17))`}+${col}16))*DebtRatePct/12` },
+    { label: 'Net equity cash flow', row: 18, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}14-${col}15+${col}16+${col}17`, bold: true },
+    { label: 'Cumulative equity cash flow', row: 19, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}18` : `=${prevCol}19+${col}18`, total: 'final' },
+  ];
+
+  const rows = ctx.dealFamily === 'income' ? incomeRows : devRows;
+  rows.forEach((rowSpec) => {
+    const r = rowSpec.row;
+    sheet.getCell(r, 1).value = rowSpec.label;
+    styleLabelCell(sheet.getCell(r, 1));
+    if (rowSpec.bold) sheet.getCell(r, 1).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    for (let m = 1; m <= months; m += 1) {
+      const col = excelCol(m + 1);
+      const prevCol = excelCol(m);
+      const cell = sheet.getCell(r, m + 1);
+      cell.value = { formula: rowSpec.formula(m, col, prevCol) };
+      styleOutputCell(cell, rowSpec.format);
+      if (rowSpec.bold) cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    }
+    const totalCell = sheet.getCell(r, months + 2);
+    if (rowSpec.total === 'blank') {
+      totalCell.value = '';
+    } else if (rowSpec.total === 'final') {
+      totalCell.value = { formula: `=${totalCol}${r}` };
+    } else {
+      totalCell.value = { formula: `=SUM($B$${r}:$${totalCol}$${r})` };
+    }
+    styleOutputCell(totalCell, rowSpec.format);
+    totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  });
+
+  return sheet;
+};
+
+const buildConstructionDrawdownSheet = (workbook, ctx) => {
+  const months = Math.min(getWorkbookModelMonths(ctx), Math.max(12, ctx.projectMonths || 36));
+  const totalCol = excelCol(months + 2);
+  const sheet = workbook.addWorksheet(SHEETS.constructionDrawdown, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
+  });
+  sheet.columns = [{ width: 34 }, ...Array.from({ length: months }, () => ({ width: 12 })), { width: 16 }];
+  sheet.mergeCells(1, 1, 1, months + 2);
+  sheet.getCell(1, 1).value = `${ctx.brandName} | Construction Drawdown`;
+  styleSectionTitle(sheet.getCell(1, 1));
+  sheet.mergeCells(2, 1, 2, months + 2);
+  sheet.getCell(2, 1).value = 'Monthly S-curve draw schedule with equity-first funding, debt draws, and capitalised interest during construction.';
+  sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(4, 1).value = 'Line item';
+  for (let m = 1; m <= months; m += 1) sheet.getCell(4, m + 1).value = `M${m}`;
+  sheet.getCell(4, months + 2).value = 'Total / Final';
+  styleHeader(sheet.getRow(4));
+
+  const rows = [
+    { row: 5, label: 'Raw S-curve weight', format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ConstructionLagQ*3,0,MAX(0.01,SIN(PI()*(${m}-ConstructionLagQ*3)/MAX(ProjectMonths-ConstructionLagQ*3,1))))`, total: 'blank' },
+    { row: 6, label: 'Normalised draw %', format: NUMBER_FORMATS.percent, formula: (m, col) => `=IFERROR(${col}5/SUM($B$5:$${totalCol}$5),0)` },
+    { row: 7, label: 'Hard-cost draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*${col}6` },
+    { row: 8, label: 'Soft/statutory draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=(${`'${SHEETS.calculations}'!$B$24`}+${`'${SHEETS.calculations}'!$B$27`}+ApprovalCostCr+PremiumFSICostCr)*${col}6` },
+    { row: 9, label: 'Total monthly draw need', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7+${col}8`, bold: true },
+    { row: 10, label: 'Cumulative draw need', format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}9` : `=${prevCol}10+${col}9`, total: 'final' },
+    { row: 11, label: 'Equity contribution', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}9*(1-DebtLTV)` },
+    { row: 12, label: 'Debt draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}9*DebtLTV` },
+    { row: 13, label: 'Interest capitalised', format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=(${m === 1 ? '0' : `${prevCol}14`}+${col}12)*DebtRatePct/12` },
+    { row: 14, label: 'Debt balance', format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}12+${col}13` : `=${prevCol}14+${col}12+${col}13`, total: 'final' },
+  ];
+
+  rows.forEach((rowSpec) => {
+    sheet.getCell(rowSpec.row, 1).value = rowSpec.label;
+    styleLabelCell(sheet.getCell(rowSpec.row, 1));
+    if (rowSpec.bold) sheet.getCell(rowSpec.row, 1).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    for (let m = 1; m <= months; m += 1) {
+      const col = excelCol(m + 1);
+      const prevCol = excelCol(m);
+      const cell = sheet.getCell(rowSpec.row, m + 1);
+      cell.value = { formula: rowSpec.formula(m, col, prevCol) };
+      styleOutputCell(cell, rowSpec.format);
+    }
+    const totalCell = sheet.getCell(rowSpec.row, months + 2);
+    if (rowSpec.total === 'blank') totalCell.value = '';
+    else if (rowSpec.total === 'final') totalCell.value = { formula: `=${totalCol}${rowSpec.row}` };
+    else totalCell.value = { formula: `=SUM($B$${rowSpec.row}:$${totalCol}$${rowSpec.row})` };
+    styleOutputCell(totalCell, rowSpec.format);
+  });
+  return sheet;
+};
+
+const buildLeaseRollSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.leaseRoll, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 4 }],
+  });
+  sheet.columns = [
+    { width: 24 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 14 },
+    ...Array.from({ length: 10 }, () => ({ width: 14 })),
+  ];
+  sheet.mergeCells('A1:R1');
+  sheet.getCell('A1').value = `${ctx.brandName} | Lease Roll`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.mergeCells('A2:R2');
+  sheet.getCell('A2').value = ctx.dealFamily === 'income'
+    ? 'Tenant-level rent reset, WALE, and expiry concentration. Seeded rows are editable assumptions.'
+    : 'Development deals do not have a stabilised lease roll; keep this sheet for income-conversion scenarios only.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+
+  const headers = ['Tenant / use', 'Area sqft', 'Rent / sqft / mo', 'CAM / sqft / mo', 'Start mo', 'Term mo', 'Expiry mo', 'Renewal %'];
+  for (let y = 1; y <= 10; y += 1) headers.push(`Year ${y} rent`);
+  headers.forEach((h, idx) => { sheet.getCell(4, idx + 1).value = h; });
+  styleHeader(sheet.getRow(4));
+
+  const isRetail = ctx.assetClass === 'retail';
+  const camFormula = isRetail ? 'RetailCAMRecoveryPct' : '0';
+  const rows = ctx.dealFamily === 'income'
+    ? [
+        [isRetail ? 'Anchor tenant' : ctx.assetClass === 'hospitality' ? 'F&B lease' : 'Primary tenant', '=SaleableAreaSqft*0.40', '=BaseRentPerSqftMonth*0.85', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.20,0)`, 1, 84, 84, 0.75],
+        [isRetail ? 'Vanilla inline' : ctx.assetClass === 'industrial_warehousing' ? 'Warehouse bay A' : 'Mid-size tenant A', '=SaleableAreaSqft*0.25', '=BaseRentPerSqftMonth*1.05', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.18,0)`, 4, 60, 64, 0.65],
+        [isRetail ? 'F&B / kiosk' : ctx.assetClass === 'industrial_warehousing' ? 'Warehouse bay B' : 'Mid-size tenant B', '=SaleableAreaSqft*0.15', '=BaseRentPerSqftMonth*1.15', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.16,0)`, 7, 48, 55, 0.60],
+        ['Vacant / rolling space', '=SaleableAreaSqft*0.20', '=BaseRentPerSqftMonth', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.15,0)`, 13, 36, 49, 0.50],
+      ]
+    : [
+        ['Not applicable', 0, 0, 0, 0, 0, 0, 0],
+      ];
+
+  rows.forEach((row, idx) => {
+    const r = 5 + idx;
+    row.forEach((value, cIdx) => {
+      const cell = sheet.getCell(r, cIdx + 1);
+      cell.value = typeof value === 'string' && value.startsWith('=') ? { formula: value } : value;
+      if (cIdx <= 7) styleInputCell(cell);
+      else styleOutputCell(cell, NUMBER_FORMATS.currency);
+      if (cIdx === 1 || cIdx === 4 || cIdx === 5 || cIdx === 6) cell.numFmt = NUMBER_FORMATS.integer;
+      if (cIdx === 7) cell.numFmt = NUMBER_FORMATS.percent;
+    });
+    for (let y = 1; y <= 10; y += 1) {
+      const c = 8 + y;
+      const cell = sheet.getCell(r, c);
+      cell.value = ctx.dealFamily === 'income'
+        ? { formula: `=IF(AND(${y}*12>=E${r},(${y}-1)*12<G${r}),B${r}*C${r}*12*(1+RentEscalationPct)^(${y}-1)/10000000,0)` }
+        : 0;
+      styleOutputCell(cell, NUMBER_FORMATS.currency);
+    }
+  });
+
+  const summaryRow = 5 + rows.length + 2;
+  sheet.mergeCells(`A${summaryRow}:R${summaryRow}`);
+  sheet.getCell(`A${summaryRow}`).value = 'Lease Metrics';
+  styleSectionTitle(sheet.getCell(`A${summaryRow}`));
+  const metrics = [
+    ['WALE (years)', `=IFERROR(SUMPRODUCT(B5:B${4 + rows.length},G5:G${4 + rows.length})/SUM(B5:B${4 + rows.length})/12,0)`, NUMBER_FORMATS.multiple],
+    ['Occupied area', `=SUM(B5:B${4 + rows.length})`, NUMBER_FORMATS.integer],
+    ['Year 1 rent', `=SUM(I5:I${4 + rows.length})`, NUMBER_FORMATS.currency],
+    ['Expiry concentration <= 3 yrs', `=IFERROR(SUMIF(G5:G${4 + rows.length},"<=36",B5:B${4 + rows.length})/SUM(B5:B${4 + rows.length}),0)`, NUMBER_FORMATS.percent],
+  ];
+  metrics.forEach(([label, formula, format], idx) => {
+    const r = summaryRow + 1 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    sheet.getCell(`B${r}`).value = { formula };
+    styleOutputCell(sheet.getCell(`B${r}`), format);
+  });
+
+  return sheet;
+};
+
+const buildSensitivityStressSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.sensitivityStress, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
+  });
+  sheet.columns = [
+    { width: 26 }, ...Array.from({ length: 9 }, () => ({ width: 14 })),
+  ];
+  sheet.mergeCells('A1:J1');
+  sheet.getCell('A1').value = `${ctx.brandName} | Sensitivity & Stress`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.mergeCells('A2:J2');
+  sheet.getCell('A2').value = ctx.dealFamily === 'income'
+    ? '2D cap-rate x occupancy sensitivity plus deterministic stress trials across rent, cost, occupancy, and cap-rate shocks.'
+    : '2D sale-rate x absorption-speed sensitivity plus deterministic stress trials across rate, cost, and absorption shocks.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+
+  const isIncome = ctx.dealFamily === 'income';
+  sheet.mergeCells('A4:H4');
+  sheet.getCell('A4').value = isIncome ? '2D Sensitivity - Exit Cap Rate x Occupancy' : '2D Sensitivity - Sale Rate x Absorption Speed';
+  styleSectionTitle(sheet.getCell('A4'));
+  const cols = isIncome ? [0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12] : [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15];
+  const rows = isIncome ? [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15] : [0.60, 0.75, 0.90, 1.00, 1.10, 1.25, 1.40];
+  sheet.getCell('A5').value = isIncome ? 'Occupancy \\ Cap rate' : 'Absorption speed \\ Sale rate';
+  styleHeader(sheet.getRow(5));
+  cols.forEach((v, idx) => {
+    const cell = sheet.getCell(5, idx + 2);
+    cell.value = v;
+    cell.numFmt = isIncome ? NUMBER_FORMATS.percent : '+0%;-0%;"base"';
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.alignment = { horizontal: 'center' };
+  });
+
+  const incomeMetric = (occShock, capRate) => {
+    const occ = `MAX(0,MIN(1,OccupancyPct*(1+${occShock})))`;
+    const annualNoi = `(SaleableAreaSqft*BaseRentPerSqftMonth*12*${occ}*(1-VacancyPct)*(1-(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct+CapExReservePct))/10000000)`;
+    return `=IFERROR((${annualNoi}/${capRate}*(1-TotalExitCostPct)-TotalProjectCostCr)/TotalProjectCostCr,0)`;
+  };
+  const devMetric = (speed, rateShock) => {
+    const revenue = `(SaleableAreaSqft*SellRatePerSqft*(1+${rateShock})*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)`;
+    const carry = `(1+MAX(0,1-${speed})*FinanceCostPct*TotalQuarters/4)`;
+    return `=IFERROR((${revenue}*CollectionPct*(1-LandownerSharePct)-TotalProjectCostCr*${carry})/${revenue},0)`;
+  };
+
+  rows.forEach((rowVal, rIdx) => {
+    const r = 6 + rIdx;
+    const labelCell = sheet.getCell(r, 1);
+    labelCell.value = rowVal;
+    labelCell.numFmt = isIncome ? '+0%;-0%;"base"' : '0.00"x"';
+    labelCell.fill = FILL(palette.xlsx('inkDeep'));
+    labelCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    labelCell.alignment = { horizontal: 'center' };
+    cols.forEach((colVal, cIdx) => {
+      const cell = sheet.getCell(r, cIdx + 2);
+      cell.value = { formula: isIncome ? incomeMetric(rowVal, colVal) : devMetric(rowVal, colVal) };
+      styleOutputCell(cell, NUMBER_FORMATS.percent);
+      cell.alignment = { horizontal: 'center' };
+    });
+  });
+  sheet.addConditionalFormatting({
+    ref: 'B6:H12',
+    rules: [{
+      type: 'colorScale',
+      cfvo: [{ type: 'num', value: -0.10 }, { type: 'num', value: 0.10 }, { type: 'num', value: 0.30 }],
+      color: [{ argb: palette.xlsx('dataNegative') }, { argb: palette.xlsx('dataWarning') }, { argb: palette.xlsx('dataPositive') }],
+      priority: 1,
+    }],
+  });
+
+  sheet.mergeCells('A15:J15');
+  sheet.getCell('A15').value = 'Deterministic Stress Trials';
+  styleSectionTitle(sheet.getCell('A15'));
+  ['Trial', 'Rate shock', 'Cost shock', isIncome ? 'Occupancy shock' : 'Absorption speed', 'Cap-rate shock', 'Metric', 'Pass / fail'].forEach((h, idx) => {
+    sheet.getCell(16, idx + 1).value = h;
+  });
+  styleHeader(sheet.getRow(16));
+  const trialCount = 80;
+  for (let i = 1; i <= trialCount; i += 1) {
+    const r = 16 + i;
+    sheet.getCell(r, 1).value = i;
+    sheet.getCell(r, 2).value = { formula: `=(MOD(SIN(A${r}*12.9898)*43758.5453,1)-0.5)*0.30` };
+    sheet.getCell(r, 3).value = { formula: `=(MOD(SIN(A${r}*78.233)*19341.123,1)-0.5)*0.24` };
+    sheet.getCell(r, 4).value = { formula: isIncome ? `=(MOD(SIN(A${r}*39.425)*27183.19,1)-0.5)*0.30` : `=0.70+MOD(SIN(A${r}*39.425)*27183.19,1)*0.70` };
+    sheet.getCell(r, 5).value = { formula: isIncome ? `=(MOD(SIN(A${r}*17.17)*11311.7,1)-0.5)*0.02` : '=0' };
+    const metricFormula = isIncome
+      ? `=IFERROR(((SaleableAreaSqft*BaseRentPerSqftMonth*(1+B${r})*12*MAX(0,MIN(1,OccupancyPct*(1+D${r})))*(1-VacancyPct)*(1-(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct+CapExReservePct))/10000000)/(ExitCapRate+E${r})*(1-TotalExitCostPct)-TotalProjectCostCr*(1+C${r}))/TotalProjectCostCr,0)`
+      : `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+B${r})*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*CollectionPct*(1-LandownerSharePct)-TotalProjectCostCr*(1+C${r})*(1+MAX(0,1-D${r})*FinanceCostPct*TotalQuarters/4))/(SaleableAreaSqft*SellRatePerSqft*(1+B${r})/10000000),0)`;
+    sheet.getCell(r, 6).value = { formula: metricFormula };
+    sheet.getCell(r, 7).value = { formula: `=IF(F${r}<0,"FAIL","PASS")` };
+    [2, 3, 4, 5, 6].forEach((c) => {
+      const cell = sheet.getCell(r, c);
+      styleOutputCell(cell, c === 4 && !isIncome ? NUMBER_FORMATS.multiple : NUMBER_FORMATS.percent);
+    });
+    styleLabelCell(sheet.getCell(r, 7));
+  }
+
+  const summaryRow = 16 + trialCount + 2;
+  sheet.mergeCells(`A${summaryRow}:J${summaryRow}`);
+  sheet.getCell(`A${summaryRow}`).value = 'Stress Summary';
+  styleSectionTitle(sheet.getCell(`A${summaryRow}`));
+  [
+    ['P10 metric', `=PERCENTILE.INC(F17:F${16 + trialCount},0.1)`],
+    ['P50 metric', `=PERCENTILE.INC(F17:F${16 + trialCount},0.5)`],
+    ['P90 metric', `=PERCENTILE.INC(F17:F${16 + trialCount},0.9)`],
+    ['Failure probability', `=COUNTIF(G17:G${16 + trialCount},"FAIL")/${trialCount}`],
+  ].forEach(([label, formula], idx) => {
+    const r = summaryRow + 1 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    styleLabelCell(sheet.getCell(`A${r}`));
+    sheet.getCell(`B${r}`).value = { formula };
+    styleOutputCell(sheet.getCell(`B${r}`), NUMBER_FORMATS.percent);
+  });
+
+  return sheet;
+};
+
 /**
  * Operating Schedule section of the Cash Flow Engine sheet.
  *
@@ -2938,6 +3399,55 @@ const buildDashboardSheet = (workbook, ctx) => {
   }
 
   // Sources & Uses block — labels + values for the chart
+  const kpiIconRules = ctx.dealFamily === 'income'
+    ? [
+        ['B4:B4', [0, 0.01, 1]],
+        ['B7:B7', [0, 1.2, 1.5]],
+      ]
+    : [
+        ['B7:B7', [0, 0.10, 0.20]],
+        ['D7:D7', [0, 1.2, 1.5]],
+        ['F4:F4', [-1, 0, 1]],
+      ];
+  kpiIconRules.forEach(([ref, values], idx) => {
+    sheet.addConditionalFormatting({
+      ref,
+      rules: [{
+        type: 'iconSet',
+        iconSet: '3TrafficLights1',
+        showValue: true,
+        cfvo: values.map((value) => ({ type: 'num', value })),
+        priority: 20 + idx,
+      }],
+    });
+  });
+
+  const trendSpecs = ctx.dealFamily === 'income'
+    ? [
+        ['A9', 'NOI trend', 'B9', '=REPT("|",MAX(1,MIN(18,ROUND(ABS(B4),0))))'],
+        ['C9', 'DSCR trend', 'D9', '=REPT("|",MAX(1,MIN(18,ROUND(B7*8,0))))'],
+        ['E9', 'Exit trend', 'F9', '=REPT("|",MAX(1,MIN(18,ROUND(F4*120,0))))'],
+      ]
+    : [
+        ['A9', 'Margin trend', 'B9', '=REPT("|",MAX(1,MIN(18,ROUND(MAX(0,B7)*120,0))))'],
+        ['C9', 'DSCR trend', 'D9', '=REPT("|",MAX(1,MIN(18,ROUND(D7*8,0))))'],
+        ['E9', 'Cash trend', 'F9', '=REPT("|",MAX(1,MIN(18,ROUND(ABS(F4)/MAX(1,ABS(D4))*18,0))))'],
+      ];
+  trendSpecs.forEach(([labelRef, label, valueRef, formula]) => {
+    const labelCell = sheet.getCell(labelRef);
+    labelCell.value = label;
+    labelCell.font = { name: FONT, size: 8, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+    labelCell.fill = FILL(palette.xlsx('paper'));
+    labelCell.alignment = { horizontal: 'left' };
+    const valueCell = sheet.getCell(valueRef);
+    valueCell.value = { formula };
+    valueCell.font = { name: FONT, size: 8, bold: true, color: { argb: palette.xlsx('accent') } };
+    valueCell.fill = FILL(palette.xlsx('paperElevated'));
+    valueCell.alignment = { horizontal: 'left' };
+    valueCell.protection = { locked: true };
+  });
+  sheet.getRow(9).height = 18;
+
   sheet.getCell('A11').value = 'Sources & Uses';
   styleSectionTitle(sheet.getCell('A11'));
   sheet.mergeCells('A11:F11');
@@ -4611,6 +5121,11 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // (section divider + header).
   const { lastRow: phasingLastRow } = buildPhasingSheet(workbook, ctx);
   buildCashFlowSheet(workbook, ctx, { phasingLastRow });
+  buildSourcesUsesSheet(workbook, ctx);
+  buildMonthlyCashFlowSheet(workbook, ctx);
+  buildLeaseRollSheet(workbook, ctx);
+  buildConstructionDrawdownSheet(workbook, ctx);
+  buildSensitivityStressSheet(workbook, ctx);
 
   buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);

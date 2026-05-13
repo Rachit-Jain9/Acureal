@@ -105,16 +105,21 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook contains the 8-sheet structure (7 visible + 1 hidden Calculations) with Dashboard first, QA second, Inputs third', async () => {
-      // Operator-directed 7-sheet restructure (2026-05-11):
+    test('produced workbook contains the institutional sheet structure with Dashboard first, QA second, Inputs third', async () => {
+      // Operator-directed institutional structure:
       //   1. Dashboard (FIRST)
       //   2. Export QA & Sources
       //   3. Inputs & Assumptions
       //   4. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
-      //   5. Debt Sizing & Amortization (combined: sizing + amort schedule)
-      //   6. Sponsor LP Waterfall
-      //   7. Unit Mix
-      //   8. Calculations            (hidden audit trail)
+      //   5. Sources & Uses
+      //   6. Monthly Cash Flow
+      //   7. Lease Roll
+      //   8. Construction Drawdown
+      //   9. Sensitivity & Stress
+      //   10. Debt Sizing & Amortization (combined: sizing + amort schedule)
+      //   11. Sponsor LP Waterfall
+      //   12. Unit Mix
+      //   13. Calculations            (hidden audit trail)
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
@@ -124,6 +129,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Export QA & Sources',
         'Inputs & Assumptions',
         'Cash Flow Engine',
+        'Sources & Uses',
+        'Monthly Cash Flow',
+        'Lease Roll',
+        'Construction Drawdown',
+        'Sensitivity & Stress',
         'Debt Sizing & Amortization',
         'Sponsor LP Waterfall',
         'Unit Mix',
@@ -249,6 +259,149 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(xirr).toContain('$B$3');
       expect(xnpv).toContain('XNPV');
       expect(xnpv).toContain('DiscountRatePct');
+    });
+
+    test('Monthly Cash Flow sheet exposes monthly S-curve, RERA, IDC, and cumulative equity rows for development deals', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const monthly = wb.getWorksheet('Monthly Cash Flow');
+
+      expect(monthly.getCell('B3').value.formula).toBeFormula('=EDATE(EffectiveDate,1)');
+      expect(monthly.getCell('A7').value).toBe('Construction draw');
+      expect(monthly.getCell('B5').value.formula).toContain('SIN');
+      expect(monthly.getCell('B7').value.formula).toContain('B5');
+      expect(monthly.getCell('A14').value).toBe('To RERA escrow');
+      expect(monthly.getCell('B19').value.formula).toContain('DebtRatePct/12');
+      expect(monthly.getCell('A21').value).toBe('Equity cash flow');
+      expect(monthly.getCell('C22').value.formula).toBeFormula('=B22+C21');
+    });
+
+    test('Monthly Cash Flow sheet switches to operating NOI rows for income deals', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'retail';
+      ctx.property.property_type = 'retail';
+      ctx.deal.model_params.inputs = {
+        ...ctx.deal.model_params.inputs,
+        baseRentPerSqftMonth: 140,
+        occupancyPct: 0.88,
+        exitCapRate: 0.08,
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const monthly = wb.getWorksheet('Monthly Cash Flow');
+
+      expect(monthly.getCell('A10').value).toBe('Effective gross revenue');
+      expect(monthly.getCell('A12').value).toBe('NOI');
+      expect(monthly.getCell('B5').value.formula).toContain('OccupancyPct');
+      expect(monthly.getCell('B17').value.formula).toContain('DebtRatePct/12');
+    });
+
+    test('Sources & Uses sheet has a dedicated reconciliation gap check', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const su = wb.getWorksheet('Sources & Uses');
+
+      expect(su.getCell('A1').value).toContain('Sources & Uses');
+      expect(su.getCell('A19').value).toBe('Source / use gap');
+      expect(su.getCell('B19').value.formula).toBeFormula('=B9-B18');
+      expect(su.conditionalFormattings.map((cf) => cf.ref)).toContain('B19:B19');
+    });
+
+    test('Sources & Uses sheet avoids development-only deal structure formulas for income deals', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.property.property_type = 'commercial_office';
+      ctx.deal.model_params.inputs = {
+        ...ctx.deal.model_params.inputs,
+        baseRentPerSqftMonth: 120,
+        occupancyPct: 0.86,
+        exitCapRate: 0.08,
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const su = wb.getWorksheet('Sources & Uses');
+
+      expect(su.getCell('B8').value.formula).toBeFormula('=0');
+      su.eachRow((row) => {
+        row.eachCell((cell) => {
+          if (cell.value?.formula) {
+            expect(cell.value.formula).not.toContain('DealStructureLabel');
+          }
+        });
+      });
+    });
+
+    test('Lease Roll sheet carries tenant rent reset, WALE, and expiry concentration', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'retail';
+      ctx.property.property_type = 'retail';
+      ctx.deal.model_params.inputs = {
+        ...ctx.deal.model_params.inputs,
+        baseRentPerSqftMonth: 180,
+        occupancyPct: 0.9,
+        exitCapRate: 0.08,
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const lease = wb.getWorksheet('Lease Roll');
+
+      expect(lease.getCell('A5').value).toBe('Anchor tenant');
+      expect(lease.getCell('D5').value.formula).toContain('RetailCAMRecoveryPct');
+      expect(lease.getCell('I5').value.formula).toContain('RentEscalationPct');
+      const labels = [];
+      lease.eachRow((row) => labels.push(String(row.getCell(1).value || '')));
+      expect(labels).toContain('WALE (years)');
+      expect(labels).toContain('Expiry concentration <= 3 yrs');
+    });
+
+    test('Lease Roll sheet stays formula-safe for development deals', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const lease = wb.getWorksheet('Lease Roll');
+
+      expect(lease.getCell('A5').value).toBe('Not applicable');
+      expect(lease.getCell('I5').value).toBe(0);
+      lease.eachRow((row) => {
+        row.eachCell((cell) => {
+          if (cell.value?.formula) {
+            expect(cell.value.formula).not.toContain('RentEscalationPct');
+          }
+        });
+      });
+    });
+
+    test('Construction Drawdown sheet models monthly S-curve debt draw and capitalised interest', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const draw = wb.getWorksheet('Construction Drawdown');
+
+      expect(draw.getCell('A5').value).toBe('Raw S-curve weight');
+      expect(draw.getCell('B5').value.formula).toContain('SIN');
+      expect(draw.getCell('A12').value).toBe('Debt draw');
+      expect(draw.getCell('B13').value.formula).toContain('DebtRatePct/12');
+      expect(draw.getCell('C14').value.formula).toBeFormula('=B14+C12+C13');
+    });
+
+    test('Sensitivity & Stress sheet adds 7x7 two-way table and deterministic stress trials without RAND', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const stress = wb.getWorksheet('Sensitivity & Stress');
+
+      expect(stress.getCell('A4').value).toContain('2D Sensitivity');
+      expect(stress.getCell('B6').value.formula).toContain('SellRatePerSqft');
+      expect(stress.getCell('A17').value).toBe(1);
+      expect(stress.getCell('B17').value.formula).toContain('SIN');
+      expect(stress.getCell('B17').value.formula).not.toContain('RAND');
+      expect(stress.getCell('F17').value.formula).toContain('TotalProjectCostCr');
+      expect(stress.getCell('A99').value).toBe('P10 metric');
     });
 
     test('Dashboard formula cells include cached values for non-Excel viewers where deterministic', async () => {
@@ -2981,6 +3134,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(refsCovered.has('B7:B7')).toBe(true);
         expect(refsCovered.has('D7:D7')).toBe(true);
         expect(refsCovered.has('F4:F4')).toBe(true);
+        const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
+        expect(iconRules.length).toBeGreaterThanOrEqual(3);
+        expect(dash.getCell('B9').value.formula).toContain('REPT');
       });
 
       test('Income family — B4 (Stabilised NOI), B7 (Min DSCR) have CF rules', async () => {
@@ -2999,6 +3155,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         // Development-only refs should NOT be in income family
         expect(refsCovered.has('D7:D7')).toBe(false);
         expect(refsCovered.has('F4:F4')).toBe(false);
+        const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
+        expect(iconRules.length).toBeGreaterThanOrEqual(2);
+        expect(dash.getCell('B9').value.formula).toContain('REPT');
       });
     });
 
