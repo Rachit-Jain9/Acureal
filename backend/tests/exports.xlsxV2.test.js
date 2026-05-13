@@ -115,7 +115,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       //   6. Monthly Cash Flow
       //   7. Lease Roll
       //   8. Construction Drawdown
-      //   9. Sensitivity & Stress
+      //   9. Sensitivity
       //   10. Debt Sizing & Amortization (combined: sizing + amort schedule)
       //   11. Sponsor LP Waterfall
       //   12. Unit Mix
@@ -133,7 +133,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Monthly Cash Flow',
         'Lease Roll',
         'Construction Drawdown',
-        'Sensitivity & Stress',
+        'Sensitivity',
         'Debt Sizing & Amortization',
         'Sponsor LP Waterfall',
         'Unit Mix',
@@ -292,10 +292,45 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       await wb.xlsx.load(buffer);
       const monthly = wb.getWorksheet('Monthly Cash Flow');
 
-      expect(monthly.getCell('A10').value).toBe('Effective gross revenue');
-      expect(monthly.getCell('A12').value).toBe('NOI');
+      expect(monthly.getCell('A10').value).toBe('Recoverable CAM / OpEx');
+      expect(monthly.getCell('A12').value).toBe('Effective gross revenue');
+      expect(monthly.getCell('A19').value).toBe('NOI');
       expect(monthly.getCell('B5').value.formula).toContain('OccupancyPct');
-      expect(monthly.getCell('B17').value.formula).toContain('DebtRatePct/12');
+      expect(monthly.getCell('B10').value.formula).toContain('RetailCAMRecoveryPct');
+      expect(monthly.getCell('B21').value.formula).toContain('LeasingCommissionPct');
+      expect(monthly.getCell('B25').value.formula).toContain('DebtRatePct/12');
+    });
+
+    test('Monthly Cash Flow sheet uses hospitality and warehouse-specific income drivers safely', async () => {
+      const hospitalityCtx = minimalContext();
+      hospitalityCtx.deal.asset_class = 'hospitality';
+      hospitalityCtx.property.property_type = 'hospitality';
+      hospitalityCtx.deal.model_params.inputs = {
+        ...hospitalityCtx.deal.model_params.inputs,
+        occupancyPct: 0.72,
+        exitCapRate: 0.085,
+      };
+      const hospitalityBuffer = await buildDealWorkbookV2(hospitalityCtx);
+      const hospitalityWb = new ExcelJS.Workbook();
+      await hospitalityWb.xlsx.load(hospitalityBuffer);
+      const hospitalityMonthly = hospitalityWb.getWorksheet('Monthly Cash Flow');
+      expect(hospitalityMonthly.getCell('B6').value.formula).toContain('HospitalityRevPAR');
+
+      const warehouseCtx = minimalContext();
+      warehouseCtx.deal.asset_class = 'industrial_warehousing';
+      warehouseCtx.property.property_type = 'industrial_warehousing';
+      warehouseCtx.deal.model_params.inputs = {
+        ...warehouseCtx.deal.model_params.inputs,
+        baseRentPerSqftMonth: 45,
+        occupancyPct: 0.88,
+        exitCapRate: 0.085,
+      };
+      const warehouseBuffer = await buildDealWorkbookV2(warehouseCtx);
+      const warehouseWb = new ExcelJS.Workbook();
+      await warehouseWb.xlsx.load(warehouseBuffer);
+      const warehouseMonthly = warehouseWb.getWorksheet('Monthly Cash Flow');
+      expect(warehouseMonthly.getCell('B10').value.formula).toContain('RecoverableExpensePct');
+      expect(warehouseMonthly.getCell('B10').value.formula).not.toContain('RetailCAMRecoveryPct');
     });
 
     test('Sources & Uses sheet has a dedicated reconciliation gap check', async () => {
@@ -389,19 +424,22 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(draw.getCell('C14').value.formula).toBeFormula('=B14+C12+C13');
     });
 
-    test('Sensitivity & Stress sheet adds 7x7 two-way table and deterministic stress trials without RAND', async () => {
+    test('Sensitivity sheet adds the 7x7 two-way table without stress-trial scaffolding', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const stress = wb.getWorksheet('Sensitivity & Stress');
+      const stress = wb.getWorksheet('Sensitivity');
 
       expect(stress.getCell('A4').value).toContain('2D Sensitivity');
       expect(stress.getCell('B6').value.formula).toContain('SellRatePerSqft');
-      expect(stress.getCell('A17').value).toBe(1);
-      expect(stress.getCell('B17').value.formula).toContain('SIN');
-      expect(stress.getCell('B17').value.formula).not.toContain('RAND');
-      expect(stress.getCell('F17').value.formula).toContain('TotalProjectCostCr');
-      expect(stress.getCell('A99').value).toBe('P10 metric');
+      expect(stress.getCell('H12').value.formula).toContain('TotalProjectCostCr');
+      expect(stress.getCell('A15').value).toBeNull();
+      stress.eachRow((row) => {
+        row.eachCell((cell) => {
+          const text = typeof cell.value === 'string' ? cell.value : cell.value?.formula || '';
+          expect(text).not.toMatch(/Stress|Trial|RAND|PERCENTILE/i);
+        });
+      });
     });
 
     test('Dashboard formula cells include cached values for non-Excel viewers where deterministic', async () => {
@@ -1091,6 +1129,19 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(contentTypes).toMatch(/\/xl\/charts\/chart1\.xml/);
     });
 
+    test('Dashboard ships native Excel sparklines for KPI trend cells', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const zip = await JSZip.loadAsync(buffer);
+      const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+
+      expect(sheetXml).toContain('<x14:sparklineGroups>');
+      expect(sheetXml).toContain('<xm:sqref>B9</xm:sqref>');
+      expect(sheetXml).toContain('<xm:sqref>D9</xm:sqref>');
+      expect(sheetXml).toContain('<xm:sqref>F9</xm:sqref>');
+      expect(sheetXml).toContain("'Dashboard'!$B$39:$B$62");
+      expect(sheetXml).toContain("'Dashboard'!$E$39:$E$62");
+    });
+
     test('workbook XML is parser-safe: no leading equals in formula nodes and no undefined colors', async () => {
       const JSZip = require('jszip');
       const buffer = await buildDealWorkbookV2(minimalContext());
@@ -1104,7 +1155,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       }
     });
 
-    // The Uses Breakdown doughnut always renders. The Quarterly Trend
+    // The Uses Breakdown doughnut always renders. The Monthly Trend
     // bar renders when totalQuarters >= 2 (which it always is in our
     // test contexts since the minimum is 4).
     test('Dashboard charts include doughnut + combo + tornado', async () => {
@@ -1121,7 +1172,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // 1) Doughnut for Uses Breakdown
       expect(xmls.some((x) => x.includes('<c:doughnutChart'))).toBe(true);
 
-      // 2) Combo (barChart + lineChart in one plotArea) for Quarterly Trend
+      // 2) Combo (barChart + lineChart in one plotArea) for Monthly Trend
       const comboChart = xmls.find((x) =>
         x.includes('<c:barChart>') && x.includes('<c:lineChart>')
       );
@@ -1182,10 +1233,10 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // Asset-class branching for the trend chart: development deals show
     // Sales vs Construction; income deals show PGI vs NOI. The series
     // labels are emitted into the chart XML.
-    test('Quarterly Trend combo-chart series labels switch by asset family', async () => {
+    test('Monthly Trend combo-chart series labels switch by asset family', async () => {
       const JSZip = require('jszip');
       // Development deal — bar series should be Sales + Construction;
-      // line series should be Cumulative Net CF
+      // line series should be Cumulative Equity CF
       const devBuffer = await buildDealWorkbookV2(minimalContext());
       const devZip = await JSZip.loadAsync(devBuffer);
       const devChartFiles = Object.keys(devZip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n));
@@ -1194,9 +1245,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(devCombo).toBeDefined();
       expect(devCombo).toMatch(/Sales \(Cr\)/);
       expect(devCombo).toMatch(/Construction \(Cr\)/);
-      expect(devCombo).toMatch(/Cumulative Net CF \(Cr\)/);
+      expect(devCombo).toMatch(/Cumulative Equity CF \(Cr\)/);
 
-      // Income deal — bar series should be PGI + NOI; line should be CF After Debt
+      // Income deal — bar series should be PGI + NOI; line should be Net Equity CF
       const incomeCtx = minimalContext();
       incomeCtx.deal.asset_class = 'commercial_office';
       const incomeBuffer = await buildDealWorkbookV2(incomeCtx);
@@ -1207,7 +1258,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(incomeCombo).toBeDefined();
       expect(incomeCombo).toMatch(/PGI \(Cr\)/);
       expect(incomeCombo).toMatch(/NOI \(Cr\)/);
-      expect(incomeCombo).toMatch(/CF After Debt/);
+      expect(incomeCombo).toMatch(/Net Equity CF/);
     });
 
     test('Calculations sheet subtotal + debt formulas have no self-references', async () => {
@@ -1332,14 +1383,14 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(String(dash.getCell('A32').value)).toContain('Scenario Comparison');
       });
 
-      test('Quarterly Trend title moved to A37 (was A36)', async () => {
+      test('Monthly Trend title sits at A37', async () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const dash = wb.getWorksheet('Dashboard');
         const title = String(dash.getCell('A37').value);
         // Asset-class-aware: dev family says "Project Trend", income says "Operating Trend"
-        expect(title).toMatch(/Quarterly (Operating|Project) Trend/);
+        expect(title).toMatch(/Monthly (Operating|Project) Trend/);
       });
     });
 
@@ -1534,8 +1585,8 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).not.toMatch(/Property Tax/);
     }, 30000);
 
-    test('Dashboard renders Quarterly Operating Trend table with asset-aware columns', async () => {
-      // Income deal — should show PGI / EGR / NOI / CF After Debt columns
+    test('Dashboard renders Monthly Trend table with asset-aware columns and monthly formulas', async () => {
+      // Income deal — should show PGI / EGR / NOI / Net Equity CF columns
       const incomeCtx = minimalContext();
       incomeCtx.deal.asset_class = 'commercial_office';
       incomeCtx.deal.name = 'Office Tower';
@@ -1548,12 +1599,16 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         if (typeof cell.value === 'string') text1.push(cell.value);
       }));
       const joined1 = text1.join(' | ');
-      expect(joined1).toMatch(/Quarterly Operating Trend/);
+      expect(joined1).toMatch(/Monthly Operating Trend/);
       expect(joined1).toMatch(/PGI \(Cr\)/);
       expect(joined1).toMatch(/NOI \(Cr\)/);
-      expect(joined1).toMatch(/CF After Debt/);
+      expect(joined1).toMatch(/Net Equity CF \(Cr\)/);
+      expect(String(dash1.getCell('A39').value)).toBe('M1');
+      expect(dash1.getCell('B39').value.formula).toBeFormula("='Monthly Cash Flow'!B7");
+      expect(dash1.getCell('D39').value.formula).toBeFormula("='Monthly Cash Flow'!B19");
+      expect(dash1.getCell('E39').value.formula).toBeFormula("='Monthly Cash Flow'!B26");
 
-      // Development deal — should show Sales / Construction / Net CF / Cumulative columns
+      // Development deal — should show Sales / Construction / Equity CF / Cumulative columns
       const devCtx = minimalContext();
       const buf2 = await buildDealWorkbookV2(devCtx);
       const wb2 = new ExcelJS.Workbook();
@@ -1564,10 +1619,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         if (typeof cell.value === 'string') text2.push(cell.value);
       }));
       const joined2 = text2.join(' | ');
-      expect(joined2).toMatch(/Quarterly Project Trend/);
+      expect(joined2).toMatch(/Monthly Project Trend/);
       expect(joined2).toMatch(/Sales \(Cr\)/);
       expect(joined2).toMatch(/Construction \(Cr\)/);
       expect(joined2).toMatch(/Cumulative \(Cr\)/);
+      expect(String(dash2.getCell('A39').value)).toBe('M1');
+      expect(dash2.getCell('B39').value.formula).toBeFormula("='Monthly Cash Flow'!B12");
+      expect(dash2.getCell('C39').value.formula).toBeFormula("='Monthly Cash Flow'!B7");
+      expect(dash2.getCell('D39').value.formula).toBeFormula("='Monthly Cash Flow'!B21");
+      expect(dash2.getCell('E39').value.formula).toBeFormula("='Monthly Cash Flow'!B22");
     }, 30000);
 
     test('Dashboard renders JV profit waterfall when deal_structure is JV/JDA/DA', async () => {
@@ -1605,20 +1665,27 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).not.toMatch(/Profit Waterfall/);
     }, 30000);
 
-    test('all sheets are unprotected (operator can edit any cell)', async () => {
+    test('all sheets protect formula areas while Inputs value cells stay editable', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      // ExcelJS exposes sheet protection via worksheet.sheetProtection
-      // (only set when protect() was called). We removed all protect()
-      // calls, so this property should be undefined or empty on every
-      // visible sheet.
       const visibleSheets = wb.worksheets.filter((ws) => ws.state !== 'hidden');
       visibleSheets.forEach((ws) => {
-        // sheetProtection.sheet === true would mean protection is active
         const isProtected = ws.sheetProtection && ws.sheetProtection.sheet === true;
-        expect(isProtected).toBeFalsy();
+        expect(isProtected).toBe(true);
       });
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+      let foundUnlockedInput = false;
+      inputs.eachRow((row) => {
+        const label = String(row.getCell(1).value || '');
+        if (/Selling Rate per sqft/i.test(label)) {
+          foundUnlockedInput = row.getCell(2).protection?.locked === false;
+        }
+      });
+      expect(foundUnlockedInput).toBe(true);
+
+      const dash = wb.getWorksheet('Dashboard');
+      expect(dash.getCell('B4').protection?.locked).not.toBe(false);
     });
 
     // ── PR-I1 — India Statutory Levies as REAL cost lines ──────────────
@@ -3136,7 +3203,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(refsCovered.has('F4:F4')).toBe(true);
         const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
         expect(iconRules.length).toBeGreaterThanOrEqual(3);
-        expect(dash.getCell('B9').value.formula).toContain('REPT');
+        expect(dash.getCell('B9').value).toBeNull();
       });
 
       test('Income family — B4 (Stabilised NOI), B7 (Min DSCR) have CF rules', async () => {
@@ -3157,7 +3224,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(refsCovered.has('F4:F4')).toBe(false);
         const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
         expect(iconRules.length).toBeGreaterThanOrEqual(2);
-        expect(dash.getCell('B9').value.formula).toContain('REPT');
+        expect(dash.getCell('B9').value).toBeNull();
       });
     });
 

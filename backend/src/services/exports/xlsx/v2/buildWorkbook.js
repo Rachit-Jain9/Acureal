@@ -32,7 +32,7 @@
 
 const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
-const { injectChartsIntoXlsx } = require('./chartInjector');
+const { injectChartsIntoXlsx, injectSparklinesIntoXlsx } = require('./chartInjector');
 const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
 
@@ -68,7 +68,7 @@ const SHEETS = {
   monthlyCashFlow: 'Monthly Cash Flow',
   leaseRoll: 'Lease Roll',
   constructionDrawdown: 'Construction Drawdown',
-  sensitivityStress: 'Sensitivity & Stress',
+  sensitivity: 'Sensitivity',
   debtAndAmort: 'Debt Sizing & Amortization',
   waterfall: 'Sponsor LP Waterfall',
   unitMix: 'Unit Mix',
@@ -913,7 +913,17 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Property Management Fee', 'PropMgmtPct',         toPctDecimal(firstNumber(ctx.inputs.propMgmtPct, ctx.inputs.managementFeePct, 0.03)),                       '% of EGR', NUMBER_FORMATS.percent],
       ['Utilities',               'UtilitiesPct',        toPctDecimal(firstNumber(ctx.inputs.utilitiesPct, 0.04)),                                                   '% of EGR', NUMBER_FORMATS.percent],
       ['Maintenance & Repairs',   'MaintenancePct',      toPctDecimal(firstNumber(ctx.inputs.maintenancePct, ctx.inputs.opexPct, 0.05)),                              '% of EGR', NUMBER_FORMATS.percent],
+      ['Recoverable OpEx / CAM',   'RecoverableExpensePct',
+        toPctDecimal(firstNumber(
+          ctx.inputs.recoverableExpensePct,
+          ctx.assetClass === 'retail' ? ctx.inputs.retailCAMRecoveryPct : null,
+          ['retail', 'industrial_warehousing'].includes(ctx.assetClass) ? 0.90 : 0.50,
+        )),
+        '% of utilities + maintenance', NUMBER_FORMATS.percent],
       ['CapEx Reserves',          'CapExReservePct',     toPctDecimal(firstNumber(ctx.inputs.capExReservePct, 0.02)),                                                '% of EGR', NUMBER_FORMATS.percent],
+      ['TI Allowance / sqft',      'TIAllowancePerSqft',  firstNumber(ctx.inputs.tiAllowancePerSqft, 0),                                               'INR/sqft', NUMBER_FORMATS.integer],
+      ['Leasing Commission',       'LeasingCommissionPct', toPctDecimal(firstNumber(ctx.inputs.leasingCommissionPct, ctx.inputs.brokeragePct, 0.02)),     '% of year-1 rent', NUMBER_FORMATS.percent],
+      ['Tenant Downtime',          'TenantDowntimeMonths', firstNumber(ctx.inputs.tenantDowntimeMonths, ctx.inputs.downtimeMonths, 3),                   'months / rollover', NUMBER_FORMATS.integer],
       ['TI / LC (Tenant Improv)', 'TILCAllowanceCr',     firstNumber(ctx.inputs.tiLcAllowanceCr, ctx.inputs.tenantImprovementsCr, 0),                  'INR Cr (one-time)', NUMBER_FORMATS.currency],
       ['Exit Cap Rate',           'ExitCapRate',         toPctDecimal(firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08)),       '% / year', NUMBER_FORMATS.percent],
       ['Selling Cost on Exit',    'SellingCostPct',      toPctDecimal(firstNumber(ctx.inputs.sellingCostPct, 0.02)),                                                 '% of sale', NUMBER_FORMATS.percent],
@@ -1758,9 +1768,6 @@ const buildInputsSheet = (workbook, ctx) => {
   sheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getCell(`A${row}`).protection = { locked: true };
 
-  // Sheet protection intentionally disabled — the operator owns this
-  // file once downloaded. Yellow input cells remain visually obvious.
-
   return { sheet, definedNames };
 };
 
@@ -2084,22 +2091,36 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
     { label: 'Cumulative equity cash flow', row: 22, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}21` : `=${prevCol}22+${col}21`, total: 'final' },
   ];
 
+  const incomeRentDriver = ctx.assetClass === 'hospitality'
+    ? 'IFERROR(HospitalityRevPAR*HospitalityKeys*365/12/SaleableAreaSqft,0)'
+    : ctx.assetClass === 'retail'
+      ? 'RetailBlendedRentPerSqftMonth'
+      : 'BaseRentPerSqftMonth';
+  const incomeRecoveryDriver = ctx.assetClass === 'retail' ? 'RetailCAMRecoveryPct' : 'RecoverableExpensePct';
   const incomeRows = [
     { label: 'Effective occupancy', row: 5, format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ProjectMonths,0,MIN(OccupancyPct,OccupancyPct*(${m}-ProjectMonths)/MAX(LeaseUpQuarters*3,1)))` },
-    { label: 'Effective rent / sqft / month', row: 6, format: NUMBER_FORMATS.integer, formula: (m) => `=BaseRentPerSqftMonth*(1+RentEscalationPct)^(MAX(0,${m}-ProjectMonths)/12)` },
+    { label: 'Effective rent / sqft / month', row: 6, format: NUMBER_FORMATS.integer, formula: (m) => `=${incomeRentDriver}*(1+RentEscalationPct)^(MAX(0,${m}-ProjectMonths)/12)` },
     { label: 'Potential gross income', row: 7, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*${col}6/10000000` },
-    { label: 'Vacancy / credit loss', row: 8, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}7*${col}5*VacancyPct` },
-    { label: 'Other income', row: 9, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*OtherIncomePerSqft*${col}5/12/10000000` },
-    { label: 'Effective gross revenue', row: 10, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7*${col}5+${col}8+${col}9`, bold: true },
-    { label: 'Operating expenses', row: 11, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-(${col}10*(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct)+SaleableAreaSqft*PropertyTaxPerSqftYr/12/10000000)` },
-    { label: 'NOI', row: 12, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}10+${col}11`, bold: true },
-    { label: 'CapEx reserve', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}10*CapExReservePct` },
-    { label: 'Cash flow before debt', row: 14, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}12+${col}13`, bold: true },
-    { label: 'Construction / lease-up uses', row: 15, format: NUMBER_FORMATS.currency, formula: (m) => `=IF(${m}<=ProjectMonths,TotalProjectCostCr/ProjectMonths,0)` },
-    { label: 'Debt draw', row: 16, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}15>${col}14,MAX(0,MIN((${col}15-${col}14)*DebtLTV,TotalProjectCostCr*DebtLTV-${m === 1 ? '0' : `SUM($B$16:${prevCol}$16)`})),0)` },
-    { label: 'Interest / debt service', row: 17, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=-MAX(0,(${m === 1 ? '0' : `SUM($B$16:${prevCol}$16)+ABS(SUM($B$17:${prevCol}$17))`}+${col}16))*DebtRatePct/12` },
-    { label: 'Net equity cash flow', row: 18, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}14-${col}15+${col}16+${col}17`, bold: true },
-    { label: 'Cumulative equity cash flow', row: 19, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}18` : `=${prevCol}19+${col}18`, total: 'final' },
+    { label: 'Physical occupancy revenue', row: 8, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7*${col}5` },
+    { label: 'Vacancy / credit loss', row: 9, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}8*VacancyPct` },
+    { label: 'Recoverable CAM / OpEx', row: 10, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7*(UtilitiesPct+MaintenancePct)*${incomeRecoveryDriver}*${col}5` },
+    { label: 'Other income', row: 11, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*OtherIncomePerSqft*${col}5/12/10000000` },
+    { label: 'Effective gross revenue', row: 12, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}8+${col}9+${col}10+${col}11`, bold: true },
+    { label: 'Property tax', row: 13, format: NUMBER_FORMATS.currency, formula: () => '=-SaleableAreaSqft*PropertyTaxPerSqftYr/12/10000000' },
+    { label: 'Insurance', row: 14, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}12*InsurancePct` },
+    { label: 'Property management', row: 15, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}12*PropMgmtPct` },
+    { label: 'Utilities gross cost', row: 16, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}12*UtilitiesPct` },
+    { label: 'Maintenance gross cost', row: 17, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}12*MaintenancePct` },
+    { label: 'Operating expenses', row: 18, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SUM(${col}13:${col}17)`, bold: true },
+    { label: 'NOI', row: 19, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}12+${col}18`, bold: true },
+    { label: 'CapEx reserve', row: 20, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-${col}12*CapExReservePct` },
+    { label: 'TI / LC / downtime costs', row: 21, format: NUMBER_FORMATS.currency, formula: (m, col) => `=-IF(MOD(MAX(0,${m}-1),60)=0,${col}8*12*LeasingCommissionPct,0)-IF(MOD(MAX(0,${m}-1),60)<TenantDowntimeMonths,SaleableAreaSqft*TIAllowancePerSqft/10000000/MAX(TenantDowntimeMonths,1),0)-IF(${m}=1,TILCAllowanceCr,0)` },
+    { label: 'Cash flow before debt', row: 22, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}19+${col}20+${col}21`, bold: true },
+    { label: 'Construction / lease-up uses', row: 23, format: NUMBER_FORMATS.currency, formula: (m) => `=IF(${m}<=ProjectMonths,TotalProjectCostCr/ProjectMonths,0)` },
+    { label: 'Debt draw', row: 24, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}23>${col}22,MAX(0,MIN((${col}23-${col}22)*DebtLTV,TotalProjectCostCr*DebtLTV-${m === 1 ? '0' : `SUM($B$24:${prevCol}$24)`})),0)` },
+    { label: 'Interest / debt service', row: 25, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=-MAX(0,(${m === 1 ? '0' : `SUM($B$24:${prevCol}$24)+ABS(SUM($B$25:${prevCol}$25))`}+${col}24))*DebtRatePct/12` },
+    { label: 'Net equity cash flow', row: 26, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}22-${col}23+${col}24+${col}25`, bold: true },
+    { label: 'Cumulative equity cash flow', row: 27, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}26` : `=${prevCol}27+${col}26`, total: 'final' },
   ];
 
   const rows = ctx.dealFamily === 'income' ? incomeRows : devRows;
@@ -2258,20 +2279,20 @@ const buildLeaseRollSheet = (workbook, ctx) => {
   return sheet;
 };
 
-const buildSensitivityStressSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.sensitivityStress, {
+const buildSensitivitySheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.sensitivity, {
     views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
   });
   sheet.columns = [
     { width: 26 }, ...Array.from({ length: 9 }, () => ({ width: 14 })),
   ];
   sheet.mergeCells('A1:J1');
-  sheet.getCell('A1').value = `${ctx.brandName} | Sensitivity & Stress`;
+  sheet.getCell('A1').value = `${ctx.brandName} | Sensitivity`;
   styleSectionTitle(sheet.getCell('A1'));
   sheet.mergeCells('A2:J2');
   sheet.getCell('A2').value = ctx.dealFamily === 'income'
-    ? '2D cap-rate x occupancy sensitivity plus deterministic stress trials across rent, cost, occupancy, and cap-rate shocks.'
-    : '2D sale-rate x absorption-speed sensitivity plus deterministic stress trials across rate, cost, and absorption shocks.';
+    ? '2D cap-rate x occupancy sensitivity for income assets.'
+    : '2D sale-rate x absorption-speed sensitivity for development deals.';
   sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
 
   const isIncome = ctx.dealFamily === 'income';
@@ -2325,50 +2346,6 @@ const buildSensitivityStressSheet = (workbook, ctx) => {
       color: [{ argb: palette.xlsx('dataNegative') }, { argb: palette.xlsx('dataWarning') }, { argb: palette.xlsx('dataPositive') }],
       priority: 1,
     }],
-  });
-
-  sheet.mergeCells('A15:J15');
-  sheet.getCell('A15').value = 'Deterministic Stress Trials';
-  styleSectionTitle(sheet.getCell('A15'));
-  ['Trial', 'Rate shock', 'Cost shock', isIncome ? 'Occupancy shock' : 'Absorption speed', 'Cap-rate shock', 'Metric', 'Pass / fail'].forEach((h, idx) => {
-    sheet.getCell(16, idx + 1).value = h;
-  });
-  styleHeader(sheet.getRow(16));
-  const trialCount = 80;
-  for (let i = 1; i <= trialCount; i += 1) {
-    const r = 16 + i;
-    sheet.getCell(r, 1).value = i;
-    sheet.getCell(r, 2).value = { formula: `=(MOD(SIN(A${r}*12.9898)*43758.5453,1)-0.5)*0.30` };
-    sheet.getCell(r, 3).value = { formula: `=(MOD(SIN(A${r}*78.233)*19341.123,1)-0.5)*0.24` };
-    sheet.getCell(r, 4).value = { formula: isIncome ? `=(MOD(SIN(A${r}*39.425)*27183.19,1)-0.5)*0.30` : `=0.70+MOD(SIN(A${r}*39.425)*27183.19,1)*0.70` };
-    sheet.getCell(r, 5).value = { formula: isIncome ? `=(MOD(SIN(A${r}*17.17)*11311.7,1)-0.5)*0.02` : '=0' };
-    const metricFormula = isIncome
-      ? `=IFERROR(((SaleableAreaSqft*BaseRentPerSqftMonth*(1+B${r})*12*MAX(0,MIN(1,OccupancyPct*(1+D${r})))*(1-VacancyPct)*(1-(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct+CapExReservePct))/10000000)/(ExitCapRate+E${r})*(1-TotalExitCostPct)-TotalProjectCostCr*(1+C${r}))/TotalProjectCostCr,0)`
-      : `=IFERROR(((SaleableAreaSqft*SellRatePerSqft*(1+B${r})*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*CollectionPct*(1-LandownerSharePct)-TotalProjectCostCr*(1+C${r})*(1+MAX(0,1-D${r})*FinanceCostPct*TotalQuarters/4))/(SaleableAreaSqft*SellRatePerSqft*(1+B${r})/10000000),0)`;
-    sheet.getCell(r, 6).value = { formula: metricFormula };
-    sheet.getCell(r, 7).value = { formula: `=IF(F${r}<0,"FAIL","PASS")` };
-    [2, 3, 4, 5, 6].forEach((c) => {
-      const cell = sheet.getCell(r, c);
-      styleOutputCell(cell, c === 4 && !isIncome ? NUMBER_FORMATS.multiple : NUMBER_FORMATS.percent);
-    });
-    styleLabelCell(sheet.getCell(r, 7));
-  }
-
-  const summaryRow = 16 + trialCount + 2;
-  sheet.mergeCells(`A${summaryRow}:J${summaryRow}`);
-  sheet.getCell(`A${summaryRow}`).value = 'Stress Summary';
-  styleSectionTitle(sheet.getCell(`A${summaryRow}`));
-  [
-    ['P10 metric', `=PERCENTILE.INC(F17:F${16 + trialCount},0.1)`],
-    ['P50 metric', `=PERCENTILE.INC(F17:F${16 + trialCount},0.5)`],
-    ['P90 metric', `=PERCENTILE.INC(F17:F${16 + trialCount},0.9)`],
-    ['Failure probability', `=COUNTIF(G17:G${16 + trialCount},"FAIL")/${trialCount}`],
-  ].forEach(([label, formula], idx) => {
-    const r = summaryRow + 1 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    sheet.getCell(`B${r}`).value = { formula };
-    styleOutputCell(sheet.getCell(`B${r}`), NUMBER_FORMATS.percent);
   });
 
   return sheet;
@@ -2872,10 +2849,6 @@ const buildPhasingSheet = (workbook, ctx) => {
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
 
-  // Sheet protection intentionally disabled — the operator owns this
-  // file once it's downloaded and shouldn't be blocked from editing
-  // any cell. Yellow input cells are still visually obvious.
-  //
   // Return the last row written so the Cash Flow section knows where to
   // start. The Cash Flow rows render BELOW these phasing rows, on the
   // SAME worksheet (post-2026-05-11 7-sheet restructure).
@@ -3171,9 +3144,6 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
     });
   }
 
-  // Sheet protection intentionally disabled — the operator owns this
-  // file once it's downloaded and shouldn't be blocked from editing
-  // any cell. Yellow input cells are still visually obvious.
   return sheet;
 };
 
@@ -3424,23 +3394,23 @@ const buildDashboardSheet = (workbook, ctx) => {
 
   const trendSpecs = ctx.dealFamily === 'income'
     ? [
-        ['A9', 'NOI trend', 'B9', '=REPT("|",MAX(1,MIN(18,ROUND(ABS(B4),0))))'],
-        ['C9', 'DSCR trend', 'D9', '=REPT("|",MAX(1,MIN(18,ROUND(B7*8,0))))'],
-        ['E9', 'Exit trend', 'F9', '=REPT("|",MAX(1,MIN(18,ROUND(F4*120,0))))'],
+        ['A9', 'PGI trend', 'B9'],
+        ['C9', 'NOI trend', 'D9'],
+        ['E9', 'Equity CF trend', 'F9'],
       ]
     : [
-        ['A9', 'Margin trend', 'B9', '=REPT("|",MAX(1,MIN(18,ROUND(MAX(0,B7)*120,0))))'],
-        ['C9', 'DSCR trend', 'D9', '=REPT("|",MAX(1,MIN(18,ROUND(D7*8,0))))'],
-        ['E9', 'Cash trend', 'F9', '=REPT("|",MAX(1,MIN(18,ROUND(ABS(F4)/MAX(1,ABS(D4))*18,0))))'],
+        ['A9', 'Sales trend', 'B9'],
+        ['C9', 'Equity CF trend', 'D9'],
+        ['E9', 'Cumulative trend', 'F9'],
       ];
-  trendSpecs.forEach(([labelRef, label, valueRef, formula]) => {
+  trendSpecs.forEach(([labelRef, label, valueRef]) => {
     const labelCell = sheet.getCell(labelRef);
     labelCell.value = label;
     labelCell.font = { name: FONT, size: 8, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
     labelCell.fill = FILL(palette.xlsx('paper'));
     labelCell.alignment = { horizontal: 'left' };
     const valueCell = sheet.getCell(valueRef);
-    valueCell.value = { formula };
+    valueCell.value = null;
     valueCell.font = { name: FONT, size: 8, bold: true, color: { argb: palette.xlsx('accent') } };
     valueCell.fill = FILL(palette.xlsx('paperElevated'));
     valueCell.alignment = { horizontal: 'left' };
@@ -3471,7 +3441,7 @@ const buildDashboardSheet = (workbook, ctx) => {
     styleOutputCell(v, NUMBER_FORMATS.currency);
   });
 
-  // Native chart objects on the Sources & Uses + Quarterly Trend blocks
+  // Native chart objects on the Sources & Uses + Monthly Trend blocks
   // are now injected post-write via `chartInjector.js` (ExcelJS 4.4.0 has
   // no native `addChart` API — confirmed `addChart` is undefined on the
   // worksheet instance). See `buildDashboardChartSpecs()` below for the
@@ -3871,22 +3841,22 @@ const buildDashboardSheet = (workbook, ctx) => {
     profitVal.protection = { locked: true };
   });
 
-  // ── Quarterly Operating Trend (asset-class-aware, conditional-format
+  // ── Monthly Operating Trend (asset-class-aware, conditional-format
   // data bars give the table an inline-chart feel that works across every
   // Excel version — more reliable than ExcelJS chart objects)
-  // Income deals: Quarter | PGI | EGR | NOI | Cash Flow After Debt
-  // Development: Quarter | Sales | Construction Cost | Net Cash Flow | Cumulative
+  // Income deals: Month | PGI | EGR | NOI | Net Equity CF
+  // Development: Month | Sales | Construction Cost | Equity CF | Cumulative
   sheet.mergeCells('A37:N37');
   sheet.getCell('A37').value = ctx.dealFamily === 'income'
-    ? 'Quarterly Operating Trend (PGI / EGR / NOI / CF After Debt)'
-    : 'Quarterly Project Trend (Sales / Construction / Net CF / Cumulative)';
+    ? 'Monthly Operating Trend (PGI / EGR / NOI / Net Equity CF)'
+    : 'Monthly Project Trend (Sales / Construction / Equity CF / Cumulative)';
   styleSectionTitle(sheet.getCell('A37'));
   sheet.getRow(37).height = 22;
 
   // Header row
   const trendHeaders = ctx.dealFamily === 'income'
-    ? ['Quarter', 'PGI (Cr)', 'EGR (Cr)', 'NOI (Cr)', 'CF After Debt (Cr)']
-    : ['Quarter', 'Sales (Cr)', 'Construction (Cr)', 'Net CF (Cr)', 'Cumulative (Cr)'];
+    ? ['Month', 'PGI (Cr)', 'EGR (Cr)', 'NOI (Cr)', 'Net Equity CF (Cr)']
+    : ['Month', 'Sales (Cr)', 'Construction (Cr)', 'Equity CF (Cr)', 'Cumulative (Cr)'];
   trendHeaders.forEach((h, idx) => {
     const cell = sheet.getCell(38, idx + 1);
     cell.value = h;
@@ -3897,23 +3867,23 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getRow(38).height = 22;
 
   // Source rows on Phasing / Cash Flow sheet — asset-class-aware
-  const trendQuarters = Math.min(ctx.totalQuarters, 16); // cap at 16 for readability
-  for (let q = 1; q <= trendQuarters; q += 1) {
-    const r = 38 + q;
-    sheet.getCell(r, 1).value = `Q${q}`;
+  const monthlySheet = `'${SHEETS.monthlyCashFlow}'`;
+  const trendMonths = Math.min(getWorkbookModelMonths(ctx), 24);
+  for (let m = 1; m <= trendMonths; m += 1) {
+    const r = 38 + m;
+    sheet.getCell(r, 1).value = `M${m}`;
     sheet.getCell(r, 1).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
     sheet.getCell(r, 1).alignment = { horizontal: 'center', vertical: 'middle' };
     sheet.getCell(r, 1).fill = FILL(palette.xlsx('paper'));
-    const qCol = colLetter(q + 1); // q=1 → B on phasing/cashflow
-
+    const mCol = excelCol(m + 1);
     if (ctx.dealFamily === 'income') {
       // Phasing section refs (rows unchanged): PGI=row 8, EGR=11, NOI=18.
       // Cash Flow section refs shifted by cfOffset (income: row 9 → 29).
       const formulas = [
-        `=${phasing}!${qCol}8`,
-        `=${phasing}!${qCol}11`,
-        `=${phasing}!${qCol}18`,
-        `=${cashflow}!${qCol}${cfShift(9)}`,
+        `=${monthlySheet}!${mCol}7`,
+        `=${monthlySheet}!${mCol}12`,
+        `=${monthlySheet}!${mCol}19`,
+        `=${monthlySheet}!${mCol}26`,
       ];
       formulas.forEach((f, idx) => {
         const cell = sheet.getCell(r, idx + 2);
@@ -3925,12 +3895,11 @@ const buildDashboardSheet = (workbook, ctx) => {
     } else {
       // Phasing section refs (unchanged): Sales=row 9, Construction=row 6.
       // Cash Flow section refs shifted by cfOffset (dev: row 8 → 34).
-      const startCol = colLetter(2);
       const formulas = [
-        `=${phasing}!${qCol}9`,
-        `=${phasing}!${qCol}6`,
-        `=${cashflow}!${qCol}${cfShift(8)}`,
-        `=SUM(${cashflow}!$${startCol}$${cfShift(8)}:${qCol}${cfShift(8)})`,
+        `=${monthlySheet}!${mCol}12`,
+        `=${monthlySheet}!${mCol}7`,
+        `=${monthlySheet}!${mCol}21`,
+        `=${monthlySheet}!${mCol}22`,
       ];
       formulas.forEach((f, idx) => {
         const cell = sheet.getCell(r, idx + 2);
@@ -3946,7 +3915,7 @@ const buildDashboardSheet = (workbook, ctx) => {
   // per cell. ExcelJS data-bar config requires `cfvo` min/max anchors.
   for (let col = 2; col <= 5; col += 1) {
     const startCell = `${colLetter(col)}39`;
-    const endCell = `${colLetter(col)}${38 + trendQuarters}`;
+    const endCell = `${colLetter(col)}${38 + trendMonths}`;
     try {
       sheet.addConditionalFormatting({
         ref: `${startCell}:${endCell}`,
@@ -3975,9 +3944,9 @@ const buildDashboardSheet = (workbook, ctx) => {
   // total profit.
   const dealStructure = String(ctx.deal.deal_structure || '').toLowerCase();
   const isJv = ['jv', 'jda', 'da'].includes(dealStructure);
-  let waterfallEndRow = 38 + trendQuarters; // baseline if waterfall not shown
+  let waterfallEndRow = 38 + trendMonths; // baseline if waterfall not shown
   if (isJv) {
-    const wfStartRow = 38 + trendQuarters + 2;
+    const wfStartRow = 38 + trendMonths + 2;
     sheet.mergeCells(`A${wfStartRow}:N${wfStartRow}`);
     sheet.getCell(`A${wfStartRow}`).value = `Profit Waterfall — ${ctx.deal.deal_structure ? ctx.deal.deal_structure.toUpperCase() : 'JV'} structure`;
     styleSectionTitle(sheet.getCell(`A${wfStartRow}`));
@@ -4029,9 +3998,6 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.getCell(`A${footerRow}`).alignment = { wrapText: true, vertical: 'middle' };
   sheet.getRow(footerRow).height = 28;
 
-  // Sheet protection intentionally disabled — the operator owns this
-  // file once it's downloaded and shouldn't be blocked from editing
-  // any cell. Yellow input cells are still visually obvious.
   return sheet;
 };
 
@@ -5074,11 +5040,25 @@ const buildCalculationsSheet = (workbook, ctx) => {
   sheet.getCell(`A${row + 1}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${row + 1}`).protection = { locked: true };
 
-  // Lock everything — power users who want to edit can unhide + unprotect.
-  // Sheet protection intentionally disabled — the operator owns this
-  // file once it's downloaded and shouldn't be blocked from editing
-  // any cell. Yellow input cells are still visually obvious.
+  // Lock everything; power users who want to inspect/edit can unhide and
+  // unprotect the sheet after download.
   return sheet;
+};
+
+const applyWorkbookProtection = (workbook) => {
+  workbook.worksheets.forEach((sheet) => {
+    sheet.protect('', {
+      selectLockedCells: true,
+      selectUnlockedCells: true,
+      formatCells: true,
+      formatColumns: true,
+      formatRows: true,
+      sort: true,
+      autoFilter: true,
+      insertRows: false,
+      deleteRows: false,
+    });
+  });
 };
 
 /**
@@ -5125,7 +5105,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   buildMonthlyCashFlowSheet(workbook, ctx);
   buildLeaseRollSheet(workbook, ctx);
   buildConstructionDrawdownSheet(workbook, ctx);
-  buildSensitivityStressSheet(workbook, ctx);
+  buildSensitivitySheet(workbook, ctx);
 
   buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);
@@ -5138,6 +5118,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
     workbook.definedNames.add(ref, name);
   });
   workbook.definedNames.add(`'${SHEETS.calculations}'!$B$28`, 'TotalProjectCostCr');
+  applyWorkbookProtection(workbook);
 
   return workbook;
 };
@@ -5149,8 +5130,8 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
  *
  * Cell positions here MUST stay in sync with buildDashboardSheet() —
  * the chart formulas point at exact cells produced by that builder.
- * Any movement of the Sources & Uses block (rows 12-18) or the Quarterly
- * Trend table (rows 37-53) needs to be reflected here.
+ * Any movement of the Sources & Uses block (rows 12-18) or the Monthly
+ * Trend table (rows 37-62 at the default 24-month view) needs to be reflected here.
  */
 const buildDashboardChartSpecs = (ctx) => {
   const specs = [];
@@ -5170,19 +5151,19 @@ const buildDashboardChartSpecs = (ctx) => {
     anchor: { fromCol: 7, fromRow: 10, widthCols: 6, heightRows: 12 },
   });
 
-  // 2. Quarterly Trend combo chart — clustered columns for period
+  // 2. Monthly Trend combo chart — clustered columns for period
   //    contribution + cumulative line on secondary value axis. The
   //    cumulative-line crossover is the canonical analyst read for
   //    "when does the deal turn positive."
   //
   //    Development family: Sales + Construction columns + Cumulative line
-  //    Income family:      PGI + NOI columns + CF-After-Debt cumulative line
+  //    Income family:      PGI + NOI columns + Net Equity CF line
   //
-  //    Anchored BELOW the data table (rows 37-53). Asset-class-aware
+  //    Anchored BELOW the data table (rows 37-62 at default view). Asset-class-aware
   //    series labels + colours.
-  const trendQuarters = Math.min(ctx.totalQuarters, 16);
-  const trendEndRow = 38 + trendQuarters;
-  if (trendQuarters >= 2) {
+  const trendMonths = Math.min(getWorkbookModelMonths(ctx), 24);
+  const trendEndRow = 38 + trendMonths;
+  if (trendMonths >= 2) {
     const isIncome = ctx.dealFamily === 'income';
     const barSeries = isIncome
       ? [
@@ -5193,14 +5174,14 @@ const buildDashboardChartSpecs = (ctx) => {
         { name: 'Sales (Cr)',        valuesRange: `$B$39:$B$${trendEndRow}`, colour: '0F7B5A' },
         { name: 'Construction (Cr)', valuesRange: `$C$39:$C$${trendEndRow}`, colour: 'B23A48' },
       ];
-    // Cumulative line lives in column E for both families (Quarterly
-    // Trend table layout: A=Quarter, B=Series1, C=Series2, D=Series3,
+    // Cumulative line lives in column E for both families (Monthly
+    // Trend table layout: A=Month, B=Series1, C=Series2, D=Series3,
     // E=Cumulative-or-CF-After-Debt). Copper accent ties the line
     // visually to the editorial palette without competing with the
     // green/red bar palette.
     const lineSeries = [
       {
-        name: isIncome ? 'CF After Debt (cum, Cr)' : 'Cumulative Net CF (Cr)',
+        name: isIncome ? 'Net Equity CF (Cr)' : 'Cumulative Equity CF (Cr)',
         valuesRange: `$E$39:$E$${trendEndRow}`,
         colour: 'B5793C',
       },
@@ -5208,8 +5189,8 @@ const buildDashboardChartSpecs = (ctx) => {
     specs.push({
       type: 'combo',
       title: isIncome
-        ? 'Quarterly Operating Trend — PGI / NOI / CF After Debt'
-        : 'Quarterly Project Trend — Sales / Construction / Cumulative',
+        ? 'Monthly Operating Trend - PGI / NOI / Net Equity CF'
+        : 'Monthly Project Trend - Sales / Construction / Cumulative',
       sheetName: dashName,
       categoriesRange: `$A$39:$A$${trendEndRow}`,
       barSeries,
@@ -5240,6 +5221,23 @@ const buildDashboardChartSpecs = (ctx) => {
   });
 
   return specs;
+};
+
+const buildDashboardSparklineSpecs = (ctx) => {
+  const trendMonths = Math.min(getWorkbookModelMonths(ctx), 24);
+  if (trendMonths < 2) return [];
+  const trendEndRow = 38 + trendMonths;
+  return ctx.dealFamily === 'income'
+    ? [
+        { location: 'B9', dataRange: `$B$39:$B$${trendEndRow}`, colour: '0E1B2C' },
+        { location: 'D9', dataRange: `$D$39:$D$${trendEndRow}`, colour: '0F7B5A' },
+        { location: 'F9', dataRange: `$E$39:$E$${trendEndRow}`, colour: 'B5793C' },
+      ]
+    : [
+        { location: 'B9', dataRange: `$B$39:$B$${trendEndRow}`, colour: '0F7B5A' },
+        { location: 'D9', dataRange: `$D$39:$D$${trendEndRow}`, colour: 'B5793C' },
+        { location: 'F9', dataRange: `$E$39:$E$${trendEndRow}`, colour: '0E1B2C' },
+      ];
 };
 
 const stripLeadingEqualsFromWorksheetFormulas = async (xlsxBuffer) => {
@@ -5332,17 +5330,16 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const xlsxBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
 
   const chartSpecs = buildDashboardChartSpecs(ctx);
-  if (chartSpecs.length === 0) return finalizeWorkbookBuffer(xlsxBuffer);
+  let enhancedBuffer = xlsxBuffer;
 
   try {
-    // Dashboard is intentionally the first worksheet, so ExcelJS maps it to
-    // xl/worksheets/sheet1.xml.
-    const withCharts = await injectChartsIntoXlsx(xlsxBuffer, {
-      targetSheetName: SHEETS.dashboard,
-      targetSheetFile: 'sheet1.xml',
-      charts: chartSpecs,
-    });
-    return finalizeWorkbookBuffer(withCharts);
+    if (chartSpecs.length > 0) {
+      enhancedBuffer = await injectChartsIntoXlsx(enhancedBuffer, {
+        targetSheetName: SHEETS.dashboard,
+        targetSheetFile: 'sheet1.xml',
+        charts: chartSpecs,
+      });
+    }
   } catch (err) {
     // Chart injection is best-effort. If anything goes wrong (a future
     // template change shifts the sheet position, an XML structure shifts,
@@ -5352,8 +5349,22 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       // eslint-disable-next-line no-console
       console.warn('[xlsx.v2] chart injection failed, returning un-enhanced workbook:', err.message);
     }
-    return finalizeWorkbookBuffer(xlsxBuffer);
   }
+
+  try {
+    enhancedBuffer = await injectSparklinesIntoXlsx(enhancedBuffer, {
+      targetSheetName: SHEETS.dashboard,
+      targetSheetFile: 'sheet1.xml',
+      sparklines: buildDashboardSparklineSpecs(ctx),
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[xlsx.v2] sparkline injection failed, returning workbook without sparklines:', err.message);
+    }
+  }
+
+  return finalizeWorkbookBuffer(enhancedBuffer);
 };
 
 module.exports = {
@@ -5365,6 +5376,7 @@ module.exports = {
     buildExportQa,
     buildDealWorkbookV2Workbook,
     buildDashboardChartSpecs,
+    buildDashboardSparklineSpecs,
     stripLeadingEqualsFromWorksheetFormulas,
     validateXlsxBufferForDownload,
     XlsxExportValidationError,

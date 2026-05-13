@@ -47,6 +47,46 @@ const escapeXml = (s) => String(s)
 // character so we always quote, always XML-escape.
 const sheetRefForChart = (sheetName, range) => `'${escapeXml(sheetName)}'!${range}`;
 
+const sheetRefForSparkline = (sheetName, range) => `'${escapeXml(String(sheetName).replace(/'/g, "''"))}'!${range}`;
+
+const buildSparklineExtXml = (targetSheetName, sparklines) => {
+  const groups = (sparklines || []).map((sparkline, idx) => {
+    const colour = sparkline.colour || 'B5793C';
+    return [
+      `<x14:sparklineGroup type="line" displayEmptyCellsAs="gap" xr:uid="{00000000-0000-0000-0000-${String(idx + 1).padStart(12, '0')}}">`,
+      `<x14:colorSeries rgb="FF${colour}"/>`,
+      '<x14:colorNegative rgb="FFB23A48"/>',
+      '<x14:colorAxis rgb="FF6B7280"/>',
+      `<x14:colorMarkers rgb="FF${colour}"/>`,
+      '<x14:colorFirst rgb="FF0E1B2C"/>',
+      '<x14:colorLast rgb="FF0F7B5A"/>',
+      '<x14:sparklines><x14:sparkline>',
+      `<xm:f>${sheetRefForSparkline(sparkline.sheetName || targetSheetName, sparkline.dataRange)}</xm:f>`,
+      `<xm:sqref>${escapeXml(sparkline.location)}</xm:sqref>`,
+      '</x14:sparkline></x14:sparklines>',
+      '</x14:sparklineGroup>',
+    ].join('');
+  }).join('');
+  return [
+    '<ext uri="{05C60535-1F16-4fd2-B633-F4F36F0B64E0}"',
+    ' xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"',
+    ' xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"',
+    ' xmlns:xr="http://schemas.microsoft.com/office/spreadsheetml/2014/revision">',
+    `<x14:sparklineGroups>${groups}</x14:sparklineGroups>`,
+    '</ext>',
+  ].join('');
+};
+
+const patchWorksheetXmlForSparklines = (sheetXml, targetSheetName, sparklines) => {
+  if (!Array.isArray(sparklines) || sparklines.length === 0) return sheetXml;
+  if (sheetXml.includes('<x14:sparklineGroups')) return sheetXml;
+  const sparklineExt = buildSparklineExtXml(targetSheetName, sparklines);
+  if (sheetXml.includes('</extLst>')) {
+    return sheetXml.replace(/<\/extLst>\s*/, `${sparklineExt}</extLst>`);
+  }
+  return sheetXml.replace(/<\/worksheet>\s*$/, `<extLst>${sparklineExt}</extLst></worksheet>`);
+};
+
 // ────────────────────────────────────────────────────────────────────────
 // Chart XML builders — one function per chart type. Each returns a string
 // that goes into xl/charts/chartN.xml.
@@ -112,7 +152,7 @@ const buildDoughnutChartXml = (spec) => {
 
 /**
  * Clustered-column or clustered-bar chart. One or more numeric series sharing
- * the same category axis. Used for Quarterly Trend on the Dashboard.
+ * the same category axis. Used for Monthly Trend on the Dashboard.
  *
  * @param {Object} spec
  * @param {string} spec.title
@@ -276,7 +316,7 @@ const buildTornadoChartXml = (spec) => {
 /**
  * Combo chart — clustered-column + line in one plot area, sharing the
  * category axis but with the line series on a secondary value axis on
- * the right side. The canonical analyst read for a Quarterly Trend
+ * the right side. The canonical analyst read for a Monthly Trend
  * showing period contribution (column) + cumulative trajectory (line)
  * where the cumulative crossover point is the "deal turns positive"
  * moment.
@@ -562,16 +602,35 @@ const injectChartsIntoXlsx = async (xlsxBuffer, opts) => {
   return zip.generateAsync({ type: 'nodebuffer' });
 };
 
+const injectSparklinesIntoXlsx = async (xlsxBuffer, opts) => {
+  const { targetSheetName, targetSheetFile, sparklines } = opts;
+  if (!Array.isArray(sparklines) || sparklines.length === 0) return xlsxBuffer;
+
+  const zip = await JSZip.loadAsync(xlsxBuffer);
+  const sheetXmlPath = `xl/worksheets/${targetSheetFile}`;
+  const sheetXmlFile = zip.file(sheetXmlPath);
+  if (!sheetXmlFile) throw new Error(`chartInjector: ${sheetXmlPath} not found in workbook`);
+
+  const sheetXml = await sheetXmlFile.async('string');
+  const patched = patchWorksheetXmlForSparklines(sheetXml, targetSheetName, sparklines);
+  if (patched === sheetXml) return xlsxBuffer;
+  zip.file(sheetXmlPath, patched);
+  return zip.generateAsync({ type: 'nodebuffer' });
+};
+
 module.exports = {
   injectChartsIntoXlsx,
+  injectSparklinesIntoXlsx,
   __internal: {
     buildDoughnutChartXml,
     buildBarChartXml,
     buildComboChartXml,
     buildTornadoChartXml,
+    buildSparklineExtXml,
     buildDrawingXml,
     buildDrawingRels,
     ensureContentTypes,
     patchWorksheetXmlForDrawing,
+    patchWorksheetXmlForSparklines,
   },
 };
