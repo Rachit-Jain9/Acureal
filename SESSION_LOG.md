@@ -2644,7 +2644,7 @@ Continued the XLSX export remarks, skipping live paid/official feed integrations
 - Reviewers now get a dedicated Sources & Uses sheet, a larger sensitivity/stress sheet, and dashboard health icons/trend strips.
 
 ### PRs opened / merged
-- PR pending from `codex/monthly-underwriting-tier` - `feat(exports): add monthly underwriting workbook tier`.
+- PR #300 - `feat(exports): add monthly underwriting workbook tier` - opened from `codex/monthly-underwriting-tier`; CI/merge/deploy handled from the same branch after this log entry.
 
 ### Validation
 - Backend XLSX v2 focused suite: 144 tests passed.
