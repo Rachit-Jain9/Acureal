@@ -4,6 +4,7 @@ const JSZip = require('jszip');
 const ExcelJS = require('exceljs');
 const {
   injectChartsIntoXlsx,
+  injectSparklinesIntoXlsx,
   __internal,
 } = require('../src/services/exports/xlsx/v2/chartInjector');
 
@@ -51,13 +52,13 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
 
     test('buildBarChartXml renders one ser per series + barDir', () => {
       const xml = __internal.buildBarChartXml({
-        title: 'Quarterly Trend',
+        title: 'Monthly Trend',
         sheetName: 'Dashboard',
-        categoriesRange: '$A$38:$A$53',
+        categoriesRange: '$A$39:$A$62',
         barDir: 'col',
         series: [
-          { name: 'Sales', valuesRange: '$B$38:$B$53', colour: '0F7B5A' },
-          { name: 'Construction', valuesRange: '$C$38:$C$53', colour: 'B23A48' },
+          { name: 'Sales', valuesRange: '$B$39:$B$62', colour: '0F7B5A' },
+          { name: 'Construction', valuesRange: '$C$39:$C$62', colour: 'B23A48' },
         ],
       });
       expect(xml).toMatch(/<c:barChart>/);
@@ -75,21 +76,21 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
       expect(xml).toMatch(/<c:valAx>/);
     });
 
-    // PR-F: combo chart for the Quarterly Trend Dashboard chart.
+    // PR-F: combo chart for the Monthly Trend Dashboard chart.
     // Office's combo pattern: barChart + lineChart inside the same
     // <c:plotArea>, sharing the category axis but with the line series
     // on a secondary value axis (right side).
     test('buildComboChartXml renders barChart + lineChart sharing cat axis', () => {
       const xml = __internal.buildComboChartXml({
-        title: 'Quarterly Trend — Sales / Construction / Cumulative',
+        title: 'Monthly Trend - Sales / Construction / Cumulative',
         sheetName: 'Dashboard',
-        categoriesRange: '$A$38:$A$53',
+        categoriesRange: '$A$39:$A$62',
         barSeries: [
-          { name: 'Sales (Cr)', valuesRange: '$B$38:$B$53', colour: '0F7B5A' },
-          { name: 'Construction (Cr)', valuesRange: '$C$38:$C$53', colour: 'B23A48' },
+          { name: 'Sales (Cr)', valuesRange: '$B$39:$B$62', colour: '0F7B5A' },
+          { name: 'Construction (Cr)', valuesRange: '$C$39:$C$62', colour: 'B23A48' },
         ],
         lineSeries: [
-          { name: 'Cumulative Net CF (Cr)', valuesRange: '$E$38:$E$53', colour: 'B5793C' },
+          { name: 'Cumulative Net CF (Cr)', valuesRange: '$E$39:$E$62', colour: 'B5793C' },
         ],
       });
 
@@ -195,6 +196,18 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
       const drawingMatches = (out2.match(/\/xl\/drawings\/drawing1\.xml/g) || []).length;
       expect(drawingMatches).toBe(1);
     });
+
+    test('buildSparklineExtXml emits native x14 sparkline groups', () => {
+      const xml = __internal.buildSparklineExtXml('Dashboard', [
+        { location: 'B9', dataRange: '$B$39:$B$62', colour: '0F7B5A' },
+        { location: 'D9', dataRange: '$D$39:$D$62', colour: 'B5793C' },
+      ]);
+      expect(xml).toMatch(/<x14:sparklineGroups>/);
+      expect(xml).toMatch(/<xm:sqref>B9<\/xm:sqref>/);
+      expect(xml).toMatch(/<xm:sqref>D9<\/xm:sqref>/);
+      expect(xml).toMatch(/'Dashboard'!\$B\$39:\$B\$62/);
+      expect(xml).toMatch(/'Dashboard'!\$D\$39:\$D\$62/);
+    });
   });
 
   describe('injectChartsIntoXlsx (end-to-end)', () => {
@@ -271,6 +284,40 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
           anchor: { fromCol: 0, fromRow: 0, widthCols: 1, heightRows: 1 },
         }],
       })).rejects.toThrow(/unsupported chart type/);
+    });
+  });
+
+  describe('injectSparklinesIntoXlsx (end-to-end)', () => {
+    test('patches the target worksheet with native sparkline XML and roundtrips', async () => {
+      const buffer = await makeMinimalWorkbookBuffer();
+      const enhanced = await injectSparklinesIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        sparklines: [
+          { location: 'B9', dataRange: '$B$1:$B$3', colour: '0F7B5A' },
+          { location: 'D9', dataRange: '$B$1:$B$3', colour: 'B5793C' },
+        ],
+      });
+
+      const zip = await JSZip.loadAsync(enhanced);
+      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
+      expect(sheetXml).toMatch(/<x14:sparklineGroups>/);
+      expect(sheetXml).toMatch(/<xm:sqref>B9<\/xm:sqref>/);
+      expect(sheetXml).toMatch(/<xm:sqref>D9<\/xm:sqref>/);
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(enhanced);
+      expect(wb.worksheets.map((w) => w.name)).toContain('Dashboard');
+    });
+
+    test('returns the input buffer untouched when no sparklines are passed', async () => {
+      const buffer = await makeMinimalWorkbookBuffer();
+      const result = await injectSparklinesIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        sparklines: [],
+      });
+      expect(result).toBe(buffer);
     });
   });
 });

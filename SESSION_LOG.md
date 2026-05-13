@@ -2654,3 +2654,27 @@ Continued the XLSX export remarks, skipping live paid/official feed integrations
 ### What's left to do
 No manual user action is required for this patch. Paid/official data feeds and expert legal/tax validation remain intentionally skipped for now.
 
+
+## 2026-05-13 - XLSX monthly dashboard polish and stress removal (PR #301)
+
+### What was worked on
+Finished the Excel-focused remainder from the current remarks/screenshot thread. Removed the partial stress/Monte Carlo-style trial scaffold, kept the deterministic 7x7 sensitivity table, switched the Dashboard trend block to monthly cash-flow references, added real Excel sparklines for KPI trend cells, protected formula areas while keeping input cells editable, and deepened income monthly mechanics for retail, warehouse, and hospitality assets.
+
+### Plain-English recap
+- The workbook no longer claims partial stress-trial outputs as if they were a full Monte Carlo engine.
+- Dashboard trends now show monthly movement from the monthly cash-flow sheet.
+- KPI tiles now carry real Excel sparklines instead of text bars.
+- Income exports now show clearer CAM recovery, hospitality RevPAR, leasing commission, tenant downtime, and NOI buildup lines.
+
+### PRs opened / merged
+- PR #301 - `feat(exports): finish XLSX monthly dashboard polish` - opened from `codex/xlsx-monthly-dashboard-polish`; CI/merge/deploy handled from the same branch after this log entry.
+
+### Validation
+- XLSX v2 focused suite: 146 tests passed.
+- XLSX chart/sparkline injector suite: 14 tests passed.
+- Full backend suite: 1,519 tests passed.
+- Frontend production build passed.
+
+### What's left to do
+No manual user action is required for this patch. True Monte Carlo remains intentionally skipped per operator instruction.
+
