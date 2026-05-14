@@ -36,6 +36,8 @@ const { injectChartsIntoXlsx, injectSparklinesIntoXlsx } = require('./chartInjec
 const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
 
+const financialKernel = require('../../../../../../packages/financial-kernel/dist');
+
 const FONT = palette.FONTS.body;
 
 // Sheet display names — operator-directed 7-sheet structure (2026-05-11):
@@ -63,6 +65,7 @@ const SHEETS = {
   dashboard: 'Dashboard',
   qaSources: 'Export QA & Sources',
   inputs: 'Inputs & Assumptions',
+  usali: 'USALI Pro Forma',
   cashFlowEngine: 'Cash Flow Engine',
   sourcesUses: 'Sources & Uses',
   monthlyCashFlow: 'Monthly Cash Flow',
@@ -123,6 +126,69 @@ const NUMBER_FORMATS = {
   date: 'dd-mmm-yyyy',
 };
 
+const USALI_ROW = Object.freeze({
+  occupancy: 5,
+  adr: 6,
+  occupiedRooms: 7,
+  revPAR: 8,
+  trevPAR: 9,
+  roomsRevenue: 10,
+  fbRestaurant: 11,
+  fbBanquet: 12,
+  otherOperated: 13,
+  parking: 14,
+  leaseIncome: 15,
+  totalRevenue: 16,
+  roomsDeptExp: 17,
+  fbDeptExp: 18,
+  otherDeptExp: 19,
+  deptProfit: 20,
+  aAndG: 21,
+  it: 22,
+  sm: 23,
+  pom: 24,
+  utilities: 25,
+  totalUndist: 26,
+  brandRoyalty: 27,
+  brandMktReserv: 28,
+  gop: 29,
+  gopMargin: 30,
+  mgmtBase: 31,
+  mgmtIncentive: 32,
+  ibfc: 33,
+  propTax: 34,
+  insurance: 35,
+  groundLease: 36,
+  ebitda: 37,
+  ebitdaMargin: 38,
+  ffeReserve: 39,
+  noi: 40,
+  noiMargin: 41,
+});
+
+const HOSPITALITY_BUDGET_ROW = Object.freeze({
+  land: 46,
+  stamp: 47,
+  hardConstruction: 48,
+  gst: 49,
+  softDesign: 50,
+  approvals: 51,
+  ffe: 52,
+  ose: 53,
+  preOpening: 54,
+  workingCapital: 55,
+  contingency: 56,
+  subtotalBeforeIdc: 57,
+  idc: 58,
+  totalDevelopmentCost: 59,
+  constructionLoan: 60,
+  requiredEquity: 61,
+  stabilizedNoi: 62,
+  stabilizedValue: 63,
+  refiProceeds: 64,
+  terminalSaleValue: 65,
+});
+
 const num = (value) => {
   if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
@@ -162,10 +228,42 @@ const toPctDecimal = (value) => {
   return n > 1 ? n / 100 : n;
 };
 
-const HOSPITALITY_DEFAULT_SQFT_PER_KEY = 600;
+const kernelAssetClassFor = (assetClass) =>
+  assetClass === 'raw_land' ? 'land_parcel' : assetClass;
+
+const resolveEngineAssumptions = (assetClass, inputs = {}) => {
+  const kernelAssetClass = kernelAssetClassFor(assetClass);
+  if (!financialKernel?.resolveAssumptions) return {};
+  try {
+    return financialKernel.resolveAssumptions({
+      assetClass: kernelAssetClass,
+      dealOverrides: inputs,
+      scenarioOverrides: null,
+    }) || {};
+  } catch {
+    return {};
+  }
+};
+
+const hasInputValue = (ctx, key) =>
+  ctx?.inputs?.[key] !== undefined
+  && ctx.inputs[key] !== null
+  && ctx.inputs[key] !== '';
+
+const engineFirstNumber = (ctx, keys = [], fallback = null) => {
+  const keyList = Array.isArray(keys) ? keys : [keys];
+  const inputValues = keyList.map((key) => ctx.inputs?.[key]);
+  const assumptionValues = keyList.map((key) => ctx.engineAssumptions?.[key]);
+  return firstNumber(...inputValues, ...assumptionValues, fallback);
+};
+
+const enginePctDecimal = (ctx, keys = [], fallback = null) =>
+  toPctDecimal(engineFirstNumber(ctx, keys, fallback));
+
+const HOSPITALITY_DEFAULT_SQFT_PER_KEY = 550;
 
 const hospitalityKeys = (ctx) =>
-  firstNumber(ctx.inputs.keys, ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, ctx.inputs.noOfKeys);
+  firstNumber(ctx.inputs.keys, ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, ctx.inputs.noOfKeys, ctx.engineAssumptions?.keys);
 
 const hospitalityAreaPerKeySqft = (ctx) =>
   positiveOrDefault(
@@ -174,19 +272,28 @@ const hospitalityAreaPerKeySqft = (ctx) =>
       ctx.inputs.areaPerKeySqft,
       ctx.inputs.sfPerKey,
       ctx.inputs.sqftPerKey,
+      ctx.engineAssumptions?.sqftPerKey,
       ctx.inputs.roomAreaSqft,
     ),
     HOSPITALITY_DEFAULT_SQFT_PER_KEY,
   );
 
 const hospitalityAdr = (ctx) =>
-  firstNumber(ctx.inputs.adr, ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, ctx.inputs.hospitalityBlendedADR);
+  firstNumber(ctx.inputs.adr, ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, ctx.inputs.hospitalityBlendedADR, ctx.engineAssumptions?.adr);
 
 const hospitalityOccupancyPct = (ctx) =>
-  toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.inputs.stabilizedOccPct, ctx.inputs.stabilisedOccPct, ctx.deal.occupancy_pct, 0.65));
+  toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.inputs.stabilizedOccPct, ctx.inputs.stabilisedOccPct, ctx.deal.occupancy_pct, ctx.engineAssumptions?.stabilizedOccPct, 0.65));
 
 const hospitalityConstructionCostPerKey = (ctx) =>
-  firstNumber(ctx.inputs.constructionCostPerKey, ctx.inputs.costPerKey, ctx.inputs.hardCostPerKey);
+  firstNumber(
+    ctx.inputs.constructionCostPerKey,
+    ctx.inputs.costPerKey,
+    ctx.inputs.hardCostPerKey,
+    ctx.engineAssumptions?.constructionCostPerKey,
+    ctx.engineAssumptions?.hardCostPerSqft && hospitalityAreaPerKeySqft(ctx)
+      ? ctx.engineAssumptions.hardCostPerSqft * hospitalityAreaPerKeySqft(ctx)
+      : null,
+  );
 
 const hospitalityAreaSqft = (ctx) => {
   const keys = hospitalityKeys(ctx);
@@ -388,6 +495,57 @@ const computeCachedCostSnapshot = (ctx) => {
   const core = getCoreInputSnapshot(ctx);
   const hardCostCr = Math.max(0, (core.constructionCostPerSqft || 0) * (core.saleableAreaSqft || 0) / 10000000);
   const landCostCr = Math.max(0, core.landCostCr || 0);
+  if (ctx.assetClass === 'hospitality') {
+    const keys = Math.max(0, hospitalityKeys(ctx) || 0);
+    const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.066)) || 0;
+    const gstPct = toPctDecimal(firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, indiaGstDefaultForClass(ctx.assetClass))) || 0;
+    const architectPct = enginePctDecimal(ctx, ['architectPctOfHard', 'architectFeePct'], 0.04) || 0;
+    const pmcPct = enginePctDecimal(ctx, ['pmcPctOfHard'], 0.02) || 0;
+    const consultantsPct = enginePctDecimal(ctx, ['consultantsPctOfHard'], 0.035) || 0;
+    const approvalsPct = enginePctDecimal(ctx, ['approvalsPctOfHard'], 0.02) || 0;
+    const softCostsCr = hardCostCr * (architectPct + pmcPct + consultantsPct);
+    const approvalCostCr = Math.max(0, firstNumber(
+      ctx.inputs.approvalCostCr,
+      ctx.deal.approval_cost_cr,
+      ctx.inputs.approvalCostPerSqft ? (core.saleableAreaSqft * ctx.inputs.approvalCostPerSqft) / 10000000 : null,
+      hardCostCr * approvalsPct,
+      0,
+    ) || 0);
+    const ffeCr = Math.max(0, keys * engineFirstNumber(ctx, ['ffePerKey'], 2500000) / 10000000);
+    const oseCr = Math.max(0, keys * engineFirstNumber(ctx, ['osePerKey'], 400000) / 10000000);
+    const preOpeningCr = Math.max(0, keys * engineFirstNumber(ctx, ['preOpeningPerKey', 'preOpeningCostPerKey'], 350000) / 10000000);
+    const workingCapitalCr = Math.max(0, engineFirstNumber(ctx, ['workingCapitalCr'], keys * 50000 / 10000000) || 0);
+    const contingencyPct = enginePctDecimal(ctx, ['contingencyPct'], 0.05) || 0;
+    const contingencyCr = (hardCostCr + softCostsCr + approvalCostCr + ffeCr + oseCr) * contingencyPct;
+    const subtotalBeforeIdc = landCostCr
+      + landCostCr * stampRegPct
+      + hardCostCr
+      + hardCostCr * gstPct
+      + softCostsCr
+      + approvalCostCr
+      + ffeCr
+      + oseCr
+      + preOpeningCr
+      + workingCapitalCr
+      + contingencyCr;
+    const constLoanLTC = enginePctDecimal(ctx, ['constLoanLTC', 'debtLTC', 'debtLTV'], 0.55) || 0;
+    const constLoanRatePct = enginePctDecimal(ctx, ['constLoanRatePct', 'interestRatePct', 'debtRatePct'], 0.105) || 0;
+    const constLoanFeesPct = enginePctDecimal(ctx, ['constLoanFeesPct'], 0.01) || 0;
+    const idcCr = subtotalBeforeIdc * constLoanLTC * 0.5 * constLoanRatePct * ((ctx.projectMonths || 0) / 12)
+      + subtotalBeforeIdc * constLoanLTC * constLoanFeesPct;
+    const statutoryCr = landCostCr * stampRegPct + hardCostCr * gstPct;
+    const totalProjectCostCr = subtotalBeforeIdc + idcCr;
+
+    return {
+      hardCostCr,
+      landCostCr,
+      approvalCostCr,
+      premiumFsiCostCr: 0,
+      softCostsCr: softCostsCr + ffeCr + oseCr + preOpeningCr + workingCapitalCr + contingencyCr + idcCr,
+      statutoryCr,
+      totalProjectCostCr,
+    };
+  }
   const approvalCostCr = Math.max(0, core.approvalCostCr || 0);
   const premiumFsiCostCr = Math.max(0, core.premiumFsiCostCr || 0);
   const softPct = [
@@ -444,6 +602,66 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
     DiscountRatePct: ['discountRatePct'],
     ExitStrategyType: ['exitStrategyType'],
     DealStructureLabel: ['dealStructureLabel'],
+    HospitalityKeys: ['keys', 'hospitalityKeys', 'numberOfKeys'],
+    HospitalityADRBase: ['adr', 'hospitalityADRBase', 'hospitalityADR'],
+    HospitalitySqftPerKey: ['sqftPerKey', 'grossAreaPerKeySqft', 'areaPerKeySqft'],
+    HospitalityADRGrowthPct: ['adrGrowthPct', 'rentEscalationPct'],
+    HospitalityInitialOccPct: ['initialOccPct'],
+    HospitalityStabilizationYear: ['stabilizationYear'],
+    HospitalityHoldYears: ['holdPeriodYears', 'holdYears'],
+    HospitalityArchitectPctHard: ['architectPctOfHard', 'architectFeePct'],
+    HospitalityPMCPctHard: ['pmcPctOfHard'],
+    HospitalityConsultantsPctHard: ['consultantsPctOfHard'],
+    HospitalityApprovalsPctHard: ['approvalsPctOfHard'],
+    HospitalityBettermentPct: ['bettermentPct'],
+    HospitalityFBRestaurantPct: ['fbRestaurantPctOfRooms'],
+    HospitalityFBBanquetPct: ['fbBanquetPctOfRooms'],
+    HospitalityOtherOperatedPct: ['otherOperatedPctOfRooms'],
+    HospitalityParkingPct: ['parkingPctOfRooms'],
+    HospitalityFBRestaurantPerPOR: ['fbRestaurantPerPOR'],
+    HospitalityFBBanquetPerPOR: ['fbBanquetPerPOR'],
+    HospitalityOtherOperatedPerPOR: ['otherOperatedPerPOR'],
+    HospitalityParkingPerPOR: ['parkingPerPOR'],
+    HospitalityFBDeliveryPerPOR: ['fbDeliveryPerPOR'],
+    HospitalityLeaseIncomeCr: ['leaseIncomeCrPa'],
+    HospitalityRoomsDeptCostPct: ['roomsDeptCostPct'],
+    HospitalityFBDeptCostPct: ['fbDeptCostPct'],
+    HospitalityOtherDeptCostPct: ['otherDeptCostPct'],
+    HospitalityRoomsFixedPct: ['roomsFixedPct'],
+    HospitalityFBFixedPct: ['fbFixedPct'],
+    HospitalityOtherOpFixedPct: ['otherOpFixedPct'],
+    HospitalityAAndGPct: ['aAndGPct'],
+    HospitalityITPct: ['itPct'],
+    HospitalitySMPct: ['smPct'],
+    HospitalityPOMPct: ['pomPct'],
+    HospitalityUtilitiesPct: ['utilitiesPct'],
+    HospitalityAAndGPerPOR: ['aAndGPerPOR'],
+    HospitalityITPerPOR: ['itPerPOR'],
+    HospitalitySMPerPOR: ['smPerPOR'],
+    HospitalityPOMPerPOR: ['pomPerPOR'],
+    HospitalityUtilitiesPerPOR: ['utilitiesPerPOR'],
+    HospitalityExpenseInflationPct: ['expenseInflationPct'],
+    HospitalityMgmtBasePct: ['mgmtBasePct'],
+    HospitalityMgmtIncentivePct: ['mgmtIncentivePct'],
+    HospitalityBrandRoyaltyPct: ['brandRoyaltyPctOfRooms'],
+    HospitalityBrandMktReservPct: ['brandMktReservPctOfRooms'],
+    HospitalityPropertyTaxPctRev: ['propertyTaxPctRev'],
+    HospitalityInsurancePctRev: ['insurancePctRev'],
+    HospitalityPropertyTaxCrPa: ['propertyTaxCrPa'],
+    HospitalityInsuranceCrPa: ['insuranceCrPa'],
+    HospitalityGroundLeaseCrPa: ['groundLeaseCrPa'],
+    HospitalityFFEReservePct: ['ffeReservePct'],
+    HospitalityConstructionCostPerKey: ['constructionCostPerKey', 'costPerKey', 'hardCostPerKey'],
+    HospitalityFFEPerKey: ['ffePerKey'],
+    HospitalityOSEPerKey: ['osePerKey'],
+    HospitalityPreOpeningPerKey: ['preOpeningPerKey', 'preOpeningCostPerKey'],
+    HospitalityWorkingCapitalCr: ['workingCapitalCr'],
+    HospitalityConstLoanLTC: ['constLoanLTC', 'debtLTC', 'debtLTV'],
+    HospitalityConstLoanRatePct: ['constLoanRatePct', 'interestRatePct', 'debtRatePct'],
+    HospitalityConstLoanFeesPct: ['constLoanFeesPct'],
+    HospitalityRefiLTV: ['refiLTV'],
+    HospitalityRefiCapRate: ['refiCapRatePct'],
+    HospitalityRefiInterestRate: ['refiInterestRatePct'],
   };
   const propertyAliases = {
     SaleableAreaSqft: ['saleable_area_sqft'],
@@ -472,6 +690,17 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
       confidence: 'stored-input',
       provenance: `deal.model_params.inputs.${name}`,
       notes: 'Operator-entered or imported model input. Verify against source documents before IC use.',
+    };
+  }
+  if (hasOwnValue(ctx.engineAssumptions, modelInputAliases[name])) {
+    return {
+      sourceType: 'Financial engine default registry',
+      sourceName: 'REDIP financial engine',
+      url: dealUrl,
+      freshness: ctx.generatedAt,
+      confidence: 'engine-default',
+      provenance: `financialKernel.resolveAssumptions.${name}`,
+      notes: 'Default applied because the operator did not provide this input; edit the yellow cell to override.',
     };
   }
   if (hasOwnValue(ctx.deal, dealAliases[name])) {
@@ -687,7 +916,8 @@ class XlsxExportValidationError extends Error {
 const buildContext = (exportContext = {}, options = {}) => {
   const deal = exportContext.deal || {};
   const property = exportContext.property || {};
-  const modelInputs = (deal.model_params && deal.model_params.inputs) || {};
+  const modelParams = deal.model_params || {};
+  const modelInputs = (modelParams && modelParams.inputs) || {};
   const inputs = { ...modelInputs, ...(options.inputs || {}) };
 
   const assetClass = inferAssetClass({
@@ -706,7 +936,6 @@ const buildContext = (exportContext = {}, options = {}) => {
     inputs.projectDurationYears ? inputs.projectDurationYears * 12 : null,
     36,
   ) || 36;
-  const totalQuarters = clamp(Math.ceil(projectMonths / 3), 4, 32);
 
   // Income-producing vs development asset classes. Drives the entire
   // workbook's structure: income deals get a PGI / Vacancy / EGR / OpEx
@@ -715,6 +944,19 @@ const buildContext = (exportContext = {}, options = {}) => {
   // same Inputs / Dashboard / Calculations chrome.
   const INCOME_CLASSES = ['commercial_office', 'retail', 'industrial_warehousing', 'hospitality'];
   const dealFamily = INCOME_CLASSES.includes(assetClass) ? 'income' : 'development';
+  const incomeHoldYears = firstNumber(
+    inputs.holdPeriodYears,
+    inputs.exitYearFromAcq,
+    inputs.loanTermYears,
+    assetClass === 'hospitality' ? 10 : 7,
+  ) || (assetClass === 'hospitality' ? 10 : 7);
+  const modelMonths = assetClass === 'hospitality'
+    ? projectMonths + Math.round(incomeHoldYears * 12)
+    : dealFamily === 'income'
+      ? Math.max(projectMonths, Math.round(incomeHoldYears * 12))
+      : projectMonths;
+  const totalQuarters = clamp(Math.ceil(modelMonths / 3), 4, dealFamily === 'income' ? 60 : 32);
+  const engineAssumptions = resolveEngineAssumptions(assetClass, inputs);
 
   // ── Kernel-computed returns ─────────────────────────────────────────────
   // Per CLAUDE.md: "the deterministic financial kernel is the only source
@@ -745,7 +987,9 @@ const buildContext = (exportContext = {}, options = {}) => {
     exportContext,
     deal,
     property,
+    modelParams,
     inputs,
+    engineAssumptions,
     assetClass,
     dealFamily,
     isIncome: dealFamily === 'income',
@@ -857,14 +1101,15 @@ const buildInputsSheet = (workbook, ctx) => {
     { width: 38 }, // A: Label
     { width: 18 }, // B: Value
     { width: 18 }, // C: Unit
+    { width: 24 }, // D: Source
   ];
 
   // Cover band
-  sheet.mergeCells('A1:C1');
+  sheet.mergeCells('A1:D1');
   sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Inputs & Assumptions`;
   styleSectionTitle(sheet.getCell('A1'));
   sheet.getRow(1).height = 28;
-  sheet.mergeCells('A2:C2');
+  sheet.mergeCells('A2:D2');
   sheet.getCell('A2').value = `${ctx.deal.deal_type || 'Acquisition'} | ${ctx.assetClass || 'Generic'} | Effective ${ctx.effectiveDate}`;
   sheet.getCell('A2').font = { name: FONT, size: 10, color: { argb: palette.xlsx('mutedHigh') }, italic: true };
   sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
@@ -875,6 +1120,7 @@ const buildInputsSheet = (workbook, ctx) => {
   sheet.getCell('A4').value = 'Input';
   sheet.getCell('B4').value = 'Value';
   sheet.getCell('C4').value = 'Unit';
+  sheet.getCell('D4').value = 'Source';
   styleHeader(sheet.getRow(4));
 
   // Sections — each entry: [label, name, value, unit, format]
@@ -945,7 +1191,11 @@ const buildInputsSheet = (workbook, ctx) => {
           0,
         ),
         'INR/sqft/mo', NUMBER_FORMATS.integer],
-      ['Rent Escalation',         'RentEscalationPct',   toPctDecimal(firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05)),             '% / year', NUMBER_FORMATS.percent],
+      ['Rent Escalation',         'RentEscalationPct',
+        ctx.assetClass === 'hospitality'
+          ? enginePctDecimal(ctx, ['adrGrowthPct', 'rentEscalationPct'], 0.05)
+          : toPctDecimal(firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05)),
+        '% / year', NUMBER_FORMATS.percent],
       ['Stabilised Occupancy',    'OccupancyPct',
         ctx.assetClass === 'hospitality'
           ? hospitalityOccupancyPct(ctx)
@@ -1011,12 +1261,15 @@ const buildInputsSheet = (workbook, ctx) => {
   const costSection = {
     title: 'Cost Structure',
     rows: [
-      ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
+      ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, ctx.engineAssumptions?.landCostCr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
       ['Construction Cost / sqft','ConstructionCostPerSqft',
         firstNumber(
           ctx.inputs.constructionCostPerSqft,
+          ctx.inputs.hardCostPerSqft,
           ctx.deal.construction_cost_per_sqft,
           ctx.assetClass === 'hospitality' ? hospitalityConstructionCostPerSqft(ctx) : null,
+          ctx.engineAssumptions?.constructionCostPerSqft,
+          ctx.engineAssumptions?.hardCostPerSqft,
           0,
         ),
         'INR/sqft', NUMBER_FORMATS.integer],
@@ -1340,6 +1593,70 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Implied annual revenue (Cr)', 'HospitalityImpliedRevenueCr',
         { formula: '=HospitalityRevPAR*HospitalityKeys*365/10000000' },
         'INR Cr / year (derived)', NUMBER_FORMATS.currency],
+    ],
+  };
+
+  const hospitalityUsaliSection = {
+    title: 'Hospitality USALI Engine Drivers',
+    rows: [
+      ['Sqft per Key', 'HospitalitySqftPerKey', engineFirstNumber(ctx, ['sqftPerKey', 'grossAreaPerKeySqft', 'areaPerKeySqft'], HOSPITALITY_DEFAULT_SQFT_PER_KEY), 'gross BUA / key', NUMBER_FORMATS.integer],
+      ['ADR Growth', 'HospitalityADRGrowthPct', enginePctDecimal(ctx, ['adrGrowthPct', 'rentEscalationPct'], 0.05), '% / year', NUMBER_FORMATS.percent],
+      ['Initial Occupancy', 'HospitalityInitialOccPct', enginePctDecimal(ctx, ['initialOccPct'], 0.45), '% in operating year 1', NUMBER_FORMATS.percent],
+      ['Stabilization Year', 'HospitalityStabilizationYear', engineFirstNumber(ctx, ['stabilizationYear'], 4), 'operating year', NUMBER_FORMATS.integer],
+      ['Hold Period', 'HospitalityHoldYears', engineFirstNumber(ctx, ['holdPeriodYears', 'holdYears'], 10), 'years after construction', NUMBER_FORMATS.integer],
+      ['Architect / Design', 'HospitalityArchitectPctHard', enginePctDecimal(ctx, ['architectPctOfHard', 'architectFeePct'], 0.04), '% of hard cost', NUMBER_FORMATS.percent],
+      ['PMC', 'HospitalityPMCPctHard', enginePctDecimal(ctx, ['pmcPctOfHard'], 0.02), '% of hard cost', NUMBER_FORMATS.percent],
+      ['Consultants', 'HospitalityConsultantsPctHard', enginePctDecimal(ctx, ['consultantsPctOfHard'], 0.035), '% of hard cost', NUMBER_FORMATS.percent],
+      ['Approvals', 'HospitalityApprovalsPctHard', enginePctDecimal(ctx, ['approvalsPctOfHard'], 0.02), '% of hard cost if no explicit approval cost', NUMBER_FORMATS.percent],
+      ['Betterment Charge', 'HospitalityBettermentPct', enginePctDecimal(ctx, ['bettermentPct'], 0.03), '% of land cost', NUMBER_FORMATS.percent],
+      ['F&B Restaurant Revenue', 'HospitalityFBRestaurantPct', enginePctDecimal(ctx, ['fbRestaurantPctOfRooms'], 0.18), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['F&B Banquet Revenue', 'HospitalityFBBanquetPct', enginePctDecimal(ctx, ['fbBanquetPctOfRooms'], 0.12), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['Other Operated Revenue', 'HospitalityOtherOperatedPct', enginePctDecimal(ctx, ['otherOperatedPctOfRooms'], 0.07), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['Parking Revenue', 'HospitalityParkingPct', enginePctDecimal(ctx, ['parkingPctOfRooms'], 0.02), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['F&B Restaurant / POR', 'HospitalityFBRestaurantPerPOR', engineFirstNumber(ctx, ['fbRestaurantPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['F&B Banquet / POR', 'HospitalityFBBanquetPerPOR', engineFirstNumber(ctx, ['fbBanquetPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['Other Operated / POR', 'HospitalityOtherOperatedPerPOR', engineFirstNumber(ctx, ['otherOperatedPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['Parking / POR', 'HospitalityParkingPerPOR', engineFirstNumber(ctx, ['parkingPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['F&B Delivery / POR', 'HospitalityFBDeliveryPerPOR', engineFirstNumber(ctx, ['fbDeliveryPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['Lease Income', 'HospitalityLeaseIncomeCr', engineFirstNumber(ctx, ['leaseIncomeCrPa'], 0), 'INR Cr / year', NUMBER_FORMATS.currency],
+      ['Rooms Department Cost', 'HospitalityRoomsDeptCostPct', enginePctDecimal(ctx, ['roomsDeptCostPct'], 0.28), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['F&B Department Cost', 'HospitalityFBDeptCostPct', enginePctDecimal(ctx, ['fbDeptCostPct'], 0.75), '% of F&B revenue', NUMBER_FORMATS.percent],
+      ['Other Department Cost', 'HospitalityOtherDeptCostPct', enginePctDecimal(ctx, ['otherDeptCostPct'], 0.52), '% of other operated revenue', NUMBER_FORMATS.percent],
+      ['Rooms Fixed Cost Split', 'HospitalityRoomsFixedPct', enginePctDecimal(ctx, ['roomsFixedPct'], 0), '% fixed / balance variable', NUMBER_FORMATS.percent],
+      ['F&B Fixed Cost Split', 'HospitalityFBFixedPct', enginePctDecimal(ctx, ['fbFixedPct'], 0), '% fixed / balance variable', NUMBER_FORMATS.percent],
+      ['Other Fixed Cost Split', 'HospitalityOtherOpFixedPct', enginePctDecimal(ctx, ['otherOpFixedPct'], 0), '% fixed / balance variable', NUMBER_FORMATS.percent],
+      ['Admin & General', 'HospitalityAAndGPct', enginePctDecimal(ctx, ['aAndGPct'], 0.075), '% of total revenue', NUMBER_FORMATS.percent],
+      ['IT / Systems', 'HospitalityITPct', enginePctDecimal(ctx, ['itPct'], 0.02), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Sales & Marketing', 'HospitalitySMPct', enginePctDecimal(ctx, ['smPct'], 0.055), '% of total revenue', NUMBER_FORMATS.percent],
+      ['POM', 'HospitalityPOMPct', enginePctDecimal(ctx, ['pomPct'], 0.045), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Utilities', 'HospitalityUtilitiesPct', enginePctDecimal(ctx, ['utilitiesPct'], 0.05), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Admin & General / POR', 'HospitalityAAndGPerPOR', engineFirstNumber(ctx, ['aAndGPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['IT / POR', 'HospitalityITPerPOR', engineFirstNumber(ctx, ['itPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['Sales & Marketing / POR', 'HospitalitySMPerPOR', engineFirstNumber(ctx, ['smPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['POM / POR', 'HospitalityPOMPerPOR', engineFirstNumber(ctx, ['pomPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['Utilities / POR', 'HospitalityUtilitiesPerPOR', engineFirstNumber(ctx, ['utilitiesPerPOR'], 0), 'INR / occupied room', NUMBER_FORMATS.integer],
+      ['Expense Inflation', 'HospitalityExpenseInflationPct', enginePctDecimal(ctx, ['expenseInflationPct'], 0), '% / year', NUMBER_FORMATS.percent],
+      ['Management Base Fee', 'HospitalityMgmtBasePct', enginePctDecimal(ctx, ['mgmtBasePct'], 0.03), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Management Incentive Fee', 'HospitalityMgmtIncentivePct', enginePctDecimal(ctx, ['mgmtIncentivePct'], 0.09), '% of positive GOP', NUMBER_FORMATS.percent],
+      ['Brand Royalty', 'HospitalityBrandRoyaltyPct', enginePctDecimal(ctx, ['brandRoyaltyPctOfRooms'], 0.05), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['Brand Marketing + Reservation', 'HospitalityBrandMktReservPct', enginePctDecimal(ctx, ['brandMktReservPctOfRooms'], 0.02), '% of rooms revenue', NUMBER_FORMATS.percent],
+      ['Property Tax', 'HospitalityPropertyTaxPctRev', enginePctDecimal(ctx, ['propertyTaxPctRev'], 0.02), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Insurance', 'HospitalityInsurancePctRev', enginePctDecimal(ctx, ['insurancePctRev'], 0.01), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Property Tax - Fixed Override', 'HospitalityPropertyTaxCrPa', engineFirstNumber(ctx, ['propertyTaxCrPa'], 0), 'INR Cr / year', NUMBER_FORMATS.currency],
+      ['Insurance - Fixed Override', 'HospitalityInsuranceCrPa', engineFirstNumber(ctx, ['insuranceCrPa'], 0), 'INR Cr / year', NUMBER_FORMATS.currency],
+      ['Ground Lease', 'HospitalityGroundLeaseCrPa', engineFirstNumber(ctx, ['groundLeaseCrPa'], 0), 'INR Cr / year', NUMBER_FORMATS.currency],
+      ['FF&E Reserve', 'HospitalityFFEReservePct', enginePctDecimal(ctx, ['ffeReservePct'], 0.04), '% of total revenue', NUMBER_FORMATS.percent],
+      ['Construction Cost / Key', 'HospitalityConstructionCostPerKey', hospitalityConstructionCostPerKey(ctx) || 0, 'INR / key', NUMBER_FORMATS.integer],
+      ['FF&E / Key', 'HospitalityFFEPerKey', engineFirstNumber(ctx, ['ffePerKey'], 2500000), 'INR / key', NUMBER_FORMATS.integer],
+      ['OS&E / Key', 'HospitalityOSEPerKey', engineFirstNumber(ctx, ['osePerKey'], 400000), 'INR / key', NUMBER_FORMATS.integer],
+      ['Pre-opening / Key', 'HospitalityPreOpeningPerKey', engineFirstNumber(ctx, ['preOpeningPerKey', 'preOpeningCostPerKey'], 350000), 'INR / key', NUMBER_FORMATS.integer],
+      ['Working Capital', 'HospitalityWorkingCapitalCr', engineFirstNumber(ctx, ['workingCapitalCr'], (engineFirstNumber(ctx, ['keys'], 100) * 50000) / 10000000), 'INR Cr', NUMBER_FORMATS.currency],
+      ['Construction Loan LTC', 'HospitalityConstLoanLTC', enginePctDecimal(ctx, ['constLoanLTC', 'debtLTC', 'debtLTV'], 0.55), '% of development cost', NUMBER_FORMATS.percent],
+      ['Construction Loan Rate', 'HospitalityConstLoanRatePct', enginePctDecimal(ctx, ['constLoanRatePct', 'interestRatePct', 'debtRatePct'], 0.105), '% / year', NUMBER_FORMATS.percent],
+      ['Construction Loan Fee', 'HospitalityConstLoanFeesPct', enginePctDecimal(ctx, ['constLoanFeesPct'], 0.01), '% of loan', NUMBER_FORMATS.percent],
+      ['Refi LTV', 'HospitalityRefiLTV', enginePctDecimal(ctx, ['refiLTV'], 0.55), '% of stabilized value', NUMBER_FORMATS.percent],
+      ['Refi Cap Rate', 'HospitalityRefiCapRate', enginePctDecimal(ctx, ['refiCapRatePct'], 0.085), '% cap rate', NUMBER_FORMATS.percent],
+      ['Refi Interest Rate', 'HospitalityRefiInterestRate', enginePctDecimal(ctx, ['refiInterestRatePct'], 0.0925), '% / year', NUMBER_FORMATS.percent],
     ],
   };
 
@@ -1757,7 +2074,7 @@ const buildInputsSheet = (workbook, ctx) => {
     khataStatusSection,
     // PR-I12: Hospitality-specific ADR / Occupancy / RevPAR — only when
     // the deal's asset class is hospitality.
-    ...(ctx.assetClass === 'hospitality' ? [hospitalitySection] : []),
+    ...(ctx.assetClass === 'hospitality' ? [hospitalitySection, hospitalityUsaliSection] : []),
     // PR-I13: Retail anchor / vanilla rent split + CAM recovery — only
     // when the deal's asset class is retail.
     ...(ctx.assetClass === 'retail' ? [retailSection] : []),
@@ -1781,7 +2098,7 @@ const buildInputsSheet = (workbook, ctx) => {
   let row = 5;
   const definedNames = [];
   sections.forEach((section) => {
-    sheet.mergeCells(`A${row}:C${row}`);
+    sheet.mergeCells(`A${row}:D${row}`);
     sheet.getCell(`A${row}`).value = section.title;
     styleSectionTitle(sheet.getCell(`A${row}`));
     sheet.getRow(row).height = 20;
@@ -1837,6 +2154,9 @@ const buildInputsSheet = (workbook, ctx) => {
       sheet.getCell(`C${row}`).value = unit;
       styleLabelCell(sheet.getCell(`C${row}`));
       sheet.getCell(`C${row}`).font = { name: FONT, size: 10, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`D${row}`).value = source.confidence;
+      styleLabelCell(sheet.getCell(`D${row}`));
+      sheet.getCell(`D${row}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
 
       // Define the workbook-level name pointing at this cell.
       definedNames.push({ name, ref: `'${SHEETS.inputs}'!$B$${row}` });
@@ -1847,7 +2167,7 @@ const buildInputsSheet = (workbook, ctx) => {
   });
 
   // Footer
-  sheet.mergeCells(`A${row}:C${row}`);
+  sheet.mergeCells(`A${row}:D${row}`);
   sheet.getCell(`A${row}`).value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | yellow cells are editable; everything else recalculates automatically.`;
   sheet.getCell(`A${row}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
@@ -2032,6 +2352,425 @@ const buildQaSourcesSheet = (workbook, ctx) => {
   return sheet;
 };
 
+const hospitalityUsaliCached = (ctx, year, field, options = {}) => {
+  const rows = ctx.modelParams?.revenue?.usali_pnl
+    || ctx.modelParams?.revenue?.usaliPnl
+    || ctx.deal?.model_params?.revenue?.usali_pnl
+    || [];
+  const row = Array.isArray(rows) ? rows[year - 1] : null;
+  const value = row ? asFiniteNumber(row[field]) : null;
+  if (value === null) return null;
+  if (options.percent) return toPctDecimal(value);
+  if (options.negative) return -Math.abs(value);
+  return value;
+};
+
+const buildHospitalityUsaliSheet = (workbook, ctx) => {
+  if (ctx.assetClass !== 'hospitality') return null;
+
+  const years = clamp(Math.round(engineFirstNumber(ctx, ['holdPeriodYears', 'holdYears'], 10) || 10), 5, 15);
+  const totalCol = excelCol(years + 2);
+  const sheet = workbook.addWorksheet(SHEETS.usali, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
+  });
+  sheet.columns = [{ width: 34 }, ...Array.from({ length: years }, () => ({ width: 14 })), { width: 16 }];
+
+  sheet.mergeCells(1, 1, 1, years + 2);
+  sheet.getCell(1, 1).value = `${ctx.brandName} | USALI Hotel Pro Forma`;
+  styleSectionTitle(sheet.getCell(1, 1));
+  sheet.getRow(1).height = 26;
+
+  sheet.mergeCells(2, 1, 2, years + 2);
+  sheet.getCell(2, 1).value = 'Annual hotel P&L mirrors the deterministic hospitality engine. Driver cells live on Inputs & Assumptions; every output below is formula-linked.';
+  sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(2, 1).alignment = { vertical: 'middle', wrapText: true };
+
+  sheet.getCell(4, 1).value = 'Line item';
+  for (let y = 1; y <= years; y += 1) sheet.getCell(4, y + 1).value = `Y${y}`;
+  sheet.getCell(4, years + 2).value = 'Total / Final';
+  styleHeader(sheet.getRow(4));
+
+  const c = (row, year) => `${excelCol(year + 1)}${row}`;
+  const prev = (row, year) => `${excelCol(year)}${row}`;
+  const infl = (year) => `(1+HospitalityExpenseInflationPct)^(${year}-1)`;
+  const rowSpecs = [
+    {
+      row: USALI_ROW.occupancy,
+      label: 'Occupancy %',
+      format: NUMBER_FORMATS.percent,
+      field: 'occupancy',
+      percent: true,
+      formula: (y) => `=IF(${y}<HospitalityStabilizationYear,HospitalityInitialOccPct+(OccupancyPct-HospitalityInitialOccPct)*(${y}-1)/MAX(1,HospitalityStabilizationYear-1),OccupancyPct)`,
+      total: 'final',
+    },
+    {
+      row: USALI_ROW.adr,
+      label: 'ADR (blended)',
+      format: NUMBER_FORMATS.integer,
+      field: 'adr',
+      formula: (y) => `=HospitalityADRBase*(1+HospitalityADRGrowthPct)^(${y}-1)`,
+      total: 'final',
+    },
+    {
+      row: USALI_ROW.occupiedRooms,
+      label: 'Occupied room nights',
+      format: NUMBER_FORMATS.integer,
+      field: 'occupiedRooms',
+      formula: (y) => `=HospitalityKeys*365*${c(USALI_ROW.occupancy, y)}`,
+    },
+    {
+      row: USALI_ROW.revPAR,
+      label: 'RevPAR',
+      format: NUMBER_FORMATS.integer,
+      field: 'revPAR',
+      formula: (y) => `=${c(USALI_ROW.adr, y)}*${c(USALI_ROW.occupancy, y)}`,
+      total: 'final',
+    },
+    {
+      row: USALI_ROW.trevPAR,
+      label: 'TRevPAR',
+      format: NUMBER_FORMATS.integer,
+      field: 'trevPAR',
+      formula: (y) => `=IFERROR(${c(USALI_ROW.totalRevenue, y)}*10000000/(HospitalityKeys*365),0)`,
+      total: 'final',
+    },
+    {
+      row: USALI_ROW.roomsRevenue,
+      label: 'Rooms revenue',
+      format: NUMBER_FORMATS.currency,
+      field: 'roomsRevenueCr',
+      formula: (y) => `=${c(USALI_ROW.occupiedRooms, y)}*${c(USALI_ROW.adr, y)}/10000000`,
+    },
+    {
+      row: USALI_ROW.fbRestaurant,
+      label: 'F&B - Restaurant',
+      format: NUMBER_FORMATS.currency,
+      field: 'fbRestaurantCr',
+      formula: (y) => `=IF(HospitalityFBRestaurantPerPOR>0,HospitalityFBRestaurantPerPOR*${c(USALI_ROW.occupiedRooms, y)}/10000000,${c(USALI_ROW.roomsRevenue, y)}*HospitalityFBRestaurantPct)`,
+    },
+    {
+      row: USALI_ROW.fbBanquet,
+      label: 'F&B - Banquet',
+      format: NUMBER_FORMATS.currency,
+      field: 'fbBanquetCr',
+      formula: (y) => `=IF(HospitalityFBBanquetPerPOR>0,HospitalityFBBanquetPerPOR*${c(USALI_ROW.occupiedRooms, y)}/10000000,${c(USALI_ROW.roomsRevenue, y)}*HospitalityFBBanquetPct)+HospitalityFBDeliveryPerPOR*${c(USALI_ROW.occupiedRooms, y)}/10000000`,
+    },
+    {
+      row: USALI_ROW.otherOperated,
+      label: 'Other operated',
+      format: NUMBER_FORMATS.currency,
+      field: 'otherOperatedCr',
+      formula: (y) => `=IF(HospitalityOtherOperatedPerPOR>0,HospitalityOtherOperatedPerPOR*${c(USALI_ROW.occupiedRooms, y)}/10000000,${c(USALI_ROW.roomsRevenue, y)}*HospitalityOtherOperatedPct)`,
+    },
+    {
+      row: USALI_ROW.parking,
+      label: 'Parking',
+      format: NUMBER_FORMATS.currency,
+      field: 'parkingCr',
+      formula: (y) => `=IF(HospitalityParkingPerPOR>0,HospitalityParkingPerPOR*${c(USALI_ROW.occupiedRooms, y)}/10000000,${c(USALI_ROW.roomsRevenue, y)}*HospitalityParkingPct)`,
+    },
+    {
+      row: USALI_ROW.leaseIncome,
+      label: 'Lease income',
+      format: NUMBER_FORMATS.currency,
+      field: 'leaseIncomeCr',
+      formula: () => '=HospitalityLeaseIncomeCr',
+    },
+    {
+      row: USALI_ROW.totalRevenue,
+      label: 'Total revenue',
+      format: NUMBER_FORMATS.currency,
+      field: 'totalRevenueCr',
+      bold: true,
+      formula: (y) => `=SUM(${c(USALI_ROW.roomsRevenue, y)}:${c(USALI_ROW.leaseIncome, y)})`,
+    },
+    {
+      row: USALI_ROW.roomsDeptExp,
+      label: 'Rooms dept expense',
+      format: NUMBER_FORMATS.currency,
+      field: 'roomsDeptExpCr',
+      negative: true,
+      formula: (y) => y === 1
+        ? `=-${c(USALI_ROW.roomsRevenue, y)}*HospitalityRoomsDeptCostPct`
+        : `=-IF(AND(HospitalityRoomsFixedPct>0,${prev(USALI_ROW.roomsRevenue, y)}>0),ABS(${prev(USALI_ROW.roomsDeptExp, y)})*HospitalityRoomsFixedPct*(1+HospitalityExpenseInflationPct)+ABS(${prev(USALI_ROW.roomsDeptExp, y)})*(1-HospitalityRoomsFixedPct)*IFERROR(${c(USALI_ROW.roomsRevenue, y)}/${prev(USALI_ROW.roomsRevenue, y)},1),${c(USALI_ROW.roomsRevenue, y)}*HospitalityRoomsDeptCostPct)`,
+    },
+    {
+      row: USALI_ROW.fbDeptExp,
+      label: 'F&B dept expense',
+      format: NUMBER_FORMATS.currency,
+      field: 'fbDeptExpCr',
+      negative: true,
+      formula: (y) => y === 1
+        ? `=-SUM(${c(USALI_ROW.fbRestaurant, y)}:${c(USALI_ROW.fbBanquet, y)})*HospitalityFBDeptCostPct`
+        : `=-IF(AND(HospitalityFBFixedPct>0,SUM(${prev(USALI_ROW.fbRestaurant, y)}:${prev(USALI_ROW.fbBanquet, y)})>0),ABS(${prev(USALI_ROW.fbDeptExp, y)})*HospitalityFBFixedPct*(1+HospitalityExpenseInflationPct)+ABS(${prev(USALI_ROW.fbDeptExp, y)})*(1-HospitalityFBFixedPct)*IFERROR(SUM(${c(USALI_ROW.fbRestaurant, y)}:${c(USALI_ROW.fbBanquet, y)})/SUM(${prev(USALI_ROW.fbRestaurant, y)}:${prev(USALI_ROW.fbBanquet, y)}),1),SUM(${c(USALI_ROW.fbRestaurant, y)}:${c(USALI_ROW.fbBanquet, y)})*HospitalityFBDeptCostPct)`,
+    },
+    {
+      row: USALI_ROW.otherDeptExp,
+      label: 'Other dept expense',
+      format: NUMBER_FORMATS.currency,
+      field: 'otherDeptExpCr',
+      negative: true,
+      formula: (y) => y === 1
+        ? `=-SUM(${c(USALI_ROW.otherOperated, y)}:${c(USALI_ROW.parking, y)})*HospitalityOtherDeptCostPct`
+        : `=-IF(AND(HospitalityOtherOpFixedPct>0,SUM(${prev(USALI_ROW.otherOperated, y)}:${prev(USALI_ROW.parking, y)})>0),ABS(${prev(USALI_ROW.otherDeptExp, y)})*HospitalityOtherOpFixedPct*(1+HospitalityExpenseInflationPct)+ABS(${prev(USALI_ROW.otherDeptExp, y)})*(1-HospitalityOtherOpFixedPct)*IFERROR(SUM(${c(USALI_ROW.otherOperated, y)}:${c(USALI_ROW.parking, y)})/SUM(${prev(USALI_ROW.otherOperated, y)}:${prev(USALI_ROW.parking, y)}),1),SUM(${c(USALI_ROW.otherOperated, y)}:${c(USALI_ROW.parking, y)})*HospitalityOtherDeptCostPct)`,
+    },
+    {
+      row: USALI_ROW.deptProfit,
+      label: 'Departmental profit',
+      format: NUMBER_FORMATS.currency,
+      field: 'deptProfitCr',
+      bold: true,
+      formula: (y) => `=${c(USALI_ROW.totalRevenue, y)}-${c(USALI_ROW.leaseIncome, y)}+SUM(${c(USALI_ROW.roomsDeptExp, y)}:${c(USALI_ROW.otherDeptExp, y)})`,
+    },
+    {
+      row: USALI_ROW.aAndG,
+      label: 'Admin & General',
+      format: NUMBER_FORMATS.currency,
+      field: 'aAndGCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalityAAndGPerPOR>0,HospitalityAAndGPerPOR*${c(USALI_ROW.occupiedRooms, y)}*${infl(y)}/10000000,${c(USALI_ROW.totalRevenue, y)}*HospitalityAAndGPct)`,
+    },
+    {
+      row: USALI_ROW.it,
+      label: 'IT / Systems',
+      format: NUMBER_FORMATS.currency,
+      field: 'itCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalityITPerPOR>0,HospitalityITPerPOR*${c(USALI_ROW.occupiedRooms, y)}*${infl(y)}/10000000,${c(USALI_ROW.totalRevenue, y)}*HospitalityITPct)`,
+    },
+    {
+      row: USALI_ROW.sm,
+      label: 'Sales & Marketing',
+      format: NUMBER_FORMATS.currency,
+      field: 'smCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalitySMPerPOR>0,HospitalitySMPerPOR*${c(USALI_ROW.occupiedRooms, y)}*${infl(y)}/10000000,${c(USALI_ROW.totalRevenue, y)}*HospitalitySMPct)`,
+    },
+    {
+      row: USALI_ROW.pom,
+      label: 'POM',
+      format: NUMBER_FORMATS.currency,
+      field: 'pomCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalityPOMPerPOR>0,HospitalityPOMPerPOR*${c(USALI_ROW.occupiedRooms, y)}*${infl(y)}/10000000,${c(USALI_ROW.totalRevenue, y)}*HospitalityPOMPct)`,
+    },
+    {
+      row: USALI_ROW.utilities,
+      label: 'Utilities',
+      format: NUMBER_FORMATS.currency,
+      field: 'utilitiesCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalityUtilitiesPerPOR>0,HospitalityUtilitiesPerPOR*${c(USALI_ROW.occupiedRooms, y)}*${infl(y)}/10000000,${c(USALI_ROW.totalRevenue, y)}*HospitalityUtilitiesPct)`,
+    },
+    {
+      row: USALI_ROW.totalUndist,
+      label: 'Total undistributed expenses',
+      format: NUMBER_FORMATS.currency,
+      field: 'totalUndistCr',
+      negative: true,
+      formula: (y) => `=SUM(${c(USALI_ROW.aAndG, y)}:${c(USALI_ROW.utilities, y)})`,
+    },
+    {
+      row: USALI_ROW.brandRoyalty,
+      label: 'Brand royalty',
+      format: NUMBER_FORMATS.currency,
+      field: 'brandRoyaltyCr',
+      negative: true,
+      formula: (y) => `=-${c(USALI_ROW.roomsRevenue, y)}*HospitalityBrandRoyaltyPct`,
+    },
+    {
+      row: USALI_ROW.brandMktReserv,
+      label: 'Brand mkt + reservation',
+      format: NUMBER_FORMATS.currency,
+      field: 'brandMktReservCr',
+      negative: true,
+      formula: (y) => `=-${c(USALI_ROW.roomsRevenue, y)}*HospitalityBrandMktReservPct`,
+    },
+    {
+      row: USALI_ROW.gop,
+      label: 'GOP',
+      format: NUMBER_FORMATS.currency,
+      field: 'gopCr',
+      bold: true,
+      formula: (y) => `=${c(USALI_ROW.deptProfit, y)}+${c(USALI_ROW.leaseIncome, y)}+${c(USALI_ROW.totalUndist, y)}+${c(USALI_ROW.brandRoyalty, y)}+${c(USALI_ROW.brandMktReserv, y)}`,
+    },
+    {
+      row: USALI_ROW.gopMargin,
+      label: 'GOP margin %',
+      format: NUMBER_FORMATS.percent,
+      field: 'gopMarginPct',
+      percent: true,
+      formula: (y) => `=IFERROR(${c(USALI_ROW.gop, y)}/${c(USALI_ROW.totalRevenue, y)},0)`,
+      total: 'final',
+    },
+    {
+      row: USALI_ROW.mgmtBase,
+      label: 'Management fee - base',
+      format: NUMBER_FORMATS.currency,
+      field: 'mgmtBaseCr',
+      negative: true,
+      formula: (y) => `=-${c(USALI_ROW.totalRevenue, y)}*HospitalityMgmtBasePct`,
+    },
+    {
+      row: USALI_ROW.mgmtIncentive,
+      label: 'Management fee - incentive',
+      format: NUMBER_FORMATS.currency,
+      field: 'mgmtIncentiveCr',
+      negative: true,
+      formula: (y) => `=-MAX(0,${c(USALI_ROW.gop, y)})*HospitalityMgmtIncentivePct`,
+    },
+    {
+      row: USALI_ROW.ibfc,
+      label: 'IBFC',
+      format: NUMBER_FORMATS.currency,
+      field: 'ibfcCr',
+      bold: true,
+      formula: (y) => `=${c(USALI_ROW.gop, y)}+${c(USALI_ROW.mgmtBase, y)}+${c(USALI_ROW.mgmtIncentive, y)}`,
+    },
+    {
+      row: USALI_ROW.propTax,
+      label: 'Property tax',
+      format: NUMBER_FORMATS.currency,
+      field: 'propTaxCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalityPropertyTaxCrPa>0,HospitalityPropertyTaxCrPa*${infl(y)},${c(USALI_ROW.totalRevenue, y)}*HospitalityPropertyTaxPctRev)`,
+    },
+    {
+      row: USALI_ROW.insurance,
+      label: 'Insurance',
+      format: NUMBER_FORMATS.currency,
+      field: 'insuranceCr',
+      negative: true,
+      formula: (y) => `=-IF(HospitalityInsuranceCrPa>0,HospitalityInsuranceCrPa*${infl(y)},${c(USALI_ROW.totalRevenue, y)}*HospitalityInsurancePctRev)`,
+    },
+    {
+      row: USALI_ROW.groundLease,
+      label: 'Ground lease',
+      format: NUMBER_FORMATS.currency,
+      field: 'groundLeaseCr',
+      negative: true,
+      formula: () => '=-HospitalityGroundLeaseCrPa',
+    },
+    {
+      row: USALI_ROW.ebitda,
+      label: 'EBITDA',
+      format: NUMBER_FORMATS.currency,
+      field: 'ebitdaCr',
+      bold: true,
+      formula: (y) => `=${c(USALI_ROW.ibfc, y)}+${c(USALI_ROW.propTax, y)}+${c(USALI_ROW.insurance, y)}+${c(USALI_ROW.groundLease, y)}`,
+    },
+    {
+      row: USALI_ROW.ebitdaMargin,
+      label: 'EBITDA margin %',
+      format: NUMBER_FORMATS.percent,
+      field: 'ebitdaMarginPct',
+      percent: true,
+      formula: (y) => `=IFERROR(${c(USALI_ROW.ebitda, y)}/${c(USALI_ROW.totalRevenue, y)},0)`,
+      total: 'final',
+    },
+    {
+      row: USALI_ROW.ffeReserve,
+      label: 'FF&E reserve',
+      format: NUMBER_FORMATS.currency,
+      field: 'ffeReserveCr',
+      negative: true,
+      formula: (y) => `=-${c(USALI_ROW.totalRevenue, y)}*HospitalityFFEReservePct`,
+    },
+    {
+      row: USALI_ROW.noi,
+      label: 'NOI',
+      format: NUMBER_FORMATS.currency,
+      field: 'noiCr',
+      bold: true,
+      formula: (y) => `=${c(USALI_ROW.ebitda, y)}+${c(USALI_ROW.ffeReserve, y)}`,
+    },
+    {
+      row: USALI_ROW.noiMargin,
+      label: 'NOI margin %',
+      format: NUMBER_FORMATS.percent,
+      field: 'noiMarginPct',
+      percent: true,
+      formula: (y) => `=IFERROR(${c(USALI_ROW.noi, y)}/${c(USALI_ROW.totalRevenue, y)},0)`,
+      total: 'final',
+    },
+  ];
+
+  rowSpecs.forEach((spec) => {
+    sheet.getCell(spec.row, 1).value = spec.label;
+    styleLabelCell(sheet.getCell(spec.row, 1));
+    if (spec.bold) sheet.getCell(spec.row, 1).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    for (let y = 1; y <= years; y += 1) {
+      const cell = sheet.getCell(spec.row, y + 1);
+      const cached = hospitalityUsaliCached(ctx, y, spec.field, {
+        percent: spec.percent,
+        negative: spec.negative,
+      });
+      cell.value = formulaValue(spec.formula(y), cached);
+      styleOutputCell(cell, spec.format);
+      if (spec.bold) cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    }
+    const totalCell = sheet.getCell(spec.row, years + 2);
+    totalCell.value = spec.total === 'final'
+      ? { formula: `=${excelCol(years + 1)}${spec.row}` }
+      : { formula: `=SUM(B${spec.row}:${excelCol(years + 1)}${spec.row})` };
+    styleOutputCell(totalCell, spec.format);
+    totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  });
+
+  const budgetTitleRow = 44;
+  sheet.mergeCells(budgetTitleRow, 1, budgetTitleRow, Math.min(years + 2, 6));
+  sheet.getCell(budgetTitleRow, 1).value = 'Hotel development budget and capital structure';
+  styleSectionTitle(sheet.getCell(budgetTitleRow, 1));
+  sheet.getRow(budgetTitleRow).height = 22;
+
+  ['Line item', 'INR Cr', 'Formula / source'].forEach((label, idx) => {
+    sheet.getCell(budgetTitleRow + 1, idx + 1).value = label;
+  });
+  styleHeader(sheet.getRow(budgetTitleRow + 1));
+
+  const budgetRows = [
+    ['Land cost', '=LandCostCr', 'Inputs & Assumptions'],
+    ['Stamp duty + registration + betterment', '=LandCostCr*(StampRegPct+HospitalityBettermentPct)', 'Land cost x statutory levy / betterment'],
+    ['Hard construction', '=HospitalityKeys*HospitalityConstructionCostPerKey/10000000', 'Keys x construction cost/key'],
+    ['GST on construction', '=B48*GstPct', 'Hard construction x GST'],
+    ['Soft design / owner costs', '=B48*(HospitalityArchitectPctHard+HospitalityPMCPctHard+HospitalityConsultantsPctHard)', 'Hotel design / PMC / consultants'],
+    ['Approvals', '=IF(ApprovalCostCr>0,ApprovalCostCr,B48*HospitalityApprovalsPctHard)+PremiumFSICostCr', 'Explicit approval cost or hotel default % of hard cost'],
+    ['FF&E', '=HospitalityKeys*HospitalityFFEPerKey/10000000', 'Keys x FF&E/key'],
+    ['OS&E', '=HospitalityKeys*HospitalityOSEPerKey/10000000', 'Keys x OS&E/key'],
+    ['Pre-opening', '=HospitalityKeys*HospitalityPreOpeningPerKey/10000000', 'Keys x pre-opening/key'],
+    ['Working capital', '=HospitalityWorkingCapitalCr', 'Engine default if not provided'],
+    ['Contingency', '=(B48+B50+B51+B52+B53)*ContingencyPct', 'Hard + soft + approvals + FF&E + OS&E x contingency'],
+    ['Subtotal before IDC', '=SUM(B46:B56)', 'All development uses before financing cost'],
+    ['Interest during construction', '=B57*HospitalityConstLoanLTC*0.5*HospitalityConstLoanRatePct*(ProjectMonths/12)+B57*HospitalityConstLoanLTC*HospitalityConstLoanFeesPct', 'Mid-draw construction loan convention'],
+    ['Total development cost', '=B57+B58', 'Total uses incl. IDC'],
+    ['Construction loan', '=B59*HospitalityConstLoanLTC', 'LTC-sized construction loan'],
+    ['Required equity', '=MAX(0,B59-B60)', 'Total cost less construction loan'],
+    ['Stabilized NOI', `=INDEX(B${USALI_ROW.noi}:${excelCol(years + 1)}${USALI_ROW.noi},1,MIN(HospitalityStabilizationYear,${years}))`, 'USALI NOI at stabilization'],
+    ['Stabilized value', '=IFERROR(B62/HospitalityRefiCapRate,0)', 'Stabilized NOI / refi cap rate'],
+    ['Permanent refinance proceeds', '=B63*HospitalityRefiLTV', 'Stabilized value x refi LTV'],
+    ['Terminal sale value', `=IFERROR(${excelCol(years + 1)}${USALI_ROW.noi}/ExitCapRate,0)`, 'Final-year NOI / exit cap rate'],
+  ];
+
+  budgetRows.forEach(([label, formula, note], idx) => {
+    const row = budgetTitleRow + 2 + idx;
+    sheet.getCell(row, 1).value = label;
+    styleLabelCell(sheet.getCell(row, 1));
+    sheet.getCell(row, 2).value = { formula };
+    styleOutputCell(sheet.getCell(row, 2), NUMBER_FORMATS.currency);
+    sheet.getCell(row, 3).value = note;
+    styleLabelCell(sheet.getCell(row, 3));
+    sheet.getCell(row, 3).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    if (['Subtotal before IDC', 'Total development cost', 'Required equity', 'Stabilized value', 'Terminal sale value'].includes(label)) {
+      ['A', 'B', 'C'].forEach((col) => {
+        sheet.getCell(`${col}${row}`).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+        sheet.getCell(`${col}${row}`).fill = FILL(palette.xlsx('paperSubtle'));
+      });
+    }
+  });
+
+  return sheet;
+};
+
 const buildSourcesUsesSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.sourcesUses, {
     views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 5 }],
@@ -2061,7 +2800,7 @@ const buildSourcesUsesSheet = (workbook, ctx) => {
   const landownerContributionFormula = ctx.dealFamily === 'development'
     ? '=IF(DealStructureLabel="outright_purchase",0,LandCostCr)'
     : '=0';
-  const rows = [
+  const genericRows = [
     ['Sources', '', '', ''],
     ['Sponsor / LP equity', '=MAX(0,TotalProjectCostCr*(1-DebtLTV))', '=IFERROR(B6*10000000/SaleableAreaSqft,0)', 'Residual source after senior debt.'],
     ['Senior debt', '=TotalProjectCostCr*DebtLTV', '=IFERROR(B7*10000000/SaleableAreaSqft,0)', 'Uses DebtLTV from Inputs; Debt Sizing sheet gives lender-constrained amount.'],
@@ -2078,6 +2817,24 @@ const buildSourcesUsesSheet = (workbook, ctx) => {
     ['Total uses', '=SUM(B12:B17)', '=IFERROR(B18*10000000/SaleableAreaSqft,0)', 'Matches TotalProjectCostCr when inputs are complete.'],
     ['Source / use gap', '=B9-B18', '=IFERROR(B19*10000000/SaleableAreaSqft,0)', 'Zero means the capital stack balances.'],
   ];
+  const b = (row) => `'${SHEETS.usali}'!$B$${row}`;
+  const hospitalityRows = [
+    ['Sources', '', '', ''],
+    ['Sponsor / LP equity', '=MAX(0,TotalProjectCostCr*(1-HospitalityConstLoanLTC))', '=IFERROR(B6*10000000/SaleableAreaSqft,0)', 'Residual equity after construction debt.'],
+    ['Construction debt', '=TotalProjectCostCr*HospitalityConstLoanLTC', '=IFERROR(B7*10000000/SaleableAreaSqft,0)', 'Uses hotel construction-loan LTC from the engine drivers.'],
+    ['Landowner contribution / JDA land', '=0', '=IFERROR(B8*10000000/SaleableAreaSqft,0)', 'Reference only for income-producing hotel acquisitions.'],
+    ['Total sources', '=SUM(B6:B8)', '=IFERROR(B9*10000000/SaleableAreaSqft,0)', 'Should reconcile to total hotel development uses.'],
+    ['', '', '', ''],
+    ['Uses', '', '', ''],
+    ['Land + stamp / betterment', `=${b(HOSPITALITY_BUDGET_ROW.land)}+${b(HOSPITALITY_BUDGET_ROW.stamp)}`, '=IFERROR(B12*10000000/SaleableAreaSqft,0)', 'Linked to the USALI hotel budget.'],
+    ['Hard construction + GST', `=${b(HOSPITALITY_BUDGET_ROW.hardConstruction)}+${b(HOSPITALITY_BUDGET_ROW.gst)}`, '=IFERROR(B13*10000000/SaleableAreaSqft,0)', 'Keys x cost/key plus construction GST.'],
+    ['Soft design + approvals', `=${b(HOSPITALITY_BUDGET_ROW.softDesign)}+${b(HOSPITALITY_BUDGET_ROW.approvals)}`, '=IFERROR(B14*10000000/SaleableAreaSqft,0)', 'Design, PMC, consultants, approvals.'],
+    ['FF&E + OS&E', `=${b(HOSPITALITY_BUDGET_ROW.ffe)}+${b(HOSPITALITY_BUDGET_ROW.ose)}`, '=IFERROR(B15*10000000/SaleableAreaSqft,0)', 'Keys x FF&E/OS&E per-key assumptions.'],
+    ['Pre-opening + working capital + contingency + IDC', `=${b(HOSPITALITY_BUDGET_ROW.preOpening)}+${b(HOSPITALITY_BUDGET_ROW.workingCapital)}+${b(HOSPITALITY_BUDGET_ROW.contingency)}+${b(HOSPITALITY_BUDGET_ROW.idc)}`, '=IFERROR(B16*10000000/SaleableAreaSqft,0)', 'Opening capital, contingency, and construction financing cost.'],
+    ['Total uses', '=SUM(B12:B16)', '=IFERROR(B17*10000000/SaleableAreaSqft,0)', 'Matches TotalProjectCostCr for hotel deals.'],
+    ['Source / use gap', '=B9-B17', '=IFERROR(B18*10000000/SaleableAreaSqft,0)', 'Zero means the capital stack balances.'],
+  ];
+  const rows = ctx.assetClass === 'hospitality' ? hospitalityRows : genericRows;
 
   rows.forEach(([label, amount, perSqft, note], idx) => {
     const r = 5 + idx;
@@ -2113,7 +2870,7 @@ const buildSourcesUsesSheet = (workbook, ctx) => {
   });
 
   sheet.addConditionalFormatting({
-    ref: 'B19:B19',
+    ref: ctx.assetClass === 'hospitality' ? 'B18:B18' : 'B19:B19',
     rules: [
       { type: 'cellIs', operator: 'notBetween', formulae: [-0.01, 0.01], style: { fill: FILL(palette.xlsx('dataNegative')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 1 },
       { type: 'cellIs', operator: 'between', formulae: [-0.01, 0.01], style: { fill: FILL(palette.xlsx('dataPositive')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 2 },
@@ -2606,6 +3363,107 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
   ];
 
+  const usaliAnnualValue = (row, q) => {
+    const col = colLetter(q + 1);
+    return `IF(${col}5=0,0,INDEX('${SHEETS.usali}'!$B$${row}:$P$${row},1,MIN(${col}5,15,ROUND(HospitalityHoldYears,0))))`;
+  };
+
+  const hospitalityRows = [
+    {
+      label: 'Operating year',
+      formula: (q) => `=MAX(0,ROUNDUP(MAX(0,${q}*3-ProjectMonths)/12,0))`,
+      format: NUMBER_FORMATS.integer,
+      totalKind: 'final',
+    },
+    {
+      label: 'Effective occupancy',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.occupancy, q)}`,
+      format: NUMBER_FORMATS.percent,
+    },
+    {
+      label: 'ADR (blended)',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.adr, q)}`,
+      format: NUMBER_FORMATS.integer,
+    },
+    {
+      label: 'Total operating revenue',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.totalRevenue, q)}/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Rooms revenue',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.roomsRevenue, q)}/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Ancillary revenue',
+      formula: (q) => `=(${usaliAnnualValue(USALI_ROW.totalRevenue, q)}-${usaliAnnualValue(USALI_ROW.roomsRevenue, q)})/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'EGR - Effective Gross Revenue',
+      formula: (q) => `=${colLetter(q + 1)}8`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Departmental expenses',
+      formula: (q) => `=(${usaliAnnualValue(USALI_ROW.roomsDeptExp, q)}+${usaliAnnualValue(USALI_ROW.fbDeptExp, q)}+${usaliAnnualValue(USALI_ROW.otherDeptExp, q)})/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Undistributed expenses',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.totalUndist, q)}/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Brand + management fees',
+      formula: (q) => `=(${usaliAnnualValue(USALI_ROW.brandRoyalty, q)}+${usaliAnnualValue(USALI_ROW.brandMktReserv, q)}+${usaliAnnualValue(USALI_ROW.mgmtBase, q)}+${usaliAnnualValue(USALI_ROW.mgmtIncentive, q)})/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Fixed charges',
+      formula: (q) => `=(${usaliAnnualValue(USALI_ROW.propTax, q)}+${usaliAnnualValue(USALI_ROW.insurance, q)}+${usaliAnnualValue(USALI_ROW.groundLease, q)})/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'FF&E reserve',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.ffeReserve, q)}/4`,
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Total operating expenses',
+      formula: (q) => `=SUM(${colLetter(q + 1)}12:${colLetter(q + 1)}16)`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'NOI - Net Operating Income',
+      formula: (q) => `=${usaliAnnualValue(USALI_ROW.noi, q)}/4`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'CapEx reserves',
+      formula: () => '=0',
+      format: NUMBER_FORMATS.currency,
+    },
+    {
+      label: 'Cash Flow Before Debt Service',
+      formula: (q) => `=${colLetter(q + 1)}18+${colLetter(q + 1)}19`,
+      format: NUMBER_FORMATS.currency,
+      bold: true,
+    },
+    {
+      label: 'Cumulative CF Before Debt',
+      formula: (q) => q === 1
+        ? `=${colLetter(q + 1)}20`
+        : `=${colLetter(q)}21+${colLetter(q + 1)}20`,
+      format: NUMBER_FORMATS.currency,
+      totalKind: 'final',
+    },
+  ];
+
   const developmentRows = [
     {
       label: 'Quarter share (uniform)',
@@ -2901,7 +3759,11 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
   ];
 
-  const rows = ctx.dealFamily === 'income' ? incomeRows : developmentRows;
+  const rows = ctx.assetClass === 'hospitality'
+    ? hospitalityRows
+    : ctx.dealFamily === 'income'
+      ? incomeRows
+      : developmentRows;
 
   let lastRow = 4;
   rows.forEach((rowSpec, rowIdx) => {
@@ -3022,15 +3884,15 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
       formula: (q) => {
         // Interest = (LTV × Total Cost − cumulative principal paid) × rate / 4
         // The Principal-row SUM reference (was $B$7:..7) shifts to cf(7).
-        if (q === 1) return `=-(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV*DebtRatePct/4`;
-        return `=-((LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV-IFERROR(SUM($B$${cf(7)}:${colLetters[q - 2]}${cf(7)}),0))*DebtRatePct/4`;
+        if (q === 1) return `=-TotalProjectCostCr*DebtLTV*DebtRatePct/4`;
+        return `=-(TotalProjectCostCr*DebtLTV-IFERROR(SUM($B$${cf(7)}:${colLetters[q - 2]}${cf(7)}),0))*DebtRatePct/4`;
       },
       format: NUMBER_FORMATS.currency,
     },
     {
       label: 'Less: Principal repayment',
       formula: (q) =>
-        `=IF(AND(${q}>MoratoriumMonths/3,${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)}>0),MIN(${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)},(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr)*DebtLTV/(LoanTermYears*4)),0)`,
+        `=IF(AND(${q}>MoratoriumMonths/3,${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)}>0),MIN(${colLetters[q - 1]}${cf(5)}+${colLetters[q - 1]}${cf(6)},TotalProjectCostCr*DebtLTV/(LoanTermYears*4)),0)`,
       format: NUMBER_FORMATS.currency,
     },
     {
@@ -3508,15 +4370,26 @@ const buildDashboardSheet = (workbook, ctx) => {
   sheet.mergeCells('A11:F11');
   sheet.getRow(11).height = 22;
 
-  const su = [
-    ['Source: Equity',             `=MAX(0,${totalProjectCostRef}*(1-DebtLTV))`, Math.max(0, cachedCosts.totalProjectCostCr * (1 - (getCoreInputSnapshot(ctx).debtLTV || 0)))],
-    ['Source: Debt',               `=${totalProjectCostRef}*DebtLTV`, cachedCosts.totalProjectCostCr * (getCoreInputSnapshot(ctx).debtLTV || 0)],
-    ['Use: Land',                  `=LandCostCr`, cachedCosts.landCostCr],
-    ['Use: Construction',          `=ConstructionCostPerSqft*SaleableAreaSqft/10000000`, cachedCosts.hardCostCr],
-    ['Use: Approvals + Premium',   `=ApprovalCostCr+PremiumFSICostCr`, cachedCosts.approvalCostCr + cachedCosts.premiumFsiCostCr],
-    ['Use: Soft Costs',            `='${SHEETS.calculations}'!$B$24`, cachedCosts.softCostsCr],
-    ['Use: Statutory Levies',      `='${SHEETS.calculations}'!$B$27`, cachedCosts.statutoryCr],
-  ];
+  const hb = (row) => `'${SHEETS.usali}'!$B$${row}`;
+  const su = ctx.assetClass === 'hospitality'
+    ? [
+        ['Source: Equity', `=MAX(0,${totalProjectCostRef}*(1-HospitalityConstLoanLTC))`, Math.max(0, cachedCosts.totalProjectCostCr * (1 - (enginePctDecimal(ctx, ['constLoanLTC', 'debtLTC', 'debtLTV'], 0.55) || 0)))],
+        ['Source: Debt', `=${totalProjectCostRef}*HospitalityConstLoanLTC`, cachedCosts.totalProjectCostCr * (enginePctDecimal(ctx, ['constLoanLTC', 'debtLTC', 'debtLTV'], 0.55) || 0)],
+        ['Use: Land + Stamp', `=${hb(HOSPITALITY_BUDGET_ROW.land)}+${hb(HOSPITALITY_BUDGET_ROW.stamp)}`, cachedCosts.landCostCr + cachedCosts.statutoryCr],
+        ['Use: Construction + GST', `=${hb(HOSPITALITY_BUDGET_ROW.hardConstruction)}+${hb(HOSPITALITY_BUDGET_ROW.gst)}`, cachedCosts.hardCostCr],
+        ['Use: Soft + Approvals', `=${hb(HOSPITALITY_BUDGET_ROW.softDesign)}+${hb(HOSPITALITY_BUDGET_ROW.approvals)}`, cachedCosts.approvalCostCr],
+        ['Use: FF&E / Opening', `=${hb(HOSPITALITY_BUDGET_ROW.ffe)}+${hb(HOSPITALITY_BUDGET_ROW.ose)}+${hb(HOSPITALITY_BUDGET_ROW.preOpening)}+${hb(HOSPITALITY_BUDGET_ROW.workingCapital)}`, cachedCosts.softCostsCr * 0.65],
+        ['Use: Contingency + IDC', `=${hb(HOSPITALITY_BUDGET_ROW.contingency)}+${hb(HOSPITALITY_BUDGET_ROW.idc)}`, cachedCosts.softCostsCr * 0.35],
+      ]
+    : [
+        ['Source: Equity',             `=MAX(0,${totalProjectCostRef}*(1-DebtLTV))`, Math.max(0, cachedCosts.totalProjectCostCr * (1 - (getCoreInputSnapshot(ctx).debtLTV || 0)))],
+        ['Source: Debt',               `=${totalProjectCostRef}*DebtLTV`, cachedCosts.totalProjectCostCr * (getCoreInputSnapshot(ctx).debtLTV || 0)],
+        ['Use: Land',                  `=LandCostCr`, cachedCosts.landCostCr],
+        ['Use: Construction',          `=ConstructionCostPerSqft*SaleableAreaSqft/10000000`, cachedCosts.hardCostCr],
+        ['Use: Approvals + Premium',   `=ApprovalCostCr+PremiumFSICostCr`, cachedCosts.approvalCostCr + cachedCosts.premiumFsiCostCr],
+        ['Use: Soft Costs',            `='${SHEETS.calculations}'!$B$24`, cachedCosts.softCostsCr],
+        ['Use: Statutory Levies',      `='${SHEETS.calculations}'!$B$27`, cachedCosts.statutoryCr],
+      ];
   su.forEach(([label, formula, cached], idx) => {
     const r = 12 + idx;
     sheet.getCell(`A${r}`).value = label;
@@ -4183,7 +5056,12 @@ const buildDebtSizingSheet = (workbook, ctx) => {
   // plus net-of-ITC GST on construction value. Asset-class-aware via the
   // GstPct + StampRegPct named ranges seeded on the Inputs sheet.
   const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
-  const totalCost = `${hardCost}+${softCost}+${indiaLevies}`;
+  const totalCost = ctx.assetClass === 'hospitality'
+    ? 'TotalProjectCostCr'
+    : `${hardCost}+${softCost}+${indiaLevies}`;
+  const totalCostNote = ctx.assetClass === 'hospitality'
+    ? 'Hotel development budget from USALI Pro Forma'
+    : 'Hard + Soft + India Statutory Levies (matches Calculations!B28)';
 
   // NOI driver — income family uses kernel-stored stabilised NOI when
   // available; development family uses a residual-land-value proxy.
@@ -4195,7 +5073,7 @@ const buildDebtSizingSheet = (workbook, ctx) => {
     : null;
 
   const inputsSummary = [
-    ['Total Project Cost (INR Cr)', `=${totalCost}`,                                   'Hard + Soft + India Statutory Levies (matches Calculations!B28)'],
+    ['Total Project Cost (INR Cr)', `=${totalCost}`,                                   totalCostNote],
     ['Stabilised NOI (INR Cr / yr)', ctx.dealFamily === 'income'
       ? (noiSource && /^[0-9.-]+$/.test(noiSource) ? `=${noiSource}` : `=${noiSource}`)
       : '"—"',
@@ -4595,10 +5473,15 @@ const buildWaterfallSheet = (workbook, ctx) => {
   // plus net-of-ITC GST on construction value. Asset-class-aware via the
   // GstPct + StampRegPct named ranges seeded on the Inputs sheet.
   const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
-  const totalCost = `${hardCost}+${softCost}+${indiaLevies}`;
+  const totalCost = ctx.assetClass === 'hospitality'
+    ? 'TotalProjectCostCr'
+    : `${hardCost}+${softCost}+${indiaLevies}`;
+  const totalCostNote = ctx.assetClass === 'hospitality'
+    ? 'Hotel development budget from USALI Pro Forma'
+    : 'Hard + Soft + India Statutory Levies (matches Calculations!B28)';
 
   const capitalRows = [
-    ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              'Hard + Soft + India Statutory Levies (matches Calculations!B28)'],
+    ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              totalCostNote],
     ['Lender-Approved Loan (INR Cr)',   `='${SHEETS.debtAndAmort}'!B28`,              'MIN of LTC/LTV/DCR/DY from Debt Sizing section'],
     ['Total Equity (INR Cr)',           '=B5-B6',                                    'Project cost − loan'],
     ['LP Equity (INR Cr)',              '=B7*LPEquityPct',                           'LP share × total equity'],
@@ -5179,6 +6062,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   buildDashboardSheet(workbook, ctx);
   buildQaSourcesSheet(workbook, ctx);
   const { definedNames } = buildInputsSheet(workbook, ctx);
+  if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
 
   // Cash Flow Engine combines (a) Phasing operating schedule + (b) Cash
   // Flow & Debt rows on the SAME worksheet. buildPhasingSheet returns the
@@ -5202,7 +6086,12 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   definedNames.forEach(({ name, ref }) => {
     workbook.definedNames.add(ref, name);
   });
-  workbook.definedNames.add(`'${SHEETS.calculations}'!$B$28`, 'TotalProjectCostCr');
+  workbook.definedNames.add(
+    ctx.assetClass === 'hospitality'
+      ? `'${SHEETS.usali}'!$B$${HOSPITALITY_BUDGET_ROW.totalDevelopmentCost}`
+      : `'${SHEETS.calculations}'!$B$28`,
+    'TotalProjectCostCr',
+  );
   applyWorkbookProtection(workbook);
 
   return workbook;
