@@ -2700,3 +2700,26 @@ Fixed the Pointec export blocker where REDIP was treating the saved hospitality 
 ### What's left to do
 Deploy this patch, then download the production Pointec workbook once to confirm the browser download path is clear.
 
+
+## 2026-05-14 - Hospitality XLSX financial-engine pro forma
+
+### What was worked on
+Rebuilt the hotel XLSX export around the same hospitality assumptions and USALI operating model used by the Financial Engine screen. The workbook now exposes hotel-specific defaults when the user did not enter a value, and links those assumptions through operating revenue, expenses, NOI, sources and uses, debt sizing, dashboard, and waterfall tabs.
+
+### Plain-English recap
+- Hotel exports now include a dedicated hotel pro forma tab with linked occupancy, nightly-rate, revenue, expense, NOI, budget, and financing lines.
+- Blank hotel inputs now fall back to the REDIP financial engine defaults and show that source in Inputs & Assumptions.
+- Cash Flow, Sources & Uses, Dashboard, Debt Sizing, and Waterfall now reconcile to the same hotel model instead of a generic office-style template.
+- This matters because an investor can trace the workbook from assumptions to returns without seeing conflicting calculation paths.
+
+### PRs opened / merged
+- PR #303 - `fix(exports): link hospitality XLSX to financial engine` - opened from `codex/investor-grade-xlsx-engine-proforma`; CI passed, with squash-merge and deployment handled after this log entry.
+
+### Validation
+- XLSX v2 focused suite: 148 tests passed.
+- Asset-class utility focused suite: 25 tests passed.
+- Generated a Pointec-shaped hospitality workbook locally and confirmed the Cash Flow Engine and Sources & Uses formulas link into the USALI Pro Forma sheet.
+
+### What's left to do
+Squash-merge PR #303, deploy it, then download the production Pointec workbook once to confirm the export path is clean.
+

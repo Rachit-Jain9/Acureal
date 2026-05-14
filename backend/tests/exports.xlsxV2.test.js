@@ -232,7 +232,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
       expect(prepared.assetClass).toBe('hospitality');
       expect(prepared.exportQa.blockers).toEqual([]);
-      expect(prepared.exportQa.core.saleableAreaSqft).toBe(60000);
+      expect(prepared.exportQa.core.saleableAreaSqft).toBe(55000);
       expect(prepared.exportQa.core.baseRentPerSqftMonth).toBeGreaterThan(0);
       expect(prepared.exportQa.core.constructionCostPerSqft).toBeGreaterThan(0);
       await expect(buildDealWorkbookV2(ctx, { strictValidation: true })).resolves.toEqual(expect.any(Buffer));
@@ -2790,6 +2790,23 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(byLabel['Implied annual revenue (Cr)'].formula)
           .toBeFormula('=HospitalityRevPAR*HospitalityKeys*365/10000000');
       });
+
+      test('Hospitality workbook adds USALI pro forma and links Cash Flow + Sources & Uses to it', async () => {
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const usali = wb.getWorksheet('USALI Pro Forma');
+        const cfe = wb.getWorksheet('Cash Flow Engine');
+        const sourcesUses = wb.getWorksheet('Sources & Uses');
+
+        expect(usali).toBeTruthy();
+        expect(usali.getCell('B16').value.formula).toContain('SUM');
+        expect(usali.getCell('B40').value.formula).toContain('B37');
+        expect(cfe.getCell('B6').value.formula).toContain("'USALI Pro Forma'");
+        expect(cfe.getCell('B18').value.formula).toContain("'USALI Pro Forma'");
+        expect(sourcesUses.getCell('B17').value.formula).toBeFormula('=SUM(B12:B16)');
+        expect(sourcesUses.getCell('B18').value.formula).toBeFormula('=B9-B17');
+      });
     });
 
     // ── PR-I13 — Retail CAM + Anchor / Vanilla rent split ──────────────
@@ -3202,10 +3219,20 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(reversionRow).toBeDefined();
         expect(reversionRow).not.toBeNull();
         // The final-quarter column holds the active formula (the rest of the
-        // quarters return '=0'). For the default 12-quarter project, that's
-        // column M.
-        const totalQuarters = 12;
-        const finalQCol = String.fromCharCode(65 + totalQuarters); // M for 12Q
+        // quarters return '=0'). Income deals may extend past the construction
+        // window to cover the hold period.
+        const prepared = __internal.prepareWorkbookContext(ctx, { strictValidation: false });
+        const excelCol = (n) => {
+          let s = '';
+          let v = n;
+          while (v > 0) {
+            const r = (v - 1) % 26;
+            s = String.fromCharCode(65 + r) + s;
+            v = Math.floor((v - r) / 26);
+          }
+          return s;
+        };
+        const finalQCol = excelCol(prepared.totalQuarters + 1);
         const cell = cfe.getCell(`${finalQCol}${reversionRow}`);
         expect(cell.value.formula).toContain('TotalExitCostPct');
         // Confirms the swap — bare SellingCostPct no longer appears in
