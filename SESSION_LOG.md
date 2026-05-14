@@ -2713,7 +2713,7 @@ Rebuilt the hotel XLSX export around the same hospitality assumptions and USALI 
 - This matters because an investor can trace the workbook from assumptions to returns without seeing conflicting calculation paths.
 
 ### PRs opened / merged
-- PR #303 - `fix(exports): link hospitality XLSX to financial engine` - opened from `codex/investor-grade-xlsx-engine-proforma`; merge/deploy pending after CI review.
+- PR #303 - `fix(exports): link hospitality XLSX to financial engine` - opened from `codex/investor-grade-xlsx-engine-proforma`; CI passed, with squash-merge and deployment handled after this log entry.
 
 ### Validation
 - XLSX v2 focused suite: 148 tests passed.
@@ -2721,5 +2721,5 @@ Rebuilt the hotel XLSX export around the same hospitality assumptions and USALI 
 - Generated a Pointec-shaped hospitality workbook locally and confirmed the Cash Flow Engine and Sources & Uses formulas link into the USALI Pro Forma sheet.
 
 ### What's left to do
-Wait for PR #303 CI, merge it, deploy, then download the production Pointec workbook once to confirm the export path is clean.
+Squash-merge PR #303, deploy it, then download the production Pointec workbook once to confirm the export path is clean.
 
