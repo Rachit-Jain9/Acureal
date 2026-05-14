@@ -164,6 +164,51 @@ describe('normalizeDealInput — assumption hierarchy', () => {
     });
     expect(r.raw.discountRatePct).toBe(18);
   });
+
+  test('canonical aliases let default hard cost satisfy residential construction cost', () => {
+    const r = normalizeDealInput({
+      assetClass: 'residential_apartments',
+      raw: {
+        plotAreaSqft: 25000,
+        fsi: 3,
+        sellingRatePerSqft: 42000,
+        landCostCr: 100,
+      },
+    });
+
+    expect(r.raw.hardCostPerSqft).toBe(2800);
+    expect(r.raw.constructionCostPerSqft).toBe(2800);
+  });
+
+  test('canonical aliases let income defaults satisfy rent and cap-rate fields', () => {
+    const r = normalizeDealInput({
+      assetClass: 'commercial_office',
+      raw: {
+        leasableAreaSqft: 100000,
+        constructionCostPerSqft: 6000,
+        landCostCr: 40,
+      },
+    });
+
+    expect(r.raw.rentPerSqftPerMonth).toBe(95);
+    expect(r.raw.baseRentPerSqftMonth).toBe(95);
+    expect(r.raw.exitCapRatePct).toBe(7.5);
+    expect(r.raw.exitCapRate).toBe(7.5);
+  });
+
+  test('canonical aliases map plotted development-cost defaults into the adapter field', () => {
+    const r = normalizeDealInput({
+      assetClass: 'plotted_development',
+      raw: {
+        totalLandSqft: 100000,
+        sellingRatePerSqft: 2500,
+        landCostCr: 20,
+      },
+    });
+
+    expect(r.raw.developmentCostPerSqft).toBe(450);
+    expect(r.raw.devCostPerSqft).toBe(450);
+  });
 });
 
 describe('computeDeal — normalises inputs end-to-end', () => {
