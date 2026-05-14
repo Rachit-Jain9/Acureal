@@ -204,6 +204,30 @@ function readMonths(raw: Unknowny, canonicalKey: string): number | undefined {
 //  Key set — what we know how to normalise
 // ─────────────────────────────────────────────────────────────────────────────
 
+function backfillCanonicalAliases(out: Record<string, unknown>): void {
+  const copyNumber = (target: string, ...sources: string[]) => {
+    if (typeof out[target] === 'number' && Number.isFinite(out[target])) return;
+    for (const source of sources) {
+      const value = out[source];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        out[target] = value;
+        return;
+      }
+    }
+  };
+
+  copyNumber('constructionCostPerSqft', 'hardCostPerSqft');
+  copyNumber('devCostPerSqft', 'developmentCostPerSqft');
+  copyNumber('baseRentPerSqftMonth', 'rentPerSqftPerMonth', 'rentPerSqftMonth');
+  copyNumber('exitCapRate', 'exitCapRatePct');
+  copyNumber('entryCapRate', 'entryCapRatePct');
+  copyNumber('gstPct', 'gstOnConstructionPct');
+  copyNumber('debtLTV', 'debtCoverage');
+  copyNumber('debtCoverage', 'debtLTV');
+  copyNumber('debtRatePct', 'interestRatePct');
+  copyNumber('interestRatePct', 'debtRatePct');
+}
+
 const AREA_KEYS = ['plotAreaSqft', 'totalLandSqft', 'leasableAreaSqft', 'avgPlotSizeSqft', 'avgUnitSizeSqft'] as const;
 const MONEY_KEYS = ['landCostCr', 'approvalCostCr', 'rehousingCostCr', 'holdingCostPerYearCr'] as const;
 const MONTH_KEYS = ['projectDurationMonths', 'constructionStartMonths', 'constructionEndMonths'] as const;
@@ -373,6 +397,7 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
       out[k] = v;
     }
   }
+  backfillCanonicalAliases(out);
   // Apply scenario overrides last, unconditionally.
   if (args.scenarioOverrides) {
     for (const [k, v] of Object.entries(args.scenarioOverrides)) {
@@ -380,6 +405,7 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
       if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
       else if (typeof v === 'string') out[k] = v;
     }
+    backfillCanonicalAliases(out);
   }
 
   // Validate required fields.

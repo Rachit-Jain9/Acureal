@@ -2723,3 +2723,29 @@ Rebuilt the hotel XLSX export around the same hospitality assumptions and USALI 
 ### What's left to do
 Squash-merge PR #303, deploy it, then download the production Pointec workbook once to confirm the export path is clean.
 
+
+## 2026-05-14 - Financial model integrity audit
+
+### What was worked on
+Aligned XLSX pro forma exports with the deterministic Financial Engine assumptions and defaults. The export now keeps saved effective dates, resolves the kernel's default naming aliases, converts loading factor correctly between engine and workbook conventions, uses income-asset defaults for blank rent/vacancy/cap-rate assumptions, and reconciles plotted-development saleable area with gross-land development cost.
+
+### Plain-English recap
+- Workbooks now use the same saved assumptions and fallback defaults as the Financial Engine.
+- Blank default-backed fields now show their source instead of quietly becoming generic workbook numbers.
+- Dates, loading factor, rent, vacancy, cap rate, debt, GST, and plotted-development costs now trace more clearly from inputs to formulas.
+- This matters because the Excel model is less likely to disagree with REDIP's own underwriting screen.
+
+### PRs opened / merged
+- PR #304 - `fix(exports): align XLSX pro formas with financial engine` - opened from `codex/financial-model-integrity-audit`.
+
+### Validation
+- Financial kernel build passed.
+- Financial kernel input-schema suite: 17 tests passed.
+- XLSX v2 focused suite: 152 tests passed.
+- Financial kernel all-asset smoke suite: 10 tests passed.
+- Asset-class utility focused suite: 25 tests passed.
+- Legacy deal XLSX service suite: 3 tests passed.
+
+### What's left to do
+Wait for PR #304 CI, then merge and deploy once checks pass.
+

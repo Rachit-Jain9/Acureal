@@ -15,6 +15,15 @@ const findValueCellByLabel = (sheet, expectedLabel) => {
   return found;
 };
 
+const findRowByLabelPrefix = (sheet, expectedPrefix) => {
+  let found = null;
+  sheet.eachRow((row) => {
+    const label = String(row.getCell(1).value || '').trim();
+    if (!found && label.startsWith(expectedPrefix)) found = row;
+  });
+  return found;
+};
+
 expect.extend({
   toBeFormula(received, expected) {
     const pass = normalizeFormula(received) === normalizeFormula(expected);
@@ -85,6 +94,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
       expect(ctx.brandName).toBe('TestCo');
       expect(ctx.generatedAt).toBe('2026-05-10T00:00:00Z');
+    });
+
+    test('uses the stored financial-engine effective date before falling back to today', () => {
+      const input = minimalContext();
+      input.deal.model_params.inputs.effectiveDate = '22-04-2026';
+
+      const ctx = __internal.buildContext(input);
+
+      expect(ctx.effectiveDate).toBe('2026-04-22');
     });
 
     test('infers asset class from deal + property combination', () => {
@@ -237,6 +255,85 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(prepared.exportQa.core.constructionCostPerSqft).toBeGreaterThan(0);
       await expect(buildDealWorkbookV2(ctx, { strictValidation: true })).resolves.toEqual(expect.any(Buffer));
     }, 30000);
+
+    test('normalizes engine loading add-on into the workbook carpet-area multiple', async () => {
+      const ctx = minimalContext();
+      ctx.deal.model_params.inputs.loadingFactor = 0.15;
+
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+      const loadingRow = findRowByLabelPrefix(inputs, 'Loading Factor');
+      const carpetRow = findRowByLabelPrefix(inputs, 'Carpet Area');
+
+      expect(loadingRow.getCell(2).value).toBeCloseTo(1.15, 6);
+      expect(String(loadingRow.getCell(4).value)).toBe('stored-input');
+      expect(carpetRow.getCell(2).value.formula).toBeFormula('=IFERROR(SaleableAreaSqft/LoadingFactor,0)');
+    });
+
+    test('uses financial-engine defaults for blank income rent, vacancy, and cap-rate assumptions', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.property.property_type = 'commercial_office';
+      ctx.property.saleable_area_sqft = null;
+      ctx.deal.model_params.inputs = {
+        assetClass: 'commercial_office',
+        leasableAreaSqft: 100000,
+        constructionCostPerSqft: 6000,
+        landCostCr: 40,
+        debtCoverage: 0.6,
+        interestRatePct: 10,
+        discountRatePct: 12,
+      };
+
+      const prepared = __internal.prepareWorkbookContext(ctx, {
+        strictValidation: true,
+        generatedAt: '2026-05-14T00:00:00Z',
+      });
+
+      expect(prepared.exportQa.core.baseRentPerSqftMonth).toBe(95);
+      expect(prepared.exportQa.core.occupancyPct).toBeCloseTo(0.9, 6);
+      expect(prepared.exportQa.core.exitCapRate).toBeCloseTo(0.075, 6);
+      expect(prepared.exportQa.core.debtLTV).toBeCloseTo(0.6, 6);
+
+      const buffer = await buildDealWorkbookV2(ctx, {
+        strictValidation: true,
+        generatedAt: '2026-05-14T00:00:00Z',
+      });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+      expect(findRowByLabelPrefix(inputs, 'Base Rent').getCell(4).value).toBe('engine-default');
+      expect(findRowByLabelPrefix(inputs, 'Stabilised Occupancy').getCell(4).value).toBe('engine-default');
+      expect(findRowByLabelPrefix(inputs, 'Exit Cap Rate').getCell(4).value).toBe('engine-default');
+    }, 30000);
+
+    test('derives plotted-development saleable land and gross-land development cost linkage', () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'plotted_development';
+      ctx.property.property_type = 'plotted_development';
+      ctx.property.saleable_area_sqft = null;
+      ctx.property.land_area_sqft = null;
+      ctx.deal.model_params.inputs = {
+        assetClass: 'plotted_development',
+        totalLandSqft: 100000,
+        saleableLandPct: 55,
+        avgPlotSizeSqft: 1200,
+        sellingRatePerSqft: 2500,
+        landCostCr: 20,
+        devCostPerSqft: 250,
+        discountRatePct: 14,
+      };
+
+      const prepared = __internal.prepareWorkbookContext(ctx, { strictValidation: true });
+
+      expect(prepared.exportQa.core.landAreaSqft).toBe(100000);
+      expect(prepared.exportQa.core.saleableAreaSqft).toBeCloseTo(55000, 6);
+      expect(prepared.exportQa.core.constructionCostPerSqft).toBeCloseTo(250 / 0.55, 6);
+      expect((prepared.exportQa.core.constructionCostPerSqft * prepared.exportQa.core.saleableAreaSqft) / 10000000)
+        .toBeCloseTo(2.5, 6);
+    });
 
     test('strict validation passes representative asset classes, deal structures, and exit strategies', async () => {
       const cases = [
@@ -1444,7 +1541,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(foundUnlocked).toBe(true);
     });
 
-    test('LoadingFactor rejects zero input and CarpetAreaSqft stays guarded', async () => {
+    test('LoadingFactor accepts zero engine add-on and CarpetAreaSqft stays guarded', async () => {
       const ctx = minimalContext();
       ctx.deal.model_params.inputs.loadingFactor = 0;
       const buffer = await buildDealWorkbookV2(ctx);
@@ -1460,7 +1557,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         if (label.includes('Carpet Area')) carpetFormula = row.getCell(2).value.formula;
       });
 
-      expect(loadingFactorValue).toBe(1.25);
+      expect(loadingFactorValue).toBe(1);
       expect(carpetFormula).toBeFormula('=IFERROR(SaleableAreaSqft/LoadingFactor,0)');
     });
 
@@ -1757,7 +1854,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(foundSection).toBe(true);
       });
 
-      test('GST default is 5% for residential, 0% for commercial, 0% for plotted', async () => {
+      test('GST default follows the financial-engine assumption registry by asset class', async () => {
         const getGstSeed = async (ctx) => {
           const buffer = await buildDealWorkbookV2(ctx);
           const wb = new ExcelJS.Workbook();
@@ -1772,7 +1869,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         };
 
         // Build contexts that DON'T set gstPct so we exercise the
-        // asset-class default path (`indiaGstDefaultForClass`).
+        // financial-engine default registry.
         const baseCtx = minimalContext();
         const stripGst = (c) => {
           const next = JSON.parse(JSON.stringify(c));
@@ -1793,9 +1890,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           getGstSeed(plottedCtx),
         ]);
 
-        expect(resGst).toBeCloseTo(0.05, 4); // residential — output GST collected, no ITC, developer eats net 5% of construction
-        expect(comGst).toBeCloseTo(0, 4);    // commercial — output GST collected from buyer fully offset by ITC on inputs
-        expect(plotGst).toBeCloseTo(0, 4);   // plotted — land transfer, no GST applicable
+        expect(resGst).toBeCloseTo(0.18, 4);
+        expect(comGst).toBeCloseTo(0.18, 4);
+        expect(plotGst).toBeCloseTo(0.12, 4);
       });
 
       test('StampRegPct defaults to 0.066 (Karnataka 5.6% + 1%) when no input provided', async () => {

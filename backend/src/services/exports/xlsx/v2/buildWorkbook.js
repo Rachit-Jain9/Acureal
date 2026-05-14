@@ -260,6 +260,192 @@ const engineFirstNumber = (ctx, keys = [], fallback = null) => {
 const enginePctDecimal = (ctx, keys = [], fallback = null) =>
   toPctDecimal(engineFirstNumber(ctx, keys, fallback));
 
+const normalizeDateString = (...values) => {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().slice(0, 10);
+    }
+    const text = String(value).trim();
+    if (!text) continue;
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const dmy = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmy) {
+      const [, dd, mm, yyyy] = dmy;
+      return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+    }
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  }
+  return null;
+};
+
+const normalizeLoadingAddon = (value, fallback = 0.15) => {
+  const parsed = num(value);
+  if (parsed === null || parsed < 0) return fallback;
+  if (parsed > 2) return parsed / 100;
+  if (parsed >= 1) return parsed - 1;
+  return parsed;
+};
+
+const loadingAddonFor = (ctx) =>
+  normalizeLoadingAddon(firstNumber(
+    ctx.inputs.loadingFactor,
+    ctx.inputs.loadingRatio,
+    ctx.engineAssumptions?.loadingFactor,
+  ));
+
+const loadingMultipleFor = (ctx) => 1 + loadingAddonFor(ctx);
+
+const landAreaSqftFor = (ctx) =>
+  firstNumber(
+    ctx.property.land_area_sqft,
+    ctx.deal.land_area_sqft,
+    ctx.inputs.plotAreaSqft,
+    ctx.inputs.totalLandSqft,
+    0,
+  );
+
+const fsiFor = (ctx) =>
+  firstNumber(ctx.property.existing_fsi, ctx.inputs.fsi, ctx.engineAssumptions?.fsi, 1.5);
+
+const saleableAreaSqftFor = (ctx) => {
+  const explicit = firstNumber(
+    ctx.property.saleable_area_sqft,
+    ctx.deal.saleable_area_sqft,
+    ctx.inputs.saleableAreaSqft,
+    ctx.inputs.leasableAreaSqft,
+  );
+  if (explicit && explicit > 0) return explicit;
+
+  if (ctx.assetClass === 'hospitality') {
+    return firstNumber(hospitalityAreaSqft(ctx), 0);
+  }
+
+  const landAreaSqft = landAreaSqftFor(ctx);
+  if (['plotted_development', 'raw_land'].includes(ctx.assetClass)) {
+    const saleableLandPct = enginePctDecimal(ctx, ['saleableLandPct'], 55) || 0;
+    return landAreaSqft > 0 ? landAreaSqft * saleableLandPct : 0;
+  }
+
+  if (ctx.dealFamily === 'development' && landAreaSqft > 0) {
+    return landAreaSqft * fsiFor(ctx) * loadingMultipleFor(ctx);
+  }
+
+  return 0;
+};
+
+const sellRatePerSqftFor = (ctx) =>
+  firstNumber(
+    ctx.inputs.sellingRatePerSqft,
+    ctx.deal.selling_rate_per_sqft,
+    ctx.engineAssumptions?.sellingRatePerSqft,
+    0,
+  );
+
+const constructionCostPerSqftFor = (ctx) => {
+  const explicit = firstNumber(
+    ctx.inputs.constructionCostPerSqft,
+    ctx.inputs.hardCostPerSqft,
+    ctx.deal.construction_cost_per_sqft,
+    ctx.assetClass === 'hospitality' ? hospitalityConstructionCostPerSqft(ctx) : null,
+    ctx.engineAssumptions?.constructionCostPerSqft,
+    ctx.engineAssumptions?.hardCostPerSqft,
+  );
+  if (explicit !== null) return explicit;
+  const devCostPerGrossSqft = firstNumber(
+    ctx.inputs.devCostPerSqft,
+    ctx.inputs.developmentCostPerSqft,
+    ctx.engineAssumptions?.devCostPerSqft,
+    ctx.engineAssumptions?.developmentCostPerSqft,
+  );
+  if (devCostPerGrossSqft !== null && ['plotted_development', 'raw_land'].includes(ctx.assetClass)) {
+    const saleableLandPct = enginePctDecimal(ctx, ['saleableLandPct'], 55) || 0;
+    return saleableLandPct > 0 ? devCostPerGrossSqft / saleableLandPct : devCostPerGrossSqft;
+  }
+  return firstNumber(devCostPerGrossSqft, 0);
+};
+
+const approvalBaseAreaSqftFor = (ctx) => {
+  const landAreaSqft = landAreaSqftFor(ctx);
+  if (['plotted_development', 'raw_land'].includes(ctx.assetClass)) return landAreaSqft;
+  if (ctx.dealFamily === 'development' && landAreaSqft > 0) return landAreaSqft * fsiFor(ctx);
+  return saleableAreaSqftFor(ctx);
+};
+
+const approvalCostCrFor = (ctx) => {
+  const explicit = firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr);
+  if (explicit !== null) return explicit;
+  const perSqft = engineFirstNumber(ctx, ['approvalCostPerSqft'], null);
+  const area = approvalBaseAreaSqftFor(ctx);
+  return perSqft && perSqft > 0 && area > 0 ? (perSqft * area) / 10000000 : 0;
+};
+
+const baseRentPerSqftMonthFor = (ctx) =>
+  firstNumber(
+    ctx.inputs.baseRentPerSqftMonth,
+    ctx.inputs.rentPerSqftMonth,
+    ctx.inputs.rentPerSqftPerMonth,
+    ctx.assetClass === 'hospitality' ? hospitalityBaseRentPerSqftMonth(ctx) : null,
+    ctx.engineAssumptions?.baseRentPerSqftMonth,
+    ctx.engineAssumptions?.rentPerSqftMonth,
+    ctx.engineAssumptions?.rentPerSqftPerMonth,
+    0,
+  );
+
+const vacancyPctFor = (ctx) =>
+  enginePctDecimal(ctx, ['vacancyPct'], 10) || 0;
+
+const occupancyPctFor = (ctx) => {
+  if (ctx.assetClass === 'hospitality') return hospitalityOccupancyPct(ctx);
+  const explicit = toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct));
+  if (explicit !== null) return explicit;
+  return Math.max(0, Math.min(1, 1 - vacancyPctFor(ctx)));
+};
+
+const exitCapRateFor = (ctx) =>
+  toPctDecimal(firstNumber(
+    ctx.inputs.exitCapRate,
+    ctx.inputs.exitCapRatePct,
+    ctx.inputs.capRate,
+    ctx.inputs.entryCapRate,
+    ctx.engineAssumptions?.exitCapRate,
+    ctx.engineAssumptions?.exitCapRatePct,
+    ctx.engineAssumptions?.capRate,
+    8,
+  ));
+
+const debtLtvFor = (ctx) =>
+  toPctDecimal(firstNumber(
+    ctx.inputs.debtLTV,
+    ctx.inputs.debtCoverage,
+    ctx.inputs.debtPct,
+    ctx.engineAssumptions?.debtLTV,
+    ctx.engineAssumptions?.debtCoverage,
+    0.55,
+  ));
+
+const debtRatePctFor = (ctx) =>
+  toPctDecimal(firstNumber(
+    ctx.inputs.debtRatePct,
+    ctx.inputs.interestRatePct,
+    ctx.engineAssumptions?.debtRatePct,
+    ctx.engineAssumptions?.interestRatePct,
+    0.115,
+  ));
+
+const discountRatePctFor = (ctx) =>
+  toPctDecimal(firstNumber(
+    ctx.inputs.discountRatePct,
+    ctx.deal.discount_rate_pct,
+    ctx.engineAssumptions?.discountRatePct,
+    0.16,
+  ));
+
+const gstPctFor = (ctx) =>
+  enginePctDecimal(ctx, ['gstPct', 'gstRatePct', 'gstOnConstructionPct'], indiaGstDefaultForClass(ctx.assetClass));
+
 const HOSPITALITY_DEFAULT_SQFT_PER_KEY = 550;
 
 const hospitalityKeys = (ctx) =>
@@ -449,39 +635,20 @@ const getCoreInputSnapshot = (ctx) => {
     dealStructureLabel,
     exitStrategyType: resolveExitStrategyType(ctx),
     effectiveDate: ctx.effectiveDate,
-    saleableAreaSqft: firstNumber(
-      ctx.property.saleable_area_sqft,
-      ctx.deal.saleable_area_sqft,
-      ctx.inputs.saleableAreaSqft,
-      ctx.inputs.leasableAreaSqft,
-      ctx.assetClass === 'hospitality' ? hospitalityAreaSqft(ctx) : null,
-      0,
-    ),
-    landAreaSqft: firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0),
-    loadingFactor: positiveOrDefault(firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio), 1.25),
-    sellRatePerSqft: firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft, 0),
-    baseRentPerSqftMonth: firstNumber(
-      ctx.inputs.baseRentPerSqftMonth,
-      ctx.inputs.rentPerSqftMonth,
-      ctx.assetClass === 'hospitality' ? hospitalityBaseRentPerSqftMonth(ctx) : null,
-      0,
-    ),
-    occupancyPct: ctx.assetClass === 'hospitality'
-      ? hospitalityOccupancyPct(ctx)
-      : toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),
-    exitCapRate: toPctDecimal(firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08)),
+    saleableAreaSqft: saleableAreaSqftFor(ctx),
+    landAreaSqft: landAreaSqftFor(ctx),
+    loadingFactor: loadingMultipleFor(ctx),
+    sellRatePerSqft: sellRatePerSqftFor(ctx),
+    baseRentPerSqftMonth: baseRentPerSqftMonthFor(ctx),
+    occupancyPct: occupancyPctFor(ctx),
+    exitCapRate: exitCapRateFor(ctx),
     landCostCr: firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),
-    constructionCostPerSqft: firstNumber(
-      ctx.inputs.constructionCostPerSqft,
-      ctx.deal.construction_cost_per_sqft,
-      ctx.assetClass === 'hospitality' ? hospitalityConstructionCostPerSqft(ctx) : null,
-      0,
-    ),
-    approvalCostCr: firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),
+    constructionCostPerSqft: constructionCostPerSqftFor(ctx),
+    approvalCostCr: approvalCostCrFor(ctx),
     premiumFsiCostCr: firstNumber(ctx.inputs.premiumFSICostCr, ctx.inputs.tdrCostCr, 0),
-    debtLTV: toPctDecimal(firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55)),
-    debtRatePct: toPctDecimal(firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115)),
-    discountRatePct: toPctDecimal(firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16)),
+    debtLTV: debtLtvFor(ctx),
+    debtRatePct: debtRatePctFor(ctx),
+    discountRatePct: discountRatePctFor(ctx),
     projectMonths: ctx.projectMonths,
     totalQuarters: ctx.totalQuarters,
     landownerSharePct,
@@ -498,7 +665,7 @@ const computeCachedCostSnapshot = (ctx) => {
   if (ctx.assetClass === 'hospitality') {
     const keys = Math.max(0, hospitalityKeys(ctx) || 0);
     const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.066)) || 0;
-    const gstPct = toPctDecimal(firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, indiaGstDefaultForClass(ctx.assetClass))) || 0;
+    const gstPct = gstPctFor(ctx) || 0;
     const architectPct = enginePctDecimal(ctx, ['architectPctOfHard', 'architectFeePct'], 0.04) || 0;
     const pmcPct = enginePctDecimal(ctx, ['pmcPctOfHard'], 0.02) || 0;
     const consultantsPct = enginePctDecimal(ctx, ['consultantsPctOfHard'], 0.035) || 0;
@@ -561,7 +728,7 @@ const computeCachedCostSnapshot = (ctx) => {
   const propTaxConstPct = toPctDecimal(firstNumber(ctx.inputs.propTaxConstPct, ctx.inputs.propertyTaxesDuringConstructionPct, 0.02)) || 0;
   const softCostsCr = hardCostCr * softPct + landCostCr * propTaxConstPct;
   const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.066)) || 0;
-  const gstPct = toPctDecimal(firstNumber(ctx.inputs.gstPct, ctx.inputs.gstRatePct, indiaGstDefaultForClass(ctx.assetClass))) || 0;
+  const gstPct = gstPctFor(ctx) || 0;
   const statutoryCr = landCostCr * stampRegPct + hardCostCr * gstPct;
   const totalProjectCostCr = landCostCr + hardCostCr + approvalCostCr + premiumFsiCostCr + softCostsCr + statutoryCr;
 
@@ -591,15 +758,25 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
   }
 
   const modelInputAliases = {
-    SaleableAreaSqft: ['saleableAreaSqft', 'leasableAreaSqft', 'keys', 'hospitalityKeys', 'numberOfKeys'],
+    SaleableAreaSqft: ['saleableAreaSqft', 'leasableAreaSqft', 'plotAreaSqft', 'totalLandSqft', 'saleableLandPct', 'keys', 'hospitalityKeys', 'numberOfKeys'],
+    LandAreaSqft: ['plotAreaSqft', 'totalLandSqft'],
+    LoadingFactor: ['loadingFactor', 'loadingRatio'],
+    FSI: ['fsi'],
     SellRatePerSqft: ['sellingRatePerSqft'],
-    BaseRentPerSqftMonth: ['baseRentPerSqftMonth', 'rentPerSqftMonth', 'adr', 'hospitalityADRBase', 'hospitalityADR'],
-    OccupancyPct: ['occupancyPct', 'stabilizedOccPct', 'stabilisedOccPct'],
-    ConstructionCostPerSqft: ['constructionCostPerSqft', 'constructionCostPerKey', 'costPerKey', 'hardCostPerKey'],
+    BaseRentPerSqftMonth: ['baseRentPerSqftMonth', 'rentPerSqftMonth', 'rentPerSqftPerMonth', 'adr', 'hospitalityADRBase', 'hospitalityADR'],
+    OccupancyPct: ['occupancyPct', 'stabilizedOccPct', 'stabilisedOccPct', 'vacancyPct'],
+    VacancyPct: ['vacancyPct'],
+    RentEscalationPct: ['rentEscalationPct', 'adrGrowthPct'],
+    ExitCapRate: ['exitCapRate', 'exitCapRatePct', 'capRate', 'entryCapRate'],
+    ConstructionCostPerSqft: ['constructionCostPerSqft', 'hardCostPerSqft', 'devCostPerSqft', 'developmentCostPerSqft', 'constructionCostPerKey', 'costPerKey', 'hardCostPerKey'],
     LandCostCr: ['landCostCr'],
-    DebtLTV: ['debtLTV', 'debtPct'],
+    ApprovalCostCr: ['approvalCostCr', 'approvalCostPerSqft'],
+    DebtLTV: ['debtLTV', 'debtCoverage', 'debtPct'],
     DebtRatePct: ['debtRatePct', 'interestRatePct'],
     DiscountRatePct: ['discountRatePct'],
+    ProjectMonths: ['projectDurationMonths', 'projectDurationYears'],
+    GstPct: ['gstPct', 'gstRatePct', 'gstOnConstructionPct'],
+    EscalationPct: ['pricingEscalationPct', 'rentEscalationPct'],
     ExitStrategyType: ['exitStrategyType'],
     DealStructureLabel: ['dealStructureLabel'],
     HospitalityKeys: ['keys', 'hospitalityKeys', 'numberOfKeys'],
@@ -929,11 +1106,13 @@ const buildContext = (exportContext = {}, options = {}) => {
     },
     inputs,
   });
+  const engineAssumptions = resolveEngineAssumptions(assetClass, inputs);
 
   const projectMonths = firstNumber(
     inputs.projectDurationMonths,
     deal.project_duration_months,
     inputs.projectDurationYears ? inputs.projectDurationYears * 12 : null,
+    engineAssumptions.projectDurationMonths,
     36,
   ) || 36;
 
@@ -948,6 +1127,7 @@ const buildContext = (exportContext = {}, options = {}) => {
     inputs.holdPeriodYears,
     inputs.exitYearFromAcq,
     inputs.loanTermYears,
+    engineAssumptions.holdPeriodYears,
     assetClass === 'hospitality' ? 10 : 7,
   ) || (assetClass === 'hospitality' ? 10 : 7);
   const modelMonths = assetClass === 'hospitality'
@@ -956,7 +1136,16 @@ const buildContext = (exportContext = {}, options = {}) => {
       ? Math.max(projectMonths, Math.round(incomeHoldYears * 12))
       : projectMonths;
   const totalQuarters = clamp(Math.ceil(modelMonths / 3), 4, dealFamily === 'income' ? 60 : 32);
-  const engineAssumptions = resolveEngineAssumptions(assetClass, inputs);
+  const effectiveDate = normalizeDateString(
+    options.effectiveDate,
+    inputs.effectiveDate,
+    modelParams.effectiveDate,
+    modelParams.effective_date,
+    deal.effective_date,
+    deal.effectiveDate,
+    property.effective_date,
+    exportContext.effectiveDate,
+  ) || new Date().toISOString().slice(0, 10);
 
   // ── Kernel-computed returns ─────────────────────────────────────────────
   // Per CLAUDE.md: "the deterministic financial kernel is the only source
@@ -998,7 +1187,7 @@ const buildContext = (exportContext = {}, options = {}) => {
     kernelKpis,
     brandName: options.brandName || 'REDIP',
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
-    effectiveDate: options.effectiveDate || new Date().toISOString().slice(0, 10),
+    effectiveDate,
   };
 };
 
@@ -1136,16 +1325,9 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Deal Type',               'DealType',            ctx.deal.deal_type || 'acquisition',          '',      null],
       ['Deal Family',             'DealFamily',          ctx.dealFamily,                              '',      null],
       ['Locality',                'Locality',            ctx.deal.city || ctx.property.city || 'Bengaluru', '', null],
-      ['Land Area',               'LandAreaSqft',        firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0), 'sqft', NUMBER_FORMATS.integer],
+      ['Land Area',               'LandAreaSqft',        landAreaSqftFor(ctx), 'sqft', NUMBER_FORMATS.integer],
       ['Saleable / Leasable Area (Super Built-up)', 'SaleableAreaSqft',
-        firstNumber(
-          ctx.property.saleable_area_sqft,
-          ctx.deal.saleable_area_sqft,
-          ctx.inputs.saleableAreaSqft,
-          ctx.inputs.leasableAreaSqft,
-          ctx.assetClass === 'hospitality' ? hospitalityAreaSqft(ctx) : null,
-          0,
-        ),
+        saleableAreaSqftFor(ctx),
         'sqft', NUMBER_FORMATS.integer],
       // PR-I5: Loading Factor + derived Carpet Area. RERA Act 2016 mandates
       // sale-side marketing in CARPET area (Section 4(2)(h)); construction
@@ -1161,19 +1343,19 @@ const buildInputsSheet = (workbook, ctx) => {
       // (carpet × sale rate, RERA disclosures, etc.) without changing the
       // revenue math.
       ['Loading Factor (Super Built-up ÷ Carpet)', 'LoadingFactor',
-        positiveOrDefault(firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio), 1.25),
+        loadingMultipleFor(ctx),
         'ratio', NUMBER_FORMATS.multiple],
       ['Carpet Area (RERA marketing area)', 'CarpetAreaSqft',
         { formula: '=IFERROR(SaleableAreaSqft/LoadingFactor,0)' },
         'sqft (derived)', NUMBER_FORMATS.integer],
-      ['Floor Space Index (FSI)', 'FSI',                 firstNumber(ctx.property.existing_fsi, ctx.inputs.fsi, 1.5), 'ratio', NUMBER_FORMATS.multiple],
+      ['Floor Space Index (FSI)', 'FSI',                 fsiFor(ctx), 'ratio', NUMBER_FORMATS.multiple],
     ],
   };
 
   const developmentRevenueSection = {
     title: 'Pricing & Revenue (Development)',
     rows: [
-      ['Selling Rate per sqft',   'SellRatePerSqft',     firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft, 0),                'INR/sqft', NUMBER_FORMATS.integer],
+      ['Selling Rate per sqft',   'SellRatePerSqft',     sellRatePerSqftFor(ctx),                'INR/sqft', NUMBER_FORMATS.integer],
       ['Pricing Escalation',      'EscalationPct',       toPctDecimal(firstNumber(ctx.inputs.pricingEscalationPct, ctx.inputs.rentEscalationPct, 0)),                 '% / year', NUMBER_FORMATS.percent],
       ['Sales Velocity',          'SalesVelocityPct',    toPctDecimal(firstNumber(ctx.inputs.salesVelocityPct, ctx.inputs.absorptionPct, 0.20)),                     '% / quarter', NUMBER_FORMATS.percent],
       ['Customer Collection',     'CollectionPct',       toPctDecimal(firstNumber(ctx.inputs.customerCollectionPct, 0.85)),                                          '% of sale', NUMBER_FORMATS.percent],
@@ -1184,24 +1366,17 @@ const buildInputsSheet = (workbook, ctx) => {
     title: 'Operating Revenue Inputs (Income Asset)',
     rows: [
       ['Base Rent / sqft / month','BaseRentPerSqftMonth',
-        firstNumber(
-          ctx.inputs.baseRentPerSqftMonth,
-          ctx.inputs.rentPerSqftMonth,
-          ctx.assetClass === 'hospitality' ? hospitalityBaseRentPerSqftMonth(ctx) : null,
-          0,
-        ),
+        baseRentPerSqftMonthFor(ctx),
         'INR/sqft/mo', NUMBER_FORMATS.integer],
       ['Rent Escalation',         'RentEscalationPct',
         ctx.assetClass === 'hospitality'
           ? enginePctDecimal(ctx, ['adrGrowthPct', 'rentEscalationPct'], 0.05)
-          : toPctDecimal(firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05)),
+          : enginePctDecimal(ctx, ['rentEscalationPct', 'pricingEscalationPct'], 5),
         '% / year', NUMBER_FORMATS.percent],
       ['Stabilised Occupancy',    'OccupancyPct',
-        ctx.assetClass === 'hospitality'
-          ? hospitalityOccupancyPct(ctx)
-          : toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),
+        occupancyPctFor(ctx),
         '% of leasable', NUMBER_FORMATS.percent],
-      ['Vacancy & Credit Loss',   'VacancyPct',          toPctDecimal(firstNumber(ctx.inputs.vacancyPct, 0.05)),                                                     '% of PGI', NUMBER_FORMATS.percent],
+      ['Vacancy & Credit Loss',   'VacancyPct',          vacancyPctFor(ctx),                                                     '% of PGI', NUMBER_FORMATS.percent],
       ['Other Income / sqft / yr','OtherIncomePerSqft',  firstNumber(ctx.inputs.otherIncomePerSqft, 0),                                                'INR/sqft/yr', NUMBER_FORMATS.integer],
       ['Lease-up Period',         'LeaseUpQuarters',     firstNumber(ctx.inputs.leaseUpQuarters, 4),                                                   'quarters', NUMBER_FORMATS.integer],
     ],
@@ -1253,7 +1428,7 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Leasing Commission',       'LeasingCommissionPct', toPctDecimal(firstNumber(ctx.inputs.leasingCommissionPct, ctx.inputs.brokeragePct, 0.02)),     '% of year-1 rent', NUMBER_FORMATS.percent],
       ['Tenant Downtime',          'TenantDowntimeMonths', firstNumber(ctx.inputs.tenantDowntimeMonths, ctx.inputs.downtimeMonths, 3),                   'months / rollover', NUMBER_FORMATS.integer],
       ['TI / LC (Tenant Improv)', 'TILCAllowanceCr',     firstNumber(ctx.inputs.tiLcAllowanceCr, ctx.inputs.tenantImprovementsCr, 0),                  'INR Cr (one-time)', NUMBER_FORMATS.currency],
-      ['Exit Cap Rate',           'ExitCapRate',         toPctDecimal(firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08)),       '% / year', NUMBER_FORMATS.percent],
+      ['Exit Cap Rate',           'ExitCapRate',         exitCapRateFor(ctx),       '% / year', NUMBER_FORMATS.percent],
       ['Selling Cost on Exit',    'SellingCostPct',      toPctDecimal(firstNumber(ctx.inputs.sellingCostPct, 0.02)),                                                 '% of sale', NUMBER_FORMATS.percent],
     ],
   };
@@ -1263,17 +1438,9 @@ const buildInputsSheet = (workbook, ctx) => {
     rows: [
       ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, ctx.engineAssumptions?.landCostCr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
       ['Construction Cost / sqft','ConstructionCostPerSqft',
-        firstNumber(
-          ctx.inputs.constructionCostPerSqft,
-          ctx.inputs.hardCostPerSqft,
-          ctx.deal.construction_cost_per_sqft,
-          ctx.assetClass === 'hospitality' ? hospitalityConstructionCostPerSqft(ctx) : null,
-          ctx.engineAssumptions?.constructionCostPerSqft,
-          ctx.engineAssumptions?.hardCostPerSqft,
-          0,
-        ),
+        constructionCostPerSqftFor(ctx),
         'INR/sqft', NUMBER_FORMATS.integer],
-      ['Approval & Fees',         'ApprovalCostCr',      firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),                           'INR Cr', NUMBER_FORMATS.currency],
+      ['Approval & Fees',         'ApprovalCostCr',      approvalCostCrFor(ctx),                           'INR Cr', NUMBER_FORMATS.currency],
       // PR-I9: Premium FSI / TDR cost line. Bengaluru operators buy
       // premium FSI from BBMP/BDA when their base FSI is insufficient
       // (typically ₹1-5 Cr/acre depending on zone). Mumbai operators
@@ -1339,11 +1506,7 @@ const buildInputsSheet = (workbook, ctx) => {
         resolvedStampRegPct,
         '% of land cost', NUMBER_FORMATS.percent],
       ['GST on Construction (Net of ITC)', 'GstPct',
-        toPctDecimal(firstNumber(
-          ctx.inputs.gstPct,
-          ctx.inputs.gstRatePct,
-          indiaGstDefaultForClass(ctx.assetClass),
-        )),
+        gstPctFor(ctx),
         '% of hard cost', NUMBER_FORMATS.percent],
     ],
   };
@@ -1475,11 +1638,11 @@ const buildInputsSheet = (workbook, ctx) => {
   const capitalSection = {
     title: 'Capital Structure & Returns',
     rows: [
-      ['Debt %',                  'DebtLTV',             toPctDecimal(firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55)),                                      '% of cost', NUMBER_FORMATS.percent],
-      ['Interest Rate',           'DebtRatePct',         toPctDecimal(firstNumber(ctx.inputs.debtRatePct, ctx.inputs.interestRatePct, 0.115)),                          '% / year', NUMBER_FORMATS.percent],
+      ['Debt %',                  'DebtLTV',             debtLtvFor(ctx),                                      '% of cost', NUMBER_FORMATS.percent],
+      ['Interest Rate',           'DebtRatePct',         debtRatePctFor(ctx),                          '% / year', NUMBER_FORMATS.percent],
       ['Loan Term',               'LoanTermYears',       firstNumber(ctx.inputs.loanTermYears, 7),                                                       'years', NUMBER_FORMATS.integer],
       ['Moratorium',              'MoratoriumMonths',    firstNumber(ctx.inputs.moratoriumMonths, 0),                                                    'months', NUMBER_FORMATS.integer],
-      ['Discount Rate',           'DiscountRatePct',     toPctDecimal(firstNumber(ctx.inputs.discountRatePct, ctx.deal.discount_rate_pct, 0.16)),                      '% / year', NUMBER_FORMATS.percent],
+      ['Discount Rate',           'DiscountRatePct',     discountRatePctFor(ctx),                      '% / year', NUMBER_FORMATS.percent],
       ['Developer Margin Target', 'DeveloperMarginPct',  toPctDecimal(firstNumber(ctx.inputs.developerMarginPct, ctx.deal.developer_margin_pct, 0.20)),                 '%', NUMBER_FORMATS.percent],
       ['JV — Developer Share',    'JVDevPct',            toPctDecimal(firstNumber(ctx.deal.jv_split_developer_pct, ctx.inputs.jvDevPct, 0.50)),                          '% of profit', NUMBER_FORMATS.percent],
       ['JV — Landowner Share',    'JVLandPct',           toPctDecimal(firstNumber(ctx.deal.jv_split_landowner_pct, ctx.inputs.jvLandPct, 0.50)),                         '% of profit', NUMBER_FORMATS.percent],
