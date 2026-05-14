@@ -2773,3 +2773,24 @@ Made REDIP XLSX exports open as editable workbooks and reduced the number of wor
 ### What's left to do
 Wait for PR #305 CI, then merge and deploy once checks pass.
 
+
+## 2026-05-14 - Debt phases and investor waterfall modeling
+
+### What was worked on
+Upgraded the XLSX export so the debt schedule and sponsor/LP waterfall model the remaining investor-grade pieces. The workbook now has construction-to-permanent debt assumptions, construction draws, capitalized construction interest, conversion/refi timing, permanent-loan moratorium timing, and a quarterly LP/GP waterfall with preferred return, return of capital, sponsor catch-up, and hurdle-ladder promote splits.
+
+### Plain-English recap
+- Excel exports now show construction debt and permanent debt as separate financing stages.
+- The waterfall now distributes cash across quarterly dates instead of treating the deal as one final payout.
+- LP preferred return, LP capital return, sponsor catch-up, and higher promote tiers are now linked formulas.
+- This matters because the workbook is more credible for investor review and easier to audit.
+
+### PRs opened / merged
+- PR #306 - `fix(exports): model debt phases and waterfall tiers` - opened from `codex/debt-waterfall-modeling-upgrade`.
+
+### Validation
+- XLSX v2 focused suite: 150 tests passed.
+
+### What's left to do
+Wait for PR #306 CI, then merge and deploy once checks pass.
+
