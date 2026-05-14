@@ -3209,6 +3209,7 @@ const buildSourcesUsesSheet = (workbook, ctx) => {
 const buildMonthlyCashFlowSheet = (workbook, ctx) => {
   const months = getWorkbookModelMonths(ctx);
   const totalCol = excelCol(months + 2);
+  const lastMonthCol = excelCol(months + 1);
   const sheet = workbook.addWorksheet(SHEETS.monthlyCashFlow, {
     views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
   });
@@ -3241,13 +3242,13 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
   const devRows = [
     { label: 'Construction S-curve raw weight', row: 5, format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ConstructionLagQ*3,0,MAX(0.01,SIN(PI()*(${m}-ConstructionLagQ*3)/MAX(ProjectMonths-ConstructionLagQ*3,1))))`, total: 'blank' },
     { label: 'Land + stamp / registration', row: 6, format: NUMBER_FORMATS.currency, formula: (m) => m === 1 ? '=LandCostCr*(1+StampRegPct)' : '=0' },
-    { label: 'Construction draw', row: 7, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR((ConstructionCostPerSqft*SaleableAreaSqft/10000000)*${col}5/SUM($B$5:$${totalCol}$5),0)` },
+    { label: 'Construction draw', row: 7, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR((ConstructionCostPerSqft*SaleableAreaSqft/10000000)*${col}5/SUM($B$5:$${lastMonthCol}$5),0)` },
     { label: 'Soft + approvals + premium draw', row: 8, format: NUMBER_FORMATS.currency, formula: () => `=(${`'${SHEETS.calculations}'!$B$24`}+ApprovalCostCr+PremiumFSICostCr)/${months}` },
-    { label: 'GST draw', row: 9, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR((ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct*${col}5/SUM($B$5:$${totalCol}$5),0)` },
+    { label: 'GST draw', row: 9, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR((ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct*${col}5/SUM($B$5:$${lastMonthCol}$5),0)` },
     { label: 'Total development uses', row: 10, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}6+${col}7+${col}8+${col}9`, bold: true },
     { label: 'Monthly sales absorption', row: 11, format: NUMBER_FORMATS.percent, formula: (m, col, prevCol) => m === 1 ? '=IF(1<=SalesLagQ*3,0,MIN(SalesVelocityPct/3,1))' : `=IF(${m}<=SalesLagQ*3,0,MAX(0,MIN(SalesVelocityPct/3,1-SUM($B$11:${prevCol}$11))))`, total: 'final' },
     { label: 'Gross sales booked', row: 12, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*SellRatePerSqft*${col}11*(1+EscalationPct)^(${m}/12)/10000000` },
-    { label: 'Customer collection', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR(SUM($B$12:$${totalCol}$12)*CollectionPct*${col}7/SUM($B$7:$${totalCol}$7),0)` },
+    { label: 'Customer collection', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR(SUM($B$12:$${lastMonthCol}$12)*CollectionPct*${col}7/SUM($B$7:$${lastMonthCol}$7),0)` },
     { label: 'To RERA escrow', row: 14, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}13*RERAEscrowPct` },
     { label: 'Escrow drawdown', row: 15, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=MIN(${col}14,${col}7)` : `=MIN(${prevCol}16+${col}14,${col}7)` },
     { label: 'Escrow balance', row: 16, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}14-${col}15` : `=${prevCol}16+${col}14-${col}15`, total: 'final' },
@@ -3309,9 +3310,9 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
     if (rowSpec.total === 'blank') {
       totalCell.value = '';
     } else if (rowSpec.total === 'final') {
-      totalCell.value = { formula: `=${totalCol}${r}` };
+      totalCell.value = { formula: `=${lastMonthCol}${r}` };
     } else {
-      totalCell.value = { formula: `=SUM($B$${r}:$${totalCol}$${r})` };
+      totalCell.value = { formula: `=SUM($B$${r}:$${lastMonthCol}$${r})` };
     }
     styleOutputCell(totalCell, rowSpec.format);
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
@@ -3323,6 +3324,7 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
 const buildConstructionDrawdownSheet = (workbook, ctx) => {
   const months = Math.min(getWorkbookModelMonths(ctx), Math.max(12, ctx.projectMonths || 36));
   const totalCol = excelCol(months + 2);
+  const lastMonthCol = excelCol(months + 1);
   const sheet = workbook.addWorksheet(SHEETS.constructionDrawdown, {
     views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
   });
@@ -3340,7 +3342,7 @@ const buildConstructionDrawdownSheet = (workbook, ctx) => {
 
   const rows = [
     { row: 5, label: 'Raw S-curve weight', format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ConstructionLagQ*3,0,MAX(0.01,SIN(PI()*(${m}-ConstructionLagQ*3)/MAX(ProjectMonths-ConstructionLagQ*3,1))))`, total: 'blank' },
-    { row: 6, label: 'Normalised draw %', format: NUMBER_FORMATS.percent, formula: (m, col) => `=IFERROR(${col}5/SUM($B$5:$${totalCol}$5),0)` },
+    { row: 6, label: 'Normalised draw %', format: NUMBER_FORMATS.percent, formula: (m, col) => `=IFERROR(${col}5/SUM($B$5:$${lastMonthCol}$5),0)` },
     { row: 7, label: 'Hard-cost draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*${col}6` },
     { row: 8, label: 'Soft/statutory draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=(${`'${SHEETS.calculations}'!$B$24`}+${`'${SHEETS.calculations}'!$B$27`}+ApprovalCostCr+PremiumFSICostCr)*${col}6` },
     { row: 9, label: 'Total monthly draw need', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7+${col}8`, bold: true },
@@ -3364,8 +3366,8 @@ const buildConstructionDrawdownSheet = (workbook, ctx) => {
     }
     const totalCell = sheet.getCell(rowSpec.row, months + 2);
     if (rowSpec.total === 'blank') totalCell.value = '';
-    else if (rowSpec.total === 'final') totalCell.value = { formula: `=${totalCol}${rowSpec.row}` };
-    else totalCell.value = { formula: `=SUM($B$${rowSpec.row}:$${totalCol}$${rowSpec.row})` };
+    else if (rowSpec.total === 'final') totalCell.value = { formula: `=${lastMonthCol}${rowSpec.row}` };
+    else totalCell.value = { formula: `=SUM($B$${rowSpec.row}:$${lastMonthCol}$${rowSpec.row})` };
     styleOutputCell(totalCell, rowSpec.format);
   });
   return sheet;

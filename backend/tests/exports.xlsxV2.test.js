@@ -6,6 +6,17 @@ const { buildDealWorkbookV2, __internal } = require('../src/services/exports/xls
 
 const normalizeFormula = (formula) => String(formula || '').replace(/^=/, '');
 
+const excelCol = (n) => {
+  let s = '';
+  let v = n;
+  while (v > 0) {
+    const r = (v - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    v = Math.floor((v - r) / 26);
+  }
+  return s;
+};
+
 const findValueCellByLabel = (sheet, expectedLabel) => {
   let found = null;
   sheet.eachRow((row) => {
@@ -459,6 +470,34 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const warehouseMonthly = warehouseWb.getWorksheet('Monthly Cash Flow');
       expect(warehouseMonthly.getCell('B10').value.formula).toContain('RecoverableExpensePct');
       expect(warehouseMonthly.getCell('B10').value.formula).not.toContain('RetailCAMRecoveryPct');
+    });
+
+    test('Monthly Cash Flow total column excludes itself from formulas', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'hospitality';
+      ctx.property.property_type = 'hospitality';
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const monthly = wb.getWorksheet('Monthly Cash Flow');
+
+      let totalColIdx = null;
+      monthly.getRow(4).eachCell((cell, colNumber) => {
+        if (String(cell.value || '') === 'Total') totalColIdx = colNumber;
+      });
+      expect(totalColIdx).toBeTruthy();
+      const totalCol = excelCol(totalColIdx);
+      const lastMonthCol = excelCol(totalColIdx - 1);
+
+      expect(monthly.getCell(`${totalCol}5`).value.formula).toBeFormula(`=SUM($B$5:$${lastMonthCol}$5)`);
+      expect(monthly.getCell(`${totalCol}27`).value.formula).toBeFormula(`=${lastMonthCol}27`);
+      for (let row = 5; row <= 27; row += 1) {
+        const formula = monthly.getCell(`${totalCol}${row}`).value?.formula;
+        if (formula) {
+          expect(formula).not.toContain(`$${totalCol}$`);
+          expect(formula).not.toBeFormula(`=${totalCol}${row}`);
+        }
+      }
     });
 
     test('Sources & Uses content is merged into Dashboard instead of a standalone sheet', async () => {
