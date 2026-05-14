@@ -1291,6 +1291,11 @@ const buildInputsSheet = (workbook, ctx) => {
     { width: 18 }, // B: Value
     { width: 18 }, // C: Unit
     { width: 24 }, // D: Source
+    { width: 42 }, // E: QA/source finding
+    { width: 24 }, // F: QA/source action or link
+    { width: 22 }, // G: QA/source freshness
+    { width: 28 }, // H: QA/source confidence
+    { width: 48 }, // I: QA/source notes
   ];
 
   // Cover band
@@ -2335,6 +2340,7 @@ const buildInputsSheet = (workbook, ctx) => {
   sheet.getCell(`A${row}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getCell(`A${row}`).protection = { locked: true };
+  appendQaSourcesToSheet(sheet, ctx, row + 3);
 
   return { sheet, definedNames };
 };
@@ -2363,6 +2369,132 @@ const styleQaBodyRows = (sheet, startRow, rowCount, columnCount) => {
     }
     sheet.getRow(r).height = 32;
   }
+};
+
+const appendQaSourcesToSheet = (sheet, ctx, startRow) => {
+  sheet.mergeCells(startRow, 1, startRow, 9);
+  sheet.getCell(startRow, 1).value = `${ctx.exportQa.status} | Export QA & Source Register | ${ctx.exportQa.blockers.length} blockers | ${ctx.exportQa.issues.length - ctx.exportQa.blockers.length} warnings/info`;
+  styleSectionTitle(sheet.getCell(startRow, 1));
+  sheet.getRow(startRow).height = 26;
+
+  const qaHeaderRow = startRow + 2;
+  const qaRows = ctx.exportQa.issues.length
+    ? ctx.exportQa.issues.map((issue) => [
+      issue.severity.toUpperCase(),
+      issue.check,
+      issue.field,
+      issue.message,
+      issue.action,
+      issue.scope,
+    ])
+    : [['PASS', 'Workbook readiness', 'All', 'No blocking QA issues detected.', 'Continue normal review.', 'all']];
+
+  sheet.addTable({
+    name: 'ExportQaChecks',
+    ref: `A${qaHeaderRow}`,
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: 'TableStyleMedium2',
+      showRowStripes: true,
+    },
+    columns: [
+      { name: 'Severity' },
+      { name: 'Check' },
+      { name: 'Field' },
+      { name: 'Finding' },
+      { name: 'Action' },
+      { name: 'Scope' },
+    ],
+    rows: qaRows,
+  });
+  styleTableHeaderRow(sheet, qaHeaderRow, 6);
+  styleQaBodyRows(sheet, qaHeaderRow + 1, qaRows.length, 6);
+
+  qaRows.forEach((row, idx) => {
+    const cell = sheet.getCell(qaHeaderRow + 1 + idx, 1);
+    const severity = String(row[0]);
+    cell.font = {
+      name: FONT,
+      size: 9,
+      bold: true,
+      color: {
+        argb: severity === 'BLOCKER'
+          ? palette.xlsx('dataNegative')
+          : severity === 'WARN'
+            ? palette.xlsx('dataWarning')
+            : palette.xlsx('dataPositive'),
+      },
+    };
+  });
+
+  const sourceTitleRow = qaHeaderRow + qaRows.length + 3;
+  sheet.mergeCells(sourceTitleRow, 1, sourceTitleRow, 9);
+  sheet.getCell(sourceTitleRow, 1).value = 'Source Register';
+  styleSectionTitle(sheet.getCell(sourceTitleRow, 1));
+  sheet.getRow(sourceTitleRow).height = 22;
+
+  const sourceHeaderRow = sourceTitleRow + 2;
+  const sourceRows = ctx.exportQa.sourceRegister.length
+    ? ctx.exportQa.sourceRegister.map((row) => [
+      row.field,
+      row.label,
+      row.value === null || row.value === undefined || row.value === '' ? 'Missing' : row.value,
+      row.sourceType,
+      row.sourceName,
+      row.url || 'No link available',
+      row.freshness || 'No verified freshness date',
+      row.confidence || 'unknown',
+      row.notes || '',
+    ])
+    : [['all', 'Source register', 'No tracked source fields', 'system', 'REDIP export', 'No link available', 'n/a', 'unknown', 'No source rows were emitted for this workbook.']];
+
+  sheet.addTable({
+    name: 'ExportSourceRegister',
+    ref: `A${sourceHeaderRow}`,
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: 'TableStyleMedium9',
+      showRowStripes: true,
+    },
+    columns: [
+      { name: 'Field' },
+      { name: 'Label' },
+      { name: 'Current Value' },
+      { name: 'Source Type' },
+      { name: 'Source Name' },
+      { name: 'Source Link' },
+      { name: 'Freshness' },
+      { name: 'Confidence' },
+      { name: 'Notes' },
+    ],
+    rows: sourceRows,
+  });
+  styleTableHeaderRow(sheet, sourceHeaderRow, 9);
+  styleQaBodyRows(sheet, sourceHeaderRow + 1, sourceRows.length, 9);
+
+  ctx.exportQa.sourceRegister.forEach((row, idx) => {
+    const excelRow = sourceHeaderRow + 1 + idx;
+    const linkCell = sheet.getCell(excelRow, 6);
+    if (row.url) {
+      linkCell.value = { text: row.url, hyperlink: row.url };
+      linkCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('accent') }, underline: true };
+    }
+    sheet.getCell(excelRow, 8).note = [
+      `Provenance: ${row.provenance}`,
+      `Freshness: ${row.freshness}`,
+      row.notes,
+    ].filter(Boolean).join('\n');
+  });
+
+  const disclosureRow = sourceHeaderRow + sourceRows.length + 2;
+  sheet.mergeCells(disclosureRow, 1, disclosureRow, 9);
+  sheet.getCell(disclosureRow, 1).value =
+    'AI-assisted narratives and market context require human review. No legal, title, RERA, zoning, approval, comp, or market claim should be quoted externally without source-document verification.';
+  sheet.getCell(disclosureRow, 1).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(disclosureRow, 1).alignment = { wrapText: true, vertical: 'top' };
+  sheet.getRow(disclosureRow).height = 28;
 };
 
 const buildQaSourcesSheet = (workbook, ctx) => {
@@ -5556,6 +5688,115 @@ const buildAmortizationSheet = (workbook, ctx) => {
   return sheet;
 };
 
+const appendWaterfallToDebtSheet = (workbook, ctx) => {
+  const sheet = workbook.getWorksheet(SHEETS.debtAndAmort);
+  if (!sheet) throw new Error('Debt Sizing & Amortization sheet must exist before appending waterfall');
+
+  if (sheet.getColumn(4).width == null) sheet.getColumn(4).width = 18;
+  if (sheet.getColumn(5).width == null) sheet.getColumn(5).width = 18;
+  if (sheet.getColumn(6).width == null) sheet.getColumn(6).width = 42;
+
+  const startRow = 126;
+  sheet.mergeCells(`A${startRow}:F${startRow}`);
+  sheet.getCell(`A${startRow}`).value = 'Sponsor / LP Waterfall';
+  styleSectionTitle(sheet.getCell(`A${startRow}`));
+  sheet.getRow(startRow).height = 24;
+
+  sheet.mergeCells(`A${startRow + 1}:F${startRow + 1}`);
+  sheet.getCell(`A${startRow + 1}`).value =
+    'Simple single-exit promote model linked to the debt sizing result above. Edit waterfall assumptions on Inputs & Assumptions.';
+  sheet.getCell(`A${startRow + 1}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${startRow + 1}`).alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(startRow + 1).height = 22;
+
+  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr+PremiumFSICostCr)';
+  const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
+  const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
+  const totalCost = ctx.assetClass === 'hospitality'
+    ? 'TotalProjectCostCr'
+    : `${hardCost}+${softCost}+${indiaLevies}`;
+
+  const sections = [
+    {
+      title: 'Capital Stack',
+      start: startRow + 3,
+      rows: [
+        ['Total Project Cost (INR Cr)', `=${totalCost}`, NUMBER_FORMATS.currency, ctx.assetClass === 'hospitality' ? 'Hotel budget total' : 'Hard + soft + statutory levies'],
+        ['Lender-Approved Loan (INR Cr)', '=$B$28', NUMBER_FORMATS.currency, 'MIN of lender sizing tests above'],
+        ['Total Equity (INR Cr)', `=B${startRow + 4}-B${startRow + 5}`, NUMBER_FORMATS.currency, 'Project cost less approved loan'],
+        ['LP Equity (INR Cr)', `=B${startRow + 6}*LPEquityPct`, NUMBER_FORMATS.currency, 'LP share of total equity'],
+        ['GP / Sponsor Equity (INR Cr)', `=B${startRow + 6}*GPEquityPct`, NUMBER_FORMATS.currency, 'Sponsor share of total equity'],
+      ],
+    },
+    {
+      title: 'Proceeds & Preferred Return',
+      start: startRow + 11,
+      rows: [
+        ['Project Hold Period (years)', '=LoanTermYears', NUMBER_FORMATS.integer, 'Pref compounding period'],
+        ['Total Cash Available to Equity', ctx.dealFamily === 'income'
+          ? `=MAX(0,${totalCost}+'${SHEETS.cashFlowEngine}'!N18*4*LoanTermYears-B${startRow + 5})`
+          : `=MAX(0,(SaleableAreaSqft*SellRatePerSqft/10000000)-${totalCost})+B${startRow + 5}`,
+        NUMBER_FORMATS.currency, 'Single-exit equity proceeds after debt'],
+        ['LP Pref Accrual (compounded)', `=B${startRow + 7}*((1+PrefReturnRate)^B${startRow + 12}-1)`, NUMBER_FORMATS.currency, 'LP equity x compounded pref'],
+        ['Tier 1 LP Distribution', `=MIN(B${startRow + 13},B${startRow + 7}+B${startRow + 14})`, NUMBER_FORMATS.currency, 'LP capital plus pref, capped at proceeds'],
+        ['Residual after Tier 1 (INR Cr)', `=MAX(0,B${startRow + 13}-B${startRow + 15})`, NUMBER_FORMATS.currency, 'Cash available for promote split'],
+      ],
+    },
+    {
+      title: 'Promote Split',
+      start: startRow + 19,
+      rows: [
+        ['Promote - LP Allocation', `=B${startRow + 16}*PromoteLPPct`, NUMBER_FORMATS.currency, 'Residual x LP promote share'],
+        ['Promote - GP Allocation', `=B${startRow + 16}*PromoteGPPct`, NUMBER_FORMATS.currency, 'Residual x GP promote share'],
+        ['GP Return of Capital', `=MIN(B${startRow + 8},B${startRow + 21})`, NUMBER_FORMATS.currency, 'GP recovers invested capital from GP allocation'],
+        ['GP Net Promote (after RoC)', `=B${startRow + 21}-B${startRow + 22}`, NUMBER_FORMATS.currency, 'GP carry above capital recovery'],
+      ],
+    },
+    {
+      title: 'Final Investor Returns',
+      start: startRow + 26,
+      rows: [
+        ['LP Total Distribution (INR Cr)', `=B${startRow + 15}+B${startRow + 20}`, NUMBER_FORMATS.currency, 'Tier 1 distribution plus LP promote allocation'],
+        ['GP Total Distribution (INR Cr)', `=B${startRow + 21}`, NUMBER_FORMATS.currency, 'GP allocation including capital and promote'],
+        ['LP Equity Multiple', `=IFERROR(B${startRow + 27}/B${startRow + 7},0)`, NUMBER_FORMATS.multiple, 'Total LP returned / LP capital invested'],
+        ['GP Equity Multiple', `=IFERROR(B${startRow + 28}/B${startRow + 8},0)`, NUMBER_FORMATS.multiple, 'Total GP returned / GP capital invested'],
+        ['LP IRR (annualised, approx)', `=IFERROR((B${startRow + 29})^(1/B${startRow + 12})-1,0)`, NUMBER_FORMATS.percent, 'Single-exit approximation'],
+        ['GP IRR (annualised, approx)', `=IFERROR((B${startRow + 30})^(1/B${startRow + 12})-1,0)`, NUMBER_FORMATS.percent, 'Single-exit approximation'],
+      ],
+    },
+  ];
+
+  sections.forEach((section) => {
+    sheet.mergeCells(`A${section.start}:F${section.start}`);
+    sheet.getCell(`A${section.start}`).value = section.title;
+    styleSectionTitle(sheet.getCell(`A${section.start}`));
+    sheet.getRow(section.start).height = 22;
+    section.rows.forEach(([label, formula, format, note], idx) => {
+      const row = section.start + 1 + idx;
+      sheet.getCell(`A${row}`).value = label;
+      styleLabelCell(sheet.getCell(`A${row}`));
+      const cell = sheet.getCell(`B${row}`);
+      cell.value = { formula };
+      styleOutputCell(cell, format);
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      sheet.mergeCells(`C${row}:F${row}`);
+      sheet.getCell(`C${row}`).value = note;
+      sheet.getCell(`C${row}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`C${row}`).alignment = { wrapText: true, vertical: 'top' };
+    });
+  });
+
+  const disclosureRow = startRow + 35;
+  sheet.mergeCells(`A${disclosureRow}:F${disclosureRow}`);
+  sheet.getCell(`A${disclosureRow}`).value =
+    'Waterfall is a single-exit approximation. Use the quarterly cash flow rows for investor-grade hurdle-laddering if the transaction has catch-up tiers or multiple distribution dates.';
+  sheet.getCell(`A${disclosureRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${disclosureRow}`).alignment = { vertical: 'top', wrapText: true };
+  sheet.getRow(disclosureRow).height = 32;
+
+  return sheet;
+};
+
 /**
  * Sponsor / LP Waterfall sheet (PR-D) — multi-tier pour-over of project
  * equity proceeds between Sponsor (GP) and Limited Partners (LP),
@@ -6171,25 +6412,7 @@ const buildCalculationsSheet = (workbook, ctx) => {
   sheet.getCell(`A${row + 1}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${row + 1}`).protection = { locked: true };
 
-  // Lock everything; power users who want to inspect/edit can unhide and
-  // unprotect the sheet after download.
   return sheet;
-};
-
-const applyWorkbookProtection = (workbook) => {
-  workbook.worksheets.forEach((sheet) => {
-    sheet.protect('', {
-      selectLockedCells: true,
-      selectUnlockedCells: true,
-      formatCells: true,
-      formatColumns: true,
-      formatRows: true,
-      sort: true,
-      autoFilter: true,
-      insertRows: false,
-      deleteRows: false,
-    });
-  });
 };
 
 /**
@@ -6223,7 +6446,6 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // workbook.worksheets array reorder below — ExcelJS's `addWorksheet`
   // appends; reordering requires direct array manipulation.
   buildDashboardSheet(workbook, ctx);
-  buildQaSourcesSheet(workbook, ctx);
   const { definedNames } = buildInputsSheet(workbook, ctx);
   if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
 
@@ -6233,16 +6455,11 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // (section divider + header).
   const { lastRow: phasingLastRow } = buildPhasingSheet(workbook, ctx);
   buildCashFlowSheet(workbook, ctx, { phasingLastRow });
-  buildSourcesUsesSheet(workbook, ctx);
   buildMonthlyCashFlowSheet(workbook, ctx);
-  buildLeaseRollSheet(workbook, ctx);
-  buildConstructionDrawdownSheet(workbook, ctx);
-  buildSensitivitySheet(workbook, ctx);
 
   buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);
-  buildWaterfallSheet(workbook, ctx);
-  buildUnitMixSheet(workbook, ctx);
+  appendWaterfallToDebtSheet(workbook, ctx);
   buildCalculationsSheet(workbook, ctx); // hidden audit trail
 
   // Register defined names AFTER all sheets exist so the references resolve.
@@ -6255,8 +6472,6 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
       : `'${SHEETS.calculations}'!$B$28`,
     'TotalProjectCostCr',
   );
-  applyWorkbookProtection(workbook);
-
   return workbook;
 };
 
@@ -6415,8 +6630,12 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     add('xl/workbook.xml', 'Workbook definition is missing.', 'Regenerate the workbook.');
   } else {
     const workbookXml = await workbookXmlFile.async('string');
-    if (!workbookXml.includes('Export QA &amp; Sources') && !workbookXml.includes('Export QA & Sources')) {
-      add(SHEETS.qaSources, 'Export QA & Sources sheet is missing from the workbook.', 'Regenerate the workbook with the QA sheet enabled.');
+    const sheetCount = (workbookXml.match(/<sheet\b/g) || []).length;
+    if (sheetCount > 7) {
+      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; maximum allowed is 7.`, 'Remove or merge non-essential worksheets before download.');
+    }
+    if (workbookXml.includes('Export QA &amp; Sources') || workbookXml.includes('Export QA & Sources')) {
+      add(SHEETS.qaSources, 'Export QA & Sources must be merged into Inputs & Assumptions.', 'Remove the standalone QA worksheet before download.');
     }
   }
 
@@ -6433,6 +6652,9 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     }
     if (/(<f(?:\s[^>]*)?>)=/.test(xml)) {
       add(file.name, 'Workbook XML contains formulas with a leading equals sign.', 'Strip leading equals signs from formula XML before download.');
+    }
+    if (xml.includes('<sheetProtection')) {
+      add(file.name, 'Worksheet protection is enabled.', 'Export workbooks must be editable without an unprotect prompt.');
     }
   }));
 

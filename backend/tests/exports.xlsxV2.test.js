@@ -123,7 +123,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook contains the institutional sheet structure with Dashboard first, QA second, Inputs third', async () => {
+    test('produced workbook stays editable and within the 6-7 worksheet structure', async () => {
       // Operator-directed institutional structure:
       //   1. Dashboard (FIRST)
       //   2. Export QA & Sources
@@ -144,26 +144,26 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const names = wb.worksheets.map((ws) => ws.name);
       expect(names).toEqual([
         'Dashboard',
-        'Export QA & Sources',
         'Inputs & Assumptions',
         'Cash Flow Engine',
-        'Sources & Uses',
         'Monthly Cash Flow',
-        'Lease Roll',
-        'Construction Drawdown',
-        'Sensitivity',
         'Debt Sizing & Amortization',
-        'Sponsor LP Waterfall',
-        'Unit Mix',
         'Calculations',
       ]);
+      expect(names.length).toBeLessThanOrEqual(7);
+      expect(names).not.toContain('Export QA & Sources');
       const calc = wb.getWorksheet('Calculations');
       expect(calc).toBeDefined();
       // Hidden by default — power users right-click → Unhide
       expect(calc.state).toBe('hidden');
+      const zip = await JSZip.loadAsync(buffer);
+      const worksheetXml = await Promise.all(
+        zip.file(/^xl\/worksheets\/sheet\d+\.xml$/).map((file) => file.async('string')),
+      );
+      expect(worksheetXml.some((xml) => xml.includes('<sheetProtection'))).toBe(false);
     });
 
-    test('Export QA & Sources sheet carries filterable QA/source tables, hyperlinks, and input comments', async () => {
+    test('Inputs sheet carries filterable QA/source tables, hyperlinks, and input comments', async () => {
       const ctx = minimalContext();
       ctx.deal.id = 42;
       ctx.market = {
@@ -185,20 +185,19 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
 
-      const qa = wb.getWorksheet('Export QA & Sources');
-      expect(qa).toBeDefined();
-      expect(String(qa.getCell('A1').value)).toContain('Export QA & Sources');
+      expect(wb.getWorksheet('Export QA & Sources')).toBeUndefined();
+      const inputs = wb.getWorksheet('Inputs & Assumptions');
+      expect(String(inputs.getCell('A1').value)).toContain('Inputs & Assumptions');
 
       const zip = await JSZip.loadAsync(buffer);
       expect(zip.file(/^xl\/tables\/table\d+\.xml$/).length).toBeGreaterThanOrEqual(2);
 
       let hasHyperlink = false;
-      qa.eachRow((row) => row.eachCell((cell) => {
+      inputs.eachRow((row) => row.eachCell((cell) => {
         if (cell.value && typeof cell.value === 'object' && cell.value.hyperlink) hasHyperlink = true;
       }));
       expect(hasHyperlink).toBe(true);
 
-      const inputs = wb.getWorksheet('Inputs & Assumptions');
       const saleable = findValueCellByLabel(inputs, 'Saleable / Leasable Area (Super Built-up)');
       expect(String(saleable.note || '')).toContain('Source:');
       expect(String(saleable.note || '')).toContain('Provenance:');
@@ -462,19 +461,19 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(warehouseMonthly.getCell('B10').value.formula).not.toContain('RetailCAMRecoveryPct');
     });
 
-    test('Sources & Uses sheet has a dedicated reconciliation gap check', async () => {
+    test('Sources & Uses content is merged into Dashboard instead of a standalone sheet', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const su = wb.getWorksheet('Sources & Uses');
+      const dash = wb.getWorksheet('Dashboard');
 
-      expect(su.getCell('A1').value).toContain('Sources & Uses');
-      expect(su.getCell('A19').value).toBe('Source / use gap');
-      expect(su.getCell('B19').value.formula).toBeFormula('=B9-B18');
-      expect(su.conditionalFormattings.map((cf) => cf.ref)).toContain('B19:B19');
+      expect(wb.getWorksheet('Sources & Uses')).toBeUndefined();
+      expect(dash.getCell('A11').value).toContain('Sources & Uses');
+      expect(dash.getCell('A12').value).toBe('Source: Equity');
+      expect(dash.getCell('A18').value).toBe('Use: Statutory Levies');
     });
 
-    test('Sources & Uses sheet avoids development-only deal structure formulas for income deals', async () => {
+    test('Dashboard Sources & Uses avoids development-only deal structure formulas for income deals', async () => {
       const ctx = minimalContext();
       ctx.deal.asset_class = 'commercial_office';
       ctx.property.property_type = 'commercial_office';
@@ -487,88 +486,28 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const buffer = await buildDealWorkbookV2(ctx);
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const su = wb.getWorksheet('Sources & Uses');
+      const dash = wb.getWorksheet('Dashboard');
 
-      expect(su.getCell('B8').value.formula).toBeFormula('=0');
-      su.eachRow((row) => {
-        row.eachCell((cell) => {
+      for (let r = 12; r <= 18; r += 1) {
+        dash.getRow(r).eachCell((cell) => {
           if (cell.value?.formula) {
             expect(cell.value.formula).not.toContain('DealStructureLabel');
           }
         });
-      });
+      }
     });
 
-    test('Lease Roll sheet carries tenant rent reset, WALE, and expiry concentration', async () => {
-      const ctx = minimalContext();
-      ctx.deal.asset_class = 'retail';
-      ctx.property.property_type = 'retail';
-      ctx.deal.model_params.inputs = {
-        ...ctx.deal.model_params.inputs,
-        baseRentPerSqftMonth: 180,
-        occupancyPct: 0.9,
-        exitCapRate: 0.08,
-      };
-      const buffer = await buildDealWorkbookV2(ctx);
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(buffer);
-      const lease = wb.getWorksheet('Lease Roll');
-
-      expect(lease.getCell('A5').value).toBe('Anchor tenant');
-      expect(lease.getCell('D5').value.formula).toContain('RetailCAMRecoveryPct');
-      expect(lease.getCell('I5').value.formula).toContain('RentEscalationPct');
-      const labels = [];
-      lease.eachRow((row) => labels.push(String(row.getCell(1).value || '')));
-      expect(labels).toContain('WALE (years)');
-      expect(labels).toContain('Expiry concentration <= 3 yrs');
-    });
-
-    test('Lease Roll sheet stays formula-safe for development deals', async () => {
+    test('standalone detail worksheets are removed in favor of the slim model tabs', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const lease = wb.getWorksheet('Lease Roll');
+      const names = wb.worksheets.map((sheet) => sheet.name);
 
-      expect(lease.getCell('A5').value).toBe('Not applicable');
-      expect(lease.getCell('I5').value).toBe(0);
-      lease.eachRow((row) => {
-        row.eachCell((cell) => {
-          if (cell.value?.formula) {
-            expect(cell.value.formula).not.toContain('RentEscalationPct');
-          }
-        });
-      });
-    });
-
-    test('Construction Drawdown sheet models monthly S-curve debt draw and capitalised interest', async () => {
-      const buffer = await buildDealWorkbookV2(minimalContext());
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(buffer);
-      const draw = wb.getWorksheet('Construction Drawdown');
-
-      expect(draw.getCell('A5').value).toBe('Raw S-curve weight');
-      expect(draw.getCell('B5').value.formula).toContain('SIN');
-      expect(draw.getCell('A12').value).toBe('Debt draw');
-      expect(draw.getCell('B13').value.formula).toContain('DebtRatePct/12');
-      expect(draw.getCell('C14').value.formula).toBeFormula('=B14+C12+C13');
-    });
-
-    test('Sensitivity sheet adds the 7x7 two-way table without stress-trial scaffolding', async () => {
-      const buffer = await buildDealWorkbookV2(minimalContext());
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(buffer);
-      const stress = wb.getWorksheet('Sensitivity');
-
-      expect(stress.getCell('A4').value).toContain('2D Sensitivity');
-      expect(stress.getCell('B6').value.formula).toContain('SellRatePerSqft');
-      expect(stress.getCell('H12').value.formula).toContain('TotalProjectCostCr');
-      expect(stress.getCell('A15').value).toBeNull();
-      stress.eachRow((row) => {
-        row.eachCell((cell) => {
-          const text = typeof cell.value === 'string' ? cell.value : cell.value?.formula || '';
-          expect(text).not.toMatch(/Stress|Trial|RAND|PERCENTILE/i);
-        });
-      });
+      expect(names).not.toContain('Lease Roll');
+      expect(names).not.toContain('Construction Drawdown');
+      expect(names).not.toContain('Sensitivity');
+      expect(names).not.toContain('Unit Mix');
+      expect(names).not.toContain('Sponsor LP Waterfall');
     });
 
     test('Dashboard formula cells include cached values for non-Excel viewers where deterministic', async () => {
@@ -654,12 +593,13 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // NAIOP Unit Mix sheet). Worksheet-only (no flow-through to
     // SaleableAreaSqft) — operator updates Inputs manually after
     // planning the mix.
-    test('Unit Mix sheet renders 5 residential unit types for development family', async () => {
+    test('Unit Mix worksheet is omitted for residential development workbooks', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext()); // default = residential_apartments
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const um = wb.getWorksheet('Unit Mix');
-      expect(um).toBeDefined();
+      expect(um).toBeUndefined();
+      return;
 
       // Headers at row 4
       expect(String(um.getCell('A4').value)).toBe('Unit Type');
@@ -682,14 +622,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(String(um.getCell(`A${totalRow}`).value)).toBe('TOTAL');
     });
 
-    test('Unit Mix sheet for hospitality uses ADR × 365 × occupancy revenue formula', async () => {
+    test('Unit Mix worksheet is omitted for hospitality workbooks', async () => {
       const ctx = minimalContext();
       ctx.deal.asset_class = 'hospitality';
       const buffer = await buildDealWorkbookV2(ctx);
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const um = wb.getWorksheet('Unit Mix');
-      expect(um).toBeDefined();
+      expect(um).toBeUndefined();
+      return;
 
       // Headers should be Keys / SF per key / ADR
       expect(String(um.getCell('A4').value)).toBe('Key Type');
@@ -701,14 +642,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(um.getCell('F5').value.formula).toContain('0.65');
     });
 
-    test('Unit Mix sheet for commercial uses monthly rent × 12 revenue formula', async () => {
+    test('Unit Mix worksheet is omitted for commercial workbooks', async () => {
       const ctx = minimalContext();
       ctx.deal.asset_class = 'commercial_office';
       const buffer = await buildDealWorkbookV2(ctx);
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const um = wb.getWorksheet('Unit Mix');
-      expect(um).toBeDefined();
+      expect(um).toBeUndefined();
+      return;
 
       // Header should reference monthly rent
       expect(String(um.getCell('E4').value)).toContain('Rent');
@@ -718,14 +660,15 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(um.getCell('F5').value.formula).toBeFormula('=D5*E5*12/10000000');
     });
 
-    test('Unit Mix sheet renders empty-state for mixed_use / raw_land', async () => {
+    test('Unit Mix worksheet is omitted for mixed-use workbooks', async () => {
       const ctx = minimalContext();
       ctx.deal.asset_class = 'mixed_use';
       const buffer = await buildDealWorkbookV2(ctx);
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const um = wb.getWorksheet('Unit Mix');
-      expect(um).toBeDefined();
+      expect(um).toBeUndefined();
+      return;
 
       // Should NOT have the standard headers — just an empty-state note
       const a4 = um.getCell('A4').value;
@@ -741,44 +684,45 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // equity proceeds (LP pref + return of capital → promote split).
     // Reference templates (NAIOP "Waterfall - IRR Hurdles", RE-540
     // "Waterfall") use exactly this structure.
-    test('Sponsor LP Waterfall sheet computes the 3-tier pour-over', async () => {
+    test('Sponsor LP Waterfall section computes the 3-tier pour-over inside Debt Sizing', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const wf = wb.getWorksheet('Sponsor LP Waterfall');
+      const wf = wb.getWorksheet('Debt Sizing & Amortization');
       expect(wf).toBeDefined();
+      expect(wb.getWorksheet('Sponsor LP Waterfall')).toBeUndefined();
 
       // Capital Stack block (rows 4-9)
-      expect(String(wf.getCell('A4').value)).toContain('Capital Stack');
+      expect(String(wf.getCell('A129').value)).toContain('Capital Stack');
       // Total Equity = Total Cost - Loan
-      expect(wf.getCell('B7').value.formula).toBeFormula('=B5-B6');
+      expect(wf.getCell('B132').value.formula).toBeFormula('=B130-B131');
       // LP Equity = Total × LPEquityPct
-      expect(wf.getCell('B8').value.formula).toBeFormula('=B7*LPEquityPct');
+      expect(wf.getCell('B133').value.formula).toBeFormula('=B132*LPEquityPct');
       // GP Equity = Total × GPEquityPct
-      expect(wf.getCell('B9').value.formula).toBeFormula('=B7*GPEquityPct');
+      expect(wf.getCell('B134').value.formula).toBeFormula('=B132*GPEquityPct');
 
       // Proceeds & Pref block (rows 11-16)
-      expect(String(wf.getCell('A11').value)).toContain('Proceeds');
+      expect(String(wf.getCell('A137').value)).toContain('Proceeds');
       // Pref accrual: LP Equity × ((1+pref)^N - 1)
-      expect(wf.getCell('B14').value.formula).toBeFormula('=B8*((1+PrefReturnRate)^B12-1)');
+      expect(wf.getCell('B140').value.formula).toBeFormula('=B133*((1+PrefReturnRate)^B138-1)');
       // Tier 1 LP distribution = MIN(proceeds, capital + pref)
-      expect(wf.getCell('B15').value.formula).toBeFormula('=MIN(B13,B8+B14)');
+      expect(wf.getCell('B141').value.formula).toBeFormula('=MIN(B139,B133+B140)');
 
       // Promote split block (rows 18-22)
-      expect(String(wf.getCell('A18').value)).toContain('Promote Split');
+      expect(String(wf.getCell('A145').value)).toContain('Promote Split');
       // LP promote = Residual × PromoteLPPct
-      expect(wf.getCell('B19').value.formula).toBeFormula('=B16*PromoteLPPct');
+      expect(wf.getCell('B146').value.formula).toBeFormula('=B142*PromoteLPPct');
       // GP promote = Residual × PromoteGPPct
-      expect(wf.getCell('B20').value.formula).toBeFormula('=B16*PromoteGPPct');
+      expect(wf.getCell('B147').value.formula).toBeFormula('=B142*PromoteGPPct');
 
       // Final returns block (rows 24-30)
-      expect(String(wf.getCell('A24').value)).toContain('Final Investor Returns');
+      expect(String(wf.getCell('A152').value)).toContain('Final Investor Returns');
       // LP Total = Tier 1 + LP promote
-      expect(wf.getCell('B25').value.formula).toBeFormula('=B15+B19');
+      expect(wf.getCell('B153').value.formula).toBeFormula('=B141+B146');
       // LP Equity Multiple = LP Total / LP Equity
-      expect(wf.getCell('B27').value.formula).toBeFormula('=IFERROR(B25/B8,0)');
+      expect(wf.getCell('B155').value.formula).toBeFormula('=IFERROR(B153/B133,0)');
       // LP IRR approx = (EM)^(1/years) - 1
-      expect(wf.getCell('B29').value.formula).toBeFormula('=IFERROR((B27)^(1/B12)-1,0)');
+      expect(wf.getCell('B157').value.formula).toBeFormula('=IFERROR((B155)^(1/B138)-1,0)');
     });
 
     test('Inputs sheet exposes 5 new waterfall named ranges', async () => {
@@ -1794,14 +1738,14 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).not.toMatch(/Profit Waterfall/);
     }, 30000);
 
-    test('all sheets protect formula areas while Inputs value cells stay editable', async () => {
+    test('all sheets are unprotected while Inputs value cells remain clearly editable', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const visibleSheets = wb.worksheets.filter((ws) => ws.state !== 'hidden');
       visibleSheets.forEach((ws) => {
         const isProtected = ws.sheetProtection && ws.sheetProtection.sheet === true;
-        expect(isProtected).toBe(true);
+        expect(isProtected).not.toBe(true);
       });
       const inputs = wb.getWorksheet('Inputs & Assumptions');
       let foundUnlockedInput = false;
@@ -2008,7 +1952,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         // the LandCostCr*StampRegPct + Construction*GstPct levies; without
         // it those sheets would understate cost vs the Calculations sheet.
         const debtSizing = wb.getWorksheet('Debt Sizing & Amortization');
-        const waterfall = wb.getWorksheet('Sponsor LP Waterfall');
+        const waterfall = debtSizing;
 
         const findCellByLabel = (sheet, expectedLabel) => {
           let found = null;
@@ -2699,7 +2643,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         };
 
         const debtSizing = wb.getWorksheet('Debt Sizing & Amortization');
-        const waterfall = wb.getWorksheet('Sponsor LP Waterfall');
+        const waterfall = debtSizing;
         expect(findCellByLabel(debtSizing, 'Total Project Cost')).toMatch(/PremiumFSICostCr/);
         expect(findCellByLabel(waterfall, 'Total Project Cost')).toMatch(/PremiumFSICostCr/);
       });
@@ -2888,21 +2832,22 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           .toBeFormula('=HospitalityRevPAR*HospitalityKeys*365/10000000');
       });
 
-      test('Hospitality workbook adds USALI pro forma and links Cash Flow + Sources & Uses to it', async () => {
+      test('Hospitality workbook adds USALI pro forma and links Cash Flow + Dashboard Sources & Uses to it', async () => {
         const buffer = await buildDealWorkbookV2(hospitalityCtx());
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
         const usali = wb.getWorksheet('USALI Pro Forma');
         const cfe = wb.getWorksheet('Cash Flow Engine');
-        const sourcesUses = wb.getWorksheet('Sources & Uses');
+        const dash = wb.getWorksheet('Dashboard');
 
         expect(usali).toBeTruthy();
         expect(usali.getCell('B16').value.formula).toContain('SUM');
         expect(usali.getCell('B40').value.formula).toContain('B37');
         expect(cfe.getCell('B6').value.formula).toContain("'USALI Pro Forma'");
         expect(cfe.getCell('B18').value.formula).toContain("'USALI Pro Forma'");
-        expect(sourcesUses.getCell('B17').value.formula).toBeFormula('=SUM(B12:B16)');
-        expect(sourcesUses.getCell('B18').value.formula).toBeFormula('=B9-B17');
+        expect(wb.getWorksheet('Sources & Uses')).toBeUndefined();
+        expect(dash.getCell('B14').value.formula).toContain("'USALI Pro Forma'");
+        expect(dash.getCell('B18').value.formula).toContain("'USALI Pro Forma'");
       });
     });
 

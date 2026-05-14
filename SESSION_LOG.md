@@ -2749,3 +2749,27 @@ Aligned XLSX pro forma exports with the deterministic Financial Engine assumptio
 ### What's left to do
 Wait for PR #304 CI, then merge and deploy once checks pass.
 
+
+## 2026-05-14 - Editable slim XLSX workbooks
+
+### What was worked on
+Made REDIP XLSX exports open as editable workbooks and reduced the number of worksheet tabs. QA and source details now sit inside Inputs & Assumptions, Sources & Uses stays on the Dashboard, Sponsor / LP Waterfall sits inside the debt sheet, and extra standalone detail sheets are no longer emitted.
+
+### Plain-English recap
+- Excel exports no longer show a sheet-protection warning when users edit cells.
+- Normal deal workbooks now stay to 6 worksheets, while hospitality workbooks stay to 7 because they keep the hotel pro forma.
+- QA/source tracking is still included, but it is merged into Inputs & Assumptions instead of appearing as its own tab.
+- This matters because the exported model is easier for investors and operators to audit without losing important traceability.
+
+### PRs opened / merged
+- PR #305 - `fix(exports): simplify XLSX workbook structure` - opened from `codex/unprotected-slim-xlsx-workbooks`.
+
+### Validation
+- XLSX v2 focused suite: 149 tests passed.
+- Asset-class utility focused suite: 25 tests passed.
+- Legacy deal XLSX service suite: 3 tests passed.
+- Financial kernel all-asset smoke suite: 10 tests passed.
+
+### What's left to do
+Wait for PR #305 CI, then merge and deploy once checks pass.
+
