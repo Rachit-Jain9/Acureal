@@ -1,15 +1,18 @@
 'use strict';
 
 /**
- * XLSX v2 — investor-grade 4-sheet workbook.
+ * XLSX v2 — investor-grade workbook export.
  *
- * Replaces the existing 13-sheet workbook with a tight 4-sheet structure
- * per operator brief 2026-05-10:
+ * Replaces the existing 13-sheet workbook with a focused 6-7 worksheet
+ * structure per operator brief:
  *
- *   1. Inputs & Assumptions          (operator-editable, unlocked)
- *   2. Construction Phasing & Sales Collection
- *   3. Quarterly Cash Flow & Debt
- *   4. Dashboard                     (KPIs, charts, sources/uses)
+ *   1. Dashboard                     (KPIs, charts, sources/uses)
+ *   2. Inputs & Assumptions          (operator-editable, unlocked)
+ *   3. Cash Flow Engine              (phasing + cash flow)
+ *   4. Debt Sizing & Amortization    (debt sizing + debt schedule + waterfall)
+ *   5. Monthly Cash Flow
+ *   6. Calculations                  (hidden audit trail)
+ *   7. USALI Pro Forma               (hospitality only)
  *
  * Cell-locking: every output cell is locked; only the input zone on the
  * Inputs sheet is unlocked. Sheet protection is on with no password —
@@ -46,18 +49,19 @@ const FONT = palette.FONTS.body;
 //   2. Inputs & Assumptions               (yellow editable cells; SECOND)
 //   3. Cash Flow Engine                   (combined: Phasing operating P&L
 //                                          + Quarterly Cash Flow + Debt)
-//   4. Debt Sizing & Amortization         (combined: MIN-of-4 sizing
-//                                          + 80-row amort schedule)
-//   5. Sponsor LP Waterfall               (3-tier pour-over equity returns)
-//   6. Unit Mix                           (asset-class-aware unit table)
-//   7. Calculations                       (hidden audit trail)
+//   4. Debt Sizing & Amortization         (combined: MIN-of-4 sizing,
+//                                          construction/permanent debt,
+//                                          waterfall)
+//   5. Monthly Cash Flow                  (asset-specific monthly bridge)
+//   6. Calculations                       (hidden audit trail)
+//   7. USALI Pro Forma                    (hospitality only)
 //
 // Pre-2026-05-11 we had 9 sheets (8 visible + 1 hidden). Operator: "Dont
 // have so many worksheets. gets confusing. Have maximum 6-7." Consolidated
 // by physically combining (a) Phasing + Cash Flow → Cash Flow Engine, and
-// (b) Debt Sizing + Amortization → Debt Sizing & Amortization. The 3-tier
-// Waterfall + Unit Mix stay standalone because they're conceptually
-// distinct (equity returns ≠ debt; unit mix ≠ either).
+// (b) Debt Sizing + Amortization + Sponsor / LP Waterfall → Debt Sizing &
+// Amortization, while keeping monthly detail as the only additional visible
+// model tab.
 //
 // Names must fit Excel's 31-character cap. Longest is "Debt Sizing &
 // Amortization" at 26 chars.
@@ -2095,13 +2099,10 @@ const buildInputsSheet = (workbook, ctx) => {
   //   Tier 4: Promote / carry split above the pref hurdle
   //   Tier 5 (optional): Bigger promote above a second hurdle (12% / 15%)
   //
-  // For v1 we model a simplified 3-tier structure: Pref + RoC, then a
-  // single promote split above the pref. Hurdle-laddered splits (Tier 5)
-  // are deferred to a follow-up PR — they require dynamic IRR-tier
-  // pour-through logic that's expensive in Excel formulas.
-  //
   // Defaults match Indian institutional equity benchmarks: LP/GP ratio
-  // 90/10 (heavy LP), 8% pref, 80/20 promote split above pref.
+  // 90/10 (heavy LP), 8% pref, 80/20 promote split above pref, with
+  // sponsor catch-up and laddered promotes at 12% / 15% modeled in the
+  // Debt Sizing & Amortization worksheet.
   const waterfallSection = {
     title: 'Sponsor / LP Waterfall',
     rows: [
@@ -2110,6 +2111,14 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Preferred Return Rate',    'PrefReturnRate',  toPctDecimal(firstNumber(ctx.inputs.prefReturnRate, ctx.inputs.preferredReturn, 0.08)), '% / year', NUMBER_FORMATS.percent],
       ['Promote Split — LP Share', 'PromoteLPPct',    toPctDecimal(firstNumber(ctx.inputs.promoteLPPct, 0.80)),                                '% above pref', NUMBER_FORMATS.percent],
       ['Promote Split — GP Share', 'PromoteGPPct',    toPctDecimal(firstNumber(ctx.inputs.promoteGPPct, 0.20)),                                '% above pref', NUMBER_FORMATS.percent],
+      ['Catch-Up Cash to Sponsor',  'CatchUpPct',      toPctDecimal(firstNumber(ctx.inputs.catchUpPct, 1.00)),                                  '% of catch-up tranche', NUMBER_FORMATS.percent],
+      ['Catch-Up Target GP Profit', 'CatchUpTargetGPPct', toPctDecimal(firstNumber(ctx.inputs.catchUpTargetGPPct, ctx.inputs.promoteGPPct, 0.20)), '% cumulative profit share', NUMBER_FORMATS.percent],
+      ['Hurdle 1 IRR',              'Hurdle1IRR',      toPctDecimal(firstNumber(ctx.inputs.hurdle1IRR, 0.12)),                                  '% annual project IRR', NUMBER_FORMATS.percent],
+      ['Hurdle 1 LP Share',         'Hurdle1LPPct',    toPctDecimal(firstNumber(ctx.inputs.hurdle1LPPct, 0.70)),                                '% residual after catch-up', NUMBER_FORMATS.percent],
+      ['Hurdle 1 GP Share',         'Hurdle1GPPct',    toPctDecimal(firstNumber(ctx.inputs.hurdle1GPPct, 0.30)),                                '% residual after catch-up', NUMBER_FORMATS.percent],
+      ['Hurdle 2 IRR',              'Hurdle2IRR',      toPctDecimal(firstNumber(ctx.inputs.hurdle2IRR, 0.15)),                                  '% annual project IRR', NUMBER_FORMATS.percent],
+      ['Hurdle 2 LP Share',         'Hurdle2LPPct',    toPctDecimal(firstNumber(ctx.inputs.hurdle2LPPct, 0.60)),                                '% residual after catch-up', NUMBER_FORMATS.percent],
+      ['Hurdle 2 GP Share',         'Hurdle2GPPct',    toPctDecimal(firstNumber(ctx.inputs.hurdle2GPPct, 0.40)),                                '% residual after catch-up', NUMBER_FORMATS.percent],
     ],
   };
 
@@ -2163,6 +2172,27 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Implied All-In Rate',      'ImpliedAllInRate',
         { formula: '=DebtRatePct+IFERROR(ProcessingFeePct/LoanTermYears,0)' },
         '% / year (derived: rate + amortised fee)', NUMBER_FORMATS.percent],
+    ],
+  };
+
+  const debtPhaseSection = {
+    title: 'Debt Phase Structure (Construction → Permanent)',
+    rows: [
+      ['Construction Loan LTC',       'ConstructionLoanLTC',
+        toPctDecimal(firstNumber(ctx.inputs.constructionLoanLTC, ctx.inputs.constrMaxLTC, ctx.inputs.maxLTC, 0.75)),
+        '% of total project cost', NUMBER_FORMATS.percent],
+      ['Construction Debt Rate',      'ConstructionDebtRatePct',
+        toPctDecimal(firstNumber(ctx.inputs.constructionDebtRatePct, ctx.inputs.constructionDebtRate, ctx.inputs.debtRatePct, 0.12)),
+        '% / year during construction', NUMBER_FORMATS.percent],
+      ['Permanent Debt Rate',         'PermanentDebtRatePct',
+        toPctDecimal(firstNumber(ctx.inputs.permanentDebtRatePct, ctx.inputs.permanentDebtRate, ctx.inputs.debtRatePct, 0.12)),
+        '% / year after conversion', NUMBER_FORMATS.percent],
+      ['Permanent Refi LTV',          'PermanentRefiLTV',
+        toPctDecimal(firstNumber(ctx.inputs.permanentRefiLTV, ctx.inputs.permMaxLTV, ctx.inputs.maxLTV, 0.65)),
+        '% of stabilised value', NUMBER_FORMATS.percent],
+      ['Conversion / Refi Quarter',   'RefinanceQuarter',
+        { formula: '=MAX(1,ROUNDUP(ProjectMonths/3,0))' },
+        'quarter when construction loan converts/refinances', NUMBER_FORMATS.integer],
     ],
   };
 
@@ -2225,6 +2255,7 @@ const buildInputsSheet = (workbook, ctx) => {
     // sizing limits). Operator reads top-to-bottom: "loan terms" → "WHO
     // is the lender" → "what's the sizing test."
     lenderProfileSection,
+    debtPhaseSection,
     debtSizingSection,
     waterfallSection,
     // ── Investor-disclosure / Bengaluru-specific land + tax data ──
@@ -5514,7 +5545,7 @@ const buildDebtSizingSheet = (workbook, ctx) => {
   sheet.mergeCells('A31:C31');
   sheet.getCell('A31').value =
     'NOI sourced from kernel-stored stabilised_noi_cr when populated (income family). '
-    + 'Annual payment factor uses simple ordinary annuity — moratorium not modelled. '
+    + 'Annual payment factor uses simple ordinary annuity for sizing; the detailed debt schedule below models construction conversion and moratorium timing. '
     + 'For development deals, lender sizing in practice depends on residual land value + sales receivable assignment — model treats LTC as binding for simplicity.';
   sheet.getCell('A31').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell('A31').alignment = { vertical: 'top', wrapText: true };
@@ -5556,6 +5587,134 @@ const buildAmortizationSheet = (workbook, ctx) => {
   // row 32 (after Debt Sizing's MIN-of-4 calculations end around row 28).
   const sheet = workbook.getWorksheet(SHEETS.debtAndAmort);
   if (!sheet) throw new Error('Debt Sizing & Amortization sheet must be created by buildDebtSizingSheet first');
+
+  {
+    [16, 16, 18, 18, 18, 18, 18, 18, 18, 18, 18].forEach((width, idx) => {
+      const col = sheet.getColumn(idx + 4);
+      if (col.width == null) col.width = width;
+    });
+
+    const AMORT_BASE = 32;
+    const termsTitleRow = AMORT_BASE + 2;
+    const headerRow = AMORT_BASE + 12;
+    const firstScheduleRow = headerRow + 1;
+    const maxRows = 80;
+
+    sheet.mergeCells(`A${AMORT_BASE}:N${AMORT_BASE}`);
+    sheet.getCell(`A${AMORT_BASE}`).value = 'Construction-to-Permanent Debt Schedule';
+    styleSectionTitle(sheet.getCell(`A${AMORT_BASE}`));
+    sheet.getRow(AMORT_BASE).height = 24;
+
+    sheet.mergeCells(`A${AMORT_BASE + 1}:N${AMORT_BASE + 1}`);
+    sheet.getCell(`A${AMORT_BASE + 1}`).value = 'Construction draws, capitalized interest, conversion/refi, permanent moratorium, and amortization all recalculate from named ranges on Inputs & Assumptions.';
+    sheet.getCell(`A${AMORT_BASE + 1}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${AMORT_BASE + 1}`).alignment = { vertical: 'middle', wrapText: true };
+    sheet.getRow(AMORT_BASE + 1).height = 22;
+
+    sheet.mergeCells(`A${termsTitleRow}:N${termsTitleRow}`);
+    sheet.getCell(`A${termsTitleRow}`).value = 'Debt Phase Terms';
+    styleSectionTitle(sheet.getCell(`A${termsTitleRow}`));
+    sheet.getRow(termsTitleRow).height = 22;
+
+    const termsRows = [
+      ['Construction Loan Cap (INR Cr)', '=TotalProjectCostCr*ConstructionLoanLTC', NUMBER_FORMATS.currency],
+      ['Permanent Loan Amount (INR Cr)', '=B28', NUMBER_FORMATS.currency],
+      ['Construction Quarterly Rate', '=(1+ConstructionDebtRatePct)^(1/4)-1', NUMBER_FORMATS.percent],
+      ['Permanent Quarterly Rate', '=(1+PermanentDebtRatePct)^(1/4)-1', NUMBER_FORMATS.percent],
+      ['Principal Moratorium Quarters', '=ROUNDUP(MoratoriumMonths/3,0)', NUMBER_FORMATS.integer],
+      ['Conversion / Refi Quarter', '=MAX(1,RefinanceQuarter)', NUMBER_FORMATS.integer],
+      ['Permanent Amortization Periods', '=LoanTermYears*4', NUMBER_FORMATS.integer],
+      ['Permanent Amortizing Payment (INR Cr)', '=-PMT(B38,MAX(B41-B39,1),B36)', NUMBER_FORMATS.currency],
+    ];
+    termsRows.forEach(([label, formula, fmt], idx) => {
+      const r = 35 + idx;
+      sheet.getCell(`A${r}`).value = label;
+      styleLabelCell(sheet.getCell(`A${r}`));
+      const cell = sheet.getCell(`B${r}`);
+      cell.value = { formula };
+      styleOutputCell(cell, fmt);
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    });
+
+    [
+      'Period',
+      'Phase',
+      'Construction Draw',
+      'Construction Beg. Balance',
+      'Construction Interest',
+      'Capitalized IDC',
+      'Refi Payoff',
+      'Construction End Balance',
+      'Permanent Beg. Balance',
+      'Permanent Payment',
+      'Permanent Interest',
+      'Permanent Principal',
+      'Permanent End Balance',
+      'Cash Debt Service',
+    ].forEach((label, idx) => {
+      const cell = sheet.getCell(headerRow, idx + 1);
+      cell.value = label;
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = FILL(palette.xlsx('inkDeep'));
+      cell.protection = { locked: true };
+    });
+    sheet.getRow(headerRow).height = 30;
+
+    for (let i = 0; i < maxRows; i += 1) {
+      const r = firstScheduleRow + i;
+      const period = i + 1;
+      const priorDraws = i === 0 ? '0' : `SUM($C$${firstScheduleRow}:C${r - 1})`;
+      const priorConstructionEnd = i === 0 ? '0' : `H${r - 1}`;
+      const priorPermanentEnd = i === 0 ? '0' : `M${r - 1}`;
+
+      sheet.getCell(`A${r}`).value = { formula: `=IF(${period}<=$B$40+$B$41,${period},"")` };
+      sheet.getCell(`A${r}`).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`A${r}`).alignment = { horizontal: 'center' };
+
+      const formulas = [
+        null,
+        `=IF($A${r}="","",IF($A${r}<=$B$40,"Construction","Permanent"))`,
+        `=IF($B${r}="Construction",MIN(MAX($B$35-${priorDraws},0),IFERROR($B$35/$B$40,0)),0)`,
+        `=IF($A${r}="","",IF($B${r}="Construction",${priorConstructionEnd},IF($A${r}=$B$40+1,${priorConstructionEnd},0)))`,
+        `=IF($B${r}="Construction",(D${r}+C${r}/2)*$B$37,0)`,
+        `=IF($B${r}="Construction",E${r},0)`,
+        `=IF(AND($B${r}="Permanent",$A${r}=$B$40+1),D${r},0)`,
+        `=IF($A${r}="","",IF($B${r}="Construction",D${r}+C${r}+F${r},MAX(0,D${r}-G${r})))`,
+        `=IF($A${r}="","",IF($B${r}="Permanent",IF($A${r}=$B$40+1,$B$36,${priorPermanentEnd}),0))`,
+        `=IF($B${r}<>"Permanent",0,IF($A${r}<=$B$40+$B$39,K${r},MIN(I${r}+K${r},$B$42)))`,
+        `=IF($B${r}="Permanent",I${r}*$B$38,0)`,
+        `=MAX(0,J${r}-K${r})`,
+        `=IF($B${r}="Permanent",MAX(0,I${r}-L${r}),0)`,
+        `=IF($B${r}="Construction",0,J${r})`,
+      ];
+
+      formulas.forEach((formula, idx) => {
+        if (idx === 0) return;
+        const cell = sheet.getCell(r, idx + 1);
+        cell.value = { formula };
+        cell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('inkDeep') } };
+        cell.alignment = { horizontal: idx === 1 ? 'center' : 'right', vertical: 'middle' };
+        if (idx !== 1) cell.numFmt = NUMBER_FORMATS.currency;
+      });
+
+      if (i % 2 === 1) {
+        for (let col = 1; col <= 14; col += 1) {
+          sheet.getCell(r, col).fill = FILL(palette.xlsx('paperSubtle'));
+        }
+      }
+    }
+
+    const footerRow = firstScheduleRow + maxRows + 1;
+    sheet.mergeCells(`A${footerRow}:N${footerRow}`);
+    sheet.getCell(`A${footerRow}`).value =
+      'Construction interest is capitalized through conversion. Permanent debt then starts from the lender-sized loan amount, pays interest-only during MoratoriumMonths, and amortizes thereafter with a quarterly PMT formula.';
+    sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${footerRow}`).alignment = { vertical: 'top', wrapText: true };
+    sheet.getRow(footerRow).height = 36;
+
+    return sheet;
+  }
 
   // Column widths set by buildDebtSizingSheet (A=32, B=22, C=32). The
   // amortization table needs 6 columns (Period / BegBal / Payment /
@@ -5680,7 +5839,7 @@ const buildAmortizationSheet = (workbook, ctx) => {
   const footerRow = (13 + amortShift) + maxRows + 1;
   sheet.mergeCells(`A${footerRow}:F${footerRow}`);
   sheet.getCell(`A${footerRow}`).value =
-    'Amortization shown at the effective quarterly rate ((1+annual)^(1/4)−1). Moratorium input MoratoriumMonths is currently not modelled here — once PR-B splits construction vs permanent loan, this schedule will show the permanent loan post-moratorium. Verify against the lender term sheet before use.';
+    'Debt schedule shown at the effective quarterly rate ((1+annual)^(1/4)-1), with construction conversion and permanent-loan moratorium timing modeled from named inputs. Verify against the lender term sheet before use.';
   sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${footerRow}`).alignment = { vertical: 'top', wrapText: true };
   sheet.getRow(footerRow).height = 36;
@@ -5691,6 +5850,198 @@ const buildAmortizationSheet = (workbook, ctx) => {
 const appendWaterfallToDebtSheet = (workbook, ctx) => {
   const sheet = workbook.getWorksheet(SHEETS.debtAndAmort);
   if (!sheet) throw new Error('Debt Sizing & Amortization sheet must exist before appending waterfall');
+
+  {
+    const widthByCol = {
+      A: 14, B: 14, C: 18, D: 18, E: 18, F: 18, G: 18, H: 18,
+      I: 18, J: 18, K: 18, L: 18, M: 18, N: 18, O: 18, P: 18,
+    };
+    Object.entries(widthByCol).forEach(([col, width]) => {
+      if (sheet.getColumn(col).width == null || sheet.getColumn(col).width < width) {
+        sheet.getColumn(col).width = width;
+      }
+    });
+
+    const startRow = 130;
+    const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr+PremiumFSICostCr)';
+    const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
+    const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
+    const totalCost = ctx.assetClass === 'hospitality'
+      ? 'TotalProjectCostCr'
+      : `${hardCost}+${softCost}+${indiaLevies}`;
+    const distributionCashFlowRow = ctx.dealFamily === 'income' ? 32 : 38;
+    const lastCashFlowCol = excelCol(ctx.totalQuarters + 1);
+
+    sheet.mergeCells(`A${startRow}:P${startRow}`);
+    sheet.getCell(`A${startRow}`).value = 'Sponsor / LP Waterfall';
+    styleSectionTitle(sheet.getCell(`A${startRow}`));
+    sheet.getRow(startRow).height = 24;
+
+    sheet.mergeCells(`A${startRow + 1}:P${startRow + 1}`);
+    sheet.getCell(`A${startRow + 1}`).value =
+      'Quarterly distribution waterfall linked to Cash Flow Engine, with preferred return, return of LP capital, sponsor catch-up, and hurdle-ladder promote splits.';
+    sheet.getCell(`A${startRow + 1}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${startRow + 1}`).alignment = { vertical: 'middle', wrapText: true };
+    sheet.getRow(startRow + 1).height = 24;
+
+    sheet.mergeCells(`A${startRow + 3}:D${startRow + 3}`);
+    sheet.getCell(`A${startRow + 3}`).value = 'Capital Stack';
+    styleSectionTitle(sheet.getCell(`A${startRow + 3}`));
+    [
+      ['Total Project Cost (INR Cr)', `=${totalCost}`, NUMBER_FORMATS.currency],
+      ['Lender-Approved Loan (INR Cr)', '=$B$28', NUMBER_FORMATS.currency],
+      ['Total Equity (INR Cr)', `=B${startRow + 4}-B${startRow + 5}`, NUMBER_FORMATS.currency],
+      ['LP Equity (INR Cr)', `=B${startRow + 6}*LPEquityPct`, NUMBER_FORMATS.currency],
+      ['GP / Sponsor Equity (INR Cr)', `=B${startRow + 6}*GPEquityPct`, NUMBER_FORMATS.currency],
+    ].forEach(([label, formula, fmt], idx) => {
+      const r = startRow + 4 + idx;
+      sheet.getCell(`A${r}`).value = label;
+      styleLabelCell(sheet.getCell(`A${r}`));
+      const cell = sheet.getCell(`B${r}`);
+      cell.value = { formula };
+      styleOutputCell(cell, fmt);
+      cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      sheet.mergeCells(`C${r}:D${r}`);
+      sheet.getCell(`C${r}`).value = idx === 0 ? 'Hard + soft + statutory levies' : 'Linked capital stack assumption';
+      sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`C${r}`).alignment = { wrapText: true, vertical: 'top' };
+    });
+
+    sheet.mergeCells(`F${startRow + 3}:I${startRow + 3}`);
+    sheet.getCell(`F${startRow + 3}`).value = 'Hurdle Ladder';
+    styleSectionTitle(sheet.getCell(`F${startRow + 3}`));
+    [
+      ['Modeled Project IRR', '=IF(ISNUMBER(Dashboard!B21),Dashboard!B21,0)', NUMBER_FORMATS.percent, 'Used to select active promote tier'],
+      ['Active Promote Tier', '=IF($G$134>=Hurdle2IRR,"Tier 3: Hurdle 2 split",IF($G$134>=Hurdle1IRR,"Tier 2: Hurdle 1 split","Tier 1: Base promote split"))', null, 'Base, first hurdle, or second hurdle'],
+      ['Catch-Up Target GP Profit %', '=CatchUpTargetGPPct', NUMBER_FORMATS.percent, 'Cumulative GP share of profit after LP pref'],
+      ['Catch-Up Cash to Sponsor', '=CatchUpPct', NUMBER_FORMATS.percent, 'Share of catch-up tranche paid to sponsor'],
+      ['Distribution Dates Modeled', `=${ctx.totalQuarters}`, NUMBER_FORMATS.integer, 'Quarterly dates from Cash Flow Engine row 3'],
+    ].forEach(([label, formula, fmt, note], idx) => {
+      const r = startRow + 4 + idx;
+      sheet.getCell(`F${r}`).value = label;
+      styleLabelCell(sheet.getCell(`F${r}`));
+      const valueCell = sheet.getCell(`G${r}`);
+      valueCell.value = { formula };
+      if (fmt) styleOutputCell(valueCell, fmt);
+      else {
+        valueCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+        valueCell.alignment = { horizontal: 'left', vertical: 'middle' };
+      }
+      sheet.mergeCells(`H${r}:I${r}`);
+      sheet.getCell(`H${r}`).value = note;
+      sheet.getCell(`H${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+      sheet.getCell(`H${r}`).alignment = { wrapText: true, vertical: 'top' };
+    });
+
+    const tableTitleRow = startRow + 11;
+    const headerRow = tableTitleRow + 1;
+    const firstDataRow = headerRow + 1;
+    sheet.mergeCells(`A${tableTitleRow}:P${tableTitleRow}`);
+    sheet.getCell(`A${tableTitleRow}`).value = 'Quarterly Distribution Waterfall';
+    styleSectionTitle(sheet.getCell(`A${tableTitleRow}`));
+    sheet.getRow(tableTitleRow).height = 22;
+
+    [
+      'Period',
+      'Date',
+      'Available Cash',
+      'Beg LP Capital',
+      'Beg Unpaid Pref',
+      'Pref Accrual',
+      'LP Pref Paid',
+      'LP Capital Return',
+      'GP Catch-Up',
+      'LP Promote',
+      'GP Promote',
+      'End LP Capital',
+      'End Unpaid Pref',
+      'LP Total',
+      'GP Total',
+      'Residual',
+    ].forEach((label, idx) => {
+      const cell = sheet.getCell(headerRow, idx + 1);
+      cell.value = label;
+      cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = FILL(palette.xlsx('inkDeep'));
+      cell.protection = { locked: true };
+    });
+    sheet.getRow(headerRow).height = 30;
+
+    for (let q = 1; q <= ctx.totalQuarters; q += 1) {
+      const r = firstDataRow + q - 1;
+      const cashFlowCol = excelCol(q + 1);
+      const priorLpPromote = q === 1 ? '0' : `SUM($J$${firstDataRow}:J${r - 1})`;
+      const priorGpProfit = q === 1 ? '0' : `SUM($I$${firstDataRow}:I${r - 1})+SUM($K$${firstDataRow}:K${r - 1})`;
+      const selectedLpPct = 'IF($G$134>=Hurdle2IRR,Hurdle2LPPct,IF($G$134>=Hurdle1IRR,Hurdle1LPPct,PromoteLPPct))';
+      const selectedGpPct = 'IF($G$134>=Hurdle2IRR,Hurdle2GPPct,IF($G$134>=Hurdle1IRR,Hurdle1GPPct,PromoteGPPct))';
+
+      sheet.getCell(`A${r}`).value = `Q${q}`;
+      sheet.getCell(`B${r}`).value = { formula: `='${SHEETS.cashFlowEngine}'!${cashFlowCol}$3` };
+      sheet.getCell(`C${r}`).value = { formula: `=MAX(0,'${SHEETS.cashFlowEngine}'!${cashFlowCol}$${distributionCashFlowRow})` };
+      sheet.getCell(`D${r}`).value = { formula: q === 1 ? '=$B$137' : `=L${r - 1}` };
+      sheet.getCell(`E${r}`).value = { formula: q === 1 ? '=0' : `=M${r - 1}` };
+      sheet.getCell(`F${r}`).value = { formula: `=D${r}*((1+PrefReturnRate)^(1/4)-1)` };
+      sheet.getCell(`G${r}`).value = { formula: `=MIN(C${r},E${r}+F${r})` };
+      sheet.getCell(`H${r}`).value = { formula: `=MIN(MAX(0,C${r}-G${r}),D${r})` };
+      sheet.getCell(`I${r}`).value = {
+        formula: `=MIN(MAX(0,C${r}-G${r}-H${r}),MAX(0,(SUM($G$${firstDataRow}:G${r})+${priorLpPromote})*CatchUpTargetGPPct/MAX(1-CatchUpTargetGPPct,0.0001)-(${priorGpProfit})))*CatchUpPct`,
+      };
+      sheet.getCell(`J${r}`).value = { formula: `=MAX(0,C${r}-G${r}-H${r}-I${r})*${selectedLpPct}` };
+      sheet.getCell(`K${r}`).value = { formula: `=MAX(0,C${r}-G${r}-H${r}-I${r})*${selectedGpPct}` };
+      sheet.getCell(`L${r}`).value = { formula: `=MAX(0,D${r}-H${r})` };
+      sheet.getCell(`M${r}`).value = { formula: `=MAX(0,E${r}+F${r}-G${r})` };
+      sheet.getCell(`N${r}`).value = { formula: `=G${r}+H${r}+J${r}` };
+      sheet.getCell(`O${r}`).value = { formula: `=I${r}+K${r}` };
+      sheet.getCell(`P${r}`).value = { formula: `=MAX(0,C${r}-G${r}-H${r}-I${r}-J${r}-K${r})` };
+
+      for (let col = 1; col <= 16; col += 1) {
+        const cell = sheet.getCell(r, col);
+        cell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('inkDeep') } };
+        cell.alignment = { horizontal: col <= 2 ? 'center' : 'right', vertical: 'middle' };
+        if (col === 2) cell.numFmt = NUMBER_FORMATS.date;
+        if (col >= 3) cell.numFmt = NUMBER_FORMATS.currency;
+        if (q % 2 === 0) cell.fill = FILL(palette.xlsx('paperSubtle'));
+      }
+    }
+
+    const lastDataRow = firstDataRow + ctx.totalQuarters - 1;
+    const summaryStartRow = lastDataRow + 3;
+    sheet.mergeCells(`A${summaryStartRow}:D${summaryStartRow}`);
+    sheet.getCell(`A${summaryStartRow}`).value = 'Waterfall Summary';
+    styleSectionTitle(sheet.getCell(`A${summaryStartRow}`));
+    [
+      ['Total LP Distributions (INR Cr)', `=SUM(N${firstDataRow}:N${lastDataRow})`, NUMBER_FORMATS.currency],
+      ['Total GP Distributions (INR Cr)', `=SUM(O${firstDataRow}:O${lastDataRow})`, NUMBER_FORMATS.currency],
+      ['LP Equity Multiple', `=IFERROR(B${summaryStartRow + 1}/B137,0)`, NUMBER_FORMATS.multiple],
+      ['GP Equity Multiple', `=IFERROR(B${summaryStartRow + 2}/B138,0)`, NUMBER_FORMATS.multiple],
+      ['GP Catch-Up Paid (INR Cr)', `=SUM(I${firstDataRow}:I${lastDataRow})`, NUMBER_FORMATS.currency],
+      ['Residual Unallocated (INR Cr)', `=SUM(P${firstDataRow}:P${lastDataRow})`, NUMBER_FORMATS.currency],
+      ['Selected Promote Tier', '=$G$135', null],
+      ['Cash Flow Row Used', `="'${SHEETS.cashFlowEngine}' row ${distributionCashFlowRow} through ${lastCashFlowCol}${distributionCashFlowRow}"`, null],
+    ].forEach(([label, formula, fmt], idx) => {
+      const r = summaryStartRow + 1 + idx;
+      sheet.getCell(`A${r}`).value = label;
+      styleLabelCell(sheet.getCell(`A${r}`));
+      const cell = sheet.getCell(`B${r}`);
+      cell.value = { formula };
+      if (fmt) styleOutputCell(cell, fmt);
+      else {
+        cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+      }
+    });
+
+    const disclosureRow = summaryStartRow + 11;
+    sheet.mergeCells(`A${disclosureRow}:P${disclosureRow}`);
+    sheet.getCell(`A${disclosureRow}`).value =
+      'Waterfall uses quarterly available-cash distributions from Cash Flow Engine. Preferred return accrues on unpaid LP capital, catch-up targets the GP profit share, and residual promote split steps up when modeled project IRR crosses Hurdle1IRR or Hurdle2IRR.';
+    sheet.getCell(`A${disclosureRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${disclosureRow}`).alignment = { vertical: 'top', wrapText: true };
+    sheet.getRow(disclosureRow).height = 36;
+
+    return sheet;
+  }
 
   if (sheet.getColumn(4).width == null) sheet.getColumn(4).width = 18;
   if (sheet.getColumn(5).width == null) sheet.getColumn(5).width = 18;
@@ -5704,7 +6055,7 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
 
   sheet.mergeCells(`A${startRow + 1}:F${startRow + 1}`);
   sheet.getCell(`A${startRow + 1}`).value =
-    'Simple single-exit promote model linked to the debt sizing result above. Edit waterfall assumptions on Inputs & Assumptions.';
+    'Quarterly promote model linked to the debt sizing result above. Edit waterfall assumptions on Inputs & Assumptions.';
   sheet.getCell(`A${startRow + 1}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${startRow + 1}`).alignment = { vertical: 'middle', wrapText: true };
   sheet.getRow(startRow + 1).height = 22;
@@ -5789,7 +6140,7 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
   const disclosureRow = startRow + 35;
   sheet.mergeCells(`A${disclosureRow}:F${disclosureRow}`);
   sheet.getCell(`A${disclosureRow}`).value =
-    'Waterfall is a single-exit approximation. Use the quarterly cash flow rows for investor-grade hurdle-laddering if the transaction has catch-up tiers or multiple distribution dates.';
+    'Waterfall uses quarterly cash flow rows for preferred return, catch-up, and hurdle-ladder promote logic across multiple distribution dates.';
   sheet.getCell(`A${disclosureRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(`A${disclosureRow}`).alignment = { vertical: 'top', wrapText: true };
   sheet.getRow(disclosureRow).height = 32;
@@ -5815,7 +6166,7 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
  * expensive in Excel formulas — most early-stage operators don't model
  * past the simple promote anyway.
  *
- * Calculation method (single-exit approximation):
+ * Calculation method:
  *   Project Life N = LoanTermYears (proxy for hold period)
  *   Total Equity = Total Project Cost − Lender-Approved Loan (Debt Sizing!B28)
  *   LP Equity = Total Equity × LPEquityPct
@@ -6001,7 +6352,7 @@ const buildWaterfallSheet = (workbook, ctx) => {
   sheet.getCell('A32').value =
     'Single-exit approximation: all cash assumed to arrive at end of hold period. Institutional templates '
     + '(NAIOP, RE-540) use quarter-by-quarter pour-through with hurdle laddering (e.g., 70/30 above 12% IRR, '
-    + '60/40 above 15% IRR). Catch-up tier not modelled in this v1 — operator can add via Excel scenarios.';
+    + '60/40 above 15% IRR). The consolidated Debt Sizing & Amortization tab now carries the quarterly catch-up and hurdle ladder.';
   sheet.getCell('A32').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell('A32').alignment = { vertical: 'top', wrapText: true };
   sheet.getRow(32).height = 36;
