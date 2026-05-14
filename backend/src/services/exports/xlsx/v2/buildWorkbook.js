@@ -162,6 +162,52 @@ const toPctDecimal = (value) => {
   return n > 1 ? n / 100 : n;
 };
 
+const HOSPITALITY_DEFAULT_SQFT_PER_KEY = 600;
+
+const hospitalityKeys = (ctx) =>
+  firstNumber(ctx.inputs.keys, ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, ctx.inputs.noOfKeys);
+
+const hospitalityAreaPerKeySqft = (ctx) =>
+  positiveOrDefault(
+    firstNumber(
+      ctx.inputs.grossAreaPerKeySqft,
+      ctx.inputs.areaPerKeySqft,
+      ctx.inputs.sfPerKey,
+      ctx.inputs.sqftPerKey,
+      ctx.inputs.roomAreaSqft,
+    ),
+    HOSPITALITY_DEFAULT_SQFT_PER_KEY,
+  );
+
+const hospitalityAdr = (ctx) =>
+  firstNumber(ctx.inputs.adr, ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, ctx.inputs.hospitalityBlendedADR);
+
+const hospitalityOccupancyPct = (ctx) =>
+  toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.inputs.stabilizedOccPct, ctx.inputs.stabilisedOccPct, ctx.deal.occupancy_pct, 0.65));
+
+const hospitalityConstructionCostPerKey = (ctx) =>
+  firstNumber(ctx.inputs.constructionCostPerKey, ctx.inputs.costPerKey, ctx.inputs.hardCostPerKey);
+
+const hospitalityAreaSqft = (ctx) => {
+  const keys = hospitalityKeys(ctx);
+  return keys && keys > 0 ? keys * hospitalityAreaPerKeySqft(ctx) : null;
+};
+
+const hospitalityBaseRentPerSqftMonth = (ctx) => {
+  const adr = hospitalityAdr(ctx);
+  const occupancy = hospitalityOccupancyPct(ctx);
+  const sqftPerKey = hospitalityAreaPerKeySqft(ctx);
+  return adr && adr > 0 && occupancy && occupancy > 0 && sqftPerKey > 0
+    ? (adr * occupancy * 365) / (12 * sqftPerKey)
+    : null;
+};
+
+const hospitalityConstructionCostPerSqft = (ctx) => {
+  const costPerKey = hospitalityConstructionCostPerKey(ctx);
+  const sqftPerKey = hospitalityAreaPerKeySqft(ctx);
+  return costPerKey && costPerKey > 0 && sqftPerKey > 0 ? costPerKey / sqftPerKey : null;
+};
+
 // ── India GST default by asset class ───────────────────────────────────
 // Per India GST regime (as of 2026-05-11): the developer's NET GST cost
 // (output GST collected from buyer / paid by developer, minus available
@@ -301,16 +347,29 @@ const getCoreInputSnapshot = (ctx) => {
       ctx.deal.saleable_area_sqft,
       ctx.inputs.saleableAreaSqft,
       ctx.inputs.leasableAreaSqft,
+      ctx.assetClass === 'hospitality' ? hospitalityAreaSqft(ctx) : null,
       0,
     ),
     landAreaSqft: firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0),
     loadingFactor: positiveOrDefault(firstNumber(ctx.inputs.loadingFactor, ctx.inputs.loadingRatio), 1.25),
     sellRatePerSqft: firstNumber(ctx.inputs.sellingRatePerSqft, ctx.deal.selling_rate_per_sqft, 0),
-    baseRentPerSqftMonth: firstNumber(ctx.inputs.baseRentPerSqftMonth, ctx.inputs.rentPerSqftMonth, 0),
-    occupancyPct: toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),
+    baseRentPerSqftMonth: firstNumber(
+      ctx.inputs.baseRentPerSqftMonth,
+      ctx.inputs.rentPerSqftMonth,
+      ctx.assetClass === 'hospitality' ? hospitalityBaseRentPerSqftMonth(ctx) : null,
+      0,
+    ),
+    occupancyPct: ctx.assetClass === 'hospitality'
+      ? hospitalityOccupancyPct(ctx)
+      : toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),
     exitCapRate: toPctDecimal(firstNumber(ctx.inputs.exitCapRate, ctx.inputs.capRate, ctx.inputs.entryCapRate, 0.08)),
     landCostCr: firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),
-    constructionCostPerSqft: firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0),
+    constructionCostPerSqft: firstNumber(
+      ctx.inputs.constructionCostPerSqft,
+      ctx.deal.construction_cost_per_sqft,
+      ctx.assetClass === 'hospitality' ? hospitalityConstructionCostPerSqft(ctx) : null,
+      0,
+    ),
     approvalCostCr: firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),
     premiumFsiCostCr: firstNumber(ctx.inputs.premiumFSICostCr, ctx.inputs.tdrCostCr, 0),
     debtLTV: toPctDecimal(firstNumber(ctx.inputs.debtLTV, ctx.inputs.debtPct, 0.55)),
@@ -374,10 +433,11 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
   }
 
   const modelInputAliases = {
-    SaleableAreaSqft: ['saleableAreaSqft', 'leasableAreaSqft'],
+    SaleableAreaSqft: ['saleableAreaSqft', 'leasableAreaSqft', 'keys', 'hospitalityKeys', 'numberOfKeys'],
     SellRatePerSqft: ['sellingRatePerSqft'],
-    BaseRentPerSqftMonth: ['baseRentPerSqftMonth', 'rentPerSqftMonth'],
-    ConstructionCostPerSqft: ['constructionCostPerSqft'],
+    BaseRentPerSqftMonth: ['baseRentPerSqftMonth', 'rentPerSqftMonth', 'adr', 'hospitalityADRBase', 'hospitalityADR'],
+    OccupancyPct: ['occupancyPct', 'stabilizedOccPct', 'stabilisedOccPct'],
+    ConstructionCostPerSqft: ['constructionCostPerSqft', 'constructionCostPerKey', 'costPerKey', 'hardCostPerKey'],
     LandCostCr: ['landCostCr'],
     DebtLTV: ['debtLTV', 'debtPct'],
     DebtRatePct: ['debtRatePct', 'interestRatePct'],
@@ -832,7 +892,14 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Locality',                'Locality',            ctx.deal.city || ctx.property.city || 'Bengaluru', '', null],
       ['Land Area',               'LandAreaSqft',        firstNumber(ctx.property.land_area_sqft, ctx.deal.land_area_sqft, ctx.inputs.plotAreaSqft, 0), 'sqft', NUMBER_FORMATS.integer],
       ['Saleable / Leasable Area (Super Built-up)', 'SaleableAreaSqft',
-        firstNumber(ctx.property.saleable_area_sqft, ctx.deal.saleable_area_sqft, ctx.inputs.saleableAreaSqft, ctx.inputs.leasableAreaSqft, 0),
+        firstNumber(
+          ctx.property.saleable_area_sqft,
+          ctx.deal.saleable_area_sqft,
+          ctx.inputs.saleableAreaSqft,
+          ctx.inputs.leasableAreaSqft,
+          ctx.assetClass === 'hospitality' ? hospitalityAreaSqft(ctx) : null,
+          0,
+        ),
         'sqft', NUMBER_FORMATS.integer],
       // PR-I5: Loading Factor + derived Carpet Area. RERA Act 2016 mandates
       // sale-side marketing in CARPET area (Section 4(2)(h)); construction
@@ -870,9 +937,20 @@ const buildInputsSheet = (workbook, ctx) => {
   const incomeRevenueSection = {
     title: 'Operating Revenue Inputs (Income Asset)',
     rows: [
-      ['Base Rent / sqft / month','BaseRentPerSqftMonth', firstNumber(ctx.inputs.baseRentPerSqftMonth, ctx.inputs.rentPerSqftMonth, 0),               'INR/sqft/mo', NUMBER_FORMATS.integer],
+      ['Base Rent / sqft / month','BaseRentPerSqftMonth',
+        firstNumber(
+          ctx.inputs.baseRentPerSqftMonth,
+          ctx.inputs.rentPerSqftMonth,
+          ctx.assetClass === 'hospitality' ? hospitalityBaseRentPerSqftMonth(ctx) : null,
+          0,
+        ),
+        'INR/sqft/mo', NUMBER_FORMATS.integer],
       ['Rent Escalation',         'RentEscalationPct',   toPctDecimal(firstNumber(ctx.inputs.rentEscalationPct, ctx.inputs.pricingEscalationPct, 0.05)),             '% / year', NUMBER_FORMATS.percent],
-      ['Stabilised Occupancy',    'OccupancyPct',        toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),                  '% of leasable', NUMBER_FORMATS.percent],
+      ['Stabilised Occupancy',    'OccupancyPct',
+        ctx.assetClass === 'hospitality'
+          ? hospitalityOccupancyPct(ctx)
+          : toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct, 0.92)),
+        '% of leasable', NUMBER_FORMATS.percent],
       ['Vacancy & Credit Loss',   'VacancyPct',          toPctDecimal(firstNumber(ctx.inputs.vacancyPct, 0.05)),                                                     '% of PGI', NUMBER_FORMATS.percent],
       ['Other Income / sqft / yr','OtherIncomePerSqft',  firstNumber(ctx.inputs.otherIncomePerSqft, 0),                                                'INR/sqft/yr', NUMBER_FORMATS.integer],
       ['Lease-up Period',         'LeaseUpQuarters',     firstNumber(ctx.inputs.leaseUpQuarters, 4),                                                   'quarters', NUMBER_FORMATS.integer],
@@ -934,7 +1012,14 @@ const buildInputsSheet = (workbook, ctx) => {
     title: 'Cost Structure',
     rows: [
       ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
-      ['Construction Cost / sqft','ConstructionCostPerSqft', firstNumber(ctx.inputs.constructionCostPerSqft, ctx.deal.construction_cost_per_sqft, 0), 'INR/sqft', NUMBER_FORMATS.integer],
+      ['Construction Cost / sqft','ConstructionCostPerSqft',
+        firstNumber(
+          ctx.inputs.constructionCostPerSqft,
+          ctx.deal.construction_cost_per_sqft,
+          ctx.assetClass === 'hospitality' ? hospitalityConstructionCostPerSqft(ctx) : null,
+          0,
+        ),
+        'INR/sqft', NUMBER_FORMATS.integer],
       ['Approval & Fees',         'ApprovalCostCr',      firstNumber(ctx.inputs.approvalCostCr, ctx.deal.approval_cost_cr, 0),                           'INR Cr', NUMBER_FORMATS.currency],
       // PR-I9: Premium FSI / TDR cost line. Bengaluru operators buy
       // premium FSI from BBMP/BDA when their base FSI is insufficient
@@ -1235,13 +1320,13 @@ const buildInputsSheet = (workbook, ctx) => {
     title: 'Hospitality Operating Metrics (ADR / Occupancy / RevPAR)',
     rows: [
       ['Number of Keys',              'HospitalityKeys',
-        firstNumber(ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, 100),
+        firstNumber(ctx.inputs.keys, ctx.inputs.hospitalityKeys, ctx.inputs.numberOfKeys, 100),
         'count (rooms)', NUMBER_FORMATS.integer],
       ['ADR — Base / Off-Season',     'HospitalityADRBase',
-        firstNumber(ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, 6000),
+        firstNumber(ctx.inputs.adr, ctx.inputs.hospitalityADRBase, ctx.inputs.hospitalityADR, 6000),
         'INR / room / night', NUMBER_FORMATS.integer],
       ['ADR — Peak Season',           'HospitalityADRPeak',
-        firstNumber(ctx.inputs.hospitalityADRPeak, ctx.inputs.hospitalityHighSeasonADR, 9000),
+        firstNumber(ctx.inputs.hospitalityADRPeak, ctx.inputs.hospitalityHighSeasonADR, ctx.inputs.adr, 9000),
         'INR / room / night', NUMBER_FORMATS.integer],
       ['Peak Season Share',           'HospitalityPeakShare',
         toPctDecimal(firstNumber(ctx.inputs.hospitalityPeakShare, ctx.inputs.hospitalityHighSeasonShare, 0.30)),

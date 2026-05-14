@@ -2678,3 +2678,25 @@ Finished the Excel-focused remainder from the current remarks/screenshot thread.
 ### What's left to do
 No manual user action is required for this patch. True Monte Carlo remains intentionally skipped per operator instruction.
 
+
+## 2026-05-14 - Pointec XLSX export unblock
+
+### What was worked on
+Fixed the Pointec export blocker where REDIP was treating the saved hospitality assumptions as missing industrial rent, area, and cost inputs. The exporter now respects a deliberate non-residential asset-class selection and converts hospitality assumptions into the generic workbook inputs needed for Excel formulas.
+
+### Plain-English recap
+- Pointec can now export because its saved hotel-style assumptions are recognized instead of being rejected as missing warehouse-style inputs.
+- Corporate-looking deal names no longer override a deliberate hospitality selection.
+- The workbook now uses rooms, nightly rate, occupancy, and cost per room to fill the Excel inputs it needs.
+
+### PRs opened / merged
+- None in this session.
+
+### Validation
+- Asset-class utility focused suite: 25 tests passed.
+- XLSX v2 focused suite: 147 tests passed.
+- Generated a real Pointec-shaped workbook from stored data and confirmed it opened with 13 sheets.
+
+### What's left to do
+Deploy this patch, then download the production Pointec workbook once to confirm the browser download path is clear.
+
