@@ -680,11 +680,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(String(a5)).toContain("isn't cleanly applicable");
     });
 
-    // PR-D: Sponsor / LP Waterfall sheet — multi-tier pour-over of
-    // equity proceeds (LP pref + return of capital → promote split).
-    // Reference templates (NAIOP "Waterfall - IRR Hurdles", RE-540
-    // "Waterfall") use exactly this structure.
-    test('Sponsor LP Waterfall section computes the 3-tier pour-over inside Debt Sizing', async () => {
+    test('Sponsor LP Waterfall section computes quarterly catch-up and hurdle-ladder distributions inside Debt Sizing', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
@@ -692,46 +688,42 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(wf).toBeDefined();
       expect(wb.getWorksheet('Sponsor LP Waterfall')).toBeUndefined();
 
-      // Capital Stack block (rows 4-9)
-      expect(String(wf.getCell('A129').value)).toContain('Capital Stack');
-      // Total Equity = Total Cost - Loan
-      expect(wf.getCell('B132').value.formula).toBeFormula('=B130-B131');
-      // LP Equity = Total × LPEquityPct
-      expect(wf.getCell('B133').value.formula).toBeFormula('=B132*LPEquityPct');
-      // GP Equity = Total × GPEquityPct
-      expect(wf.getCell('B134').value.formula).toBeFormula('=B132*GPEquityPct');
+      expect(String(wf.getCell('A130').value)).toContain('Sponsor / LP Waterfall');
+      expect(String(wf.getCell('A133').value)).toContain('Capital Stack');
+      expect(wf.getCell('B136').value.formula).toBeFormula('=B134-B135');
+      expect(wf.getCell('B137').value.formula).toBeFormula('=B136*LPEquityPct');
+      expect(wf.getCell('B138').value.formula).toBeFormula('=B136*GPEquityPct');
 
-      // Proceeds & Pref block (rows 11-16)
-      expect(String(wf.getCell('A137').value)).toContain('Proceeds');
-      // Pref accrual: LP Equity × ((1+pref)^N - 1)
-      expect(wf.getCell('B140').value.formula).toBeFormula('=B133*((1+PrefReturnRate)^B138-1)');
-      // Tier 1 LP distribution = MIN(proceeds, capital + pref)
-      expect(wf.getCell('B141').value.formula).toBeFormula('=MIN(B139,B133+B140)');
+      expect(String(wf.getCell('F133').value)).toContain('Hurdle Ladder');
+      expect(wf.getCell('G134').value.formula).toBeFormula('=IF(ISNUMBER(Dashboard!B21),Dashboard!B21,0)');
+      expect(wf.getCell('G135').value.formula).toContain('Hurdle2IRR');
+      expect(wf.getCell('G135').value.formula).toContain('Hurdle1IRR');
 
-      // Promote split block (rows 18-22)
-      expect(String(wf.getCell('A145').value)).toContain('Promote Split');
-      // LP promote = Residual × PromoteLPPct
-      expect(wf.getCell('B146').value.formula).toBeFormula('=B142*PromoteLPPct');
-      // GP promote = Residual × PromoteGPPct
-      expect(wf.getCell('B147').value.formula).toBeFormula('=B142*PromoteGPPct');
-
-      // Final returns block (rows 24-30)
-      expect(String(wf.getCell('A152').value)).toContain('Final Investor Returns');
-      // LP Total = Tier 1 + LP promote
-      expect(wf.getCell('B153').value.formula).toBeFormula('=B141+B146');
-      // LP Equity Multiple = LP Total / LP Equity
-      expect(wf.getCell('B155').value.formula).toBeFormula('=IFERROR(B153/B133,0)');
-      // LP IRR approx = (EM)^(1/years) - 1
-      expect(wf.getCell('B157').value.formula).toBeFormula('=IFERROR((B155)^(1/B138)-1,0)');
+      expect(String(wf.getCell('A141').value)).toContain('Quarterly Distribution Waterfall');
+      expect(String(wf.getCell('A142').value)).toBe('Period');
+      expect(wf.getCell('B143').value.formula).toBeFormula("='Cash Flow Engine'!B$3");
+      expect(wf.getCell('C143').value.formula).toBeFormula("=MAX(0,'Cash Flow Engine'!B$38)");
+      expect(wf.getCell('F143').value.formula).toContain('PrefReturnRate');
+      expect(wf.getCell('G143').value.formula).toBeFormula('=MIN(C143,E143+F143)');
+      expect(wf.getCell('H143').value.formula).toBeFormula('=MIN(MAX(0,C143-G143),D143)');
+      expect(wf.getCell('I143').value.formula).toContain('CatchUpTargetGPPct');
+      expect(wf.getCell('I143').value.formula).toContain('CatchUpPct');
+      expect(wf.getCell('J143').value.formula).toContain('Hurdle2LPPct');
+      expect(wf.getCell('J143').value.formula).toContain('Hurdle1LPPct');
+      expect(wf.getCell('K143').value.formula).toContain('Hurdle2GPPct');
+      expect(wf.getCell('N143').value.formula).toBeFormula('=G143+H143+J143');
+      expect(wf.getCell('O143').value.formula).toBeFormula('=I143+K143');
     });
 
-    test('Inputs sheet exposes 5 new waterfall named ranges', async () => {
+    test('Inputs sheet exposes catch-up and hurdle-ladder waterfall named ranges', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const allDefined = JSON.stringify(wb.definedNames);
       for (const name of ['LPEquityPct', 'GPEquityPct', 'PrefReturnRate',
-        'PromoteLPPct', 'PromoteGPPct']) {
+        'PromoteLPPct', 'PromoteGPPct', 'CatchUpPct', 'CatchUpTargetGPPct',
+        'Hurdle1IRR', 'Hurdle1LPPct', 'Hurdle1GPPct', 'Hurdle2IRR',
+        'Hurdle2LPPct', 'Hurdle2GPPct']) {
         expect(allDefined).toContain(name);
       }
     });
@@ -801,65 +793,53 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       }
     });
 
-    // PR-C: standalone Amortization Schedule sheet — quarter-by-quarter
-    // debt amortization with Beginning / Payment / Interest / Principal /
-    // Ending Balance columns. Standard component of every institutional
-    // pro forma (NAIOP + RE-540 both have explicit amortization sheets).
+    test('Inputs sheet exposes construction-to-permanent debt phase named ranges', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const allDefined = JSON.stringify(wb.definedNames);
+      for (const name of ['ConstructionLoanLTC', 'ConstructionDebtRatePct',
+        'PermanentDebtRatePct', 'PermanentRefiLTV', 'RefinanceQuarter']) {
+        expect(allDefined).toContain(name);
+      }
+    });
+
     test('Amortization Schedule section renders loan terms + quarter-by-quarter amort table (combined Debt Sizing & Amortization sheet)', async () => {
-      // Post-restructure: Amortization rows shifted +30 to live BELOW the
-      // Debt Sizing section on the same worksheet. amortShift = 30.
-      // Loan Terms title was row 4 → now row 34; Loan Amount was B5 → B35;
-      // table header was row 12 → row 42; first amort row was 13 → 43.
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const amort = wb.getWorksheet('Debt Sizing & Amortization');
       expect(amort).toBeDefined();
 
-      // Loan Terms block at rows 34-40 (was 4-10 pre-restructure)
+      expect(String(amort.getCell('A32').value)).toMatch(/Construction-to-Permanent Debt Schedule/);
       const a34 = amort.getCell('A34').value;
-      expect(String(a34)).toMatch(/Loan Terms/);
+      expect(String(a34)).toMatch(/Debt Phase Terms/);
 
-      // Loan Amount cell B35 (was B5) — same-sheet reference to B28
-      // (Debt Sizing section's MIN-of-4 cell) since both sections live on
-      // the same worksheet now.
       const b35 = amort.getCell('B35').value;
       expect(b35).toBeTruthy();
-      expect(b35.formula).toBeFormula('=B28');
-
-      // Quarterly Rate cell B39 (was B9) — (1+annual)^(1/4) - 1
+      expect(b35.formula).toBeFormula('=TotalProjectCostCr*ConstructionLoanLTC');
+      expect(amort.getCell('B36').value.formula).toBeFormula('=B28');
+      expect(amort.getCell('B37').value.formula).toMatch(/\(1\+ConstructionDebtRatePct\)\^\(1\/4\)-1/);
+      expect(amort.getCell('B38').value.formula).toMatch(/\(1\+PermanentDebtRatePct\)\^\(1\/4\)-1/);
       const b39 = amort.getCell('B39').value;
-      expect(b39.formula).toMatch(/\(1\+DebtRatePct\)\^\(1\/4\)-1/);
+      expect(b39.formula).toBeFormula('=ROUNDUP(MoratoriumMonths/3,0)');
+      expect(amort.getCell('B40').value.formula).toBeFormula('=MAX(1,RefinanceQuarter)');
+      expect(amort.getCell('B42').value.formula).toBeFormula('=-PMT(B38,MAX(B41-B39,1),B36)');
 
-      // Quarterly Payment cell B40 (was B10) — PMT formula. The
-      // references B39, B38, B35 reflect the shifted positions of the
-      // rate / periods / amount cells.
-      const b40 = amort.getCell('B40').value;
-      expect(b40.formula).toMatch(/PMT\(B39,B38,B35\)/);
+      expect(String(amort.getCell('A44').value)).toBe('Period');
+      expect(String(amort.getCell('B44').value)).toBe('Phase');
+      expect(String(amort.getCell('C44').value)).toBe('Construction Draw');
+      expect(String(amort.getCell('I44').value)).toBe('Permanent Beg. Balance');
+      expect(String(amort.getCell('N44').value)).toBe('Cash Debt Service');
 
-      // Header row at row 42 (was 12)
-      expect(String(amort.getCell('A42').value)).toBe('Period');
-      expect(String(amort.getCell('B42').value)).toBe('Beginning Balance');
-      expect(String(amort.getCell('C42').value)).toBe('Payment');
-      expect(String(amort.getCell('D42').value)).toBe('Interest');
-      expect(String(amort.getCell('E42').value)).toBe('Principal');
-      expect(String(amort.getCell('F42').value)).toBe('Ending Balance');
-
-      // Row 43 (Period 1, was row 13): Beginning Balance = $B$35 (Loan Amount, was $B$5)
-      const b43 = amort.getCell('B43').value;
-      expect(b43.formula).toBeFormula('=$B$35');
-
-      // Row 44 (Period 2, was row 14): Beginning Balance = previous-row Ending Balance
-      const b44 = amort.getCell('B44').value;
-      expect(b44.formula).toMatch(/F43/);
-
-      // Interest formula = Beginning × Quarterly Rate (B$39 was B$9 pre-shift)
-      const d43 = amort.getCell('D43').value;
-      expect(d43.formula).toContain('B43*$B$39');
-
-      // Ending Balance = MAX(Beginning - Principal, 0)
-      const f43 = amort.getCell('F43').value;
-      expect(f43.formula).toContain('MAX(B43-E43,0)');
+      expect(amort.getCell('B45').value.formula).toBeFormula('=IF($A45="","",IF($A45<=$B$40,"Construction","Permanent"))');
+      expect(amort.getCell('C45').value.formula).toContain('$B$35/$B$40');
+      expect(amort.getCell('E45').value.formula).toContain('(D45+C45/2)*$B$37');
+      expect(amort.getCell('F45').value.formula).toBeFormula('=IF($B45="Construction",E45,0)');
+      expect(amort.getCell('G45').value.formula).toContain('$B$40+1');
+      expect(amort.getCell('J45').value.formula).toContain('$B$39');
+      expect(amort.getCell('J45').value.formula).toContain('$B$42');
+      expect(amort.getCell('M45').value.formula).toContain('I45-L45');
     });
 
     // PR-A institutional-grade soft cost breakdown: reference pro formas
