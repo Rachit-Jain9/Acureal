@@ -48,6 +48,32 @@ describe('assetClass utility', () => {
     expect(assetClass).toBe('industrial_warehousing');
   });
 
+  test('honours explicit non-residential asset_class over corporate-name inference', () => {
+    const assetClass = inferAssetClass({
+      deal: {
+        name: 'Pointec Pens and Energy Private Limited',
+        asset_class: 'hospitality',
+      },
+      inputs: {
+        assetClass: 'hospitality',
+      },
+    });
+    expect(assetClass).toBe('hospitality');
+  });
+
+  test('prefers a saved non-residential asset_class over stale residential input defaults', () => {
+    const assetClass = inferAssetClass({
+      deal: {
+        name: 'Pointec Pens and Energy Private Limited',
+        asset_class: 'hospitality',
+      },
+      inputs: {
+        assetClass: 'residential_apartments',
+      },
+    });
+    expect(assetClass).toBe('hospitality');
+  });
+
   test('honours explicit asset_class when deal name resolves to residential', () => {
     // Edge case: an operator might genuinely have a "Phase 2 Apartments"
     // deal that they have re-classified as mixed_use mid-flow. Don't

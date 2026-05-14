@@ -206,6 +206,38 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         });
     });
 
+    test('strict validation accepts hospitality assumptions without office rent inputs', async () => {
+      const ctx = minimalContext();
+      ctx.deal.name = 'Pointec Pens and Energy Private Limited';
+      ctx.deal.asset_class = 'hospitality';
+      ctx.property.property_type = 'land';
+      ctx.property.saleable_area_sqft = null;
+      ctx.deal.model_params.inputs = {
+        assetClass: 'hospitality',
+        keys: 100,
+        adr: 7000,
+        stabilizedOccPct: 70,
+        constructionCostPerKey: 2000000,
+        landCostCr: 30,
+        exitCapRate: 9.5,
+        interestRatePct: 12,
+        discountRatePct: 15,
+        projectDurationYears: 4,
+      };
+
+      const prepared = __internal.prepareWorkbookContext(ctx, {
+        strictValidation: false,
+        generatedAt: '2026-05-14T00:00:00Z',
+      });
+
+      expect(prepared.assetClass).toBe('hospitality');
+      expect(prepared.exportQa.blockers).toEqual([]);
+      expect(prepared.exportQa.core.saleableAreaSqft).toBe(60000);
+      expect(prepared.exportQa.core.baseRentPerSqftMonth).toBeGreaterThan(0);
+      expect(prepared.exportQa.core.constructionCostPerSqft).toBeGreaterThan(0);
+      await expect(buildDealWorkbookV2(ctx, { strictValidation: true })).resolves.toEqual(expect.any(Buffer));
+    }, 30000);
+
     test('strict validation passes representative asset classes, deal structures, and exit strategies', async () => {
       const cases = [
         { asset: 'residential_apartments', exit: 'outright_progressive' },
