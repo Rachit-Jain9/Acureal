@@ -2794,3 +2794,24 @@ Upgraded the XLSX export so the debt schedule and sponsor/LP waterfall model the
 ### What's left to do
 Wait for PR #306 CI, then merge and deploy once checks pass.
 
+
+## 2026-05-14 - Monthly cash flow circular-reference fix
+
+### What was worked on
+Fixed the XLSX export formula bug that made the Monthly Cash Flow total column include itself in its own SUM range. This caused Excel to warn about circular references, especially in long hospitality workbooks such as Pointec.
+
+### Plain-English recap
+- Monthly Cash Flow totals now sum only the real monthly columns.
+- Final-balance rows now point to the last real month, not the Total column.
+- The same guard was applied to the older construction drawdown builder.
+- This matters because Excel should open the exported workbook without circular-reference warnings.
+
+### PRs opened / merged
+- Pending PR from `codex/fix-xlsx-circular-references`.
+
+### Validation
+- XLSX v2 focused suite: 151 tests passed.
+
+### What's left to do
+Open the PR, wait for CI, merge, deploy, then re-download Pointec once to confirm Excel opens cleanly.
+
