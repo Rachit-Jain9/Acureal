@@ -6991,6 +6991,51 @@ const normalizeWorksheetXmlForExcelCompatibility = async (xlsxBuffer) => {
   return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
 };
 
+const forceWorkbookRecalculationOnOpen = async (xlsxBuffer) => {
+  const zip = await JSZip.loadAsync(xlsxBuffer);
+  const workbookFile = zip.file('xl/workbook.xml');
+  if (!workbookFile) return xlsxBuffer;
+
+  const xml = await workbookFile.async('string');
+  let changed = false;
+  const forcedCalcPr = (tag) => {
+    const cleaned = tag.replace(/\s(?:calcMode|fullCalcOnLoad|forceFullCalc|calcOnSave)="[^"]*"/g, '');
+    const attrs = ' calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1" calcOnSave="1"';
+    return cleaned.endsWith('/>')
+      ? cleaned.replace(/\/>$/, `${attrs}/>`)
+      : cleaned.replace(/>$/, `${attrs}>`);
+  };
+
+  let next;
+  if (/<calcPr\b[^>]*\/?>/.test(xml)) {
+    next = xml.replace(/<calcPr\b[^>]*\/?>/, (tag) => forcedCalcPr(tag));
+  } else {
+    next = xml.replace('</workbook>', '<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1" calcOnSave="1"/></workbook>');
+  }
+
+  if (zip.file('xl/calcChain.xml')) {
+    changed = true;
+    zip.remove('xl/calcChain.xml');
+    const relsFile = zip.file('xl/_rels/workbook.xml.rels');
+    if (relsFile) {
+      const relsXml = await relsFile.async('string');
+      const relsNext = relsXml.replace(/<Relationship\b[^>]*calcChain\.xml[^>]*\/>/g, '');
+      if (relsNext !== relsXml) zip.file('xl/_rels/workbook.xml.rels', relsNext);
+    }
+    const contentTypesFile = zip.file('[Content_Types].xml');
+    if (contentTypesFile) {
+      const contentTypesXml = await contentTypesFile.async('string');
+      const contentTypesNext = contentTypesXml.replace(/<Override\b[^>]*\/xl\/calcChain\.xml[^>]*\/>/g, '');
+      if (contentTypesNext !== contentTypesXml) zip.file('[Content_Types].xml', contentTypesNext);
+    }
+  }
+
+  changed = changed || next !== xml;
+  if (!changed) return xlsxBuffer;
+  zip.file('xl/workbook.xml', next);
+  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+};
+
 const validateXlsxBufferForDownload = async (xlsxBuffer) => {
   const zip = await JSZip.loadAsync(xlsxBuffer);
   const issues = [];
@@ -7017,6 +7062,10 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     }
     if (workbookXml.includes('Export QA &amp; Sources') || workbookXml.includes('Export QA & Sources')) {
       add(SHEETS.qaSources, 'Export QA & Sources must be merged into Inputs & Assumptions.', 'Remove the standalone QA worksheet before download.');
+    }
+    const calcPr = workbookXml.match(/<calcPr\b[^>]*>/)?.[0] || '';
+    if (!calcPr.includes('calcMode="auto"') || !calcPr.includes('fullCalcOnLoad="1"') || !calcPr.includes('forceFullCalc="1"')) {
+      add('xl/workbook.xml', 'Workbook is not marked for automatic full recalculation on open.', 'Force recalculation metadata before download so formula-heavy sheets render values in Excel.');
     }
   }
 
@@ -7058,8 +7107,9 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
 const finalizeWorkbookBuffer = async (xlsxBuffer) => {
   const stripped = await stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
   const normalized = await normalizeWorksheetXmlForExcelCompatibility(stripped);
-  await validateXlsxBufferForDownload(normalized);
-  return normalized;
+  const recalcReady = await forceWorkbookRecalculationOnOpen(normalized);
+  await validateXlsxBufferForDownload(recalcReady);
+  return recalcReady;
 };
 
 /**
@@ -7125,6 +7175,7 @@ module.exports = {
     buildDashboardSparklineSpecs,
     stripLeadingEqualsFromWorksheetFormulas,
     normalizeWorksheetXmlForExcelCompatibility,
+    forceWorkbookRecalculationOnOpen,
     validateXlsxBufferForDownload,
     XlsxExportValidationError,
     SHEETS,
