@@ -1532,10 +1532,27 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // PR-NX4 (2026-05-15): for mixed_use / redevelopment / township
+  // templates, the Selling Rate per sqft should default to the derived
+  // MixUseBlendedRatePerSqft (= sum of component_share × component_rate).
+  // Pre-fix the operator had to read the blended rate from the
+  // Mixed-Use Component section and manually retype it into Selling Rate
+  // — which silently broke when component splits changed. Wiring it
+  // here closes the loop: edit a component share and SellRatePerSqft
+  // recalculates live. Operators with an explicit sellingRatePerSqft
+  // input override (any positive value) keep their literal value.
+  const isMixUseTemplate = ['mixed_use', 'redevelopment'].includes(ctx.assetClass);
+  const hasExplicitSellingRate = asFiniteNumber(ctx.inputs.sellingRatePerSqft) > 0;
+  const sellRateCell = isMixUseTemplate && !hasExplicitSellingRate
+    ? { formula: '=MixUseBlendedRatePerSqft' }
+    : sellRatePerSqftFor(ctx);
+  const sellRateUnit = isMixUseTemplate && !hasExplicitSellingRate
+    ? 'INR/sqft (auto-blended from components)'
+    : 'INR/sqft';
   const developmentRevenueSection = {
     title: 'Pricing & Revenue (Development)',
     rows: [
-      ['Selling Rate per sqft',   'SellRatePerSqft',     sellRatePerSqftFor(ctx),                'INR/sqft', NUMBER_FORMATS.integer],
+      ['Selling Rate per sqft',   'SellRatePerSqft',     sellRateCell,                            sellRateUnit, NUMBER_FORMATS.integer],
       ['Pricing Escalation',      'EscalationPct',       toPctDecimal(firstNumber(ctx.inputs.pricingEscalationPct, ctx.inputs.rentEscalationPct, 0)),                 '% / year', NUMBER_FORMATS.percent],
       ['Sales Velocity',          'SalesVelocityPct',    toPctDecimal(firstNumber(ctx.inputs.salesVelocityPct, ctx.inputs.absorptionPct, 0.20)),                     '% / quarter', NUMBER_FORMATS.percent],
       ['Customer Collection',     'CollectionPct',       toPctDecimal(firstNumber(ctx.inputs.customerCollectionPct, 0.85)),                                          '% of sale', NUMBER_FORMATS.percent],
@@ -1904,6 +1921,20 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Sum of detailed approvals',        'ApprovalsBreakdownSumCr',
         { formula: '=ApprKhataCr+ApprBDALayoutCr+ApprBBMPSanctionCr+ApprBWSSBCr+ApprBESCOMCr+ApprKSPCBCr+ApprAirportNOCCr+ApprFireNOCCr+ApprLiftNOCCr+ApprRERACr+ApprOCCr+ApprCCCr' },
         'INR Cr (derived — compare vs ApprovalCostCr above)', NUMBER_FORMATS.currency],
+      // PR-NX4 (2026-05-15): live reconciliation between the operator-
+      // entered headline ApprovalCostCr and the detailed breakdown sum.
+      // Auto-flags divergence > 5% so the operator knows when their
+      // breakdown drift has materially desynced from the headline rollup
+      // (which is what downstream cost / debt / waterfall formulas use).
+      ['Reconciliation — Δ vs Headline',  'ApprovalsBreakdownDeltaCr',
+        { formula: '=ApprovalsBreakdownSumCr-ApprovalCostCr' },
+        'INR Cr (breakdown − headline; should be ~0)', NUMBER_FORMATS.currency],
+      ['Reconciliation — Δ %',             'ApprovalsBreakdownDeltaPct',
+        { formula: '=IFERROR(ABS(ApprovalsBreakdownDeltaCr)/ApprovalCostCr,0)' },
+        '% absolute deviation (target < 5%)', NUMBER_FORMATS.percent],
+      ['Reconciliation — Status',          'ApprovalsBreakdownStatus',
+        { formula: '=IF(IFERROR(ApprovalsBreakdownDeltaPct,0)<0.05,"✓ Aligned","⚠ Drift > 5% — review breakdown")' },
+        'auto-flagged when divergence exceeds 5%', null],
     ],
   };
 
@@ -4002,11 +4033,34 @@ const buildPhasingSheet = (workbook, ctx) => {
     },
     {
       label: 'Quarter sales (INR Cr)',
-      formula: (q) =>
-        `=SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(${q}/4)*` +
-        `IF(${q}=1,IF(${q}<=SalesLagQ,0,MIN(1,SalesVelocityPct*(${q}-SalesLagQ))),` +
-        `IF(${q}<=SalesLagQ,0,MIN(1,SalesVelocityPct*(${q}-SalesLagQ)))-` +
-        `IF(${q}-1<=SalesLagQ,0,MIN(1,SalesVelocityPct*(${q}-1-SalesLagQ))))/10000000`,
+      // Base sales formula = absorption_delta × area × rate × escalation / 1e7.
+      //
+      // PR-NX4 (2026-05-15): wire EffectiveExitFactor + KhataExitMultiplier
+      // into the FINAL quarter when ExitStrategyType = "bulk_exit_completion".
+      // Final quarter's sales add a "bulk-exit top-up" = remaining unsold
+      // inventory × full rate × EffectiveExitFactor (discount + broker fee)
+      // × KhataExitMultiplier (B-khata haircut, default 1.0 for A-khata).
+      // Without this top-up, leftover inventory at completion stays dead
+      // in the model — operators using bulk_exit_completion strategy were
+      // previously seeing under-counted revenue. EffectiveExitFactor was
+      // a display-only derived value on Inputs; now it drives the math.
+      formula: (q) => {
+        const baseFormula =
+          `SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(${q}/4)*` +
+          `IF(${q}=1,IF(${q}<=SalesLagQ,0,MIN(1,SalesVelocityPct*(${q}-SalesLagQ))),` +
+          `IF(${q}<=SalesLagQ,0,MIN(1,SalesVelocityPct*(${q}-SalesLagQ)))-` +
+          `IF(${q}-1<=SalesLagQ,0,MIN(1,SalesVelocityPct*(${q}-1-SalesLagQ))))/10000000`;
+        // Only the final quarter gets the bulk-exit top-up.
+        if (q !== ctx.totalQuarters) {
+          return `=${baseFormula}`;
+        }
+        const remainingInv =
+          `MAX(0,1-MIN(1,SalesVelocityPct*(${q}-SalesLagQ)))`;
+        const bulkExitTopUp =
+          `${remainingInv}*SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(${q}/4)`
+          + `*EffectiveExitFactor*KhataExitMultiplier/10000000`;
+        return `=${baseFormula}+IF(ExitStrategyType="bulk_exit_completion",${bulkExitTopUp},0)`;
+      },
       format: NUMBER_FORMATS.currency,
     },
     {
