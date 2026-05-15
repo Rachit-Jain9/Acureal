@@ -3531,6 +3531,159 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // PR-NX4 (2026-05-15): close the derived-value loop — wire 3 derived
+    // named ranges that used to sit idle on Inputs into the actual
+    // downstream formulas. Operators no longer have to manually re-paste
+    // these derived values; they flow live as soon as the operator edits
+    // the inputs that feed them.
+    describe('PR-NX4: derived-value wiring — close the loop', () => {
+      const findValueCellByLabel = (inputs, labelMatch) => {
+        let found = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (typeof labelMatch === 'string'
+            ? label === labelMatch
+            : labelMatch.test(label)) {
+            found = row.getCell(2);
+          }
+        });
+        return found;
+      };
+
+      // ── Item #1: SellRatePerSqft auto-defaults to MixUseBlendedRatePerSqft
+      //    for mixed_use templates with no explicit selling rate. ─────
+      test('Mixed-use template: SellRatePerSqft is a formula referencing MixUseBlendedRatePerSqft', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'mixed_use';
+        ctx.property.property_type = 'mixed_use';
+        // Clear any explicit selling rate so the auto-blend kicks in.
+        delete ctx.deal.model_params.inputs.sellingRatePerSqft;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Selling Rate per sqft');
+        expect(cell).not.toBeNull();
+        // ExcelJS strips the leading "=" when reading formulas back.
+        expect(cell.value).toEqual(expect.objectContaining({ formula: 'MixUseBlendedRatePerSqft' }));
+      });
+
+      test('Residential template: SellRatePerSqft stays a literal value (no auto-blend)', async () => {
+        const ctx = minimalContext(); // default residential_apartments
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Selling Rate per sqft');
+        expect(cell).not.toBeNull();
+        // Should be a literal number, not a formula
+        expect(typeof cell.value).not.toBe('object');
+        expect(cell.value).toBe(12000); // from minimalContext default
+      });
+
+      test('Mixed-use template with explicit selling rate keeps the literal', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'mixed_use';
+        ctx.property.property_type = 'mixed_use';
+        ctx.deal.model_params.inputs.sellingRatePerSqft = 15500;
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, 'Selling Rate per sqft');
+        expect(cell.value).toBe(15500);
+      });
+
+      // ── Item #2: Approvals reconciliation row auto-flags drift > 5% ───
+      test('Approvals reconciliation row computes delta + Δ% + status', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+
+        const deltaCell = findValueCellByLabel(inputs, /Reconciliation — Δ vs Headline/);
+        expect(deltaCell).not.toBeNull();
+        // ExcelJS strips leading "=" when reading formulas back
+        expect(deltaCell.value.formula).toBe('ApprovalsBreakdownSumCr-ApprovalCostCr');
+
+        const deltaPctCell = findValueCellByLabel(inputs, /Reconciliation — Δ %/);
+        expect(deltaPctCell).not.toBeNull();
+        expect(deltaPctCell.value.formula).toContain('ApprovalsBreakdownDeltaCr');
+        expect(deltaPctCell.value.formula).toContain('ApprovalCostCr');
+
+        const statusCell = findValueCellByLabel(inputs, /Reconciliation — Status/);
+        expect(statusCell).not.toBeNull();
+        // Status flag: "✓ Aligned" when within 5%, "⚠ Drift > 5%" otherwise
+        expect(statusCell.value.formula).toContain('Aligned');
+        expect(statusCell.value.formula).toContain('Drift');
+        expect(statusCell.value.formula).toContain('0.05');
+      });
+
+      // ── Item #3: Development family Quarter sales has bulk-exit top-up
+      //    at the final quarter when bulk_exit_completion strategy. ───
+      test('Development Quarter sales formula at final quarter has bulk-exit top-up', async () => {
+        const ctx = minimalContext();
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cfe = wb.getWorksheet('Cash Flow Engine');
+
+        // Locate the Quarter sales row
+        let salesRow = null;
+        cfe.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Quarter sales (INR Cr)') salesRow = rowIdx;
+        });
+        expect(salesRow).not.toBeNull();
+
+        const prepared = __internal.prepareWorkbookContext(ctx, { strictValidation: false });
+        const excelCol = (n) => {
+          let s = '';
+          let v = n;
+          while (v > 0) {
+            const r = (v - 1) % 26;
+            s = String.fromCharCode(65 + r) + s;
+            v = Math.floor((v - r) / 26);
+          }
+          return s;
+        };
+        const finalQCol = excelCol(prepared.totalQuarters + 1);
+
+        // Final-quarter formula should include the bulk-exit-completion branch
+        // with EffectiveExitFactor × KhataExitMultiplier
+        const finalCell = cfe.getCell(`${finalQCol}${salesRow}`);
+        expect(finalCell.value.formula).toContain('bulk_exit_completion');
+        expect(finalCell.value.formula).toContain('EffectiveExitFactor');
+        expect(finalCell.value.formula).toContain('KhataExitMultiplier');
+
+        // Q1 (non-final) should NOT contain the bulk-exit branch
+        const q1Cell = cfe.getCell(`B${salesRow}`);
+        expect(q1Cell.value.formula).not.toContain('bulk_exit_completion');
+        expect(q1Cell.value.formula).not.toContain('EffectiveExitFactor');
+      });
+
+      test('Mid-quarter sales formulas remain the base absorption-delta formula', async () => {
+        const ctx = minimalContext();
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cfe = wb.getWorksheet('Cash Flow Engine');
+
+        let salesRow = null;
+        cfe.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Quarter sales (INR Cr)') salesRow = rowIdx;
+        });
+
+        // Pick Q5 (mid-quarter) and confirm it's the simple base formula
+        const q5Cell = cfe.getCell(`F${salesRow}`); // col F = q5 (B=q1)
+        expect(q5Cell.value.formula).toContain('SaleableAreaSqft');
+        expect(q5Cell.value.formula).toContain('SellRatePerSqft');
+        // No bulk-exit branch in mid-quarter
+        expect(q5Cell.value.formula).not.toContain('bulk_exit_completion');
+      });
+    });
+
     describe('Reversion formula wiring (TotalExitCostPct)', () => {
       test('Income family Reversion uses TotalExitCostPct instead of bare SellingCostPct', async () => {
         const ctx = minimalContext();
