@@ -1260,6 +1260,18 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(legacyDrawingIndex).toBeLessThan(tablePartsIndex);
     });
 
+    test('workbook forces automatic full recalculation so formula-heavy sheets display values in Excel', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const zip = await JSZip.loadAsync(buffer);
+      const workbookXml = await zip.file('xl/workbook.xml').async('string');
+      const calcPr = workbookXml.match(/<calcPr\b[^>]*>/)?.[0] || '';
+
+      expect(calcPr).toContain('calcMode="auto"');
+      expect(calcPr).toContain('fullCalcOnLoad="1"');
+      expect(calcPr).toContain('forceFullCalc="1"');
+      expect(zip.file('xl/calcChain.xml')).toBeNull();
+    });
+
     // The Uses Breakdown doughnut always renders. The Monthly Trend
     // bar renders when totalQuarters >= 2 (which it always is in our
     // test contexts since the minimum is 4).
