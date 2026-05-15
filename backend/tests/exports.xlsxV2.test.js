@@ -3804,6 +3804,140 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // PR-NX6 (2026-05-15): asset-class defaults library bridges the gap
+    // between the kernel's mostly-empty defaults and the rich Bengaluru-
+    // priority benchmarks that operators expect. Layered into
+    // ctx.engineAssumptions BEFORE the kernel's resolveAssumptions output,
+    // so any kernel-provided value (e.g. rentPerSqftPerMonth = 95 for
+    // commercial_office) still wins, but fields the kernel doesn't cover
+    // (e.g. saleableAreaSqft, landCostCr, debt structure) get our defaults.
+    describe('PR-NX6: asset-class defaults bridge sparse-input deals', () => {
+      const findValueByLabel = (inputs, labelMatch) => {
+        let v = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (typeof labelMatch === 'string'
+            ? label === labelMatch
+            : labelMatch.test(label)) {
+            v = row.getCell(2).value;
+          }
+        });
+        return v;
+      };
+
+      test('Sparse Commercial Office deal seeds Bengaluru-realistic defaults', async () => {
+        // Operator-created deal with only land cost + area filled. Every
+        // other field should fall through to the asset-class default.
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        ctx.property.saleable_area_sqft = null;
+        ctx.deal.model_params.inputs = {
+          assetClass: 'commercial_office',
+          landCostCr: 95, // operator entered
+          // Everything else missing — should default.
+        };
+        const buffer = await buildDealWorkbookV2(ctx, { strictValidation: false });
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+
+        // Asset-class defaults flow through. Saleable area: my default 500000.
+        expect(findValueByLabel(inputs, /Saleable.*Leasable Area/)).toBeGreaterThan(0);
+        // Construction cost: 6800/sqft from my defaults.
+        expect(findValueByLabel(inputs, /Construction Cost.*sqft/i)).toBe(6800);
+        // Debt LTV: 60% from my defaults.
+        expect(findValueByLabel(inputs, /^Debt %/)).toBeCloseTo(0.60, 2);
+        // Operator-entered landCost is preserved (not overridden by default).
+        expect(findValueByLabel(inputs, /^Land Cost/i)).toBe(95);
+      });
+
+      test('Sparse Hospitality deal seeds constructionCostPerSqft from asset-class default', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'hospitality';
+        ctx.property.property_type = 'hospitality';
+        ctx.deal.model_params.inputs = {
+          assetClass: 'hospitality',
+        };
+        const buffer = await buildDealWorkbookV2(ctx, { strictValidation: false });
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+
+        // Hospitality construction cost defaults to 6400/sqft (mid-segment
+        // institutional hotel build); flows via engineAssumptions because
+        // constructionCostPerSqftFor() consults that chain.
+        expect(findValueByLabel(inputs, /Construction Cost.*sqft/i)).toBe(6400);
+      });
+
+      test('Sparse Retail deal seeds constructionCostPerSqft from asset-class default', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'retail';
+        ctx.property.property_type = 'retail';
+        ctx.deal.model_params.inputs = {
+          assetClass: 'retail',
+        };
+        const buffer = await buildDealWorkbookV2(ctx, { strictValidation: false });
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        // Retail construction cost defaults to 7500/sqft (mall finish-level)
+        expect(findValueByLabel(inputs, /Construction Cost.*sqft/i)).toBe(7500);
+      });
+
+      test('Sparse Industrial deal seeds constructionCostPerSqft + propertyTax from defaults', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'industrial_warehousing';
+        ctx.property.property_type = 'industrial_warehousing';
+        ctx.deal.model_params.inputs = {
+          assetClass: 'industrial_warehousing',
+        };
+        const buffer = await buildDealWorkbookV2(ctx, { strictValidation: false });
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        // Industrial / warehouse construction cost = ₹2400/sqft (PEB shell)
+        expect(findValueByLabel(inputs, /Construction Cost.*sqft/i)).toBe(2400);
+      });
+
+      test('Operator-entered inputs always override asset-class defaults', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        ctx.deal.model_params.inputs = {
+          assetClass: 'commercial_office',
+          // Operator-specified non-default values.
+          landCostCr: 250,
+          constructionCostPerSqft: 9000,
+          debtLTV: 0.70,
+        };
+        const buffer = await buildDealWorkbookV2(ctx, { strictValidation: false });
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+
+        expect(findValueByLabel(inputs, /^Land Cost/i)).toBe(250);
+        expect(findValueByLabel(inputs, /Construction Cost.*sqft/i)).toBe(9000);
+        expect(findValueByLabel(inputs, /^Debt %/)).toBeCloseTo(0.70, 2);
+      });
+
+      test('Kernel-published values (e.g. rentPerSqftPerMonth = 95 for office) win over asset-class defaults', async () => {
+        // The kernel publishes rentPerSqftPerMonth = 95 for commercial_office.
+        // Our defaults library intentionally does NOT redefine
+        // baseRentPerSqftMonth — so the kernel's 95 should flow through to
+        // baseRentPerSqftMonthFor()'s lookup chain.
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        ctx.deal.model_params.inputs = {
+          assetClass: 'commercial_office',
+          // No baseRent / rent input — kernel default should win.
+        };
+        const prepared = __internal.prepareWorkbookContext(ctx, { strictValidation: false });
+        expect(prepared.exportQa.core.baseRentPerSqftMonth).toBe(95);
+      });
+    });
+
     describe('Reversion formula wiring (TotalExitCostPct)', () => {
       test('Income family Reversion uses TotalExitCostPct instead of bare SellingCostPct', async () => {
         const ctx = minimalContext();
