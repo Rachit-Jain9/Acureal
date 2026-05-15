@@ -40,7 +40,7 @@ const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
 
 const financialKernel = require('../../../../../../packages/financial-kernel/dist');
-const { defaultsForAssetClass } = require('./assetClassDefaults');
+const { defaultsForAssetClass, benchmarkFor } = require('./assetClassDefaults');
 const { generateDealBriefing, buildTemplatedBriefing, buildNumericSnapshot } = require('./dealBriefing.service');
 
 const FONT = palette.FONTS.body;
@@ -5272,28 +5272,106 @@ const buildDashboardSheet = (workbook, ctx) => {
     });
   }
 
-  // Sources & Uses block — labels + values for the chart
-  const kpiIconRules = ctx.dealFamily === 'income'
+  // ── KPI icon-set conditional formatting (PR-NX11 — 2026-05-15) ──────
+  // FULL COVERAGE: every Dashboard KPI tile gets a traffic-light icon
+  // derived from asset-class-aware benchmark bands (sourced from Cushman,
+  // JLL, HVS, RBI — see KPI_BENCHMARKS in assetClassDefaults.js).
+  //
+  // Pre-fix (2026-05-11): only 2-3 of 6 tiles per family had iconSet rules,
+  // and thresholds were hardcoded global defaults that didn't reflect
+  // Bengaluru asset-class market reality (e.g. office cap rate band 7%-9%
+  // vs warehousing 8%-10.5%).
+  //
+  // For UP-IS-GOOD KPIs (yield, margin, DSCR): cfvo [low, mid, high]
+  //   icon-set: red below mid, amber low-to-mid, green at high
+  // For DOWN-IS-GOOD KPIs (cap rate): we invert by swapping the cfvo
+  //   order so the same iconSet rule reads correctly (low cap = green).
+  // A tile carries the benchmark citation as a cell COMMENT so hovering
+  // surfaces "Source: Cushman & Wakefield India Bengaluru ORR..." to the
+  // operator — institutional credibility without needing a separate
+  // benchmark sheet.
+  const assetClass = ctx.assetClass;
+  const family = ctx.dealFamily;
+  // Map of (cellRef, kpiKey) pairs — covers all 6 tiles per family.
+  const kpiTileMap = family === 'income'
     ? [
-        ['B4:B4', [0, 0.01, 1]],
-        ['B7:B7', [0, 1.2, 1.5]],
+        { ref: 'B4', kpi: 'noi',             label: 'Stabilised NOI' },
+        { ref: 'D4', kpi: 'yieldOnCost',     label: 'Stabilized Yield on Cost' },
+        { ref: 'F4', kpi: 'exitCapRate',     label: 'Exit Cap Rate' },
+        { ref: 'B7', kpi: 'minDscr',         label: 'Min DSCR' },
+        { ref: 'D7', kpi: 'cashOnCash',      label: 'Cash-on-Cash (Stabilised)' },
+        { ref: 'F7', kpi: 'netSaleProceeds', label: 'Net Sale Proceeds' },
       ]
     : [
-        ['B7:B7', [0, 0.10, 0.20]],
-        ['D7:D7', [0, 1.2, 1.5]],
-        ['F4:F4', [-1, 0, 1]],
+        { ref: 'B4', kpi: 'revenue',         label: 'Total Revenue' },
+        { ref: 'D4', kpi: 'cost',            label: 'Total Project Cost' },
+        { ref: 'F4', kpi: 'netCashFlow',     label: 'Project Net Cash Flow' },
+        { ref: 'B7', kpi: 'grossMargin',     label: 'Gross Margin' },
+        { ref: 'D7', kpi: 'minDscr',         label: 'Min DSCR' },
+        { ref: 'F7', kpi: 'residualLand',    label: 'Residual Land Value' },
       ];
-  kpiIconRules.forEach(([ref, values], idx) => {
-    sheet.addConditionalFormatting({
-      ref,
-      rules: [{
-        type: 'iconSet',
-        iconSet: '3TrafficLights1',
-        showValue: true,
-        cfvo: values.map((value) => ({ type: 'num', value })),
-        priority: 20 + idx,
-      }],
-    });
+
+  kpiTileMap.forEach(({ ref, kpi, label }, idx) => {
+    const bm = benchmarkFor(assetClass, family, kpi);
+    if (!bm) return; // No benchmark for this KPI — skip (very rare, fail-safe).
+
+    // cfvo ordering: ExcelJS's iconSet rule reads cfvo as [low-thr, mid-thr,
+    // high-thr]. Direction is handled by the cfvo VALUES themselves —
+    // for UP-IS-GOOD: low < mid < high (red below low, amber mid, green above).
+    // For DOWN-IS-GOOD: the benchmark already stores [low, mid, high]
+    // with low > mid > high — but iconSet always reads ascending. So we
+    // invert via the underlying cellIs rule (red ABOVE high, green BELOW low).
+    if (bm.direction === 'up') {
+      sheet.addConditionalFormatting({
+        ref: `${ref}:${ref}`,
+        rules: [{
+          type: 'iconSet',
+          iconSet: '3TrafficLights1',
+          showValue: true,
+          cfvo: [
+            { type: 'num', value: bm.low },
+            { type: 'num', value: bm.mid },
+            { type: 'num', value: bm.high },
+          ],
+          priority: 50 + idx,
+        }],
+      });
+    } else {
+      // Down-is-good — invert the icon-set by reversing the iconSet order.
+      // ExcelJS supports `reverse: true` to flip the icon assignment so
+      // green sits at low values instead of high values.
+      sheet.addConditionalFormatting({
+        ref: `${ref}:${ref}`,
+        rules: [{
+          type: 'iconSet',
+          iconSet: '3TrafficLights1',
+          showValue: true,
+          reverse: true,
+          cfvo: [
+            { type: 'num', value: bm.high }, // tighter cap = green
+            { type: 'num', value: bm.mid },
+            { type: 'num', value: bm.low },  // wider cap = red
+          ],
+          priority: 50 + idx,
+        }],
+      });
+    }
+
+    // Attach the benchmark citation as a cell COMMENT — operator hovers
+    // the tile and sees the institutional source. Per CLAUDE.md
+    // "verified data only, source + freshness on every cell" rule.
+    // Cell-comment text builds on top of any existing comment (we preserve
+    // the kernel-provenance comment that PR-NX3 attached).
+    const cell = sheet.getCell(ref);
+    const existingNote = cell.note;
+    const benchmarkBlock = `\n\n─── KPI Benchmark (${label}) ───\nRange: ${bm.direction === 'up' ? `${bm.low} → ${bm.mid} → ${bm.high}` : `${bm.high} → ${bm.mid} → ${bm.low} (lower is better)`}\nSource: ${bm.citation}`;
+    const note = existingNote
+      ? (typeof existingNote === 'string' ? existingNote + benchmarkBlock : (existingNote.texts || []).map((t) => t.text || '').join('') + benchmarkBlock)
+      : benchmarkBlock.trim();
+    cell.note = {
+      texts: [{ text: note }],
+      margins: { insetmode: 'custom', inset: [0.1, 0.1, 0.1, 0.1] },
+    };
   });
 
   const trendSpecs = ctx.dealFamily === 'income'

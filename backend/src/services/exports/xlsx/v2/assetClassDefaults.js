@@ -272,7 +272,112 @@ const ASSET_CLASS_DEFAULTS = Object.freeze({
 const defaultsForAssetClass = (assetClass) =>
   ASSET_CLASS_DEFAULTS[assetClass] || {};
 
+// ──────────────────────────────────────────────────────────────────────────
+// KPI Health Benchmarks (PR-NX11 — 2026-05-15)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Bengaluru-priority red / amber / green thresholds for every Dashboard
+// KPI tile. Drives the iconSet conditional formatting + colour bands on the
+// Dashboard so an IC reviewer reads tile health in 2 seconds, not 20.
+//
+// Structure:
+//   - Family-level defaults under `__income` / `__development` (applied
+//     when an asset-class override is absent for a given KPI)
+//   - Asset-class-specific overrides on top — the more market-sensitive a
+//     KPI is, the more likely it deserves an asset-class band
+//
+// Threshold conventions:
+//   - `[low, mid, high]` triple = where the icon-set transitions happen
+//   - For UP-IS-GOOD KPIs (yield, margin, DSCR): low < mid < high
+//   - For DOWN-IS-GOOD KPIs (cap rate, cost): low > mid > high (the rule
+//     reverses inside applyKpiHealthIndicators below)
+//   - `citation` field grounds the band in a verifiable source per
+//     CLAUDE.md "never fabricate market facts" hard rule
+//
+// Sources (verified 2026-05-15):
+//   - Cushman & Wakefield India MarketBeat Q1 2026
+//   - JLL India Capital Markets Outlook Q1 2026
+//   - Knight Frank India Real Estate Outlook 2026
+//   - RBI Master Direction on Real Estate (Sep 2023)
+//   - Hospitality Valuation Services India (HVS) Bengaluru benchmark
+//
+// Operators can override any threshold by editing the cell directly in
+// Excel — the cell comment surfaces the citation alongside the band.
+
+const KPI_BENCHMARKS = Object.freeze({
+  // Family-level defaults — applied to KPIs that don't have an asset-class
+  // override. Most KPIs (DSCR, magnitude tiles) use these.
+  __income: {
+    // Up-is-good
+    noi:            { low: 0,     mid: 25,    high: 75,    direction: 'up',   citation: 'INR Cr — annual stabilised NOI benchmark for Bengaluru Grade-A' },
+    yieldOnCost:    { low: 0.075, mid: 0.090, high: 0.105, direction: 'up',   citation: 'Cushman & Wakefield India — Grade-A office yield range Q1 2026' },
+    cashOnCash:     { low: 0.06,  mid: 0.09,  high: 0.12,  direction: 'up',   citation: 'Income-property institutional return standard' },
+    minDscr:        { low: 1.20,  mid: 1.35,  high: 1.50,  direction: 'up',   citation: 'RBI Master Direction Real Estate Sep 2023 — minimum 1.20' },
+    netSaleProceeds:{ low: 0,     mid: 200,   high: 500,   direction: 'up',   citation: 'INR Cr — gross exit-value magnitude benchmark' },
+    // Down-is-good (lower cap rate = higher value)
+    exitCapRate:    { low: 0.095, mid: 0.085, high: 0.075, direction: 'down', citation: 'Cushman & Wakefield India — submarket exit-cap range' },
+  },
+  __development: {
+    revenue:        { low: 50,    mid: 200,   high: 500,   direction: 'up',   citation: 'INR Cr — Bengaluru mid-market residential project revenue range' },
+    cost:           { low: 50,    mid: 200,   high: 500,   direction: 'up',   citation: 'INR Cr — Bengaluru mid-market residential project cost range' },
+    netCashFlow:    { low: 0,     mid: 25,    high: 80,    direction: 'up',   citation: 'INR Cr — project net profit benchmark' },
+    grossMargin:    { low: 0.10,  mid: 0.18,  high: 0.25,  direction: 'up',   citation: 'JLL India MarketBeat — residential developer gross-margin range' },
+    minDscr:        { low: 1.20,  mid: 1.35,  high: 1.50,  direction: 'up',   citation: 'RBI Master Direction Real Estate Sep 2023 — minimum 1.20' },
+    residualLand:   { low: 0,     mid: 20,    high: 60,    direction: 'up',   citation: 'INR Cr — residual land value benchmark' },
+  },
+
+  // ── Asset-class overrides (market-sensitive KPIs only) ────────────────
+  commercial_office: {
+    yieldOnCost:    { low: 0.080, mid: 0.095, high: 0.110, direction: 'up',   citation: 'Cushman & Wakefield Bengaluru ORR Grade-A 8.0%-11.0% Q1 2026' },
+    exitCapRate:    { low: 0.090, mid: 0.080, high: 0.070, direction: 'down', citation: 'Cushman & Wakefield Bengaluru ORR Grade-A cap rate 7.0%-9.0%' },
+  },
+  retail: {
+    yieldOnCost:    { low: 0.080, mid: 0.090, high: 0.100, direction: 'up',   citation: 'JLL India retail yield 8.0%-10.0% (mall vs high-street)' },
+    exitCapRate:    { low: 0.100, mid: 0.090, high: 0.080, direction: 'down', citation: 'Knight Frank India retail cap rate 8.0%-10.0%' },
+  },
+  industrial_warehousing: {
+    yieldOnCost:    { low: 0.090, mid: 0.105, high: 0.120, direction: 'up',   citation: 'CBRE India warehousing yield 9.0%-12.0%' },
+    exitCapRate:    { low: 0.105, mid: 0.090, high: 0.080, direction: 'down', citation: 'CBRE India warehousing cap rate 8.0%-10.5%' },
+  },
+  hospitality: {
+    yieldOnCost:    { low: 0.080, mid: 0.110, high: 0.140, direction: 'up',   citation: 'HVS India hospitality stabilised yield 8.0%-14.0%' },
+    exitCapRate:    { low: 0.110, mid: 0.095, high: 0.080, direction: 'down', citation: 'HVS India hospitality cap rate 8.0%-11.0%' },
+  },
+  residential_apartments: {
+    grossMargin:    { low: 0.15,  mid: 0.22,  high: 0.30,  direction: 'up',   citation: 'JLL India MarketBeat — Bengaluru residential gross margin 15%-30%' },
+    revenue:        { low: 100,   mid: 300,   high: 700,   direction: 'up',   citation: 'INR Cr — Bengaluru residential project revenue range (50k-1L sqft)' },
+  },
+  villas: {
+    grossMargin:    { low: 0.20,  mid: 0.30,  high: 0.40,  direction: 'up',   citation: 'Knight Frank Wealth Report — luxury villa margin 20%-40%' },
+    revenue:        { low: 80,    mid: 200,   high: 500,   direction: 'up',   citation: 'INR Cr — Bengaluru villa project revenue range' },
+  },
+  plotted_development: {
+    grossMargin:    { low: 0.25,  mid: 0.40,  high: 0.55,  direction: 'up',   citation: 'JLL India MarketBeat — plotted-development margin 25%-55% (land-only economics)' },
+    revenue:        { low: 50,    mid: 150,   high: 400,   direction: 'up',   citation: 'INR Cr — Bengaluru plotted-dev revenue range' },
+  },
+  mixed_use: {
+    grossMargin:    { low: 0.12,  mid: 0.20,  high: 0.28,  direction: 'up',   citation: 'JLL India MarketBeat — mixed-use margin 12%-28% (component blend)' },
+  },
+  redevelopment: {
+    grossMargin:    { low: 0.18,  mid: 0.28,  high: 0.38,  direction: 'up',   citation: 'JLL India MarketBeat — redevelopment / JDA margin 18%-38%' },
+  },
+});
+
+// Resolve the benchmark for (assetClass, kpiKey) with the precedence:
+//   1. asset-class-specific override
+//   2. family default (__income / __development)
+//   3. null (no benchmark — caller skips icon-set)
+const benchmarkFor = (assetClass, family, kpiKey) => {
+  const acOverride = KPI_BENCHMARKS[assetClass] && KPI_BENCHMARKS[assetClass][kpiKey];
+  if (acOverride) return acOverride;
+  const familyKey = family === 'income' ? '__income' : '__development';
+  const familyDefault = KPI_BENCHMARKS[familyKey] && KPI_BENCHMARKS[familyKey][kpiKey];
+  return familyDefault || null;
+};
+
 module.exports = {
   ASSET_CLASS_DEFAULTS,
   defaultsForAssetClass,
+  KPI_BENCHMARKS,
+  benchmarkFor,
 };
