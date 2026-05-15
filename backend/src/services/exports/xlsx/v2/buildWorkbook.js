@@ -41,6 +41,7 @@ const palette = require('../../shared/palette');
 
 const financialKernel = require('../../../../../../packages/financial-kernel/dist');
 const { defaultsForAssetClass } = require('./assetClassDefaults');
+const { generateDealBriefing, buildTemplatedBriefing, buildNumericSnapshot } = require('./dealBriefing.service');
 
 const FONT = palette.FONTS.body;
 
@@ -67,6 +68,7 @@ const FONT = palette.FONTS.body;
 // Names must fit Excel's 31-character cap. Longest is "Debt Sizing &
 // Amortization" at 26 chars.
 const SHEETS = {
+  executiveBriefing: 'Executive Briefing',
   dashboard: 'Dashboard',
   qaSources: 'Export QA & Sources',
   inputs: 'Inputs & Assumptions',
@@ -4840,6 +4842,176 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
 };
 
 /**
+ * Executive Briefing sheet (PR-NX7 — 2026-05-15) — the FIRST tab the
+ * operator sees on workbook open. Carries an AI-assisted 4-bullet
+ * narrative + risk note + one-line summary, all generated from the
+ * deal's actual kernel KPIs + India-context inputs (no fabrication
+ * per CLAUDE.md). Always present; falls back to deterministic templated
+ * synthesis when the AI provider isn't available.
+ *
+ * Layout:
+ *   Row 1  — Title banner (orange accent so it screams "read me first")
+ *   Row 2  — Deal identity subtitle (same line as Dashboard for consistency)
+ *   Row 3  — AI-Assisted disclosure (mandatory per CLAUDE.md)
+ *   Row 4  — blank
+ *   Row 5  — Section: "Summary"
+ *   Row 6  — Summary text (single sentence, wrapped)
+ *   Row 7  — blank
+ *   Row 8  — Section: "Key Points"
+ *   Rows 9-12 — 4 bullet points (one per row)
+ *   Row 13 — blank
+ *   Row 14 — Section: "Risk Note" (with warning fill)
+ *   Row 15 — Risk note text
+ *   Row 16 — blank
+ *   Row 17 — Generation metadata (provider, timestamp)
+ *   Row 18 — Full disclosure footnote
+ */
+const buildExecutiveBriefingSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.executiveBriefing, {
+    views: [{ showGridLines: false, state: 'normal' }],
+  });
+  sheet.columns = [
+    { width: 28 }, { width: 28 }, { width: 28 }, { width: 28 },
+    { width: 28 }, { width: 28 }, { width: 22 }, { width: 22 },
+  ];
+
+  const briefing = ctx.briefing || buildTemplatedBriefing(buildNumericSnapshot(ctx));
+  const isAiAssisted = briefing.source === 'ai-assisted';
+
+  // Row 1 — title banner. Accent fill (copper) so the operator immediately
+  // knows this is the IC-facing briefing.
+  sheet.mergeCells('A1:H1');
+  const titleCell = sheet.getCell('A1');
+  titleCell.value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Executive Briefing`;
+  titleCell.font = { name: FONT, size: 14, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  titleCell.fill = FILL(palette.xlsx('accent'));
+  titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  titleCell.protection = { locked: true };
+  sheet.getRow(1).height = 32;
+
+  // Row 2 — deal identity subtitle (same format as Dashboard for cross-
+  // sheet consistency — see buildDealIdentityLine helper).
+  sheet.mergeCells('A2:H2');
+  const subtitleCell = sheet.getCell('A2');
+  subtitleCell.value = buildDealIdentityLine(ctx);
+  subtitleCell.font = { name: FONT, size: 10, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  subtitleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+  subtitleCell.protection = { locked: true };
+  sheet.getRow(2).height = 22;
+
+  // Row 3 — AI-Assisted disclosure (mandatory per CLAUDE.md "Every AI-
+  // synthesized narrative must carry a prominent 'AI-assisted — requires
+  // human review' label").
+  sheet.mergeCells('A3:H3');
+  const disclosureCell = sheet.getCell('A3');
+  disclosureCell.value = isAiAssisted
+    ? '⚠ AI-Assisted Synthesis — REQUIRES HUMAN REVIEW. All numbers sourced from the deterministic financial kernel + Inputs sheet (no fabrication). Verify against source documents before any IC decision.'
+    : '⚠ Templated Synthesis — REQUIRES HUMAN REVIEW. Deterministic narrative generated from deal\'s kernel KPIs + inputs. Verify against source documents before any IC decision.';
+  disclosureCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  disclosureCell.fill = FILL(palette.xlsx('dataWarning'));
+  disclosureCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+  disclosureCell.protection = { locked: true };
+  sheet.getRow(3).height = 32;
+
+  // Row 4 blank spacer
+  sheet.getRow(4).height = 8;
+
+  // Row 5 — "Summary" section title
+  sheet.mergeCells('A5:H5');
+  const summaryLabel = sheet.getCell('A5');
+  summaryLabel.value = 'SUMMARY';
+  summaryLabel.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('inkDeep') }, charSpace: 1.6 };
+  summaryLabel.fill = FILL(palette.xlsx('paperSubtle'));
+  summaryLabel.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  summaryLabel.protection = { locked: true };
+  sheet.getRow(5).height = 22;
+
+  // Row 6 — summary text
+  sheet.mergeCells('A6:H6');
+  const summaryCell = sheet.getCell('A6');
+  summaryCell.value = briefing.summary || '—';
+  summaryCell.font = { name: FONT, size: 11, color: { argb: palette.xlsx('ink') } };
+  summaryCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+  summaryCell.protection = { locked: true };
+  sheet.getRow(6).height = 36;
+
+  // Row 7 blank spacer
+  sheet.getRow(7).height = 8;
+
+  // Row 8 — "Key Points" section title
+  sheet.mergeCells('A8:H8');
+  const kpLabel = sheet.getCell('A8');
+  kpLabel.value = 'KEY POINTS';
+  kpLabel.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('inkDeep') }, charSpace: 1.6 };
+  kpLabel.fill = FILL(palette.xlsx('paperSubtle'));
+  kpLabel.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  kpLabel.protection = { locked: true };
+  sheet.getRow(8).height = 22;
+
+  // Rows 9-12 — 4 bullet rows
+  const bullets = (briefing.bullets || []).slice(0, 4);
+  for (let i = 0; i < 4; i += 1) {
+    const r = 9 + i;
+    sheet.mergeCells(`A${r}:H${r}`);
+    const cell = sheet.getCell(`A${r}`);
+    cell.value = bullets[i] ? `•  ${bullets[i]}` : '';
+    cell.font = { name: FONT, size: 10.5, color: { argb: palette.xlsx('ink') } };
+    cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+    cell.protection = { locked: true };
+    sheet.getRow(r).height = 28;
+  }
+
+  // Row 13 blank spacer
+  sheet.getRow(13).height = 8;
+
+  // Row 14 — "Risk Note" section title
+  sheet.mergeCells('A14:H14');
+  const riskLabel = sheet.getCell('A14');
+  riskLabel.value = 'RISK NOTE';
+  riskLabel.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('paperElevated') }, charSpace: 1.6 };
+  riskLabel.fill = FILL(palette.xlsx('dataNegative'));
+  riskLabel.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  riskLabel.protection = { locked: true };
+  sheet.getRow(14).height = 22;
+
+  // Row 15 — risk note text
+  sheet.mergeCells('A15:H15');
+  const riskCell = sheet.getCell('A15');
+  riskCell.value = briefing.riskNote || 'Review all kernel-stored values against source documents before IC.';
+  riskCell.font = { name: FONT, size: 10.5, color: { argb: palette.xlsx('ink') } };
+  riskCell.fill = FILL(palette.xlsx('paperSubtle'));
+  riskCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+  riskCell.protection = { locked: true };
+  sheet.getRow(15).height = 36;
+
+  // Row 16 blank spacer
+  sheet.getRow(16).height = 12;
+
+  // Row 17 — generation metadata
+  sheet.mergeCells('A17:H17');
+  const metaCell = sheet.getCell('A17');
+  metaCell.value = isAiAssisted
+    ? `Generated: ${briefing.generatedAt || ctx.generatedAt} · Provider: OpenAI gpt-4o · Cached on deal-snapshot hash`
+    : `Generated: ${briefing.generatedAt || ctx.generatedAt} · Synthesis: deterministic templated narrative (AI fallback path)`;
+  metaCell.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  metaCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  metaCell.protection = { locked: true };
+  sheet.getRow(17).height = 16;
+
+  // Row 18 — full disclosure footnote
+  sheet.mergeCells('A18:H18');
+  const footnoteCell = sheet.getCell('A18');
+  footnoteCell.value =
+    'Disclosure: This Executive Briefing is an AI-assisted synthesis of the deal\'s deterministic financial-kernel KPIs (IRR, NPV, EM, NOI, exit value) and operator-entered Inputs. Every number you see above is sourced from the Inputs sheet or the kernel — the AI does NOT generate or fabricate numbers, only assembles them into prose. ALL underwriting decisions require human review of source documents (sale deeds, RERA registration, encumbrance certificate, BBMP plan sanction, etc.) and verification of every input against ground truth. See the Inputs sheet for the full editable assumption stack with India-context cell tooltips (RERA / GST / BBMP UAV / LTCG / Khata).';
+  footnoteCell.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
+  footnoteCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
+  footnoteCell.protection = { locked: true };
+  sheet.getRow(18).height = 80;
+
+  return sheet;
+};
+
+/**
  * Dashboard sheet — KPI summary cards + native Excel chart for sources/uses.
  */
 const buildDashboardSheet = (workbook, ctx) => {
@@ -7254,10 +7426,12 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   //   7. Calculations            (hidden audit trail)
   //
   // Workbook tab order follows the order in which `addWorksheet` is called.
-  // We build Inputs FIRST (to populate definedNames) but PHYSICALLY move
-  // the Dashboard tab to position 0 after all sheets exist via the
-  // workbook.worksheets array reorder below — ExcelJS's `addWorksheet`
-  // appends; reordering requires direct array manipulation.
+  // PR-NX7 (2026-05-15): Executive Briefing built FIRST so it's the
+  // operator's landing tab on open. The Dashboard remains the primary
+  // analytical view; Briefing is the 1-page IC summary they read before
+  // diving into the numbers. ChartInjector caller below targets the
+  // Dashboard by name, not file index, so its addition doesn't shift charts.
+  buildExecutiveBriefingSheet(workbook, ctx);
   buildDashboardSheet(workbook, ctx);
   const { definedNames } = buildInputsSheet(workbook, ctx);
   if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
@@ -7517,8 +7691,11 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
   } else {
     const workbookXml = await workbookXmlFile.async('string');
     const sheetCount = (workbookXml.match(/<sheet\b/g) || []).length;
-    if (sheetCount > 7) {
-      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; maximum allowed is 7.`, 'Remove or merge non-essential worksheets before download.');
+    // PR-NX7 (2026-05-15): raised the ceiling from 7 → 8 to accommodate
+    // the Executive Briefing sheet (first tab, IC-facing summary). 8 is
+    // the new operator-blessed maximum.
+    if (sheetCount > 8) {
+      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; maximum allowed is 8.`, 'Remove or merge non-essential worksheets before download.');
     }
     if (workbookXml.includes('Export QA &amp; Sources') || workbookXml.includes('Export QA & Sources')) {
       add(SHEETS.qaSources, 'Export QA & Sources must be merged into Inputs & Assumptions.', 'Remove the standalone QA worksheet before download.');
@@ -7581,6 +7758,21 @@ const finalizeWorkbookBuffer = async (xlsxBuffer) => {
  */
 const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const ctx = prepareWorkbookContext(exportContext, options);
+  // PR-NX7 (2026-05-15): generate the AI-assisted Executive Briefing
+  // BEFORE building the workbook so the briefing service has time to
+  // call OpenAI (or fall back to templated synthesis) without blocking
+  // the synchronous sheet builders. The `options.skipAiBriefing` escape
+  // hatch is for tests / batch exports that don't want the AI cost.
+  try {
+    ctx.briefing = await generateDealBriefing(ctx, {
+      preferTemplated: options.skipAiBriefing === true,
+    });
+  } catch {
+    // Briefing failure is non-fatal — the buildExecutiveBriefingSheet
+    // function falls back to deterministic templated synthesis if
+    // ctx.briefing is missing.
+    ctx.briefing = null;
+  }
   const workbook = buildDealWorkbookV2Workbook(exportContext, { ...options, __preparedContext: ctx });
   const raw = await workbook.xlsx.writeBuffer();
   const xlsxBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
@@ -7588,11 +7780,19 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const chartSpecs = buildDashboardChartSpecs(ctx);
   let enhancedBuffer = xlsxBuffer;
 
+  // PR-NX7: Dashboard is now the 2nd sheet (Executive Briefing is 1st),
+  // so its underlying XML file is sheet2.xml not sheet1.xml. Compute the
+  // file index dynamically from the workbook's worksheet array so the
+  // chart injector always targets the right file regardless of future
+  // sheet-order changes.
+  const dashboardIdx = workbook.worksheets.findIndex((ws) => ws.name === SHEETS.dashboard);
+  const dashboardSheetFile = dashboardIdx >= 0 ? `sheet${dashboardIdx + 1}.xml` : 'sheet1.xml';
+
   try {
     if (chartSpecs.length > 0) {
       enhancedBuffer = await injectChartsIntoXlsx(enhancedBuffer, {
         targetSheetName: SHEETS.dashboard,
-        targetSheetFile: 'sheet1.xml',
+        targetSheetFile: dashboardSheetFile,
         charts: chartSpecs,
       });
     }
@@ -7610,7 +7810,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   try {
     enhancedBuffer = await injectSparklinesIntoXlsx(enhancedBuffer, {
       targetSheetName: SHEETS.dashboard,
-      targetSheetFile: 'sheet1.xml',
+      targetSheetFile: dashboardSheetFile,
       sparklines: buildDashboardSparklineSpecs(ctx),
     });
   } catch (err) {
