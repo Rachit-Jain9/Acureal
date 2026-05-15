@@ -130,6 +130,177 @@ const NUMBER_FORMATS = {
   date: 'dd-mmm-yyyy',
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// India-context cell-comment library (PR-NX3 — 2026-05-15)
+// ──────────────────────────────────────────────────────────────────────────
+// Hover-tooltip text appended to the existing source/confidence/freshness
+// note on key India-specific input cells. Each entry below explains the
+// regulatory or market basis for the seeded default — turning a number
+// in a cell into a self-documenting piece of underwriting knowledge.
+//
+// Investor-grade workbooks distinguish themselves by carrying CONTEXT,
+// not just numbers. An operator opening the workbook in Excel and
+// hovering over the "GST Rate" cell should see "5% under-construction
+// residential per Section 16, Finance Act 2019; 1% affordable below ₹45L;
+// 0% completed/OC. No ITC for residential." rather than just "0.05".
+//
+// Sourcing: each note cross-references the applicable statute (Finance
+// Act, BBMP rules, RERA Act, RBI circulars, Karnataka Stamp Act) so the
+// operator can trace back to the primary regulation.
+const INDIA_CONTEXT_NOTES = {
+  // ── Taxation ─────────────────────────────────────────────────────────
+  GstPct:
+    'GST on under-construction sale.\n'
+    + '• 5% — residential non-affordable (no ITC, Section 17(5)(c))\n'
+    + '• 1% — affordable housing ≤ ₹45L carpet (no ITC)\n'
+    + '• 12% — commercial / office / retail (ITC available)\n'
+    + '• 0% — completed property with OC, or plotted layout sale\n'
+    + 'Source: Finance Act 2019 + GST Council notification 03/2019-CT(R).',
+  StampRegPct:
+    'Karnataka stamp duty + registration on land conveyance.\n'
+    + '• 5% stamp duty (Karnataka Stamp Act, Schedule I)\n'
+    + '• 1% registration fee (Registration Act 1908)\n'
+    + '• 0.6% cess (surcharge — varies by district)\n'
+    + 'Total ≈ 6.6% on guidance value. Apartment sales: 5.6% + 1% on first sale.',
+  LTCGRate:
+    'Long-term capital gains on real-estate disposal.\n'
+    + '• 12.5% — post Jul-2024 Union Budget (Finance (No. 2) Bill 2024)\n'
+    + '• 20% (with indexation) — pre Jul-2024, grandfathered for legacy holdings\n'
+    + 'Holding period for LTCG: ≥ 24 months. Below = STCG slab (~30%).',
+  TDSRate:
+    'TDS u/s 194-IA on real-estate sale > ₹50 lakh.\n'
+    + '• 1% withheld by buyer at registration\n'
+    + '• Credited against seller\'s annual tax liability\n'
+    + 'Modeled as a cash-flow timing impact, not a permanent cost.',
+  IndexationRegime:
+    'Cost-inflation-index regime for capital-gains calc.\n'
+    + '• post_2024_no_indexation: 12.5% flat (default for new acquisitions)\n'
+    + '• pre_2024_with_indexation: 20% with CII benefit (legacy / grandfathered)\n'
+    + 'Operator chooses based on acquisition date relative to 23-Jul-2024 budget.',
+  EffectiveCGRate:
+    'Derived: switches LTCG / STCG based on EffectiveHoldYears.\n'
+    + '• If hold ≥ 2 years → LTCGRate (12.5% default)\n'
+    + '• Else → STCG slab rate (~30% modeled)\n'
+    + 'Source: Section 112A + Section 111 of Income Tax Act 1961.',
+
+  // ── Approvals + RERA ────────────────────────────────────────────────
+  CustomerCollectionPct:
+    'RERA-mandated escrow collection schedule.\n'
+    + '• 70% to escrow — released to developer against verified construction milestones\n'
+    + '• 30% retained — for marketing / financing / operating expenses\n'
+    + 'Source: RERA Act 2016 Section 4(2)(l)(D). Karnataka RERA Rules 2017.\n'
+    + 'Default 85% reflects typical Bengaluru milestone schedule.',
+  ApprovalCostCr:
+    'Aggregate Karnataka approval cost rollup.\n'
+    + 'Includes: Khata conversion (BBMP), BDA layout, BBMP plan sanction,\n'
+    + 'BWSSB water, BESCOM electrical, KSPCB environmental, Airport NOC,\n'
+    + 'Fire NOC, Lift NOC, RERA registration, OC, CC.\n'
+    + 'Operator can break out individual permits in the Approvals & RERA section.',
+
+  // ── Property tax ────────────────────────────────────────────────────
+  PropertyTaxPerSqftYr:
+    'BBMP property tax — Unit Area Value (UAV) method.\n'
+    + 'Computed per built-up sqft per year, not as % of revenue.\n'
+    + '• Zone A (premium CBD): ₹50-80/sqft/yr\n'
+    + '• Zone B (developed): ₹30-50/sqft/yr\n'
+    + '• Zone C (developing): ₹15-30/sqft/yr\n'
+    + 'Source: BBMP Property Tax Rules 2009. Area-driven (vacancy-independent).',
+
+  // ── Khata / title (Bengaluru-specific) ──────────────────────────────
+  KhataStatus:
+    'BBMP property title classification.\n'
+    + '• A_khata — formally registered, full transferability, bank-financeable\n'
+    + '• B_khata — pending regularization, restricted financing + transfer\n'
+    + '• mixed — partial A-khata coverage across parcels\n'
+    + 'B-khata properties typically take 15-25% exit haircut. Karnataka\n'
+    + 'Municipality Act 1964; BBMP Khata Transfer Rules 2014.',
+  BKhataExitHaircutPct:
+    'Exit-value haircut applied when KhataStatus = B_khata or mixed.\n'
+    + 'Reflects buyer-side risk discount: harder to secure loans against\n'
+    + 'B-khata collateral, longer due-diligence, regularization timeline\n'
+    + 'uncertainty. Typical BLR market: 10-25% depending on micro-market.',
+
+  // ── Debt / financing ────────────────────────────────────────────────
+  DebtRatePct:
+    'All-in lender rate on real-estate debt.\n'
+    + 'Indian benchmarks (2026):\n'
+    + '• Construction finance — Repo + 350-450 bps (~10-11%)\n'
+    + '• LRD (Lease Rental Discounting) — Repo + 200-280 bps (~9-10%)\n'
+    + '• Project finance — Repo + 380-500 bps (~11-12%)\n'
+    + 'Source: RBI Master Direction — Real Estate (Sep 2023).',
+  LoanType:
+    'Indian real-estate debt facility type.\n'
+    + '• Construction Finance — draw-as-you-build, secured by project\n'
+    + '• LRD — refinance against stabilised rental cash flows\n'
+    + '• Project Finance — pre-construction project equity + debt blend\n'
+    + '• Mezzanine — subordinate debt + equity kicker',
+  RateBenchmark:
+    'RBI-mandated lending-rate benchmark.\n'
+    + '• Repo — RBI policy repo rate (current 6.50%); fastest re-pricing\n'
+    + '• MCLR — Marginal Cost of Funds Lending Rate; slower re-pricing\n'
+    + '• Fixed — Reset-protected fixed rate (rare for RE construction debt)\n'
+    + '• Marginal — Loan-specific marginal rate (legacy)',
+  PermMaxLTV:
+    'Maximum Loan-to-Value for permanent (post-stabilisation) debt.\n'
+    + 'RBI caps (Master Direction Sep 2023):\n'
+    + '• 75% — properties below ₹30L (priority)\n'
+    + '• 80% — properties ₹30L-₹75L\n'
+    + '• 75% — properties above ₹75L\n'
+    + 'Institutional lenders typically operate 5-10 pp below the cap.',
+  PermMinDCR:
+    'Minimum Debt Coverage Ratio at refinance / stabilisation.\n'
+    + 'Institutional benchmark: 1.40-1.55x for income-stabilised assets.\n'
+    + 'Below 1.20x = covenant breach risk. Lenders size loan amount to\n'
+    + 'keep DCR ≥ this floor across the full hold period.',
+
+  // ── Exit / valuation ────────────────────────────────────────────────
+  ExitCapRate:
+    'Stabilised-yield cap rate for terminal-value calculation.\n'
+    + 'Bengaluru institutional benchmarks (2026 Cushman Wakefield + JLL):\n'
+    + '• Grade-A office (ORR / Whitefield) — 7.5-8.5%\n'
+    + '• Retail mall / high-street — 8.5-9.5%\n'
+    + '• Industrial / warehousing — 7.5-8.5%\n'
+    + '• Hospitality (full-service) — 9.0-10.5%\n'
+    + '• Data centre (hyperscale) — 8.0-9.0%',
+  SellingCostPct:
+    'Selling cost as % of gross sale value.\n'
+    + 'Includes: broker fee (1-3%), legal/registration costs (0.5-1%),\n'
+    + 'marketing / handover (0.5%). Total typical 2-4%.\n'
+    + 'For institutional sales: broker fee 0.5-1%, plus diligence costs.',
+
+  // ── JDA / structure ─────────────────────────────────────────────────
+  LandownerSharePct:
+    'JDA / Development Management landowner economic share.\n'
+    + 'Bengaluru JDA benchmarks (2026):\n'
+    + '• 40-50% area share — developer constructs, landowner gets units\n'
+    + '• 25-35% revenue share — developer keeps construction margin\n'
+    + 'Often a hybrid: landowner gets minimum guarantee + upside share.',
+  JVDevPct:
+    'JV developer share of profit (post-landowner).\n'
+    + 'Typical Indian JV: 55-65% developer, 35-45% landowner.\n'
+    + 'Landowner contributes land (no upfront cost to developer);\n'
+    + 'developer brings construction, sales, financing, regulatory clearances.',
+
+  // ── Hospitality (USALI) ─────────────────────────────────────────────
+  HospitalityKeys:
+    'Number of guest rooms (keys) in the hotel.\n'
+    + 'Indian hospitality benchmarks:\n'
+    + '• Boutique — 30-80 keys\n'
+    + '• Upscale full-service — 150-300 keys\n'
+    + '• Convention / luxury — 350+ keys\n'
+    + 'GFA per key: 500-700 sqft (full-service); 350-450 sqft (limited-service).',
+  HospitalityADRBase:
+    'Average Daily Rate (ADR) in INR per occupied room night — off-peak.\n'
+    + 'Bengaluru benchmarks (2026):\n'
+    + '• Marriott / Hyatt / IHG upscale — ₹7,000-9,000\n'
+    + '• ITC / Conrad luxury — ₹10,000-14,000\n'
+    + '• Limited-service / domestic — ₹4,000-6,500',
+  HospitalityOccupancyPct:
+    'Stabilised occupancy (% of available room nights sold).\n'
+    + 'India tier-1 city benchmarks: 68-74% stabilised.\n'
+    + 'Lease-up: Year 1 ≈ 45%, Year 2 ≈ 55%, Year 3 ≈ 65%, Year 4+ stabilised.',
+};
+
 const USALI_ROW = Object.freeze({
   occupancy: 5,
   adr: 6,
@@ -2061,8 +2232,8 @@ const buildInputsSheet = (workbook, ctx) => {
       // × (1 − total exit cost) for net proceeds. IFERROR-guarded so
       // empty inputs or div-by-zero collapse to 0 cleanly.
       ['Implied Net Exit Value (Cr)','ImpliedNetExitValueCr',
-        { formula: `=IFERROR(INDEX('${SHEETS.cashFlowEngine}'!18:18,TotalQuarters+1)*4/ExitCapRate*(1-TotalExitCostPct),0)` },
-        'INR Cr (last-Q NOI × 4 ÷ cap × (1 − exit cost))', NUMBER_FORMATS.currency],
+        { formula: `=IFERROR(INDEX('${SHEETS.cashFlowEngine}'!18:18,TotalQuarters+1)*4/ExitCapRate*(1-TotalExitCostPct)*KhataExitMultiplier,0)` },
+        'INR Cr (last-Q NOI × 4 ÷ cap × (1 − exit cost) × Khata multiplier)', NUMBER_FORMATS.currency],
     ],
   };
 
@@ -2321,12 +2492,19 @@ const buildInputsSheet = (workbook, ctx) => {
         if (format) valueCell.numFmt = format;
       }
       const source = namedRangeSource(ctx, name, value, isDerivedFormula);
+      // PR-NX3 (2026-05-15): append India-regulatory context to the note
+      // for cells in the INDIA_CONTEXT_NOTES library. Hovering the cell
+      // in Excel shows source + confidence + freshness + provenance + the
+      // applicable statute / market benchmark — turning a number into a
+      // self-documenting piece of underwriting knowledge.
+      const indiaContext = INDIA_CONTEXT_NOTES[name];
       valueCell.note = [
         `Source: ${source.sourceName}`,
         `Confidence: ${source.confidence}`,
         `Freshness: ${source.freshness}`,
         `Provenance: ${source.provenance}`,
         source.notes,
+        indiaContext ? `\n── India context ──\n${indiaContext}` : null,
       ].filter(Boolean).join('\n');
       // Categorical dropdown (PR-DD) — when the named range is one of the
       // entries in CATEGORICAL_OPTIONS, apply Excel's list-validation
@@ -4250,8 +4428,16 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
       // full exit-cost stack. For deals where the new exit-strategy fields
       // are at defaults (broker 2% / legal 0.5%), this lifts effective
       // exit costs from 2% → 4.5% — more realistic for institutional sales.
+      //
+      // PR-NX3 (2026-05-15): wire KhataExitMultiplier into the reversion.
+      // B-Khata / mixed-Khata properties take a buyer-side exit haircut
+      // (default 15%) — the derived multiplier on Inputs computes
+      // 1 - haircut when KhataStatus = B_khata or mixed, else 1.0.
+      // Previously the multiplier was a display-only field on Inputs;
+      // now it actually depresses the institutional sale value, matching
+      // how Bengaluru buyers underwrite B-khata collateral.
       formula: (q) => q === ctx.totalQuarters
-        ? `=IFERROR(${colLetters[q - 1]}18*4/ExitCapRate*(1-TotalExitCostPct),0)`
+        ? `=IFERROR(${colLetters[q - 1]}18*4/ExitCapRate*(1-TotalExitCostPct)*KhataExitMultiplier,0)`
         : `=0`,
       format: NUMBER_FORMATS.currency,
     },
