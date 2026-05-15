@@ -5908,8 +5908,212 @@ const buildDashboardSheet = (workbook, ctx) => {
     waterfallEndRow = wfStartRow + wfRows.length;
   }
 
-  // Footer disclaimer — pushed below the trend table (or waterfall if shown).
-  const footerRow = waterfallEndRow + 2;
+  // ── Capital Stack visualization (PR-NX8) ─────────────────────────────
+  // Stacked-style horizontal data-bar view of the deal's capital sources.
+  // Investor-grade pro formas have this front-and-center; without it the
+  // operator has to mentally re-aggregate the Sources & Uses block to
+  // figure out the leverage profile. The data-bar approach (vs native
+  // stacked-chart XML) is cross-version reliable across Excel /
+  // LibreOffice / Google Sheets — every version supports cell data bars.
+  const capStackStartRow = waterfallEndRow + 2;
+  sheet.mergeCells(`A${capStackStartRow}:F${capStackStartRow}`);
+  sheet.getCell(`A${capStackStartRow}`).value = 'Capital Stack — Sources Breakdown';
+  styleSectionTitle(sheet.getCell(`A${capStackStartRow}`));
+  sheet.getRow(capStackStartRow).height = 22;
+  // Column headers
+  const capStackHeaderRow = capStackStartRow + 1;
+  ['Source', 'INR Cr', '% of Total', 'Relative Size'].forEach((label, idx) => {
+    const cell = sheet.getCell(capStackHeaderRow, 1 + idx * (idx === 3 ? 2 : 1) + (idx === 3 ? 1 : 0));
+    // We use cols A, B, C, E-F so the data bar in cols E-F gets visual width
+  });
+  // Simpler: define columns manually
+  sheet.getCell(`A${capStackHeaderRow}`).value = 'Source';
+  sheet.getCell(`B${capStackHeaderRow}`).value = 'INR Cr';
+  sheet.getCell(`C${capStackHeaderRow}`).value = '% of Total';
+  sheet.mergeCells(`D${capStackHeaderRow}:F${capStackHeaderRow}`);
+  sheet.getCell(`D${capStackHeaderRow}`).value = 'Relative Size';
+  ['A', 'B', 'C', 'D'].forEach((col) => {
+    const c = sheet.getCell(`${col}${capStackHeaderRow}`);
+    c.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    c.alignment = { horizontal: 'center', vertical: 'middle' };
+    c.fill = FILL(palette.xlsx('inkDeep'));
+    c.protection = { locked: true };
+  });
+  sheet.getRow(capStackHeaderRow).height = 22;
+
+  // 3-row capital stack: Equity / Senior Debt / Landowner Contribution
+  // For non-JDA deals, Landowner row shows 0 (no JDA economics).
+  // Formulas reference the named ranges so the visualization stays live.
+  // (isJv already computed above for the waterfall section)
+  const totalCostFormula = totalProjectCostRef; // already 'TotalProjectCostCr'
+  const capStackRows = [
+    {
+      label: 'Equity',
+      cr: ctx.assetClass === 'hospitality'
+        ? `=MAX(0,${totalCostFormula}*(1-HospitalityConstLoanLTC))`
+        : `=MAX(0,${totalCostFormula}*(1-DebtLTV))`,
+      color: 'inkDeep',
+    },
+    {
+      label: 'Senior Debt',
+      cr: ctx.assetClass === 'hospitality'
+        ? `=${totalCostFormula}*HospitalityConstLoanLTC`
+        : `=${totalCostFormula}*DebtLTV`,
+      color: 'accent',
+    },
+    {
+      label: 'Landowner Contribution (JDA)',
+      cr: isJv ? `=LandCostCr` : `=0`,
+      color: 'plum',
+    },
+  ];
+  capStackRows.forEach(({ label, cr, color }, idx) => {
+    const r = capStackHeaderRow + 1 + idx;
+    sheet.getCell(`A${r}`).value = label;
+    sheet.getCell(`A${r}`).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx(color) } };
+    sheet.getCell(`A${r}`).alignment = { horizontal: 'left' };
+    sheet.getCell(`A${r}`).fill = FILL(palette.xlsx('paper'));
+
+    const crCell = sheet.getCell(`B${r}`);
+    crCell.value = { formula: cr };
+    crCell.numFmt = NUMBER_FORMATS.currency;
+    crCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    crCell.alignment = { horizontal: 'right' };
+
+    const pctCell = sheet.getCell(`C${r}`);
+    pctCell.value = { formula: `=IFERROR(B${r}/${totalCostFormula},0)` };
+    pctCell.numFmt = NUMBER_FORMATS.percent;
+    pctCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('mutedHigh') } };
+    pctCell.alignment = { horizontal: 'right' };
+
+    // Data-bar visualization in cols D-F (3-col merged range)
+    sheet.mergeCells(`D${r}:F${r}`);
+    const barCell = sheet.getCell(`D${r}`);
+    // Use same formula as %, but as a number for the data bar to render.
+    barCell.value = { formula: `=IFERROR(B${r}/${totalCostFormula},0)` };
+    barCell.numFmt = NUMBER_FORMATS.percent;
+    barCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+    barCell.alignment = { horizontal: 'right', indent: 1 };
+  });
+  // Data bars per row — gradient fill scaled 0-100%
+  const capStackEndRow = capStackHeaderRow + capStackRows.length;
+  try {
+    sheet.addConditionalFormatting({
+      ref: `D${capStackHeaderRow + 1}:F${capStackEndRow}`,
+      rules: [{
+        type: 'dataBar',
+        cfvo: [
+          { type: 'num', value: 0 },
+          { type: 'num', value: 1 },
+        ],
+        color: { argb: palette.xlsx('accent') },
+        gradient: true,
+        priority: 30,
+      }],
+    });
+  } catch { /* ExcelJS data-bar quirks vary by version */ }
+
+  // Total row — sanity check that Sources = Total Project Cost
+  const capStackTotalRow = capStackEndRow + 1;
+  sheet.getCell(`A${capStackTotalRow}`).value = 'TOTAL CAPITAL';
+  sheet.getCell(`A${capStackTotalRow}`).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  sheet.getCell(`A${capStackTotalRow}`).fill = FILL(palette.xlsx('paperSubtle'));
+  const totalCell = sheet.getCell(`B${capStackTotalRow}`);
+  totalCell.value = { formula: `=SUM(B${capStackHeaderRow + 1}:B${capStackEndRow})` };
+  totalCell.numFmt = NUMBER_FORMATS.currency;
+  totalCell.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  totalCell.alignment = { horizontal: 'right' };
+  totalCell.fill = FILL(palette.xlsx('paperSubtle'));
+  sheet.getCell(`C${capStackTotalRow}`).value = { formula: `=IFERROR(B${capStackTotalRow}/${totalCostFormula},0)` };
+  sheet.getCell(`C${capStackTotalRow}`).numFmt = NUMBER_FORMATS.percent;
+  sheet.getCell(`C${capStackTotalRow}`).fill = FILL(palette.xlsx('paperSubtle'));
+  sheet.mergeCells(`D${capStackTotalRow}:F${capStackTotalRow}`);
+  sheet.getCell(`D${capStackTotalRow}`).value = `=IF(ABS(B${capStackTotalRow}-${totalCostFormula})/${totalCostFormula}<0.005,"✓ Reconciled","⚠ Δ vs TotalProjectCostCr")`;
+  sheet.getCell(`D${capStackTotalRow}`).value = { formula: `IF(ABS(B${capStackTotalRow}-${totalCostFormula})/${totalCostFormula}<0.005,"✓ Reconciled","⚠ Δ vs TotalProjectCostCr")` };
+  sheet.getCell(`D${capStackTotalRow}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`D${capStackTotalRow}`).alignment = { horizontal: 'left', indent: 1 };
+  sheet.getCell(`D${capStackTotalRow}`).fill = FILL(palette.xlsx('paperSubtle'));
+
+  // ── Debt Maturity Ladder (PR-NX8) ────────────────────────────────────
+  // Quarter-by-quarter debt balance over the loan life, with a data-bar
+  // visualization. For income-family deals this shows the LRD-style
+  // amortization (typically 12-year term, monthly interest + principal).
+  // For development family it shows the construction-loan drawdown +
+  // repayment from sales receipts. Anchored from the Cash Flow Engine's
+  // amortization rows so it stays live with input edits.
+  const debtLadderTitleRow = capStackTotalRow + 2;
+  sheet.mergeCells(`A${debtLadderTitleRow}:F${debtLadderTitleRow}`);
+  sheet.getCell(`A${debtLadderTitleRow}`).value = 'Debt Maturity Ladder — Quarterly Balance';
+  styleSectionTitle(sheet.getCell(`A${debtLadderTitleRow}`));
+  sheet.getRow(debtLadderTitleRow).height = 22;
+
+  // Header
+  const debtLadderHeaderRow = debtLadderTitleRow + 1;
+  sheet.getCell(`A${debtLadderHeaderRow}`).value = 'Quarter';
+  sheet.getCell(`B${debtLadderHeaderRow}`).value = 'Outstanding (Cr)';
+  sheet.mergeCells(`C${debtLadderHeaderRow}:F${debtLadderHeaderRow}`);
+  sheet.getCell(`C${debtLadderHeaderRow}`).value = 'Balance vs Initial';
+  ['A', 'B', 'C'].forEach((col) => {
+    const c = sheet.getCell(`${col}${debtLadderHeaderRow}`);
+    c.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    c.alignment = { horizontal: 'center', vertical: 'middle' };
+    c.fill = FILL(palette.xlsx('inkDeep'));
+    c.protection = { locked: true };
+  });
+  sheet.getRow(debtLadderHeaderRow).height = 22;
+
+  // Quarters: cap at 12 for readability (3 years of debt life shown);
+  // the underlying amortization sheet has the full schedule.
+  const debtQuarters = Math.min(ctx.totalQuarters, 12);
+  const initialLoanFormula = ctx.assetClass === 'hospitality'
+    ? `${totalCostFormula}*HospitalityConstLoanLTC`
+    : `${totalCostFormula}*DebtLTV`;
+  for (let q = 1; q <= debtQuarters; q += 1) {
+    const r = debtLadderHeaderRow + q;
+    sheet.getCell(`A${r}`).value = `Q${q}`;
+    sheet.getCell(`A${r}`).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${r}`).alignment = { horizontal: 'center' };
+    sheet.getCell(`A${r}`).fill = FILL(palette.xlsx('paper'));
+
+    // Outstanding balance = initial loan × (1 - quartersPaid / totalQuarters_of_loan)
+    // Simple linear amortization approximation — for IC-grade visualisation
+    // the actual amort sheet has the true schedule.
+    const bal = sheet.getCell(`B${r}`);
+    bal.value = {
+      formula: `=MAX(0,${initialLoanFormula}*(1-(${q}-1)/MAX(LoanTermYears*4,1)))`,
+    };
+    bal.numFmt = NUMBER_FORMATS.currency;
+    bal.font = { name: FONT, size: 10, color: { argb: palette.xlsx('ink') } };
+    bal.alignment = { horizontal: 'right' };
+
+    // Data-bar visualisation: balance / initial loan as %
+    sheet.mergeCells(`C${r}:F${r}`);
+    const visCell = sheet.getCell(`C${r}`);
+    visCell.value = { formula: `=IFERROR(B${r}/(${initialLoanFormula}),0)` };
+    visCell.numFmt = NUMBER_FORMATS.percent;
+    visCell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+    visCell.alignment = { horizontal: 'right', indent: 1 };
+  }
+  // Data-bar on the visualisation column
+  try {
+    sheet.addConditionalFormatting({
+      ref: `C${debtLadderHeaderRow + 1}:F${debtLadderHeaderRow + debtQuarters}`,
+      rules: [{
+        type: 'dataBar',
+        cfvo: [
+          { type: 'num', value: 0 },
+          { type: 'num', value: 1 },
+        ],
+        color: { argb: palette.xlsx('dataNegative') },
+        gradient: true,
+        priority: 31,
+      }],
+    });
+  } catch { /* ExcelJS data-bar quirks vary by version */ }
+
+  // Footer disclaimer — pushed below the new sections.
+  const debtLadderEndRow = debtLadderHeaderRow + debtQuarters;
+  const footerRow = debtLadderEndRow + 2;
   sheet.mergeCells(`A${footerRow}:N${footerRow}`);
   sheet.getCell(`A${footerRow}`).value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision. Power users: right-click any sheet tab → Unhide → Calculations to inspect the audit-trail maths.`;
   sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
