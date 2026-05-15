@@ -3986,7 +3986,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // reads the state at a glance. Same palette as the Cash Flow DSCR
     // conditional formatting — consistency across the workbook.
     describe('Dashboard KPI conditional formatting', () => {
-      test('Development family — B7 (Gross Margin), D7 (Min DSCR), F4 (Net CF) have CF rules', async () => {
+      test('Development family — every KPI tile (B4 / D4 / F4 / B7 / D7 / F7) has CF rules (PR-NX11 full coverage)', async () => {
         const buffer = await buildDealWorkbookV2(minimalContext()); // dev family
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
@@ -3996,16 +3996,132 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const cfList = dash.conditionalFormattings || [];
         const refsCovered = new Set();
         cfList.forEach((cf) => refsCovered.add(cf.ref));
-        // The three dev-family tiles should be covered
-        expect(refsCovered.has('B7:B7')).toBe(true);
-        expect(refsCovered.has('D7:D7')).toBe(true);
-        expect(refsCovered.has('F4:F4')).toBe(true);
+        // PR-NX11: full coverage — every dev-family KPI tile gets a CF rule
+        expect(refsCovered.has('B4:B4')).toBe(true); // Total Revenue
+        expect(refsCovered.has('D4:D4')).toBe(true); // Total Project Cost
+        expect(refsCovered.has('F4:F4')).toBe(true); // Project Net CF
+        expect(refsCovered.has('B7:B7')).toBe(true); // Gross Margin
+        expect(refsCovered.has('D7:D7')).toBe(true); // Min DSCR
+        expect(refsCovered.has('F7:F7')).toBe(true); // Residual Land Value
         const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
-        expect(iconRules.length).toBeGreaterThanOrEqual(3);
+        // At least 6 iconSet rules — one per KPI tile
+        expect(iconRules.length).toBeGreaterThanOrEqual(6);
         expect(dash.getCell('B9').value).toBeNull();
       });
 
-      test('Income family — B4 (Stabilised NOI), B7 (Min DSCR) have CF rules', async () => {
+      // ── PR-NX11: KPI icon-set FULL COVERAGE with asset-class benchmark bands ──
+      test('PR-NX11: KPI icon-set thresholds swap per asset class (commercial_office vs warehousing yield-on-cost)', async () => {
+        // Different asset classes pull different yield-on-cost benchmark bands
+        // from KPI_BENCHMARKS. Commercial office: 8.0%-11.0%. Warehousing: 9.0%-12.0%.
+        // The cfvo VALUES on the iconSet rule for D4 should reflect each class.
+        const officeCtx = minimalContext();
+        officeCtx.deal.asset_class = 'commercial_office';
+        officeCtx.property.property_type = 'commercial_office';
+        const officeBuf = await buildDealWorkbookV2(officeCtx);
+        const officeWb = new ExcelJS.Workbook();
+        await officeWb.xlsx.load(officeBuf);
+        const officeDash = officeWb.getWorksheet('Dashboard');
+        const officeRules = (officeDash.conditionalFormattings || [])
+          .filter((cf) => cf.ref === 'D4:D4')
+          .flatMap((cf) => cf.rules);
+        expect(officeRules.length).toBeGreaterThanOrEqual(1);
+        const officeIcon = officeRules.find((r) => r.type === 'iconSet');
+        expect(officeIcon).toBeTruthy();
+        // Yield-on-Cost cfvo values for office: [0.080, 0.095, 0.110]
+        const officeValues = officeIcon.cfvo.map((c) => c.value);
+        expect(officeValues).toContain(0.080);
+        expect(officeValues).toContain(0.110);
+
+        const warehouseCtx = minimalContext();
+        warehouseCtx.deal.asset_class = 'industrial_warehousing';
+        warehouseCtx.property.property_type = 'industrial_warehousing';
+        const warehouseBuf = await buildDealWorkbookV2(warehouseCtx);
+        const warehouseWb = new ExcelJS.Workbook();
+        await warehouseWb.xlsx.load(warehouseBuf);
+        const warehouseDash = warehouseWb.getWorksheet('Dashboard');
+        const warehouseRules = (warehouseDash.conditionalFormattings || [])
+          .filter((cf) => cf.ref === 'D4:D4')
+          .flatMap((cf) => cf.rules);
+        const warehouseIcon = warehouseRules.find((r) => r.type === 'iconSet');
+        expect(warehouseIcon).toBeTruthy();
+        // Warehousing yield-on-cost cfvo: [0.090, 0.105, 0.120]
+        const warehouseValues = warehouseIcon.cfvo.map((c) => c.value);
+        expect(warehouseValues).toContain(0.090);
+        expect(warehouseValues).toContain(0.120);
+        // Different asset classes => different threshold values
+        expect(warehouseValues).not.toEqual(officeValues);
+      });
+
+      test('PR-NX11: Exit Cap Rate icon-set uses `reverse: true` (down-is-good direction)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const capRateRules = (dash.conditionalFormattings || [])
+          .filter((cf) => cf.ref === 'F4:F4')
+          .flatMap((cf) => cf.rules);
+        const capIcon = capRateRules.find((r) => r.type === 'iconSet');
+        expect(capIcon).toBeTruthy();
+        expect(capIcon.reverse).toBe(true);
+      });
+
+      test('PR-NX11: KPI tile carries a hover-tooltip with benchmark citation', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const yieldCell = dash.getCell('D4');
+        const note = yieldCell.note;
+        const noteText = note && (typeof note === 'string' ? note : (note.texts || []).map((t) => t.text || '').join(''));
+        expect(noteText).toMatch(/KPI Benchmark/);
+        expect(noteText).toMatch(/Source:/);
+        expect(noteText).toMatch(/Cushman/);
+      });
+
+      test('PR-NX11: residential_apartments uses tighter gross-margin band than default development', async () => {
+        // residential_apartments override: 15%/22%/30% (vs default dev: 10%/18%/25%)
+        const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const marginRules = (dash.conditionalFormattings || [])
+          .filter((cf) => cf.ref === 'B7:B7')
+          .flatMap((cf) => cf.rules);
+        const marginIcon = marginRules.find((r) => r.type === 'iconSet');
+        expect(marginIcon).toBeTruthy();
+        const values = marginIcon.cfvo.map((c) => c.value);
+        // Tightened residential-specific band: 15%/22%/30%
+        expect(values).toContain(0.15);
+        expect(values).toContain(0.30);
+      });
+
+      test('PR-NX11: every iconSet rule keeps the value visible (showValue !== false)', async () => {
+        // Operator readability: icon ALONGSIDE number, not icon REPLACING number.
+        // ExcelJS strips `showValue` from the serialized XML when it equals the
+        // Excel default (true). So we assert "not explicitly hidden" via
+        // !== false, which catches a regression where showValue: false leaks in.
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const iconRules = (dash.conditionalFormattings || [])
+          .flatMap((cf) => cf.rules)
+          .filter((r) => r && r.type === 'iconSet')
+          .filter((r) => r.iconSet === '3TrafficLights1');
+        expect(iconRules.length).toBeGreaterThanOrEqual(6);
+        iconRules.forEach((r) => {
+          // showValue is either explicitly true OR undefined (default = true)
+          expect(r.showValue).not.toBe(false);
+        });
+      });
+
+      test('Income family — every KPI tile (B4 / D4 / F4 / B7 / D7 / F7) has CF rules (PR-NX11 full coverage)', async () => {
         const ctx = minimalContext();
         ctx.deal.asset_class = 'commercial_office';
         ctx.property.property_type = 'commercial_office';
@@ -4016,13 +4132,16 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const cfList = dash.conditionalFormattings || [];
         const refsCovered = new Set();
         cfList.forEach((cf) => refsCovered.add(cf.ref));
-        expect(refsCovered.has('B4:B4')).toBe(true);
-        expect(refsCovered.has('B7:B7')).toBe(true);
-        // Development-only refs should NOT be in income family
-        expect(refsCovered.has('D7:D7')).toBe(false);
-        expect(refsCovered.has('F4:F4')).toBe(false);
+        // PR-NX11: full coverage — every income-family KPI tile gets a CF rule
+        expect(refsCovered.has('B4:B4')).toBe(true); // Stabilised NOI
+        expect(refsCovered.has('D4:D4')).toBe(true); // Yield on Cost
+        expect(refsCovered.has('F4:F4')).toBe(true); // Exit Cap Rate
+        expect(refsCovered.has('B7:B7')).toBe(true); // Min DSCR
+        expect(refsCovered.has('D7:D7')).toBe(true); // Cash-on-Cash
+        expect(refsCovered.has('F7:F7')).toBe(true); // Net Sale Proceeds
         const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
-        expect(iconRules.length).toBeGreaterThanOrEqual(2);
+        // At least 6 iconSet rules — one per KPI tile
+        expect(iconRules.length).toBeGreaterThanOrEqual(6);
         expect(dash.getCell('B9').value).toBeNull();
       });
     });
