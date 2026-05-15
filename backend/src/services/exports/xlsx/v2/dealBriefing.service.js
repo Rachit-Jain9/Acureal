@@ -352,8 +352,13 @@ const generateDealBriefing = async (ctx, options = {}) => {
   const promptSha256 = sha256OfPrompt();
 
   try {
+    // PR-NX9 (2026-05-15): route to the new `narrative_synthesis` task,
+    // which defaults to Claude Sonnet 4.6 per the model-specialization
+    // policy. Operator can override via AI_PROVIDER_NARRATIVE_SYNTHESIS
+    // env var if Claude is rate-limited / unavailable. Falls back to
+    // templated narrative on any AI failure (existing behavior).
     const callResult = await runClaudeReasoning({
-      task: 'reasoning',
+      task: 'narrative_synthesis',
       systemPrompt: SYSTEM_PROMPT,
       payload: buildUserPrompt(snapshot),
       maxTokens: 700,
