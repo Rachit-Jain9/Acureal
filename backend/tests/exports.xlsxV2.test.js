@@ -3398,6 +3398,139 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // The Reversion formula now uses the broader TotalExitCostPct so all
     // three components flow through. For default inputs this lifts effective
     // exit costs from 2% → 4.5%.
+    // PR-NX3 (2026-05-15): India-context cell comments — every key
+    // input cell now carries a hover tooltip explaining the applicable
+    // Indian statute / market benchmark (RERA escrow, GST regime, BBMP
+    // UAV property tax, Karnataka stamp duty, LTCG post-2024, B-khata
+    // haircut, JDA economics, RBI debt benchmarks, USALI hospitality).
+    describe('PR-NX3: India-context cell comments + KhataExitMultiplier wiring', () => {
+      // Helper: locate a row on Inputs by label, return its value cell.
+      const findValueCellByLabel = (inputs, labelMatch) => {
+        let found = null;
+        inputs.eachRow((row) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (typeof labelMatch === 'string'
+            ? label === labelMatch
+            : labelMatch.test(label)) {
+            found = row.getCell(2);
+          }
+        });
+        return found;
+      };
+
+      test('GST rate cell carries India-context note (Section 16 reference)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext()); // dev (residential)
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, /^GST/i);
+        expect(cell).not.toBeNull();
+        expect(String(cell.note || '')).toContain('India context');
+        expect(String(cell.note || '')).toMatch(/5%.*residential|1%.*affordable/);
+      });
+
+      test('LTCG rate cell carries India-context note (Finance Act 2024 reference)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, /^LTCG Rate/i);
+        expect(cell).not.toBeNull();
+        expect(String(cell.note || '')).toContain('12.5%');
+        expect(String(cell.note || '')).toMatch(/Jul-2024|Finance/i);
+      });
+
+      test('Khata Status cell explains A vs B implications', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, /^Khata Status/i);
+        expect(cell).not.toBeNull();
+        expect(String(cell.note || '')).toContain('A_khata');
+        expect(String(cell.note || '')).toContain('B_khata');
+        expect(String(cell.note || '')).toMatch(/BBMP|Municipality/);
+      });
+
+      test('Exit cap rate cell shows Bengaluru benchmarks by asset class', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, /^Exit Cap Rate/i);
+        expect(cell).not.toBeNull();
+        expect(String(cell.note || '')).toMatch(/Bengaluru|ORR|Whitefield/);
+        expect(String(cell.note || '')).toMatch(/Grade-A|7\.5|8\.5/);
+      });
+
+      test('Income-family Reversion formula includes KhataExitMultiplier', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cfe = wb.getWorksheet('Cash Flow Engine');
+        // Locate the Reversion — Net Sale Proceeds row (final-quarter formula)
+        let reversionRow = null;
+        cfe.eachRow((row, rowIdx) => {
+          const label = String(row.getCell(1).value || '').trim();
+          if (label.includes('Reversion') && label.includes('Net Sale Proceeds')) {
+            reversionRow = rowIdx;
+          }
+        });
+        expect(reversionRow).not.toBeNull();
+        const prepared = __internal.prepareWorkbookContext(ctx, { strictValidation: false });
+        const excelCol = (n) => {
+          let s = '';
+          let v = n;
+          while (v > 0) {
+            const r = (v - 1) % 26;
+            s = String.fromCharCode(65 + r) + s;
+            v = Math.floor((v - r) / 26);
+          }
+          return s;
+        };
+        const finalQCol = excelCol(prepared.totalQuarters + 1);
+        const cell = cfe.getCell(`${finalQCol}${reversionRow}`);
+        // B-khata properties take an exit haircut; KhataExitMultiplier
+        // applies that haircut to the reversion sale value.
+        expect(cell.value.formula).toContain('KhataExitMultiplier');
+        // Original formula structure (TotalExitCostPct) is still intact.
+        expect(cell.value.formula).toContain('TotalExitCostPct');
+      });
+
+      test('ImpliedNetExitValueCr formula includes KhataExitMultiplier', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, /Implied Net Exit Value/i);
+        expect(cell).not.toBeNull();
+        expect(cell.value.formula).toContain('KhataExitMultiplier');
+      });
+
+      test('Comment library entries do not break existing source/confidence metadata', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const cell = findValueCellByLabel(inputs, /^Khata Status/i);
+        const note = String(cell.note || '');
+        // Pre-existing structure preserved
+        expect(note).toContain('Source:');
+        expect(note).toContain('Confidence:');
+        // New context section appended
+        expect(note).toContain('India context');
+      });
+    });
+
     describe('Reversion formula wiring (TotalExitCostPct)', () => {
       test('Income family Reversion uses TotalExitCostPct instead of bare SellingCostPct', async () => {
         const ctx = minimalContext();
