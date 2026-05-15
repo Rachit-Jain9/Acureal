@@ -3684,6 +3684,126 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // PR-NX5 (2026-05-15): every Excel export must read as deal-SPECIFIC,
+    // not as a generic template. Dashboard row 2 + Inputs row 2 + Cash
+    // Flow Engine row 2 now carry a self-describing identity line:
+    // "{Asset Class} · {Deal Structure} · Exit: {Exit Strategy} · {Hold} · {City}"
+    // plus an asset-class-aware modeling-mechanic hint on Inputs row 3.
+    describe('PR-NX5: deal identity surfaced on every sheet header', () => {
+      test('Dashboard row 2 names asset class + deal structure + exit + hold + city', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        ctx.deal.deal_structure = 'outright_purchase';
+        ctx.deal.exit_strategy = 'strategic_sale';
+        ctx.property.city = 'Bengaluru';
+        ctx.property.micro_market = 'Outer Ring Road';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const subtitle = String(wb.getWorksheet('Dashboard').getCell('A2').value);
+        // Asset class label
+        expect(subtitle).toContain('Commercial Office');
+        // Deal structure label
+        expect(subtitle).toContain('Outright Purchase');
+        // Exit strategy label
+        expect(subtitle).toContain('Strategic Sale');
+        // Location
+        expect(subtitle).toContain('Bengaluru');
+        // Hold / horizon
+        expect(subtitle).toMatch(/horizon|cycle|yr/);
+      });
+
+      test('Dashboard subtitle adapts to JDA structure', async () => {
+        const ctx = minimalContext(); // residential_apartments, dev family
+        ctx.deal.deal_structure = 'jda_revenue_share';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const subtitle = String(wb.getWorksheet('Dashboard').getCell('A2').value);
+        expect(subtitle).toContain('JDA');
+        expect(subtitle).toContain('Revenue Share');
+      });
+
+      test('Dashboard subtitle adapts to development-management structure', async () => {
+        const ctx = minimalContext();
+        ctx.deal.deal_structure = 'development_management';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const subtitle = String(wb.getWorksheet('Dashboard').getCell('A2').value);
+        expect(subtitle).toContain('Development Management');
+        expect(subtitle).toContain('Fee Only');
+      });
+
+      test('Inputs sheet row 2 carries deal identity, row 3 carries mechanic hint', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'hospitality';
+        ctx.property.property_type = 'hospitality';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const row2 = String(inputs.getCell('A2').value);
+        const row3 = String(inputs.getCell('A3').value);
+        expect(row2).toContain('Hospitality');
+        expect(row2).toContain('Effective');
+        expect(row3).toContain('Modeling mechanic');
+        // USALI mechanic hint for hospitality
+        expect(row3).toMatch(/USALI|ADR|Occupancy/);
+      });
+
+      test('Inputs mechanic hint adapts per asset class — commercial_office gets a lease-driven hint', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const row3 = String(wb.getWorksheet('Inputs & Assumptions').getCell('A3').value);
+        expect(row3).toMatch(/lease|CAM|LRD|strategic-sale/i);
+      });
+
+      test('Cash Flow Engine row 1 includes the deal name, row 2 carries identity + mechanic hint', async () => {
+        const ctx = minimalContext();
+        ctx.deal.name = 'Whitefield Phase 2';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cfe = wb.getWorksheet('Cash Flow Engine');
+        const row1 = String(cfe.getCell('A1').value);
+        const row2 = String(cfe.getCell('A2').value);
+        expect(row1).toContain('Whitefield Phase 2');
+        expect(row1).toContain('Cash Flow Engine');
+        // Identity line on row 2
+        expect(row2).toContain('Residential Apartments');
+        // Mechanic hint included
+        expect(row2).toMatch(/RERA|milestone|GST/i);
+      });
+
+      test('Exit strategy label propagates: REIT exit shows on Dashboard', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office'; // income family
+        ctx.property.property_type = 'commercial_office';
+        ctx.deal.exit_strategy = 'reit_exit';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const subtitle = String(wb.getWorksheet('Dashboard').getCell('A2').value);
+        expect(subtitle).toContain('REIT');
+      });
+
+      test('Exit strategy bulk_exit_completion shows "Bulk Sale at Completion" on Dashboard', async () => {
+        const ctx = minimalContext(); // dev family residential
+        ctx.deal.exit_strategy = 'bulk_exit_completion';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const subtitle = String(wb.getWorksheet('Dashboard').getCell('A2').value);
+        expect(subtitle).toContain('Bulk Sale');
+      });
+    });
+
     describe('Reversion formula wiring (TotalExitCostPct)', () => {
       test('Income family Reversion uses TotalExitCostPct instead of bare SellingCostPct', async () => {
         const ctx = minimalContext();

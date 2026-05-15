@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Brain, BarChart3,
-  FileBarChart2, FileSpreadsheet, Settings, LogOut, ChevronLeft, ChevronRight, X,
+  FileBarChart2, Settings, LogOut, ChevronLeft, ChevronRight, X,
   Shield, Map, Database, Inbox, Activity, Beaker,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -15,7 +15,6 @@ const primaryNavItems = [
   { to: '/dashboard/intelligence', icon: Brain,            label: 'Market Intelligence' },
   { to: '/dashboard/comps',        icon: BarChart3,        label: 'Comps' },
   { to: '/dashboard/reports',      icon: FileBarChart2,    label: 'Reports / Exports' },
-  { to: '/dashboard/templates',    icon: FileSpreadsheet,  label: 'Excel Templates' },
 ];
 
 // Admin group: shared data curation surfaces. Visible only to roles that can
