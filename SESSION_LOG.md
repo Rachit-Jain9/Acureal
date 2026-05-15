@@ -4,6 +4,65 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-15 (afternoon) — Probability-weighted scenarios + full-coverage KPI icon-sets (PRs #324, #325)
+
+Operator directive: *"Pls start with whatever is best for website. We have all the time in the world. Do multiple steps/ tasks together that is convenient for you and best for the website, goes well together. Verify it works with no errors, no problems and no bugs and then push+commit+deploy."*
+
+Two thematically coherent PRs that compound on the morning's PR-NX10 sensitivity work and the PR-NX8 dashboard visual depth.
+
+### PRs shipped + merged
+
+- **#324 — Probability-Weighted Scenarios + Top-Driver Sensitivity Ranking (PR-NX10).** New Dashboard sections below Debt Maturity Ladder: 4-scenario blend (Bull 25% / Base 50% / Bear 20% / Lehman 5%) with asymmetric tail weighting per Knight 2018 IC convention. Each scenario shocks 4 input axes simultaneously and computes a single yield-on-cost (income) or project margin (development). Derives an **Expected-Value IRR** as SUMPRODUCT(weights × scenario outputs) — the single headline number IC underwrites against. Adds **Top-6 Driver Ranking** with low/high-case deltas, basis-point range, cumulative running sum, asset-class-aware driver list. Every formula live-recalcs against Inputs named ranges — zero hardcoded numbers, zero AI, methodology footer cites academic basis. +18 tests.
+
+- **#325 — Full-coverage KPI icon-sets with Bengaluru benchmark bands (PR-NX11).** New `KPI_BENCHMARKS` table in `assetClassDefaults.js` with Bengaluru-priority red/amber/green thresholds for every Dashboard KPI tile. Every entry carries an explicit citation (Cushman, JLL, Knight Frank, HVS, RBI) per CLAUDE.md "verified data only" rule. New `benchmarkFor(assetClass, family, kpi)` resolver with 3-step precedence (asset-class → family → null). Replaces the partial 2-3-tile icon-set wiring with full 6-tile coverage per family. Asset-class threshold swaps (office yield-on-cost 8.0-11.0% vs warehousing 9.0-12.0%) reflect real Bengaluru market bands, not generic globals. Down-is-good KPIs (exit cap rate) use `reverse: true`. Hover any KPI tile → cell comment shows benchmark range + source. +22 tests across two test files (15 in new `assetClassDefaults.test.js`, 7 in `exports.xlsxV2.test.js`).
+
+### Architecture additions
+
+- `backend/tests/assetClassDefaults.test.js` — new test file for KPI_BENCHMARKS structure + benchmarkFor precedence
+- `KPI_BENCHMARKS` export in `assetClassDefaults.js` — family defaults + per-asset-class overrides with citations
+- Dashboard scenario block at rows after Debt Maturity Ladder; Driver ranking block below scenarios
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| exports.xlsxV2.test.js | 186 | 211 | +25 |
+| assetClassDefaults.test.js | 0 | 15 | +15 |
+| Other backend | 1,436 | 1,436 | 0 |
+| **TOTAL** | **1,622** | **1,662** | **+40** |
+
+Zero pre-existing test regressions across all 101 backend suites. Frontend build clean both PRs (~22-26s).
+
+### Production verification (pending — manual)
+
+Two manual smoke tests outstanding from the morning batch + this batch:
+
+1. **PR-NX10 (this batch)** — Download a deal XLSX from prod and scroll to the bottom of the Dashboard (below the Debt Maturity Ladder). Verify:
+   - "Probability-Weighted Scenarios — Bull / Base / Bear / Lehman" section appears with 4 scenario rows
+   - Probability sum row shows 100%
+   - Expected-Value Yield-on-Cost (income) or Expected-Value Project Margin (dev) is a non-zero number
+   - Top-Driver Sensitivity Ranking lists 6 drivers with cumulative range
+
+2. **PR-NX11 (this batch)** — Same workbook. Verify:
+   - Every KPI tile (6 per family) shows a red/amber/green traffic-light icon next to the number
+   - Hover any tile (e.g. Yield on Cost) — comment includes "KPI Benchmark" + source citation
+   - Cap rate tile shows green when low, red when high (inverted direction)
+
+3. **PR-NX7 / NX9 (from morning batch)** — AI Briefing tab first row 17 should now read `Provider: claude-sonnet-4-6` (Claude active) vs `Synthesis: deterministic templated` (fallback). If fallback only, debug `ANTHROPIC_API_KEY` + `ai_routing_config narrative_synthesis` row.
+
+### What's next (carry-over from morning, unchanged)
+
+**Tier 1 (real depth):**
+1. AI Briefing production smoke test (~30 min)
+2. Native P&L drivers for 9 mapped asset classes
+3. Sheet count 7-8 → ≤5 (operator directive)
+4. ~~Dedicated Sensitivity worksheet~~ — superseded by today's PR-NX10 (Dashboard-embedded scenarios + drivers)
+5. Lease Roll + Construction Drawdown
+
+**Recommendation for next session:** Tier 4 B (Briefing visual diff on deal updates) — combined with today's Dashboard depth, every input edit produces a measurable, accountable shift visible in both the briefing narrative AND the scenario block.
+
+---
+
 ## 2026-05-15 — Per-deal Excel exports → investor-grade, India-native, AI-augmented (PRs #312–#320)
 
 Operator directive at the start: *"Make sure everything is accurate, specific, credible, precise, relevant, correct, reliable, informative, interesting, impactful."* + later: *"Generate excel exports specific and relevant to each deal. It should be generated based on deal type and structure, asset type, inputs and assumptions and exit strategy given by user."*
