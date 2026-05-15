@@ -1511,6 +1511,121 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // PR-NX2 (2026-05-15): operator audit on a real production workbook
+    // (Pointec Pens) surfaced two structural accuracy bugs that had been
+    // hiding for months. Dashboard B4 "Stabilised NOI / yr" was rendering
+    // `'Cash Flow Engine'!BF18 * 4` where BF was the TOTAL column on the
+    // NOI row — i.e. SUM(all-quarter NOI) × 4 = lifetime aggregate × 4,
+    // not the trailing-year stabilised rate. Same pattern on Cash-on-Cash
+    // (using Q2 alone — still in lease-up for most income assets) and Net
+    // Sale Proceeds (using TOTAL column on Reversion row — accidentally
+    // correct since other quarters were 0, but fragile). Separately, the
+    // income-family IRR / NPV / EM were referencing row 11 (Reversion-
+    // only — mostly zeros, IRR could not converge → "–") instead of row
+    // 12 (Total CF Incl Reversion). And that row didn't have an initial
+    // equity outflow at Q1 — so even with the correct row, IRR would
+    // still fail because the series was all-positive. All three issues
+    // ship together so the Dashboard reconciles end-to-end.
+    describe('Dashboard accuracy bug fixes (PR-NX2 — Pointec Pens audit)', () => {
+      test('Stabilised NOI uses trailing-year SUM, not lifetime aggregate × 4', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office'; // income family
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const formula = dash.getCell('B4').value.formula;
+        // Pre-fix: ='Cash Flow Engine'!BF18*4 (BF = TOTAL/SUM column)
+        // Post-fix: trailing-4-quarter SUM via INDEX
+        expect(formula).toMatch(/INDEX/);
+        expect(formula).toMatch(/TotalQuarters-3/);
+        expect(formula).toMatch(/TotalQuarters\)/);
+        // Should NOT reference the "Total" column (which is SUM) for NOI
+        expect(formula).not.toMatch(/!\$?[A-Z]{1,3}\$?\d+\*4/); // no "TotalCol18*4"
+      });
+
+      test('Stabilized Yield on Cost uses trailing-year NOI ÷ TotalProjectCostCr', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const formula = dash.getCell('D4').value.formula;
+        expect(formula).toMatch(/INDEX/);
+        expect(formula).toMatch(/TotalProjectCostCr/);
+      });
+
+      test('Cash-on-Cash (Stabilised) uses trailing-year CFADS ÷ equity', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        // Label changed from "Cash-on-Cash (Yr 1)" to "Cash-on-Cash (Stabilised)"
+        expect(String(dash.getCell('C7').value)).toContain('Stabilised');
+        const formula = dash.getCell('D7').value.formula;
+        // Pre-fix: =IFERROR(...!C{cfShift(9)}/(TotalProjectCostCr*(1-DebtLTV)),0)
+        // Post-fix: INDEX-based trailing-year SUM
+        expect(formula).toMatch(/INDEX/);
+        expect(formula).toMatch(/TotalProjectCostCr\*\(1-DebtLTV\)/);
+      });
+
+      test('Net Sale Proceeds uses INDEX at TotalQuarters (final-quarter cell, not SUM)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        const formula = dash.getCell('F7').value.formula;
+        // Pre-fix: ='Cash Flow Engine'!BF{cfShift(11)} (SUM column on Reversion row)
+        // Post-fix: =INDEX(Reversion row, 1, TotalQuarters)
+        expect(formula).toMatch(/INDEX/);
+        expect(formula).toMatch(/TotalQuarters\)/);
+      });
+
+      test('Income family Total CF row injects initial equity outflow at Q1', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const cf = wb.getWorksheet('Cash Flow Engine');
+        // Find the "Total Cash Flow Including Reversion (FCFE basis)" row
+        let targetRow = -1;
+        cf.eachRow((row, idx) => {
+          const lab = row.getCell(1).value;
+          if (typeof lab === 'string' && /Total Cash Flow Including Reversion/i.test(lab)) {
+            targetRow = idx;
+          }
+        });
+        expect(targetRow).toBeGreaterThan(0);
+        // Q1 formula (col B) should subtract initial equity
+        const q1Formula = cf.getCell(targetRow, 2).value.formula;
+        expect(q1Formula).toMatch(/TotalProjectCostCr\*\(1-DebtLTV\)/);
+        // Label should reflect FCFE basis
+        const label = String(cf.getCell(targetRow, 1).value);
+        expect(label).toContain('FCFE');
+      });
+
+      test('Income IRR / NPV / EM reference the Total CF row (row 12 legacy), not Reversion row (11)', async () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const dash = wb.getWorksheet('Dashboard');
+        // Modeled IRR formula at B21
+        const irrFormula = dash.getCell('B21').value.formula;
+        // Income family cfOffset = 20, so cfShift(12) = 32. Row 32 is the
+        // Total CF row. Pre-fix used row 31 (Reversion only).
+        expect(irrFormula).toMatch(/\$32:/);
+        expect(irrFormula).not.toMatch(/\$31:/);
+      });
+    });
+
     test('Inputs sheet has the input zone unlocked', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
