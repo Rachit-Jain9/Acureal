@@ -2840,3 +2840,27 @@ Fixed the XLSX export issue that made Microsoft Excel repair the Pointec workboo
 ### What's left to do
 Re-download Pointec from production and open it in Excel once as a final user-facing smoke check.
 
+
+## 2026-05-15 - Cash Flow Engine display recalculation fix
+
+### What was worked on
+Fixed the XLSX export behavior that could make formula-heavy worksheets such as Cash Flow Engine appear blank until Excel recalculated the workbook. New exports now force Microsoft Excel to rebuild formulas on open and remove stale calculation-chain metadata.
+
+### Plain-English recap
+- Cash Flow Engine should now show calculated values when a fresh export opens.
+- The workbook still keeps formulas and links so users can edit assumptions and rerun sensitivities.
+- A recalculated local copy of the Pointec workbook was created on the Desktop.
+- This matters because users should not see a blank-looking engine sheet when the model data is present.
+
+### PRs opened / merged
+- PR #310 - `fix(xlsx): force cash flow recalculation on open` - opened, merged, and deployed.
+
+### Validation
+- XLSX v2 focused suite: 153 tests passed.
+- PR #310 CI passed on backend, frontend, financial kernel, and audit/migration lint.
+- Production Vercel deployment completed for commit `bbc48b5`.
+- Local recalculated Pointec workbook had cached display values for all Cash Flow Engine formula cells.
+
+### What's left to do
+Re-download Pointec from production and open it in Excel to confirm the Cash Flow Engine displays values immediately.
+
