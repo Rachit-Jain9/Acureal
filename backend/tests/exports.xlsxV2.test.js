@@ -1247,6 +1247,19 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       }
     });
 
+    test('Inputs sheet comments are serialized before table parts so Excel opens without repair', async () => {
+      const buffer = await buildDealWorkbookV2(minimalContext());
+      const zip = await JSZip.loadAsync(buffer);
+      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
+
+      const legacyDrawingIndex = sheetXml.indexOf('<legacyDrawing');
+      const tablePartsIndex = sheetXml.indexOf('<tableParts');
+
+      expect(legacyDrawingIndex).toBeGreaterThan(-1);
+      expect(tablePartsIndex).toBeGreaterThan(-1);
+      expect(legacyDrawingIndex).toBeLessThan(tablePartsIndex);
+    });
+
     // The Uses Breakdown doughnut always renders. The Monthly Trend
     // bar renders when totalQuarters >= 2 (which it always is in our
     // test contexts since the minimum is 4).
