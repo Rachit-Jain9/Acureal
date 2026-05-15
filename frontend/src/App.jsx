@@ -41,6 +41,7 @@ const FinancialsPage = lazy(() => import('./pages/FinancialsPage'));
 const CompsPage = lazy(() => import('./pages/CompsPage'));
 const DealComparePage = lazy(() => import('./pages/DealComparePage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
@@ -142,6 +143,7 @@ export default function App() {
           {/* Compare: accessible but not in primary nav */}
           <Route path="compare" element={withSuspense(<DealComparePage />)} />
           <Route path="reports" element={withSuspense(<ReportsPage />)} />
+          <Route path="templates" element={withSuspense(<TemplatesPage />)} />
           <Route path="settings" element={withSuspense(<SettingsPage />)} />
           {/* Admin / data-curation surfaces — moved out of Settings (which is now
               personal profile only). Old /settings/* paths kept as redirects so
