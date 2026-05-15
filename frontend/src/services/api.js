@@ -470,16 +470,6 @@ export const exportsAPI = {
   dealsCsv: (params) => api.get('/exports/deals/csv', { params, responseType: 'blob' }),
   intelligenceTearSheet: (params) =>
     api.get('/exports/intelligence/tear-sheet', { params, responseType: 'blob' }),
-  // Reference template library (PR-TPL — 2026-05-15)
-  // 19 India-context Excel templates, fully formula-driven, RERA/GST/JDA
-  // aware. The catalog endpoint feeds the Templates page; the download
-  // endpoint streams the workbook as a blob.
-  templateCatalog: () => api.get('/exports/templates/catalog'),
-  templateXlsx: (assetClass, dealStructure, exitStrategy) =>
-    api.get(`/exports/templates/${assetClass}/${dealStructure}/xlsx`, {
-      params: exitStrategy ? { exit: exitStrategy } : undefined,
-      responseType: 'blob',
-    }),
 };
 
 // Tier-2 #11 — Deal Q&A agent.

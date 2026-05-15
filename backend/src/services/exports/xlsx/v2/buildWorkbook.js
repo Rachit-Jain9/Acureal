@@ -557,6 +557,119 @@ const approvalCostCrFor = (ctx) => {
   return perSqft && perSqft > 0 && area > 0 ? (perSqft * area) / 10000000 : 0;
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Deal-identity labels (PR-NX5 — 2026-05-15)
+// ──────────────────────────────────────────────────────────────────────────
+// The Excel export must read as deal-SPECIFIC to whoever opens it — not as
+// a generic template. The helpers below convert the deal record's stored
+// values (asset_class, deal_structure, exit_strategy) into investor-friendly
+// labels + asset-class-aware modeling mechanic hints, and assemble them
+// into a single self-describing subtitle line that's used identically
+// across the Dashboard + Inputs + Cash Flow Engine sheets.
+//
+// Without this, a Commercial Office deal opens with the same generic
+// subtitle as a Hospitality deal — "Operating Asset Dashboard". After this,
+// the operator reads "Commercial Office · Outright Purchase · Exit:
+// Strategic Sale · 5-yr hold · Bengaluru ORR" before scrolling a pixel.
+const ASSET_CLASS_LABEL_MAP = Object.freeze({
+  residential_apartments: 'Residential Apartments',
+  villas: 'Villas',
+  plotted_development: 'Plotted Development',
+  commercial_office: 'Commercial Office',
+  retail: 'Retail / Mall',
+  industrial_warehousing: 'Industrial & Warehousing',
+  hospitality: 'Hospitality',
+  mixed_use: 'Mixed-Use Development',
+  redevelopment: 'Redevelopment',
+  raw_land: 'Raw Land',
+});
+
+const DEAL_STRUCTURE_LABEL_MAP = Object.freeze({
+  outright_purchase: 'Outright Purchase',
+  jda_revenue_share: 'JDA — Revenue Share',
+  jda_area_share: 'JDA — Area Share',
+  development_management: 'Development Management (Fee Only)',
+});
+
+const EXIT_STRATEGY_LABEL_MAP = Object.freeze({
+  // Income-family exits
+  strategic_sale: 'Strategic Sale (Institutional Buyer)',
+  reit_exit: 'REIT Listing / Contribution',
+  hold_to_perpetuity: 'Long-Term Hold',
+  refinance_hold: 'LRD Refinance + Hold',
+  // Development-family exits
+  outright_progressive: 'Progressive Sale (RERA-Milestone Linked)',
+  bulk_exit_completion: 'Bulk Sale at Completion',
+  hold_post_completion: 'Hold Post-Completion (Lease-up)',
+});
+
+// Asset-class-aware one-line modeling mechanic. Surfaces immediately what
+// kind of pro-forma the operator is looking at — institutional reviewers
+// can verify within seconds that the underlying engine matches the deal
+// structure they expected.
+const ASSET_CLASS_MECHANIC_HINT = Object.freeze({
+  residential_apartments:
+    'RERA-milestone sales collection · GST 5%/1% · Bulk-exit top-up at completion',
+  villas:
+    'Premium plot + built-up sales · Faster absorption than apartments · GST 5%',
+  plotted_development:
+    'BDA/DTCP-layout plot sales · No construction risk · GST 0% · Stamp duty on buyer',
+  commercial_office:
+    'Multi-tenant lease · CAM + escalation · LRD refinance / strategic-sale exit',
+  retail:
+    'Anchor + vanilla rent split · CAM recovery · Cap-rate or REIT exit',
+  industrial_warehousing:
+    'Single/multi-tenant warehouse lease · Tight cap rates · BTS or strategic sale',
+  hospitality:
+    'USALI room-night revenue (Keys × ADR × Occupancy × 365) · F&B + Banquet ancillary',
+  mixed_use:
+    'Component-weighted blended rate · Resi / Office / Retail / Hospitality stack',
+  redevelopment:
+    'Society redevelopment · Area-share with existing residents · GST 5%',
+  raw_land:
+    'Pre-conversion land · Title / Conversion / Layout pipeline · 79A/79B compliance',
+});
+
+// Format a hold/build period in years for the subtitle.
+const formatHoldPeriod = (months) => {
+  const m = Number(months) || 0;
+  if (!m) return null;
+  if (m < 12) return `${m}-mo cycle`;
+  const yrs = m / 12;
+  return Number.isInteger(yrs) ? `${yrs}-yr horizon` : `${yrs.toFixed(1)}-yr horizon`;
+};
+
+// Format the location chip — city + optional micro-market.
+const formatLocation = (deal, property) => {
+  const city = deal.city || property.city;
+  const microMarket = property.micro_market || deal.micro_market;
+  if (city && microMarket && microMarket !== city) return `${city} · ${microMarket}`;
+  return city || 'India';
+};
+
+// Build the dense, self-describing identity line used on every key sheet.
+// Returns the assembled string (no leading separator) — caller decides
+// formatting (italic / colour / bold).
+const buildDealIdentityLine = (ctx) => {
+  const assetLabel = ASSET_CLASS_LABEL_MAP[ctx.assetClass] || ctx.assetClass || 'Asset';
+  const structureKey = String(ctx.deal.deal_structure || ctx.deal.deal_type || 'outright_purchase').toLowerCase();
+  const structureLabel = DEAL_STRUCTURE_LABEL_MAP[structureKey] || structureKey.replace(/_/g, ' ');
+  const exitKey = String(ctx.deal.exit_strategy || (ctx.dealFamily === 'income' ? 'strategic_sale' : 'outright_progressive')).toLowerCase();
+  const exitLabel = EXIT_STRATEGY_LABEL_MAP[exitKey] || exitKey.replace(/_/g, ' ');
+  const hold = formatHoldPeriod(ctx.projectMonths);
+  const location = formatLocation(ctx.deal, ctx.property);
+  const parts = [assetLabel, structureLabel, `Exit: ${exitLabel}`];
+  if (hold) parts.push(hold);
+  if (location) parts.push(location);
+  return parts.join(' · ');
+};
+
+// Asset-class-aware modeling-mechanic blurb. Used as a second-line
+// subtitle on the Inputs sheet so the operator sees what kind of engine
+// drives the pro forma before they touch any cell.
+const buildModelingMechanicHint = (ctx) =>
+  ASSET_CLASS_MECHANIC_HINT[ctx.assetClass] || 'Quarter-by-quarter cash flow · Operator-editable inputs · Live recalc';
+
 const baseRentPerSqftMonthFor = (ctx) =>
   firstNumber(
     ctx.inputs.baseRentPerSqftMonth,
@@ -1478,12 +1591,24 @@ const buildInputsSheet = (workbook, ctx) => {
   sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Inputs & Assumptions`;
   styleSectionTitle(sheet.getCell('A1'));
   sheet.getRow(1).height = 28;
-  sheet.mergeCells('A2:D2');
-  sheet.getCell('A2').value = `${ctx.deal.deal_type || 'Acquisition'} | ${ctx.assetClass || 'Generic'} | Effective ${ctx.effectiveDate}`;
+  // PR-NX5 (2026-05-15): Inputs sheet row 2 now mirrors the Dashboard's
+  // deal-identity subtitle so both sheets read as deal-SPECIFIC.
+  // Row 3 carries the asset-class-aware modeling mechanic hint so the
+  // operator sees exactly what kind of pro-forma engine is driving the
+  // workbook before they edit any cell.
+  sheet.mergeCells('A2:I2');
+  sheet.getCell('A2').value = `${buildDealIdentityLine(ctx)} · Effective ${ctx.effectiveDate}`;
   sheet.getCell('A2').font = { name: FONT, size: 10, color: { argb: palette.xlsx('mutedHigh') }, italic: true };
   sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getCell('A2').protection = { locked: true };
   sheet.getRow(2).height = 22;
+
+  sheet.mergeCells('A3:I3');
+  sheet.getCell('A3').value = `Modeling mechanic: ${buildModelingMechanicHint(ctx)}`;
+  sheet.getCell('A3').font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedLow') } };
+  sheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet.getCell('A3').protection = { locked: true };
+  sheet.getRow(3).height = 18;
 
   // Column header row
   sheet.getCell('A4').value = 'Input';
@@ -3762,17 +3887,21 @@ const buildPhasingSheet = (workbook, ctx) => {
   };
 
   // Title row — single banner covers the whole sheet (both sections).
+  // PR-NX5: includes the deal name so the Cash Flow Engine sheet
+  // reads as deal-specific too (not just "Cash Flow Engine — generic").
   sheet.mergeCells(1, 1, 1, ctx.totalQuarters + 2);
+  const dealName = ctx.deal.name || ctx.property.property_name || 'Deal';
   sheet.getCell(1, 1).value = ctx.dealFamily === 'income'
-    ? `${ctx.brandName} | Cash Flow Engine — Operating Schedule + Cash Flow + Debt`
-    : `${ctx.brandName} | Cash Flow Engine — Phasing + Sales Collection + Cash Flow + Debt`;
+    ? `${ctx.brandName} | ${dealName} | Cash Flow Engine — Operating Schedule + Cash Flow + Debt`
+    : `${ctx.brandName} | ${dealName} | Cash Flow Engine — Phasing + Sales Collection + Cash Flow + Debt`;
   styleSectionTitle(sheet.getCell(1, 1));
   sheet.getRow(1).height = 26;
 
   sheet.mergeCells(2, 1, 2, ctx.totalQuarters + 2);
-  sheet.getCell(2, 1).value = ctx.dealFamily === 'income'
-    ? `Quarter-by-quarter PGI / EGR / OpEx / NOI build. All formulas reference Inputs & Assumptions named ranges.`
-    : `Quarters driven by ProjectMonths input. All formulas reference Inputs & Assumptions named ranges.`;
+  // PR-NX5: row 2 now carries the same deal-identity subtitle that the
+  // Dashboard + Inputs sheets carry, plus the asset-class-aware mechanic
+  // hint for at-a-glance modeling-engine identification.
+  sheet.getCell(2, 1).value = `${buildDealIdentityLine(ctx)} · ${buildModelingMechanicHint(ctx)}`;
   sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(2, 1).alignment = { vertical: 'middle' };
 
@@ -4701,8 +4830,14 @@ const buildDashboardSheet = (workbook, ctx) => {
   styleSectionTitle(sheet.getCell('A1'));
   sheet.getRow(1).height = 28;
 
+  // PR-NX5 (2026-05-15): Dashboard row 2 now surfaces the full deal
+  // identity line so the workbook reads as deal-SPECIFIC immediately on
+  // open. Pre-fix: "Operating Asset Dashboard — every figure recalculates…"
+  // (generic, identical across all deals). Post-fix: e.g. "Commercial
+  // Office · Outright Purchase · Exit: Strategic Sale · 5-yr horizon ·
+  // Bengaluru · ORR" — every dimension of the deal in one glance.
   sheet.mergeCells('A2:N2');
-  sheet.getCell('A2').value = `${ctx.dealFamily === 'income' ? 'Operating Asset Dashboard' : 'Development Project Dashboard'} — every figure recalculates live from the Inputs sheet.`;
+  sheet.getCell('A2').value = buildDealIdentityLine(ctx);
   sheet.getCell('A2').font = { name: FONT, size: 10, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
   sheet.getRow(2).height = 22;
