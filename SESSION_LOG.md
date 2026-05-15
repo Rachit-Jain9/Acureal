@@ -2815,3 +2815,28 @@ Fixed the XLSX export formula bug that made the Monthly Cash Flow total column i
 ### What's left to do
 Open the PR, wait for CI, merge, deploy, then re-download Pointec once to confirm Excel opens cleanly.
 
+
+## 2026-05-15 - Pointec workbook Excel repair fix
+
+### What was worked on
+Fixed the XLSX export issue that made Microsoft Excel repair the Pointec workbook and remove the Inputs & Assumptions sheet. The workbook generator now writes the Inputs sheet in the order Excel expects when the sheet contains notes, source links, and filterable QA/source tables.
+
+### Plain-English recap
+- Pointec exports should now open without Excel asking to repair the file.
+- Inputs & Assumptions should stay intact with the assumptions, notes, links, and QA/source details visible.
+- A repaired local copy was created on the Desktop for the already-downloaded Pointec workbook.
+- This matters because users can trust the exported model to keep its assumptions and audit trail.
+
+### PRs opened / merged
+- PR #307 - `fix(exports): remove monthly cash flow circular refs` - merged and deployed.
+- PR #308 - `fix(xlsx): prevent inputs sheet repair in Excel` - opened, merged, and deployed.
+
+### Validation
+- XLSX v2 focused suite: 152 tests passed.
+- PR #308 CI passed on backend, frontend, financial kernel, and audit/migration lint.
+- Production Vercel deployment completed for commit `549df84`.
+- Repaired Pointec workbook validated with all 7 expected worksheets intact.
+
+### What's left to do
+Re-download Pointec from production and open it in Excel once as a final user-facing smoke check.
+
