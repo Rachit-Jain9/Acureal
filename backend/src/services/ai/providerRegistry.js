@@ -6,12 +6,20 @@ let geminiClient = null;
 let anthropicClient = null;
 let openaiClient = null;
 
-const DEFAULT_GEMINI_MODEL = 'gemini-3-flash-preview';
-// 2026-05-11 fix: was 'gpt-5.4' (placeholder from when the OpenAI adapter
-// was first wired in — that model name doesn't exist on OpenAI's API and
-// triggers a 400 BadRequest on every call). Production fix: switch to
-// 'gpt-4o' which is OpenAI's actual flagship multimodal model.
-const DEFAULT_OPENAI_MODEL = 'gpt-4o';
+// 2026-05-15 upgrade: Gemini 3.1 Flash-Lite GA'd 2026-05-07 (8 days ago).
+// 2.5× faster Time-to-First-Token + 45% faster output vs 2.5 Flash, at
+// $0.25 / $1.50 per M tokens — best fit for REDIP's extraction +
+// classification workloads (high-volume, low-latency, cost-sensitive).
+const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
+
+// 2026-05-15 correction: GPT-5.4 was released by OpenAI on 2026-03-05
+// (confirmed via developers.openai.com + TechCrunch announcement). The
+// 2026-05-11 fix-back to 'gpt-4o' (PR-285) was based on a misdiagnosis —
+// the 400 BadRequest at the time was likely org-access / transient,
+// not "model doesn't exist." Promoting GPT-5.4 to the production default
+// now, with 1M-token context + frontier reasoning for the deal-analysis
+// surface. Operator override via OPENAI_MODEL env var is preserved.
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
 const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
 const getProviderAvailability = () => ({
@@ -24,13 +32,18 @@ const getRoutingConfig = () => ({
   document_classification: process.env.AI_PROVIDER_DOCUMENT_CLASSIFICATION || 'gemini',
   document_extraction: process.env.AI_PROVIDER_DOCUMENT_EXTRACTION || 'gemini',
   translation: process.env.AI_PROVIDER_TRANSLATION || 'gemini',
-  // Operator directive 2026-05-11: switched the reasoning + market-synthesis
-  // defaults from Claude to OpenAI (GPT-5.4) due to Anthropic credit limits.
-  // The aiRouter's typed Claude wrappers are routing-aware — they dispatch
-  // to providerRegistry.runOpenAIReasoning(Stream) when this config says
-  // 'openai', keeping all 11 narrative call sites unchanged.
+  // 2026-05-15 model-specialization policy (per the AI-architecture doc):
+  //   - reasoning + market_synthesis      → OpenAI GPT-5.4 (structured outputs,
+  //                                          frontier reasoning, agent workflows)
+  //   - narrative_synthesis (NEW)         → Claude Sonnet 4.6 (institutional
+  //                                          narrative tone, IC memos, briefing)
+  //   - document_extraction/classification → Gemini 3.1 Flash-Lite (cheap +
+  //                                          fast multimodal OCR)
+  // Each task's provider override stays env-var driven so ops can swap any
+  // task's provider without a deploy.
   reasoning: process.env.AI_PROVIDER_REASONING || 'openai',
   market_synthesis: process.env.AI_PROVIDER_MARKET_SYNTHESIS || 'openai',
+  narrative_synthesis: process.env.AI_PROVIDER_NARRATIVE_SYNTHESIS || 'claude',
 });
 
 const getGeminiClient = () => {
