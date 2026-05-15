@@ -134,26 +134,23 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook stays editable and within the 6-7 worksheet structure', async () => {
-      // Operator-directed institutional structure:
-      //   1. Dashboard (FIRST)
-      //   2. Export QA & Sources
+    test('produced workbook stays editable and within the 8-worksheet structure', async () => {
+      // PR-NX7 (2026-05-15): Executive Briefing added as the FIRST tab.
+      // Total now 8 sheets:
+      //   1. Executive Briefing (FIRST — AI-assisted IC summary)
+      //   2. Dashboard
       //   3. Inputs & Assumptions
       //   4. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
-      //   5. Sources & Uses
-      //   6. Monthly Cash Flow
-      //   7. Lease Roll
-      //   8. Construction Drawdown
-      //   9. Sensitivity
-      //   10. Debt Sizing & Amortization (combined: sizing + amort schedule)
-      //   11. Sponsor LP Waterfall
-      //   12. Unit Mix
-      //   13. Calculations            (hidden audit trail)
+      //   5. Monthly Cash Flow
+      //   6. Debt Sizing & Amortization
+      //   7. Unit Mix (when applicable)
+      //   8. Calculations            (hidden audit trail)
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const names = wb.worksheets.map((ws) => ws.name);
       expect(names).toEqual([
+        'Executive Briefing',
         'Dashboard',
         'Inputs & Assumptions',
         'Cash Flow Engine',
@@ -161,7 +158,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Debt Sizing & Amortization',
         'Calculations',
       ]);
-      expect(names.length).toBeLessThanOrEqual(7);
+      expect(names.length).toBeLessThanOrEqual(8);
       expect(names).not.toContain('Export QA & Sources');
       const calc = wb.getWorksheet('Calculations');
       expect(calc).toBeDefined();
@@ -1207,12 +1204,12 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const drawingXml = await zip.file('xl/drawings/drawing1.xml').async('string');
       expect(drawingXml).toMatch(/<xdr:oneCellAnchor>/);
 
-      // Dashboard sheet references the drawing
-      const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+      // PR-NX7: Dashboard is now sheet2.xml (Executive Briefing is sheet1.xml).
+      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
       expect(sheetXml).toMatch(/<drawing\s+r:id="rId\d+"\s*\/>/);
 
       // Sheet rels include the drawing rel
-      const sheetRels = await zip.file('xl/worksheets/_rels/sheet1.xml.rels').async('string');
+      const sheetRels = await zip.file('xl/worksheets/_rels/sheet2.xml.rels').async('string');
       expect(sheetRels).toMatch(/drawings\/drawing1\.xml/);
 
       // Content types declares each chart + the drawing
@@ -1224,7 +1221,8 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     test('Dashboard ships native Excel sparklines for KPI trend cells', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const zip = await JSZip.loadAsync(buffer);
-      const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+      // PR-NX7: Dashboard is sheet2.xml (Executive Briefing is sheet1.xml).
+      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
 
       expect(sheetXml).toContain('<x14:sparklineGroups>');
       expect(sheetXml).toContain('<xm:sqref>B9</xm:sqref>');
@@ -1250,7 +1248,8 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     test('Inputs sheet comments are serialized before table parts so Excel opens without repair', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const zip = await JSZip.loadAsync(buffer);
-      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
+      // PR-NX7: Inputs is sheet3.xml (Executive Briefing + Dashboard ahead of it).
+      const sheetXml = await zip.file('xl/worksheets/sheet3.xml').async('string');
 
       const legacyDrawingIndex = sheetXml.indexOf('<legacyDrawing');
       const tablePartsIndex = sheetXml.indexOf('<tableParts');
@@ -2431,7 +2430,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           });
           expect(label).toBe(expectedLabel);
         }
-      });
+      }, 30000); // generates 7 workbooks in one test — 5s default is too tight
 
       test('Income family deals do NOT get the Deal Structure section', async () => {
         const ctx = minimalContext();
@@ -3090,7 +3089,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         await check('plotted_development', false);
         await check('raw_land', false);
         await check('commercial_office', false);
-      });
+      }, 30000); // generates 6 workbooks in one test — 5s default too tight
 
       test('Equivalent EscalationPct derived = (1+MilestoneTotal)^(1/years) - 1', async () => {
         const buffer = await buildDealWorkbookV2(minimalContext());
