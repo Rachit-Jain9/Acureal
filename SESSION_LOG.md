@@ -4,6 +4,73 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-15 — Per-deal Excel exports → investor-grade, India-native, AI-augmented (PRs #312–#320)
+
+Operator directive at the start: *"Make sure everything is accurate, specific, credible, precise, relevant, correct, reliable, informative, interesting, impactful."* + later: *"Generate excel exports specific and relevant to each deal. It should be generated based on deal type and structure, asset type, inputs and assumptions and exit strategy given by user."*
+
+Nine PRs shipped, +125 tests, zero regressions. The per-deal XLSX moved from "spreadsheet of numbers" to investor-grade IC briefing package.
+
+### PRs shipped + merged
+
+- **#312 — Accuracy fixes from Pointec Pens audit.** Stabilised NOI formula was `BF18 × 4` (lifetime aggregate × 4, ~14× over-statement). Replaced with trailing-year SUM via INDEX. Same pattern for Cash-on-Cash (Q2 → stabilised year). Net Sale Proceeds → final-quarter INDEX. Income-family IRR convergence fixed by injecting initial equity outflow at Q1. `returnCfLegacyRow` off-by-one (11 → 12 for income).
+- **#313 / #314 — Reference Template Library (since removed).** 65 downloadable templates (19 asset classes × deal structures). Polish PR added hero strip + search + India badges + defaults preview. **Reverted in PR-317** per operator pivot: "no separate tab, make per-deal exports themselves specific."
+- **#315 — India regulatory cell comments + Khata wiring.** 20+ hover tooltips citing Finance Act 2019, GST Council notification 03/2019-CT(R), Karnataka Stamp Act 1957, BBMP Property Tax Rules 2009, RERA Act 2016, RBI Master Direction, Income Tax Act Sections 111/112A/194-IA, Karnataka Municipality Act 1964. KhataExitMultiplier wired into income Reversion + ImpliedNetExitValueCr.
+- **#316 — Derived-value loop closure.** MixUseBlendedRatePerSqft → SellRatePerSqft default for mixed_use. ApprovalCostCr ↔ ApprovalsBreakdownSumCr reconciliation row with auto-flag. EffectiveExitFactor × KhataExitMultiplier injected into dev-family final-quarter Quarter Sales for bulk_exit_completion strategy.
+- **#317 — Per-deal identity headers + removed Templates UI.** Dashboard subtitle: `{Asset} · {Structure} · Exit: {Strategy} · {Hold} · {City} · {Micro-market}`. Sidebar nav cleaned up. TemplatesPage.jsx kept as orphaned file but unlinked.
+- **#318 — Asset-class defaults bridge.** New `assetClassDefaults.js` layered into `resolveEngineAssumptions()`. Closes the gap where sparse-input deals exported as mostly-zero workbooks. Deconflicted from kernel-published keys (rentPerSqftPerMonth, exitCapRatePct) to avoid shadowing kernel values.
+- **#319 — AI-Assisted Executive Briefing (flagship).** New first tab on every workbook. Three-layer architecture: deterministic numeric snapshot extraction → AI synthesis via OpenAI gpt-4o (cached) → templated fallback. Mandatory "⚠ AI-Assisted — REQUIRES HUMAN REVIEW" disclosure per CLAUDE.md. 4-bullet narrative + auto-flagged risk note + full disclosure footnote.
+- **#320 — Capital Stack + Debt Maturity Ladder + snapshot-realism suite.** Two new Dashboard sections with data-bar visualizations + reconciliation status flag. 42 realism tests across 6 representative fixtures asserting headline KPIs land in asset-class plausibility bands. Catches PR-312-class regressions automatically.
+
+### Architecture additions
+
+- `backend/src/services/exports/xlsx/v2/assetClassDefaults.js` — Bengaluru-priority defaults for 10 native asset classes
+- `backend/src/services/exports/xlsx/v2/dealBriefing.service.js` — AI + templated narrative generation
+- `backend/tests/exports.xlsxV2.realism.test.js` — 6-fixture snapshot suite
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| exports.xlsxV2.test.js | 120 | 186 | +66 |
+| dealBriefing.service.test.js | 0 | 19 | +19 |
+| exports.xlsxV2.realism.test.js | 0 | 42 | +42 |
+| Other backend | 1,377 | 1,375 | -2 |
+| **TOTAL** | **1,497** | **1,622** | **+125** |
+
+### Production verification (pending — manual)
+
+- AI Briefing path is built but unverified in prod. Download a deal XLSX, check the Briefing footer for `Provider: OpenAI gpt-4o` (AI active) vs `Synthesis: deterministic templated narrative` (fallback). If fallback only, debug `OPENAI_API_KEY` runtime visibility + `ai_routing_config` reasoning task entry.
+
+### What's next (tiered)
+
+**Tier 1 (real depth):**
+1. AI Briefing production smoke test (~30 min)
+2. Native P&L drivers for 9 mapped asset classes (Data Centre, Co-living, BTR, Logistics Park, etc.) — currently share P&L with closest native
+3. Sheet count 7-8 → ≤5 (operator directive); consolidate Monthly Cash Flow + Debt Sizing into Calculations
+4. Dedicated Sensitivity worksheet (2D tables + IRR contour + Spider + Bull/Base/Bear/Lehman overlay)
+5. Lease Roll (income) + Construction Drawdown (dev) — pre-req: `lease_tenants` + `construction_milestones` data models
+
+**Tier 2 (polish):** AI briefing on DOCX + PPTX · sheet protection unlocking only inputs · native chart objects · sparklines on every tile
+
+**Tier 4 (better alternatives, ranked):**
+- A: Streaming briefing preview on Reports page (~1 session)
+- B: Briefing visual diff on deal updates (~1 session, flagship)
+- C: Nightly briefing pre-cache cron (~half session)
+- D: AI comp commentary on Dashboard (~1-2 sessions)
+- E: Risk heatmap on Dashboard from `risks` table (~half session)
+- F: Comp-to-deal positioning scatter chart (~1 session)
+- G: PDF IC-summary one-pager (~1 session)
+- H: Briefing feedback loop / thumbs-up-down (~half session)
+- I: Document-to-input auto-population via Gemini (~1-2 sessions)
+- ~~J: Hindi/Kannada translation~~ (skipped per operator)
+
+### Recommendation for next session
+
+Top pick: **Tier 4 B (Briefing visual diff)** — flagship UX. Combined with the PR-NX8 realism suite, every input edit produces a measurable, accountable narrative shift.
+Runner-up: **Tier 1 #1 (AI smoke test)** — 30 min, confirms the flagship feature actually fires in prod.
+
+---
+
 ## 2026-05-12 — XLSX Excel polish batch: formula-driven tiles, Exit Strategy, dropdowns, Post-Tax IRR (PRs #292, #293, #294, #295, #296)
 
 Operator directive: *"Pls make the excel sheets specific and relevant to each deal type and its asset class with different deal structure and exit strategy. Hardcode values and numbers only where necessary. Use formulas, cell references, linkages and locking of cells wherever possible, applicable and required. Make sure there are no errors or bugs or problems and nothing breaks in the excel sheet with no invalid value."*
