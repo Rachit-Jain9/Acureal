@@ -4256,8 +4256,20 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
       format: NUMBER_FORMATS.currency,
     },
     {
-      label: 'Total Cash Flow Including Reversion',
-      formula: (q) => `=${colLetters[q - 1]}${cf(9)}+${colLetters[q - 1]}${cf(11)}`,
+      // PR-NX2 (2026-05-15): inject initial-equity outflow at Q1 so the
+      // row produces a valid IRR. Pre-fix the row was all-positive
+      // (CFADS₊ + Reversion at end), so IRR couldn't converge → "–" on
+      // the Dashboard. The investor's equity contribution at Q1 = Total
+      // Project Cost × (1 − DebtLTV) and was implicit in the kernel but
+      // missing from the workbook IRR chain. Subtracting it at Q1 turns
+      // Q1 negative (or near-zero) and lets IRR / NPV / XIRR resolve.
+      // Reversion remains in the Reversion row (cf(11)); this row sums
+      // them into the per-quarter free-cash-flow-to-equity series that
+      // institutional underwriting actually measures returns on.
+      label: 'Total Cash Flow Including Reversion (FCFE basis)',
+      formula: (q) => q === 1
+        ? `=${colLetters[q - 1]}${cf(9)}+${colLetters[q - 1]}${cf(11)}-(TotalProjectCostCr*(1-DebtLTV))`
+        : `=${colLetters[q - 1]}${cf(9)}+${colLetters[q - 1]}${cf(11)}`,
       format: NUMBER_FORMATS.currency,
       bold: true,
     },
@@ -4356,7 +4368,13 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
   const datedReturnStartRow = datedReturnTitleRow + 1;
   const dateStartCol = colLetter(2);
   const dateEndCol = colLetter(ctx.totalQuarters + 1);
-  const returnCfLegacyRow = ctx.dealFamily === 'income' ? 11 : 8;
+  // Legacy-row positions for the modeled-returns cash-flow row. Income
+  // family: row 12 = "Total Cash Flow Including Reversion (FCFE basis)"
+  // (PR-NX2 fix — was 11 = Reversion-only row, which made IRR/XIRR fail
+  // because the row was all-zeros except the final period). Development
+  // family: row 8 = "Project net cash flow" (Q1 already negative via
+  // construction outflows; IRR works).
+  const returnCfLegacyRow = ctx.dealFamily === 'income' ? 12 : 8;
   const datedCashFlowRow = cf(returnCfLegacyRow);
   const datedCashFlowRange = `$${dateStartCol}$${datedCashFlowRow}:$${dateEndCol}$${datedCashFlowRow}`;
   const datedDateRange = `$${dateStartCol}$3:$${dateEndCol}$3`;
@@ -4499,6 +4517,16 @@ const buildDashboardSheet = (workbook, ctx) => {
     return s;
   };
   const totalCol = colLetter(totalQ + 2);
+  // Last QUARTER column (vs totalCol which is the "Total"-row column to the
+  // right of the last quarter). 2026-05-15 operator audit on Pointec Pens
+  // surfaced that the headline "Stabilised NOI / yr" tile was using
+  // BF18 × 4 = SUM(all-quarter NOI) × 4 = lifetime aggregate × 4, NOT
+  // the trailing-year stabilised NOI. Same bug on Cash-on-Cash + Net
+  // Sale Proceeds. The fix is to use INDEX into the per-quarter range
+  // and pick the trailing 4 quarters (= stabilised year NOI), or the
+  // single final quarter (for reversion). lastQuarterCol scopes that
+  // range correctly.
+  const lastQuarterCol = colLetter(totalQ + 1);
   const totalProjectCostRef = 'TotalProjectCostCr';
 
   // Asset-class-aware KPI tiles. Each tile takes BOTH a kernel-stored
@@ -4516,19 +4544,43 @@ const buildDashboardSheet = (workbook, ctx) => {
   // surface (Reports page, PPTX deck, DOCX report).
   const k = ctx.kernelKpis;
   const cachedCosts = computeCachedCostSnapshot(ctx);
+  // Trailing-year aggregator for NOI / CFADS — picks the LAST 4 quarters
+  // of the supplied row on the Cash Flow Engine sheet. Used by the income-
+  // family KPI tiles so the "stabilised" tile shows the actual stabilised
+  // annual rate (= last operating year of the hold) rather than a
+  // lifetime aggregate. Wraps with MAX(1, TotalQuarters-3) so a short
+  // horizon (< 4 quarters) doesn't produce a negative INDEX argument.
+  const trailingYearSum = (row) =>
+    `SUM(INDEX(${phasing}!$B$${row}:$${lastQuarterCol}$${row},1,MAX(1,TotalQuarters-3)):INDEX(${phasing}!$B$${row}:$${lastQuarterCol}$${row},1,TotalQuarters))`;
+  // Final-quarter picker — used for the reversion row where all quarters
+  // are zero EXCEPT the last, which holds the sale-proceeds value.
+  const finalQuarterCell = (row) =>
+    `INDEX(${cashflow}!$B$${row}:$${lastQuarterCol}$${row},1,TotalQuarters)`;
+
   const kpiCells = ctx.dealFamily === 'income'
     ? [
         // Top row — operating fundamentals (Phasing section: rows unchanged
         // by restructure; e.g. NOI is at row 18 in the upper Phasing block).
-        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=${phasing}!${totalCol}18*4`,                                                                       format: NUMBER_FORMATS.currency, cached: k.noi },
-        { row: 4, col: 'C', label: 'Stabilized Yield on Cost',      kernel: null,                  formula: `=IFERROR(${phasing}!${totalCol}18*4/${totalProjectCostRef},0)`, format: NUMBER_FORMATS.percent, cached: k.yieldOnCost },
+        // Stabilised NOI = SUM of trailing 4 quarters of NOI row 18. Pre-fix
+        // (2026-05-15) used BF18 × 4 where BF was the "Total" SUM column,
+        // producing lifetime aggregate × 4 (= 14× year-NOI). Trailing-year
+        // SUM is the canonical institutional definition of stabilised
+        // annual NOI.
+        { row: 4, col: 'A', label: 'Stabilised NOI (INR Cr / yr)',  kernel: k.noi,                formula: `=IFERROR(${trailingYearSum(18)},0)`,                                                                 format: NUMBER_FORMATS.currency, cached: k.noi },
+        { row: 4, col: 'C', label: 'Stabilized Yield on Cost',      kernel: null,                  formula: `=IFERROR(${trailingYearSum(18)}/${totalProjectCostRef},0)`,                                          format: NUMBER_FORMATS.percent, cached: k.yieldOnCost },
         { row: 4, col: 'E', label: 'Exit Cap Rate',                 kernel: null,                  formula: `=ExitCapRate`,                                                                                       format: NUMBER_FORMATS.percent, cached: getCoreInputSnapshot(ctx).exitCapRate },
         // Bottom row — investor returns. Cash Flow section: rows shift by
         // cfShift (income cfOffset=20 → row 10 becomes row 30, row 9 → 29,
-        // row 11 → 31).
+        // row 11 → 31). Min DSCR uses the Total column which is MIN()-
+        // configured (not SUM) on the DSCR row (see buildCashFlowSheet
+        // line 4347). Cash-on-Cash uses trailing-year CFADS / equity
+        // (was Q2 alone — wrong, Q2 is still in lease-up for most income
+        // assets). Net Sale Proceeds uses INDEX at the final quarter
+        // (was SUM of reversion row — correct-by-accident since other
+        // quarters are 0, now explicit).
         { row: 7, col: 'A', label: 'Min DSCR',                      kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(10)}`,                                                                         format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'C', label: 'Cash-on-Cash (Yr 1)',           kernel: k.yieldOnCost,         formula: `=IFERROR(${cashflow}!C${cfShift(9)}/(${totalProjectCostRef}*(1-DebtLTV)),0)`, format: NUMBER_FORMATS.percent, cached: k.yieldOnCost },
-        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=${cashflow}!${totalCol}${cfShift(11)}`,                                                                         format: NUMBER_FORMATS.currency, cached: k.exitValue },
+        { row: 7, col: 'C', label: 'Cash-on-Cash (Stabilised)',     kernel: k.yieldOnCost,         formula: `=IFERROR(${trailingYearSum(cfShift(9))}/(${totalProjectCostRef}*(1-DebtLTV)),0)`,                  format: NUMBER_FORMATS.percent, cached: k.yieldOnCost },
+        { row: 7, col: 'E', label: 'Net Sale Proceeds (INR Cr)',    kernel: k.exitValue,           formula: `=IFERROR(${finalQuarterCell(cfShift(11))},0)`,                                                       format: NUMBER_FORMATS.currency, cached: k.exitValue },
       ]
     : [
         // Development family. Phasing row 9 = Quarter sales; Cash Flow
@@ -4735,13 +4787,16 @@ const buildDashboardSheet = (workbook, ctx) => {
 
   // ── Returns block — IRR / NPV via native Excel functions ─────────────
   // Cash flow row used for IRR / NPV is asset-class-aware:
-  //   - Income deals: row 11 = "Total Cash Flow Including Reversion"
-  //   - Development:  row 8  = "Project net cash flow"
+  //   - Income deals: row 12 = "Total Cash Flow Including Reversion (FCFE
+  //                            basis)" — Q1 has initial-equity outflow
+  //                            injected so IRR can converge (PR-NX2).
+  //   - Development:  row 8  = "Project net cash flow" (Q1 negative via
+  //                            construction outflow — IRR already works).
   // Excel's IRR() expects a contiguous range; NPV() takes a quarterly rate
   // because the cash flows are quarterly.
   //
-  // Post-restructure: shift by cfOffset (income: 11→31, dev: 8→34).
-  const cfRow = cfShift(ctx.dealFamily === 'income' ? 11 : 8);
+  // Post-restructure: shift by cfOffset (income: 12→32, dev: 8→34).
+  const cfRow = cfShift(ctx.dealFamily === 'income' ? 12 : 8);
   const cfRangeProper = `${cashflow}!$${colLetter(2)}$${cfRow}:$${colLetter(totalQ + 1)}$${cfRow}`;
 
   sheet.mergeCells('A19:F19');
