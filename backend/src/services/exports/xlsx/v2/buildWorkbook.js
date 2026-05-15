@@ -40,6 +40,7 @@ const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
 
 const financialKernel = require('../../../../../../packages/financial-kernel/dist');
+const { defaultsForAssetClass } = require('./assetClassDefaults');
 
 const FONT = palette.FONTS.body;
 
@@ -407,16 +408,36 @@ const kernelAssetClassFor = (assetClass) =>
   assetClass === 'raw_land' ? 'land_parcel' : assetClass;
 
 const resolveEngineAssumptions = (assetClass, inputs = {}) => {
+  // PR-NX6 (2026-05-15): three-layer fallback chain for input defaults.
+  // Operator-entered ctx.inputs.X always wins. Below that, the kernel's
+  // resolveAssumptions output takes priority over the static asset-class
+  // defaults library. The library exists because the kernel currently
+  // returns mostly empty defaults (only sellingRatePerSqft populated for
+  // residential), which made sparse deals export as mostly-zero workbooks.
+  // Now: a Commercial Office deal with only land cost + saleable area
+  // filled will still see realistic Bengaluru base rent (₹110/sqft/mo),
+  // exit cap rate (8.0%), debt LTV (60%), occupancy (92%), etc. flowing
+  // through to every downstream formula. Operator override always wins.
+  const baseDefaults = defaultsForAssetClass(assetClass);
   const kernelAssetClass = kernelAssetClassFor(assetClass);
-  if (!financialKernel?.resolveAssumptions) return {};
+  if (!financialKernel?.resolveAssumptions) return { ...baseDefaults };
   try {
-    return financialKernel.resolveAssumptions({
+    const kernelAssumptions = financialKernel.resolveAssumptions({
       assetClass: kernelAssetClass,
       dealOverrides: inputs,
       scenarioOverrides: null,
     }) || {};
+    // Layer: kernel wins over static defaults (kernel only fills what it
+    // has, so the spread + selective override is sound).
+    const merged = { ...baseDefaults };
+    for (const [key, value] of Object.entries(kernelAssumptions)) {
+      if (value !== undefined && value !== null && value !== '') {
+        merged[key] = value;
+      }
+    }
+    return merged;
   } catch {
-    return {};
+    return { ...baseDefaults };
   }
 };
 
@@ -495,20 +516,22 @@ const saleableAreaSqftFor = (ctx) => {
   if (explicit && explicit > 0) return explicit;
 
   if (ctx.assetClass === 'hospitality') {
-    return firstNumber(hospitalityAreaSqft(ctx), 0);
+    const hospArea = firstNumber(hospitalityAreaSqft(ctx), 0);
+    if (hospArea > 0) return hospArea;
   }
 
   const landAreaSqft = landAreaSqftFor(ctx);
   if (['plotted_development', 'raw_land'].includes(ctx.assetClass)) {
     const saleableLandPct = enginePctDecimal(ctx, ['saleableLandPct'], 55) || 0;
-    return landAreaSqft > 0 ? landAreaSqft * saleableLandPct : 0;
-  }
-
-  if (ctx.dealFamily === 'development' && landAreaSqft > 0) {
+    if (landAreaSqft > 0) return landAreaSqft * saleableLandPct;
+  } else if (ctx.dealFamily === 'development' && landAreaSqft > 0) {
     return landAreaSqft * fsiFor(ctx) * loadingMultipleFor(ctx);
   }
 
-  return 0;
+  // PR-NX6: final fallback to asset-class default if no land/explicit area.
+  // Operator gets a realistic seed (e.g. 500k sqft for office) when they
+  // create a sparse deal with only a few inputs.
+  return firstNumber(ctx.engineAssumptions?.saleableAreaSqft, 0);
 };
 
 const sellRatePerSqftFor = (ctx) =>
@@ -1394,6 +1417,13 @@ const buildContext = (exportContext = {}, options = {}) => {
     },
     inputs,
   });
+  // PR-NX6 (2026-05-15): resolveEngineAssumptions now layers our
+  // asset-class defaults UNDER the financial kernel's output, so every
+  // helper that uses `engineFirstNumber(ctx, [...])` or reads
+  // `ctx.engineAssumptions.X` gets a Bengaluru-priority fallback.
+  // Helpers that intentionally carry their own hardcoded fallbacks
+  // (e.g. hospitality 100 keys / 6000 ADR for "boutique" defaults)
+  // keep those — we don't shadow them at the ctx.inputs layer.
   const engineAssumptions = resolveEngineAssumptions(assetClass, inputs);
 
   const projectMonths = firstNumber(
