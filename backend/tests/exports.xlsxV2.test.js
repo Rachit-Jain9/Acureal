@@ -4161,5 +4161,311 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(cell.dataValidation.error).toContain('A_khata');
       });
     });
+
+    // ──────────────────────────────────────────────────────────────────
+    // PR-NX10 (2026-05-15): Probability-weighted scenarios + driver ranking
+    // ──────────────────────────────────────────────────────────────────
+    describe('PR-NX10: probability-weighted scenarios + top-driver ranking on Dashboard', () => {
+      // Locate the row whose column-A value matches a substring. Section
+      // titles drift down the sheet as Capital Stack / Debt Maturity Ladder
+      // sections grow, so we anchor by content rather than fixed rows.
+      const findRowByA = (sheet, predicate) => {
+        let found = null;
+        sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+          const v = row.getCell(1).value;
+          const label = typeof v === 'string' ? v : String(v ?? '');
+          if (!found && predicate(label)) found = rowNumber;
+        });
+        return found;
+      };
+
+      describe('Probability-Weighted Scenarios section', () => {
+        test('renders the section title + subtitle below Debt Maturity Ladder', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          expect(titleRow).toBeTruthy();
+          expect(String(dash.getCell(`A${titleRow}`).value)).toContain('Bull / Base / Bear / Lehman');
+
+          // Subtitle on the next row
+          const subtitle = String(dash.getCell(`A${titleRow + 1}`).value);
+          expect(subtitle).toMatch(/SUMPRODUCT|Expected-Value|institutional headline KPI/);
+        });
+
+        test('all four scenarios appear with their probability weights (25 / 50 / 20 / 5)', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          expect(titleRow).toBeTruthy();
+          // Header row at titleRow+2 (subtitle is +1); first scenario at +3.
+          const firstScenarioRow = titleRow + 3;
+          const names = ['Bull', 'Base', 'Bear', 'Lehman'];
+          const weights = [0.25, 0.50, 0.20, 0.05];
+          names.forEach((name, idx) => {
+            const r = firstScenarioRow + idx;
+            expect(String(dash.getCell(`A${r}`).value)).toBe(name);
+            expect(dash.getCell(`B${r}`).value).toBe(weights[idx]);
+          });
+        });
+
+        test('probability sum check row equals 100%', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          const probRow = titleRow + 7; // header + 4 scenarios + sum-check
+          expect(String(dash.getCell(`A${probRow}`).value)).toContain('Σ Probability');
+          const probCell = dash.getCell(`B${probRow}`);
+          expect(probCell.value).toBeTruthy();
+          const formula = probCell.value.formula || probCell.formula;
+          expect(formula).toMatch(/^SUM\(B\d+:B\d+\)$/);
+        });
+
+        test('Expected-Value headline is a SUMPRODUCT of weights × scenario outputs', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const evRow = findRowByA(dash, (s) => s.startsWith('Expected-Value'));
+          expect(evRow).toBeTruthy();
+          const evCell = dash.getCell(`G${evRow}`);
+          const formula = evCell.value && (evCell.value.formula || evCell.formula);
+          expect(formula).toMatch(/^SUMPRODUCT\(B\d+:B\d+,G\d+:G\d+\)$/);
+        });
+
+        test('scenario range row computes Bull − Lehman from the IRR output column', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const rangeRow = findRowByA(dash, (s) => s.includes('Bull − Lehman') || s.includes('Bull - Lehman'));
+          expect(rangeRow).toBeTruthy();
+          const rangeCell = dash.getCell(`G${rangeRow}`);
+          const formula = rangeCell.value && (rangeCell.value.formula || rangeCell.formula);
+          expect(formula).toMatch(/^G\d+-G\d+$/);
+        });
+
+        test('income deal uses Cap-Rate / Occupancy / Rent / Cost shock headers', async () => {
+          const ctx = minimalContext();
+          ctx.deal.asset_class = 'commercial_office';
+          ctx.property.property_type = 'commercial_office';
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          const headerRow = titleRow + 2;
+          const headers = [];
+          for (let c = 1; c <= 7; c += 1) {
+            headers.push(String(dash.getCell(headerRow, c).value || ''));
+          }
+          expect(headers.join('|')).toMatch(/Cap-Rate Shock/);
+          expect(headers.join('|')).toMatch(/Occupancy Shock/);
+          expect(headers.join('|')).toMatch(/Rent Shock/);
+          expect(headers.join('|')).toMatch(/Yield-on-Cost/);
+        });
+
+        test('development deal uses Sale-Rate / Cost / Absorption / Collection shock headers', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          const headerRow = titleRow + 2;
+          const headers = [];
+          for (let c = 1; c <= 7; c += 1) {
+            headers.push(String(dash.getCell(headerRow, c).value || ''));
+          }
+          expect(headers.join('|')).toMatch(/Sale-Rate Shock/);
+          expect(headers.join('|')).toMatch(/Cost Shock/);
+          expect(headers.join('|')).toMatch(/Absorption Shock/);
+          expect(headers.join('|')).toMatch(/Collection Stress/);
+          expect(headers.join('|')).toMatch(/Project Margin/);
+        });
+
+        test('Lehman scenario applies more severe shocks than Bear', async () => {
+          // Bull / Base / Bear / Lehman shock magnitudes should be monotonic
+          // in the tail direction. Lehman cap-shock (+20%) > Bear (+10%).
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          const firstScenarioRow = titleRow + 3;
+          // Dev family: col C = sale shock; Bear -0.10, Lehman -0.20.
+          const bearSale = dash.getCell(`C${firstScenarioRow + 2}`).value;
+          const lehmanSale = dash.getCell(`C${firstScenarioRow + 3}`).value;
+          expect(Math.abs(lehmanSale)).toBeGreaterThan(Math.abs(bearSale));
+        });
+
+        test('every scenario output cell carries an IFERROR-wrapped formula referencing named ranges', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          const firstScenarioRow = titleRow + 3;
+          [0, 1, 2, 3].forEach((idx) => {
+            const r = firstScenarioRow + idx;
+            const formula = dash.getCell(`G${r}`).value && (dash.getCell(`G${r}`).value.formula || dash.getCell(`G${r}`).formula);
+            expect(formula).toMatch(/^IFERROR/);
+            // References at least one named range
+            expect(formula).toMatch(/SaleableAreaSqft|SellRatePerSqft|BaseRentPerSqftMonth|OccupancyPct|CollectionPct|TotalProjectCostCr/);
+          });
+        });
+      });
+
+      describe('Top-Driver Sensitivity Ranking section', () => {
+        test('renders the section title below the scenario block', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          expect(titleRow).toBeTruthy();
+          expect(String(dash.getCell(`A${titleRow}`).value)).toContain('±10%');
+        });
+
+        test('lists six ranked drivers with rank 1-6 in column A', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          const firstDriverRow = titleRow + 2; // title + header
+          for (let i = 0; i < 6; i += 1) {
+            const r = firstDriverRow + i;
+            expect(dash.getCell(`A${r}`).value).toBe(i + 1);
+          }
+        });
+
+        test('low-case / high-case deltas reference the 5×5 sensitivity grid (B26:F30 / D28 centre)', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          const firstDriverRow = titleRow + 2;
+          // First driver's low-case delta — should reference D28 (base)
+          const lowFormula = dash.getCell(`C${firstDriverRow}`).value
+            && (dash.getCell(`C${firstDriverRow}`).value.formula || dash.getCell(`C${firstDriverRow}`).formula);
+          expect(lowFormula).toMatch(/D28/);
+        });
+
+        test('range column is in basis points scale ((|low|+|high|) × 10000)', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          const firstDriverRow = titleRow + 2;
+          const rangeFormula = dash.getCell(`E${firstDriverRow}`).value
+            && (dash.getCell(`E${firstDriverRow}`).value.formula || dash.getCell(`E${firstDriverRow}`).formula);
+          expect(rangeFormula).toMatch(/10000/);
+          expect(rangeFormula).toMatch(/ABS/);
+        });
+
+        test('cumulative column is a running sum starting from rank-1 range', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          const firstDriverRow = titleRow + 2;
+          // First row cumulative = its own range
+          const f1 = dash.getCell(`F${firstDriverRow}`).value
+            && (dash.getCell(`F${firstDriverRow}`).value.formula || dash.getCell(`F${firstDriverRow}`).formula);
+          expect(f1).toBe(`E${firstDriverRow}`);
+          // Second row = F(prev) + E(this)
+          const f2 = dash.getCell(`F${firstDriverRow + 1}`).value
+            && (dash.getCell(`F${firstDriverRow + 1}`).value.formula || dash.getCell(`F${firstDriverRow + 1}`).formula);
+          expect(f2).toBe(`F${firstDriverRow}+E${firstDriverRow + 1}`);
+        });
+
+        test('income-family drivers include cap-rate compression and occupancy', async () => {
+          const ctx = minimalContext();
+          ctx.deal.asset_class = 'commercial_office';
+          ctx.property.property_type = 'commercial_office';
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          const firstDriverRow = titleRow + 2;
+          const labels = [];
+          for (let i = 0; i < 6; i += 1) {
+            labels.push(String(dash.getCell(`B${firstDriverRow + i}`).value || ''));
+          }
+          const joined = labels.join('|');
+          expect(joined).toMatch(/Cap-rate/);
+          expect(joined).toMatch(/occupancy/i);
+        });
+
+        test('development-family drivers include sale-rate and construction cost', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Top-Driver Sensitivity Ranking'));
+          const firstDriverRow = titleRow + 2;
+          const labels = [];
+          for (let i = 0; i < 6; i += 1) {
+            labels.push(String(dash.getCell(`B${firstDriverRow + i}`).value || ''));
+          }
+          const joined = labels.join('|');
+          expect(joined).toMatch(/Sale rate/i);
+          expect(joined).toMatch(/Construction cost/i);
+        });
+      });
+
+      describe('Methodology + non-fabrication compliance', () => {
+        test('all scenario IRR formulas reference at least one Inputs named range (no hardcoded numbers)', async () => {
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const titleRow = findRowByA(dash, (s) => s.includes('Probability-Weighted Scenarios'));
+          const firstScenarioRow = titleRow + 3;
+          // Collect all four scenario formulas
+          const formulas = [];
+          [0, 1, 2, 3].forEach((idx) => {
+            const r = firstScenarioRow + idx;
+            const f = dash.getCell(`G${r}`).value && (dash.getCell(`G${r}`).value.formula || dash.getCell(`G${r}`).formula);
+            if (f) formulas.push(f);
+          });
+          expect(formulas).toHaveLength(4);
+          formulas.forEach((f) => {
+            // Each formula must reference at least one of these named ranges.
+            const referencesNamedRange = /(SaleableAreaSqft|SellRatePerSqft|BaseRentPerSqftMonth|OccupancyPct|ExitCapRatePct|TotalProjectCostCr|CollectionPct|EscalationPct|LandownerSharePct|VacancyPct)/.test(f);
+            expect(referencesNamedRange).toBe(true);
+          });
+        });
+
+        test('Expected-Value formula structure matches probability-weighted-blend convention', async () => {
+          // SUMPRODUCT(weights, outputs) is the institutional convention.
+          const buffer = await buildDealWorkbookV2(minimalContext());
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const dash = wb.getWorksheet('Dashboard');
+          const evRow = findRowByA(dash, (s) => s.startsWith('Expected-Value'));
+          expect(evRow).toBeTruthy();
+          const evCell = dash.getCell(`G${evRow}`);
+          const formula = evCell.value && (evCell.value.formula || evCell.formula);
+          // Must be SUMPRODUCT of two equal-length column ranges
+          const m = formula.match(/^SUMPRODUCT\(B(\d+):B(\d+),G(\d+):G(\d+)\)$/);
+          expect(m).toBeTruthy();
+          const [, b1, b2, g1, g2] = m;
+          expect(b1).toBe(g1);
+          expect(b2).toBe(g2);
+          // Range spans exactly 4 rows (Bull / Base / Bear / Lehman)
+          expect(Number(b2) - Number(b1)).toBe(3);
+        });
+      });
+    });
   });
 });

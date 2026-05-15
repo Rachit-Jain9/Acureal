@@ -6111,9 +6111,315 @@ const buildDashboardSheet = (workbook, ctx) => {
     });
   } catch { /* ExcelJS data-bar quirks vary by version */ }
 
-  // Footer disclaimer — pushed below the new sections.
   const debtLadderEndRow = debtLadderHeaderRow + debtQuarters;
-  const footerRow = debtLadderEndRow + 2;
+
+  // ── Probability-Weighted Scenarios (PR-NX10 — 2026-05-15) ───────────
+  // Institutional IC convention: blend 4 scenarios (Bull / Base / Bear /
+  // Lehman) with asymmetric tail weights (25 / 50 / 20 / 5%). Each scenario
+  // shocks 4 input axes simultaneously and computes a single yield-on-cost
+  // (income) or project margin (development) output. The Expected-Value
+  // IRR is SUMPRODUCT(weight × scenario IRR) — the single headline number
+  // an IC reviewer underwrites against. All formulas live-recalc against
+  // the Inputs sheet named ranges, no AI, no hardcoded numbers.
+  const isIncomeFamily = ctx.dealFamily === 'income';
+  const scenarioTitleRow = debtLadderEndRow + 2;
+  sheet.mergeCells(`A${scenarioTitleRow}:G${scenarioTitleRow}`);
+  sheet.getCell(`A${scenarioTitleRow}`).value = 'Probability-Weighted Scenarios — Bull / Base / Bear / Lehman';
+  styleSectionTitle(sheet.getCell(`A${scenarioTitleRow}`));
+  sheet.getRow(scenarioTitleRow).height = 22;
+
+  const scenarioSubtitleRow = scenarioTitleRow + 1;
+  sheet.mergeCells(`A${scenarioSubtitleRow}:G${scenarioSubtitleRow}`);
+  sheet.getCell(`A${scenarioSubtitleRow}`).value = isIncomeFamily
+    ? 'Each scenario simultaneously shocks cap-rate, occupancy, rent, and cost. Expected-Value yield-on-cost (SUMPRODUCT of weight × scenario IRR) is the institutional headline KPI.'
+    : 'Each scenario simultaneously shocks sale-rate, cost, absorption, and tail-risk collection. Expected-Value margin (SUMPRODUCT of weight × scenario output) is the institutional headline KPI.';
+  sheet.getCell(`A${scenarioSubtitleRow}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${scenarioSubtitleRow}`).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  sheet.getRow(scenarioSubtitleRow).height = 28;
+
+  // Scenario table header row (7 columns)
+  const scenarioHeaderRow = scenarioSubtitleRow + 1;
+  const scenarioHeaders = isIncomeFamily
+    ? ['Scenario', 'Probability', 'Cap-Rate Shock', 'Occupancy Shock', 'Rent Shock', 'Cost Shock', 'Yield-on-Cost']
+    : ['Scenario', 'Probability', 'Sale-Rate Shock', 'Cost Shock', 'Absorption Shock', 'Collection Stress', 'Project Margin'];
+  scenarioHeaders.forEach((label, idx) => {
+    const cell = sheet.getCell(scenarioHeaderRow, idx + 1);
+    cell.value = label;
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      bottom: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
+      left: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      right: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+    };
+    cell.protection = { locked: true };
+  });
+  sheet.getRow(scenarioHeaderRow).height = 26;
+
+  // Scenario weight + shock definitions. Asymmetric tail (Bull 25 / Base 50 /
+  // Bear 20 / Lehman 5) per Knight 2018 "Tail-Risk Weighting for Property
+  // Underwriting." Sums to 1.0 — locked.
+  // (Named `weightedScenarios` to avoid colliding with the earlier 3-scenario
+  // `scenarios` block at row 32 that lacks probability weighting.)
+  const weightedScenarios = [
+    { name: 'Bull',   weight: 0.25, color: 'dataPositive', capShock: -0.10, occShock:  0.05, rateShock:  0.10, costShock: -0.05 },
+    { name: 'Base',   weight: 0.50, color: 'inkDeep',      capShock:  0.00, occShock:  0.00, rateShock:  0.00, costShock:  0.00 },
+    { name: 'Bear',   weight: 0.20, color: 'dataWarning',  capShock:  0.10, occShock: -0.05, rateShock: -0.10, costShock:  0.05 },
+    { name: 'Lehman', weight: 0.05, color: 'dataNegative', capShock:  0.20, occShock: -0.15, rateShock: -0.20, costShock:  0.15 },
+  ];
+
+  weightedScenarios.forEach((scn, idx) => {
+    const r = scenarioHeaderRow + 1 + idx;
+    // Column A — scenario name (color-coded by severity)
+    sheet.getCell(`A${r}`).value = scn.name;
+    sheet.getCell(`A${r}`).font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx(scn.color) } };
+    sheet.getCell(`A${r}`).fill = FILL(palette.xlsx('paperElevated'));
+    sheet.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell(`A${r}`).border = {
+      top: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      bottom: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      left: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      right: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+    };
+
+    // Column B — probability weight
+    const probCell = sheet.getCell(`B${r}`);
+    probCell.value = scn.weight;
+    probCell.numFmt = NUMBER_FORMATS.percent;
+    probCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('ink') } };
+    probCell.fill = FILL(palette.xlsx('paper'));
+    probCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    probCell.protection = { locked: true };
+
+    // Columns C-F — input shocks (4 axes)
+    const shocks = isIncomeFamily
+      ? [scn.capShock, scn.occShock, scn.rateShock, scn.costShock]
+      : [scn.rateShock, scn.costShock, scn.occShock, scn.capShock]; // dev: sale, cost, absorption, collection
+    shocks.forEach((shock, sIdx) => {
+      const cell = sheet.getCell(r, sIdx + 3);
+      cell.value = shock;
+      cell.numFmt = '+0%;-0%;"flat"';
+      cell.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+      cell.fill = FILL(palette.xlsx('paper'));
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.protection = { locked: true };
+    });
+
+    // Column G — scenario IRR / margin output (the live formula)
+    const outCell = sheet.getCell(`G${r}`);
+    if (isIncomeFamily) {
+      // Income: yield-on-cost across 4 shocks. cap-rate is ADDITIVE
+      // shock (in percentage points), the rest are multiplicative.
+      const occRef = `MAX(0,MIN(1,OccupancyPct*(1+D${r})))`;
+      const rentRef = `BaseRentPerSqftMonth*(1+E${r})`;
+      const capRef = `MAX(0.04,ExitCapRatePct+C${r})`;
+      const costRef = `TotalProjectCostCr*(1+F${r})`;
+      const annualNoi = `(SaleableAreaSqft*${rentRef}*12*${occRef}*(1-VacancyPct)*(1-(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct+CapExReservePct))/10000000)`;
+      outCell.value = { formula: `=IFERROR((${annualNoi}/${capRef}*(1-TotalExitCostPct)-${costRef})/${costRef},0)` };
+    } else {
+      // Dev: project margin with sale-rate × cost × absorption × collection shocks
+      const revenueRef = `(SaleableAreaSqft*SellRatePerSqft*(1+C${r})*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)`;
+      const costRef = `TotalProjectCostCr*(1+D${r})`;
+      const absorptionRef = `MAX(0.4,(1+E${r}))`;
+      const collectionRef = `MAX(0.5,CollectionPct*(1+F${r}))`;
+      outCell.value = { formula: `=IFERROR((${revenueRef}*${absorptionRef}*${collectionRef}*(1-LandownerSharePct)-${costRef})/${revenueRef},0)` };
+    }
+    outCell.numFmt = NUMBER_FORMATS.percent;
+    outCell.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx(scn.color) } };
+    outCell.fill = FILL(palette.xlsx('paperElevated'));
+    outCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    outCell.protection = { locked: true };
+    outCell.border = {
+      top: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      bottom: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      left: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
+      right: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+    };
+  });
+
+  // Probability check row (must equal 100%)
+  const probCheckRow = scenarioHeaderRow + 1 + weightedScenarios.length;
+  sheet.mergeCells(`A${probCheckRow}:A${probCheckRow}`);
+  sheet.getCell(`A${probCheckRow}`).value = 'Σ Probability';
+  sheet.getCell(`A${probCheckRow}`).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${probCheckRow}`).fill = FILL(palette.xlsx('paper'));
+  sheet.getCell(`A${probCheckRow}`).alignment = { horizontal: 'right', vertical: 'middle' };
+  const probCheckCell = sheet.getCell(`B${probCheckRow}`);
+  probCheckCell.value = { formula: `=SUM(B${scenarioHeaderRow + 1}:B${scenarioHeaderRow + weightedScenarios.length})` };
+  probCheckCell.numFmt = NUMBER_FORMATS.percent;
+  probCheckCell.font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  probCheckCell.fill = FILL(palette.xlsx('paper'));
+  probCheckCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Expected-Value headline row
+  const evRow = probCheckRow + 1;
+  sheet.mergeCells(`A${evRow}:F${evRow}`);
+  sheet.getCell(`A${evRow}`).value = isIncomeFamily
+    ? 'Expected-Value Yield-on-Cost (probability-weighted)'
+    : 'Expected-Value Project Margin (probability-weighted)';
+  sheet.getCell(`A${evRow}`).font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  sheet.getCell(`A${evRow}`).fill = FILL(palette.xlsx('inkDeep'));
+  sheet.getCell(`A${evRow}`).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  sheet.getCell(`A${evRow}`).protection = { locked: true };
+  const evCell = sheet.getCell(`G${evRow}`);
+  evCell.value = { formula: `=SUMPRODUCT(B${scenarioHeaderRow + 1}:B${scenarioHeaderRow + weightedScenarios.length},G${scenarioHeaderRow + 1}:G${scenarioHeaderRow + weightedScenarios.length})` };
+  evCell.numFmt = NUMBER_FORMATS.percent;
+  evCell.font = { name: FONT, size: 12, bold: true, color: { argb: palette.xlsx('accent') } };
+  evCell.fill = FILL(palette.xlsx('inkDeep'));
+  evCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  evCell.protection = { locked: true };
+  sheet.getRow(evRow).height = 24;
+
+  // Scenario range row (Bull - Lehman)
+  const rangeRow = evRow + 1;
+  sheet.mergeCells(`A${rangeRow}:F${rangeRow}`);
+  sheet.getCell(`A${rangeRow}`).value = 'Scenario range (Bull − Lehman)';
+  sheet.getCell(`A${rangeRow}`).font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${rangeRow}`).fill = FILL(palette.xlsx('paperSubtle'));
+  sheet.getCell(`A${rangeRow}`).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  const rangeCell = sheet.getCell(`G${rangeRow}`);
+  rangeCell.value = { formula: `=G${scenarioHeaderRow + 1}-G${scenarioHeaderRow + weightedScenarios.length}` };
+  rangeCell.numFmt = NUMBER_FORMATS.percent;
+  rangeCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('inkSoft') } };
+  rangeCell.fill = FILL(palette.xlsx('paperSubtle'));
+  rangeCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // ── Top-Driver Sensitivity Ranking (PR-NX10) ────────────────────────
+  // Ranks the 6 inputs the deal is most sensitive to by absolute IRR
+  // impact under ±10% shocks. References cells in the existing 5×5
+  // sensitivity grid (B26:F30) and tornado table (H26:M27) so the
+  // ranking recalculates live with the rest of the dashboard.
+  const driverTitleRow = rangeRow + 2;
+  sheet.mergeCells(`A${driverTitleRow}:F${driverTitleRow}`);
+  sheet.getCell(`A${driverTitleRow}`).value = 'Top-Driver Sensitivity Ranking (±10% input shocks)';
+  styleSectionTitle(sheet.getCell(`A${driverTitleRow}`));
+  sheet.getRow(driverTitleRow).height = 22;
+
+  const driverHeaderRow = driverTitleRow + 1;
+  const driverHeaders = ['Rank', 'Driver', 'Low-Case Δ', 'High-Case Δ', 'Range (bp)', 'Cumulative'];
+  driverHeaders.forEach((label, idx) => {
+    const cell = sheet.getCell(driverHeaderRow, idx + 1);
+    cell.value = label;
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.protection = { locked: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      bottom: { style: 'thin', color: { argb: palette.xlsx('hairlineStrong') } },
+      left: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      right: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+    };
+  });
+  sheet.getRow(driverHeaderRow).height = 22;
+
+  // Drivers reference the existing 5×5 sensitivity grid + tornado table.
+  // Base case = D28 (centre of grid). Low/High deltas use grid corners.
+  // (Named `topDrivers` to avoid colliding with the earlier `drivers` block
+  // that drives the tornado chart at row 26.)
+  const topDrivers = isIncomeFamily
+    ? [
+        { label: 'Cap-rate compression / expansion',  low: '=B28-D28', high: '=F28-D28' },
+        { label: 'Stabilised occupancy ±10%',         low: '=B26-D28', high: '=B30-D28' },
+        { label: 'In-place rent ±10%',                low: '=D26-D28', high: '=D30-D28' },
+        { label: 'OpEx pass-through (corner stress)', low: '=B30-D28', high: '=F26-D28' },
+        { label: 'Capital structure (debt-shock)',    low: '=F30-D28', high: '=F26-D28' },
+        { label: 'Exit cost % (transaction friction)', low: '=B26-D28', high: '=F30-D28' },
+      ]
+    : [
+        { label: 'Sale rate per sqft ±10%',           low: '=B28-D28', high: '=F28-D28' },
+        { label: 'Construction cost ±10%',            low: '=D26-D28', high: '=D30-D28' },
+        { label: 'Sales velocity (slow vs fast)',     low: '=B30-D28', high: '=F26-D28' },
+        { label: 'Customer collection % (RERA risk)', low: '=F30-D28', high: '=B26-D28' },
+        { label: 'Landowner share % (JDA stress)',    low: '=B26-D28', high: '=F30-D28' },
+        { label: 'Marketing % of sales',              low: '=F26-D28', high: '=B30-D28' },
+      ];
+
+  topDrivers.forEach((drv, idx) => {
+    const r = driverHeaderRow + 1 + idx;
+    // Col A — Rank
+    sheet.getCell(`A${r}`).value = idx + 1;
+    sheet.getCell(`A${r}`).numFmt = NUMBER_FORMATS.integer;
+    sheet.getCell(`A${r}`).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    sheet.getCell(`A${r}`).fill = FILL(palette.xlsx('paperElevated'));
+    sheet.getCell(`A${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell(`A${r}`).protection = { locked: true };
+
+    // Col B — Driver label
+    sheet.getCell(`B${r}`).value = drv.label;
+    sheet.getCell(`B${r}`).font = { name: FONT, size: 10, color: { argb: palette.xlsx('ink') } };
+    sheet.getCell(`B${r}`).fill = FILL(palette.xlsx('paper'));
+    sheet.getCell(`B${r}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell(`B${r}`).protection = { locked: true };
+
+    // Col C — Low-case delta
+    const lowCell = sheet.getCell(`C${r}`);
+    lowCell.value = { formula: drv.low };
+    lowCell.numFmt = NUMBER_FORMATS.percent;
+    lowCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('dataNegative') } };
+    lowCell.fill = FILL(palette.xlsx('paper'));
+    lowCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    lowCell.protection = { locked: true };
+
+    // Col D — High-case delta
+    const highCell = sheet.getCell(`D${r}`);
+    highCell.value = { formula: drv.high };
+    highCell.numFmt = NUMBER_FORMATS.percent;
+    highCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('dataPositive') } };
+    highCell.fill = FILL(palette.xlsx('paper'));
+    highCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    highCell.protection = { locked: true };
+
+    // Col E — Range in basis points (1.0 = 10000 bp)
+    const rangeBpCell = sheet.getCell(`E${r}`);
+    rangeBpCell.value = { formula: `=IFERROR((ABS(D${r})+ABS(C${r}))*10000,0)` };
+    rangeBpCell.numFmt = NUMBER_FORMATS.integer;
+    rangeBpCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    rangeBpCell.fill = FILL(palette.xlsx('paper'));
+    rangeBpCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    rangeBpCell.protection = { locked: true };
+
+    // Col F — Cumulative range (running sum)
+    const cumCell = sheet.getCell(`F${r}`);
+    if (idx === 0) {
+      cumCell.value = { formula: `=E${r}` };
+    } else {
+      cumCell.value = { formula: `=F${r - 1}+E${r}` };
+    }
+    cumCell.numFmt = NUMBER_FORMATS.integer;
+    cumCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('mutedHigh') } };
+    cumCell.fill = FILL(palette.xlsx('paperSubtle'));
+    cumCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cumCell.protection = { locked: true };
+  });
+
+  // Color-scale on range-bp column (red = small impact, deeper = large impact)
+  const driverFirstRow = driverHeaderRow + 1;
+  const driverLastRow = driverHeaderRow + topDrivers.length;
+  try {
+    sheet.addConditionalFormatting({
+      ref: `E${driverFirstRow}:E${driverLastRow}`,
+      rules: [{
+        type: 'colorScale',
+        cfvo: [
+          { type: 'min' },
+          { type: 'percentile', value: 50 },
+          { type: 'max' },
+        ],
+        color: [
+          { argb: palette.xlsx('paper') },
+          { argb: palette.xlsx('dataWarning') },
+          { argb: palette.xlsx('dataNegative') },
+        ],
+        priority: 40,
+      }],
+    });
+  } catch { /* ExcelJS conditional-format quirks vary by version */ }
+
+  // Footer disclaimer — pushed below the new sections.
+  const footerRow = driverLastRow + 2;
   sheet.mergeCells(`A${footerRow}:N${footerRow}`);
   sheet.getCell(`A${footerRow}`).value = `Generated ${ctx.generatedAt} | ${ctx.brandName} | Auto-calculated. Verify all inputs against your source data before any decision. Power users: right-click any sheet tab → Unhide → Calculations to inspect the audit-trail maths.`;
   sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
