@@ -6963,6 +6963,34 @@ const stripLeadingEqualsFromWorksheetFormulas = async (xlsxBuffer) => {
   return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
 };
 
+const normalizeWorksheetXmlForExcelCompatibility = async (xlsxBuffer) => {
+  const zip = await JSZip.loadAsync(xlsxBuffer);
+  const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
+  let changed = false;
+
+  await Promise.all(sheetFiles.map(async (file) => {
+    const xml = await file.async('string');
+    const tableParts = /<tableParts\b[^>]*(?:\/>|>[\s\S]*?<\/tableParts>)/.exec(xml);
+    const legacyDrawing = /<legacyDrawing\b[^>]*(?:\/>|>[\s\S]*?<\/legacyDrawing>)/.exec(xml);
+
+    if (!tableParts || !legacyDrawing || legacyDrawing.index < tableParts.index) return;
+
+    const legacyXml = legacyDrawing[0];
+    const next = [
+      xml.slice(0, tableParts.index),
+      legacyXml,
+      xml.slice(tableParts.index, legacyDrawing.index),
+      xml.slice(legacyDrawing.index + legacyXml.length),
+    ].join('');
+
+    zip.file(file.name, next);
+    changed = true;
+  }));
+
+  if (!changed) return xlsxBuffer;
+  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+};
+
 const validateXlsxBufferForDownload = async (xlsxBuffer) => {
   const zip = await JSZip.loadAsync(xlsxBuffer);
   const issues = [];
@@ -7006,6 +7034,11 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     if (/(<f(?:\s[^>]*)?>)=/.test(xml)) {
       add(file.name, 'Workbook XML contains formulas with a leading equals sign.', 'Strip leading equals signs from formula XML before download.');
     }
+    const tablePartsIndex = xml.indexOf('<tableParts');
+    const legacyDrawingIndex = xml.indexOf('<legacyDrawing');
+    if (tablePartsIndex !== -1 && legacyDrawingIndex !== -1 && legacyDrawingIndex > tablePartsIndex) {
+      add(file.name, 'Worksheet comments are serialized after table parts, which causes Excel to repair the sheet.', 'Normalize worksheet XML element order before download.');
+    }
     if (xml.includes('<sheetProtection')) {
       add(file.name, 'Worksheet protection is enabled.', 'Export workbooks must be editable without an unprotect prompt.');
     }
@@ -7024,8 +7057,9 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
 
 const finalizeWorkbookBuffer = async (xlsxBuffer) => {
   const stripped = await stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
-  await validateXlsxBufferForDownload(stripped);
-  return stripped;
+  const normalized = await normalizeWorksheetXmlForExcelCompatibility(stripped);
+  await validateXlsxBufferForDownload(normalized);
+  return normalized;
 };
 
 /**
@@ -7090,6 +7124,7 @@ module.exports = {
     buildDashboardChartSpecs,
     buildDashboardSparklineSpecs,
     stripLeadingEqualsFromWorksheetFormulas,
+    normalizeWorksheetXmlForExcelCompatibility,
     validateXlsxBufferForDownload,
     XlsxExportValidationError,
     SHEETS,
