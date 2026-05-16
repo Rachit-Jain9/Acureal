@@ -436,4 +436,309 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
       expect(result).toBe(buffer);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // PR-NX24 (2026-05-16) REGRESSION GUARD: per-chart fault tolerance,
+  // extLst ordering, diagnostics opts.
+  //
+  // The bug class this fixes: charts STILL missing from production files
+  // after PR-NX17 (drawing-ordering fix) and PR-NX16 (REDIP_SKIP escape
+  // hatches). Two symptoms:
+  //   (1) ONE bad chart spec (invalid range, unsupported type, bad escape)
+  //       caused the WHOLE chart-injection step to throw; outer catch
+  //       swallowed it → zero charts shipped even though 2/3 were valid.
+  //   (2) Sparkline injection patched extLst INSIDE an existing extLst
+  //       that ExcelJS had placed BEFORE legacyDrawing — schema-invalid,
+  //       triggered Excel auto-repair which scrubbed the Dashboard.
+  // ──────────────────────────────────────────────────────────────────────
+  describe('PR-NX24 — per-chart fault tolerance', () => {
+    test('one bad spec does not kill the good ones (partial success)', async () => {
+      const buffer = await makeMinimalWorkbookBuffer();
+      const diagnostics = {};
+      const enhanced = await injectChartsIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        charts: [
+          // GOOD
+          {
+            type: 'doughnut',
+            title: 'Good Doughnut',
+            categoriesRange: '$A$1:$A$3',
+            valuesRange: '$B$1:$B$3',
+            colours: ['0E1B2C', 'B5793C', '0F7B5A'],
+            anchor: { fromCol: 4, fromRow: 0, widthCols: 6, heightRows: 12 },
+          },
+          // BAD: unsupported type — pre-NX24 this killed the whole batch
+          {
+            type: 'sankey',
+            title: 'Bad Sankey',
+            anchor: { fromCol: 0, fromRow: 14, widthCols: 6, heightRows: 12 },
+          },
+          // GOOD
+          {
+            type: 'bar',
+            title: 'Good Bar',
+            categoriesRange: '$A$1:$A$3',
+            barDir: 'col',
+            series: [{ name: 'X', valuesRange: '$B$1:$B$3', colour: '0F7B5A' }],
+            anchor: { fromCol: 10, fromRow: 0, widthCols: 6, heightRows: 12 },
+          },
+        ],
+        diagnostics,
+      });
+
+      // Buffer is still a valid xlsx
+      expect(Buffer.isBuffer(enhanced)).toBe(true);
+      const zip = await JSZip.loadAsync(enhanced);
+      // 2 charts shipped (indexed sequentially — the bad one is SKIPPED)
+      expect(zip.file('xl/charts/chart1.xml')).not.toBeNull();
+      expect(zip.file('xl/charts/chart2.xml')).not.toBeNull();
+      expect(zip.file('xl/charts/chart3.xml')).toBeNull(); // bad one not written
+      // Drawing references 2 charts only
+      const drawingXml = await zip.file('xl/drawings/drawing1.xml').async('string');
+      const anchors = (drawingXml.match(/<xdr:oneCellAnchor>/g) || []);
+      expect(anchors.length).toBe(2);
+
+      // Diagnostics object populated
+      expect(diagnostics.requestedCount).toBe(3);
+      expect(diagnostics.builtCount).toBe(2);
+      expect(diagnostics.failureCount).toBe(1);
+      expect(diagnostics.failures).toHaveLength(1);
+      expect(diagnostics.failures[0].type).toBe('sankey');
+      expect(diagnostics.failures[0].chartIndex).toBe(1);
+      expect(diagnostics.failures[0].error).toMatch(/unsupported chart type/);
+    });
+
+    test('all-bad batch still throws (caller fallback fires)', async () => {
+      const buffer = await makeMinimalWorkbookBuffer();
+      const diagnostics = {};
+      await expect(injectChartsIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        charts: [
+          { type: 'sankey', title: 'X', anchor: { fromCol: 0, fromRow: 0, widthCols: 1, heightRows: 1 } },
+          { type: 'pyramid', title: 'Y', anchor: { fromCol: 0, fromRow: 2, widthCols: 1, heightRows: 1 } },
+        ],
+        diagnostics,
+      })).rejects.toThrow(/all 2 charts failed/);
+
+      // Even on wholesale failure, diagnostics MUST be populated so the
+      // caller's catch can still log per-spec attribution.
+      expect(diagnostics.requestedCount).toBe(2);
+      expect(diagnostics.builtCount).toBe(0);
+      expect(diagnostics.failureCount).toBe(2);
+      expect(diagnostics.failures.map((f) => f.type)).toEqual(['sankey', 'pyramid']);
+    });
+
+    test('all-good batch populates diagnostics with zero failures', async () => {
+      const buffer = await makeMinimalWorkbookBuffer();
+      const diagnostics = {};
+      await injectChartsIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        charts: [{
+          type: 'doughnut',
+          title: 'Only',
+          categoriesRange: '$A$1:$A$3',
+          valuesRange: '$B$1:$B$3',
+          colours: ['0E1B2C', 'B5793C', '0F7B5A'],
+          anchor: { fromCol: 4, fromRow: 0, widthCols: 6, heightRows: 12 },
+        }],
+        diagnostics,
+      });
+      expect(diagnostics.requestedCount).toBe(1);
+      expect(diagnostics.builtCount).toBe(1);
+      expect(diagnostics.failureCount).toBe(0);
+      expect(diagnostics.failures).toEqual([]);
+    });
+
+    test('omitting diagnostics opt still works (backward compat)', async () => {
+      const buffer = await makeMinimalWorkbookBuffer();
+      // No diagnostics key in opts — should not throw / should still produce buffer
+      const enhanced = await injectChartsIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        charts: [{
+          type: 'doughnut',
+          title: 'NoDiag',
+          categoriesRange: '$A$1:$A$3',
+          valuesRange: '$B$1:$B$3',
+          colours: ['0E1B2C', 'B5793C', '0F7B5A'],
+          anchor: { fromCol: 4, fromRow: 0, widthCols: 6, heightRows: 12 },
+        }],
+      });
+      expect(Buffer.isBuffer(enhanced)).toBe(true);
+    });
+  });
+
+  describe('PR-NX24 — patchWorksheetXmlForSparklines extLst ordering', () => {
+    // The bug: when ExcelJS had ALREADY emitted an <extLst> (for iconSet
+    // conditional formatting), our pre-NX24 patch did .replace(/<\/extLst>\s*/)
+    // which spliced sparkline content INSIDE that existing extLst. The
+    // merged extLst landed at the original (early) position, BEFORE
+    // legacyDrawing or tableParts — violating CT_Worksheet child-order
+    // schema. Excel rejected and auto-repaired, scrubbing the Dashboard.
+    test('lifts existing extLst out when it sits BEFORE legacyDrawing', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet>'
+        + '<sheetData/>'
+        + '<extLst><ext uri="iconSet">iconStuff</ext></extLst>'   // <- ExcelJS-placed
+        + '<legacyDrawing r:id="rId99"/>'                          // <- after extLst (wrong)
+        + '</worksheet>';
+      const patched = __internal.patchWorksheetXmlForSparklines(
+        sheetXml,
+        'Dashboard',
+        [{ location: 'B9', dataRange: '$B$1:$B$3', colour: '0F7B5A' }],
+      );
+
+      const extLstIdx = patched.indexOf('<extLst>');
+      const legacyIdx = patched.indexOf('<legacyDrawing');
+      const sparkIdx = patched.indexOf('<x14:sparklineGroups>');
+      // extLst MUST be after legacyDrawing now (schema-valid)
+      expect(legacyIdx).toBeGreaterThan(0);
+      expect(extLstIdx).toBeGreaterThan(legacyIdx);
+      // Sparkline content lives INSIDE the lifted extLst
+      expect(sparkIdx).toBeGreaterThan(extLstIdx);
+      // Original iconSet content is preserved (lift, don't drop)
+      expect(patched).toContain('iconStuff');
+      // Exactly ONE extLst remains (we lifted, didn't append a second one)
+      const extCount = (patched.match(/<extLst>/g) || []).length;
+      expect(extCount).toBe(1);
+    });
+
+    test('existing extLst at end (after legacyDrawing) — sparkline appended in place', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet>'
+        + '<sheetData/>'
+        + '<legacyDrawing r:id="rId99"/>'
+        + '<extLst><ext uri="iconSet">iconStuff</ext></extLst>'
+        + '</worksheet>';
+      const patched = __internal.patchWorksheetXmlForSparklines(
+        sheetXml,
+        'Dashboard',
+        [{ location: 'B9', dataRange: '$B$1:$B$3', colour: '0F7B5A' }],
+      );
+      const extCount = (patched.match(/<extLst>/g) || []).length;
+      expect(extCount).toBe(1);
+      // legacyDrawing still before extLst
+      expect(patched.indexOf('<legacyDrawing')).toBeLessThan(patched.indexOf('<extLst>'));
+      // Both the original iconSet ext + the new sparkline ext live inside
+      expect(patched).toContain('iconStuff');
+      expect(patched).toMatch(/<x14:sparklineGroups>/);
+    });
+
+    test('no existing extLst — sparkline ext inserted right before </worksheet>', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/><legacyDrawing r:id="rId1"/></worksheet>';
+      const patched = __internal.patchWorksheetXmlForSparklines(
+        sheetXml,
+        'Dashboard',
+        [{ location: 'B9', dataRange: '$B$1:$B$3', colour: '0F7B5A' }],
+      );
+      // extLst MUST come after legacyDrawing
+      expect(patched.indexOf('<legacyDrawing')).toBeLessThan(patched.indexOf('<extLst>'));
+      expect(patched).toMatch(/<x14:sparklineGroups>/);
+    });
+
+    test('idempotent — second call is a no-op when sparklines already present', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/></worksheet>';
+      const once = __internal.patchWorksheetXmlForSparklines(
+        sheetXml,
+        'Dashboard',
+        [{ location: 'B9', dataRange: '$B$1:$B$3', colour: '0F7B5A' }],
+      );
+      const twice = __internal.patchWorksheetXmlForSparklines(
+        once,
+        'Dashboard',
+        [{ location: 'B9', dataRange: '$B$1:$B$3', colour: '0F7B5A' }],
+      );
+      // Second call returns the same string — no duplicate sparkline blocks
+      expect(twice).toBe(once);
+    });
+
+    test('end-to-end — sheet with comments (legacyDrawing) + pre-existing extLst + sparklines all coexist', async () => {
+      // Worst-case real-world combo: PR-NX11 KPI Benchmark notes
+      // (legacyDrawing) + a pre-existing extLst (placed BEFORE legacyDrawing
+      // — the schema-invalid position ExcelJS sometimes emits) + sparkline
+      // injection. Pre-NX24 this was the Pointec Pens Dashboard regression
+      // class — extLst stayed in the wrong position after sparkline patch,
+      // Excel auto-repaired and scrubbed the Dashboard.
+      //
+      // Rather than fight ExcelJS's iconSet API quirks to produce the
+      // pre-existing extLst, we patch the worksheet XML directly via
+      // JSZip — this gives us deterministic control over the exact XML
+      // structure that triggers the bug.
+      const wb = new ExcelJS.Workbook();
+      wb.addWorksheet('Inputs');
+      const dash = wb.addWorksheet('Dashboard');
+      dash.getCell('A1').value = 'KPI';
+      dash.getCell('B1').value = 100;
+      dash.getCell('A2').value = 'KPI2';
+      dash.getCell('B2').value = 50;
+      dash.getCell('A3').value = 'KPI3';
+      dash.getCell('B3').value = 75;
+      // Force a legacyDrawing via a cell comment (PR-NX11 pattern)
+      dash.getCell('B1').note = 'Benchmark median: 75';
+      const raw = await wb.xlsx.writeBuffer();
+      const baseBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+
+      // Manually inject a pre-existing extLst BEFORE legacyDrawing — this
+      // is the malformed pattern we need to ensure our sparkline patch
+      // corrects. Real-world this comes from ExcelJS emitting iconSet CF
+      // before legacyDrawing in some workbook configurations.
+      const baseZip = await JSZip.loadAsync(baseBuffer);
+      const sheet2Path = 'xl/worksheets/sheet2.xml';
+      let sheet2Xml = await baseZip.file(sheet2Path).async('string');
+      // Insert <extLst> right before </worksheet> — but BEFORE the existing
+      // legacyDrawing. We do this by finding </worksheet> and prepending an
+      // extLst right before it, but FIRST we move legacyDrawing to come
+      // AFTER (simulating the wrong-order case).
+      // Simpler: just put an extLst INSIDE the sheet at a wrong position
+      // by inserting it right after </sheetData>.
+      sheet2Xml = sheet2Xml.replace(
+        /<\/sheetData>/,
+        '</sheetData><extLst><ext uri="iconSetTest" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">iconStuff</ext></extLst>',
+      );
+      baseZip.file(sheet2Path, sheet2Xml);
+      const buffer = await baseZip.generateAsync({ type: 'nodebuffer' });
+
+      // Sanity check: the bad pattern is set up — extLst lives before legacyDrawing
+      const preZip = await JSZip.loadAsync(buffer);
+      const preXml = await preZip.file(sheet2Path).async('string');
+      const preLegacyIdx = preXml.indexOf('<legacyDrawing');
+      const preExtLstIdx = preXml.indexOf('<extLst>');
+      // Confirm test setup is producing the bad pattern we want to fix
+      if (preLegacyIdx > 0 && preExtLstIdx > 0) {
+        expect(preExtLstIdx).toBeLessThan(preLegacyIdx); // bad: extLst before legacyDrawing
+      }
+
+      // Now run the sparkline injector — it should LIFT the existing extLst
+      // and place it after all schema-later elements.
+      const enhanced = await injectSparklinesIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        sparklines: [{ location: 'C1', dataRange: '$B$1:$B$3', colour: '0F7B5A' }],
+      });
+
+      // ExcelJS round-trip must succeed (no schema-invalid XML)
+      const wb2 = new ExcelJS.Workbook();
+      await wb2.xlsx.load(enhanced);
+      expect(wb2.worksheets.map((w) => w.name)).toContain('Dashboard');
+
+      const zip = await JSZip.loadAsync(enhanced);
+      const xml = await zip.file(sheet2Path).async('string');
+      // Sparkline group lives in xml
+      expect(xml).toMatch(/<x14:sparklineGroups>/);
+      // Original iconSet content preserved (lift, don't drop)
+      expect(xml).toContain('iconStuff');
+      // CRITICAL: exactly ONE extLst, and it must be AFTER legacyDrawing
+      const extCount = (xml.match(/<extLst>/g) || []).length;
+      expect(extCount).toBe(1);
+      const legacyIdx = xml.indexOf('<legacyDrawing');
+      const extLstIdx = xml.indexOf('<extLst>');
+      expect(legacyIdx).toBeGreaterThan(0);
+      expect(extLstIdx).toBeGreaterThan(legacyIdx); // fixed order
+    });
+  });
 });

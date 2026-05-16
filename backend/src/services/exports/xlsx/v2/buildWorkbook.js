@@ -8800,6 +8800,15 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
     }
   };
 
+  // PR-NX24 (2026-05-16): mutable diagnostics bag captured by chartInjector.
+  // After the call, `chartDiagnostics` has shape:
+  //   { requestedCount, builtCount, failureCount, failures: [{chartIndex,type,title,error}] }
+  // Used to emit a [CHARTS-FAILED] tagged log line operators can grep in
+  // Vercel logs to see exactly WHICH chart spec broke (e.g., a bad range
+  // ref, an unsupported type, a special-character escape bug). Pre-NX24
+  // we only knew "chart injection failed" with no per-spec attribution.
+  const chartDiagnostics = {};
+
   try {
     if (chartSpecs.length > 0 && !skipCharts) {
       const preChartBuffer = enhancedBuffer;
@@ -8808,9 +8817,21 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
         targetSheetName: SHEETS.dashboard,
         targetSheetFile: dashboardSheetFile,
         charts: chartSpecs,
+        diagnostics: chartDiagnostics,
       });
       const postChartCells = await getDashboardCellCount(enhancedBuffer);
       await measureDashboardCells(enhancedBuffer, 'post-chart-injection');
+      // PR-NX24: emit operator-greppable log when ANY individual chart
+      // failed (even when others built). Without this, the partial-fail
+      // path was completely silent — operator saw "missing chart X" but
+      // had no Vercel-log signal for WHY.
+      if (process.env.NODE_ENV !== 'test' && chartDiagnostics.failureCount > 0) {
+        const summary = (chartDiagnostics.failures || [])
+          .map((f) => `[${f.chartIndex}] ${f.type} "${f.title || '?'}": ${f.error}`)
+          .join(' | ');
+        // eslint-disable-next-line no-console
+        console.error(`[CHARTS-FAILED ${ctxLabel}] ${chartDiagnostics.failureCount}/${chartDiagnostics.requestedCount} chart(s) failed (${chartDiagnostics.builtCount} shipped). Failures: ${summary}`);
+      }
       // PR-NX16 (2026-05-16): AUTO-ROLLBACK if chart injection corrupted
       // the Dashboard. If the cell count drops significantly, the
       // injection produced malformed XML that strips cells. Roll back
@@ -8835,8 +8856,10 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
     // etc.) we fall back to the un-injected workbook so the operator
     // still gets a working file rather than an error.
     if (process.env.NODE_ENV !== 'test') {
+      // PR-NX24: also tag the wholesale-failure case with [CHARTS-FAILED]
+      // so the operator's grep finds both partial and total failures.
       // eslint-disable-next-line no-console
-      console.warn(`[xlsx.v2 ${ctxLabel}] chart injection failed, returning un-enhanced workbook:`, err.message, err.stack);
+      console.error(`[CHARTS-FAILED ${ctxLabel}] WHOLESALE chart injection failed (returning un-enhanced workbook): ${err.message}`, err.stack);
     }
   }
 
