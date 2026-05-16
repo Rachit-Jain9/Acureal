@@ -4,6 +4,52 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-16 (late evening) — AI Reliability Bundle: failover + health surface (PR #339, #340, #341)
+
+After confirming the operator's still-broken prod state (downloaded Pointec Pens + Jigani both shipped at 14:54 UTC still showing "templated fallback" + no charts despite the operator's morning env-var fixes), pivoted to **AI Reliability** — the gap between "AI works in code" and "AI works in production reliably." Operator green-lit the auto-failover code change I had pending. Bundled with health surface to make the entire AI infrastructure self-diagnosing.
+
+### PRs shipped + merged
+
+- **#339 — PR-NX21: AI Briefing multi-provider failover cascade.** `generateDealBriefing` now tries 3 paths in order: PRIMARY (Claude Sonnet 4.6) → SECONDARY (OpenAI GPT-5.4, auto-cross-over) → TEMPLATED. Operator never sees "templated fallback" unless BOTH AI providers are simultaneously down. New briefing schema fields: `source` (tri-state: `ai-assisted-claude` | `ai-assisted-openai` | `templated`), `provider` (model id), `fallbackReason` (diagnostic when primary failed, e.g., "Claude 401 invalid_api_key — auto-failover succeeded on openai"). All 3 export builders (XLSX / DOCX / PPTX) updated to recognize the new tri-state source via `startsWith('ai-assisted')` + surface `fallbackReason` in the briefing footer. +4 tests.
+
+- **#340 — PR-NX22: AI Health backend endpoint.** New `GET /api/admin/ai-health` + `aiHealth.service.js` surface live operational status for Gemini / Claude / OpenAI. Per-provider: configured + lastCall (status / latency / task / errorCode + errorMessage) + 7d aggregates (calls / successRate / p50 / p95 latency) + coarse `healthBand` classification (`healthy` / `degraded` / `unhealthy` / `unknown`). Overall band picks worst across the 3. Soft-fails if `ai_call_logs` unavailable. Admin/analyst-gated, org-scoped via RLS. +22 tests.
+
+- **#341 — PR-NX23: AI Health frontend widget on Settings page.** New `AIHealthWidget` mounted on SettingsPage right above the existing `AIUsageWidget`. 3 provider rows with color-coded status dot + label, last-call timestamp + 7d summary inline, click-to-expand reveals last-call detail (task / latency / error code + message) + 7d aggregates (calls / success rate / p50 / p95 latency). Auto-refresh every 60s. Overall health pill in widget header. Hairline borders + neutral greys per FRONTEND_GUIDELINES.md.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| dealBriefing.service.test.js | 61 | 65 | +4 |
+| aiHealth.service.test.js (NEW) | 0 | 22 | +22 |
+| Other backend | 1,667 | 1,668 | +1 |
+| **TOTAL** | **1,749** | **1,775** | **+26** |
+
+Zero pre-existing test regressions. Frontend build clean (~13-17s).
+
+### Outcome for the operator
+
+**Before this batch:** Operator's prod has `ANTHROPIC_API_KEY` showing "Needs Attention" in Vercel → every AI Briefing falls to templated → operator only discovers this by downloading a deal export and reading the footer.
+
+**After this batch:**
+1. Briefing auto-fails over to OpenAI when Claude is broken. The operator's NEXT download will likely show "Synthesis: gpt-5.4 · auto-failover: Claude 401 invalid_api_key" — REAL AI briefing + visible diagnosis.
+2. Settings page in REDIP now shows 3 colored status pills. Red dot next to Claude with "Last call: error — 401 invalid_api_key" tells operator EXACTLY which env var to fix.
+3. Worst case (both AI providers down): footer says "cause: Claude 401; OpenAI 429 rate_limited" — actionable instead of vague "AI unavailable."
+
+### Outstanding operator actions (carried)
+
+1. **Verify the leaked Claude key was rotated.** Operator decided to skip rotation but acknowledged risk.
+2. **Charts still missing from prod files.** Either `REDIP_SKIP_ALL_POST_INJECTION` is still set in Production scope (not just Preview), OR there's a deploy that hasn't propagated. Operator should verify in Vercel env vars page (search for "REDIP").
+3. **Re-download after `f03d4a8` deploys** (~3 min). Expected: briefing footer says "Synthesis: gpt-5.4 · auto-failover: ..." (if Anthropic key still broken) OR "Synthesis: Claude Sonnet 4.6" (if key works); native charts render on Dashboard; Settings page shows new AI Provider Health widget.
+
+### Recommendation for next session
+
+Per the prior strategic-review synthesis, the next-highest-leverage work is **Document Ingestion + AI auto-fill MVP** (Priority 1 in STRATEGIC_REVIEW_2026_05_15.md). Now that Gemini key is restored AND the AI reliability foundation is hardened, the document-extraction pipeline (Gemini-first with Claude fallback already wired) should be production-trustworthy. 2-session scope. Closes the deal-creation friction (manual 30+-field entry → upload sale deed → AI extract → operator review/commit).
+
+Honorable mention: **Tier 4 B (Briefing visual diff)** — combined with PR-NX10 scenarios + the now-resilient briefing, this is the defining "every edit produces a measurable, accountable shift" UX moment.
+
+---
+
 ## 2026-05-16 (evening) — Cross-product AI Briefing parity + reconciliation suite + doc sync (PR #335, #336, #337)
 
 After the morning's Pointec Pens root-cause fix (PR-NX17, drawing-element OOXML ordering), the XLSX export is stable. Pivoted from firefighting to feature work. Per operator direction ("highest priority right now, multiple things that go well together"), read every .md file in the repo + did first-principles synthesis. Picked the **3-PR compound bundle** that extends recent work + adds validation + cleans hygiene.
