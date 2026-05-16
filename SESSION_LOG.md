@@ -4,6 +4,59 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-15 (late afternoon) — Pointec Pens audit + 4-PR comprehensive fix (PR #327, #328, #329, #330)
+
+Operator audit flagged 14 issues in the downloaded Pointec Pens Excel (hospitality deal). Top: Dashboard sheet stripped to nothing by Excel auto-repair due to malformed XML in PR #325 cell-note serialization. Below that: briefing said "0 sqft hospitality" + "rent inputs pending" (asset-class-blind), GST framing wrong for hospitality, phantom rent field on hospitality Inputs sheet, several minor UX issues.
+
+### PRs shipped + merged
+
+- **#327 — HOTFIX: cell.note plain-string** (covered in morning). XML corruption fix that restored the Dashboard sheet.
+
+- **#328 — PR-NX12: Asset-class × structure × exit-strategy aware briefing narrative.** Fixes briefing snapshot extractor to derive sqft from `hospitalityKeys × sqftPerKey` when SaleableAreaSqft is 0 (the "0 sqft hospitality" bug). Splits economics builder into 10 asset-class-specific functions (hospitality USALI, retail anchor/vanilla/CAM, office CAM-loaded rent, industrial warehouse, residential launch price + RERA velocity, villas luxury premium, plotted sell-rate minus dev cost, mixed-use component blend, redevelopment landowner area-share, raw land entitlement stage). Adds 4 deal-structure-specific capital-stack builders (outright / JDA-RS / JDA-AS / DM). Adds 7 exit-strategy-specific exit-phrase builders. Adds 10 asset-class-specific India GST framings (hospitality construction inputs + room nights; office GST on rent + ITC; residential UC sale + affordable carve-out; plotted no-GST; raw land no-GST + Karnataka conversion fee). Adds asset-class-specific risk notes (hospitality occupancy break-even, retail anchor concentration, mixed-use single-component dominance, plotted velocity, raw-land entitlement). +40 tests.
+
+- **#329 — PR-NX13: Asset-class-aware Inputs sheet visibility.** Hospitality now skips both `incomeRevenueSection` (rent/sqft) and `incomeOpExSection` (office-style opex) — USALI section supplies the correct keys-based revenue + departmental-cost inputs. Hospitality + raw_land hide Loading Factor + Carpet Area rows (sale-side carpet concepts that don't apply). Raw_land + plotted_development skip RERA Escrow section (no construction milestones). Office / retail / industrial / residential / villas / mixed-use / redevelopment unchanged (regression-test guarded). Inputs sheet for hospitality dropped from 1011 → 919 cells (= ~92 phantom rent rows hidden). +8 tests.
+
+- **#330 — PR-NX14: Briefing prefix unification + provider metadata fix + Project Schedule label clarity + 3-state approvals reconciliation.** Both AI-active and templated-fallback paths now share "⚠ AI-Assisted Briefing" prefix with synthesis path in parentheses. Footer no longer claims "OpenAI gpt-4o" (stale since PR-NX9) — now says "Claude Sonnet 4.6" or the operator-actionable env-var hint when fallback. "Project Duration / Quarters" relabeled to "Construction Duration (months, build phase) / Total Modeling Horizon (quarters, incl. operating hold)" to eliminate the "48 months = 16 quarters, why 56?" confusion. Approvals reconciliation status gets a third "ℹ Headline only — populate line items below" state for when the operator hasn't itemized yet (instead of alarming "⚠ Drift > 5%"). +4 tests.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| exports.xlsxV2.test.js | 211 | 223 | +12 |
+| dealBriefing.service.test.js | 19 | 61 | +42 |
+| exports.xlsxV2.realism.test.js | 42 | 42 | 0 |
+| assetClassDefaults.test.js | 15 | 15 | 0 |
+| Other backend | 1,377 | 1,375 | -2 |
+| **TOTAL** | **1,664** | **1,716** | **+52** |
+
+Zero pre-existing test regressions across all 101 backend suites. Frontend build clean throughout (~14-44s).
+
+### Outstanding operator actions
+
+1. **Re-download a deal Excel** to verify the Pointec Pens-class bugs are fixed end-to-end. Dashboard should load without repair popup; hospitality deals should read "100-key hospitality (~55,000 sqft GFA)" not "0 sqft hospitality"; rent-based phrasing replaced by USALI Keys × ADR; GST line says "construction inputs + room nights" not "under-construction sale"; Loading Factor row gone from hospitality Inputs; Schedule labels self-documenting.
+
+2. **Verify Vercel env vars** so AI briefing fires (currently dark per audit):
+   - `ANTHROPIC_API_KEY` must be set (per project_context.md it was set on 2026-05-05, but worth re-confirming)
+   - `AI_PROVIDER_NARRATIVE_SYNTHESIS=claude` (or empty — Claude is the default after PR-NX9 if no override)
+   - `CLAUDE_MODEL=claude-sonnet-4-6` (default; can be empty)
+   - Optional: insert `('narrative_synthesis', 'claude', 'claude-sonnet-4-6')` into `ai_routing_config` table for admin-panel visibility
+   - When working, footer row 17 should read `Provider: Claude Sonnet 4.6 · Cached on deal-snapshot hash` (not `Synthesis: deterministic templated fallback`).
+
+### Items NOT fixed in this batch (deliberate)
+
+- **"EM 2.46x doesn't reconcile with IRR 9.3%"** — my initial triage flagged this as a bug, but on reflection EM and IRR legitimately diverge when there are interim cash flows (operating NOI over 7 years + terminal sale). The Pointec Pens hospitality deal has both, so the divergence is expected. Not a bug. No action needed unless the operator can demonstrate a specific deal where the kernel computes inconsistent EM.
+- **ADR Base = ADR Peak both ₹7,000** — operator-overridden value. The asset-class defaults in `assetClassDefaults.js` correctly differentiate (`hospitalityADRBase: 7500`, `hospitalityADRPeak: 11500`). Not a bug.
+- **Number of Keys = 100 (default = 250)** — operator-overridden value. Not a bug.
+
+### Recommendation for next session
+
+Operator should:
+1. Re-download the Pointec Pens Excel and confirm end-to-end fix (5 min)
+2. If the briefing still shows templated fallback, set Vercel env per action #2 above (5 min)
+3. If still issues, share the new file — there may be a third-tier bug below the asset-class-blindness we've now fixed
+
+---
+
 ## 2026-05-15 (afternoon) — Probability-weighted scenarios + full-coverage KPI icon-sets (PRs #324, #325)
 
 Operator directive: *"Pls start with whatever is best for website. We have all the time in the world. Do multiple steps/ tasks together that is convenient for you and best for the website, goes well together. Verify it works with no errors, no problems and no bugs and then push+commit+deploy."*
