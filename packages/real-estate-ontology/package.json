@@ -1,0 +1,27 @@
+{
+  "name": "@redip/real-estate-ontology",
+  "version": "1.0.0",
+  "description": "REDIP canonical real-estate ontology — asset class / deal structure / exit strategy / area / pricing / extraction field map. Single source of truth shared across backend, frontend, and exports.",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest --no-cache"
+  },
+  "keywords": [
+    "redip",
+    "real-estate",
+    "ontology",
+    "india",
+    "bengaluru"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
