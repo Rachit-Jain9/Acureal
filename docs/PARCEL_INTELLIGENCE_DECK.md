@@ -55,7 +55,7 @@ Strip the surface to four irreducible truths. Every design call follows from the
 | # | Truth | Consequence in code |
 |---|---|---|
 | 1 | **Karnataka land facts live behind portals without public APIs.** Bhoomi, Kaveri, e-Aasthi, K-RERA, IGR — all CAPTCHA / OTP / login-gated. | Manual blockers preserved. Upload-first. Deep-link when possible (K-GIS), copy-paste payload when not. Never imply live registry connectivity. ([TODO_LEGAL.md](TODO_LEGAL.md)) |
-| 2 | **Humans can't eyeball every PDF at scale.** Title chains, ECs, mutations, RMP tables explode in volume on a real deal. | Gemini 2.5 Flash for extraction with per-doctype JSON schemas; **never** for math. ([backend/src/services/extraction.service.js](backend/src/services/extraction.service.js)) |
+| 2 | **Humans can't eyeball every PDF at scale.** Title chains, ECs, mutations, RMP tables explode in volume on a real deal. | Gemini 3.1 Flash-Lite for extraction with per-doctype JSON schemas; **never** for math. ([backend/src/services/extraction.service.js](backend/src/services/extraction.service.js)) |
 | 3 | **Trust is the product.** A wrong FAR or a hallucinated owner kills a deal — and a reputation. | Every fact: source, page, confidence, reviewer, effective date. Review queue gates promotion. Snapshots can be HMAC-signed. ([database/migrations/20260425_parcel_intelligence_phase1.sql](database/migrations/20260425_parcel_intelligence_phase1.sql)) |
 | 4 | **Speed × accuracy compounds.** Sourcing must work without a parcel name. Underwriting must not stall on missing road width. | Pure deterministic math in [parcelBuildability.js](backend/src/utils/parcelBuildability.js). Truthful "Needs Verification" states. K-GIS adapter, OSM road-width adapter, local what-if sliders — all on the same pure functions. |
 
@@ -76,7 +76,7 @@ C4Context
       System(kernel, "Financial Kernel", "TS, BigInt-Decimal, deterministic")
       SystemDb(db, "Supabase Postgres + PostGIS", "regulatory_data schema, RLS, evidence vault")
     }
-    System_Ext(gemini, "Google Gemini 2.5 Flash", "Document extraction (per-doctype JSON)")
+    System_Ext(gemini, "Google Gemini 3.1 Flash-Lite", "Document extraction (per-doctype JSON)")
     System_Ext(claude, "Anthropic Claude Sonnet 4.6", "Reasoning, narrative, IC synthesis")
     System_Ext(authorities, "Karnataka Authorities", "Bhoomi · Kaveri · e-Aasthi · K-RERA · IGR · K-GIS")
     System_Ext(maps, "Google Places + OSM Nominatim", "Geocoding (server-side)")
@@ -101,7 +101,7 @@ C4Context
 ```mermaid
 flowchart LR
     A["Authority artifact<br/>(RMP table, RTC, EC,<br/>khata, IGR PDF)"] -->|signed upload URL| B[(master_plan_documents<br/>+ evidence_sources<br/>status: pending)]
-    B -->|POST /documents/:id/extract| C{Gemini 2.5 Flash<br/>per-doctype schema}
+    B -->|POST /documents/:id/extract| C{Gemini 3.1 Flash-Lite<br/>per-doctype schema}
     C -->|typed JSON| D[evidenceIngestion.service]
     D --> E[(evidence_facts)]
     D --> F[(far_rules)]
@@ -197,7 +197,7 @@ Five ADRs, kept short. These are the choices that distinguish REDIP from a gener
 
 ### ADR-1 · Gemini for extraction, Claude for reasoning, deterministic JS for math
 **Choice:** Three lanes, never mixed. Routing config in [providerRegistry.js](backend/src/services/ai/providerRegistry.js); pure-JS engine in [parcelBuildability.js](backend/src/utils/parcelBuildability.js).
-**Why:** Gemini 2.5 Flash beats Claude on document I/O (PDF-in, JSON-out, lower latency, cheaper); Claude beats Gemini on cross-document reasoning and narrative. Math must never depend on either — a hallucinated FAR coefficient fails CLAUDE.md and kills trust.
+**Why:** Gemini 3.1 Flash-Lite beats Claude on document I/O (PDF-in, JSON-out, lower latency, cheaper); Claude beats Gemini on cross-document reasoning and narrative. Math must never depend on either — a hallucinated FAR coefficient fails CLAUDE.md and kills trust.
 **Trade-off accepted:** two SDKs, one telemetry layer ([aiRouter.js](backend/src/services/ai/aiRouter.js) → `ai_call_logs`).
 
 ### ADR-2 · Manual blockers preserved end-to-end
@@ -233,7 +233,7 @@ Five ADRs, kept short. These are the choices that distinguish REDIP from a gener
 | DB | Supabase-hosted Postgres 14+ · PostGIS · pg_trgm · ref `lsbhrbvuynzqhdtzczco` | `database/migrations/` |
 | Storage | Vercel Blob (preferred) OR Supabase Storage `redip-documents` | — |
 | Auth | Custom JWT · RLS via `current_organization_id()` claim | [backend/src/middleware/auth.js](backend/src/middleware/auth.js) |
-| AI | Gemini 2.5 Flash · Claude Sonnet 4.6 · optional GPT-4o-mini | [backend/src/services/ai/](backend/src/services/ai/) |
+| AI | Gemini 3.1 Flash-Lite · Claude Sonnet 4.6 · GPT-5.4 (reasoning + market_synthesis routing) | [backend/src/services/ai/](backend/src/services/ai/) |
 
 [vercel.json](vercel.json) builds the kernel TS → JS at install (`npx tsc -p tsconfig.build.json`), bundles `{backend,packages/financial-kernel/dist}/**`, runs the function at `maxDuration=60s, memory=1024MB`. SPA fallback rewrite. One cron at 03:05 UTC for FX refresh.
 

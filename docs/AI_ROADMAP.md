@@ -51,7 +51,11 @@ These extend `CLAUDE.md`'s AI Routing Policy with what we've learned:
 
 ## 3. Architecture
 
-### 3.1 Current (as of 2026-05-04)
+### 3.1 Current (as of 2026-05-16)
+
+> **2026-05-16 refresh** (PR-NX20): model defaults bumped per PR-NX9 (#322); cross-product AI-Assisted Briefing now lives on XLSX (PR-NX12 #328), DOCX + PPTX (PR-NX18 #335) — all 3 formats share the same `dealBriefing.service.js`. Cross-product consistency enforced by `exports.crossProductReconciliation.test.js` (PR-NX19 #336). See `SESSION_LOG.md` for the full PR-by-PR history since 2026-05-04.
+
+### 3.1.legacy Architecture snapshot (as of 2026-05-04, kept for diff reference)
 
 ```
 React 18 / Vite frontend
@@ -285,14 +289,18 @@ Each tool runs server-side under the requesting user's session; RLS enforces ten
 
 ### 8.1 Model routing (per-task, env-overridable)
 
+**Defaults refreshed 2026-05-15 per PR-NX9 (#322):** Gemini bumped from 2.5-flash → 3.1-flash-lite (cheaper + faster), Claude unchanged at Sonnet 4.6, OpenAI added for reasoning/synthesis paths at GPT-5.4. The `narrative_synthesis` task (used by the cross-product AI-Assisted Briefing in XLSX, DOCX, PPTX per PR-NX12 / PR-NX18) routes to Claude Sonnet 4.6 by default; operator can override per-task via `AI_PROVIDER_<TASK>` env vars without a code redeploy.
+
 | Task | Default | Cheapest acceptable | Why |
 |---|---|---|---|
-| Document classification | Gemini Flash | Gemini Flash | Fast, multimodal, cheap |
-| Document extraction (text+image) | Gemini Flash | — | Required: multimodal native |
-| Translation (Indic) | Gemini Flash | Bhashini (when integrated) | Cost cliff vs paid LLMs |
-| Comps cleanup | Gemini Flash | Claude Haiku | Either works; Haiku for token-economy |
-| Reasoning / risk narrative | Claude Sonnet 4.6 | — | Quality matters; Haiku fails the bar |
-| IC memo generation | Claude Sonnet 4.6 | — | Long-form, structured |
+| Document classification | Gemini 3.1 Flash-Lite | Gemini 3.1 Flash-Lite | Fast, multimodal, cheap |
+| Document extraction (text+image) | Gemini 3.1 Flash-Lite | — | Required: multimodal native |
+| Translation (Indic) | Gemini 3.1 Flash-Lite | Bhashini (when integrated) | Cost cliff vs paid LLMs |
+| Comps cleanup | Gemini 3.1 Flash-Lite | GPT-5.4 mini | Either works; route by ops cost target |
+| Reasoning / risk narrative | GPT-5.4 | Claude Sonnet 4.6 | OpenAI now leads on benchmark + cost; Claude fallback retained for redundancy |
+| Market synthesis | GPT-5.4 | Claude Sonnet 4.6 | Same routing rationale as reasoning |
+| **Narrative synthesis (AI-Assisted Briefing)** | **Claude Sonnet 4.6** | GPT-5.4 | Claude's prose quality + institutional voice strength is the right primary; OpenAI is the fallback when Anthropic is rate-limited |
+| IC memo generation | Claude Sonnet 4.6 | GPT-5.4 | Long-form, structured |
 | Scenario diagnosis ("why did IRR drop?") | Claude Sonnet 4.6 | — | Diagnostic reasoning |
 | Red-team review (when added) | Claude Sonnet 4.6 | Sonnet 4.6 | Opus 4.7 is 5× output cost; not worth it pre-revenue |
 
