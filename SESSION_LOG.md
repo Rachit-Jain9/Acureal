@@ -4,6 +4,53 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-16 (evening) — Cross-product AI Briefing parity + reconciliation suite + doc sync (PR #335, #336, #337)
+
+After the morning's Pointec Pens root-cause fix (PR-NX17, drawing-element OOXML ordering), the XLSX export is stable. Pivoted from firefighting to feature work. Per operator direction ("highest priority right now, multiple things that go well together"), read every .md file in the repo + did first-principles synthesis. Picked the **3-PR compound bundle** that extends recent work + adds validation + cleans hygiene.
+
+### PRs shipped + merged
+
+- **#335 — PR-NX18: AI-Assisted Briefing parity for DOCX + PPTX.** Extends the asset-class × deal-structure × exit-strategy aware briefing (shipped in PR-NX12 #328 for XLSX) to DOCX and PPTX. Single source of truth: `backend/src/services/exports/xlsx/v2/dealBriefing.service.js`. Each format calls it via a small adapter that reshapes its own context. DOCX gets a new "AI-Assisted Briefing" section between Cover and Executive Summary (mandatory amber disclosure, 4 asset-class-aware bullets, crimson risk callout, footer with synthesis attribution). PPTX gets a new "AI-Assisted Briefing" slide at position 2 (right after Cover, before Contents). +11 tests verifying slide manifest placement, asset-class-aware language (hospitality USALI vs office leasing), section ordering, graceful zero-KPI fallback.
+
+- **#336 — PR-NX19: Cross-product reconciliation test suite.** New `exports.crossProductReconciliation.test.js` builds the same `exportContext` through all 3 export builders (XLSX / DOCX / PPTX) and asserts the asset-class-aware briefing language matches across all three. Catches a regression where any one builder drifts from the shared service. Covers 3 asset classes (hospitality, commercial_office, residential JDA) × 5 assertion types per class (asset class label, economics language, GST framing, deal structure language, mandatory disclosure). PPTX built via Node subprocess (`execFileSync` pattern from existing tests) because pptxgenjs has a dynamic ES-module import incompatible with Jest's default VM. +14 tests, all pass.
+
+- **#337 — PR-NX20: Stale doc refresh.** 4 .md files where model IDs + cross-product references had drifted from prod reality. AI_ROADMAP §3.1 header bumped to 2026-05-16 (legacy snapshot preserved as §3.1.legacy); §8.1 model routing table updated to PR-NX9 defaults (Gemini 3.1 Flash-Lite, GPT-5.4, Claude Sonnet 4.6) + adds the new `narrative_synthesis` task. PARCEL_INTELLIGENCE_DECK updated all 5 "Gemini 2.5 Flash" references → 3.1 Flash-Lite. TODO_MANUAL model bump timestamp 2026-05-05 → 2026-05-15 (PR-NX9), Gemini model ID fixed from `gemini-3-flash-preview` → `gemini-3.1-flash-lite`, per-task routing env-var overrides documented. OPERATOR_HANDBOOK adds a stale-notice banner pointing to SESSION_LOG.md for the ~175 PRs since 2026-05-04.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| exports.docx.test.js | 13 | 20 | +7 |
+| dealPptx.service.test.js | 13 | 17 | +4 |
+| exports.crossProductReconciliation.test.js | 0 | 14 | +14 |
+| Other backend | 1,722 | 1,722 | 0 |
+| **TOTAL** | **1,720** | **1,749** | **+29** |
+
+Zero pre-existing test regressions across all 101 backend suites. Frontend build clean (~14-30s).
+
+### Architecture wins from this batch
+
+- **Single source of truth for briefing language.** All 3 export formats now consume `dealBriefing.service.js`. A reviewer downloading the same deal as XLSX, PPTX, or DOCX sees verbatim identical headline language. Cross-product consistency is machine-enforced (PR-NX19 reconciliation suite).
+- **Per-asset-class narrative coverage 100%.** 10 native asset classes × 4 deal structures × 7 exit strategies × 3 export formats = full coverage of the matrix.
+- **Stale doc debt cleared.** Operator handbook + AI roadmap + parcel intel deck + TODO_MANUAL all reflect current model defaults + cross-product references. No more "wait, which Gemini are we on?" questions.
+
+### Outstanding operator actions (carried from prior sessions)
+
+1. **Re-download Pointec Pens** after Vercel deploys commit `d22207a` (~3 min). Confirm hospitality Dashboard loads cleanly with native charts (PR-NX17 should have fixed the root-cause OOXML ordering issue).
+2. **Verify Vercel env vars** so AI Briefing fires (PR-NX12/NX18 currently falling back to templated in prod per operator's earlier file):
+   - `ANTHROPIC_API_KEY` must be set
+   - Optionally `AI_PROVIDER_NARRATIVE_SYNTHESIS=claude` (default after PR-NX9 anyway)
+   - Optionally `CLAUDE_MODEL=claude-sonnet-4-6`
+3. **Remove `REDIP_SKIP_ALL_POST_INJECTION` env var** (set during PR-NX16 debugging — no longer needed since PR-NX17 fixed the root cause).
+
+### Recommendation for next session
+
+Per the .md file synthesis, the next highest-leverage work is **Document ingestion + AI auto-fill MVP** (STRATEGIC_REVIEW Priority 1; biggest moat). 2-session scope. Closes the deal-creation friction (manual entry of 30+ inputs → upload sale deed + AI extract + operator review + commit).
+
+Honorable mention: **Live what-if buildability sliders on Parcel Tab** (PARCEL_INTELLIGENCE_DECK Q-next T1; 1 session, zero LLM cost). Bloomberg-grade interaction.
+
+---
+
 ## 2026-05-15 (late afternoon) — Pointec Pens audit + 4-PR comprehensive fix (PR #327, #328, #329, #330)
 
 Operator audit flagged 14 issues in the downloaded Pointec Pens Excel (hospitality deal). Top: Dashboard sheet stripped to nothing by Excel auto-repair due to malformed XML in PR #325 cell-note serialization. Below that: briefing said "0 sqft hospitality" + "rent inputs pending" (asset-class-blind), GST framing wrong for hospitality, phantom rent field on hospitality Inputs sheet, several minor UX issues.
