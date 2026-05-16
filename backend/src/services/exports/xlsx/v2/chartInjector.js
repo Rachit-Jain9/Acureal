@@ -482,11 +482,55 @@ const buildDrawingRels = (chartCount) => {
 // present, so we insert it before the closing </worksheet> tag.
 // ────────────────────────────────────────────────────────────────────────
 
+// PR-NX17 (2026-05-16) — ROOT CAUSE of the hospitality Dashboard bug
+// that survived PRs #327, #329, #332, #333.
+//
+// OOXML schema strictly orders worksheet child elements at the end of
+// `<worksheet>`. The relevant tail-element ordering (from the official
+// ECMA-376 schema, sheet element):
+//
+//   sheetData, sheetCalcPr, sheetProtection, protectedRanges, scenarios,
+//   autoFilter, sortState, dataConsolidate, customSheetViews,
+//   mergeCells, phoneticPr, conditionalFormatting, dataValidations,
+//   hyperlinks, printOptions, pageMargins, pageSetup, headerFooter,
+//   rowBreaks, colBreaks, customProperties, cellWatches, ignoredErrors,
+//   smartTags, **drawing**, legacyDrawing, legacyDrawingHF, picture,
+//   oleObjects, controls, webPublishItems, tableParts, **extLst**
+//
+// Pre-fix `patchWorksheetXmlForDrawing` slammed `<drawing/>` right
+// before `</worksheet>`. When the Dashboard already had `<legacyDrawing/>`
+// (from PR-NX11's KPI Benchmark cell-comments) or `<tableParts>` or
+// `<extLst>` (from later sparkline injection), the resulting order was:
+//
+//   <legacyDrawing/><drawing/></worksheet>      ← WRONG
+//   <tableParts>...</tableParts><drawing/></ws> ← WRONG
+//   <extLst>...</extLst><drawing/></worksheet>  ← WRONG
+//
+// Microsoft Excel parses the worksheet strictly per the schema and
+// rejects out-of-order elements. Its auto-repair kicks in and SCRUBS
+// the entire `<sheetData>` block (along with everything else) leaving
+// only the bare worksheet skeleton with `<sheetData/>`. The hospitality
+// deals — which trigger cell-comments more aggressively due to PR-NX11
+// + PR-NX15 compat section — were the most exposed to this bug.
+//
+// FIX: insert `<drawing/>` BEFORE any of the schema-later elements,
+// not right before `</worksheet>`.
+const SCHEMA_LATER_THAN_DRAWING = /<(legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b/;
+
 const patchWorksheetXmlForDrawing = (sheetXml, drawingRelId) => {
   if (sheetXml.includes('<drawing ')) return sheetXml;  // already has one — leave it alone
+  const drawingTag = `<drawing r:id="${drawingRelId}"/>`;
+  const match = sheetXml.match(SCHEMA_LATER_THAN_DRAWING);
+  if (match) {
+    // Insert <drawing/> immediately BEFORE the first schema-later element
+    // so the resulting order matches OOXML schema and Excel accepts it.
+    const insertAt = match.index;
+    return sheetXml.slice(0, insertAt) + drawingTag + sheetXml.slice(insertAt);
+  }
+  // No schema-later elements present — fall back to inserting before </worksheet>
   return sheetXml.replace(
     /<\/worksheet>\s*$/,
-    `<drawing r:id="${drawingRelId}"/></worksheet>`,
+    `${drawingTag}</worksheet>`,
   );
 };
 

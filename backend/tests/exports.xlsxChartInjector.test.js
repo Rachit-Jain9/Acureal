@@ -285,6 +285,122 @@ describe('services/exports/xlsx/v2/chartInjector', () => {
         }],
       })).rejects.toThrow(/unsupported chart type/);
     });
+
+    // ──────────────────────────────────────────────────────────────────
+    // PR-NX17 (2026-05-16) ROOT-CAUSE REGRESSION GUARD
+    // ──────────────────────────────────────────────────────────────────
+    // The Pointec Pens hospitality bug that survived 4 fix attempts:
+    // chart injection slammed `<drawing/>` right before `</worksheet>`
+    // even when `<legacyDrawing/>` or `<tableParts>` or `<extLst>` were
+    // already present. OOXML schema requires `<drawing>` to come BEFORE
+    // those elements. Excel rejected the out-of-order XML and auto-
+    // repaired the entire Dashboard sheet to `<sheetData/>`.
+    test('PR-NX17 REGRESSION: <drawing> is inserted BEFORE <legacyDrawing> per OOXML schema', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/>'
+        + '<legacyDrawing r:id="rId99"/>'
+        + '</worksheet>';
+      const patched = __internal.patchWorksheetXmlForDrawing(sheetXml, 'rId7');
+      // The drawing tag MUST appear before legacyDrawing
+      const drawingIdx = patched.indexOf('<drawing ');
+      const legacyIdx = patched.indexOf('<legacyDrawing ');
+      expect(drawingIdx).toBeGreaterThan(0);
+      expect(legacyIdx).toBeGreaterThan(0);
+      expect(drawingIdx).toBeLessThan(legacyIdx); // critical OOXML ordering
+    });
+
+    test('PR-NX17 REGRESSION: <drawing> is inserted BEFORE <tableParts>', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/>'
+        + '<tableParts count="1"><tablePart r:id="rId5"/></tableParts>'
+        + '</worksheet>';
+      const patched = __internal.patchWorksheetXmlForDrawing(sheetXml, 'rId7');
+      const drawingIdx = patched.indexOf('<drawing ');
+      const tableIdx = patched.indexOf('<tableParts');
+      expect(drawingIdx).toBeLessThan(tableIdx);
+    });
+
+    test('PR-NX17 REGRESSION: <drawing> is inserted BEFORE <extLst>', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/>'
+        + '<extLst><ext uri="x"/></extLst>'
+        + '</worksheet>';
+      const patched = __internal.patchWorksheetXmlForDrawing(sheetXml, 'rId7');
+      const drawingIdx = patched.indexOf('<drawing ');
+      const extLstIdx = patched.indexOf('<extLst>');
+      expect(drawingIdx).toBeLessThan(extLstIdx);
+    });
+
+    test('PR-NX17 REGRESSION: <drawing> position when ALL schema-later elements coexist (worst case)', () => {
+      // The Pointec Pens hospitality Dashboard has comments (legacyDrawing
+      // from PR-NX11 KPI Benchmark notes) + tableParts (Inputs QA tables
+      // shared via sharedStrings) + extLst (sparkline injection). All
+      // three present at the worksheet tail. Drawing MUST come before all.
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/>'
+        + '<legacyDrawing r:id="rId98"/>'
+        + '<tableParts count="1"><tablePart r:id="rId97"/></tableParts>'
+        + '<extLst><ext uri="x"/></extLst>'
+        + '</worksheet>';
+      const patched = __internal.patchWorksheetXmlForDrawing(sheetXml, 'rId7');
+      const drawingIdx = patched.indexOf('<drawing ');
+      const legacyIdx = patched.indexOf('<legacyDrawing ');
+      const tableIdx = patched.indexOf('<tableParts');
+      const extLstIdx = patched.indexOf('<extLst>');
+      expect(drawingIdx).toBeLessThan(legacyIdx);
+      expect(drawingIdx).toBeLessThan(tableIdx);
+      expect(drawingIdx).toBeLessThan(extLstIdx);
+    });
+
+    test('PR-NX17 REGRESSION: fallback to </worksheet>-insertion when no schema-later elements exist', () => {
+      const sheetXml = '<?xml version="1.0"?>'
+        + '<worksheet><sheetData/></worksheet>';
+      const patched = __internal.patchWorksheetXmlForDrawing(sheetXml, 'rId7');
+      expect(patched).toContain('<drawing r:id="rId7"/></worksheet>');
+    });
+
+    test('PR-NX17 REGRESSION: end-to-end — hospitality-like sheet with comments + tables ships valid order', async () => {
+      // Reproduce the production failure mode: ExcelJS-written sheet with
+      // legacyDrawing (comments) + tableParts + sparkline-style extLst,
+      // then chart injection. Should produce schema-valid XML.
+      const wb = new ExcelJS.Workbook();
+      wb.addWorksheet('Inputs');
+      const dash = wb.addWorksheet('Dashboard');
+      dash.getCell('A1').value = 'Use: Land';
+      dash.getCell('B1').value = 85;
+      // Attach a comment (will cause ExcelJS to emit <legacyDrawing>)
+      dash.getCell('B1').note = 'Sample comment';
+      const raw = await wb.xlsx.writeBuffer();
+      const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+
+      const enhanced = await injectChartsIntoXlsx(buffer, {
+        targetSheetName: 'Dashboard',
+        targetSheetFile: 'sheet2.xml',
+        charts: [{
+          type: 'doughnut',
+          title: 'Test',
+          categoriesRange: '$A$1:$A$1',
+          valuesRange: '$B$1:$B$1',
+          colours: ['0E1B2C'],
+          anchor: { fromCol: 4, fromRow: 0, widthCols: 6, heightRows: 12 },
+        }],
+      });
+
+      const zip = await JSZip.loadAsync(enhanced);
+      const xml = await zip.file('xl/worksheets/sheet2.xml').async('string');
+      const drawingIdx = xml.indexOf('<drawing ');
+      const legacyIdx = xml.indexOf('<legacyDrawing');
+      // Both must be present
+      expect(drawingIdx).toBeGreaterThan(0);
+      if (legacyIdx > 0) {
+        // If comments produced legacyDrawing, our patch MUST put drawing first
+        expect(drawingIdx).toBeLessThan(legacyIdx);
+      }
+      // ExcelJS round-trip should accept the patched XML
+      const wb2 = new ExcelJS.Workbook();
+      await wb2.xlsx.load(enhanced);
+      expect(wb2.worksheets.map((w) => w.name)).toContain('Dashboard');
+    });
   });
 
   describe('injectSparklinesIntoXlsx (end-to-end)', () => {
