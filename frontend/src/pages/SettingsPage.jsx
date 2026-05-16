@@ -8,6 +8,7 @@ import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
 import { emitCurrencyChange } from '../hooks/useCurrencyPref';
 import AIUsageWidget from '../components/admin/AIUsageWidget';
+import AIHealthWidget from '../components/admin/AIHealthWidget'; // PR-NX23
 import CloseAccountCard from '../components/common/CloseAccountCard';
 import MfaCard from '../components/common/MfaCard';
 
@@ -489,6 +490,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* PR-NX23 (2026-05-16): Live provider health surface — sits ABOVE
+          the AI usage / cost widget because "is it working?" precedes
+          "how much did it cost?". Same role gate as the cost widget. */}
+      {(user?.role === 'owner' || user?.role === 'admin' || user?.role === 'analyst') && (
+        <AIHealthWidget />
+      )}
 
       {(user?.role === 'owner' || user?.role === 'admin' || user?.role === 'analyst') && (
         <AIUsageWidget />
