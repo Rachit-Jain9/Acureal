@@ -63,8 +63,14 @@ const {
 } = require('./contentBuilders');
 
 const buildSlideManifest = (context) => {
+  // PR-NX18 (2026-05-16): AI-Assisted Briefing slide is the 2nd slide
+  // (right after Cover). Mirrors the XLSX Executive Briefing tab being
+  // the 1st sheet — IC reviewer reads the AI synthesis FIRST, then dives
+  // into the structured content. Pre-NX18 this slide existed only in
+  // XLSX; PPTX + DOCX had no asset-class-aware briefing.
   const slides = [
     { key: 'cover', title: context.dealTitle },
+    { key: 'briefing', title: 'AI-Assisted Briefing' },
     { key: 'contents', title: 'Contents' },
     { key: 'decisionFrame', title: 'Decision Frame & Composite Score' },
     { key: 'dividerOpportunity', title: 'The Opportunity' },

@@ -135,6 +135,116 @@ const renderCover = (pptx, slide, context, totalSlides) => {
   });
 };
 
+// ──────────────────────────────────────────────────────────────────────
+// PR-NX18 (2026-05-16) — AI-Assisted Briefing slide (cross-product parity)
+// ──────────────────────────────────────────────────────────────────────
+//
+// Mirrors the XLSX Executive Briefing tab (PR-NX7 / PR-NX12) and the
+// DOCX AI-Assisted Briefing section. Same asset-class × deal-structure
+// × exit-strategy aware narrative — so an IC reviewer reading the PPTX,
+// DOCX, or XLSX for the same deal sees identical headline language.
+//
+// Sourced from `context.briefing` which is pre-computed in
+// `precomputeDeckAssets` via the shared `generateDealBriefing()` service.
+// The shared service handles AI-first → templated-fallback so the slide
+// always renders even if Claude is rate-limited / unconfigured.
+//
+// Mandatory CLAUDE.md disclosure: every AI-synthesized narrative carries
+// "AI-Assisted — REQUIRES HUMAN REVIEW" in a prominent amber banner.
+const renderBriefing = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(pptx, slide, context, 'AI-Assisted Briefing', pageNumber, totalSlides, `${context.assetClassLabel} | ${context.dealStructureLabel} | ${context.locationLine}`);
+
+  const briefing = context.precomputed?.briefing || null;
+  const isAiAssisted = briefing?.source === 'ai-assisted';
+
+  // Mandatory disclosure banner (amber, full-width below header)
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 1.05, w: 12.33, h: 0.42,
+    fill: { color: COLORS.amber || 'C97B0E' },
+    line: { color: COLORS.amber || 'C97B0E', pt: 0.1 },
+  });
+  const disclosureText = isAiAssisted
+    ? '⚠ AI-Assisted Briefing (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW. Every number sourced from REDIP\'s deterministic financial kernel. Verify against source documents before any IC decision.'
+    : '⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW. AI path unavailable; narrative generated from kernel KPIs + Inputs by deterministic template. Verify against source documents before any IC decision.';
+  slide.addText(disclosureText, {
+    x: 0.65, y: 1.08, w: 12.0, h: 0.36,
+    fontFace: FONT, fontSize: 9, bold: true, color: 'FFFFFF', valign: 'mid',
+  });
+
+  // Returns summary (one-liner — directly under the disclosure)
+  slide.addText('Modeled Returns', {
+    x: 0.5, y: 1.62, w: 6.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addText(briefing?.summary || 'Returns pending kernel computation — fill in inputs and refresh the deal.', {
+    x: 0.5, y: 1.85, w: 12.33, h: 0.45,
+    fontFace: FONT, fontSize: 14, bold: true, color: COLORS.charcoal, fit: 'shrink',
+  });
+
+  // Key Points — 4 asset-class-aware bullets in a 2×2 card grid
+  slide.addText('Key Points', {
+    x: 0.5, y: 2.45, w: 6.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  const bullets = Array.isArray(briefing?.bullets) ? briefing.bullets : [
+    `${context.assetClassLabel} deal in ${context.locationLine}.`,
+    'Operating economics pending — populate the Inputs sheet to refresh.',
+    'Capital structure + exit pending.',
+    'India context pending.',
+  ];
+  // Pad to 4 bullets so the grid always renders evenly
+  while (bullets.length < 4) bullets.push('');
+
+  const cardLayout = [
+    { x: 0.5, y: 2.72, w: 6.10, h: 1.55, label: 'Overview' },
+    { x: 6.73, y: 2.72, w: 6.10, h: 1.55, label: 'Economics' },
+    { x: 0.5, y: 4.35, w: 6.10, h: 1.55, label: 'Capital + Exit' },
+    { x: 6.73, y: 4.35, w: 6.10, h: 1.55, label: 'India Context' },
+  ];
+
+  cardLayout.forEach((card, idx) => {
+    slide.addShape(pptx.ShapeType.rect, {
+      x: card.x, y: card.y, w: card.w, h: card.h,
+      fill: { color: COLORS.paper },
+      line: { color: COLORS.hairline || 'D7DDE5', pt: 0.5 },
+    });
+    // Eyebrow label (top-left)
+    slide.addText(card.label.toUpperCase(), {
+      x: card.x + 0.18, y: card.y + 0.14, w: card.w - 0.36, h: 0.22,
+      fontFace: FONT, fontSize: 8, bold: true, color: COLORS.plum, charSpace: 2.0,
+    });
+    // Bullet text
+    slide.addText(bullets[idx] || '', {
+      x: card.x + 0.18, y: card.y + 0.40, w: card.w - 0.36, h: card.h - 0.55,
+      fontFace: FONT, fontSize: 11, color: COLORS.charcoal, valign: 'top',
+      paraSpaceBefore: 0, paraSpaceAfter: 0,
+    });
+  });
+
+  // Risk Note — crimson-fill callout at the bottom
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 6.00, w: 12.33, h: 0.65,
+    fill: { color: COLORS.crimson || 'B23A48' },
+    line: { color: COLORS.crimson || 'B23A48', pt: 0.1 },
+  });
+  slide.addText('RISK NOTE', {
+    x: 0.65, y: 6.06, w: 1.4, h: 0.20,
+    fontFace: FONT, fontSize: 9, bold: true, color: 'FFFFFF', charSpace: 2.0,
+  });
+  slide.addText(briefing?.riskNote || 'Review all kernel-stored values against source documents before IC.', {
+    x: 0.65, y: 6.28, w: 12.0, h: 0.32,
+    fontFace: FONT, fontSize: 11, color: 'FFFFFF', valign: 'mid',
+  });
+
+  // Footer line — generation metadata
+  const provider = isAiAssisted ? (briefing?.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
+  slide.addText(`Generated ${formatDate(context.generatedAt)} · Synthesis: ${provider} · Per-deal snapshot cached`, {
+    x: 0.5, y: 6.78, w: 12.33, h: 0.18,
+    fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted,
+  });
+};
+
 /**
  * Contents slide — pure table-of-contents with slide numbers.
  *
@@ -2604,6 +2714,7 @@ const renderKeyAssumptions = (pptx, slide, context, pageNumber, totalSlides) => 
 
 module.exports = {
   renderCover,
+  renderBriefing,
   renderContents,
   renderDecisionFrame,
   renderExecutiveSummary,

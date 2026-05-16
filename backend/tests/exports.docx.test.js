@@ -223,4 +223,84 @@ describe('services/exports/docx/buildReport', () => {
       expect(buffer.length).toBeGreaterThan(5000);
     }, 30000);
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-NX18 (2026-05-16): AI-Assisted Briefing section
+  // ────────────────────────────────────────────────────────────────────
+  // Cross-product parity with XLSX Executive Briefing (PR-NX7 / PR-NX12)
+  // and PPTX briefing slide. Same shared `generateDealBriefing` service.
+  describe('PR-NX18: AI-Assisted Briefing section (cross-product parity)', () => {
+    const JSZip = require('jszip');
+
+    const extractDocXmlText = async (buffer) => {
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml').async('string');
+      // Strip XML tags, keep text content for easy regex matching
+      return docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    };
+
+    test('DOCX includes "AI-Assisted Briefing" section heading', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/AI-Assisted Briefing/);
+    });
+
+    test('DOCX includes mandatory disclosure banner per CLAUDE.md', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/REQUIRES HUMAN REVIEW/);
+      expect(text).toMatch(/AI-Assisted Briefing/);
+    });
+
+    test('DOCX briefing surfaces asset-class-aware language for residential', async () => {
+      const buffer = await buildDealReportDocx(minimalContext()); // residential_apartments
+      const text = await extractDocXmlText(buffer);
+      // Residential briefing per PR-NX12: "launch price"
+      expect(text).toMatch(/launch price|gross margin|RERA/);
+    });
+
+    test('DOCX briefing surfaces asset-class-aware language for hospitality (NOT rent-based)', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'hospitality';
+      ctx.property.property_type = 'hospitality';
+      ctx.deal.model_params = {
+        inputs: { hospitalityKeys: 100, hospitalityADRBase: 7500, hospitalityOccupancyPct: 0.70 },
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Hospitality per PR-NX12: "USALI economics" + "keys"
+      expect(text).toMatch(/USALI|keys|ADR|hospitality/i);
+      // MUST NOT use generic rent-based language for hospitality
+      expect(text).not.toMatch(/rent inputs pending × \d+% occupancy/);
+    });
+
+    test('DOCX briefing surfaces asset-class-aware language for commercial_office', async () => {
+      const ctx = minimalContext();
+      ctx.deal.asset_class = 'commercial_office';
+      ctx.property.property_type = 'commercial_office';
+      ctx.deal.model_params = {
+        inputs: { baseRentPerSqftMonth: 115, occupancyPct: 0.92 },
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/office|rent|occupancy/i);
+    });
+
+    test('DOCX briefing includes a footer attributing the shared service to XLSX + PPTX', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Synthesis:/);
+      expect(text).toMatch(/cross-product consistency|XLSX|PPTX/i);
+    });
+
+    test('DOCX briefing precedes Executive Summary (briefing is section 2, exec summary is section 3)', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      const briefingIdx = text.indexOf('AI-Assisted Briefing');
+      const execIdx = text.indexOf('Executive Summary');
+      expect(briefingIdx).toBeGreaterThan(-1);
+      expect(execIdx).toBeGreaterThan(-1);
+      expect(briefingIdx).toBeLessThan(execIdx);
+    });
+  });
 });

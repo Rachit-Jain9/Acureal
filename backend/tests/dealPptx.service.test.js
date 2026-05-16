@@ -649,4 +649,71 @@ describe('dealPptx.service', () => {
       expect(assets.dealScore).toBeDefined();
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-NX18 (2026-05-16): AI-Assisted Briefing slide (cross-product parity)
+  // ────────────────────────────────────────────────────────────────────
+  // Same shared `generateDealBriefing` service used by XLSX (PR-NX7/12)
+  // and DOCX (PR-NX18 sibling). All three render identical headline
+  // language for the same deal.
+  describe('PR-NX18: AI-Assisted Briefing slide', () => {
+    test('slide manifest places briefing as slide 2 (right after Cover)', () => {
+      const exportContext = createExportContext();
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
+      });
+      const manifest = baseContext.slideManifest;
+      expect(manifest[0].key).toBe('cover');
+      expect(manifest[1].key).toBe('briefing');
+      expect(manifest[1].title).toBe('AI-Assisted Briefing');
+      expect(manifest[2].key).toBe('contents');
+    });
+
+    test('precomputeDeckAssets generates a briefing object', async () => {
+      const exportContext = createExportContext();
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
+      });
+      const assets = await __testables.precomputeDeckAssets(
+        exportContext, baseContext, { publicUrl: 'https://redip.vercel.app' },
+      );
+      expect(assets.briefing).toBeTruthy();
+      expect(assets.briefing.bullets).toHaveLength(4);
+      expect(typeof assets.briefing.riskNote).toBe('string');
+      expect(typeof assets.briefing.summary).toBe('string');
+    });
+
+    test('briefing is asset-class-aware (industrial → warehouse language, not residential)', async () => {
+      const exportContext = createExportContext(); // industrial_warehousing
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
+      });
+      const assets = await __testables.precomputeDeckAssets(
+        exportContext, baseContext, { publicUrl: 'https://redip.vercel.app' },
+      );
+      const allText = `${assets.briefing.summary} ${assets.briefing.bullets.join(' ')} ${assets.briefing.riskNote}`;
+      // Industrial economics bullet should mention warehouse / logistics
+      expect(allText).toMatch(/Logistics|warehouse|industrial/i);
+    });
+
+    test('briefing renders cleanly when the deal has zero kernel KPIs (early-stage)', async () => {
+      const exportContext = createExportContext();
+      delete exportContext.deal.irr_pct;
+      delete exportContext.deal.npv_cr;
+      delete exportContext.deal.equity_multiple;
+      delete exportContext.deal.gross_margin_pct;
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
+      });
+      const assets = await __testables.precomputeDeckAssets(
+        exportContext, baseContext, { publicUrl: 'https://redip.vercel.app' },
+      );
+      expect(assets.briefing).toBeTruthy();
+      expect(assets.briefing.bullets).toHaveLength(4);
+      // No NaN / undefined leaks in the rendered text
+      assets.briefing.bullets.forEach((b) => {
+        expect(b).not.toMatch(/NaN|undefined|\[object Object\]/);
+      });
+    });
+  });
 });
