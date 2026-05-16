@@ -5360,18 +5360,28 @@ const buildDashboardSheet = (workbook, ctx) => {
     // Attach the benchmark citation as a cell COMMENT — operator hovers
     // the tile and sees the institutional source. Per CLAUDE.md
     // "verified data only, source + freshness on every cell" rule.
-    // Cell-comment text builds on top of any existing comment (we preserve
-    // the kernel-provenance comment that PR-NX3 attached).
+    //
+    // 2026-05-15 HOTFIX: cell.note MUST be a plain string here, not an
+    // object with `texts`/`margins`. The object form is technically
+    // supported by ExcelJS but the `margins.insetmode: 'custom'` path
+    // serializes malformed sheetN.xml that Microsoft Excel rejects on
+    // open ("Replaced Part: /xl/worksheets/sheetN.xml part with XML error.
+    // Load error. Line 2, column 0" — Excel then strips the entire sheet
+    // during auto-repair). The string form matches the existing PR-NX3
+    // pattern at line 2689 and serializes cleanly in every Excel version.
+    //
+    // KPI tile cells are FRESH cells on the Dashboard (not Inputs sheet
+    // cells that PR-NX3 already commented), so there's no prior note to
+    // preserve — direct string assignment is safe.
     const cell = sheet.getCell(ref);
-    const existingNote = cell.note;
-    const benchmarkBlock = `\n\n─── KPI Benchmark (${label}) ───\nRange: ${bm.direction === 'up' ? `${bm.low} → ${bm.mid} → ${bm.high}` : `${bm.high} → ${bm.mid} → ${bm.low} (lower is better)`}\nSource: ${bm.citation}`;
-    const note = existingNote
-      ? (typeof existingNote === 'string' ? existingNote + benchmarkBlock : (existingNote.texts || []).map((t) => t.text || '').join('') + benchmarkBlock)
-      : benchmarkBlock.trim();
-    cell.note = {
-      texts: [{ text: note }],
-      margins: { insetmode: 'custom', inset: [0.1, 0.1, 0.1, 0.1] },
-    };
+    const benchmarkLines = [
+      `── KPI Benchmark (${label}) ──`,
+      bm.direction === 'up'
+        ? `Range: ${bm.low} → ${bm.mid} → ${bm.high}`
+        : `Range: ${bm.high} → ${bm.mid} → ${bm.low} (lower is better)`,
+      `Source: ${bm.citation}`,
+    ];
+    cell.note = benchmarkLines.join('\n');
   });
 
   const trendSpecs = ctx.dealFamily === 'income'

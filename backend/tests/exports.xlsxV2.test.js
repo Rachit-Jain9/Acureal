@@ -4084,6 +4084,68 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(noteText).toMatch(/Cushman/);
       });
 
+      test('PR-NX11 HOTFIX: KPI tile note is a plain STRING (object form corrupts sheetN.xml in Microsoft Excel)', async () => {
+        // 2026-05-15 production bug: cell.note set to an object with `texts`
+        // and `margins.insetmode: 'custom'` serialized malformed XML that
+        // Microsoft Excel rejected on open ("Replaced Part: sheet2.xml part
+        // with XML error. Load error. Line 2, column 0"). Excel then
+        // stripped the entire Dashboard sheet during auto-repair. The
+        // string form matches the pre-existing PR-NX3 pattern at line 2689
+        // and round-trips through Excel cleanly.
+        //
+        // Regression guard: assert the in-memory note shape is `string`,
+        // not `object`. ExcelJS may normalize on round-trip so we ALSO
+        // re-serialize and assert the comments XML has no malformed
+        // <commentPr> attributes.
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'commercial_office';
+        ctx.property.property_type = 'commercial_office';
+        const buffer = await buildDealWorkbookV2(ctx);
+
+        // Unzip and inspect comments1.xml directly — bypasses ExcelJS
+        // normalization that hides the malformed-XML bug.
+        const zip = await JSZip.loadAsync(buffer);
+        const commentFiles = zip.file(/^xl\/comments\d+\.xml$/);
+        expect(commentFiles.length).toBeGreaterThan(0);
+        const commentsXmls = await Promise.all(commentFiles.map((f) => f.async('string')));
+
+        // Find a comments XML that mentions KPI Benchmark (the PR-NX11 marker)
+        const kpiCommentsXml = commentsXmls.find((xml) => xml.includes('KPI Benchmark'));
+        expect(kpiCommentsXml).toBeTruthy();
+
+        // Malformed-XML signatures that broke production:
+        //   - <commentPr insetmode="custom"...> with malformed inset attribute
+        //   - Missing closing tags on <text>, <r>, or <rPr>
+        //   - Stray `[object Object]` toString leaks (catches future
+        //     accidental object-as-note assignments)
+        expect(kpiCommentsXml).not.toMatch(/insetmode=/i);
+        expect(kpiCommentsXml).not.toMatch(/\[object Object\]/);
+        // Every <comment> must close its <text> tag
+        const openTexts = (kpiCommentsXml.match(/<text>/g) || []).length;
+        const closeTexts = (kpiCommentsXml.match(/<\/text>/g) || []).length;
+        expect(openTexts).toBe(closeTexts);
+      });
+
+      test('PR-NX11 HOTFIX: Dashboard sheet XML contains real cell content (not stripped by Excel-style repair)', async () => {
+        // Direct assertion that sheet2.xml (Dashboard, the 2nd visible sheet
+        // after Executive Briefing) is not an empty shell. The Pointec Pens
+        // bug produced a sheet with literally <sheetData/> and nothing else.
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const zip = await JSZip.loadAsync(buffer);
+        const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
+        expect(sheetFiles.length).toBeGreaterThan(0);
+        const xmls = await Promise.all(sheetFiles.map((f) => f.async('string')));
+        // Find the Dashboard sheet — has the title banner with "Dashboard"
+        const dashXml = xmls.find((xml) => xml.includes('Dashboard'));
+        expect(dashXml).toBeTruthy();
+        // Empty-shell signature: <sheetData/> (self-closing means no rows).
+        // A real Dashboard has 100+ rows under <sheetData> ... </sheetData>.
+        expect(dashXml).not.toMatch(/<sheetData\s*\/>/);
+        // Real Dashboard always has many <c r="..."> cell entries
+        const cellCount = (dashXml.match(/<c\s+r="/g) || []).length;
+        expect(cellCount).toBeGreaterThan(50);
+      });
+
       test('PR-NX11: residential_apartments uses tighter gross-margin band than default development', async () => {
         // residential_apartments override: 15%/22%/30% (vs default dev: 10%/18%/25%)
         const buffer = await buildDealWorkbookV2(minimalContext()); // residential_apartments
