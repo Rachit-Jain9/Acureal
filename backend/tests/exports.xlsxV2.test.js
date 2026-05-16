@@ -3147,6 +3147,37 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // ── PR-NX14 — Label + UX polish ─────────────────────────────────────
+    describe('PR-NX14: Project Schedule label clarity', () => {
+      test('Schedule labels distinguish Construction Duration (months) from Total Modeling Horizon (qtrs, incl. operating hold)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const collectLabelUnits = [];
+        inputs.eachRow({ includeEmpty: false }, (row) => {
+          const label = String(row.getCell(1).value || '');
+          const unit = String(row.getCell(3).value || '');
+          if (label && (label.startsWith('Construction Duration') || label.startsWith('Total Modeling Horizon'))) {
+            collectLabelUnits.push({ label, unit });
+          }
+        });
+        expect(collectLabelUnits.find((x) => x.label === 'Construction Duration')).toBeDefined();
+        expect(collectLabelUnits.find((x) => x.label === 'Total Modeling Horizon')).toBeDefined();
+        const horizon = collectLabelUnits.find((x) => x.label === 'Total Modeling Horizon');
+        expect(horizon.unit).toMatch(/incl.*operating hold/i);
+      });
+
+      test('Named ranges ProjectMonths + TotalQuarters are unchanged (downstream formulas keep working)', async () => {
+        const buffer = await buildDealWorkbookV2(minimalContext());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const names = (wb.definedNames.model || []).map((n) => n.name);
+        expect(names).toContain('ProjectMonths');
+        expect(names).toContain('TotalQuarters');
+      });
+    });
+
     // ── PR-I13 — Retail CAM + Anchor / Vanilla rent split ──────────────
     describe('PR-I13: Retail CAM + Anchor / Vanilla Rent Split (income asset family only)', () => {
       const retailCtx = () => {
@@ -3750,10 +3781,12 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
         const statusCell = findValueCellByLabel(inputs, /Reconciliation — Status/);
         expect(statusCell).not.toBeNull();
-        // Status flag: "✓ Aligned" when within 5%, "⚠ Drift > 5%" otherwise
+        // PR-NX14 (2026-05-15): three-state — Aligned / Drift / Headline-only.
         expect(statusCell.value.formula).toContain('Aligned');
         expect(statusCell.value.formula).toContain('Drift');
         expect(statusCell.value.formula).toContain('0.05');
+        // New: third state for when breakdown sum = 0
+        expect(statusCell.value.formula).toContain('Headline only');
       });
 
       // ── Item #3: Development family Quarter sales has bulk-exit top-up

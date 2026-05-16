@@ -1995,13 +1995,23 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // PR-NX14 (2026-05-15): label clarity in the Project Schedule section.
+  // Pre-fix the operator saw "Project Duration: 48 months" and "Quarters:
+  // 56" side-by-side and reasonably asked "48 months = 16 quarters, why
+  // is the Quarters field 56?" The answer: TotalQuarters includes the
+  // operating/hold horizon AFTER construction completes (for income deals
+  // = construction + 5-year hold = 36 + 20 = 56 quarters; for hospitality
+  // = construction + 14-year hold = 12 + 56 = 56 quarters). Renamed to
+  // "Total Modeling Horizon" + unit "quarters (incl. operating hold)"
+  // so the meaning is unambiguous. The named range TotalQuarters
+  // remains unchanged — only the operator-facing label/unit is updated.
   const scheduleSection = {
     title: 'Project Schedule',
     rows: [
-      ['Project Duration',        'ProjectMonths',       ctx.projectMonths,                                                                              'months', NUMBER_FORMATS.integer],
-      ['Quarters',                'TotalQuarters',       ctx.totalQuarters,                                                                              'count', NUMBER_FORMATS.integer],
-      ['Construction Start Lag',  'ConstructionLagQ',    firstNumber(ctx.inputs.constructionLagQuarters, 1),                                             'quarters', NUMBER_FORMATS.integer],
-      ['Sales / Lease Launch Lag','SalesLagQ',           firstNumber(ctx.inputs.salesLagQuarters, ctx.inputs.leaseLagQuarters, 0),                       'quarters', NUMBER_FORMATS.integer],
+      ['Construction Duration',         'ProjectMonths',       ctx.projectMonths,                                                                              'months (build phase)', NUMBER_FORMATS.integer],
+      ['Total Modeling Horizon',        'TotalQuarters',       ctx.totalQuarters,                                                                              'quarters (incl. operating hold)', NUMBER_FORMATS.integer],
+      ['Construction Start Lag',        'ConstructionLagQ',    firstNumber(ctx.inputs.constructionLagQuarters, 1),                                             'quarters', NUMBER_FORMATS.integer],
+      ['Sales / Lease Launch Lag',      'SalesLagQ',           firstNumber(ctx.inputs.salesLagQuarters, ctx.inputs.leaseLagQuarters, 0),                       'quarters', NUMBER_FORMATS.integer],
     ],
   };
 
@@ -2105,9 +2115,18 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Reconciliation — Δ %',             'ApprovalsBreakdownDeltaPct',
         { formula: '=IFERROR(ABS(ApprovalsBreakdownDeltaCr)/ApprovalCostCr,0)' },
         '% absolute deviation (target < 5%)', NUMBER_FORMATS.percent],
+      // PR-NX14 (2026-05-15): three-state reconciliation status.
+      // Pre-fix this was binary (✓ Aligned vs ⚠ Drift). When the operator
+      // had NOT yet populated the line-item breakdown (sum = 0 but
+      // headline ApprovalCostCr > 0), the formula showed "⚠ Drift > 5%"
+      // — alarming, but really just "you haven't filled in the breakdown
+      // yet." Now the formula distinguishes:
+      //   - sum = 0 (breakdown not populated): "ℹ Headline only — itemize below"
+      //   - drift > 5% (both populated, mismatch): "⚠ Drift — review breakdown"
+      //   - drift ≤ 5% (aligned): "✓ Aligned"
       ['Reconciliation — Status',          'ApprovalsBreakdownStatus',
-        { formula: '=IF(IFERROR(ApprovalsBreakdownDeltaPct,0)<0.05,"✓ Aligned","⚠ Drift > 5% — review breakdown")' },
-        'auto-flagged when divergence exceeds 5%', null],
+        { formula: '=IF(IFERROR(ApprovalsBreakdownSumCr,0)=0,"ℹ Headline only — populate line items below to itemize",IF(IFERROR(ApprovalsBreakdownDeltaPct,0)<0.05,"✓ Aligned","⚠ Drift > 5% — review breakdown"))' },
+        'three-state: aligned / drift / headline-only', null],
     ],
   };
 
@@ -4952,9 +4971,19 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   // human review' label").
   sheet.mergeCells('A3:H3');
   const disclosureCell = sheet.getCell('A3');
+  // PR-NX14 (2026-05-15): unified disclosure prefix. Pre-fix the AI path
+  // said "⚠ AI-Assisted Synthesis" and the templated path said
+  // "⚠ Templated Synthesis" — two different prefixes for what is
+  // conceptually the same governance label (per CLAUDE.md "Every AI
+  // output must carry 'AI-assisted — requires human review' label").
+  // Operators flagged the inconsistency: when the AI failed they
+  // sometimes thought they were looking at a different feature. Now
+  // both paths share the same "⚠ AI-Assisted Briefing" prefix, with
+  // the synthesis path indicated in parentheses so operators see
+  // exactly which engine produced the prose.
   disclosureCell.value = isAiAssisted
-    ? '⚠ AI-Assisted Synthesis — REQUIRES HUMAN REVIEW. All numbers sourced from the deterministic financial kernel + Inputs sheet (no fabrication). Verify against source documents before any IC decision.'
-    : '⚠ Templated Synthesis — REQUIRES HUMAN REVIEW. Deterministic narrative generated from deal\'s kernel KPIs + inputs. Verify against source documents before any IC decision.';
+    ? '⚠ AI-Assisted Briefing (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW. All numbers sourced from the deterministic financial kernel + Inputs sheet (no fabrication). Verify against source documents before any IC decision.'
+    : '⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW. AI path unavailable; narrative generated from deal\'s kernel KPIs + inputs by deterministic template. Verify against source documents before any IC decision.';
   disclosureCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
   disclosureCell.fill = FILL(palette.xlsx('dataWarning'));
   disclosureCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
@@ -5038,9 +5067,17 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   // Row 17 — generation metadata
   sheet.mergeCells('A17:H17');
   const metaCell = sheet.getCell('A17');
+  // PR-NX14 (2026-05-15): fix the AI provider metadata. Pre-fix this
+  // read "Provider: OpenAI gpt-4o" — wrong since PR-NX9 (2026-05-15)
+  // routed `narrative_synthesis` to Claude Sonnet 4.6. Operators
+  // reading the footer were misled about which model produced the
+  // briefing. Now reflects the actual model from the briefing payload.
+  // (Falls back to a generic "AI provider" label when the source
+  // doesn't carry the model id — defensive against future schema drift.)
+  const aiProviderLabel = briefing.provider || briefing.model || 'Claude Sonnet 4.6';
   metaCell.value = isAiAssisted
-    ? `Generated: ${briefing.generatedAt || ctx.generatedAt} · Provider: OpenAI gpt-4o · Cached on deal-snapshot hash`
-    : `Generated: ${briefing.generatedAt || ctx.generatedAt} · Synthesis: deterministic templated narrative (AI fallback path)`;
+    ? `Generated: ${briefing.generatedAt || ctx.generatedAt} · Provider: ${aiProviderLabel} · Cached on deal-snapshot hash`
+    : `Generated: ${briefing.generatedAt || ctx.generatedAt} · Synthesis: deterministic templated fallback (AI path unavailable — see Vercel env: ANTHROPIC_API_KEY / AI_PROVIDER_NARRATIVE_SYNTHESIS)`;
   metaCell.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   metaCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
   metaCell.protection = { locked: true };

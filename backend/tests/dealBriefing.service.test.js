@@ -262,8 +262,40 @@ describe('dealBriefing.service (PR-NX7)', () => {
       const sheet = wb.getWorksheet('Executive Briefing');
       const disclosure = String(sheet.getCell('A3').value);
       expect(disclosure).toMatch(/REQUIRES HUMAN REVIEW/i);
-      // When AI is unavailable (test env), the disclosure should reflect that
-      expect(disclosure).toMatch(/AI-Assisted|Templated Synthesis/);
+      // PR-NX14 (2026-05-15): unified prefix — both paths start with
+      // "⚠ AI-Assisted Briefing" so operators see a consistent label
+      // regardless of which synthesis engine produced the prose.
+      expect(disclosure).toMatch(/AI-Assisted Briefing/);
+    });
+
+    test('PR-NX14: Executive Briefing prefix is unified across AI + templated paths', async () => {
+      // Templated path (skipAiBriefing forces fallback)
+      const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const sheet = wb.getWorksheet('Executive Briefing');
+      const disclosure = String(sheet.getCell('A3').value);
+      // Both paths share the "⚠ AI-Assisted Briefing" prefix
+      expect(disclosure.startsWith('⚠ AI-Assisted Briefing')).toBe(true);
+      // The synthesis path is indicated in parentheses
+      expect(disclosure).toMatch(/synthesis:/);
+      // Templated path explicitly says so
+      expect(disclosure).toMatch(/templated fallback/i);
+    });
+
+    test('PR-NX14: Executive Briefing meta row reports Claude (post-NX9), not OpenAI gpt-4o', async () => {
+      // When AI path fires (currently fallback in test env), the meta
+      // row should NOT contain the stale "OpenAI gpt-4o" string from
+      // pre-NX9 default.
+      const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const sheet = wb.getWorksheet('Executive Briefing');
+      const meta = String(sheet.getCell('A17').value);
+      expect(meta).not.toMatch(/OpenAI gpt-4o/);
+      // For templated-fallback path, meta should mention the operator-actionable
+      // remediation (ANTHROPIC_API_KEY env var)
+      expect(meta).toMatch(/ANTHROPIC_API_KEY|AI_PROVIDER_NARRATIVE_SYNTHESIS|Claude/);
     });
 
     test('Executive Briefing has 4 bullet rows (rows 9-12)', async () => {
