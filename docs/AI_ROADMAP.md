@@ -1,8 +1,8 @@
 # AI Roadmap — Institutional Analyst, not a Chatbot
 
-**Last reviewed:** 2026-05-09 (after the Tier-2 #11 narrow Deal Q&A agent landed via #199, completing the AI artifact suite + activating the dormant tool registry safely).
+**Last reviewed:** 2026-05-17 (after PR-NX25 + PR-NX26 shipped Document Ingestion auto-fill end-to-end — canonical ontology package + apply-extractions endpoint + AutoFillFromDocumentsModal frontend — closing the flagship priority from the 2026-05-15 Strategic Review §III.1).
 **Owner:** REDIP core
-**Status:** Tiers 0–2 LANDED in full. Tier 4.1 LANDED. Tier 3 foundation LANDED (registry only). The 4-of-4 AI artifact suite is fully wired (deal_analysis, risk_brief, ic_memo, parcel_narrative all share persistence + numerical verifier + Copy/Download exports). Open Tier work: Tier 2.1 (Vercel AI SDK migration — bundled with Tier 3.2 agent runner whenever that ships) and Tier 5 reliability items.
+**Status:** Tiers 0–2 LANDED in full. Tier 4.1 LANDED. Tier 3 foundation LANDED (registry only). The 4-of-4 AI artifact suite is fully wired (deal_analysis, risk_brief, ic_memo, parcel_narrative all share persistence + numerical verifier + Copy/Download exports). **Document Ingestion + auto-fill LANDED 2026-05-17** (Strategic Review §III.1 flagship — PR-NX25 #345 + PR-NX26 #346): operator uploads sale deed → Gemini extracts → modal proposes → operator approves → deal + property populated with full audit trail via `@redip/real-estate-ontology` v1.0.0 single source of truth. Open Tier work: Tier 2.1 (Vercel AI SDK migration — bundled with Tier 3.2 agent runner whenever that ships) and Tier 5 reliability items.
 
 This is the canonical, single-source roadmap for AI work in REDIP. It supersedes any earlier plan doc that named individual prompts or models. Whenever something here changes, update this file in the same PR.
 

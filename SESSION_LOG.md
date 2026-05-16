@@ -4,6 +4,58 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (overnight) — Document Ingestion + Auto-fill MVP: ontology + apply-extractions + modal (PR #345, #346)
+
+After the operator confirmed PR-NX24 fixed the charts ("Perfect. It works."), pivoted to the next flagship priority per docs/STRATEGIC_REVIEW_2026_05_15.md §III.1 — Document Ingestion + AI auto-fill. The extraction half was already shipped (Gemini 3.1 Flash-Lite extracts 15+ doctypes into `document_extractions.structured_fields` with confidence scores), but operators still had to manually re-enter every extracted field into the deal form. This batch closes that workflow gap end-to-end.
+
+### PRs shipped + merged
+
+- **#345 — PR-NX25: Canonical real-estate ontology + apply-extractions endpoint.** Two new artifacts:
+  1. **`@redip/real-estate-ontology` v1.0.0** — the first-class versioned artifact called for by Strategic Review §III.2. Single source of truth shared across backend, frontend, and exports. Encodes the 10 native asset classes (with `family` and `india_notes`), 4 deal structures, family-conditional exit strategies, zoning + ownership enums, area unit conversions (sqft / acres / sqm / sqyd / guntha (Karnataka) / ground (TN)), pricing constants (₹ ↔ ₹Cr ↔ ₹Lakh), extraction field map (canonical_key → {table, column, value_type, transform, india_context, min/max guardrails}), confidence bands. `validateAndCoerce()` is the apply-extractions gate — type coerce + range/length check + transform application in one call. 51 tests pin every taxonomy + conversion + transform path.
+  2. **`POST /api/deals/:id/apply-extractions`** — operator-approved extraction values land on the deal + linked property in a single transaction. Ontology-routed (each canonical field knows its destination table.column). Fail-soft per field (one out-of-range value doesn't kill the batch). Transactional (deal + property + source-marking commit together). Audit-attributed (one `deal_audit_log` row per target table with `metadata.source='document_extraction'` + `source_extraction_ids` + `ontology_version`). Marks source `document_extractions` as consumed via `correction_history` JSONB append (zero-migration audit linkage). 17 service tests pin routing, fail-soft, RLS, last-write-wins, JSONB append shape.
+
+- **#346 — PR-NX26: AutoFillFromDocumentsModal — operator UI.** The frontend that consumes PR-NX25. New "Auto-fill from documents (N)" button on the Documents tab header (visible only when ≥1 extraction is mapped). Click opens a wide modal listing every canonical extracted field as a row with: current vs proposed value side-by-side (with "overwrites" warning), confidence pill (high/medium/low), source-document chip, per-field india_context tooltip explaining WHY the field matters. HIGH-confidence rows auto-selected on first render; bulk actions for select-all-by-band. Mandatory amber "AI-assisted — requires human review" banner per CLAUDE.md. Sticky footer CTA "Apply N fields". Vite alias `@redip/real-estate-ontology` imports the same v1.json the backend validates against — keeps frontend labels + routing in lock-step with backend writes. 14 modal tests cover open/closed, auto-selection, bulk actions, overwrite warnings, applyMutation invocation shape.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| ontology.test.js (NEW) | 0 | 51 | +51 |
+| dealApplyExtractions.service.test.js (NEW) | 0 | 17 | +17 |
+| AutoFillFromDocumentsModal.test.jsx (NEW) | 0 | 14 | +14 |
+| **Backend TOTAL** | **1,784** | **1,801** | **+17** |
+| **Frontend TOTAL** | **360** | **374** | **+14** |
+
+Zero pre-existing test regressions across 104 backend suites + 44 frontend suites. Frontend build clean (~26s). Backend route compiles cleanly. Vite dev server boots clean with zero console errors.
+
+### Outcome for the operator
+
+**Before this batch:** Upload sale deed → Gemini extracts 30+ fields → see them on the extraction badge per document → manually retype each field into the deal form (Owner Name, Survey Number, Khata Number, PID, Land Area, Consideration, RERA Number, …). Deal-creation friction was the single largest workflow drag per the Strategic Review.
+
+**After this batch:**
+1. Upload sale deed → extraction runs as before.
+2. Open the deal's Documents tab → see a new "Auto-fill from documents (N)" button next to "Upload Document."
+3. Click it → modal opens with a side-by-side review of every mapped field. High-confidence ones are pre-checked.
+4. Eyeball, tick/untick, click "Apply N fields." Deal + linked property are populated in one transaction.
+5. Deal timeline now shows a "Fields applied from documents" audit row with source-extraction attribution.
+
+What used to take 10–15 minutes of mechanical retyping now takes ~30 seconds of review.
+
+### Outstanding operator actions
+
+1. **Verify the leaked Claude key was rotated.** (Carried from PR-NX22; operator decided to skip but acknowledged risk.)
+2. **End-to-end smoke after `d833327` deploys** (~3 min): upload a real sale deed PDF to a Bengaluru deal, wait for extraction, click "Auto-fill from documents", verify the field-comparison UI looks right + the apply flow populates the deal + the audit timeline shows the new entry.
+3. **No DB migrations required.** Uses existing tables (deals, properties, document_extractions.correction_history, deal_audit_log).
+
+### Recommendation for next session
+
+The ontology and apply-extractions service are now production-grade. Two natural follow-ups, each independently shippable:
+
+- **Adopt the ontology across existing services** — currently `dealApplyExtractions.service.js` is the only consumer. Migrate the deal-create / deal-edit forms to pull asset-class / deal-structure / exit-strategy options from `@redip/real-estate-ontology` instead of `constants/domain.js`. Removes the drift risk where the backend ontology says "redevelopment" but the frontend hardcodes a stale list. 1-session scope.
+- **Validation engine market-benchmark rules** — `buildExportQa()` in `backend/src/services/exports/xlsx/v2/buildWorkbook.js` has 8 blocker validators today. Extend with market-benchmark rules sourced from verified comps: "sale rate > 95th percentile of nearby comps → WARN" with citation. Per Strategic Review §III.3. 1-session scope.
+
+---
+
 ## 2026-05-16 (night) — Chart-injection root-cause hotfix + briefing truncation fix (PR #343)
 
 Operator reported "Charts STILL missing from prod files" after PR-NX17 (drawing-ordering fix) shipped. Verified via screenshot that `REDIP_SKIP_ALL_POST_INJECTION` was deleted from Vercel — so the bug had to be code-side, not env. Diagnosed two independent silent failures plus a truncation issue in the briefing path. Bundled all three into one tight hotfix.
