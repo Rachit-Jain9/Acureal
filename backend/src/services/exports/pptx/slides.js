@@ -155,7 +155,10 @@ const renderBriefing = (pptx, slide, context, pageNumber, totalSlides) => {
   addTopHeader(pptx, slide, context, 'AI-Assisted Briefing', pageNumber, totalSlides, `${context.assetClassLabel} | ${context.dealStructureLabel} | ${context.locationLine}`);
 
   const briefing = context.precomputed?.briefing || null;
-  const isAiAssisted = briefing?.source === 'ai-assisted';
+  // PR-NX21 (2026-05-16): briefing source can be 'ai-assisted-claude',
+  // 'ai-assisted-openai' (auto-failover succeeded), or 'templated'.
+  const isAiAssisted = typeof briefing?.source === 'string' && briefing.source.startsWith('ai-assisted');
+  const providerLabel = isAiAssisted ? (briefing?.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
 
   // Mandatory disclosure banner (amber, full-width below header)
   slide.addShape(pptx.ShapeType.rect, {
@@ -164,7 +167,7 @@ const renderBriefing = (pptx, slide, context, pageNumber, totalSlides) => {
     line: { color: COLORS.amber || 'C97B0E', pt: 0.1 },
   });
   const disclosureText = isAiAssisted
-    ? '⚠ AI-Assisted Briefing (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW. Every number sourced from REDIP\'s deterministic financial kernel. Verify against source documents before any IC decision.'
+    ? `⚠ AI-Assisted Briefing (synthesis: ${providerLabel}) — REQUIRES HUMAN REVIEW. Every number sourced from REDIP's deterministic financial kernel. Verify against source documents before any IC decision.`
     : '⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW. AI path unavailable; narrative generated from kernel KPIs + Inputs by deterministic template. Verify against source documents before any IC decision.';
   slide.addText(disclosureText, {
     x: 0.65, y: 1.08, w: 12.0, h: 0.36,
@@ -237,9 +240,11 @@ const renderBriefing = (pptx, slide, context, pageNumber, totalSlides) => {
     fontFace: FONT, fontSize: 11, color: 'FFFFFF', valign: 'mid',
   });
 
-  // Footer line — generation metadata
-  const provider = isAiAssisted ? (briefing?.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
-  slide.addText(`Generated ${formatDate(context.generatedAt)} · Synthesis: ${provider} · Per-deal snapshot cached`, {
+  // Footer line — generation metadata.
+  // PR-NX21: surface auto-failover state. If secondary rescued the briefing,
+  // include WHY primary failed so operators know to investigate.
+  const failoverNote = briefing?.fallbackReason ? ` · auto-failover: ${briefing.fallbackReason}` : '';
+  slide.addText(`Generated ${formatDate(context.generatedAt)} · Synthesis: ${providerLabel} · Per-deal snapshot cached${failoverNote}`, {
     x: 0.5, y: 6.78, w: 12.33, h: 0.18,
     fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted,
   });

@@ -385,7 +385,11 @@ const buildCover = (ctx) => {
 const buildBriefingSection = (ctx) => {
   const children = [];
   const briefing = ctx.briefing || null;
-  const isAiAssisted = briefing?.source === 'ai-assisted';
+  // PR-NX21 (2026-05-16): briefing source can be 'ai-assisted-claude',
+  // 'ai-assisted-openai', or 'templated'. The startsWith check covers
+  // both AI paths; specific provider surfaces via `briefing.provider`.
+  const isAiAssisted = typeof briefing?.source === 'string' && briefing.source.startsWith('ai-assisted');
+  const providerLabel = isAiAssisted ? (briefing.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
 
   children.push(sectionHeading('AI-Assisted Briefing', { pageBreakBefore: true }));
 
@@ -394,7 +398,7 @@ const buildBriefingSection = (ctx) => {
     children: [
       new TextRun({
         text: isAiAssisted
-          ? ' ⚠ AI-Assisted Briefing (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW '
+          ? ` ⚠ AI-Assisted Briefing (synthesis: ${providerLabel}) — REQUIRES HUMAN REVIEW `
           : ' ⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW ',
         font: FONT,
         size: 22, // 11pt
@@ -469,9 +473,14 @@ const buildBriefingSection = (ctx) => {
   children.push(blank());
 
   // Generation metadata footer
-  const provider = isAiAssisted ? (briefing?.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
+  // PR-NX21: surface auto-failover state. If the SECONDARY provider rescued
+  // the briefing (primary failed → alternate succeeded), include the WHY
+  // so operators know to investigate the primary key/quota.
+  const failoverNote = briefing?.fallbackReason
+    ? ` · auto-failover: ${briefing.fallbackReason}`
+    : '';
   children.push(bodyPara(
-    `Generated: ${formatDate(ctx.generatedAt)} · Synthesis: ${provider} · Per-deal snapshot cached. This briefing mirrors the AI-assisted Executive Briefing tab in the XLSX export and the AI-Assisted Briefing slide in the PPTX deck — all three reuse the same shared service for cross-product consistency.`,
+    `Generated: ${formatDate(ctx.generatedAt)} · Synthesis: ${providerLabel} · Per-deal snapshot cached${failoverNote}. This briefing mirrors the AI-assisted Executive Briefing tab in the XLSX export and the AI-Assisted Briefing slide in the PPTX deck — all three reuse the same shared service for cross-product consistency.`,
     { italic: true, color: HEX('mutedLow'), color2: HEX('mutedHigh') },
   ));
 

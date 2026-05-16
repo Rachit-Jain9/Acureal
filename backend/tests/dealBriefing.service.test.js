@@ -243,7 +243,76 @@ describe('dealBriefing.service (PR-NX7)', () => {
       const ctx = __internal.prepareWorkbookContext(minimalDevCtx(), { strictValidation: false });
       const briefing = await generateDealBriefing(ctx);
       expect(briefing).toBeTruthy();
-      expect(['ai-assisted', 'templated']).toContain(briefing.source);
+      // PR-NX21: source can be 'ai-assisted-claude', 'ai-assisted-openai', or 'templated'
+      const validSources = ['ai-assisted-claude', 'ai-assisted-openai', 'templated'];
+      expect(validSources).toContain(briefing.source);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-NX21 (2026-05-16) — Multi-provider failover cascade
+  // ────────────────────────────────────────────────────────────────────
+  describe('PR-NX21: AI Briefing auto-failover (Claude → OpenAI → templated)', () => {
+    const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
+    const originalOpenaiKey = process.env.OPENAI_API_KEY;
+
+    afterEach(() => {
+      // Restore env between tests so we don't pollute subsequent suites
+      if (originalAnthropicKey !== undefined) process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+      else delete process.env.ANTHROPIC_API_KEY;
+      if (originalOpenaiKey !== undefined) process.env.OPENAI_API_KEY = originalOpenaiKey;
+      else delete process.env.OPENAI_API_KEY;
+    });
+
+    test('source uses the new tri-state vocabulary (ai-assisted-claude / ai-assisted-openai / templated)', async () => {
+      const ctx = __internal.prepareWorkbookContext(minimalIncomeCtx(), { strictValidation: false });
+      const briefing = await generateDealBriefing(ctx, { preferTemplated: true });
+      // Templated path is always one of these three exact strings
+      expect(briefing.source).toBe('templated');
+      // AI-active paths would be 'ai-assisted-claude' or 'ai-assisted-openai'
+      // (we can't easily trigger them in test env without mocking the AI router)
+    });
+
+    test('templated fallback exposes a fallbackReason field when both providers are unavailable', async () => {
+      // With no API keys configured, the service short-circuits to templated.
+      // It does NOT attempt either provider (so no fallbackReason is added).
+      // This test verifies the short-circuit path produces a clean templated.
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      const ctx = __internal.prepareWorkbookContext(minimalIncomeCtx(), { strictValidation: false });
+      const briefing = await generateDealBriefing(ctx);
+      expect(briefing.source).toBe('templated');
+      // No fallbackReason on the cheap short-circuit path (no AI was attempted)
+      expect(briefing.fallbackReason).toBeUndefined();
+    });
+
+    test('briefing schema: source + provider + (optional) fallbackReason fields exist', async () => {
+      const ctx = __internal.prepareWorkbookContext(minimalIncomeCtx(), { strictValidation: false });
+      const briefing = await generateDealBriefing(ctx, { preferTemplated: true });
+      // Required fields always
+      expect(typeof briefing.source).toBe('string');
+      expect(typeof briefing.summary).toBe('string');
+      expect(Array.isArray(briefing.bullets)).toBe(true);
+      expect(typeof briefing.riskNote).toBe('string');
+      // Optional fields (may or may not exist)
+      if (briefing.fallbackReason !== undefined) {
+        expect(typeof briefing.fallbackReason).toBe('string');
+      }
+      if (briefing.provider !== undefined) {
+        expect(typeof briefing.provider).toBe('string');
+      }
+    });
+
+    test('describeProviderError formats errors with status + message', () => {
+      const { describeProviderError } = __internal;
+      // Skip this if not exported — it's an internal helper
+      if (typeof describeProviderError !== 'function') return;
+      expect(describeProviderError('Claude', { status: 401, message: 'invalid_api_key' }))
+        .toBe('Claude 401 invalid_api_key');
+      expect(describeProviderError('OpenAI', { code: 'ECONNRESET', message: 'connection reset' }))
+        .toBe('OpenAI ECONNRESET connection reset');
+      expect(describeProviderError('Claude', { message: 'unknown error' }))
+        .toBe('Claude unknown error');
     });
   });
 

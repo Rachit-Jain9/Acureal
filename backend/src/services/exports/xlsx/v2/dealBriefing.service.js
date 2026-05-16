@@ -684,56 +684,184 @@ const sha256OfSnapshot = (snapshot) =>
 const sha256OfPrompt = () =>
   crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex');
 
+// ──────────────────────────────────────────────────────────────────────
+// PR-NX21 (2026-05-16) — Multi-provider failover cascade
+// ──────────────────────────────────────────────────────────────────────
+//
+// Pre-NX21 the briefing was Claude-only: if Claude returned a 401
+// (bad key), rate-limited, or had a network error, the service fell
+// straight to the templated narrative. Operators saw "deterministic
+// templated fallback" in the briefing footer and had no idea why.
+//
+// Post-NX21 the cascade is:
+//   1. PRIMARY    — `narrative_synthesis` routing default (Claude Sonnet 4.6)
+//   2. SECONDARY  — OpenAI GPT-5.4 (if Claude fails AND OpenAI is configured)
+//   3. TEMPLATED  — deterministic narrative (always available)
+//
+// The returned briefing carries:
+//   - `source`         — 'ai-assisted-claude' | 'ai-assisted-openai' | 'templated'
+//   - `provider`       — model id used (or null for templated)
+//   - `fallbackReason` — diagnostic string when primary failed
+//                        (e.g., "Claude 401 invalid_api_key; OpenAI 429 rate_limited")
+//
+// Why this matters in practice: today the operator's ANTHROPIC_API_KEY
+// shows "Needs Attention" in Vercel and the briefing dark-fails. With
+// auto-failover, OpenAI (whose key works) seamlessly produces the AI
+// briefing — operator never sees the templated fallback unless BOTH
+// providers are simultaneously down.
+//
+// The cascade preserves the existing `runClaudeReasoning` env-var routing:
+// if `AI_PROVIDER_NARRATIVE_SYNTHESIS=openai` is set, primary IS already
+// OpenAI; the secondary path then becomes Claude (a symmetric swap).
+const callPrimaryProvider = async (snapshot, inputSha256, promptSha256, dealId, assetClass, family) => {
+  return runClaudeReasoning({
+    task: 'narrative_synthesis',
+    systemPrompt: SYSTEM_PROMPT,
+    payload: buildUserPrompt(snapshot),
+    maxTokens: 700,
+    attach: { dealId },
+    metadata: { stage: 'deal_briefing', assetClass, family, attempt: 'primary' },
+    cache: { inputSha256, promptSha256 },
+    retry: { attempts: 1 },
+  });
+};
+
+const callSecondaryProvider = async (snapshot, inputSha256, promptSha256, dealId, assetClass, family) => {
+  // Force the alternate provider by passing explicit `provider` arg to
+  // `runAI` (the full-envelope variant). The router honors explicit
+  // provider over routing-config / env-var. If primary was Claude
+  // (default), secondary is OpenAI. If operator already overrode primary
+  // to OpenAI via env var, secondary is Claude.
+  const primaryProvider = (process.env.AI_PROVIDER_NARRATIVE_SYNTHESIS || 'claude').toLowerCase();
+  const alternateProvider = primaryProvider === 'openai' ? 'claude' : 'openai';
+  // Soft-import to avoid breaking when AI services aren't available.
+  let runAI;
+  try {
+    ({ runAI } = require('../../../ai/aiRouter'));
+  } catch {
+    return null;
+  }
+  if (!runAI) return null;
+  return runAI({
+    task: 'narrative_synthesis',
+    provider: alternateProvider, // ← explicit override
+    attach: { dealId },
+    metadata: { stage: 'deal_briefing', assetClass, family, attempt: 'secondary' },
+    cache: { inputSha256, promptSha256 },
+    run: async ({ providers, model }) => {
+      if (alternateProvider === 'openai') {
+        return providers.runOpenAIReasoning({
+          systemPrompt: SYSTEM_PROMPT,
+          payload: buildUserPrompt(snapshot),
+          maxTokens: 700,
+          model,
+        });
+      }
+      return providers.runClaudeReasoning({
+        systemPrompt: SYSTEM_PROMPT,
+        payload: buildUserPrompt(snapshot),
+        maxTokens: 700,
+        model,
+      });
+    },
+  });
+};
+
+// Extract a one-line diagnostic from an error. Goal: tell the operator
+// WHY the AI call failed without leaking internals. Examples:
+//   "Claude 401 invalid_api_key" → operator knows to check the key
+//   "Claude 429 rate_limited"   → operator knows to wait / lift cap
+//   "OpenAI ECONNRESET"         → transient network — auto-retry next time
+const describeProviderError = (provider, err) => {
+  if (!err) return `${provider} failed (unknown reason)`;
+  const msg = String(err.message || err).slice(0, 120);
+  const status = err.status || err.statusCode || err.code || null;
+  return status ? `${provider} ${status} ${msg}` : `${provider} ${msg}`;
+};
+
 /**
- * Generate the deal briefing. Tries AI first; falls back to templated
- * synthesis on any failure. ALWAYS returns a valid briefing object —
- * the caller can render it without further error handling.
+ * Generate the deal briefing with multi-provider failover.
+ *
+ * Cascade: PRIMARY (Claude or env-overridden) → SECONDARY (alternate AI
+ * provider) → TEMPLATED (deterministic fallback).
+ *
+ * ALWAYS returns a valid briefing object — the caller can render without
+ * further error handling. The `source` + `provider` + `fallbackReason`
+ * fields tell the caller which path actually fired so the export can
+ * surface accurate provenance to the operator.
  *
  * @param {object} ctx - the buildContext()-prepared workbook context
  * @param {object} [options]
- * @param {boolean} [options.preferTemplated=false] - skip AI, force fallback
- * @returns {Promise<{source, summary, bullets[], riskNote, generatedAt}>}
+ * @param {boolean} [options.preferTemplated=false] - skip AI entirely
+ * @returns {Promise<{source, provider, fallbackReason, summary, bullets, riskNote, generatedAt}>}
  */
 const generateDealBriefing = async (ctx, options = {}) => {
   const snapshot = buildNumericSnapshot(ctx);
-  const fallback = buildTemplatedBriefing(snapshot);
+  const templated = buildTemplatedBriefing(snapshot);
 
-  // Skip AI in test envs / when explicitly requested. Templated narrative
-  // is fully deterministic + zero-cost and covers 100% of the value-add
-  // when the AI path isn't available.
-  if (options.preferTemplated) return fallback;
-  if (!runClaudeReasoning) return fallback;
-  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) return fallback;
+  // Test env / explicit opt-out — skip AI entirely, ship templated cleanly.
+  if (options.preferTemplated) return templated;
+  if (!runClaudeReasoning) return templated;
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) return templated;
 
   const inputSha256 = sha256OfSnapshot(snapshot);
   const promptSha256 = sha256OfPrompt();
+  const dealId = ctx.deal?.id || null;
+  const fallbackReasons = [];
 
+  // ─── Attempt 1: PRIMARY provider (routing default per PR-NX9) ────────
   try {
-    // PR-NX9 (2026-05-15): route to the new `narrative_synthesis` task,
-    // which defaults to Claude Sonnet 4.6 per the model-specialization
-    // policy. Operator can override via AI_PROVIDER_NARRATIVE_SYNTHESIS
-    // env var if Claude is rate-limited / unavailable. Falls back to
-    // templated narrative on any AI failure (existing behavior).
-    const callResult = await runClaudeReasoning({
-      task: 'narrative_synthesis',
-      systemPrompt: SYSTEM_PROMPT,
-      payload: buildUserPrompt(snapshot),
-      maxTokens: 700,
-      attach: { dealId: ctx.deal?.id || null },
-      metadata: { stage: 'deal_briefing', assetClass: ctx.assetClass, family: ctx.dealFamily },
-      cache: { inputSha256, promptSha256 },
-      retry: { attempts: 1 }, // single retry — caller is in a download path
-    });
-
-    const text = callResult?.result || null;
-    const parsed = parseBriefingResponse(text);
-    if (parsed) return parsed;
-    // Malformed AI output — fall back to templated.
-    return fallback;
-  } catch {
-    // Network / rate-limit / model error — fall back gracefully.
-    return fallback;
+    const result = await callPrimaryProvider(snapshot, inputSha256, promptSha256, dealId, ctx.assetClass, ctx.dealFamily);
+    const parsed = parseBriefingResponse(result?.result || null);
+    if (parsed) {
+      const primaryProvider = (process.env.AI_PROVIDER_NARRATIVE_SYNTHESIS || 'claude').toLowerCase();
+      return {
+        ...parsed,
+        source: `ai-assisted-${primaryProvider}`,
+        provider: result?.model || (primaryProvider === 'claude' ? 'claude-sonnet-4-6' : 'gpt-5.4'),
+      };
+    }
+    fallbackReasons.push('primary returned malformed JSON');
+  } catch (err) {
+    fallbackReasons.push(describeProviderError('primary', err));
   }
+
+  // ─── Attempt 2: SECONDARY provider (cross-over) ──────────────────────
+  // Only attempt if the alternate provider has a key configured (otherwise
+  // the call would throw immediately on missing-credential check).
+  const primaryProvider = (process.env.AI_PROVIDER_NARRATIVE_SYNTHESIS || 'claude').toLowerCase();
+  const alternateProvider = primaryProvider === 'openai' ? 'claude' : 'openai';
+  const alternateConfigured = alternateProvider === 'claude'
+    ? Boolean(process.env.ANTHROPIC_API_KEY)
+    : Boolean(process.env.OPENAI_API_KEY);
+
+  if (alternateConfigured) {
+    try {
+      const result = await callSecondaryProvider(snapshot, inputSha256, promptSha256, dealId, ctx.assetClass, ctx.dealFamily);
+      const parsed = parseBriefingResponse(result?.result || null);
+      if (parsed) {
+        return {
+          ...parsed,
+          source: `ai-assisted-${alternateProvider}`,
+          provider: result?.model || (alternateProvider === 'claude' ? 'claude-sonnet-4-6' : 'gpt-5.4'),
+          fallbackReason: `${fallbackReasons.join('; ')} — auto-failover succeeded on ${alternateProvider}`,
+        };
+      }
+      fallbackReasons.push(`secondary (${alternateProvider}) returned malformed JSON`);
+    } catch (err) {
+      fallbackReasons.push(describeProviderError(alternateProvider, err));
+    }
+  } else {
+    fallbackReasons.push(`secondary (${alternateProvider}) not configured`);
+  }
+
+  // ─── Attempt 3: TEMPLATED fallback ───────────────────────────────────
+  // Both providers failed (or weren't available). Ship the deterministic
+  // narrative with diagnostic context so the operator knows exactly why.
+  return {
+    ...templated,
+    fallbackReason: fallbackReasons.join('; '),
+  };
 };
 
 module.exports = {
@@ -757,6 +885,7 @@ module.exports = {
     buildCapitalExitBullet,
     buildIndiaContextBullet,
     buildRiskNote,
+    describeProviderError, // PR-NX21: exposed for unit-testing the failover diagnostic formatter
     buildReturnsSummary,
     deriveHospitalitySqft,
   },

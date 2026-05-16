@@ -5068,7 +5068,13 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   ];
 
   const briefing = ctx.briefing || buildTemplatedBriefing(buildNumericSnapshot(ctx));
-  const isAiAssisted = briefing.source === 'ai-assisted';
+  // PR-NX21 (2026-05-16): the briefing source can now be one of:
+  //   - 'ai-assisted-claude'  — primary Claude succeeded
+  //   - 'ai-assisted-openai'  — secondary OpenAI succeeded (Claude failed first)
+  //   - 'templated'           — both AI providers failed; deterministic narrative
+  // `startsWith('ai-assisted')` covers both AI paths; the specific provider is
+  // surfaced separately via `briefing.provider`.
+  const isAiAssisted = typeof briefing.source === 'string' && briefing.source.startsWith('ai-assisted');
 
   // Row 1 — title banner. Accent fill (copper) so the operator immediately
   // knows this is the IC-facing briefing.
@@ -5200,9 +5206,21 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   // (Falls back to a generic "AI provider" label when the source
   // doesn't carry the model id — defensive against future schema drift.)
   const aiProviderLabel = briefing.provider || briefing.model || 'Claude Sonnet 4.6';
+  // PR-NX21 (2026-05-16): surface auto-failover state in the footer.
+  // - When the SECONDARY provider rescued the briefing (Claude failed →
+  //   OpenAI succeeded), include "via auto-failover" + the reason the
+  //   primary failed so operators know the briefing is real-AI but the
+  //   primary provider needs attention.
+  // - When BOTH providers failed and we're on templated, surface the
+  //   concatenated WHY (e.g., "Claude 401 invalid_api_key; OpenAI 429")
+  //   instead of the generic "AI path unavailable" message. Operator
+  //   instantly knows what to fix.
+  const failoverNote = briefing.fallbackReason
+    ? ` · auto-failover: ${briefing.fallbackReason}`
+    : '';
   metaCell.value = isAiAssisted
-    ? `Generated: ${briefing.generatedAt || ctx.generatedAt} · Provider: ${aiProviderLabel} · Cached on deal-snapshot hash`
-    : `Generated: ${briefing.generatedAt || ctx.generatedAt} · Synthesis: deterministic templated fallback (AI path unavailable — see Vercel env: ANTHROPIC_API_KEY / AI_PROVIDER_NARRATIVE_SYNTHESIS)`;
+    ? `Generated: ${briefing.generatedAt || ctx.generatedAt} · Provider: ${aiProviderLabel} · Cached on deal-snapshot hash${failoverNote}`
+    : `Generated: ${briefing.generatedAt || ctx.generatedAt} · Synthesis: deterministic templated fallback${briefing.fallbackReason ? ` (cause: ${briefing.fallbackReason})` : ' (AI path unavailable — see Vercel env: ANTHROPIC_API_KEY / AI_PROVIDER_NARRATIVE_SYNTHESIS)'}`;
   metaCell.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   metaCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
   metaCell.protection = { locked: true };
