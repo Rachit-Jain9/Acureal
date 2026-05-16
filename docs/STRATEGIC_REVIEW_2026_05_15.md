@@ -297,13 +297,14 @@ Avoid fabricating variants. If the doc proposes "GPT-5.4 mini / nano / pro" or "
 
 ## VI · Recommended next-session priorities
 
-| Priority | Pick | Effort | Why |
-|---|---|---|---|
-| **1** | **Document ingestion + AI auto-fill MVP** (using Gemini 3.1 Flash-Lite) | 2 sessions | Biggest moat; flagship UX; uses existing extraction pipeline + ontology |
-| 2 | Canonical real-estate ontology package | 1 session | Foundation for ingestion + validation |
-| 3 | Cross-product AI briefing on DOCX + PPTX (via Claude Sonnet 4.6) | 1 session | Multiplies PR-NX7 value 3× |
-| 4 | Validation engine extension (market-benchmark rules from verified comps) | 1 session | Anti-superficial enforcement; cite-or-null per `AI_ROADMAP.md` |
-| 5 | Production AI smoke test + telemetry dashboard | half session | Confirms PR-NX7 flagship actually fires Claude in prod |
+| Priority | Pick | Effort | Why | Status |
+|---|---|---|---|---|
+| ~~1~~ | ~~Document ingestion + AI auto-fill MVP~~ | ~~2 sessions~~ | ~~Biggest moat; flagship UX~~ | ✅ **LANDED 2026-05-17** (PR-NX25 #345 + PR-NX26 #346) |
+| ~~2~~ | ~~Canonical real-estate ontology package~~ | ~~1 session~~ | ~~Foundation for ingestion + validation~~ | ✅ **LANDED 2026-05-17** as `@redip/real-estate-ontology` v1.0.0 (PR-NX25 #345) |
+| ~~3~~ | ~~Cross-product AI briefing on DOCX + PPTX~~ | ~~1 session~~ | ~~Multiplies PR-NX7 value 3×~~ | ✅ **LANDED 2026-05-16** (PR-NX18 #335) |
+| **1** | **Validation engine extension (market-benchmark rules from verified comps)** | 1 session | Anti-superficial enforcement; cite-or-null per `AI_ROADMAP.md` | 🔴 NOT STARTED |
+| **2** | **Adopt ontology across existing services** (deal-create / deal-edit forms read from `@redip/real-estate-ontology` not `constants/domain.js`) | 1 session | Removes drift risk; reduces 3 places that encode asset-class to 1 | 🔴 NOT STARTED (ontology now exists; adoption is incremental) |
+| **3** | **Production AI smoke test + telemetry dashboard** | half session | Confirms PR-NX7 flagship actually fires Claude in prod | 🟡 PARTIAL — AI Provider Health widget (PR-NX23 #341) is the prod telemetry surface |
 
 **Defer:**
 - LangGraph adoption → Phase 4 (~18+ months)
