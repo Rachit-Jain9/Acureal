@@ -2226,6 +2226,122 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // ──────────────────────────────────────────────────────────────────────
+  // PR-NX15 (2026-05-16) — HOTFIX: Hospitality → Income-Family Compat Bridge
+  // ──────────────────────────────────────────────────────────────────────
+  //
+  // ROOT CAUSE: PR-NX13 (2026-05-15) skipped `incomeRevenueSection` +
+  // `incomeOpExSection` for hospitality to remove phantom "Base Rent / sqft"
+  // + "Loading Factor" rows. UX win — but it ALSO removed the named ranges
+  // those sections defined: `OccupancyPct`, `VacancyPct`,
+  // `BaseRentPerSqftMonth`, `RentEscalationPct`, `OtherIncomePerSqft`,
+  // `LeaseUpQuarters`, `PropertyTaxPerSqftYr`, `InsurancePct`, `PropMgmtPct`,
+  // `UtilitiesPct`, `MaintenancePct`, `RecoverableExpensePct`,
+  // `CapExReservePct`, `TIAllowancePerSqft`, `LeasingCommissionPct`,
+  // `TenantDowntimeMonths`, `TILCAllowanceCr`, `ExitCapRate`, `SellingCostPct`.
+  //
+  // The Dashboard's pre-existing 5×5 sensitivity grid (rows 24-30),
+  // PR-NX10's probability-weighted scenarios + driver-ranking formulas,
+  // AND various Cash Flow Engine formulas ALL reference these named
+  // ranges. With the names undefined, Excel encountered hundreds of
+  // #NAME? errors on workbook open and triggered auto-repair, which
+  // SCRUBBED THE ENTIRE DASHBOARD SHEET. The operator received a workbook
+  // with an empty Dashboard tab — only Executive Briefing + Inputs + the
+  // other sheets survived.
+  //
+  // FIX: define every income-family named range with hospitality-equivalent
+  // values. Hospitality operators still don't see phantom rent rows
+  // (PR-NX13 visibility win preserved), but the named ranges resolve to
+  // sensible values so the Dashboard's existing formulas compute cleanly.
+  //
+  // - `OccupancyPct` ← `HospitalityOccupancyPct` (live link to USALI input)
+  // - `RentEscalationPct` ← hospitality ADR-growth default 5%
+  // - `VacancyPct` ← 5% (hotel rooms have nightly turnover, not vacancy
+  //   in the office sense; small reserve for room out-of-order)
+  // - `BaseRentPerSqftMonth` ← derived implied rent per sqft from
+  //   hospitality revenue (room nights × RevPAR ÷ sqft ÷ 12). Gives a
+  //   coherent "if this were rent" number so the existing 5×5 grid +
+  //   PR-NX10 scenarios produce plausible sensitivity values.
+  // - Other opex pcts: hospitality-tier defaults (slightly higher than
+  //   office because hotels have more intensive operations)
+  // - `ExitCapRate`: aliases the operator's exit cap input (already in
+  //   the hospitality USALI section, just exposed under the income-family
+  //   name the Dashboard expects)
+  //
+  // Section is rendered AFTER the hospitality sections so it visually
+  // groups with hospitality content. Marked clearly as "auxiliary" so
+  // operators understand these aren't primary inputs for hospitality.
+  // Resolve hospitality occupancy + implied per-sqft rent ONCE here so the
+  // compat section uses direct numeric values (not broken formulas
+  // referencing named ranges that don't exist yet at parse time).
+  const compatOccupancy = occupancyPctFor(ctx); // routes to hospitalityOccupancyPct() for hospitality
+  const compatRentImpliedPerSqftMo = (() => {
+    // Implied per-sqft rent derived from hospitality revenue:
+    //   keys × ADR × occupancy × 365 days ÷ saleable sqft ÷ 12 months
+    // Coherent placeholder so the Dashboard's existing 5×5 sensitivity
+    // grid + PR-NX10 scenarios produce plausible numbers. Hospitality
+    // operators primarily read USALI; this is purely model-internal.
+    const keys = firstNumber(ctx.inputs.hospitalityKeys, ctx.engineAssumptions?.keys, 100);
+    const adr = firstNumber(ctx.inputs.hospitalityADRBase, ctx.engineAssumptions?.adrBase, 7000);
+    const occ = compatOccupancy || 0.70;
+    const sqft = saleableAreaSqftFor(ctx) || (keys * 550);
+    if (!keys || !adr || !sqft) return 0;
+    return Math.round(keys * adr * occ * 365 / sqft / 12);
+  })();
+
+  const hospitalityIncomeCompatSection = {
+    title: 'Hospitality → Income-Family Compat (auxiliary — feeds Dashboard sensitivity grid; NOT the primary USALI engine)',
+    rows: [
+      // Live link to hospitality stabilised occupancy (typed value)
+      ['Occupancy Pct (mirrors USALI stabilised occupancy)', 'OccupancyPct',
+        compatOccupancy,
+        '% (operator-set; mirrors hospitality stabilised occupancy)', NUMBER_FORMATS.percent],
+      // ADR growth ≈ rent escalation
+      ['Rent Escalation Pct (alias of ADR growth)', 'RentEscalationPct',
+        enginePctDecimal(ctx, ['adrGrowthPct', 'rentEscalationPct'], 0.05),
+        '% / year (matches HospitalityADRGrowth)', NUMBER_FORMATS.percent],
+      // Hotel room out-of-order rate
+      ['Vacancy + Credit Loss', 'VacancyPct',
+        0.05,
+        '% of PGI (5% hotel room out-of-order; not vacancy in office sense)', NUMBER_FORMATS.percent],
+      // Implied per-sqft rent — calculated above
+      ['Base Rent (derived implied / sqft / mo)', 'BaseRentPerSqftMonth',
+        compatRentImpliedPerSqftMo,
+        'INR/sqft/mo (derived for Dashboard sensitivity grid only)', NUMBER_FORMATS.integer],
+      // Income side props
+      ['Other Income / sqft / yr', 'OtherIncomePerSqft', 0, 'INR/sqft/yr', NUMBER_FORMATS.integer],
+      ['Lease-up Period', 'LeaseUpQuarters', 4, 'quarters', NUMBER_FORMATS.integer],
+      // Property tax: hospitality default (₹40/sqft/yr for Bengaluru
+      // Zone-A commercial / hospitality per BBMP UAV)
+      ['Property Tax (BBMP UAV)', 'PropertyTaxPerSqftYr',
+        firstNumber(ctx.inputs.propertyTaxPerSqftYr, 40),
+        'INR / sqft / year', NUMBER_FORMATS.integer],
+      // Opex pcts: hospitality defaults (slightly elevated vs office)
+      ['Insurance Pct', 'InsurancePct', 0.015, '% of EGR (hospitality default)', NUMBER_FORMATS.percent],
+      ['Property Management Fee', 'PropMgmtPct', 0.04, '% of EGR (hospitality default)', NUMBER_FORMATS.percent],
+      ['Utilities', 'UtilitiesPct', 0.05, '% of EGR', NUMBER_FORMATS.percent],
+      ['Maintenance', 'MaintenancePct', 0.06, '% of EGR', NUMBER_FORMATS.percent],
+      ['Recoverable OpEx', 'RecoverableExpensePct', 0.50, '% (hotel rooms don\'t have CAM in office sense)', NUMBER_FORMATS.percent],
+      ['CapEx Reserves', 'CapExReservePct', 0.05, '% of EGR (matches FF&E reserve)', NUMBER_FORMATS.percent],
+      // Office-leasing fields that don't apply to hospitality — zero defaults
+      ['TI Allowance / sqft', 'TIAllowancePerSqft', 0, 'INR/sqft (N/A for hospitality)', NUMBER_FORMATS.integer],
+      ['Leasing Commission', 'LeasingCommissionPct', 0, '% (N/A for hospitality)', NUMBER_FORMATS.percent],
+      ['Tenant Downtime', 'TenantDowntimeMonths', 0, 'months (N/A for hospitality)', NUMBER_FORMATS.integer],
+      ['TI / LC Allowance', 'TILCAllowanceCr', 0, 'INR Cr (N/A for hospitality)', NUMBER_FORMATS.currency],
+      // Exit cap rate aliases (Dashboard formulas use BOTH names — define
+      // both as the same operator-set value)
+      ['Exit Cap Rate (income-family alias)', 'ExitCapRate',
+        exitCapRateFor(ctx),
+        '% / year (operator-set)', NUMBER_FORMATS.percent],
+      ['Exit Cap Rate Pct (alias)', 'ExitCapRatePct',
+        { formula: '=ExitCapRate' },
+        '% / year (derived alias)', NUMBER_FORMATS.percent],
+      ['Selling Cost on Exit', 'SellingCostPct',
+        toPctDecimal(firstNumber(ctx.inputs.sellingCostPct, 0.02)),
+        '% of sale', NUMBER_FORMATS.percent],
+    ],
+  };
+
   // ── Retail CAM + Anchor / Vanilla split (PR-I13) ──────────────────────
   // Indian mall economics: anchors at ₹60-90/sqft/mo + minimal CAM;
   // vanilla tenants at ₹150-300 + full CAM. PR-I13 adds anchor share +
@@ -2699,7 +2815,16 @@ const buildInputsSheet = (workbook, ctx) => {
     khataStatusSection,
     // PR-I12: Hospitality-specific ADR / Occupancy / RevPAR — only when
     // the deal's asset class is hospitality.
-    ...(ctx.assetClass === 'hospitality' ? [hospitalitySection, hospitalityUsaliSection] : []),
+    // PR-NX15 (2026-05-16) HOTFIX: hospitality also gets the
+    // income-family compat section. PR-NX13 skipped incomeRevenueSection +
+    // incomeOpExSection (UX: don't show phantom rent rows), but that
+    // removed named ranges the Dashboard 5×5 sensitivity grid +
+    // PR-NX10 scenarios depend on → Excel auto-repair scrubbed the
+    // entire Dashboard. The compat section re-defines those names with
+    // hospitality-equivalent values (OccupancyPct ← HospitalityOccupancyPct,
+    // BaseRentPerSqftMonth ← derived implied rent, etc.) so the Dashboard
+    // renders cleanly without showing operators phantom rent inputs.
+    ...(ctx.assetClass === 'hospitality' ? [hospitalitySection, hospitalityUsaliSection, hospitalityIncomeCompatSection] : []),
     // PR-I13: Retail anchor / vanilla rent split + CAM recovery — only
     // when the deal's asset class is retail.
     ...(ctx.assetClass === 'retail' ? [retailSection] : []),
@@ -8410,6 +8535,25 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     }
     if (xml.includes('<sheetProtection')) {
       add(file.name, 'Worksheet protection is enabled.', 'Export workbooks must be editable without an unprotect prompt.');
+    }
+    // PR-NX15 (2026-05-16): defensive sanity check. The PR-NX13 bug
+    // produced a Dashboard sheet with <sheetData/> (no cells) because
+    // upstream formula generation crashed and ExcelJS serialized an
+    // empty sheet. Excel auto-repair then scrubbed it cleanly without
+    // anyone noticing server-side. This check catches that class of
+    // bug: any non-Calculations sheet (which is hidden, audit-only)
+    // with an empty <sheetData/> is a defect. Better to fail loud and
+    // make the developer investigate than ship a broken file.
+    if (/<sheetData\s*\/>/.test(xml) && !file.name.includes('sheet7') /* Calculations is sheet7+; allow it to be sparse */) {
+      // Sheet ordering: 1=Executive Briefing, 2=Dashboard, 3=Inputs,
+      // 4=USALI (hospitality only), 5=Cash Flow Engine, 6=Monthly CF,
+      // 7=Debt Sizing, 8=Calculations. The Dashboard sheet number varies
+      // for hospitality (4) vs non-hospitality (3 — USALI is skipped).
+      // Skip sheet1.xml (Executive Briefing) too — it uses only merged
+      // header cells and may parse as empty after Excel's strict pass.
+      if (!file.name.match(/sheet[18]\.xml$/)) {
+        add(file.name, 'Worksheet has empty <sheetData/> after generation — content failed to render. Likely cause: a formula references an undefined named range, causing ExcelJS to suppress cell writes.', 'Investigate the build path for the affected asset class. Check that all named ranges referenced by formulas are still defined (e.g., PR-NX13 hospitality section visibility regression).');
+      }
     }
   }));
 

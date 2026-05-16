@@ -3134,6 +3134,55 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         }
       });
 
+      test('PR-NX15 HOTFIX: hospitality preserves ALL Dashboard-dependent named ranges via compat section', async () => {
+        // 2026-05-16 production bug postmortem: PR-NX13 hid the income
+        // revenue + opex sections for hospitality, which removed the
+        // OccupancyPct / VacancyPct / BaseRentPerSqftMonth / ExitCapRate /
+        // InsurancePct / PropMgmtPct / etc. named ranges that the
+        // Dashboard's pre-existing 5×5 sensitivity grid + PR-NX10
+        // scenarios + driver-ranking formulas ALL reference. Excel hit
+        // hundreds of #NAME? errors on open → auto-repair → entire
+        // Dashboard sheet scrubbed.
+        //
+        // The hotfix PR-NX15 adds a "Hospitality → Income-Family Compat"
+        // section that re-defines all 19 missing named ranges with
+        // hospitality-equivalent values. This regression test guards
+        // against ANY future change to PR-NX13's section hiding silently
+        // breaking the Dashboard.
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const names = (wb.definedNames.model || []).map((n) => n.name);
+        const required = [
+          'OccupancyPct', 'VacancyPct', 'BaseRentPerSqftMonth',
+          'RentEscalationPct', 'OtherIncomePerSqft', 'LeaseUpQuarters',
+          'PropertyTaxPerSqftYr', 'InsurancePct', 'PropMgmtPct',
+          'UtilitiesPct', 'MaintenancePct', 'CapExReservePct',
+          'RecoverableExpensePct', 'TIAllowancePerSqft',
+          'LeasingCommissionPct', 'TenantDowntimeMonths', 'TILCAllowanceCr',
+          'ExitCapRate', 'ExitCapRatePct', 'SellingCostPct',
+        ];
+        const missing = required.filter((n) => !names.includes(n));
+        expect(missing).toEqual([]);
+      });
+
+      test('PR-NX15 HOTFIX: hospitality Dashboard sheet has 50+ cells after generation (not empty after auto-repair)', async () => {
+        // Direct sanity check on the raw XML: Dashboard sheet (sheet2.xml)
+        // must contain real <c r="..."> cell entries, not the empty
+        // <sheetData/> that triggers Excel auto-repair scrubbing.
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const zip = await JSZip.loadAsync(buffer);
+        // Hospitality has USALI sheet inserted at position 4 — so the
+        // Dashboard is at position 2 (after Executive Briefing), and
+        // sheet2.xml is the Dashboard.
+        const dashFile = zip.file('xl/worksheets/sheet2.xml');
+        expect(dashFile).toBeTruthy();
+        const xml = await dashFile.async('string');
+        expect(xml).not.toMatch(/<sheetData\s*\/>/);
+        const cellCount = (xml.match(/<c\s+r="/g) || []).length;
+        expect(cellCount).toBeGreaterThan(50);
+      });
+
       test('Hospitality SaleableAreaSqft is still present (named range needed for USALI sqftPerKey calc)', async () => {
         // We hide Loading Factor + Carpet Area but the underlying
         // SaleableAreaSqft must remain — the USALI engine uses
