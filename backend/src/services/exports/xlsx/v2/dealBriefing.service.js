@@ -713,12 +713,27 @@ const sha256OfPrompt = () =>
 // The cascade preserves the existing `runClaudeReasoning` env-var routing:
 // if `AI_PROVIDER_NARRATIVE_SYNTHESIS=openai` is set, primary IS already
 // OpenAI; the secondary path then becomes Claude (a symmetric swap).
+// PR-NX24 (2026-05-16): bump maxTokens 700 → 1200 across all three call
+// sites (primary Claude, secondary OpenAI, secondary Claude).
+//
+// Why: the prod briefing footer in the operator's 14:54 UTC pull read
+//   "Provider: gpt-5.4 · auto-failover: primary returned malformed JSON
+//    — auto-failover succeeded on openai"
+// indicating Claude's response was truncated mid-JSON. 700 tokens covers
+// the SYSTEM_PROMPT's required keys + short narrative fields but leaves
+// almost no headroom for the rich multi-paragraph asset-class-specific
+// commentary the schema asks for. 1200 gives ~70% more room — enough for
+// hospitality/mixed-use narratives without inflating per-call cost
+// meaningfully (Claude Sonnet 4.6 is $3/M input + $15/M output; an extra
+// 500 output tokens is $0.0075 per export, ~₹0.65).
+const PROVIDER_MAX_TOKENS = 1200;
+
 const callPrimaryProvider = async (snapshot, inputSha256, promptSha256, dealId, assetClass, family) => {
   return runClaudeReasoning({
     task: 'narrative_synthesis',
     systemPrompt: SYSTEM_PROMPT,
     payload: buildUserPrompt(snapshot),
-    maxTokens: 700,
+    maxTokens: PROVIDER_MAX_TOKENS,
     attach: { dealId },
     metadata: { stage: 'deal_briefing', assetClass, family, attempt: 'primary' },
     cache: { inputSha256, promptSha256 },
@@ -753,14 +768,14 @@ const callSecondaryProvider = async (snapshot, inputSha256, promptSha256, dealId
         return providers.runOpenAIReasoning({
           systemPrompt: SYSTEM_PROMPT,
           payload: buildUserPrompt(snapshot),
-          maxTokens: 700,
+          maxTokens: PROVIDER_MAX_TOKENS,
           model,
         });
       }
       return providers.runClaudeReasoning({
         systemPrompt: SYSTEM_PROMPT,
         payload: buildUserPrompt(snapshot),
-        maxTokens: 700,
+        maxTokens: PROVIDER_MAX_TOKENS,
         model,
       });
     },

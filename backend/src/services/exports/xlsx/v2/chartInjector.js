@@ -77,13 +77,64 @@ const buildSparklineExtXml = (targetSheetName, sparklines) => {
   ].join('');
 };
 
+// PR-NX24 (2026-05-16) — OOXML schema fix for extLst ordering.
+//
+// Per CT_Worksheet child-element schema order, the tail elements MUST appear
+// in this sequence:
+//   ... → drawing → legacyDrawing → legacyDrawingHF → picture → oleObjects
+//       → controls → webPublishItems → tableParts → extLst (LAST)
+//
+// Pre-NX24 the sparkline patch inserted extLst right before </worksheet>.
+// When a sheet already had a legacyDrawing (from cell comments — e.g., the
+// PR-NX11 KPI Benchmark notes), the resulting order was:
+//   <legacyDrawing/><extLst>...</extLst></worksheet>  ✓ CORRECT
+// BUT if ExcelJS had already inserted an extLst itself (for conditional-
+// formatting iconSet rules), our patch would do .replace(/<\/extLst>\s*/,
+// ...) which inserts INSIDE the existing extLst. The merged extLst then
+// landed at the OLD extLst's position — typically BEFORE legacyDrawing,
+// producing:
+//   <extLst>...new sparklineGroups...</extLst><legacyDrawing/></worksheet>
+// which violates the schema and triggers Excel auto-repair on open.
+//
+// Fix: ALWAYS ensure the final extLst lands AFTER legacyDrawing (and after
+// tableParts, picture, controls, etc.). If an existing extLst is found in
+// the wrong position, lift it out and re-insert at the correct place
+// right before </worksheet>.
 const patchWorksheetXmlForSparklines = (sheetXml, targetSheetName, sparklines) => {
   if (!Array.isArray(sparklines) || sparklines.length === 0) return sheetXml;
   if (sheetXml.includes('<x14:sparklineGroups')) return sheetXml;
+
   const sparklineExt = buildSparklineExtXml(targetSheetName, sparklines);
-  if (sheetXml.includes('</extLst>')) {
+
+  // Case 1: existing <extLst>...</extLst> block.
+  // Two sub-cases:
+  //   (a) extLst is already at the END (right before </worksheet>) — just
+  //       insert the sparkline <ext> inside it. Order stays valid.
+  //   (b) extLst is somewhere in the middle (e.g., between mergeCells and
+  //       conditionalFormatting) — that's invalid OOXML. Lift it out and
+  //       re-insert at the end with the sparkline content appended.
+  const existingExtLstMatch = sheetXml.match(/<extLst>([\s\S]*?)<\/extLst>/);
+  if (existingExtLstMatch) {
+    const tailWithoutExtLst = sheetXml.slice(existingExtLstMatch.index + existingExtLstMatch[0].length);
+    // Heuristic: if anything after the existing extLst (before </worksheet>)
+    // looks like another schema-later element, the extLst is in the wrong
+    // position and needs to be lifted.
+    const tailHasLaterElements = /<(legacyDrawing|tableParts|picture|oleObjects|controls|drawing\s)/.test(tailWithoutExtLst);
+    if (tailHasLaterElements) {
+      // LIFT: remove the existing extLst, re-insert with sparkline content at end
+      const innerContent = existingExtLstMatch[1];
+      const without = sheetXml.replace(existingExtLstMatch[0], '');
+      return without.replace(
+        /<\/worksheet>\s*$/,
+        `<extLst>${innerContent}${sparklineExt}</extLst></worksheet>`,
+      );
+    }
+    // extLst is already at the end — just inject sparkline content into it
     return sheetXml.replace(/<\/extLst>\s*/, `${sparklineExt}</extLst>`);
   }
+
+  // Case 2: no existing extLst — insert at very end (after all other schema
+  // elements like legacyDrawing, tableParts).
   return sheetXml.replace(/<\/worksheet>\s*$/, `<extLst>${sparklineExt}</extLst></worksheet>`);
 };
 
@@ -593,29 +644,82 @@ const ensureContentTypes = (xml, chartCount) => {
  * @returns {Promise<Buffer>} new xlsx buffer with charts injected
  */
 const injectChartsIntoXlsx = async (xlsxBuffer, opts) => {
-  const { targetSheetName, targetSheetFile, charts } = opts;
-  if (!Array.isArray(charts) || charts.length === 0) return xlsxBuffer;
+  const { targetSheetName, targetSheetFile, charts, diagnostics } = opts;
+  // PR-NX24: `diagnostics` is an optional mutable object the caller can
+  // pass to capture per-run injection state without changing the return
+  // shape. After the call returns (or throws), it will contain:
+  //   { requestedCount, builtCount, failureCount, failures: [{chartIndex,type,title,error}] }
+  // Used by buildWorkbook to emit a [CHARTS-FAILED] tagged log line that
+  // operators can grep in Vercel function logs.
+  if (!Array.isArray(charts) || charts.length === 0) {
+    if (diagnostics) {
+      diagnostics.requestedCount = 0;
+      diagnostics.builtCount = 0;
+      diagnostics.failureCount = 0;
+      diagnostics.failures = [];
+    }
+    return xlsxBuffer;
+  }
 
   const zip = await JSZip.loadAsync(xlsxBuffer);
 
-  // 1. Write chart XML files
+  // PR-NX24 (2026-05-16) — per-chart fault tolerance.
+  // Pre-NX24: if ANY chart spec failed XML build (bad anchor, unsupported
+  // type, special-character escape bug), the whole injection threw and the
+  // outer catch swallowed it. Result: prod had zero charts even when only
+  // one of three was broken.
+  // Post-NX24: each chart is built in its own try/catch. Bad specs are
+  // skipped with a logged warning; the good ones still ship. The injection
+  // only fails wholesale if ZERO charts survive.
+  const builtCharts = []; // [{ xml, spec, index }]
+  const failures = [];
   for (let i = 0; i < charts.length; i += 1) {
     const spec = { ...charts[i], sheetName: charts[i].sheetName || targetSheetName };
-    let xml;
-    if (spec.type === 'doughnut') xml = buildDoughnutChartXml(spec);
-    else if (spec.type === 'bar') xml = buildBarChartXml(spec);
-    else if (spec.type === 'combo') xml = buildComboChartXml(spec);
-    else if (spec.type === 'tornado') xml = buildTornadoChartXml(spec);
-    else throw new Error(`chartInjector: unsupported chart type "${spec.type}"`);
-    zip.file(`xl/charts/chart${i + 1}.xml`, xml);
+    try {
+      let xml;
+      if (spec.type === 'doughnut') xml = buildDoughnutChartXml(spec);
+      else if (spec.type === 'bar') xml = buildBarChartXml(spec);
+      else if (spec.type === 'combo') xml = buildComboChartXml(spec);
+      else if (spec.type === 'tornado') xml = buildTornadoChartXml(spec);
+      else throw new Error(`unsupported chart type "${spec.type}"`);
+      builtCharts.push({ xml, spec, index: builtCharts.length + 1 });
+    } catch (err) {
+      failures.push({ chartIndex: i, type: spec.type, title: spec.title, error: err.message });
+      if (process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.warn(`[chartInjector] chart ${i} (${spec.type} "${spec.title}") FAILED: ${err.message}`);
+      }
+    }
   }
 
-  // 2. Drawing XML — one anchor per chart on the target sheet
-  const drawingXml = buildDrawingXml(charts.map((c) => c.anchor));
+  // PR-NX24: populate diagnostics BEFORE the wholesale-failure check so
+  // the caller's diagnostics object reflects state even when we throw.
+  if (diagnostics) {
+    diagnostics.requestedCount = charts.length;
+    diagnostics.builtCount = builtCharts.length;
+    diagnostics.failureCount = failures.length;
+    diagnostics.failures = failures;
+  }
+
+  // If every chart failed, we have nothing to inject. Throw so the caller's
+  // catch fires and the workbook ships un-charted (better than an empty zip
+  // entry or half-injected state).
+  if (builtCharts.length === 0) {
+    const reasons = failures.map((f) => `${f.type}:${f.error}`).join('; ');
+    throw new Error(`chartInjector: all ${charts.length} charts failed (${reasons})`);
+  }
+
+  // 1. Write chart XML files (only the ones that built successfully)
+  builtCharts.forEach((c) => {
+    zip.file(`xl/charts/chart${c.index}.xml`, c.xml);
+  });
+
+  // 2. Drawing XML — one anchor per successfully-built chart
+  const drawingXml = buildDrawingXml(builtCharts.map((c) => c.spec.anchor));
   zip.file('xl/drawings/drawing1.xml', drawingXml);
 
-  // 3. Drawing → chart rels
-  zip.file('xl/drawings/_rels/drawing1.xml.rels', buildDrawingRels(charts.length));
+  // 3. Drawing → chart rels (count matches built charts, not original)
+  zip.file('xl/drawings/_rels/drawing1.xml.rels', buildDrawingRels(builtCharts.length));
 
   // 4. Worksheet → drawing rel + worksheet body patch
   const sheetXmlPath = `xl/worksheets/${targetSheetFile}`;
@@ -639,9 +743,9 @@ const injectChartsIntoXlsx = async (xlsxBuffer, opts) => {
   const updatedRels = ensureWorksheetRels(existingRelsXml, drawingRelId);
   zip.file(sheetRelsPath, updatedRels);
 
-  // 5. Content_Types.xml
+  // 5. Content_Types.xml — register only the chart parts we actually wrote
   const ctXml = await zip.file('[Content_Types].xml').async('string');
-  zip.file('[Content_Types].xml', ensureContentTypes(ctXml, charts.length));
+  zip.file('[Content_Types].xml', ensureContentTypes(ctXml, builtCharts.length));
 
   return zip.generateAsync({ type: 'nodebuffer' });
 };
