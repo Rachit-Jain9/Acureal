@@ -4,6 +4,49 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-16 (night) — Chart-injection root-cause hotfix + briefing truncation fix (PR #343)
+
+Operator reported "Charts STILL missing from prod files" after PR-NX17 (drawing-ordering fix) shipped. Verified via screenshot that `REDIP_SKIP_ALL_POST_INJECTION` was deleted from Vercel — so the bug had to be code-side, not env. Diagnosed two independent silent failures plus a truncation issue in the briefing path. Bundled all three into one tight hotfix.
+
+### PRs shipped + merged
+
+- **#343 — PR-NX24: per-chart fault tolerance + extLst lift + Claude max_tokens bump.** Three independent root-causes consolidated:
+  1. **Per-chart failure killed entire batch.** `injectChartsIntoXlsx` built all chart XML in a single try block — if any spec threw (bad range, unsupported type, escape edge case), the whole injection rejected and the outer catch swallowed it. Zero charts shipped even when 2/3 specs were valid. Post-fix: each spec gets its own try/catch in a per-chart loop. Bad specs skip with a logged warning; good ones still ship. Wholesale throw only fires when ZERO charts survived. Chart-index resequencing keeps `chart1.xml` / `chart2.xml` contiguous when middle specs fail.
+  2. **Sparkline extLst patch produced schema-invalid XML.** `patchWorksheetXmlForSparklines` did `.replace(/<\/extLst>\s*/, sparklineExt + '</extLst>')` which spliced sparkline content INSIDE any existing extLst. When ExcelJS had placed an extLst BEFORE `legacyDrawing` (its iconSet conditional-formatting position), the merged extLst stayed at the wrong position — violating CT_Worksheet child-order schema. Excel auto-repair fired and scrubbed the Dashboard. Post-fix: the patcher detects schema-later elements after any existing extLst and LIFTS the extLst out, re-inserting it right before `</worksheet>` with both old + new ext children. Result: extLst always lands LAST per OOXML, exactly one per sheet.
+  3. **AI Briefing truncated mid-JSON.** Operator's 14:54 UTC prod file footer read "primary returned malformed JSON — auto-failover succeeded on openai." Claude was being capped at 700 tokens — enough for SYSTEM_PROMPT's required keys but no headroom for asset-class-specific commentary. Bumped to 1200 across all three call sites (primary Claude, secondary OpenAI, secondary Claude) via a shared `PROVIDER_MAX_TOKENS` constant. Cost: +$0.0075/export.
+
+  Plus operator-greppable diagnostics: `injectChartsIntoXlsx` accepts an optional `diagnostics` opts object; `buildWorkbook` passes one and on any failure emits `[CHARTS-FAILED hospitality/abc-123] 1/3 chart(s) failed (2 shipped). Failures: [1] sankey "Risk Distribution": unsupported chart type` so operators can grep Vercel logs for per-spec attribution. +9 new regression tests covering partial success / all-bad throws / extLst lift / end-to-end with comments + iconSet + sparklines coexisting.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| exports.xlsxChartInjector.test.js | 20 | 29 | +9 |
+| Other backend | 1,755 | 1,755 | 0 |
+| **TOTAL** | **1,775** | **1,784** | **+9** |
+
+Zero pre-existing test regressions. Frontend build clean (~13s).
+
+### Outcome for the operator
+
+**Before this hotfix:** Hospitality / mixed-use Dashboards shipped chart-less even though logs said "chart injection succeeded." Briefing footer routinely read "auto-failover succeeded on openai" because Claude's response was malformed-JSON (truncated). No way to know WHICH chart broke without re-running locally.
+
+**After this hotfix:**
+1. Charts render even when one spec has a quirk that previously killed the batch.
+2. AI Briefing reads as a complete multi-paragraph narrative (Claude finishes properly at 1200 tokens, no fallback needed).
+3. When a chart fails, operator greps Vercel logs for `[CHARTS-FAILED]` and sees exactly which spec + why — "sankey" type unsupported, "$Z$99" range invalid, etc.
+
+### Outstanding operator actions (carried)
+
+1. **Verify the leaked Claude key was rotated.** Operator decided to skip rotation but acknowledged risk.
+2. **Re-download a hospitality deal export after `e09ef05` deploys** (~3 min). Expected: Dashboard charts render; briefing footer reads "Synthesis: Claude Sonnet 4.6" (no auto-failover suffix since truncation is fixed); if any chart fails, Vercel logs have a `[CHARTS-FAILED]` line.
+
+### Recommendation for next session
+
+Per prior strategic-review synthesis: **Document Ingestion + AI auto-fill MVP** (Priority 1 in STRATEGIC_REVIEW_2026_05_15.md). The XLSX export pipeline is now hardened against the chart / briefing failure modes; the AI provider stack is failover-cascaded and self-diagnosing. Next-highest-leverage work is closing the deal-creation friction (manual 30+-field entry → upload sale deed → Gemini extracts → operator reviews/commits → deal record auto-populated). Gemini-first with Claude fallback already wired via PR-NX21 cascade. 2-session scope.
+
+---
+
 ## 2026-05-16 (late evening) — AI Reliability Bundle: failover + health surface (PR #339, #340, #341)
 
 After confirming the operator's still-broken prod state (downloaded Pointec Pens + Jigani both shipped at 14:54 UTC still showing "templated fallback" + no charts despite the operator's morning env-var fixes), pivoted to **AI Reliability** — the gap between "AI works in code" and "AI works in production reliably." Operator green-lit the auto-failover code change I had pending. Bundled with health surface to make the entire AI infrastructure self-diagnosing.
