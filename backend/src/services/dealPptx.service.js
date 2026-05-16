@@ -31,6 +31,7 @@ const { buildSlideManifest, buildDeckContext } = require('./exports/pptx/deckCon
 const { addTopHeader, addSectionDivider } = require('./exports/pptx/primitives');
 const {
   renderCover,
+  renderBriefing,
   renderContents,
   renderDecisionFrame,
   renderExecutiveSummary,
@@ -50,6 +51,13 @@ const {
   renderKeyAssumptions,
   renderDisclaimer,
 } = require('./exports/pptx/slides');
+// PR-NX18 (2026-05-16): the asset-class × structure × exit-strategy aware
+// briefing service is shared across all three export formats (XLSX, DOCX,
+// PPTX). Each format renders the same `briefing` object in its own visual
+// style — XLSX as a sheet, DOCX as a section, PPTX as slide 2. Cross-product
+// consistency: an IC reviewer downloading any of the 3 sees identical
+// headline language for the same deal.
+const { generateDealBriefing } = require('./exports/xlsx/v2/dealBriefing.service');
 const {
   buildExecutiveSummaryPoints,
   buildInvestmentHighlights,
@@ -126,6 +134,7 @@ const buildDividerRightPanel = (kind, context) => {
 const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) => {
   switch (slideDef.key) {
     case 'cover': renderCover(pptx, slide, context, totalSlides); return;
+    case 'briefing': renderBriefing(pptx, slide, context, pageNumber, totalSlides); return;
     case 'contents': renderContents(pptx, slide, context, pageNumber, totalSlides); return;
     case 'decisionFrame': renderDecisionFrame(pptx, slide, context, pageNumber, totalSlides); return;
     case 'dividerOpportunity': addSectionDivider(pptx, slide, context, 'The Opportunity', `${context.assetClassLabel} | ${context.dealTypeLabel}`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('opportunity', context) }); return;
@@ -187,13 +196,43 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
   };
   const dealScore = computeDealScore(scoreInput);
 
-  // Run AI narrative + Mapbox site-map fetch in parallel. Both wrapped so a
-  // single failure never crashes the deck — each returns a fallback shape.
+  // Run AI narrative + Mapbox site-map fetch + AI Briefing in parallel.
+  // Each wrapped so a single failure never crashes the deck — each returns
+  // a fallback shape.
   const lat = Number(exportContext?.deal?.property_lat);
   const lng = Number(exportContext?.deal?.property_lng);
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
 
-  const [prosCons, siteMapResult] = await Promise.all([
+  // PR-NX18 (2026-05-16): adapter that reshapes deck context → briefing
+  // service input. The briefing service was written for XLSX which has
+  // its own ctx shape (ctx.kernelKpis.*); PPTX has the flat shape (ctx.irr,
+  // ctx.noi, etc.). This adapter wraps the flat shape so the same shared
+  // service produces the same asset-class × structure × exit-strategy
+  // aware narrative — XLSX, PPTX, and DOCX share verbatim language.
+  const briefingCtx = {
+    deal: exportContext?.deal || {},
+    property: exportContext?.property || exportContext?.deal?.property || {},
+    inputs: baseContext.inputs || {},
+    assetClass: baseContext.assetClass,
+    dealFamily: baseContext.isIncome ? 'income' : 'development',
+    projectMonths: Number(exportContext?.deal?.project_duration_months)
+      || Number(baseContext.inputs?.projectDurationMonths)
+      || 36,
+    kernelKpis: {
+      irr: baseContext.irr,
+      npv: baseContext.npv,
+      equityMultiple: baseContext.equityMultiple,
+      noi: baseContext.noi,
+      grossMargin: baseContext.grossMargin,
+      yieldOnCost: baseContext.yieldOnCost,
+      totalRevenue: baseContext.totalRevenue,
+      totalCost: baseContext.totalCost,
+      exitValue: baseContext.exitValue,
+      residualLandValue: baseContext.residualLandValue,
+    },
+  };
+
+  const [prosCons, siteMapResult, briefing] = await Promise.all([
     generateSection({
       section: 'prosCons',
       payload: {
@@ -223,6 +262,10 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
       ? renderSiteMapDetailed({ lat, lng, zoom: 15, label: baseContext.locationLine || 'Site' })
           .catch((err) => ({ buffer: null, status: 'fetch_failed', error: err?.message || 'Map render threw', httpStatus: null }))
       : Promise.resolve({ buffer: null, status: 'no_coords', error: 'No coordinates on the deal record.', httpStatus: null }),
+    // PR-NX18: AI Briefing — always returns a valid briefing object
+    // (templated fallback when AI is unavailable).
+    generateDealBriefing(briefingCtx)
+      .catch(() => null),
   ]);
   const siteMapBuffer = siteMapResult?.buffer || null;
   const siteMapStatus = siteMapResult?.status || (hasCoords ? (isGoogleMapsEnabled() ? 'fetch_failed' : 'no_token') : 'no_coords');
@@ -254,6 +297,7 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
     siteMapError,
     siteMapHttpStatus,
     assetArtDataUri,
+    briefing, // PR-NX18: asset-class-aware AI briefing for the briefing slide
   };
 };
 

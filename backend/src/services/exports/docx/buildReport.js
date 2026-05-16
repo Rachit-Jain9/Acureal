@@ -39,6 +39,10 @@ const palette = require('../shared/palette');
 const { computeDealScore } = require('../../../utils/scoring/dealScore');
 const { renderSiteMap } = require('../shared/googleMapsStaticMap.service');
 const { generateSection } = require('../narrative/exportNarrative.service');
+// PR-NX18 (2026-05-16): asset-class × deal-structure × exit-strategy aware
+// briefing — shared across XLSX, DOCX, PPTX. Same service, same narrative
+// for the same deal, regardless of which format an IC reviewer downloads.
+const { generateDealBriefing } = require('../xlsx/v2/dealBriefing.service');
 const {
   renderCapitalStackDonutSvg,
   renderCashFlowTrendSvg,
@@ -362,6 +366,113 @@ const buildCover = (ctx) => {
   children.push(bodyPara(
     'This report combines deterministic platform data (financials, KPIs, comps, scoring) with AI-assisted narrative (interpretation paragraphs, pros & cons synthesis). Every AI-Assisted section is labelled. No section contains AI-generated numerical figures — all numbers come from the platform\'s deterministic financial kernel. Verify all interpretations and recommendations against your source documents before any investment decision.',
     { color: HEX('mutedHigh'), italic: true },
+  ));
+
+  return children;
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// PR-NX18 (2026-05-16) — AI-Assisted Briefing section (cross-product parity)
+// ──────────────────────────────────────────────────────────────────────
+//
+// Mirrors the XLSX Executive Briefing tab (PR-NX7 / PR-NX12) and the
+// PPTX briefing slide. Same asset-class × deal-structure × exit-strategy
+// aware narrative — so an IC reviewer reading the DOCX, XLSX, or PPTX
+// for the same deal sees identical headline language.
+//
+// Per CLAUDE.md hard rule: prominent "AI-Assisted — REQUIRES HUMAN
+// REVIEW" banner. Mandatory amber/inkDeep disclosure header.
+const buildBriefingSection = (ctx) => {
+  const children = [];
+  const briefing = ctx.briefing || null;
+  const isAiAssisted = briefing?.source === 'ai-assisted';
+
+  children.push(sectionHeading('AI-Assisted Briefing', { pageBreakBefore: true }));
+
+  // Mandatory disclosure banner (amber background; mirrors XLSX briefing)
+  children.push(new Paragraph({
+    children: [
+      new TextRun({
+        text: isAiAssisted
+          ? ' ⚠ AI-Assisted Briefing (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW '
+          : ' ⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW ',
+        font: FONT,
+        size: 22, // 11pt
+        bold: true,
+        color: HEX('paperElevated'),
+        shading: { type: ShadingType.CLEAR, fill: HEX('dataWarning') || 'C97B0E' },
+      }),
+    ],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 120, after: 120 },
+  }));
+
+  children.push(bodyPara(
+    isAiAssisted
+      ? 'All numbers sourced from REDIP\'s deterministic financial kernel + Inputs sheet (no fabrication). Verify against source documents (sale deed, RERA registration, encumbrance certificate, BBMP plan sanction) before any IC decision.'
+      : 'AI path unavailable; narrative generated from kernel KPIs + Inputs by deterministic template. Verify against source documents before any IC decision.',
+    { italic: true, color: HEX('mutedHigh') },
+  ));
+
+  children.push(blank());
+
+  // Modeled Returns summary (one-liner)
+  children.push(eyebrow('Modeled Returns'));
+  children.push(bodyPara(
+    briefing?.summary || 'Returns pending kernel computation — fill in inputs and refresh the deal.',
+    { bold: true, color: HEX('inkDeep') },
+  ));
+
+  children.push(blank());
+
+  // Key Points — 4 asset-class-aware bullets
+  children.push(eyebrow('Key Points'));
+  const bullets = Array.isArray(briefing?.bullets) ? briefing.bullets : [];
+  if (bullets.length === 0) {
+    children.push(bodyPara(
+      'Briefing bullets pending. Populate the Inputs sheet and refresh the deal to generate.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  } else {
+    bullets.forEach((bullet) => {
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: '•  ', font: FONT, size: 22, bold: true, color: HEX('accent') }),
+          new TextRun({ text: String(bullet || ''), font: FONT, size: 22, color: HEX('ink') }),
+        ],
+        spacing: { before: 80, after: 80 },
+        indent: { left: 200 },
+      }));
+    });
+  }
+
+  children.push(blank());
+
+  // Risk Note — full-width crimson banner with the asset-class-specific risk
+  if (briefing?.riskNote) {
+    children.push(eyebrow('Risk Note'));
+    children.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: ` ${briefing.riskNote} `,
+          font: FONT,
+          size: 22,
+          bold: true,
+          color: HEX('paperElevated'),
+          shading: { type: ShadingType.CLEAR, fill: HEX('dataNegative') || 'B23A48' },
+        }),
+      ],
+      spacing: { before: 120, after: 120 },
+    }));
+  }
+
+  children.push(blank());
+
+  // Generation metadata footer
+  const provider = isAiAssisted ? (briefing?.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
+  children.push(bodyPara(
+    `Generated: ${formatDate(ctx.generatedAt)} · Synthesis: ${provider} · Per-deal snapshot cached. This briefing mirrors the AI-assisted Executive Briefing tab in the XLSX export and the AI-Assisted Briefing slide in the PPTX deck — all three reuse the same shared service for cross-product consistency.`,
+    { italic: true, color: HEX('mutedLow'), color2: HEX('mutedHigh') },
   ));
 
   return children;
@@ -1223,16 +1334,49 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
   }).catch(() => ({ available: false, paragraphs: [], reason: 'narrative call failed' }));
 
   // Build site info section (async — Google Maps call). Never throws.
-  const [prosCons, whyThisArea, siteSection] = await Promise.all([
+  // PR-NX18 (2026-05-16): adapter that reshapes DOCX ctx → briefing
+  // service input. The briefing service was written for XLSX which has
+  // `ctx.kernelKpis.*`; DOCX has flat `ctx.irr` etc. This wrapper bridges
+  // the shapes so the SAME shared service produces the SAME asset-class
+  // × structure × exit-strategy aware narrative across XLSX, DOCX, PPTX.
+  const incomeFamily = ['commercial_office', 'retail', 'industrial_warehousing', 'hospitality'];
+  const briefingCtx = {
+    deal: ctx.deal,
+    property: ctx.property,
+    inputs: ctx.inputs,
+    assetClass: ctx.assetClass,
+    dealFamily: incomeFamily.includes(ctx.assetClass) ? 'income' : 'development',
+    projectMonths: Number(ctx.deal?.project_duration_months)
+      || Number(ctx.inputs?.projectDurationMonths)
+      || 36,
+    kernelKpis: {
+      irr: ctx.irr,
+      npv: ctx.npv,
+      equityMultiple: ctx.equityMultiple,
+      noi: ctx.noi,
+      grossMargin: ctx.grossMargin,
+      yieldOnCost: ctx.yieldOnCost,
+      totalRevenue: ctx.totalRevenue,
+      totalCost: ctx.totalCost,
+      exitValue: ctx.exitValue,
+      residualLandValue: ctx.residualLandValue,
+    },
+  };
+  const briefingPromise = generateDealBriefing(briefingCtx).catch(() => null);
+
+  const [prosCons, whyThisArea, siteSection, briefing] = await Promise.all([
     prosConsPromise,
     whyThisAreaPromise,
     buildSiteInformation(ctx),
+    briefingPromise,
   ]);
   ctx.prosCons = prosCons;
   ctx.whyThisArea = whyThisArea;
+  ctx.briefing = briefing; // PR-NX18: consumed by buildBriefingSection
 
   const documentChildren = [
     ...buildCover(ctx),
+    ...buildBriefingSection(ctx), // PR-NX18 — Section 2: AI-Assisted Briefing
     ...buildExecutiveSummary(ctx),
     ...siteSection,
     ...buildOverview(ctx),
