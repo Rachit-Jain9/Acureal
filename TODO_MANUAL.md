@@ -70,15 +70,19 @@ Recommended routing defaults:
 - `AI_PROVIDER_TRANSLATION=gemini`
 - `AI_PROVIDER_REASONING=claude`
 
-**Model ID defaults (post-bump 2026-05-05, commit `fe7754b`):**
+**Model ID defaults (post-bump 2026-05-15, PR-NX9 #322):**
 
 | Provider | Default model ID | Override env var |
 |---|---|---|
-| Gemini | `gemini-3-flash-preview` | `GEMINI_MODEL` |
+| Gemini | `gemini-3.1-flash-lite` | `GEMINI_MODEL` |
 | Claude | `claude-sonnet-4-6` | `CLAUDE_MODEL` |
 | OpenAI | `gpt-5.4` | `OPENAI_MODEL` |
 
-If a model goes flaky in prod, set the override env var on Vercel and redeploy — no code revert needed. Roll-back targets: `gemini-2.5-flash`, `gpt-4o-mini`.
+If a model goes flaky in prod, set the override env var on Vercel and redeploy — no code revert needed. Roll-back targets: `gemini-2.5-flash` (Google previous-gen), `gpt-4o-mini` (OpenAI previous-gen), `claude-haiku` (Anthropic previous-gen).
+
+**Per-task routing overrides (PR-NX9 added):** `AI_PROVIDER_DOCUMENT_CLASSIFICATION`, `AI_PROVIDER_DOCUMENT_EXTRACTION`, `AI_PROVIDER_TRANSLATION`, `AI_PROVIDER_REASONING`, `AI_PROVIDER_MARKET_SYNTHESIS`, `AI_PROVIDER_NARRATIVE_SYNTHESIS`. Set to `claude` / `openai` / `gemini` to override the routing config in `ai_routing_config` (which itself can be edited via the DB without code change).
+
+**Cross-product AI-Assisted Briefing (PR-NX12 #328 + PR-NX18 #335):** The `narrative_synthesis` task is what produces the briefing now rendered in XLSX (Executive Briefing tab), DOCX (Section 2), and PPTX (Slide 2). All 3 formats share the same `dealBriefing.service.js` — cross-product consistency enforced by `exports.crossProductReconciliation.test.js` (PR-NX19 #336). If the AI is dark in prod, all 3 fall back to the templated narrative (still asset-class-aware).
 
 Also required for the investor-grade audit log:
 

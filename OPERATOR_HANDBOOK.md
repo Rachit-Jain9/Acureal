@@ -3,6 +3,8 @@
 **Single dashboard for everything the operator (you, Rachit) needs to do, decide, or pay for.**
 Last refreshed: 2026-05-04 (after the PR #159–#166 sprint: UI polish, ai_routing_config, OTel tracing, MFA/TOTP, VirtualizedList, pgvector flagship, semantic search UI, tool registry foundation).
 
+> **⚠ Stale notice (2026-05-16, PR-NX20):** This handbook captures ops procedures + the live status snapshot as of **2026-05-04**. Since then we've shipped ~175 PRs (#167 → #336+), most notably: Tokyo→Mumbai Supabase migration; AI model bump to GPT-5.4 / Gemini 3.1 Flash-Lite / Claude Sonnet 4.6 (PR-NX9 #322); XLSX investor-grade arc completion (PR #312–#334); cross-product AI-Assisted Briefing covering 10 native asset classes × 4 deal structures × 7 exit strategies, now on XLSX (PR-NX12 #328) + DOCX + PPTX (PR-NX18 #335); cross-product reconciliation suite (PR-NX19 #336). For the chronological PR log + plain-English summaries see **`SESSION_LOG.md`**. The operator-action items in §2 (legal red-line, domain, entity, Vercel env) + §4 (migrations) remain current.
+
 This file aggregates from the working TODO files. It is the **first** place to look when starting a session.
 
 | Other tracking files (don't replace, complement) | What's in them |
