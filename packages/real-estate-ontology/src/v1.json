@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "ontology_version": "1.0.0",
+  "last_reviewed": "2026-05-17",
+  "review_owner": "REDIP core",
+  "description": "Canonical real-estate ontology for REDIP. Single source of truth for area / pricing / deal-structure / exit-strategy taxonomies + extraction field mappings. Bengaluru-priority, India-context. Used by document ingestion (extraction.service), apply-extractions endpoint, deal export builders, frontend form validation.",
+
+  "asset_class": {
+    "description": "10 native asset classes REDIP underwrites. Anything else routes through 'mixed_use' or 'raw_land' depending on entitlement stage. Per CLAUDE.md the primary nav axis.",
+    "values": [
+      { "key": "hospitality",            "label": "Hospitality (hotel)",           "family": "income",      "india_notes": "USALI cost structure; ADR + RevPAR + OCC% KPIs; STR / branded vs unbranded keys distinct on tax/financing." },
+      { "key": "commercial_office",      "label": "Commercial Office",              "family": "income",      "india_notes": "Grade A vs B; CBD vs SBD vs PBD rental tiers; vacancy in Bengaluru micro-markets (ORR, EPIP, KIADB) varies 8-22%." },
+      { "key": "retail",                 "label": "Retail",                         "family": "income",      "india_notes": "Anchor + vanilla rent split; CAM + revenue-share variants; high-street vs mall vs neighborhood retail." },
+      { "key": "industrial_warehousing", "label": "Industrial / Warehousing",       "family": "income",      "india_notes": "Grade A + Class A warehouse rent ₹22-32/sqft/month; KIADB/KUM logistics parks; truck dock density matters." },
+      { "key": "residential_apartments", "label": "Residential Apartments",         "family": "development", "india_notes": "RERA escrow 70/30 milestone economics; sale rate ₹/sqft based on saleable area (SBA); GST 5% with no ITC for under-construction." },
+      { "key": "villas",                 "label": "Villas / Row Houses",            "family": "development", "india_notes": "Luxury premium framing; plot + built-up split; smaller cohort sizes; longer sales cycle (12-18 months)." },
+      { "key": "plotted_development",    "label": "Plotted Development",            "family": "development", "india_notes": "Karnataka conversion (DC) fee; layout approval from BDA/BMRDA/BBMP; PRR connectivity premium." },
+      { "key": "mixed_use",              "label": "Mixed-Use Development",          "family": "development", "india_notes": "Component blend across residential / office / retail / hospitality; share-by-area or share-by-revenue accounting." },
+      { "key": "redevelopment",          "label": "Redevelopment (JDA)",            "family": "development", "india_notes": "JDA area-share or revenue-share with landowner; existing-society approvals; relocation costs." },
+      { "key": "raw_land",               "label": "Raw Land (entitlement pipeline)","family": "land",        "india_notes": "Pre-conversion entitlement risk; KIADB / KUM acquisition vs private; months-to-conversion pipeline." }
+    ]
+  },
+
+  "deal_structure": {
+    "description": "How the deal is structured between developer and landowner. Drives capital-stack accounting + exit-economics.",
+    "values": [
+      { "key": "outright_purchase",       "label": "Outright Purchase",         "india_notes": "Developer pays full land cost upfront; equity + debt on total cost." },
+      { "key": "jda_revenue_share",       "label": "JDA — Revenue Share",       "india_notes": "Landowner gets % of project revenue; developer covers all construction cost; no upfront land payment." },
+      { "key": "jda_area_share",          "label": "JDA — Area Share",          "india_notes": "Landowner gets % of built-up area (units / sqft); developer covers construction; landowner monetizes own share independently." },
+      { "key": "development_management",  "label": "Development Management",     "india_notes": "Fee-only — developer earns a % management fee; no developer equity at risk; landowner / fund owns the project." }
+    ]
+  },
+
+  "exit_strategy": {
+    "description": "Exit strategies are FAMILY-CONDITIONAL. Income-family deals have different exits than development-family deals. Surfacing the wrong exit list on the UI is a red flag.",
+    "by_family": {
+      "income": [
+        { "key": "strategic_sale",    "label": "Strategic Sale (full asset)",  "india_notes": "Full stabilized-asset sale to PE / REIT / strategic buyer at cap-rate price." },
+        { "key": "reit_exit",         "label": "REIT Exit",                    "india_notes": "Contribution to a SEBI-registered REIT; minimum 25% public float; income-distributing." },
+        { "key": "refinance_hold",    "label": "Refinance + Hold",             "india_notes": "Refi to LRD post-stabilization, hold for cash-flow; common in office + retail." },
+        { "key": "hold_to_perpetuity","label": "Hold to Perpetuity",           "india_notes": "Operator-owned long-term; appears in family-office / sovereign-fund deals." }
+      ],
+      "development": [
+        { "key": "outright_progressive", "label": "Outright Sale (progressive)", "india_notes": "Sales close progressively as construction milestones complete; RERA escrow 70/30." },
+        { "key": "bulk_exit_completion", "label": "Bulk Exit on Completion",      "india_notes": "Bulk B2B exit to a single institutional buyer post-OC; common in BTR plays." },
+        { "key": "hold_post_completion", "label": "Hold post completion",          "india_notes": "Developer holds units post-OC for lease; converts development to income-family economics." }
+      ],
+      "land": [
+        { "key": "strategic_sale",    "label": "Strategic Sale of entitled land","india_notes": "Sell post-conversion to a developer / fund at the entitlement premium." },
+        { "key": "jda_with_developer","label": "JDA with downstream developer",  "india_notes": "Enter JDA after entitlements complete; capture downstream development upside." }
+      ]
+    }
+  },
+
+  "zoning": {
+    "description": "Mirrors the Postgres zoning_type enum. Karnataka Revised Master Plan 2031 zone codes. Used by extraction field mapping for sale-deed zoning columns.",
+    "values": [
+      "residential", "commercial", "mixed_use", "industrial",
+      "agricultural", "institutional", "public_semi_public",
+      "open_space", "transportation", "utilities", "unknown"
+    ]
+  },
+
+  "ownership_type": {
+    "description": "Title-status taxonomy. Drives DD work + exit haircuts. A-khata vs B-khata is a major Bengaluru valuation factor (default 15% haircut on B-khata at exit).",
+    "values": [
+      { "key": "freehold",       "label": "Freehold" },
+      { "key": "leasehold",      "label": "Leasehold" },
+      { "key": "a_khata",        "label": "A-Khata (BBMP regularized)" },
+      { "key": "b_khata",        "label": "B-Khata (BBMP irregular)" },
+      { "key": "mixed_khata",    "label": "Mixed A+B Khata" },
+      { "key": "not_applicable", "label": "Not Applicable / Outside BBMP" }
+    ]
+  },
+
+  "area": {
+    "description": "Area unit definitions. India RE practice uses sqft / acres / sqyd / sqm interchangeably; canonical normalization is sqft. SBA / BUA / Carpet conversions are RANGES — pick the midpoint when no specific ratio is documented.",
+    "units": {
+      "sqft":  { "label": "Square Feet",  "to_sqft_factor": 1.0 },
+      "sqm":   { "label": "Square Meters","to_sqft_factor": 10.7639 },
+      "acre":  { "label": "Acres",        "to_sqft_factor": 43560.0 },
+      "sqyd":  { "label": "Square Yards", "to_sqft_factor": 9.0 },
+      "ground":{ "label": "Ground (Chennai/TN convention; 2400 sqft)", "to_sqft_factor": 2400.0 },
+      "guntha":{ "label": "Guntha (Karnataka rural convention; 1089 sqft)", "to_sqft_factor": 1089.0 }
+    },
+    "concepts": {
+      "GFA":   { "label": "Gross Floor Area",        "description": "Total built area including walls, terraces, common areas. Permission basis." },
+      "BUA":   { "label": "Built-Up Area",           "description": "Net usable area excluding terraces. Construction-cost basis." },
+      "SBA":   { "label": "Super Built-Up Area",     "description": "BUA + pro-rata common areas. Selling basis (residential)." },
+      "Carpet":{ "label": "Carpet Area (RERA)",      "description": "Net habitable floor area excluding walls. RERA-mandated disclosure since 2017." },
+      "Rentable": { "label": "Rentable Area (BOMA)", "description": "Leasing basis for office; close to BUA + lobby + corridor." }
+    },
+    "conversion_ratios": {
+      "sba_to_carpet": { "low": 0.65, "high": 0.78, "midpoint": 0.715, "notes": "Typical residential SBA→Carpet ratio. Use 0.70 default when unspecified." },
+      "sba_to_bua":    { "low": 0.85, "high": 0.92, "midpoint": 0.885, "notes": "Typical residential SBA→BUA ratio. Use 0.88 default." },
+      "carpet_to_sba": { "low": 1.28, "high": 1.54, "midpoint": 1.41,  "notes": "Inverse of sba_to_carpet. Use 1.43 default." }
+    }
+  },
+
+  "pricing": {
+    "description": "Pricing unit definitions. Bengaluru land deals commonly quoted in ₹ Cr total OR ₹/sqft OR ₹/acre. Normalization to ₹/sqft (per land area) for downstream comp benchmarking.",
+    "units": {
+      "inr_per_sqft":  { "label": "₹ per sqft" },
+      "inr_per_acre":  { "label": "₹ per acre" },
+      "inr_cr_total":  { "label": "₹ Crore (total)" },
+      "inr_lakh_total":{ "label": "₹ Lakh (total)" }
+    },
+    "constants": {
+      "sqft_per_acre": 43560,
+      "inr_per_cr":    10000000,
+      "inr_per_lakh":  100000
+    }
+  },
+
+  "extraction_field_map": {
+    "description": "Maps canonical extraction-field keys to their destination table + column in REDIP's DB schema. Used by the apply-extractions endpoint to route each approved extraction value to the correct write path. Each entry includes: table, column, value_type, optional transform (for unit-conversion or basis-change), description, and an india_context note explaining WHY this matters.",
+    "fields": {
+      "survey_number": {
+        "label": "Survey Number",
+        "table": "properties",
+        "column": "survey_number",
+        "value_type": "string",
+        "max_length": 100,
+        "description": "Karnataka Revenue survey number (e.g. '45/2A, 45/2B'). Often comma- or slash-separated.",
+        "india_context": "Survey numbers are the primary identifier for rural / sub-urban Karnataka land. Bhoomi / RTC linkage."
+      },
+      "pid": {
+        "label": "PID Number",
+        "table": "properties",
+        "column": "pid",
+        "value_type": "string",
+        "max_length": 120,
+        "description": "BBMP-issued Property Identification Number (e.g. '4-23-456/789').",
+        "india_context": "BBMP-jurisdiction urban properties carry PID; rural ones don't. Used for property-tax lookup."
+      },
+      "khata_number": {
+        "label": "Khata Number",
+        "table": "properties",
+        "column": "khata_no",
+        "value_type": "string",
+        "max_length": 120,
+        "description": "BBMP Khata extract number — the ownership ledger entry.",
+        "india_context": "A-Khata (regularized) vs B-Khata (irregular) is a major valuation factor; default 15% haircut on B-Khata at exit."
+      },
+      "bhoomi_id": {
+        "label": "Bhoomi ID",
+        "table": "properties",
+        "column": "bhoomi_id",
+        "value_type": "string",
+        "max_length": 120,
+        "description": "Karnataka Bhoomi land-records ID. Used to fetch RTC / Pahani extract.",
+        "india_context": "Bhoomi linkage required to verify rural-land title. Direct API access is BLOCKED — operator must manually fetch RTC."
+      },
+      "owner_name": {
+        "label": "Owner Name",
+        "table": "properties",
+        "column": "owner_name",
+        "value_type": "string",
+        "max_length": 255,
+        "description": "Registered owner per sale deed / khata extract.",
+        "india_context": "Compare against promoter name to flag potential conflict-of-interest in JDA deals."
+      },
+      "land_area_sqft": {
+        "label": "Land Area (sqft)",
+        "table": "properties",
+        "column": "land_area_sqft",
+        "value_type": "number",
+        "min": 100,
+        "max": 50000000,
+        "description": "Total land area in square feet. Canonical area unit for storage.",
+        "india_context": "land_area_acres is GENERATED ALWAYS AS land_area_sqft / 43560.0 — never write to acres directly."
+      },
+      "land_area_acres": {
+        "label": "Land Area (acres)",
+        "table": "properties",
+        "column": "land_area_sqft",
+        "value_type": "number",
+        "transform": "acres_to_sqft",
+        "min": 0.01,
+        "max": 1000,
+        "description": "Land area in acres. Auto-converted to sqft on write (sqft = acres × 43560).",
+        "india_context": "Karnataka rural deals quote in acres or guntha; conversion to sqft on write is mandatory."
+      },
+      "road_width_m": {
+        "label": "Abutting Road Width (m)",
+        "table": "properties",
+        "column": "road_width_mtrs",
+        "value_type": "number",
+        "min": 1,
+        "max": 100,
+        "description": "Width of the road abutting the property in meters.",
+        "india_context": "Karnataka RMP 2031 commercial FAR uplifts triggered at 12m / 18m / 24m road widths. Direct FAR multiplier."
+      },
+      "circle_rate_per_sqft": {
+        "label": "Circle Rate (₹/sqft)",
+        "table": "properties",
+        "column": "circle_rate_per_sqft",
+        "value_type": "number",
+        "min": 100,
+        "max": 100000,
+        "description": "IGR Karnataka guidance value per sqft. Stamp-duty floor.",
+        "india_context": "Karnataka stamp duty 6.6% computed on max(consideration, circle_rate × area). IGR SRO publishes ward-wise rates."
+      },
+      "permissible_fsi": {
+        "label": "Permissible FSI",
+        "table": "properties",
+        "column": "permissible_fsi",
+        "value_type": "number",
+        "min": 0.5,
+        "max": 6.0,
+        "description": "Floor Space Index permissible per zoning + road width.",
+        "india_context": "BBMP residential 1.75-3.25; commercial 2.5-4.0 depending on road width + plot frontage."
+      },
+      "existing_fsi": {
+        "label": "Existing FSI",
+        "table": "properties",
+        "column": "existing_fsi",
+        "value_type": "number",
+        "min": 0,
+        "max": 6.0,
+        "description": "FSI already consumed by existing structures (redevelopment context)."
+      },
+      "frontage_mtrs": {
+        "label": "Frontage (m)",
+        "table": "properties",
+        "column": "frontage_mtrs",
+        "value_type": "number",
+        "min": 1,
+        "max": 500,
+        "description": "Plot frontage on the abutting road."
+      },
+      "depth_mtrs": {
+        "label": "Depth (m)",
+        "table": "properties",
+        "column": "depth_mtrs",
+        "value_type": "number",
+        "min": 1,
+        "max": 1000,
+        "description": "Plot depth perpendicular to road."
+      },
+      "ownership_type": {
+        "label": "Ownership Type",
+        "table": "properties",
+        "column": "ownership_type",
+        "value_type": "string",
+        "max_length": 100,
+        "description": "Title type — freehold / leasehold / a_khata / b_khata / mixed_khata / not_applicable.",
+        "india_context": "Drives DD scope + exit-pricing haircut. B-Khata default 15% haircut at exit."
+      },
+      "encumbrance_status": {
+        "label": "Encumbrance Status",
+        "table": "properties",
+        "column": "encumbrance_status",
+        "value_type": "string",
+        "max_length": 100,
+        "description": "Whether the property is encumbered (mortgage / lien / litigation pending)."
+      },
+      "rera_number": {
+        "label": "RERA Registration Number",
+        "table": "deals",
+        "column": "rera_number",
+        "value_type": "string",
+        "max_length": 100,
+        "description": "Karnataka RERA project registration number (e.g. 'PRM/KA/RERA/1251/308/PR/...')."
+      },
+      "rera_registration_number_property": {
+        "label": "RERA Registration (property-level)",
+        "table": "properties",
+        "column": "rera_registration_number",
+        "value_type": "string",
+        "max_length": 120,
+        "description": "Property-level RERA reg (for ongoing projects with multiple phases)."
+      },
+      "consideration_inr": {
+        "label": "Sale Consideration (₹)",
+        "table": "deals",
+        "column": "negotiated_price_cr",
+        "value_type": "number",
+        "transform": "inr_to_cr",
+        "min": 1000000,
+        "max": 100000000000,
+        "description": "Total consideration in rupees. Auto-converted to ₹ Crore on write (cr = inr / 10000000).",
+        "india_context": "Sale deeds quote in ₹; deals table stores in Crore for analyst readability."
+      },
+      "notes": {
+        "label": "Notes / Observations",
+        "table": "properties",
+        "column": "notes",
+        "value_type": "string",
+        "max_length": 10000,
+        "description": "Free-form extraction notes (e.g., 'EC clear except 2019 mortgage to HDFC, satisfied 2023')."
+      }
+    }
+  },
+
+  "confidence_bands": {
+    "description": "How REDIP UI renders raw confidence scores. Per AI_ROADMAP §10 (UX/UI conventions for AI surfaces).",
+    "bands": [
+      { "key": "high",   "label": "High",   "min": 0.80, "max": 1.00, "tone": "data-positive",  "applies": "Auto-fill candidate — operator may accept-all-high in bulk." },
+      { "key": "medium", "label": "Medium", "min": 0.50, "max": 0.80, "tone": "data-highlight", "applies": "Requires explicit per-field review before apply." },
+      { "key": "low",    "label": "Low",    "min": 0.00, "max": 0.50, "tone": "data-negative",  "applies": "Surface only as 'verify' suggestion; never auto-fill." }
+    ]
+  }
+}

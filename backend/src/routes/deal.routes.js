@@ -3,6 +3,7 @@ const { body, query: qv, param } = require('express-validator');
 const dealService = require('../services/deal.service');
 const dealWorkspaceService = require('../services/dealWorkspace.service');
 const dealShareService = require('../services/dealShare.service');
+const dealApplyExtractionsService = require('../services/dealApplyExtractions.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -17,6 +18,7 @@ const {
   ASSET_CLASSES,
   DEAL_STRUCTURES,
 } = require('../constants/domain');
+const ontology = require('../../../packages/real-estate-ontology/src');
 
 const router = express.Router();
 
@@ -251,6 +253,83 @@ router.post(
         req.body.reason || null,
       );
       res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /deals/:id/apply-extractions (PR-NX25 — 2026-05-17)
+//
+// Operator-approved auto-fill from document extractions. Body shape:
+//
+//   {
+//     approved: [
+//       {
+//         canonical_field: "survey_number",         // key in ontology.extraction_field_map
+//         value: "45/2A",                            // raw value (transform applied server-side)
+//         source_extraction_id: "<uuid>",            // FK to document_extractions
+//         source_document_id: "<uuid>",              // optional, for audit
+//         source_field: "survey_number",             // optional, the raw extraction key
+//         confidence: 0.92                            // optional, for audit
+//       },
+//       ...
+//     ]
+//   }
+//
+// Behavior:
+//   - Each item is validated + coerced via @redip/real-estate-ontology
+//     (e.g., acres → sqft, ₹ → ₹Cr).
+//   - Items targeting deals.* are batched into ONE UPDATE; items
+//     targeting properties.* into another. Same transaction.
+//   - Bad items (out-of-range, unknown field) are SKIPPED with reason;
+//     good items still ship. Empty `applied` after validation → 200 with
+//     the skip list (no error).
+//   - Source `document_extractions` get an `applied_to_deal` entry
+//     appended to their correction_history JSONB so the modal can hide
+//     already-consumed extractions.
+//   - Two `deal_audit_log` rows max (one for deals.*, one for properties.*)
+//     with metadata.source='document_extraction'.
+//
+// Operator value: closes the "manually re-enter 30 fields" gap left by
+// the extraction-only pipeline. Operator clicks "Auto-fill" in the
+// Documents tab modal → reviews proposed values → approves → this
+// endpoint persists with full audit trail.
+router.post(
+  '/:id/apply-extractions',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    param('id').isUUID().withMessage('deal id must be a UUID'),
+    body('approved').isArray({ min: 1, max: 100 }).withMessage('approved must be a non-empty array (max 100)'),
+    body('approved.*.canonical_field')
+      .isString()
+      .withMessage('canonical_field must be a string')
+      .custom((value) => {
+        if (!ontology.getExtractionField(value)) {
+          throw new Error(`canonical_field "${value}" is not in the ontology (v${ontology.getOntologyVersion()})`);
+        }
+        return true;
+      }),
+    body('approved.*.value').exists({ checkNull: true }).withMessage('value is required (use empty string for explicit clear)'),
+    body('approved.*.source_extraction_id').optional({ nullable: true }).isUUID(),
+    body('approved.*.source_document_id').optional({ nullable: true }).isUUID(),
+    body('approved.*.source_field').optional({ nullable: true }).isString().isLength({ max: 200 }),
+    body('approved.*.confidence').optional({ nullable: true }).isFloat({ min: 0, max: 1 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await dealApplyExtractionsService.applyExtractionsToDeal(
+        req.params.id,
+        req.body.approved,
+        req.user?.id || null,
+      );
+      const message =
+        result.applied.length === 0
+          ? 'No fields applied — all were rejected by validation. See `skipped` for reasons.'
+          : `Applied ${result.applied.length} field(s) to the deal${result.skipped.length ? `; ${result.skipped.length} skipped` : ''}.`;
+      res.json({ success: true, message, data: result });
     } catch (err) {
       next(err);
     }
