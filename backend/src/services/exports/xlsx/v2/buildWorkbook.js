@@ -36,6 +36,7 @@
 const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const { injectChartsIntoXlsx, injectSparklinesIntoXlsx } = require('./chartInjector');
+const { runMarketBenchmarkValidators } = require('./marketBenchmarkValidator');
 const { inferAssetClass } = require('../../../../utils/assetClass');
 const palette = require('../../shared/palette');
 
@@ -1380,6 +1381,13 @@ const buildExportQa = (ctx, options = {}) => {
   if (!Array.isArray(ctx.exportContext?.market?.exportComps) || ctx.exportContext.market.exportComps.length === 0) {
     addIssue('warn', 'Market coverage', 'MarketComps', 'No verified comparable feed is present.', 'Attach verified comps or show the workbook as an internal sensitivity file only.', 'market data');
   }
+
+  // PR-NX28 (2026-05-17) — comp-derived market-benchmark validators.
+  // Adds WARN-level issues like "SellRatePerSqft is above the 95th
+  // percentile of N verified nearby comps" with citation back to the
+  // comp set. Fail-open: any internal error just skips that validator,
+  // never throws, never blocks the export.
+  runMarketBenchmarkValidators(ctx, core, addIssue);
 
   const blockers = issues.filter((issue) => issue.severity === 'blocker');
   return {
