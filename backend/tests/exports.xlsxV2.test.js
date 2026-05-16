@@ -3009,6 +3009,144 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
     });
 
+    // ── PR-NX13 — Asset-class-aware Inputs sheet visibility ────────────
+    describe('PR-NX13: Inputs sheet visibility per asset class', () => {
+      const hospitalityCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'hospitality';
+        ctx.property.property_type = 'hospitality';
+        return ctx;
+      };
+
+      const rawLandCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'raw_land';
+        ctx.property.property_type = 'raw_land';
+        return ctx;
+      };
+
+      const plottedCtx = () => {
+        const ctx = minimalContext();
+        ctx.deal.asset_class = 'plotted_development';
+        ctx.property.property_type = 'plotted_development';
+        return ctx;
+      };
+
+      // Helper: collect all label strings in column A of the Inputs sheet
+      const collectInputLabels = (inputs) => {
+        const labels = [];
+        inputs.eachRow({ includeEmpty: false }, (row) => {
+          const v = row.getCell(1).value;
+          if (v && typeof v === 'string') labels.push(v);
+        });
+        return labels;
+      };
+
+      test('Hospitality skips the rent/sqft income revenue section (USALI handles revenue)', async () => {
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const labels = collectInputLabels(inputs);
+        // Section title from incomeRevenueSection should NOT appear
+        expect(labels).not.toContain('Operating Revenue Inputs (Income Asset)');
+        // Hospitality-specific section title SHOULD appear
+        expect(labels).toContain('Hospitality Operating Metrics (ADR / Occupancy / RevPAR)');
+      });
+
+      test('Hospitality skips the income OpEx section (USALI carries departmental costs)', async () => {
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const labels = collectInputLabels(inputs);
+        expect(labels).not.toContain('Operating Expenses (Income Asset)');
+        // But the USALI sections (rendered as part of the hospitality block)
+        // should still surface the cost inputs the model needs.
+        expect(labels).toContain('Hospitality USALI Engine Drivers');
+      });
+
+      test('Hospitality hides Loading Factor + Carpet Area rows (keys-based, no sale-side carpet)', async () => {
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const labels = collectInputLabels(inputs);
+        expect(labels.find((l) => l.startsWith('Loading Factor'))).toBeUndefined();
+        expect(labels.find((l) => l.startsWith('Carpet Area'))).toBeUndefined();
+      });
+
+      test('Hospitality export still validates / exports cleanly (LoadingFactor validator skipped)', async () => {
+        // Pre-fix: the validator at "Loading factor" positivity check
+        // would BLOCK the export for hospitality (since LoadingFactor row
+        // was hidden but validator still ran). This test confirms the
+        // skip works end-to-end — hospitality exports a non-empty buffer.
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        expect(Buffer.isBuffer(buffer)).toBe(true);
+        expect(buffer.length).toBeGreaterThan(10000);
+      });
+
+      test('Raw land hides Loading Factor + Carpet Area rows (no construction, no carpet)', async () => {
+        const buffer = await buildDealWorkbookV2(rawLandCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const labels = collectInputLabels(inputs);
+        expect(labels.find((l) => l.startsWith('Loading Factor'))).toBeUndefined();
+        expect(labels.find((l) => l.startsWith('Carpet Area'))).toBeUndefined();
+      });
+
+      test('Raw land + Plotted skip the RERA Escrow section (no customer construction milestones)', async () => {
+        const rawBuf = await buildDealWorkbookV2(rawLandCtx());
+        const wbRaw = new ExcelJS.Workbook();
+        await wbRaw.xlsx.load(rawBuf);
+        const rawLabels = collectInputLabels(wbRaw.getWorksheet('Inputs & Assumptions'));
+        expect(rawLabels.find((l) => l.includes('RERA Compliance'))).toBeUndefined();
+
+        const plottedBuf = await buildDealWorkbookV2(plottedCtx());
+        const wbPlotted = new ExcelJS.Workbook();
+        await wbPlotted.xlsx.load(plottedBuf);
+        const plottedLabels = collectInputLabels(wbPlotted.getWorksheet('Inputs & Assumptions'));
+        expect(plottedLabels.find((l) => l.includes('RERA Compliance'))).toBeUndefined();
+
+        // But standard residential (development family) DOES still see RERA
+        const residentialBuf = await buildDealWorkbookV2(minimalContext());
+        const wbRes = new ExcelJS.Workbook();
+        await wbRes.xlsx.load(residentialBuf);
+        const resLabels = collectInputLabels(wbRes.getWorksheet('Inputs & Assumptions'));
+        expect(resLabels).toContain('RERA Compliance & Escrow');
+      });
+
+      test('Other income classes (office / retail / industrial) STILL see Loading Factor + income sections (no regression)', async () => {
+        for (const cls of ['commercial_office', 'retail', 'industrial_warehousing']) {
+          const ctx = minimalContext();
+          ctx.deal.asset_class = cls;
+          ctx.property.property_type = cls;
+          const buffer = await buildDealWorkbookV2(ctx);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buffer);
+          const inputs = wb.getWorksheet('Inputs & Assumptions');
+          const labels = collectInputLabels(inputs);
+          // These classes keep the rent + loading-factor inputs
+          expect(labels).toContain('Operating Revenue Inputs (Income Asset)');
+          expect(labels).toContain('Operating Expenses (Income Asset)');
+          expect(labels.find((l) => l.startsWith('Loading Factor'))).toBeDefined();
+        }
+      });
+
+      test('Hospitality SaleableAreaSqft is still present (named range needed for USALI sqftPerKey calc)', async () => {
+        // We hide Loading Factor + Carpet Area but the underlying
+        // SaleableAreaSqft must remain — the USALI engine uses
+        // SaleableAreaSqft / HospitalityKeys = sqft/key as a diagnostic.
+        const buffer = await buildDealWorkbookV2(hospitalityCtx());
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const inputs = wb.getWorksheet('Inputs & Assumptions');
+        const labels = collectInputLabels(inputs);
+        expect(labels.find((l) => l.includes('Saleable / Leasable Area'))).toBeDefined();
+      });
+    });
+
     // ── PR-I13 — Retail CAM + Anchor / Vanilla rent split ──────────────
     describe('PR-I13: Retail CAM + Anchor / Vanilla Rent Split (income asset family only)', () => {
       const retailCtx = () => {

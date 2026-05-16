@@ -1329,7 +1329,15 @@ const buildExportQa = (ctx, options = {}) => {
   const allowedExit = ctx.dealFamily === 'income' ? allowedIncomeExit : allowedDevExit;
 
   positive('SaleableAreaSqft', core.saleableAreaSqft, 'Saleable / leasable area', 'Fill the property area or model saleable/leasable area before export.', 'all asset classes');
-  positive('LoadingFactor', core.loadingFactor, 'Loading factor', 'Set a positive loading factor so carpet area can be derived.', 'all asset classes');
+  // PR-NX13 (2026-05-15): LoadingFactor is a super-built-up ÷ carpet ratio
+  // — meaningful only for asset classes with sale-side carpet vs SBA
+  // distinction (residential / villas / office / retail / industrial /
+  // mixed_use / redevelopment). Hospitality is keys-based (GFA only)
+  // and raw_land has no construction. Skip the validator for those
+  // classes so the export doesn't block on a meaningless input.
+  if (ctx.assetClass !== 'hospitality' && ctx.assetClass !== 'raw_land') {
+    positive('LoadingFactor', core.loadingFactor, 'Loading factor', 'Set a positive loading factor so carpet area can be derived.', 'all asset classes');
+  }
   positive('DebtRatePct', core.debtRatePct, 'Debt rate', 'Set the lender interest rate before export.', 'all capital structures');
   positive('DiscountRatePct', core.discountRatePct, 'Discount rate', 'Set the discount rate before export.', 'all return metrics');
   pctRange('DebtLTV', core.debtLTV, 'Debt percentage', 0, 1, 'Set Debt % as a decimal or percent between 0% and 100%.');
@@ -1679,12 +1687,20 @@ const buildInputsSheet = (workbook, ctx) => {
       // available for any future RERA-marketing-compliance calculation
       // (carpet × sale rate, RERA disclosures, etc.) without changing the
       // revenue math.
-      ['Loading Factor (Super Built-up ÷ Carpet)', 'LoadingFactor',
-        loadingMultipleFor(ctx),
-        'ratio', NUMBER_FORMATS.multiple],
-      ['Carpet Area (RERA marketing area)', 'CarpetAreaSqft',
-        { formula: '=IFERROR(SaleableAreaSqft/LoadingFactor,0)' },
-        'sqft (derived)', NUMBER_FORMATS.integer],
+      //
+      // PR-NX13 (2026-05-15): Loading Factor + Carpet Area are
+      // sale-side concepts (super-built-up ÷ carpet). They DON'T apply
+      // to hospitality (keys-based, gross-built-up only matters for
+      // construction cost), nor to raw_land (no construction, no
+      // carpet). Hide for those classes to avoid operator confusion.
+      ...(ctx.assetClass === 'hospitality' || ctx.assetClass === 'raw_land' ? [] : [
+        ['Loading Factor (Super Built-up ÷ Carpet)', 'LoadingFactor',
+          loadingMultipleFor(ctx),
+          'ratio', NUMBER_FORMATS.multiple],
+        ['Carpet Area (RERA marketing area)', 'CarpetAreaSqft',
+          { formula: '=IFERROR(SaleableAreaSqft/LoadingFactor,0)' },
+          'sqft (derived)', NUMBER_FORMATS.integer],
+      ]),
       ['Floor Space Index (FSI)', 'FSI',                 fsiFor(ctx), 'ratio', NUMBER_FORMATS.multiple],
     ],
   };
@@ -2592,16 +2608,48 @@ const buildInputsSheet = (workbook, ctx) => {
   // Statutory Levies sits between Detailed Soft Costs and Project Schedule
   // because operators read the Inputs sheet top-to-bottom following the
   // cost-then-schedule mental model.
+  //
+  // PR-NX13 (2026-05-15): asset-class-aware visibility. Pre-fix every
+  // income deal — including hospitality — got the rent/sqft +
+  // loading-factor + TI-allowance rows in incomeRevenueSection +
+  // incomeOpExSection. For hospitality these don't apply (revenue is
+  // Keys × ADR × Occupancy via USALI; no leasable square footage in
+  // the office sense; no TI / leasing commission). Showing them
+  // (a) confused operators into typing meaningless rents, which
+  // (b) cross-polluted downstream formulas with a phantom rent path,
+  // and (c) generated the Pointec Pens briefing bug where the snapshot
+  // surfaced rent inputs that the engine didn't actually use.
+  //
+  // Post-fix: hospitality skips both income-revenue and income-opex
+  // sections entirely. The USALI section (rendered later) carries
+  // hospitality-specific rent + opex inputs (departmental costs, brand
+  // fees, GOP-aligned management fee). For raw_land, we skip RERA escrow
+  // (no customer construction milestones to police) and most income/dev
+  // operating sections (raw land is plot-only — its inputs are land cost
+  // + entitlement-stage months only).
+  const isHospitality = ctx.assetClass === 'hospitality';
+  const isRawLand = ctx.assetClass === 'raw_land';
+  const isPlotted = ctx.assetClass === 'plotted_development';
+
+  // Hospitality skips the rent/sqft income sections; USALI section
+  // (rendered below at line ~2635) supplies the keys-based revenue /
+  // departmental-cost inputs instead.
+  const incomeSectionsForClass = isHospitality
+    ? []
+    : [incomeRevenueSection, incomeOpExSection];
+
   const sections = [
     generalSection,
-    ...(ctx.dealFamily === 'income' ? [incomeRevenueSection, incomeOpExSection] : [developmentRevenueSection]),
+    ...(ctx.dealFamily === 'income' ? incomeSectionsForClass : [developmentRevenueSection]),
     costSection,
     detailedSoftCostsSection,
     indiaStatutoryLeviesSection,
-    // RERA Escrow only meaningful for development-family deals (residential,
-    // villas, plotted, mixed-use, raw land). Income deals don't have
-    // customer collection at all (rent-paying tenants, no escrow regime).
-    ...(ctx.dealFamily === 'development' ? [reraSection] : []),
+    // RERA Escrow only meaningful for development-family deals that have
+    // customer construction-milestone collections (residential, villas,
+    // mixed-use, redevelopment). Plotted / raw_land deals have land
+    // economics — no construction milestones, so no escrow regime
+    // applies. Income family doesn't have customer collection at all.
+    ...(ctx.dealFamily === 'development' && !isRawLand && !isPlotted ? [reraSection] : []),
     // Deal Structure (PR-I3) — JDA / Outright / DM. Only meaningful for
     // development family — income family acquisitions don't have a
     // landowner-share concept (the seller takes the full sale price).
