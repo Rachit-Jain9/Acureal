@@ -4,7 +4,7 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
-## 2026-05-17 (overnight) — Document Ingestion + Auto-fill MVP: ontology + apply-extractions + modal (PR #345, #346)
+## 2026-05-17 (overnight) — Document Ingestion + Auto-fill MVP + Market-Benchmark Validators (PR #345, #346, #347, #348)
 
 After the operator confirmed PR-NX24 fixed the charts ("Perfect. It works."), pivoted to the next flagship priority per docs/STRATEGIC_REVIEW_2026_05_15.md §III.1 — Document Ingestion + AI auto-fill. The extraction half was already shipped (Gemini 3.1 Flash-Lite extracts 15+ doctypes into `document_extractions.structured_fields` with confidence scores), but operators still had to manually re-enter every extracted field into the deal form. This batch closes that workflow gap end-to-end.
 
@@ -16,14 +16,17 @@ After the operator confirmed PR-NX24 fixed the charts ("Perfect. It works."), pi
 
 - **#346 — PR-NX26: AutoFillFromDocumentsModal — operator UI.** The frontend that consumes PR-NX25. New "Auto-fill from documents (N)" button on the Documents tab header (visible only when ≥1 extraction is mapped). Click opens a wide modal listing every canonical extracted field as a row with: current vs proposed value side-by-side (with "overwrites" warning), confidence pill (high/medium/low), source-document chip, per-field india_context tooltip explaining WHY the field matters. HIGH-confidence rows auto-selected on first render; bulk actions for select-all-by-band. Mandatory amber "AI-assisted — requires human review" banner per CLAUDE.md. Sticky footer CTA "Apply N fields". Vite alias `@redip/real-estate-ontology` imports the same v1.json the backend validates against — keeps frontend labels + routing in lock-step with backend writes. 14 modal tests cover open/closed, auto-selection, bulk actions, overwrite warnings, applyMutation invocation shape.
 
+- **#348 — PR-NX28: Comp-derived market-benchmark validators.** Strategic Review §III.3 — "Validation engine extension (market-benchmark rules from verified comps)" — was the explicit next priority after the ingestion bundle landed. Pre-NX28 the 8 existing validators in `buildExportQa()` were deterministic + structural ("DebtLTV must be 0-1", "ExitCapRate must be present"). They never cross-checked operator inputs against the verified comp feed, so an aspirational sell rate (₹X above the 95th-percentile comp) passed QA silently. New module `marketBenchmarkValidator.js` adds 3 fail-open WARN validators: (a) `validateSellRateBands` — fires WARN if SellRatePerSqft is above p95 or below p25 of nearby verified comps with citation showing the count + percentile values; (b) `validateCompCoverage` — fires WARN when zero verified or <5 verified comps (benchmark is unreliable below this threshold); (c) `validateCompFreshness` — fires WARN when latest comp.launch_year is 3+ years older than the export year (Bengaluru micro-markets move 10–20%/yr). Each validator is fail-open, skipped silently when prerequisites aren't met, severity WARN (never blocker — per CLAUDE.md "never expose unverified market intelligence as authoritative"). +28 tests pin the percentile helper, the verified-rate extractor, each validator's positive/negative/edge cases, and the orchestrator's fail-open guarantee.
+
 ### Tests
 
 | Suite | Start | End | Δ |
 |---|---:|---:|---:|
 | ontology.test.js (NEW) | 0 | 51 | +51 |
 | dealApplyExtractions.service.test.js (NEW) | 0 | 17 | +17 |
+| marketBenchmarkValidator.test.js (NEW) | 0 | 28 | +28 |
 | AutoFillFromDocumentsModal.test.jsx (NEW) | 0 | 14 | +14 |
-| **Backend TOTAL** | **1,784** | **1,801** | **+17** |
+| **Backend TOTAL** | **1,784** | **1,829** | **+45** |
 | **Frontend TOTAL** | **360** | **374** | **+14** |
 
 Zero pre-existing test regressions across 104 backend suites + 44 frontend suites. Frontend build clean (~26s). Backend route compiles cleanly. Vite dev server boots clean with zero console errors.
@@ -49,10 +52,11 @@ What used to take 10–15 minutes of mechanical retyping now takes ~30 seconds o
 
 ### Recommendation for next session
 
-The ontology and apply-extractions service are now production-grade. Two natural follow-ups, each independently shippable:
+After this overnight batch, the top three Strategic Review priorities are LANDED (doc ingestion, ontology, validation engine). Next-natural follow-ups, each independently shippable:
 
-- **Adopt the ontology across existing services** — currently `dealApplyExtractions.service.js` is the only consumer. Migrate the deal-create / deal-edit forms to pull asset-class / deal-structure / exit-strategy options from `@redip/real-estate-ontology` instead of `constants/domain.js`. Removes the drift risk where the backend ontology says "redevelopment" but the frontend hardcodes a stale list. 1-session scope.
-- **Validation engine market-benchmark rules** — `buildExportQa()` in `backend/src/services/exports/xlsx/v2/buildWorkbook.js` has 8 blocker validators today. Extend with market-benchmark rules sourced from verified comps: "sale rate > 95th percentile of nearby comps → WARN" with citation. Per Strategic Review §III.3. 1-session scope.
+- **Adopt the ontology across existing services** — currently `dealApplyExtractions.service.js` is the only consumer of `@redip/real-estate-ontology`. Migrate the deal-create / deal-edit forms (frontend + backend express-validator) to pull asset-class / deal-structure / exit-strategy options from the ontology instead of `constants/domain.js`. Removes the drift risk where the backend ontology says "redevelopment" but the frontend hardcodes a stale list. **Risk**: medium — need to diff existing constants against ontology and reconcile any divergence. 1-session scope, NOT recommended for unattended autonomous execution.
+- **Audit-log timeline UI surface for doc-ingestion auto-fill events** — PR-NX25's audit rows carry `metadata.source='document_extraction'` + `source_extraction_ids` + `applied_fields_count` + `ontology_version`, but the AuditTab UI renders them with the generic "Fields updated" label. A dedicated icon + summary ("7 fields applied from sale-deed.pdf by Rachit") plus an expand-to-see-which-fields drill-down makes the audit reviewable + builds trust. 1-session scope.
+- **More market-benchmark validators** — PR-NX28 handles SellRatePerSqft + comp coverage + freshness. Future additions: DSCR < 1.20 BLOCK (RBI Master Direction floor), Yield-on-Cost vs Exit Cap spread WARN (negative spread), Construction-cost-per-sqft band check vs Bengaluru benchmarks. Each is a small validator. 1-session scope.
 
 ---
 
