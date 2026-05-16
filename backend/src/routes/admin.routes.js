@@ -15,6 +15,7 @@
 const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const aiUsageService = require('../services/aiUsage.service');
+const aiHealthService = require('../services/aiHealth.service'); // PR-NX22
 const routingConfigService = require('../services/ai/routingConfig');
 const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 const { query } = require('../config/database');
@@ -89,6 +90,28 @@ router.get('/ai-usage', authenticate, requireRole('admin', 'analyst'), async (re
     const days = req.query.days ? parseInt(req.query.days, 10) : 30;
     const data = await aiUsageService.getUsageDashboard({ days });
     res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/ai-health
+//
+// PR-NX22 (2026-05-16): live operational status for the 3 AI providers
+// (Gemini / Claude / OpenAI). Complements /ai-usage (cost lens) with
+// the WORKING-RIGHT-NOW lens. Returns per-provider: env-var configured,
+// most recent call status + latency + error, 7-day success rate + p50/p95
+// latency, and a coarse healthBand classification (healthy/degraded/
+// unhealthy/unknown) for at-a-glance UI rendering.
+//
+// Soft-fails if ai_call_logs is unavailable — returns configuration
+// status only, never throws.
+//
+// Org-scoped via RLS on ai_call_logs. Read-only.
+router.get('/ai-health', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const snapshot = await aiHealthService.getHealthSnapshot();
+    res.json({ success: true, data: snapshot });
   } catch (error) {
     next(error);
   }
