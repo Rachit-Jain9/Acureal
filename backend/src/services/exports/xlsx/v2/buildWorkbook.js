@@ -8478,7 +8478,82 @@ const forceWorkbookRecalculationOnOpen = async (xlsxBuffer) => {
   return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
 };
 
-const validateXlsxBufferForDownload = async (xlsxBuffer) => {
+// ──────────────────────────────────────────────────────────────────────
+// PR-NX16 (2026-05-16) — Defensive XML validation + per-step diagnostics
+// ──────────────────────────────────────────────────────────────────────
+//
+// The Pointec Pens hospitality bug evaded THREE rounds of fixes (#327,
+// #329, #332) because the bug surfaced ONLY after the file left REDIP
+// and reached Microsoft Excel. The server-side validator passed; ExcelJS
+// re-parsed the buffer cleanly in Jest tests; the file was valid by every
+// check we had — but Excel still auto-repaired the Dashboard sheet to
+// empty `<sheetData/>` on user's machine. Without intercepting the
+// pristine pre-repair file, we can't see what Excel rejected.
+//
+// This pass adds multiple parallel defensive layers:
+//   - Strict XML well-formedness check via `xml-js` parser (stricter than
+//     ExcelJS's lenient self-validation; catches malformed elements
+//     ExcelJS allows but Excel rejects)
+//   - Per-sheet cell-count assertions with named-sheet awareness (reads
+//     workbook.xml to map sheetN.xml → human name, so error messages
+//     say "Dashboard" not "sheet2")
+//   - Comprehensive server-side logging via console.log (visible in
+//     Vercel function logs)
+//   - Detection of additional Excel-rejection patterns: unclosed tags,
+//     mismatched quote attributes, multiple xml decls in one file
+//
+// ──────────────────────────────────────────────────────────────────────
+
+// Map sheetN.xml file name → sheet display name from workbook.xml.
+// Useful for error messages so developers see "Dashboard is empty" not
+// "sheet2.xml is empty".
+const buildSheetNameMap = async (zip) => {
+  const workbookFile = zip.file('xl/workbook.xml');
+  const relsFile = zip.file('xl/_rels/workbook.xml.rels');
+  if (!workbookFile || !relsFile) return {};
+  const wbXml = await workbookFile.async('string');
+  const relsXml = await relsFile.async('string');
+  // Map rId → target file path
+  const rIdToTarget = {};
+  for (const m of relsXml.matchAll(/<Relationship\s+Id="(rId\d+)"\s+[^>]*Target="([^"]+)"/g)) {
+    rIdToTarget[m[1]] = m[2];
+  }
+  // Map sheet name → target via rId
+  const nameMap = {};
+  for (const m of wbXml.matchAll(/<sheet\s+name="([^"]+)"\s+sheetId="\d+"\s+(?:state="[^"]+"\s+)?r:id="(rId\d+)"/g)) {
+    const rawName = m[1].replace(/&amp;/g, '&');
+    const target = rIdToTarget[m[2]];
+    if (target) {
+      // target is typically "worksheets/sheetN.xml"; normalize to "sheetN.xml"
+      const basename = target.replace(/^.*\//, '');
+      nameMap[basename] = rawName;
+    }
+  }
+  return nameMap;
+};
+
+// Strict XML parser — wraps xml-js, returns { valid, error } per buffer.
+// Returns valid=true even for empty XML (xml-js accepts empty docs);
+// caller checks emptiness separately.
+const validateXmlWellFormedness = (xmlString, label) => {
+  if (typeof xmlString !== 'string' || xmlString.length === 0) {
+    return { valid: false, error: `${label}: empty XML string` };
+  }
+  // xml-js (already a project dependency) does strict well-formedness
+  // parsing. If parsing throws, the XML is malformed and Excel will reject.
+  try {
+    // eslint-disable-next-line global-require
+    const xmlJs = require('xml-js');
+    // Lightweight mode: don't materialize the AST, just validate.
+    xmlJs.xml2js(xmlString, { compact: true, alwaysArray: false });
+    return { valid: true };
+  } catch (err) {
+    return { valid: false, error: `${label}: ${err.message}` };
+  }
+};
+
+const validateXlsxBufferForDownload = async (xlsxBuffer, options = {}) => {
+  const ctxLabel = options.ctxLabel || 'unknown';
   const zip = await JSZip.loadAsync(xlsxBuffer);
   const issues = [];
   const add = (field, message, action) => {
@@ -8491,6 +8566,9 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
       scope: 'xlsx package',
     });
   };
+
+  // PR-NX16: build sheet-name map so error messages say "Dashboard" not "sheet2"
+  const sheetNameMap = await buildSheetNameMap(zip);
 
   if (!zip.file('[Content_Types].xml')) add('[Content_Types].xml', 'Workbook content types part is missing.', 'Regenerate the workbook.');
   const workbookXmlFile = zip.file('xl/workbook.xml');
@@ -8512,6 +8590,9 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     if (!calcPr.includes('calcMode="auto"') || !calcPr.includes('fullCalcOnLoad="1"') || !calcPr.includes('forceFullCalc="1"')) {
       add('xl/workbook.xml', 'Workbook is not marked for automatic full recalculation on open.', 'Force recalculation metadata before download so formula-heavy sheets render values in Excel.');
     }
+    // PR-NX16: strict XML check on workbook.xml itself
+    const wbCheck = validateXmlWellFormedness(workbookXml, 'xl/workbook.xml');
+    if (!wbCheck.valid) add('xl/workbook.xml', `Workbook XML failed strict parser: ${wbCheck.error}`, 'Regenerate; this XML would trigger Excel auto-repair on open.');
   }
 
   const tableFiles = zip.file(/^xl\/tables\/table\d+\.xml$/);
@@ -8519,43 +8600,79 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
     add('xl/tables', 'Expected Excel tables for QA checks and source register are missing.', 'Regenerate the workbook so reviewers get filterable QA/source tables.');
   }
 
+  // PR-NX16: collect per-sheet diagnostics for end-of-validation logging
+  const sheetDiagnostics = [];
   const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
   await Promise.all(sheetFiles.map(async (file) => {
     const xml = await file.async('string');
+    const basename = file.name.replace(/^.*\//, '');
+    const displayName = sheetNameMap[basename] || basename;
+    const fieldLabel = `${displayName} (${file.name})`;
+    const cellCount = (xml.match(/<c\s+r="/g) || []).length;
+    const xmlSize = xml.length;
+    const isEmpty = /<sheetData\s*\/>/.test(xml);
+    sheetDiagnostics.push({ basename, displayName, cellCount, xmlSize, isEmpty });
+
     if (xml.includes('FFundefined')) {
-      add(file.name, 'Workbook XML contains an invalid undefined ARGB color.', 'Fix the style token before download.');
+      add(fieldLabel, 'Workbook XML contains an invalid undefined ARGB color.', 'Fix the style token before download.');
     }
     if (/(<f(?:\s[^>]*)?>)=/.test(xml)) {
-      add(file.name, 'Workbook XML contains formulas with a leading equals sign.', 'Strip leading equals signs from formula XML before download.');
+      add(fieldLabel, 'Workbook XML contains formulas with a leading equals sign.', 'Strip leading equals signs from formula XML before download.');
     }
     const tablePartsIndex = xml.indexOf('<tableParts');
     const legacyDrawingIndex = xml.indexOf('<legacyDrawing');
     if (tablePartsIndex !== -1 && legacyDrawingIndex !== -1 && legacyDrawingIndex > tablePartsIndex) {
-      add(file.name, 'Worksheet comments are serialized after table parts, which causes Excel to repair the sheet.', 'Normalize worksheet XML element order before download.');
+      add(fieldLabel, 'Worksheet comments are serialized after table parts, which causes Excel to repair the sheet.', 'Normalize worksheet XML element order before download.');
     }
     if (xml.includes('<sheetProtection')) {
-      add(file.name, 'Worksheet protection is enabled.', 'Export workbooks must be editable without an unprotect prompt.');
+      add(fieldLabel, 'Worksheet protection is enabled.', 'Export workbooks must be editable without an unprotect prompt.');
     }
-    // PR-NX15 (2026-05-16): defensive sanity check. The PR-NX13 bug
-    // produced a Dashboard sheet with <sheetData/> (no cells) because
-    // upstream formula generation crashed and ExcelJS serialized an
-    // empty sheet. Excel auto-repair then scrubbed it cleanly without
-    // anyone noticing server-side. This check catches that class of
-    // bug: any non-Calculations sheet (which is hidden, audit-only)
-    // with an empty <sheetData/> is a defect. Better to fail loud and
-    // make the developer investigate than ship a broken file.
-    if (/<sheetData\s*\/>/.test(xml) && !file.name.includes('sheet7') /* Calculations is sheet7+; allow it to be sparse */) {
-      // Sheet ordering: 1=Executive Briefing, 2=Dashboard, 3=Inputs,
-      // 4=USALI (hospitality only), 5=Cash Flow Engine, 6=Monthly CF,
-      // 7=Debt Sizing, 8=Calculations. The Dashboard sheet number varies
-      // for hospitality (4) vs non-hospitality (3 — USALI is skipped).
-      // Skip sheet1.xml (Executive Briefing) too — it uses only merged
-      // header cells and may parse as empty after Excel's strict pass.
-      if (!file.name.match(/sheet[18]\.xml$/)) {
-        add(file.name, 'Worksheet has empty <sheetData/> after generation — content failed to render. Likely cause: a formula references an undefined named range, causing ExcelJS to suppress cell writes.', 'Investigate the build path for the affected asset class. Check that all named ranges referenced by formulas are still defined (e.g., PR-NX13 hospitality section visibility regression).');
-      }
+
+    // PR-NX16: strict XML well-formedness check via xml-js parser
+    const check = validateXmlWellFormedness(xml, fieldLabel);
+    if (!check.valid) {
+      add(fieldLabel, `Sheet XML failed strict well-formedness check: ${check.error}`, 'Regenerate. This XML would trigger Excel auto-repair (scrub the sheet to <sheetData/>) on open.');
+    }
+
+    // PR-NX16: empty sheetData check, NAMED so error mentions "Dashboard"
+    // not "sheet2.xml". Skip Executive Briefing (header-only) and the
+    // hidden Calculations sheet (sometimes legitimately sparse).
+    if (isEmpty
+        && displayName !== SHEETS.executiveBriefing
+        && displayName !== SHEETS.calculations) {
+      add(
+        fieldLabel,
+        `${displayName} ships with empty <sheetData/> (${xmlSize} bytes) — content failed to render or was scrubbed. This is the same class of bug that caused the Pointec Pens hospitality Dashboard regression. Likely causes: (a) a formula references an undefined named range (PR-NX13/NX15 pattern), (b) chart injection corrupted the XML, (c) ExcelJS produced output Microsoft Excel rejects.`,
+        `Re-investigate the build path for asset class "${ctxLabel}". Run diagnose-dashboard-xml.js with the failing deal's data and inspect ${file.name} directly.`,
+      );
+    }
+
+    // PR-NX16: extra Excel-rejection signatures
+    // Multiple <?xml decls in one file → invalid (Excel rejects)
+    if ((xml.match(/<\?xml\s/g) || []).length > 1) {
+      add(fieldLabel, 'Sheet XML contains multiple <?xml declarations — invalid.', 'Regenerate; this XML would trigger Excel auto-repair on open.');
+    }
+    // Stray null bytes
+    if (xml.includes(' ')) {
+      add(fieldLabel, 'Sheet XML contains null bytes — invalid.', 'Strip null bytes from cell values before serialization.');
+    }
+    // Common toString leaks
+    if (xml.includes('[object Object]')) {
+      add(fieldLabel, 'Sheet XML contains "[object Object]" — a JavaScript object was concatenated to a string somewhere.', 'Find and fix the object-to-string coercion bug.');
     }
   }));
+
+  // PR-NX16: log per-sheet cell-count diagnostics to console (visible in
+  // Vercel function logs). Helps diagnose production-only bugs by seeing
+  // exactly what each sheet looked like when REDIP shipped it.
+  if (process.env.NODE_ENV !== 'test') {
+    const diagLine = sheetDiagnostics
+      .sort((a, b) => a.basename.localeCompare(b.basename))
+      .map((d) => `${d.basename}=${d.displayName}:${d.cellCount}c/${d.xmlSize}b${d.isEmpty ? '⚠EMPTY' : ''}`)
+      .join(' | ');
+    // eslint-disable-next-line no-console
+    console.log(`[xlsx.v2 validate ${ctxLabel}] ${diagLine}`);
+  }
 
   if (issues.length) {
     throw new XlsxExportValidationError({
@@ -8568,11 +8685,11 @@ const validateXlsxBufferForDownload = async (xlsxBuffer) => {
   return true;
 };
 
-const finalizeWorkbookBuffer = async (xlsxBuffer) => {
+const finalizeWorkbookBuffer = async (xlsxBuffer, options = {}) => {
   const stripped = await stripLeadingEqualsFromWorksheetFormulas(xlsxBuffer);
   const normalized = await normalizeWorksheetXmlForExcelCompatibility(stripped);
   const recalcReady = await forceWorkbookRecalculationOnOpen(normalized);
-  await validateXlsxBufferForDownload(recalcReady);
+  await validateXlsxBufferForDownload(recalcReady, options);
   return recalcReady;
 };
 
@@ -8615,13 +8732,84 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const dashboardIdx = workbook.worksheets.findIndex((ws) => ws.name === SHEETS.dashboard);
   const dashboardSheetFile = dashboardIdx >= 0 ? `sheet${dashboardIdx + 1}.xml` : 'sheet1.xml';
 
+  // PR-NX16 (2026-05-16) — escape hatches for diagnosing the Pointec Pens
+  // bug class. If REDIP_SKIP_CHART_INJECTION=1, skip the native-chart XML
+  // splice. If REDIP_SKIP_SPARKLINE_INJECTION=1, skip sparklines. If
+  // REDIP_SKIP_ALL_POST_INJECTION=1, skip both. Operator can toggle via
+  // Vercel env vars without a redeploy. Helps isolate whether the
+  // Dashboard corruption is from chart injection or earlier in the pipeline.
+  const skipCharts = process.env.REDIP_SKIP_CHART_INJECTION === '1'
+    || process.env.REDIP_SKIP_ALL_POST_INJECTION === '1';
+  const skipSparklines = process.env.REDIP_SKIP_SPARKLINE_INJECTION === '1'
+    || process.env.REDIP_SKIP_ALL_POST_INJECTION === '1';
+
+  // PR-NX16: track Dashboard cell count BEFORE and AFTER chart injection
+  // so server-side logs reveal which step (if any) corrupts the sheet.
+  const ctxLabel = `${ctx.assetClass || 'unknown'}/${ctx.deal?.id || 'no-id'}`;
+  const measureDashboardCells = async (buffer, label) => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const inspectZip = await JSZip.loadAsync(buffer);
+      const dashFile = inspectZip.file(`xl/worksheets/${dashboardSheetFile}`);
+      if (!dashFile) {
+        // eslint-disable-next-line no-console
+        console.log(`[xlsx.v2 ${ctxLabel} ${label}] dashboard file missing: ${dashboardSheetFile}`);
+        return;
+      }
+      const xml = await dashFile.async('string');
+      const cellCount = (xml.match(/<c\s+r="/g) || []).length;
+      const isEmpty = /<sheetData\s*\/>/.test(xml);
+      // eslint-disable-next-line no-console
+      console.log(`[xlsx.v2 ${ctxLabel} ${label}] dashboard ${dashboardSheetFile}: ${cellCount} cells, ${xml.length} bytes${isEmpty ? ' ⚠ EMPTY' : ''}`);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.log(`[xlsx.v2 ${ctxLabel} ${label}] dashboard inspect failed: ${err.message}`);
+    }
+  };
+
+  await measureDashboardCells(enhancedBuffer, 'post-exceljs-write');
+
+  // PR-NX16: helper to count Dashboard cells in a buffer (sync-callable)
+  const getDashboardCellCount = async (buf) => {
+    try {
+      const z = await JSZip.loadAsync(buf);
+      const df = z.file(`xl/worksheets/${dashboardSheetFile}`);
+      if (!df) return 0;
+      const x = await df.async('string');
+      return (x.match(/<c\s+r="/g) || []).length;
+    } catch {
+      return -1;
+    }
+  };
+
   try {
-    if (chartSpecs.length > 0) {
+    if (chartSpecs.length > 0 && !skipCharts) {
+      const preChartBuffer = enhancedBuffer;
+      const preChartCells = await getDashboardCellCount(preChartBuffer);
       enhancedBuffer = await injectChartsIntoXlsx(enhancedBuffer, {
         targetSheetName: SHEETS.dashboard,
         targetSheetFile: dashboardSheetFile,
         charts: chartSpecs,
       });
+      const postChartCells = await getDashboardCellCount(enhancedBuffer);
+      await measureDashboardCells(enhancedBuffer, 'post-chart-injection');
+      // PR-NX16 (2026-05-16): AUTO-ROLLBACK if chart injection corrupted
+      // the Dashboard. If the cell count drops significantly, the
+      // injection produced malformed XML that strips cells. Roll back
+      // to the pre-injection buffer (no charts, but with full content).
+      // Trade-off: operator loses the native chart objects, but the
+      // entire Dashboard remains visible — vastly better than an
+      // empty Dashboard that Excel auto-repairs.
+      if (preChartCells > 50 && postChartCells < preChartCells * 0.5) {
+        if (process.env.NODE_ENV !== 'test') {
+          // eslint-disable-next-line no-console
+          console.error(`[xlsx.v2 ${ctxLabel}] ⛔ chart injection CORRUPTED Dashboard (${preChartCells} → ${postChartCells} cells). Rolling back to pre-chart buffer.`);
+        }
+        enhancedBuffer = preChartBuffer;
+      }
+    } else if (skipCharts && process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.log(`[xlsx.v2 ${ctxLabel}] chart injection SKIPPED (REDIP_SKIP_CHART_INJECTION=1)`);
     }
   } catch (err) {
     // Chart injection is best-effort. If anything goes wrong (a future
@@ -8630,24 +8818,41 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
     // still gets a working file rather than an error.
     if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
-      console.warn('[xlsx.v2] chart injection failed, returning un-enhanced workbook:', err.message);
+      console.warn(`[xlsx.v2 ${ctxLabel}] chart injection failed, returning un-enhanced workbook:`, err.message, err.stack);
     }
   }
 
   try {
-    enhancedBuffer = await injectSparklinesIntoXlsx(enhancedBuffer, {
-      targetSheetName: SHEETS.dashboard,
-      targetSheetFile: dashboardSheetFile,
-      sparklines: buildDashboardSparklineSpecs(ctx),
-    });
+    if (!skipSparklines) {
+      const preSparkBuffer = enhancedBuffer;
+      const preSparkCells = await getDashboardCellCount(preSparkBuffer);
+      enhancedBuffer = await injectSparklinesIntoXlsx(enhancedBuffer, {
+        targetSheetName: SHEETS.dashboard,
+        targetSheetFile: dashboardSheetFile,
+        sparklines: buildDashboardSparklineSpecs(ctx),
+      });
+      const postSparkCells = await getDashboardCellCount(enhancedBuffer);
+      await measureDashboardCells(enhancedBuffer, 'post-sparkline-injection');
+      // PR-NX16 (2026-05-16): same auto-rollback as chart injection
+      if (preSparkCells > 50 && postSparkCells < preSparkCells * 0.5) {
+        if (process.env.NODE_ENV !== 'test') {
+          // eslint-disable-next-line no-console
+          console.error(`[xlsx.v2 ${ctxLabel}] ⛔ sparkline injection CORRUPTED Dashboard (${preSparkCells} → ${postSparkCells} cells). Rolling back.`);
+        }
+        enhancedBuffer = preSparkBuffer;
+      }
+    } else if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.log(`[xlsx.v2 ${ctxLabel}] sparkline injection SKIPPED (REDIP_SKIP_SPARKLINE_INJECTION=1)`);
+    }
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
-      console.warn('[xlsx.v2] sparkline injection failed, returning workbook without sparklines:', err.message);
+      console.warn(`[xlsx.v2 ${ctxLabel}] sparkline injection failed, returning workbook without sparklines:`, err.message, err.stack);
     }
   }
 
-  return finalizeWorkbookBuffer(enhancedBuffer);
+  return finalizeWorkbookBuffer(enhancedBuffer, { ctxLabel });
 };
 
 module.exports = {
