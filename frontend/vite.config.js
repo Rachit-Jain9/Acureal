@@ -20,6 +20,14 @@ export default defineConfig({
         __dirname,
         '../packages/financial-kernel/src/browser.ts',
       ),
+      // PR-NX26 (2026-05-17): single-source-of-truth ontology JSON
+      // consumed by the AutoFillFromDocumentsModal. The backend validates
+      // writes against this same v1.json file — keep them in lock-step
+      // by importing the JSON directly, not by re-typing field labels.
+      '@redip/real-estate-ontology': path.resolve(
+        __dirname,
+        '../packages/real-estate-ontology/src/v1.json',
+      ),
     },
   },
   server: {

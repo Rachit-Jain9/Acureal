@@ -9,15 +9,17 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDocuments, useUploadDocument, useDeleteDocument, useExtractDocument } from '../../hooks/useDocuments';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
-import { useDealContext } from '../../hooks/useDealContext';
+import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import { SectionHeader, SkeletonList } from '../../design-system';
 import SemanticSearchPanel from '../common/SemanticSearchPanel';
+import AutoFillFromDocumentsModal from './AutoFillFromDocumentsModal';
 import { formatDate } from '../../utils/format';
 import { downloadAxiosResponse } from '../../utils/download';
 
@@ -62,6 +64,7 @@ function formatDocType(docType) {
 
 export default function DocumentsTab() {
   const { dealId } = useDealContext();
+  const dealRecord = useDealRecord();
   const { data: docsData, isLoading, isError, refetch } = useDocuments(dealId);
   const { data: extractionData } = useDealExtractions(dealId);
   const uploadDoc = useUploadDocument();
@@ -75,7 +78,16 @@ export default function DocumentsTab() {
   const [fileError, setFileError] = useState('');
   const [downloading, setDownloading] = useState(null);
   const [extractingDocId, setExtractingDocId] = useState(null);
+  const [autoFillOpen, setAutoFillOpen] = useState(false);
   const fileRef = useRef(null);
+
+  // PR-NX26: count of canonical fields that have at least one extraction
+  // mapped (regardless of confidence). Drives the "Auto-fill (N)" button
+  // visibility — no button = no mapped extractions yet.
+  const mappedFieldCount = useMemo(
+    () => Object.keys(extractionData?.field_map || {}).length,
+    [extractionData?.field_map],
+  );
 
   // The API returns { data: [...] } or an array directly
   const docs = Array.isArray(docsData)
@@ -202,14 +214,38 @@ export default function DocumentsTab() {
         <p className="text-sm text-content-secondary">
           {docs.length} document{docs.length !== 1 ? 's' : ''} uploaded
         </p>
-        <button
-          onClick={() => setShowUploadForm((v) => !v)}
-          className="btn btn-primary flex items-center gap-1.5 text-sm"
-        >
-          <FilePlus size={14} />
-          Upload Document
-        </button>
+        <div className="flex items-center gap-2">
+          {mappedFieldCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setAutoFillOpen(true)}
+              className="btn btn-secondary flex items-center gap-1.5 text-sm"
+              title="Review extracted fields and apply approved values to the deal"
+            >
+              <Sparkles size={14} className="text-accent" />
+              Auto-fill from documents ({mappedFieldCount})
+            </button>
+          )}
+          <button
+            onClick={() => setShowUploadForm((v) => !v)}
+            className="btn btn-primary flex items-center gap-1.5 text-sm"
+          >
+            <FilePlus size={14} />
+            Upload Document
+          </button>
+        </div>
       </div>
+
+      {/* Auto-fill modal (PR-NX26) — operator reviews mapped extractions
+          and applies approved values to the deal + linked property. */}
+      <AutoFillFromDocumentsModal
+        dealId={dealId}
+        open={autoFillOpen}
+        onClose={() => setAutoFillOpen(false)}
+        dealCurrentValues={dealRecord || {}}
+        propertyCurrentValues={dealRecord || {}}
+      />
+
 
       {/* Upload Form */}
       {showUploadForm && (

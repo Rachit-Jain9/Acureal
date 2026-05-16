@@ -680,6 +680,12 @@ export const extractionAPI = {
   getResult:        (documentId)                                  => api.get(`/documents/${documentId}/extraction`),
   listForDeal:      (dealId)                                      => api.get(`/deals/${dealId}/extractions`),
   applyCorrections: (documentId, extractionId, corrections)       => api.put(`/documents/${documentId}/extraction/${extractionId}/corrections`, { corrections }),
+  // PR-NX26 (2026-05-17): apply operator-approved extractions to the
+  // deal + linked property. Backend validates each canonical_field
+  // against the ontology, batches deal-level + property-level writes
+  // into a single transaction, and returns { applied[], skipped[], deal,
+  // property, audit_log_id_deal, audit_log_id_property }.
+  applyToDeal:      (dealId, approved)                            => api.post(`/deals/${dealId}/apply-extractions`, { approved }),
 };
 
 export default api;
