@@ -52,7 +52,7 @@ export default function ZoningTab({ setTab }) {
   return (
     <div className="space-y-5">
       <MasterPlanZonePanel property={property} />
-      <DealStreetLookupCard property={property} />
+      <DealStreetLookupCard property={property} deal={deal} />
       <DealPlanningContextCard />
       <ParcelIntelligencePanel
         property={property}
