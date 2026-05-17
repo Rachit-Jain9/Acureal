@@ -415,4 +415,154 @@ describe('AuditTab UX upgrades', () => {
     // currentDealId. Asserting on the badge specifically.
     expect(screen.getByText(/^\(this deal\)$/i)).toBeInTheDocument();
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // PR-NX31 (2026-05-17) — document_extraction event rendering
+  // ──────────────────────────────────────────────────────────────────
+  //
+  // PR-NX25's apply-extractions endpoint writes deal_audit_log rows with
+  // event_type='updated' + metadata.source='document_extraction' +
+  // metadata.applied_fields_count + metadata.source_extraction_ids +
+  // metadata.target_table + metadata.ontology_version. The generic
+  // 'Edited' label loses the actual story; these tests pin the
+  // distinctive rendering.
+  describe('PR-NX31 — document_extraction event rendering', () => {
+    it('renders the synthetic "Auto-filled from documents" badge instead of generic "Edited"', () => {
+      eventsState = {
+        data: [
+          {
+            id: 'e-ax',
+            kind: 'mutation',
+            event_type: 'updated',
+            actor: { id: 'u1', name: 'Rachit Jain' },
+            created_at: new Date().toISOString(),
+            before: { negotiated_price_cr: null },
+            after: { negotiated_price_cr: 18 },
+            metadata: {
+              source: 'document_extraction',
+              applied_fields_count: 1,
+              source_extraction_ids: ['ext-a'],
+              target_table: 'deals',
+              ontology_version: '1.0.0',
+            },
+          },
+        ],
+        isLoading: false,
+      };
+      renderWithClient(<AuditTab />);
+      // Synthetic label, not generic
+      expect(screen.getByText('Auto-filled from documents')).toBeInTheDocument();
+      expect(screen.queryByText(/^Edited$/i)).not.toBeInTheDocument();
+    });
+
+    it('prepends a metadata attribution line with field count + target table + ontology version', () => {
+      eventsState = {
+        data: [
+          {
+            id: 'e-ax',
+            kind: 'mutation',
+            event_type: 'updated',
+            actor: { id: 'u1', name: 'Rachit Jain' },
+            created_at: new Date().toISOString(),
+            before: { negotiated_price_cr: null, rera_number: null },
+            after: { negotiated_price_cr: 18, rera_number: 'PRM/KA/X' },
+            metadata: {
+              source: 'document_extraction',
+              applied_fields_count: 2,
+              source_extraction_ids: ['ext-a', 'ext-b'],
+              target_table: 'deals',
+              ontology_version: '1.0.0',
+            },
+          },
+        ],
+        isLoading: false,
+      };
+      renderWithClient(<AuditTab />);
+      // The attribution line shows "2 fields applied from 2 document extractions → deal record"
+      const banner = screen.getByText(/applied from/i);
+      expect(banner).toBeInTheDocument();
+      expect(banner.textContent).toMatch(/2 fields/);
+      expect(banner.textContent).toMatch(/2 document extractions/);
+      expect(banner.textContent).toMatch(/deal record/);
+      // Ontology version stamped
+      expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+      // The per-field diff still renders below
+      expect(screen.getAllByText(/RERA number|Negotiated/).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('maps target_table="properties" to "linked property" in the header', () => {
+      eventsState = {
+        data: [
+          {
+            id: 'e-ax',
+            kind: 'mutation',
+            event_type: 'updated',
+            actor: { id: 'u1', name: 'Rachit Jain' },
+            created_at: new Date().toISOString(),
+            before: { survey_number: null },
+            after: { survey_number: '45/2A' },
+            metadata: {
+              source: 'document_extraction',
+              applied_fields_count: 1,
+              source_extraction_ids: ['ext-a'],
+              target_table: 'properties',
+              ontology_version: '1.0.0',
+            },
+          },
+        ],
+        isLoading: false,
+      };
+      renderWithClient(<AuditTab />);
+      expect(screen.getByText(/linked property/i)).toBeInTheDocument();
+    });
+
+    it('uses singular form "1 field" / "1 document extraction" when counts are 1', () => {
+      eventsState = {
+        data: [
+          {
+            id: 'e-ax',
+            kind: 'mutation',
+            event_type: 'updated',
+            actor: { id: 'u1', name: 'Rachit Jain' },
+            created_at: new Date().toISOString(),
+            before: { negotiated_price_cr: null },
+            after: { negotiated_price_cr: 18 },
+            metadata: {
+              source: 'document_extraction',
+              applied_fields_count: 1,
+              source_extraction_ids: ['ext-a'],
+              target_table: 'deals',
+            },
+          },
+        ],
+        isLoading: false,
+      };
+      renderWithClient(<AuditTab />);
+      const banner = screen.getByText(/applied from/i);
+      expect(banner.textContent).toMatch(/1 field /);
+      expect(banner.textContent).toMatch(/1 document extraction/);
+    });
+
+    it('generic edits (no metadata.source) still render the "Edited" label, untouched', () => {
+      eventsState = {
+        data: [
+          {
+            id: 'e-plain',
+            kind: 'mutation',
+            event_type: 'updated',
+            actor: { id: 'u1', name: 'Rachit Jain' },
+            created_at: new Date().toISOString(),
+            before: { notes: null },
+            after: { notes: 'Manual change' },
+            metadata: {}, // no source flag
+          },
+        ],
+        isLoading: false,
+      };
+      renderWithClient(<AuditTab />);
+      expect(screen.getByText('Edited')).toBeInTheDocument();
+      expect(screen.queryByText('Auto-filled from documents')).not.toBeInTheDocument();
+      expect(screen.queryByText(/applied from/i)).not.toBeInTheDocument();
+    });
+  });
 });

@@ -20,6 +20,8 @@ import {
   Layers,
   X,
   ExternalLink,
+  Sparkles,
+  FileText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import Badge from '../common/Badge';
@@ -74,6 +76,26 @@ const EVENT_TYPE_CONFIG = {
   bulk_reassigned:     { label: 'Reassigned (bulk)',   tone: 'info',     icon: Layers },
   bulk_stage_changed:  { label: 'Stage changed (bulk)', tone: 'info',    icon: Layers },
   bulk_deleted:        { label: 'Deleted (bulk)',      tone: 'danger',   icon: Layers },
+};
+
+// PR-NX31 (2026-05-17): document-ingestion auto-fill events use the DB
+// event_type 'updated' (since they're just deals/properties UPDATEs at
+// the DB level) but carry metadata.source='document_extraction'. The
+// generic "Edited" label loses the actual story — "Rachit approved 7
+// fields extracted from sale-deed.pdf via the auto-fill workflow."
+// resolveEffectiveCfg returns a synthetic cfg for these rows so the
+// timeline reads like a first-class document-ingestion event rather
+// than a generic edit.
+const DOC_EXTRACTION_CFG = {
+  label: 'Auto-filled from documents',
+  tone: 'info',
+  icon: Sparkles,
+};
+const resolveEffectiveCfg = (event) => {
+  if (event?.event_type === 'updated' && event?.metadata?.source === 'document_extraction') {
+    return DOC_EXTRACTION_CFG;
+  }
+  return EVENT_TYPE_CONFIG[event?.event_type] || { label: event?.event_type, tone: 'neutral' };
 };
 
 // Human-readable labels for the per-field diff renderer. Kept in sync
@@ -267,11 +289,44 @@ function MutationDiff({ before, after, metadata, eventType }) {
     return JSON.stringify(b) !== JSON.stringify(a);
   });
 
+  // PR-NX31: prepend a document-ingestion attribution line when the
+  // metadata flags it. Gives the operator immediate context — "this
+  // wasn't a manual edit; this was an approve-from-extraction" — before
+  // they read the per-field diff. Falls back gracefully when any of the
+  // expected metadata pieces are missing (e.g., legacy rows pre-NX25).
+  const isDocExtraction = metadata?.source === 'document_extraction';
+  const appliedCount = Number(metadata?.applied_fields_count) || null;
+  const targetTable = metadata?.target_table || null;
+  const ontologyVersion = metadata?.ontology_version || null;
+  const sourceExtractionCount = Array.isArray(metadata?.source_extraction_ids)
+    ? metadata.source_extraction_ids.length
+    : null;
+
+  const docExtractionHeader = isDocExtraction ? (
+    <div className="inline-flex flex-wrap items-center gap-1.5 text-[11px] text-content-secondary mb-1.5 px-2 py-1 rounded-md bg-accent-50/60 border border-accent-100">
+      <FileText size={11} className="text-accent flex-shrink-0" />
+      <span>
+        <span className="font-medium text-content-primary">
+          {appliedCount != null ? `${appliedCount} field${appliedCount === 1 ? '' : 's'}` : 'Fields'}
+        </span>
+        {' '}applied from{' '}
+        {sourceExtractionCount != null && sourceExtractionCount > 0
+          ? `${sourceExtractionCount} document extraction${sourceExtractionCount === 1 ? '' : 's'}`
+          : 'document extraction'}
+        {targetTable ? ` → ${targetTable === 'deals' ? 'deal record' : targetTable === 'properties' ? 'linked property' : targetTable}` : ''}
+      </span>
+      {ontologyVersion && (
+        <span className="text-[9px] text-content-tertiary font-mono">v{ontologyVersion}</span>
+      )}
+    </div>
+  ) : null;
+
   if (changed.length === 0) {
     // Synthesize a useful row from metadata when the diff is empty.
     if (metadata?.bulk_id || metadata?.bulk_size) {
       return (
         <div className="text-xs text-content-secondary">
+          {docExtractionHeader}
           Part of a <span className="font-medium text-content-primary">bulk batch</span>
           {metadata.bulk_size ? (
             <> of {metadata.bulk_size} deal{metadata.bulk_size === 1 ? '' : 's'}</>
@@ -287,32 +342,40 @@ function MutationDiff({ before, after, metadata, eventType }) {
         </div>
       );
     }
-    return null;
+    // PR-NX31: doc-extraction header is informative even with an empty
+    // diff (e.g., the auto-fill went through but every approved value
+    // was the same as the existing one — rare but possible).
+    return docExtractionHeader;
   }
 
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {changed.map((key) => {
-        const label = FIELD_LABELS[key] || key;
-        return (
-          <div key={key} className="text-xs text-content-secondary inline-flex items-center gap-1.5 flex-wrap">
-            <span className="text-content-muted">{label}:</span>
-            <span className="line-through text-content-muted tabular-nums">
-              {fmtFieldValue(beforeObj[key])}
-            </span>
-            <ArrowRight size={10} className="text-content-muted" />
-            <span className="text-content-primary font-medium tabular-nums">
-              {fmtFieldValue(afterObj[key])}
-            </span>
-          </div>
-        );
-      })}
+    <div>
+      {docExtractionHeader}
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {changed.map((key) => {
+          const label = FIELD_LABELS[key] || key;
+          return (
+            <div key={key} className="text-xs text-content-secondary inline-flex items-center gap-1.5 flex-wrap">
+              <span className="text-content-muted">{label}:</span>
+              <span className="line-through text-content-muted tabular-nums">
+                {fmtFieldValue(beforeObj[key])}
+              </span>
+              <ArrowRight size={10} className="text-content-muted" />
+              <span className="text-content-primary font-medium tabular-nums">
+                {fmtFieldValue(afterObj[key])}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function MutationRow({ event, onPeekBatch }) {
-  const cfg = EVENT_TYPE_CONFIG[event.event_type] || { label: event.event_type, tone: 'neutral' };
+  // PR-NX31: pick the synthetic cfg for document_extraction-sourced
+  // updates so the icon + label + tone reflect the ingestion provenance.
+  const cfg = resolveEffectiveCfg(event);
   const Icon = cfg.icon || ShieldCheck;
   const actorName = event.actor?.name || event.actor?.email || (event.actor_id ? 'Unknown user' : 'System');
   const bulkId = event.metadata?.bulk_id;
