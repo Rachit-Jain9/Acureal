@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, FileText, Loader2, Presentation } from 'lucide-react';
+import { Download, FileText, Loader2, Presentation, BookText } from 'lucide-react';
 import { downloadAxiosResponse } from '../utils/download';
 import { downloadCsv } from '../utils/csvDownload';
 import { useDeals } from '../hooks/useDeals';
@@ -54,6 +54,10 @@ export default function ReportsPage() {
   const [exportingPptx, setExportingPptx] = useState(null);
   const [exportingXlsx, setExportingXlsx] = useState(null);
   const [exportingPdf, setExportingPdf] = useState(null);
+  // PR-NX39 (2026-05-17): per-row busy state for the new DOCX underwriting
+  // report download button. Stores the deal id while in flight so only that
+  // row's button shows the spinner.
+  const [exportingDocx, setExportingDocx] = useState(null);
 
   const { data: dealsData, isLoading } = useDeals({ limit: 500 });
   const { data: dailyBrief } = useDailyBrief();
@@ -189,6 +193,28 @@ export default function ReportsPage() {
       console.error('[ReportsPage] PDF export error:', err);
     } finally {
       setExportingPdf(null);
+    }
+  };
+
+  // PR-NX39 (2026-05-17): institutional-grade DOCX underwriting report
+  // (22 sections — Cover → ToC → AI Briefing → Exec Summary → ... →
+  // Risk Register → DD Status → Approvals Tracker → Provenance → Pros &
+  // Cons → Score → Methodology → Disclaimer). Gated server-side behind
+  // DOCX_REPORT_ENABLED=1 (flipped 2026-05-17). Admins bypass the gate.
+  const handleExportDocx = async (dealId, dealName) => {
+    setExportingDocx(dealId);
+    try {
+      const response = await exportsAPI.dealDocx(dealId);
+      const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      const today = new Date().toISOString().slice(0, 10);
+      downloadAxiosResponse(response, `redip-${safeName}-underwriting-${today}.docx`);
+      toast.success('Underwriting report (DOCX) downloaded');
+    } catch (err) {
+      const msg = await getExportErrorMessage(err, 'Underwriting report download failed');
+      toast.error(msg);
+      console.error('[ReportsPage] DOCX export error:', err);
+    } finally {
+      setExportingDocx(null);
     }
   };
 
@@ -553,6 +579,19 @@ export default function ReportsPage() {
                               <FileText size={11} />
                             )}
                             PDF
+                          </button>
+                          <button
+                            onClick={() => handleExportDocx(deal.id, deal.name)}
+                            disabled={exportingDocx === deal.id}
+                            title="Download 22-section institutional underwriting report (DOCX)"
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            {exportingDocx === deal.id ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <BookText size={11} />
+                            )}
+                            DOCX
                           </button>
                         </div>
                       </td>
