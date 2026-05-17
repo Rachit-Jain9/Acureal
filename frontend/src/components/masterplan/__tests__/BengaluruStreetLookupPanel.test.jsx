@@ -151,6 +151,21 @@ describe('BengaluruStreetLookupPanel', () => {
     expect(screen.getByText(/Could not load street lookup/i)).toBeInTheDocument();
   });
 
+  it('listens for the "bbmp:focus-zone" window event and updates the zone filter', async () => {
+    render(<BengaluruStreetLookupPanel />);
+    window.dispatchEvent(new CustomEvent('bbmp:focus-zone', { detail: { zone: 'C' } }));
+    await waitFor(() => {
+      expect(lastParams.zone).toBe('C');
+    }, { timeout: 200 });
+  });
+
+  it('ignores "bbmp:focus-zone" with an invalid zone code', async () => {
+    render(<BengaluruStreetLookupPanel />);
+    window.dispatchEvent(new CustomEvent('bbmp:focus-zone', { detail: { zone: 'Z' } }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(lastParams.zone).toBeFalsy();
+  });
+
   it('renders the source document name and the AI-assisted disclaimer', () => {
     render(<BengaluruStreetLookupPanel />);
     // "Notification No. 384" appears in both the eyebrow sub and the source

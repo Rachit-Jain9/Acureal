@@ -173,7 +173,21 @@ export default function UavBenchmarkPanel() {
                 <th className="text-left font-medium px-4 py-2">Property use</th>
                 {zones.map((z) => (
                   <th key={z} className="text-right font-medium px-3 py-2">
-                    Zone {z}
+                    {/* Each zone header is a click-through into the Bengaluru
+                        Street Lookup pre-filtered to this zone. We fire a
+                        window-level CustomEvent the lookup panel listens on
+                        — keeps both panels independent (no shared parent
+                        state) while still wiring the navigation. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('bbmp:focus-zone', { detail: { zone: z } }));
+                      }}
+                      className="text-right hover:text-accent hover:underline transition-colors duration-120 cursor-pointer"
+                      title={`Filter the Bengaluru Street Lookup to Zone ${z}`}
+                    >
+                      Zone {z}
+                    </button>
                   </th>
                 ))}
               </tr>

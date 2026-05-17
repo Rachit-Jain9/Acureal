@@ -84,6 +84,21 @@ describe('UavBenchmarkPanel', () => {
     expect(screen.getByText('Zone F')).toBeInTheDocument();
   });
 
+  it('dispatches a "bbmp:focus-zone" window event when a zone header is clicked', () => {
+    const events = [];
+    const handler = (e) => events.push(e.detail);
+    window.addEventListener('bbmp:focus-zone', handler);
+    try {
+      render(<UavBenchmarkPanel />);
+      // The "Zone C" header is a clickable button.
+      const zoneCBtn = screen.getByRole('button', { name: /Zone C/i });
+      fireEvent.click(zoneCBtn);
+      expect(events).toContainEqual({ zone: 'C' });
+    } finally {
+      window.removeEventListener('bbmp:focus-zone', handler);
+    }
+  });
+
   it('renders the ratio strip below the zone headers', () => {
     render(<UavBenchmarkPanel />);
     expect(screen.getByText(/Avg ratio vs Zone A/i)).toBeInTheDocument();
