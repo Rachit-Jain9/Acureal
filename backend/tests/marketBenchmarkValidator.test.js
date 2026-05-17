@@ -11,6 +11,9 @@ const {
   validateSellRateBands,
   validateCompCoverage,
   validateCompFreshness,
+  validateDscrFloor,
+  validateYocVsExitCapSpread,
+  RBI_DSCR_FLOOR,
 } = __internal;
 
 // Helper: capture addIssue calls into an array so each test can inspect.
@@ -252,6 +255,203 @@ describe('marketBenchmarkValidator', () => {
       const { issues, addIssue } = makeIssueCollector();
       validateCompFreshness(buildCtx([{ rate_per_sqft: 15000 }]), {}, addIssue);
       expect(issues).toHaveLength(0);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // PR-NX33 — income-deal validators
+  // ──────────────────────────────────────────────────────────────────
+
+  describe('validateDscrFloor — RBI Master Direction 1.20x floor', () => {
+    // Helper: build an income-family ctx with the financial inputs the
+    // validator reads. NOI in Cr, totalCost in Cr.
+    const buildCtx = (overrides = {}) => ({
+      dealFamily: 'income',
+      kernelKpis: {
+        noi: overrides.noi ?? 8.5,
+        totalCost: overrides.totalCost ?? 100,
+      },
+      inputs: {
+        loanTermYears: overrides.loanTermYears ?? 12,
+      },
+    });
+    const buildCore = (overrides = {}) => ({
+      debtLTV: overrides.debtLTV ?? 0.65,
+      debtRatePct: overrides.debtRatePct ?? 0.105, // 10.5% — Indian LRD norm
+    });
+
+    test('development-family deal skipped (no income → no DSCR)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      const ctx = buildCtx();
+      ctx.dealFamily = 'development';
+      validateDscrFloor(ctx, buildCore(), addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('missing NOI → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      const ctx = buildCtx();
+      ctx.kernelKpis.noi = null;
+      validateDscrFloor(ctx, buildCore(), addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('zero LTV → silent (no debt → no DSCR)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateDscrFloor(buildCtx(), buildCore({ debtLTV: 0 }), addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('healthy DSCR (well above 1.20x) → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // NOI 12 Cr on 100 Cr cost × 50% LTV = 50 Cr loan
+      // Annual debt service @ 9% × 15yr ≈ 6.2 Cr → DSCR ≈ 1.93x
+      validateDscrFloor(
+        buildCtx({ noi: 12, totalCost: 100, loanTermYears: 15 }),
+        buildCore({ debtLTV: 0.50, debtRatePct: 0.09 }),
+        addIssue,
+      );
+      expect(issues).toHaveLength(0);
+    });
+
+    test('DSCR between 1.00 and 1.20 → WARN (below RBI floor)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // Engineer: NOI 10 Cr on 100 Cr cost × 60% LTV = 60 Cr loan
+      // Annual debt service @ 10% × 10yr:
+      //   factor = (0.10 × 1.10^10) / (1.10^10 − 1) ≈ 0.1627
+      //   service ≈ 60 × 0.1627 ≈ 9.76 Cr
+      //   DSCR ≈ 10 / 9.76 ≈ 1.02× — in the 1.00–1.20 WARN band
+      validateDscrFloor(
+        buildCtx({ noi: 10, totalCost: 100, loanTermYears: 10 }),
+        buildCore({ debtLTV: 0.60, debtRatePct: 0.10 }),
+        addIssue,
+      );
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warn');
+      expect(issues[0].field).toBe('DebtLTV');
+      expect(issues[0].check).toMatch(/RBI Master Direction/);
+      expect(issues[0].message).toMatch(/BELOW the conventional 1.20× floor/);
+      expect(issues[0].message).toMatch(/1\.0[0-9]×/); // DSCR value in [1.00, 1.10)
+    });
+
+    test('DSCR below 1.00 → escalated WARN (cannot service debt)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // Very high LTV + thin NOI → DSCR < 1.0
+      // NOI 5 Cr on 100 Cr cost × 80% LTV = 80 Cr loan
+      // Annual debt service @ 11% × 10yr ≈ 13.6 Cr → DSCR ≈ 0.37x
+      validateDscrFloor(
+        buildCtx({ noi: 5, totalCost: 100, loanTermYears: 10 }),
+        buildCore({ debtLTV: 0.80, debtRatePct: 0.11 }),
+        addIssue,
+      );
+      expect(issues).toHaveLength(1);
+      expect(issues[0].message).toMatch(/does not cover annual debt service/);
+      expect(issues[0].action).toMatch(/lower DebtRatePct OR extend LoanTermYears/);
+    });
+
+    test('zero interest rate → uses simple division (defensive edge case)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // r=0 path: annualDebtService = loan / n
+      // 100 Cr × 0.5 LTV = 50 Cr loan, 10yr term → 5 Cr/yr
+      // NOI 3 Cr → DSCR 0.6 (escalated WARN)
+      validateDscrFloor(
+        buildCtx({ noi: 3, totalCost: 100, loanTermYears: 10 }),
+        buildCore({ debtLTV: 0.50, debtRatePct: 0.0001 }), // ~0 but not literal 0 (validator gates r > 0)
+        addIssue,
+      );
+      // With r→0, DSCR ≈ NOI / (loan/term) ≈ 3 / 5 ≈ 0.6, triggers WARN
+      expect(issues).toHaveLength(1);
+    });
+
+    test('exact 1.20x boundary → silent (at the floor, not below)', () => {
+      // Engineer the inputs to produce DSCR ≈ exactly 1.20x
+      // loan = 50, rate = 0.10, term = 15yr
+      // annual debt service = 50 × (0.10×(1.10)^15)/((1.10)^15 − 1) ≈ 6.575
+      // need NOI = 1.20 × 6.575 ≈ 7.89
+      const { issues, addIssue } = makeIssueCollector();
+      validateDscrFloor(
+        buildCtx({ noi: 7.89, totalCost: 100, loanTermYears: 15 }),
+        buildCore({ debtLTV: 0.50, debtRatePct: 0.10 }),
+        addIssue,
+      );
+      // DSCR is at-or-just-above 1.20x — should NOT fire
+      expect(issues).toHaveLength(0);
+    });
+
+    test('RBI_DSCR_FLOOR constant is exported as 1.20', () => {
+      expect(RBI_DSCR_FLOOR).toBe(1.20);
+    });
+  });
+
+  describe('validateYocVsExitCapSpread — development premium check', () => {
+    const buildCtx = (yoc) => ({
+      dealFamily: 'income',
+      kernelKpis: { yieldOnCost: yoc },
+    });
+
+    test('development-family deal skipped', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      const ctx = buildCtx(0.05);
+      ctx.dealFamily = 'development';
+      validateYocVsExitCapSpread(ctx, { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('missing YoC → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateYocVsExitCapSpread(buildCtx(null), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('healthy positive spread (≥200 bps) → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // YoC 9.5%, ExitCap 7.5% → 200 bps spread
+      validateYocVsExitCapSpread(buildCtx(0.095), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('thin positive spread (between 50 and 200 bps) → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // YoC 8.5%, ExitCap 7.5% → 100 bps spread
+      validateYocVsExitCapSpread(buildCtx(0.085), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('very thin positive spread (<50 bps) → WARN', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // YoC 7.75%, ExitCap 7.5% → 25 bps spread
+      validateYocVsExitCapSpread(buildCtx(0.0775), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warn');
+      expect(issues[0].field).toBe('ExitCapRate');
+      expect(issues[0].message).toMatch(/THIN development premium/);
+      expect(issues[0].message).toMatch(/25 bps of spread/);
+    });
+
+    test('negative spread → escalated WARN (no economic rationale)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // YoC 6.5%, ExitCap 7.5% → −100 bps spread
+      validateYocVsExitCapSpread(buildCtx(0.065), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].message).toMatch(/NEGATIVE spread/);
+      expect(issues[0].message).toMatch(/100 bps deficit/);
+      expect(issues[0].action).toMatch(/build-cost basis|stabilised income|Exit Cap Rate assumption/);
+    });
+
+    test('exactly 50 bps spread → silent (at the threshold)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // YoC 8%, ExitCap 7.5% → 50 bps exactly
+      validateYocVsExitCapSpread(buildCtx(0.080), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('exact zero spread → silent? actually WARN — thin band catches it', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      // YoC 7.5%, ExitCap 7.5% → 0 bps exactly
+      // Falls in the [0, 50) bps THIN warning band
+      validateYocVsExitCapSpread(buildCtx(0.075), { exitCapRate: 0.075 }, addIssue);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].message).toMatch(/THIN development premium/);
     });
   });
 
