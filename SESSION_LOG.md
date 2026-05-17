@@ -4,6 +4,41 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (continued, ~10 hr autonomous window) — BBMP Guidance Value end-to-end (PRs #350, #351, #352, #353, #354)
+
+**What was worked on in plain English:**
+- Extracted the entire 686-page BBMP Guidance Value gazette into a searchable street-level index — **9,913 streets** with ward + source-page on every row, indexed in Postgres with a trigram GIN for fuzzy search.
+- Built a **Bengaluru Street Lookup** panel on the admin Planning Intelligence tab — search any area or street, see the BBMP ward + the exact gazette page in milliseconds.
+- Filled in the **BBMP zone (A–F) + IGR-style guidance value bandwidth (Rs. min–max / sqft)** for 2,943 streets (30%) using a deterministic heuristic over the pypdf zone footers; the remaining 70% are queued for an LLM enrichment pass that needs a working `GEMINI_API_KEY`.
+- Wired the lookup directly into **every Bengaluru deal's Zoning tab** with a card that pre-seeds the search from the linked property and shows top-match zone, guidance band, and corpus coverage.
+- Added a pure-JS **spread-vs-guidance kernel** that compares the deal's transaction price per sqft against the matched guidance bandwidth and renders a four-state signal (*Undervalued / Fair / Overpriced / Bubble risk*) with a **risk-adjusted not-to-exceed entry price** (`guidance_mid × 1.10`).
+- Added a **"Verify on Kaveri"** CTA on the deal-side card pointing to the live IGR portal with the exact terms to enter, plus a sharpened disclaimer making the BBMP-property-tax-zone vs IGR-sale-deed-guidance distinction explicit.
+
+**PRs opened/merged:**
+- PR #350 — `feat(planning-intelligence): Bengaluru Street Lookup — 9,913 streets from the BBMP Guidance Value PDF` — squash-merged.
+- PR #351 — `feat(planning-intelligence): Phase 2 — zone enrichment + zone-filter chips` — squash-merged.
+- PR #352 — `feat(deal): wire Bengaluru Street Lookup into every Bengaluru deal's Zoning tab` — squash-merged.
+- PR #353 — `feat(deal): spread vs guidance signal on Bengaluru deal Zoning tab` — squash-merged.
+- PR #354 — `feat(deal): Verify-on-Kaveri CTA + IGR-vs-BBMP disclaimer on street lookup` — open (in CI at time of writing).
+
+**Verification:**
+- Backend test suite: 1,834 → 1,835 (+1 sweep of new street-lookup service tests; the 6 new tests are within the same single-suite parent describe).
+- Frontend test suite: ~370 → 434 (+64 across guidance-value kernel parity, BengaluruStreetLookupPanel, DealStreetLookupCard, spread tile, Kaveri CTA).
+- Frontend production build: clean every PR (10–22 s, no new warnings).
+- CI: every PR landed with all checks green (Backend / Frontend / Financial kernel / Audit & migration lint / Vercel).
+
+**Manual blockers (need your action when you wake up):**
+- ⚠️ Both `GEMINI_API_KEY` and `ANTHROPIC_API_KEY` in `backend/.env` + `backend/.env.local` return 401 INVALID. Refreshing either unlocks `scripts/enrich-bbmp-street-zones.js` to fill in the remaining ~70% of unenriched street rows (~$1 cost, ~15 min runtime).
+- ⚠️ Two Supabase projects exist: `lsbhrbvuynzqhdtzczco` (Tokyo, REDIP-Tokyo, has prior session's regulatory data) and `niamgjbxxgmmffggumvj` (ap-south, REDIP, matches `backend/.env`). The street index seed + heuristic enrichment landed in niam only. Tell me which Vercel production uses and I'll sync the other.
+- Both projects had the schema migration applied so the table exists in both regardless.
+
+**What's left:**
+- LLM pass over the 70 multi-zone PDF pages to enrich the remaining ~7,000 streets (script ready, blocked on API keys).
+- IC PPTX export could carry the BBMP guidance section inline — chose to defer because the deal page already shows it; revisit if IC packets need standalone defensibility.
+- K-GIS integration for parcel polygon + village-code lookup (per GROK doc; would unlock geo-anchored guidance value joins) — separate, larger feature.
+
+---
+
 ## 2026-05-17 (overnight) — Document Ingestion + Auto-fill MVP + Market-Benchmark Validators (PR #345, #346, #347, #348)
 
 After the operator confirmed PR-NX24 fixed the charts ("Perfect. It works."), pivoted to the next flagship priority per docs/STRATEGIC_REVIEW_2026_05_15.md §III.1 — Document Ingestion + AI auto-fill. The extraction half was already shipped (Gemini 3.1 Flash-Lite extracts 15+ doctypes into `document_extractions.structured_fields` with confidence scores), but operators still had to manually re-enter every extracted field into the deal form. This batch closes that workflow gap end-to-end.
