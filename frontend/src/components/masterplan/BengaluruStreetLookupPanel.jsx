@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search, MapPin, FileText, AlertTriangle, BookOpen } from 'lucide-react';
 import Badge from '../common/Badge';
 import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
@@ -96,12 +96,33 @@ const ZONE_FILTERS = [
 export default function BengaluruStreetLookupPanel() {
   const [searchInput, setSearchInput] = useState('');
   const [zoneFilter, setZoneFilter] = useState(null);
+  const rootRef = useRef(null);
   const debouncedSearch = useDebounced(searchInput, 200);
   const { data, isLoading, isError, isFetching } = useStreetLookup({
     search: debouncedSearch,
     zone: zoneFilter,
     limit: 50,
   });
+
+  // Cross-link: when the UAV Benchmark panel fires a 'bbmp:focus-zone'
+  // event (clicked zone column header), set our filter to that zone and
+  // scroll the panel into view. Window-level event keeps the two panels
+  // independent — no shared parent state needed.
+  useEffect(() => {
+    const handler = (event) => {
+      const zone = event?.detail?.zone;
+      if (typeof zone !== 'string') return;
+      const valid = ZONE_FILTERS.some((opt) => opt.key === zone);
+      if (!valid) return;
+      setZoneFilter(zone);
+      // requestAnimationFrame so the layout settles before we scroll.
+      requestAnimationFrame(() => {
+        rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+    window.addEventListener('bbmp:focus-zone', handler);
+    return () => window.removeEventListener('bbmp:focus-zone', handler);
+  }, []);
 
   if (isLoading) return <PanelSkeleton />;
   if (isError) {
@@ -122,7 +143,7 @@ export default function BengaluruStreetLookupPanel() {
     : 0;
 
   return (
-    <div className="space-y-5">
+    <div ref={rootRef} className="space-y-5">
       <SectionHeader
         eyebrow="Bengaluru street index"
         title="Find a street's BBMP zone + source page"
