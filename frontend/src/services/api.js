@@ -240,6 +240,18 @@ export const propertiesAPI = {
   parcelVerifications: (id) => api.get(`/properties/${id}/parcel-intelligence/verifications`),
   verifyParcelItem: (id, payload) => api.post(`/properties/${id}/parcel-intelligence/verify-item`, payload),
   unverifyParcelItem: (id, linkId) => api.delete(`/properties/${id}/parcel-intelligence/verifications/${linkId}`),
+  // Auto-derive parcel context from either an address or (lat, lng).
+  // Returns a single payload with coordinates, BBMP jurisdiction + ward,
+  // BBMP zone + guidance value, planning district + demographics, K-GIS
+  // hierarchy + survey numbers + geometry, applicable city-level callouts
+  // (SDZ/heritage/NGT/PRR), and verify-link payloads.
+  autoDeriveContext: ({ address, lat, lng } = {}) => {
+    const params = {};
+    if (address && String(address).trim()) params.address = String(address).trim();
+    if (lat !== undefined && lat !== null && lat !== '') params.lat = lat;
+    if (lng !== undefined && lng !== null && lng !== '') params.lng = lng;
+    return api.get('/properties/auto-derive-context', { params });
+  },
 };
 
 // Financials
