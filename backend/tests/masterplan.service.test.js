@@ -1458,6 +1458,83 @@ describe('masterplan.service district intelligence helpers', () => {
     });
   });
 
+  describe('getBbmpWardSummary', () => {
+    test('aggregates per-ward street counts + dominant zone + median guidance', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            ward_no: 84,
+            street_count: 100,
+            enriched_count: 70,
+            distinct_zone_count: 2,
+            median_guidance_mid_inr: '4250.5',
+            sample_aro_section: 'WHITEFIELD / RESIDENTIAL',
+            dominant_zone: 'C',
+            dominant_zone_count: 50,
+            dominant_zone_share_pct: '71.4',
+          },
+          {
+            ward_no: 151,
+            street_count: 60,
+            enriched_count: 0,
+            distinct_zone_count: 0,
+            median_guidance_mid_inr: null,
+            sample_aro_section: 'KORAMANGALA / RESIDENTIAL',
+            dominant_zone: null,
+            dominant_zone_count: null,
+            dominant_zone_share_pct: null,
+          },
+          {
+            ward_no: 111,
+            street_count: 40,
+            enriched_count: 40,
+            distinct_zone_count: 1,
+            median_guidance_mid_inr: '7001',
+            sample_aro_section: 'CHIKPETE / RESIDENTIAL',
+            dominant_zone: 'A',
+            dominant_zone_count: 40,
+            dominant_zone_share_pct: '100.0',
+          },
+        ],
+      });
+
+      const result = await service.getBbmpWardSummary();
+
+      expect(result.wards).toHaveLength(3);
+      const w84 = result.wards.find((w) => w.ward_no === 84);
+      expect(w84.dominant_zone).toBe('C');
+      expect(w84.dominant_zone_share_pct).toBeCloseTo(71.4, 1);
+      // median_guidance_mid_inr should be rounded to nearest integer
+      expect(w84.median_guidance_mid_inr).toBe(4251);
+
+      const w151 = result.wards.find((w) => w.ward_no === 151);
+      expect(w151.dominant_zone).toBeNull();
+      expect(w151.median_guidance_mid_inr).toBeNull();
+
+      // Summary aggregates: 100 + 60 + 40 = 200 total; 70 + 0 + 40 = 110 enriched = 55%
+      expect(result.summary.ward_count).toBe(3);
+      expect(result.summary.total_streets).toBe(200);
+      expect(result.summary.total_enriched).toBe(110);
+      expect(result.summary.enriched_pct).toBeCloseTo(55, 1);
+      // Wards fully enriched: only ward 111 (40/40)
+      expect(result.summary.wards_fully_enriched).toBe(1);
+      // Wards with multiple zones: only ward 84 (2 distinct)
+      expect(result.summary.wards_with_multiple_zones).toBe(1);
+
+      expect(result.source_document).toMatch(/Notification No\. 384/);
+      expect(result.disclaimer).toMatch(/Ward rollups/i);
+    });
+
+    test('returns empty arrays when no wards have street data', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+      const result = await service.getBbmpWardSummary();
+      expect(result.wards).toEqual([]);
+      expect(result.summary.ward_count).toBe(0);
+      expect(result.summary.total_streets).toBe(0);
+      expect(result.summary.enriched_pct).toBe(0);
+    });
+  });
+
   describe('searchBbmpStreets', () => {
     // Parent describe does not clearAllMocks(), so each test:
     //   1. Captures callsBefore,

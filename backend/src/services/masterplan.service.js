@@ -1873,6 +1873,108 @@ const STREET_INDEX_SOURCE_DOC = 'BBMP Guidance Value Notification No. 384 (09-Ma
 const STREET_INDEX_DISCLAIMER = 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.';
 const VALID_ZONE_CODES = new Set(['A', 'B', 'C', 'D', 'E', 'F']);
 
+// Ward-level rollup of the BBMP street index. Returns one row per ward_no
+// with: street count, dominant zone (the zone code that wins the plurality
+// of enriched rows in that ward), dominant-zone share, and the median
+// guidance-value bandwidth midpoint across enriched rows. Powers the
+// admin-side "Ward summary" panel and the cross-link from a deal page
+// when the team wants a one-glance read on a whole ward.
+async function getBbmpWardSummary() {
+  const result = await query(
+    `WITH ward_zone_counts AS (
+       SELECT ward_no, zone_code, COUNT(*)::int AS cnt
+       FROM regulatory_data.bbmp_street_index
+       WHERE ward_no IS NOT NULL
+       GROUP BY ward_no, zone_code
+     ),
+     ward_dominant_zone AS (
+       SELECT DISTINCT ON (ward_no)
+         ward_no,
+         zone_code AS dominant_zone,
+         cnt       AS dominant_zone_count
+       FROM ward_zone_counts
+       WHERE zone_code IS NOT NULL
+       ORDER BY ward_no, cnt DESC, zone_code
+     ),
+     ward_totals AS (
+       SELECT
+         ward_no,
+         COUNT(*)::int                                                  AS street_count,
+         COUNT(*) FILTER (WHERE zone_code IS NOT NULL)::int             AS enriched_count,
+         COUNT(DISTINCT zone_code) FILTER (WHERE zone_code IS NOT NULL)::int AS distinct_zone_count,
+         -- Median midpoint of the guidance bandwidth across enriched rows.
+         -- Min and max bound midpoints separately, then take the median of
+         -- midpoints so the figure shrugs off skew from one open-ended row.
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY
+           CASE
+             WHEN guidance_value_band_min_inr IS NOT NULL AND guidance_value_band_max_inr IS NOT NULL
+               THEN (guidance_value_band_min_inr + guidance_value_band_max_inr) / 2.0
+             WHEN guidance_value_band_min_inr IS NOT NULL THEN guidance_value_band_min_inr
+             WHEN guidance_value_band_max_inr IS NOT NULL THEN guidance_value_band_max_inr
+             ELSE NULL
+           END
+         ) FILTER (WHERE zone_code IS NOT NULL)                         AS median_guidance_mid_inr,
+         MIN(aro_section) FILTER (WHERE aro_section IS NOT NULL)        AS sample_aro_section
+       FROM regulatory_data.bbmp_street_index
+       WHERE ward_no IS NOT NULL
+       GROUP BY ward_no
+     )
+     SELECT
+       t.ward_no,
+       t.street_count,
+       t.enriched_count,
+       t.distinct_zone_count,
+       t.median_guidance_mid_inr,
+       t.sample_aro_section,
+       d.dominant_zone,
+       d.dominant_zone_count,
+       CASE WHEN t.enriched_count > 0
+         THEN ROUND(100.0 * d.dominant_zone_count / t.enriched_count, 1)
+         ELSE NULL
+       END AS dominant_zone_share_pct
+     FROM ward_totals t
+     LEFT JOIN ward_dominant_zone d USING (ward_no)
+     ORDER BY t.ward_no`,
+  );
+
+  const rows = result.rows;
+
+  // Summary band — useful for the panel's top-line StatTiles.
+  const totalStreets = rows.reduce((sum, r) => sum + (r.street_count || 0), 0);
+  const totalEnriched = rows.reduce((sum, r) => sum + (r.enriched_count || 0), 0);
+  const enrichedPct = totalStreets > 0 ? Math.round((totalEnriched / totalStreets) * 1000) / 10 : 0;
+  const wardsFullyEnriched = rows.filter((r) => r.enriched_count === r.street_count).length;
+  const wardsWithMultipleZones = rows.filter((r) => (r.distinct_zone_count || 0) > 1).length;
+
+  return {
+    wards: rows.map((r) => ({
+      ward_no: r.ward_no,
+      street_count: r.street_count,
+      enriched_count: r.enriched_count,
+      distinct_zone_count: r.distinct_zone_count,
+      median_guidance_mid_inr: r.median_guidance_mid_inr === null
+        ? null
+        : Math.round(Number(r.median_guidance_mid_inr)),
+      sample_aro_section: r.sample_aro_section,
+      dominant_zone: r.dominant_zone,
+      dominant_zone_count: r.dominant_zone_count,
+      dominant_zone_share_pct: r.dominant_zone_share_pct === null
+        ? null
+        : Number(r.dominant_zone_share_pct),
+    })),
+    summary: {
+      ward_count: rows.length,
+      total_streets: totalStreets,
+      total_enriched: totalEnriched,
+      enriched_pct: enrichedPct,
+      wards_fully_enriched: wardsFullyEnriched,
+      wards_with_multiple_zones: wardsWithMultipleZones,
+    },
+    source_document: 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)',
+    disclaimer: 'Ward rollups derived from the AI-extracted street index; verify any ward you cite against the BBMP gazette page before quoting in IC memos.',
+  };
+}
+
 async function getStreetIndexSummary() {
   // One round-trip for the corpus-wide stats so the panel doesn't have to
   // fan out three separate queries on every load.
@@ -2485,6 +2587,7 @@ module.exports = {
   getSourceExplorer,
   getReviewQueue,
   getUavBenchmark,
+  getBbmpWardSummary,
   searchBbmpStreets,
   parseDistrictNotes,
   normalizePdCode,

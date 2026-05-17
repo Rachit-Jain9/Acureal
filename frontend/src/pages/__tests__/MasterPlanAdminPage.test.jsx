@@ -127,6 +127,11 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isError: false,
     isFetching: false,
   }),
+  useBbmpWardSummary: () => ({
+    data: { wards: [], summary: {}, source_document: 'BBMP', disclaimer: '' },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
