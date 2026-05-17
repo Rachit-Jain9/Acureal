@@ -1857,6 +1857,67 @@ function parseDistrictNotes(notes) {
 // Land-use intelligence — pulls the existing/proposed BMA land-use breakdown
 // facts seeded from the Existing Land Use 2015 + Proposed Land Use 2031
 // maps. Returns paired rows so the UI can render the 2015 → 2031 shift.
+// Street lookup — searches the 9,913-row BBMP street index (sourced from the
+// 686-page BBMP Guidance Value PDF). Returns matches with ward + source page
+// so the user can verify the street's zone classification in the original
+// PDF. Phase 2 will enrich each row with `zone_code` + guidance-value
+// bandwidth via an LLM pass; for now those fields surface when present.
+async function searchBbmpStreets({ search = '', limit = 25 } = {}) {
+  const cleanSearch = String(search || '').trim();
+  // `Number(0) || 25` returns 25 because 0 is falsy, so use explicit
+  // null/undefined/NaN gating before clamping.
+  const parsedLimit = Number(limit);
+  const cleanLimit = Math.min(
+    Math.max(1, Number.isFinite(parsedLimit) ? parsedLimit : 25),
+    100,
+  );
+
+  // Empty search → return the first batch sorted alphabetically so the panel
+  // can show *something* on load instead of a blank state.
+  if (!cleanSearch) {
+    const result = await query(
+      `SELECT id, street_name_en, ward_no, page_number, aro_section,
+              zone_code, guidance_value_band_min_inr, guidance_value_band_max_inr,
+              row_excerpt
+       FROM regulatory_data.bbmp_street_index
+       ORDER BY street_name_en
+       LIMIT $1`,
+      [cleanLimit],
+    );
+    return {
+      query: '',
+      total: result.rows.length,
+      rows: result.rows,
+      source_document: 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)',
+      disclaimer: 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.',
+    };
+  }
+
+  // Use the trigram index (`gin_trgm_ops`) for fuzzy matching plus a hard
+  // ILIKE rank so exact substring hits float to the top.
+  const result = await query(
+    `SELECT id, street_name_en, ward_no, page_number, aro_section,
+            zone_code, guidance_value_band_min_inr, guidance_value_band_max_inr,
+            row_excerpt,
+            similarity(street_name_en, $1) AS sim,
+            (street_name_en ILIKE '%' || $1 || '%') AS exact_substring
+     FROM regulatory_data.bbmp_street_index
+     WHERE street_name_en ILIKE '%' || $1 || '%'
+        OR street_name_en % $1
+     ORDER BY exact_substring DESC, sim DESC, street_name_en
+     LIMIT $2`,
+    [cleanSearch, cleanLimit],
+  );
+
+  return {
+    query: cleanSearch,
+    total: result.rows.length,
+    rows: result.rows,
+    source_document: 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)',
+    disclaimer: 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.',
+  };
+}
+
 // UAV Benchmark — pivots BBMP UAV rate-card rows into a comparison matrix
 // where each (zone, property_use) cell is the prevailing INR/sqft/month
 // rate. Adds a "ratio vs Zone A" column so deal teams can see how rates
@@ -2382,6 +2443,7 @@ module.exports = {
   getSourceExplorer,
   getReviewQueue,
   getUavBenchmark,
+  searchBbmpStreets,
   parseDistrictNotes,
   normalizePdCode,
   importZoneGeoJSON,

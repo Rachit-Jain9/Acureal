@@ -387,6 +387,22 @@ router.get('/intelligence/uav-benchmark', authenticate, async (req, res, next) =
   }
 });
 
+// GET /api/master-plan/intelligence/street-lookup?search=...&limit=...
+// Fuzzy-search the 9,913-row BBMP street index sourced from the Guidance
+// Value PDF. Each hit carries the ward + source page so the user can verify
+// the zone classification in the original document.
+router.get('/intelligence/street-lookup', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.searchBbmpStreets({
+      search: req.query.search,
+      limit: req.query.limit,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/bbmp-uav
 router.get('/bbmp-uav', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {

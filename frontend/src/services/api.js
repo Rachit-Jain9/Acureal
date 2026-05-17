@@ -553,6 +553,7 @@ export const masterPlanAPI = {
   sourceExplorer: ()                   => api.get('/master-plan/intelligence/sources'),
   reviewQueue: ()                      => api.get('/master-plan/intelligence/review-queue'),
   uavBenchmark: (params)               => api.get('/master-plan/intelligence/uav-benchmark', { params }),
+  streetLookup: (params)               => api.get('/master-plan/intelligence/street-lookup', { params }),
 };
 
 // Parcel Intelligence admin / evidence operations

@@ -20,6 +20,7 @@ import BuildabilityLab from '../components/masterplan/BuildabilityLab';
 import SourceExplorerPanel from '../components/masterplan/SourceExplorerPanel';
 import ReviewQueuePanel from '../components/masterplan/ReviewQueuePanel';
 import UavBenchmarkPanel from '../components/masterplan/UavBenchmarkPanel';
+import BengaluruStreetLookupPanel from '../components/masterplan/BengaluruStreetLookupPanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1826,6 +1827,9 @@ function PlanningIntelligencePanel() {
       </div>
       <div className="border-t border-hairline pt-8">
         <UavBenchmarkPanel />
+      </div>
+      <div className="border-t border-hairline pt-8">
+        <BengaluruStreetLookupPanel />
       </div>
       <div className="border-t border-hairline pt-8">
         <ReviewQueuePanel />

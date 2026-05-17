@@ -90,6 +90,18 @@ export function useUavBenchmark(params = {}) {
   });
 }
 
+export function useStreetLookup(params = {}) {
+  const search = String(params.search || '').trim();
+  return useQuery({
+    queryKey: ['master-plan-street-lookup', search, params.limit ?? 25],
+    queryFn: () => masterPlanAPI
+      .streetLookup({ search, limit: params.limit })
+      .then((r) => r.data.data ?? { query: search, total: 0, rows: [], disclaimer: '' }),
+    staleTime: 60 * 1000,
+    keepPreviousData: true,
+  });
+}
+
 export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],

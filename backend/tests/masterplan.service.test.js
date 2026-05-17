@@ -1458,6 +1458,79 @@ describe('masterplan.service district intelligence helpers', () => {
     });
   });
 
+  describe('searchBbmpStreets', () => {
+    // The parent describe block does not call jest.clearAllMocks() between
+    // tests, so every assertion below uses callsBefore + .at(callsBefore) to
+    // index relative to its own call boundary.
+    test('returns the first batch sorted alphabetically when search is empty', async () => {
+      const callsBefore = query.mock.calls.length;
+      query.mockResolvedValueOnce({
+        rows: [
+          { id: 's1', street_name_en: 'AVENUE ROAD', ward_no: 109, page_number: 17, aro_section: 'CHICKPET / RESIDENTIAL', zone_code: null, guidance_value_band_min_inr: null, guidance_value_band_max_inr: null, row_excerpt: '2 109 AVENUE ROAD' },
+          { id: 's2', street_name_en: 'BRIGADE ROAD', ward_no: 111, page_number: 227, aro_section: null, zone_code: null, guidance_value_band_min_inr: null, guidance_value_band_max_inr: null, row_excerpt: 'BRIGADE ROAD' },
+        ],
+      });
+      const result = await service.searchBbmpStreets({});
+      const [sql, params] = query.mock.calls[callsBefore];
+      expect(sql).toContain('ORDER BY street_name_en');
+      expect(params).toEqual([25]);
+      expect(result.query).toBe('');
+      expect(result.rows).toHaveLength(2);
+      expect(result.source_document).toMatch(/Notification No\. 384/);
+      expect(result.disclaimer).toMatch(/verify the ward and zone classification/i);
+    });
+
+    test('runs a fuzzy + ILIKE query when search has content, ranking exact-substring hits first', async () => {
+      const callsBefore = query.mock.calls.length;
+      query.mockResolvedValueOnce({
+        rows: [
+          { id: 'a', street_name_en: 'WHITEFIELD MAIN ROAD, WHITEFIELD', ward_no: 84, page_number: 297, aro_section: 'WHITEFIELD / RESIDENTIAL', zone_code: null, guidance_value_band_min_inr: null, guidance_value_band_max_inr: null, row_excerpt: '...', sim: 0.92, exact_substring: true },
+        ],
+      });
+
+      const result = await service.searchBbmpStreets({ search: 'whitefield', limit: 50 });
+      const [sql, params] = query.mock.calls[callsBefore];
+      expect(sql).toContain('similarity(street_name_en');
+      expect(sql).toContain('ORDER BY exact_substring DESC, sim DESC');
+      expect(params).toEqual(['whitefield', 50]);
+      expect(result.rows[0].street_name_en).toMatch(/WHITEFIELD/);
+      expect(result.query).toBe('whitefield');
+    });
+
+    test('clamps limit into [1,100] and defaults to 25', async () => {
+      query.mockResolvedValue({ rows: [] });
+
+      await service.searchBbmpStreets({ limit: 0 });
+      expect(query.mock.calls.at(-1)[1].at(-1)).toBe(1);
+
+      await service.searchBbmpStreets({ limit: 999 });
+      expect(query.mock.calls.at(-1)[1].at(-1)).toBe(100);
+
+      await service.searchBbmpStreets({});
+      expect(query.mock.calls.at(-1)[1].at(-1)).toBe(25);
+
+      await service.searchBbmpStreets({ limit: 'not-a-number' });
+      expect(query.mock.calls.at(-1)[1].at(-1)).toBe(25);
+    });
+
+    test('trims whitespace around the search string before deciding the query path', async () => {
+      const callsBefore = query.mock.calls.length;
+      query.mockResolvedValueOnce({ rows: [] });
+      const result = await service.searchBbmpStreets({ search: '   whitefield   ', limit: 10 });
+      expect(query.mock.calls[callsBefore][1]).toEqual(['whitefield', 10]);
+      expect(result.query).toBe('whitefield');
+    });
+
+    test('an all-whitespace search falls back to the empty-search path', async () => {
+      const callsBefore = query.mock.calls.length;
+      query.mockResolvedValueOnce({ rows: [] });
+      const result = await service.searchBbmpStreets({ search: '   ', limit: 10 });
+      const [sql] = query.mock.calls[callsBefore];
+      expect(sql).toContain('ORDER BY street_name_en');
+      expect(result.query).toBe('');
+    });
+  });
+
   describe('getUavBenchmark', () => {
     test('pivots BBMP UAV rows into a (use × zone) matrix and computes ratios vs Zone A', async () => {
       query.mockResolvedValueOnce({

@@ -121,6 +121,12 @@ vi.mock('../../hooks/useMasterPlan', () => ({
     isLoading: false,
     isError: false,
   }),
+  useStreetLookup: () => ({
+    data: { query: '', total: 0, rows: [], source_document: 'BBMP', disclaimer: '' },
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+  }),
   useCreateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateZone: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReviewZone: () => ({ mutate: vi.fn() }),
