@@ -303,9 +303,12 @@ Avoid fabricating variants. If the doc proposes "GPT-5.4 mini / nano / pro" or "
 | ~~2~~ | ~~Canonical real-estate ontology package~~ | ~~1 session~~ | ~~Foundation for ingestion + validation~~ | ✅ **LANDED 2026-05-17** as `@redip/real-estate-ontology` v1.0.0 (PR-NX25 #345) |
 | ~~3~~ | ~~Cross-product AI briefing on DOCX + PPTX~~ | ~~1 session~~ | ~~Multiplies PR-NX7 value 3×~~ | ✅ **LANDED 2026-05-16** (PR-NX18 #335) |
 | ~~1~~ | ~~Validation engine extension (market-benchmark rules from verified comps)~~ | ~~1 session~~ | ~~Anti-superficial enforcement; cite-or-null per `AI_ROADMAP.md`~~ | ✅ **LANDED 2026-05-17** (PR-NX28 #348) |
+| ~~Auto-fill discoverability (Overview card)~~ | ~~surface auto-fill on the Overview tab~~ | ~~½ session~~ | ~~Without this the auto-fill modal stays buried in the Documents tab~~ | ✅ **LANDED 2026-05-17** (PR-NX30 #361) |
+| ~~Audit-log timeline UI for doc-ingestion auto-fill events~~ | ~~dedicated icon + drill-down for `metadata.source='document_extraction'` audit rows~~ | ~~1 session~~ | ~~Makes the auto-fill flow reviewable + audit-grade~~ | ✅ **LANDED 2026-05-17** (PR-NX31 #362) |
+| ~~More market-benchmark validators~~ | ~~DSCR < 1.20 per RBI, Yield-on-Cost vs Exit Cap spread~~ | ~~1 session~~ | ~~Extends PR-NX28 with income-deal validators~~ | ✅ **LANDED 2026-05-17** (PR-NX33 #363) |
 | **1** | **Adopt ontology across existing services** (deal-create / deal-edit forms read from `@redip/real-estate-ontology` not `constants/domain.js`) | 1 session | Removes drift risk; reduces 3 places that encode asset-class to 1 | 🔴 NOT STARTED (ontology now exists; adoption is incremental) |
-| **2** | **Audit-log timeline UI for doc-ingestion auto-fill events** (dedicated icon + drill-down for `metadata.source='document_extraction'` audit rows shipped via PR-NX25 #345) | 1 session | Makes the auto-fill flow reviewable + audit-grade; builds operator trust | 🔴 NOT STARTED |
-| **3** | **More market-benchmark validators** (DSCR < 1.20 BLOCK per RBI Master Direction, Yield-on-Cost vs Exit Cap spread WARN) | 1 session | Extends PR-NX28 with income-deal validators | 🔴 NOT STARTED |
+| **2** | **Provenance chips on deal fields** — render a tiny "from sale-deed.pdf" chip next to fields populated via auto-fill, driven by the `deal_audit_log` metadata that PR-NX31 surfaces in the timeline | 1–2 sessions | Cross-cutting visual that makes every auto-filled field self-documenting | 🔴 NOT STARTED |
+| **3** | **Live market-benchmark warnings on financial input forms** — port PR-NX28/NX33 validators to fire as the operator types in the Financials page, not only at export time | 1 session | Catches mistakes at input time, not 5 hours later at export | 🔴 NOT STARTED |
 | **4** | **Production AI smoke test + telemetry dashboard** | half session | Confirms PR-NX7 flagship actually fires Claude in prod | 🟡 PARTIAL — AI Provider Health widget (PR-NX23 #341) is the prod telemetry surface |
 
 **Defer:**

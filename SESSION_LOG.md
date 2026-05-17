@@ -4,6 +4,61 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (afternoon/evening) — Auto-fill discoverability + AuditTab ingestion rendering + income-deal validators (PR #361, #362, #363)
+
+After the operator confirmed the overnight ingestion bundle and the BBMP enrichment closed, pivoted to follow-up work that **compounds the value of what shipped overnight**. The user asked for "highest priority right now" with "first principles thinking." First-principles question: what's the biggest *missed-opportunity* gap in the just-shipped auto-fill workflow? Answer: discoverability (operators landing on Overview tab don't know auto-fill exists) and trust (Audit timeline showed doc-ingestion events as generic "Edited" entries, indistinguishable from manual edits). Then completed PR-NX28's market-benchmark validators with income-deal coverage (DSCR + YoC spread).
+
+### PRs shipped + merged
+
+- **#361 — PR-NX30: AutoFillReadyCard on Deal Overview tab.** Closes the discoverability gap from PR-NX26. Pre-NX30, the only entry point to the auto-fill modal was a button buried in the Documents tab header — operators landing on the Overview tab (the default first-paint) had no signal extractions were waiting. New compact card right between DealQaBox and the Below-the-fold CollapsibleCards: "N fields ready to auto-fill from documents" with Sparkles icon, AI-assisted pill, source-doc-type citation ("Extracted from sale deed · khata extract · rera registration"). Click → opens the same `AutoFillFromDocumentsModal` from PR-NX26. Renders nothing when no extractions are mapped. +7 component tests.
+
+- **#362 — PR-NX31: Distinctive AuditTab rendering for document_extraction events.** PR-NX25's apply-extractions endpoint writes `deal_audit_log` rows with `event_type='updated'` + `metadata.source='document_extraction'` + `applied_fields_count` + `source_extraction_ids` + `target_table` + `ontology_version` — but AuditTab.jsx rendered them with the generic "Edited" badge, losing the entire provenance story. New `resolveEffectiveCfg(event)` helper detects the metadata signature and returns a synthetic `DOC_EXTRACTION_CFG` (Sparkles icon, "Auto-filled from documents" label). `MutationDiff` now prepends an amber-tinted attribution banner — "📄 7 fields applied from 2 document extractions → deal record  v1.0.0" — before the per-field diff. `target_table='properties'` maps to "linked property." Generic edits (no metadata.source) render untouched. +5 AuditTab tests.
+
+- **#363 — PR-NX33: Income-deal market-benchmark validators (DSCR + YoC spread).** Completes PR-NX28's market-benchmark coverage with income-family validators:
+  - `validateDscrFloor` — computes DSCR via standard amortization formula from `ctx.kernelKpis.{noi, totalCost}` + `core.{debtLTV, debtRatePct}` + `ctx.inputs.loanTermYears`. Fires WARN when DSCR < 1.20 (RBI Master Direction floor for Indian LRD / project-finance lenders) with citation of exact NOI ÷ debt-service inputs + suggested lever. Escalated WARN below 1.00× ("NOI does not cover annual debt service").
+  - `validateYocVsExitCapSpread` — checks the developer's reward for taking development risk. Negative spread → WARN ("developer earns LESS than a passive buyer of stabilised"). 0 to 50 bps → WARN ("THIN development premium"). 50+ bps → silent.
+  Both added to the runner array already wired by PR-NX28 (no buildExportQa changes needed). +17 tests covering every band + edge case.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| AutoFillReadyCard.test.jsx (NEW) | 0 | 7 | +7 |
+| AuditTab.test.jsx | 19 | 24 | +5 |
+| marketBenchmarkValidator.test.js | 28 | 45 | +17 |
+| **Backend TOTAL** | **1,829** | **1,854** | **+25** |
+| **Frontend TOTAL** | **457** | **462** | **+5** |
+
+Zero pre-existing regressions. Frontend build clean (~15s). Preview boots clean with zero console errors.
+
+### Outcome for the operator
+
+**Before this batch:**
+- Auto-fill was invisible unless you knew to go to the Documents tab.
+- Audit timeline showed doc-ingestion events as generic "Edited (N fields)" — indistinguishable from manual edits.
+- Income-deal Excel exports could ship with DSCR 0.85× (impossible per RBI) or YoC < ExitCap (no economic reason to build) and QA showed PASS.
+
+**After this batch:**
+1. Open any deal → "N fields ready to auto-fill from documents" appears above the fold with the source-doc citation. One click → modal opens.
+2. Open the Audit tab → doc-ingestion events have a distinctive Sparkles icon + "Auto-filled from documents" badge + attribution banner naming the source extraction count, target table, and ontology version. Manual edits stay clearly distinct.
+3. Income-deal exports flag DSCR < 1.20× (with computed value + inputs + which lever to dial back) and YoC ≤ Exit-Cap spread (with bps deficit + suggested adjustments). Cite-or-null per AI_ROADMAP — every WARN carries the exact citation.
+
+### Outstanding operator actions (carried)
+
+1. **Smoke-test the auto-fill workflow end-to-end** on a real deal: upload sale deed → extract → look for the new Overview card → click → modal opens → apply subset → check Audit tab for the new "Auto-filled from documents" entry with attribution banner.
+2. **Smoke-test the income-deal validators** by opening an income-family deal (hospitality / office / retail), entering aggressive debt sizing on thin NOI → Excel export QA should now show DSCR WARN. Enter YoC ≤ ExitCap → spread WARN.
+3. **Verify the leaked Claude key rotation** — carried from PR-NX22.
+
+### Recommendation for next session
+
+After this 3-PR follow-up, the Document Ingestion + Auto-fill workflow is **complete end-to-end with full audit trust**, and market-benchmark validators cover both development AND income families. Remaining top priorities from Strategic Review §VI:
+
+- **Adopt the ontology across deal-create / deal-edit forms** (`@redip/real-estate-ontology` as the source of truth instead of `constants/domain.js`). Risk: medium — needs cross-check vs existing constants for drift. 1 session.
+- **Provenance chips on deal fields** — show a tiny "from sale-deed.pdf" chip next to any deal field that was populated via auto-fill (driven by the same `deal_audit_log` metadata that PR-NX31 surfaces in the timeline). 1–2 sessions.
+- **Live market-benchmark warnings on financial input forms** — port PR-NX28/NX33 validators to fire as the operator types in the Financials page, not only at export time. Needs a new `useBenchmarkBands(dealId)` hook + a server endpoint to ship comp percentiles. 1 session.
+
+---
+
 ## 2026-05-17 (closing window) — BBMP enrichment to 100% + UAV↔Street cross-link + housekeeping (PR #359, plus this PR)
 
 **What was worked on in plain English:**
