@@ -23,6 +23,7 @@ import BuildabilitySummary from './BuildabilitySummary';
 import AiSynthesisPanel from './AiSynthesisPanel';
 import DealQaBox from './DealQaBox';
 import AutoFillReadyCard from './AutoFillReadyCard';
+import DealAutoDerivedWarningsStrip from './DealAutoDerivedWarningsStrip';
 import {
   formatCrores,
   formatPct,
@@ -233,6 +234,11 @@ export default function OverviewTab() {
           lives buried in the Documents tab and operators landing here
           never discover it. */}
       <AutoFillReadyCard dealId={dealId} />
+
+      {/* City-level callouts that may apply to this parcel. Empty for
+          non-Bengaluru deals or before the auto-derive endpoint has
+          returned warnings. Stops the "discovered in IC" failure mode. */}
+      <DealAutoDerivedWarningsStrip deal={deal} />
 
       {/* ── Below the fold ──────────────────────────────────────────────
           Everything beneath this point is wrapped in a CollapsibleCard
