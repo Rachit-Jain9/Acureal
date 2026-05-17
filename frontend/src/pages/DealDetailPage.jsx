@@ -12,6 +12,7 @@ import {
   Presentation,
   FileDown,
   Share2,
+  BookText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -137,6 +138,9 @@ export default function DealDetailPage() {
   const [editForm, setEditForm] = useState(null);
   const [exportingPptx, setExportingPptx] = useState(false);
   const [exportingTearSheet, setExportingTearSheet] = useState(false);
+  // PR-NX39 (2026-05-17): per-format busy state for the new DOCX
+  // underwriting-report download button.
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
@@ -196,6 +200,29 @@ export default function DealDetailPage() {
       toast.error(error.response?.data?.message || 'PPTX export failed');
     } finally {
       setExportingPptx(false);
+    }
+  };
+
+  // PR-NX39 (2026-05-17): institutional-grade DOCX underwriting report.
+  // 22 sections (Cover → ToC → AI-Assisted Briefing → Executive Summary
+  // → ... → Risk Register → DD Status → Approvals Tracker → Provenance →
+  // Pros & Cons → Score → Methodology & Assumptions → Disclaimer). Built
+  // by buildDealReportDocx (PR-NX18 / PR-NX35 / PR-NX36 / PR-NX37).
+  const handleExportDocx = async () => {
+    setExportingDocx(true);
+    try {
+      const response = await exportsAPI.dealDocx(id);
+      const safeName = (deal?.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+      const today = new Date().toISOString().slice(0, 10);
+      downloadAxiosResponse(response, `redip-${safeName}-underwriting-${today}.docx`);
+      toast.success('Underwriting report downloaded');
+    } catch (error) {
+      // 403 here means DOCX_REPORT_ENABLED isn't flipped on prod for
+      // non-admin users — keep the server message verbatim so the
+      // operator knows what to do.
+      toast.error(error.response?.data?.message || 'Underwriting report download failed');
+    } finally {
+      setExportingDocx(false);
     }
   };
 
@@ -322,6 +349,17 @@ export default function DealDetailPage() {
             >
               {exportingPptx ? <Loader2 size={13} className="animate-spin" /> : <Presentation size={13} />}
               Export Deck
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={handleExportDocx}
+              disabled={exportingDocx}
+              className="btn btn-secondary flex items-center gap-1 text-sm"
+              title="22-section institutional underwriting report (DOCX) — Cover, AI-Assisted Briefing, Executive Summary, Site, Overview, Demographics, Why-this-area, Job Growth, Social Infra, Supply & Demand, Comparables, Better Alternatives, Financials, Risk Register, DD Status, Approvals Tracker, Provenance, Pros & Cons, Score, Methodology, Disclaimer"
+            >
+              {exportingDocx ? <Loader2 size={13} className="animate-spin" /> : <BookText size={13} />}
+              Underwriting Report
             </button>
           )}
           <button

@@ -462,6 +462,11 @@ export const exportsAPI = {
   dealXlsx: (dealId) => api.get(`/exports/deals/${dealId}/xlsx`, { responseType: 'blob' }),
   dealPdf: (dealId) => api.get(`/exports/deals/${dealId}/pdf`, { responseType: 'blob' }),
   dealPptx: (dealId) => api.get(`/exports/deals/${dealId}/pptx`, { responseType: 'blob' }),
+  // PR-NX39 (2026-05-17): institutional-grade DOCX underwriting report
+  // (22 sections, ~PR-NX35/NX36/NX37). Gated server-side behind
+  // `DOCX_REPORT_ENABLED=1` (flipped in production 2026-05-17). Admins
+  // bypass the gate regardless.
+  dealDocx: (dealId) => api.get(`/exports/deals/${dealId}/docx`, { responseType: 'blob' }),
   dealsXlsx: (params) => api.get('/exports/deals/xlsx', { params, responseType: 'blob' }),
   // CSV export of the deals list. Accepts the same filter query params
   // as `dealsAPI.list` so the export respects the page's current filter
