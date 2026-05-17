@@ -4,6 +4,13 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
+### Apply migration: `20260531_land_use_insight_and_city_callouts.sql` (Phase A3)
+Path: `database/migrations/20260531_land_use_insight_and_city_callouts.sql`. Idempotent. Inserts 32 evidence_facts rows: 14 existing (2015) + 12 proposed (2031) land-use shares + 4 totals (BMA area, developable area, agriculture-outside-developable, LPA of BDA) + 1 landmark aggregate (22 named landmarks) + 1 boundary aggregate (7 adjacent planning authorities). Hand-extracted from the RMP 2031 Existing/Proposed Land Use maps, confidence 0.95. Until applied, the Land Use Insight panel at `/admin/planning-intelligence` and the DealPlanningContextCard on every Bengaluru deal's Zoning tab render empty.
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260531_land_use_insight_and_city_callouts.sql
+```
+SDZ corridors, heritage zones, NGT drainage classification, regional parks, and PRR alignment detail are NOT in this PR — those need a Volume-6 deeper Gemini multimodal pass (deferred to a follow-up). The card will show empty for those callouts.
+
 ### Apply migration: `20260530_bbmp_uav_rate_card.sql` (Phase A1)
 Path: `database/migrations/20260530_bbmp_uav_rate_card.sql`. Idempotent. Inserts 108 rows into `regulatory_data.bbmp_uav_entries` — the BBMP Unit Area Value rate card from Gazette Notification 384 dated 09-Mar-2016 (18 property-use categories × 6 zones). Hand-extracted from the gazette tables, confidence 0.95, review_status 'approved'. Until applied, the UAV Benchmark panel at `/admin/planning-intelligence` renders an empty matrix.
 ```powershell
