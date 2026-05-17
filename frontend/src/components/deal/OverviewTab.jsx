@@ -22,6 +22,7 @@ import { SectionHeader, CollapsibleCard } from '../../design-system';
 import BuildabilitySummary from './BuildabilitySummary';
 import AiSynthesisPanel from './AiSynthesisPanel';
 import DealQaBox from './DealQaBox';
+import AutoFillReadyCard from './AutoFillReadyCard';
 import {
   formatCrores,
   formatPct,
@@ -225,6 +226,13 @@ export default function OverviewTab() {
           answers with mandatory citations back to source. Self-contained
           component with its own state machine + history. */}
       <DealQaBox dealId={dealId} />
+
+      {/* PR-NX30 (2026-05-17) — discoverability surface for the auto-fill
+          workflow. Renders only when ≥1 extracted field is ready to apply;
+          hides entirely otherwise. Without this, the auto-fill modal
+          lives buried in the Documents tab and operators landing here
+          never discover it. */}
+      <AutoFillReadyCard dealId={dealId} />
 
       {/* ── Below the fold ──────────────────────────────────────────────
           Everything beneath this point is wrapped in a CollapsibleCard
