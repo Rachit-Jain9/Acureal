@@ -4,6 +4,48 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (closing window) — BBMP enrichment to 100% + UAV↔Street cross-link + housekeeping (PR #359, plus this PR)
+
+**What was worked on in plain English:**
+- Closed both manual operator actions from earlier in the day:
+  - **Tokyo Supabase project deleted** by the user via dashboard (`lsbhrbvuynzqhdtzczco` is gone; Mumbai `niamgjbxxgmmffggumvj` is the sole production project).
+  - **BBMP zone enrichment taken from 30% → 100%** (9,913 / 9,913 streets classified). User added ~$10 of Gemini credits; total spend was ~$0.05.
+- Made the UAV Benchmark zone column headers click-through into the Bengaluru Street Lookup with that zone pre-filtered + auto-scrolled into view (PR #359, the only code change in this window).
+- Captured the heuristic SQL that took coverage from 46% (after LLM pass) to 100% as a reproducible script (`scripts/apply-bbmp-zone-inheritance.sql`) so the production write is documented and re-runnable on a fresh DB.
+
+**How the 30%→100% enrichment broke down:**
+
+| Tier | Method | Rows | Confidence |
+|---|---|---|---|
+| Heuristic | Phase 2a (single-zone PDF pages, no LLM) | included in trigram below | 0.75 |
+| **LLM exact** | Gemini-extracted street, exact name match | 1,846 | 0.85 |
+| **LLM fuzzy** | Gemini-extracted, trigram fallback (sim ≥ 0.3) | 3,873 | 0.65 |
+| Inherit (prior, same ARO) | Page N inherits page N-1's dominant zone | 1,978 | 0.55 |
+| Inherit (next, same ARO) | First page of section inherits page N+1 | 1,695 | 0.45 |
+| Inherit (cross-ARO neighbour) | NULL aro_section rows | 439 | 0.40 |
+| Inherit (chained iterations) | Multi-page deserts, iterated to fixed point | 82 | 0.35 |
+| **Total** | | **9,913 (100%)** | |
+
+**PRs opened/merged:**
+- PR #359 — `feat(planning-intelligence): UAV Benchmark zone headers cross-link into Street Lookup` — squash-merged as `240b846`.
+- (This PR) — `docs(bbmp): close out enrichment + Tokyo deletion, capture inheritance SQL` — open for merge.
+
+**Verification:**
+- BBMP street index: 9,913 / 9,913 (100%) enriched on Mumbai production. Every row carries a `confidence_score` (0.35–0.85) so the Review Queue can surface the lowest-confidence ones first for human verification.
+- Backend test suite: 1,837 (unchanged — no service code changed in this window).
+- Frontend test suite: 447 → 450 (+3 for the UAV↔Street event handshake tests).
+- CI: every PR landed with all checks green.
+
+**Manual blockers still pending:**
+- None from the BBMP arc. The two earlier blockers (refresh GEMINI_API_KEY → run enrichment; delete Tokyo project) are both closed.
+
+**What's left from the broader product roadmap (unchanged from previous entries):**
+- K-GIS adapter is built but the cache is empty — cross-verification surface will light up as soon as real parcels trigger K-GIS lookups.
+- IC PPTX slide for BBMP guidance — deliberately deferred because the deal page already shows the same data inline.
+- Cross-locality K-GIS Bhoomi/Kaveri/RERA integrations remain credentials-blocked (recorded in TODO_DATA.md).
+
+---
+
 ## 2026-05-17 (second 10-hr autonomous tail) — BBMP runbook + Ward Summary (PRs #356, #357)
 
 **What was worked on in plain English:**
