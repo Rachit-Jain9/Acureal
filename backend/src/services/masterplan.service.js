@@ -1860,9 +1860,47 @@ function parseDistrictNotes(notes) {
 // Street lookup — searches the 9,913-row BBMP street index (sourced from the
 // 686-page BBMP Guidance Value PDF). Returns matches with ward + source page
 // so the user can verify the street's zone classification in the original
-// PDF. Phase 2 will enrich each row with `zone_code` + guidance-value
-// bandwidth via an LLM pass; for now those fields surface when present.
-async function searchBbmpStreets({ search = '', limit = 25 } = {}) {
+// PDF. Phase 2 enriches rows with `zone_code` + guidance-value bandwidth via
+// (a) a heuristic pass for single-zone pages and (b) an LLM pass for
+// multi-zone pages — the response includes a `summary` block with the
+// corpus-wide enrichment counts so the panel can render accurate stats.
+const STREET_INDEX_RETURN_COLS = `
+  id, street_name_en, ward_no, page_number, aro_section,
+  zone_code, guidance_value_band_min_inr, guidance_value_band_max_inr,
+  row_excerpt
+`;
+const STREET_INDEX_SOURCE_DOC = 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)';
+const STREET_INDEX_DISCLAIMER = 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.';
+const VALID_ZONE_CODES = new Set(['A', 'B', 'C', 'D', 'E', 'F']);
+
+async function getStreetIndexSummary() {
+  // One round-trip for the corpus-wide stats so the panel doesn't have to
+  // fan out three separate queries on every load.
+  const result = await query(
+    `SELECT
+       COUNT(*)::int                                                       AS total,
+       COUNT(*) FILTER (WHERE zone_code IS NOT NULL)::int                  AS enriched,
+       COUNT(DISTINCT ward_no)::int                                        AS wards,
+       jsonb_object_agg(
+         coalesce(zone_code, 'unknown'),
+         cnt
+       ) AS by_zone
+     FROM (
+       SELECT zone_code, ward_no, COUNT(*) AS cnt
+       FROM regulatory_data.bbmp_street_index
+       GROUP BY zone_code, ward_no
+     ) bucketed`,
+  );
+  const row = result.rows[0] || {};
+  return {
+    total: row.total ?? 0,
+    enriched: row.enriched ?? 0,
+    wards: row.wards ?? 0,
+    by_zone: row.by_zone ?? {},
+  };
+}
+
+async function searchBbmpStreets({ search = '', limit = 25, zone = null } = {}) {
   const cleanSearch = String(search || '').trim();
   // `Number(0) || 25` returns 25 because 0 is falsy, so use explicit
   // null/undefined/NaN gating before clamping.
@@ -1871,50 +1909,54 @@ async function searchBbmpStreets({ search = '', limit = 25 } = {}) {
     Math.max(1, Number.isFinite(parsedLimit) ? parsedLimit : 25),
     100,
   );
+  const cleanZone = (() => {
+    if (!zone) return null;
+    const upper = String(zone).trim().toUpperCase();
+    return VALID_ZONE_CODES.has(upper) ? upper : null;
+  })();
 
-  // Empty search → return the first batch sorted alphabetically so the panel
-  // can show *something* on load instead of a blank state.
-  if (!cleanSearch) {
-    const result = await query(
-      `SELECT id, street_name_en, ward_no, page_number, aro_section,
-              zone_code, guidance_value_band_min_inr, guidance_value_band_max_inr,
-              row_excerpt
-       FROM regulatory_data.bbmp_street_index
-       ORDER BY street_name_en
-       LIMIT $1`,
-      [cleanLimit],
-    );
-    return {
-      query: '',
-      total: result.rows.length,
-      rows: result.rows,
-      source_document: 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)',
-      disclaimer: 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.',
-    };
+  // Build WHERE clauses + params dynamically so the same query supports
+  // any combination of {search, zone, neither}.
+  const whereParts = [];
+  const params = [];
+
+  if (cleanSearch) {
+    params.push(cleanSearch);
+    whereParts.push(`(street_name_en ILIKE '%' || $${params.length} || '%' OR street_name_en % $${params.length})`);
+  }
+  if (cleanZone) {
+    params.push(cleanZone);
+    whereParts.push(`zone_code = $${params.length}`);
   }
 
-  // Use the trigram index (`gin_trgm_ops`) for fuzzy matching plus a hard
-  // ILIKE rank so exact substring hits float to the top.
-  const result = await query(
-    `SELECT id, street_name_en, ward_no, page_number, aro_section,
-            zone_code, guidance_value_band_min_inr, guidance_value_band_max_inr,
-            row_excerpt,
-            similarity(street_name_en, $1) AS sim,
-            (street_name_en ILIKE '%' || $1 || '%') AS exact_substring
-     FROM regulatory_data.bbmp_street_index
-     WHERE street_name_en ILIKE '%' || $1 || '%'
-        OR street_name_en % $1
-     ORDER BY exact_substring DESC, sim DESC, street_name_en
-     LIMIT $2`,
-    [cleanSearch, cleanLimit],
-  );
+  const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+  // Order: exact-substring hits float to the top when there's a search;
+  // otherwise sort alphabetically.
+  const orderSql = cleanSearch
+    ? `ORDER BY (street_name_en ILIKE '%' || $1 || '%') DESC, similarity(street_name_en, $1) DESC, street_name_en`
+    : `ORDER BY street_name_en`;
+
+  params.push(cleanLimit);
+  const sql = `
+    SELECT ${STREET_INDEX_RETURN_COLS}
+    FROM regulatory_data.bbmp_street_index
+    ${whereSql}
+    ${orderSql}
+    LIMIT $${params.length}`;
+
+  const [rowsResult, summary] = await Promise.all([
+    query(sql, params),
+    getStreetIndexSummary(),
+  ]);
 
   return {
     query: cleanSearch,
-    total: result.rows.length,
-    rows: result.rows,
-    source_document: 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)',
-    disclaimer: 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.',
+    zone_filter: cleanZone,
+    rows: rowsResult.rows,
+    summary,
+    source_document: STREET_INDEX_SOURCE_DOC,
+    disclaimer: STREET_INDEX_DISCLAIMER,
   };
 }
 

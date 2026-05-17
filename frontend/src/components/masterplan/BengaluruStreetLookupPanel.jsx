@@ -83,11 +83,23 @@ function HitRow({ row }) {
   );
 }
 
+const ZONE_FILTERS = [
+  { key: null, label: 'All zones' },
+  { key: 'A', label: 'Zone A' },
+  { key: 'B', label: 'Zone B' },
+  { key: 'C', label: 'Zone C' },
+  { key: 'D', label: 'Zone D' },
+  { key: 'E', label: 'Zone E' },
+  { key: 'F', label: 'Zone F' },
+];
+
 export default function BengaluruStreetLookupPanel() {
   const [searchInput, setSearchInput] = useState('');
+  const [zoneFilter, setZoneFilter] = useState(null);
   const debouncedSearch = useDebounced(searchInput, 200);
   const { data, isLoading, isError, isFetching } = useStreetLookup({
     search: debouncedSearch,
+    zone: zoneFilter,
     limit: 50,
   });
 
@@ -101,16 +113,20 @@ export default function BengaluruStreetLookupPanel() {
   }
 
   const rows = data?.rows || [];
-  const totalIndexed = 9913; // From the seeded BBMP Guidance Value PDF
-  const totalWards = 198;
-  const enrichedCount = rows.filter((r) => r.zone_code).length;
+  const summary = data?.summary || {};
+  const totalIndexed = summary.total ?? 0;
+  const totalWards = summary.wards ?? 0;
+  const enrichedCount = summary.enriched ?? 0;
+  const enrichedPct = totalIndexed > 0
+    ? Math.round((enrichedCount / totalIndexed) * 100)
+    : 0;
 
   return (
     <div className="space-y-5">
       <SectionHeader
         eyebrow="Bengaluru street index"
         title="Find a street's BBMP zone + source page"
-        sub="Type any area or street from inside BBMP limits. The index is built from every street listed in the 686-page BBMP Guidance Value gazette (Notification No. 384 dated 09-Mar-2016). Each hit shows the ward, the exact PDF page so you can verify the zone classification, and — once Phase 2 enrichment lands — the assigned UAV zone + guidance-value bandwidth."
+        sub="Type any area or street from inside BBMP limits. The index is built from every street listed in the 686-page BBMP Guidance Value gazette (Notification No. 384 dated 09-Mar-2016). Each hit shows the ward + the exact PDF page; rows enriched in Phase 2 also surface the assigned UAV zone and guidance-value bandwidth."
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -126,8 +142,10 @@ export default function BengaluruStreetLookupPanel() {
         />
         <StatTile
           label="With zone enrichment"
-          value={fmt(enrichedCount)}
-          footnote="Phase 2 fills the rest"
+          value={`${fmt(enrichedCount)} (${enrichedPct}%)`}
+          footnote={enrichedPct < 100
+            ? 'LLM pass extends coverage'
+            : 'Full coverage'}
         />
       </div>
 
@@ -148,11 +166,36 @@ export default function BengaluruStreetLookupPanel() {
         )}
       </div>
 
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-eyebrow uppercase tracking-[0.08em] text-content-muted font-medium mr-1">
+          Filter
+        </span>
+        {ZONE_FILTERS.map((opt) => {
+          const active = zoneFilter === opt.key;
+          const count = opt.key ? (summary.by_zone?.[opt.key] ?? 0) : totalIndexed;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setZoneFilter(opt.key)}
+              className={`px-2.5 py-1 rounded text-xs tabular-nums transition-colors duration-150 border ${
+                active
+                  ? 'bg-accent-soft text-accent border-accent'
+                  : 'bg-bg-secondary text-content-secondary hover:text-content-primary border-transparent'
+              }`}
+            >
+              {opt.label}
+              {count > 0 && <span className="ml-1 text-[11px] opacity-70">({fmt(count)})</span>}
+            </button>
+          );
+        })}
+      </div>
+
       <Card elevated className="p-0 overflow-hidden">
         {rows.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-content-muted">
-            {debouncedSearch
-              ? `No streets matched "${debouncedSearch}". Try a shorter or differently-spelled fragment — the gazette uses formal street names (e.g. "MAHATMA GANDHI ROAD" not "MG").`
+            {debouncedSearch || zoneFilter
+              ? `No streets match the current filter. ${debouncedSearch ? `Try a shorter or differently-spelled fragment — the gazette uses formal street names (e.g. "MAHATMA GANDHI ROAD" not "MG").` : 'Clear the zone filter to see all results.'}`
               : 'Start typing a street or area name above to search the index.'}
           </div>
         ) : (
@@ -161,7 +204,9 @@ export default function BengaluruStreetLookupPanel() {
               <span>
                 {debouncedSearch
                   ? `${rows.length} match${rows.length === 1 ? '' : 'es'} for "${debouncedSearch}"`
-                  : `Showing first ${rows.length} streets`}
+                  : zoneFilter
+                    ? `Showing first ${rows.length} streets in Zone ${zoneFilter}`
+                    : `Showing first ${rows.length} streets`}
               </span>
               <span className="flex items-center gap-1 text-[11px] normal-case tracking-normal">
                 <BookOpen size={11} />

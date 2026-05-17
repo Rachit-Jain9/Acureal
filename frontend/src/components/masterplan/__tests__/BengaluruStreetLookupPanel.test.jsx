@@ -15,7 +15,7 @@ import BengaluruStreetLookupPanel from '../BengaluruStreetLookupPanel';
 
 const SAMPLE = {
   query: '',
-  total: 3,
+  zone_filter: null,
   rows: [
     {
       id: 'r1', street_name_en: 'WHITEFIELD MAIN ROAD, WHITEFIELD',
@@ -36,6 +36,12 @@ const SAMPLE = {
       row_excerpt: '...',
     },
   ],
+  summary: {
+    total: 9913,
+    enriched: 2943,
+    wards: 199,
+    by_zone: { A: 292, B: 257, C: 465, D: 824, E: 879, F: 226, unknown: 6970 },
+  },
   source_document: 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)',
   disclaimer: 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.',
 };
@@ -64,8 +70,10 @@ describe('BengaluruStreetLookupPanel', () => {
 
   it('shows a Zone badge when zone enrichment is present on a row', () => {
     render(<BengaluruStreetLookupPanel />);
-    expect(screen.getByText('Zone A')).toBeInTheDocument();
-    expect(screen.getByText('Zone C')).toBeInTheDocument();
+    // "Zone A" appears in BOTH the row badge and the filter chip — assert
+    // at least 2 instances rather than asserting uniqueness.
+    expect(screen.getAllByText('Zone A').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Zone C').length).toBeGreaterThanOrEqual(2);
   });
 
   it('formats the guidance value band when present (min only renders with +, min+max renders as range)', () => {
@@ -87,19 +95,48 @@ describe('BengaluruStreetLookupPanel', () => {
   });
 
   it('shows the empty-search hint card when there are no rows and the search is empty', () => {
-    streetQuery = { data: { query: '', total: 0, rows: [], disclaimer: '' }, isLoading: false, isError: false, isFetching: false };
+    streetQuery = {
+      data: { query: '', zone_filter: null, rows: [], summary: { total: 0, enriched: 0, wards: 0, by_zone: {} }, disclaimer: '' },
+      isLoading: false, isError: false, isFetching: false,
+    };
     render(<BengaluruStreetLookupPanel />);
     expect(screen.getByText(/Start typing a street or area name above/i)).toBeInTheDocument();
   });
 
   it('shows the no-matches hint when a search returns nothing', async () => {
-    streetQuery = { data: { query: 'xyz123', total: 0, rows: [], disclaimer: '' }, isLoading: false, isError: false, isFetching: false };
+    streetQuery = {
+      data: { query: 'xyz123', zone_filter: null, rows: [], summary: { total: 9913, enriched: 2943, wards: 199, by_zone: {} }, disclaimer: '' },
+      isLoading: false, isError: false, isFetching: false,
+    };
     render(<BengaluruStreetLookupPanel />);
     const input = screen.getByPlaceholderText(/Search by street or area name/i);
     fireEvent.change(input, { target: { value: 'xyz123' } });
     await waitFor(() => {
-      expect(screen.getByText(/No streets matched "xyz123"/i)).toBeInTheDocument();
+      expect(screen.getByText(/No streets match the current filter/i)).toBeInTheDocument();
     }, { timeout: 600 });
+  });
+
+  it('renders the zone-filter chips with per-zone counts when summary is populated', () => {
+    render(<BengaluruStreetLookupPanel />);
+    expect(screen.getByRole('button', { name: /All zones/i })).toBeInTheDocument();
+    // Zone A has 292 in the summary fixture; the chip should display the count.
+    expect(screen.getByRole('button', { name: /Zone A.*\(292\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Zone F.*\(226\)/ })).toBeInTheDocument();
+  });
+
+  it('threads the zone filter through to the hook when a chip is clicked', async () => {
+    render(<BengaluruStreetLookupPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Zone C/ }));
+    await waitFor(() => {
+      expect(lastParams.zone).toBe('C');
+    }, { timeout: 200 });
+  });
+
+  it('shows enriched count + percent in the enrichment tile', () => {
+    render(<BengaluruStreetLookupPanel />);
+    // 2,943 / 9,913 = 30%
+    expect(screen.getByText(/2,943 \(30%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/LLM pass extends coverage/i)).toBeInTheDocument();
   });
 
   it('shows a skeleton while loading', () => {
