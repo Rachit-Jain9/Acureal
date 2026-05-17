@@ -387,6 +387,19 @@ router.get('/intelligence/uav-benchmark', authenticate, async (req, res, next) =
   }
 });
 
+// GET /api/master-plan/intelligence/ward-summary
+// Ward-level rollup of the BBMP street index — one row per ward with
+// street count, dominant zone, dominant-zone share %, and median
+// guidance-value midpoint. Powers the admin "Ward summary" panel.
+router.get('/intelligence/ward-summary', authenticate, async (req, res, next) => {
+  try {
+    const data = await masterplanService.getBbmpWardSummary();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/master-plan/intelligence/street-lookup?search=...&limit=...&zone=A
 // Fuzzy-search the 9,913-row BBMP street index sourced from the Guidance
 // Value PDF. Each hit carries the ward + source page so the user can verify

@@ -90,6 +90,14 @@ export function useUavBenchmark(params = {}) {
   });
 }
 
+export function useBbmpWardSummary() {
+  return useQuery({
+    queryKey: ['master-plan-bbmp-ward-summary'],
+    queryFn: () => masterPlanAPI.wardSummary().then((r) => r.data.data ?? { wards: [], summary: {}, disclaimer: '' }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useStreetLookup(params = {}) {
   const search = String(params.search || '').trim();
   const zone = params.zone || null;
