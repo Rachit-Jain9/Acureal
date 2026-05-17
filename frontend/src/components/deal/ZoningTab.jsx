@@ -1,6 +1,7 @@
 import ParcelIntelligencePanel from './ParcelIntelligencePanel';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
 import DealPlanningContextCard from './DealPlanningContextCard';
+import DealStreetLookupCard from './DealStreetLookupCard';
 import { ErrorState } from '../../design-system';
 import { useProperty } from '../../hooks/useProperties';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
@@ -51,6 +52,7 @@ export default function ZoningTab({ setTab }) {
   return (
     <div className="space-y-5">
       <MasterPlanZonePanel property={property} />
+      <DealStreetLookupCard property={property} />
       <DealPlanningContextCard />
       <ParcelIntelligencePanel
         property={property}
