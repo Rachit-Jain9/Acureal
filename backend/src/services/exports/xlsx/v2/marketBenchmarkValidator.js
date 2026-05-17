@@ -163,7 +163,138 @@ const validateCompCoverage = (ctx, core, addIssue) => {
 };
 
 /**
- * Validator 4: CompSetStale — latest comp launch_year is more than 24
+ * Validator 4 (PR-NX33 — 2026-05-17): DSCR floor per RBI Master Direction.
+ * Income-family only. Surfaces WARN when computed Debt Service Coverage
+ * Ratio (NOI ÷ annual debt service) is below the conventional 1.20x
+ * floor that Indian LRD / project-finance lenders enforce.
+ *
+ * Pre-NX33 the export QA validated DebtLTV and DebtRatePct as structural
+ * inputs but never CHECKED whether the resulting debt service was
+ * actually sustainable from the income. An operator could enter 80% LTV
+ * @ 11% on a 7-year amortization and ship a workbook where DSCR is
+ * 0.85x — economically impossible per RBI, but the export passed silently.
+ *
+ * Computation:
+ *   loan amount = totalCost (₹Cr) × debtLTV
+ *   annual debt service = loan × [r(1+r)^n / ((1+r)^n − 1)]
+ *     where r = debtRatePct, n = loanTermYears
+ *   DSCR = noi / annual debt service
+ *
+ * Thresholds (per RBI Master Direction on Project Finance + LRD norms):
+ *   - DSCR ≥ 1.30 → silent (well-cushioned)
+ *   - 1.20 ≤ DSCR < 1.30 → silent (within RBI floor with thin cushion)
+ *   - DSCR < 1.20 → WARN with citation
+ *   - DSCR < 1.00 → escalated WARN (NOI doesn't cover debt service at all)
+ *
+ * Skipped silently when:
+ *   - dealFamily !== 'income' (only income deals have stabilised NOI)
+ *   - kernelKpis.noi or kernelKpis.totalCost missing
+ *   - debtLTV ≤ 0 (no debt → no DSCR)
+ *   - any numeric coercion fails
+ */
+const RBI_DSCR_FLOOR = 1.20;
+
+const validateDscrFloor = (ctx, core, addIssue) => {
+  if (ctx.dealFamily !== 'income') return;
+
+  const totalCostCr = asFiniteNumber(ctx.kernelKpis?.totalCost);
+  const noiCr = asFiniteNumber(ctx.kernelKpis?.noi);
+  const ltv = asFiniteNumber(core?.debtLTV);
+  const rate = asFiniteNumber(core?.debtRatePct);
+  const termYears = asFiniteNumber(ctx.inputs?.loanTermYears) || 7;
+
+  // All prereqs present?
+  if (totalCostCr === null || totalCostCr <= 0) return;
+  if (noiCr === null || noiCr <= 0) return;
+  if (ltv === null || ltv <= 0 || ltv > 1) return;
+  if (rate === null || rate <= 0 || rate > 1) return;
+
+  const loanAmountCr = totalCostCr * ltv;
+  // Standard amortization. Edge case r=0: simple division (rare but
+  // operator could enter a zero-coupon assumption).
+  const r = rate;
+  const n = termYears;
+  const annualDebtServiceCr = r === 0
+    ? loanAmountCr / n
+    : loanAmountCr * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+
+  if (annualDebtServiceCr <= 0) return; // shouldn't happen but defensive
+
+  const dscr = noiCr / annualDebtServiceCr;
+  if (!Number.isFinite(dscr)) return;
+
+  if (dscr < 1.00) {
+    addIssue(
+      'warn',
+      'RBI Master Direction — DSCR floor',
+      'DebtLTV',
+      `Computed DSCR is ${dscr.toFixed(2)}× — NOI (₹${noiCr.toFixed(2)} Cr) does not cover annual debt service (₹${annualDebtServiceCr.toFixed(2)} Cr at ${(rate * 100).toFixed(2)}% × ${termYears}yr on ₹${loanAmountCr.toFixed(2)} Cr loan). Below 1.00× means the deal cannot service debt from operating income alone — only feasible if sponsor injects equity from outside cash flow.`,
+      `Reduce DebtLTV (currently ${(ltv * 100).toFixed(0)}%) OR lower DebtRatePct OR extend LoanTermYears (currently ${termYears}). Indian LRD lenders enforce DSCR ≥ 1.20× per RBI Master Direction; deals below 1.00× will not clear credit.`,
+      'income asset classes',
+    );
+  } else if (dscr < RBI_DSCR_FLOOR) {
+    addIssue(
+      'warn',
+      'RBI Master Direction — DSCR floor',
+      'DebtLTV',
+      `Computed DSCR is ${dscr.toFixed(2)}× — BELOW the conventional 1.20× floor Indian LRD / project-finance lenders enforce per RBI Master Direction. NOI ₹${noiCr.toFixed(2)} Cr ÷ annual debt service ₹${annualDebtServiceCr.toFixed(2)} Cr (at ${(rate * 100).toFixed(2)}% × ${termYears}yr on ₹${loanAmountCr.toFixed(2)} Cr loan).`,
+      `Reduce DebtLTV (currently ${(ltv * 100).toFixed(0)}%) OR negotiate a lower DebtRatePct OR extend LoanTermYears (currently ${termYears}) to bring DSCR above 1.20×.`,
+      'income asset classes',
+    );
+  }
+};
+
+/**
+ * Validator 5 (PR-NX33 — 2026-05-17): Yield-on-Cost vs Exit Cap Rate
+ * spread. Income-family only. Surfaces WARN when the stabilised
+ * yield-on-cost is at or below the exit cap rate — the development
+ * premium has evaporated and there's no economic reason to build vs.
+ * just buy the stabilised asset.
+ *
+ * The spread is the developer's reward for taking development risk
+ * (entitlement, construction, lease-up). A 50–200 bps positive spread
+ * is the conventional minimum for the deal to clear IC.
+ *
+ * Thresholds:
+ *   - spread ≥ 200 bps → silent (healthy development premium)
+ *   - 50 bps ≤ spread < 200 bps → silent (thin but positive)
+ *   - 0 ≤ spread < 50 bps → WARN (development premium very thin)
+ *   - spread < 0 → escalated WARN (negative spread — economically
+ *     irrational to build vs. acquire stabilised)
+ */
+const validateYocVsExitCapSpread = (ctx, core, addIssue) => {
+  if (ctx.dealFamily !== 'income') return;
+
+  const yoc = asFiniteNumber(ctx.kernelKpis?.yieldOnCost);
+  const exitCap = asFiniteNumber(core?.exitCapRate);
+  if (yoc === null || exitCap === null) return;
+  if (yoc <= 0 || exitCap <= 0) return; // can't compute meaningful spread
+
+  const spreadBps = Math.round((yoc - exitCap) * 10000);
+
+  if (spreadBps < 0) {
+    addIssue(
+      'warn',
+      'Yield-on-Cost vs Exit Cap',
+      'ExitCapRate',
+      `NEGATIVE spread: stabilised Yield-on-Cost ${(yoc * 100).toFixed(2)}% is BELOW Exit Cap Rate ${(exitCap * 100).toFixed(2)}% (${Math.abs(spreadBps)} bps deficit). The developer earns LESS than a passive buyer of a stabilised asset — there's no economic reward for taking development risk.`,
+      `Either lower the build-cost basis (TotalCost), raise stabilised income (BaseRentPerSqftMonth × OccupancyPct), or revise the Exit Cap Rate assumption. Income deals typically need ≥150-200 bps positive YoC-vs-Exit-Cap spread to clear IC.`,
+      'income asset classes',
+    );
+  } else if (spreadBps < 50) {
+    addIssue(
+      'warn',
+      'Yield-on-Cost vs Exit Cap',
+      'ExitCapRate',
+      `THIN development premium: Yield-on-Cost ${(yoc * 100).toFixed(2)}% vs Exit Cap ${(exitCap * 100).toFixed(2)}% leaves only ${spreadBps} bps of spread. Conventional IC threshold is 150–200 bps for income deals — a thin spread leaves no margin for cost overruns, lease-up delays, or cap-rate widening.`,
+      `Stress-test the build cost (typically +10% contingency) and re-check the spread. If the spread compresses below zero on a reasonable downside, the development premium is illusory.`,
+      'income asset classes',
+    );
+  }
+};
+
+/**
+ * Validator 6: CompSetStale — latest comp launch_year is more than 24
  * months old. Indian RE pricing moves fast in active micro-markets.
  */
 const validateCompFreshness = (ctx, core, addIssue) => {
@@ -212,6 +343,9 @@ const runMarketBenchmarkValidators = (ctx, core, addIssue) => {
     validateSellRateBands,
     validateCompCoverage,
     validateCompFreshness,
+    // PR-NX33 (2026-05-17): income-deal validators
+    validateDscrFloor,
+    validateYocVsExitCapSpread,
   ];
   for (const validator of runners) {
     try {
@@ -235,5 +369,8 @@ module.exports = {
     validateSellRateBands,
     validateCompCoverage,
     validateCompFreshness,
+    validateDscrFloor,
+    validateYocVsExitCapSpread,
+    RBI_DSCR_FLOOR,
   },
 };
