@@ -4,6 +4,33 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (second 10-hr autonomous tail) — BBMP runbook + Ward Summary (PRs #356, #357)
+
+**What was worked on in plain English:**
+- Documented the two manual operator actions left after the BBMP arc (refresh `GEMINI_API_KEY` from Vercel → run the LLM enrichment script; delete the legacy Tokyo Supabase project via dashboard) directly in `TODO_MANUAL.md` so they're discoverable from the standard "what's pending" workflow.
+- Added a ninth surface to the admin Planning Intelligence tab: **BBMP Ward Summary** — 198 wards rolled up by street index. Per-ward street count, dominant zone (the UAV zone code that wins the plurality of enriched streets), dominant-zone share %, distinct-zone count, median guidance bandwidth midpoint, sample ARO area. Sortable by every column, filterable by ward number / area name / single-letter zone code (A–F treated as exact-match-only so it doesn't collide with "RESIDENTIAL" via substring).
+
+**PRs opened/merged:**
+- PR #356 — `docs(todo-manual): add BBMP Phase 2b enrichment + Tokyo deletion runbooks` — squash-merged.
+- PR #357 — `feat(planning-intelligence): BBMP Ward Summary — 198 wards rolled up by street index` — squash-merged.
+
+**Verification:**
+- Backend test suite: 1,835 → 1,837 (+2 covering the per-ward aggregate + the empty case).
+- Frontend test suite: 434 → 447 (+13 across BbmpWardSummaryPanel sort/filter/tone-mapped badges + the page-test mock for `useBbmpWardSummary`).
+- Build clean (34 s).
+- CI: every PR landed with all checks green.
+
+**Manual blockers still pending (no change since #355's entry):**
+- Refresh `GEMINI_API_KEY` locally (`vercel env pull backend/.env.local`) → run `scripts/enrich-bbmp-street-zones.js` to take street zone coverage from 30% → ~100%.
+- Delete Tokyo Supabase project `lsbhrbvuynzqhdtzczco` via dashboard (Supabase MCP exposes only pause/restore).
+
+**What's left:**
+- Cross-link the UAV Benchmark zone column headers to the Street Lookup with pre-selected zone filter — deferred this session; ~30 min frontend-only change when prioritised.
+- K-GIS ↔ BBMP street-index cross-verification — adapter already exists but `kgis_cache` is empty; build the cross-verify surface once a real parcel triggers a cache populate.
+- IC PPTX slide for BBMP guidance value — duplicates what's now on the deal page; revisit only if IC packets need standalone defensibility.
+
+---
+
 ## 2026-05-17 (continued, ~10 hr autonomous window) — BBMP Guidance Value end-to-end (PRs #350, #351, #352, #353, #354)
 
 **What was worked on in plain English:**
