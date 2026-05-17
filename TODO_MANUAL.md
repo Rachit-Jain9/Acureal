@@ -4,6 +4,13 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
+### Apply migration: `20260530_bbmp_uav_rate_card.sql` (Phase A1)
+Path: `database/migrations/20260530_bbmp_uav_rate_card.sql`. Idempotent. Inserts 108 rows into `regulatory_data.bbmp_uav_entries` — the BBMP Unit Area Value rate card from Gazette Notification 384 dated 09-Mar-2016 (18 property-use categories × 6 zones). Hand-extracted from the gazette tables, confidence 0.95, review_status 'approved'. Until applied, the UAV Benchmark panel at `/admin/planning-intelligence` renders an empty matrix.
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260530_bbmp_uav_rate_card.sql
+```
+Or paste into Supabase SQL editor. Trailing `SELECT` reports per-zone row counts (each of A-F should show 18 uses, 18 rows).
+
 ### Apply migration: `20260529_planning_district_demographics.sql` (Phase A2)
 Path: `database/migrations/20260529_planning_district_demographics.sql`. Idempotent. Inserts a single `evidence_facts` row (`fact_type='rmp_table', fact_key='planning_districts'`) containing all 42 Bengaluru Planning Districts with population, area, density, ward count, and village count extracted from RMP 2031 Volume-4 PDR. Until applied, the District Intelligence panel at `/admin/planning-intelligence` shows 42 stub rows with no demographics.
 ```powershell
