@@ -4,6 +4,13 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
+### Apply migration: `20260601_rmp_vol3_vol1_callouts_and_rules.sql` (Phase A4)
+Path: `database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql`. Idempotent. Inserts 6 evidence_facts rows extracted via Gemini from RMP 2031 Volume-3 + Volume-1: 5 SDZ corridors (Bellary/Old Madras/Sarjapur/Hosur/Mysuru roads), 12 heritage zones (Central Administrative, Raj Bhavan, etc.), regional parks aggregate, NGT drainage classification, Peripheral Ring Road alignment, and 17 substantive zoning rule narratives (FAR base, setback floor, etc.). All review_status='pending' so they land in the Review Queue for human verification. Until applied, DealPlanningContextCard's SDZ/heritage/NGT/PRR callouts stay empty.
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql
+```
+Volume-6 zoning regulations not in this PR — hit Gemini's output-token budget on the full inventory pass; needs a narrower chunked extraction in a follow-up.
+
 ### Apply migration: `20260531_land_use_insight_and_city_callouts.sql` (Phase A3)
 Path: `database/migrations/20260531_land_use_insight_and_city_callouts.sql`. Idempotent. Inserts 32 evidence_facts rows: 14 existing (2015) + 12 proposed (2031) land-use shares + 4 totals (BMA area, developable area, agriculture-outside-developable, LPA of BDA) + 1 landmark aggregate (22 named landmarks) + 1 boundary aggregate (7 adjacent planning authorities). Hand-extracted from the RMP 2031 Existing/Proposed Land Use maps, confidence 0.95. Until applied, the Land Use Insight panel at `/admin/planning-intelligence` and the DealPlanningContextCard on every Bengaluru deal's Zoning tab render empty.
 ```powershell
