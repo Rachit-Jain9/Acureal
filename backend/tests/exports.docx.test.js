@@ -303,4 +303,198 @@ describe('services/exports/docx/buildReport', () => {
       expect(briefingIdx).toBeLessThan(execIdx);
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-NX35 (2026-05-17): Risk Register / DD Status / Approvals Tracker
+  // ────────────────────────────────────────────────────────────────────
+  // Three new platform-data sections between Financials and Pros & Cons.
+  // Operator-curated facts read BEFORE the AI-synthesised Pros & Cons.
+  describe('PR-NX35: Risk Register / DD Status / Approvals Tracker', () => {
+    const JSZip = require('jszip');
+
+    const extractDocXmlText = async (buffer) => {
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml').async('string');
+      return docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    };
+
+    // ── Section headings exist ────────────────────────────────────────
+    test('renders Risk Register, Due Diligence Status, Approvals Tracker headings', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Risk Register/);
+      expect(text).toMatch(/Due Diligence Status/);
+      expect(text).toMatch(/Approvals Tracker/);
+    });
+
+    // ── Honest empty-states when data is missing ──────────────────────
+    test('Risk Register renders empty-state when no risks logged', async () => {
+      const buffer = await buildDealReportDocx(minimalContext()); // no risks.items
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/No risks have been logged for this deal yet/);
+      expect(text).toMatch(/Manual input required/);
+    });
+
+    test('DD Status renders empty-state when no DD checklist seeded', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/No DD checklist has been seeded/);
+    });
+
+    test('Approvals Tracker renders empty-state with Karnataka template hint', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/No approvals have been seeded/);
+      // Karnataka-specific template citation
+      expect(text).toMatch(/CDP\/Zoning|Khata|BWSSB|BESCOM|RERA/);
+    });
+
+    // ── Risk Register populated case ──────────────────────────────────
+    test('Risk Register renders rows with severity + status + summary line', async () => {
+      const ctx = minimalContext();
+      ctx.risks = {
+        summary: { critical: 1, high: 2, medium: 1, low: 0, total: 4 },
+        items: [
+          { severity: 'critical', category: 'title_ownership', title: 'Pending mutation', status: 'open', mitigation: 'Fast-track via revenue office', created_by_name: 'Rachit' },
+          { severity: 'high', category: 'statutory', title: 'RERA registration not filed', status: 'flagged', mitigation: 'File before Q3', created_by_name: 'Rachit' },
+          { severity: 'high', category: 'physical_technical', title: 'Soil report outdated', status: 'mitigated', mitigation: 'New report commissioned', created_by_name: 'Rachit' },
+          { severity: 'medium', category: 'commercial', title: 'Anchor tenant LOI pending', status: 'open', mitigation: 'Backup tenant identified', created_by_name: 'Rachit' },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Summary line surfaces the breakdown
+      expect(text).toMatch(/4 risks logged.*1 critical, 2 high, 1 medium/);
+      // Each title shows
+      expect(text).toMatch(/Pending mutation/);
+      expect(text).toMatch(/RERA registration not filed/);
+      expect(text).toMatch(/Anchor tenant LOI pending/);
+      // Categories labelized (snake_case → "Title Ownership")
+      expect(text).toMatch(/Title Ownership/);
+    });
+
+    // ── DD Status populated case ──────────────────────────────────────
+    test('DD Status renders summary with deal-breaker count + open items', async () => {
+      const ctx = minimalContext();
+      ctx.dd = {
+        summary: {
+          total_required: 12,
+          completed_required: 9,
+          completed_count: 9,
+          flagged_count: 1,
+          deal_breakers_total: 3,
+          deal_breakers_done: 2,
+        },
+        items: [
+          { category: 'title_ownership', item_name: 'Mother deed traced', severity: 'deal_breaker', status: 'completed', notes: 'Done 2026-04-15' },
+          { category: 'statutory', item_name: 'RERA filing', severity: 'deal_breaker', status: 'pending', notes: 'Awaiting plan sanction' },
+          { category: 'physical_technical', item_name: 'Boundary survey', severity: 'buildability_blocker', status: 'in_progress', notes: 'Surveyor onsite' },
+          { category: 'commercial', item_name: 'Vendor due diligence', severity: 'commercial_blocker', status: 'flagged', notes: 'Disputed price escalation' },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Summary line: "9 of 12 required ... 1 deal-breaker open ... 1 flagged"
+      expect(text).toMatch(/9 of 12 required items completed/);
+      expect(text).toMatch(/1 deal-breaker open/);
+      expect(text).toMatch(/1 flagged/);
+      // Item names appear
+      expect(text).toMatch(/Mother deed traced/);
+      expect(text).toMatch(/RERA filing/);
+      expect(text).toMatch(/Boundary survey/);
+      // Severity labelization (deal_breaker → Deal Breaker)
+      expect(text).toMatch(/Deal Breaker/);
+    });
+
+    // ── Approvals Tracker populated case ──────────────────────────────
+    test('Approvals Tracker renders summary with validated / in-progress / issue counts', async () => {
+      const ctx = minimalContext();
+      ctx.approvals = {
+        summary: { total: 5, validated: 2, in_progress: 2, issue: 1 },
+        items: [
+          { approval_type: 'rera', name: 'RERA Registration', is_required: true, is_validated: true, status: 'validated', reference_number: 'PRM/KA/RERA/1251/308/PR/2025', issuing_authority: 'K-RERA', expiry_date: null, next_action: null },
+          { approval_type: 'plan', name: 'Sanctioned Building Plan', is_required: true, is_validated: false, status: 'in_progress', issuing_authority: 'BBMP', next_action: 'Resubmit drawings' },
+          { approval_type: 'fire', name: 'Fire NOC', is_required: true, is_validated: false, status: 'issue', issuing_authority: 'KSFES', next_action: 'Width compliance pending' },
+          { approval_type: 'water', name: 'BWSSB Water Connection', is_required: true, is_validated: true, status: 'validated', reference_number: 'BW/2024/12345', issuing_authority: 'BWSSB' },
+          { approval_type: 'power', name: 'BESCOM Power Connection', is_required: true, is_validated: false, status: 'in_progress', issuing_authority: 'BESCOM' },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Summary line
+      expect(text).toMatch(/5 required of 5 tracked/);
+      expect(text).toMatch(/2 validated/);
+      expect(text).toMatch(/2 in progress/);
+      expect(text).toMatch(/1 with issue/);
+      // Each name appears
+      expect(text).toMatch(/RERA Registration/);
+      expect(text).toMatch(/Sanctioned Building Plan/);
+      expect(text).toMatch(/Fire NOC/);
+      expect(text).toMatch(/BWSSB Water Connection/);
+      // Authority appears
+      expect(text).toMatch(/BBMP/);
+      expect(text).toMatch(/BESCOM/);
+    });
+
+    // ── Order: 3 new sections sit between Financials and Pros & Cons ─
+    test('section order: Financials → Risk Register → DD Status → Approvals Tracker → Pros & Cons', async () => {
+      const ctx = minimalContext();
+      // Populate all three so each renders fully
+      ctx.risks = { summary: { total: 1 }, items: [{ severity: 'high', category: 'x', title: 'r-test', status: 'open' }] };
+      ctx.dd = { summary: { total_required: 1, completed_required: 0 }, items: [{ category: 'x', item_name: 'dd-test', severity: 'secondary', status: 'pending' }] };
+      ctx.approvals = { summary: {}, items: [{ approval_type: 'rera', name: 'approval-test', is_required: true, status: 'pending' }] };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Headings containing "&" are XML-escaped as "&amp;" in the doc XML.
+      // Use a regex that matches either form.
+      const financialsIdx = text.search(/Financials &(?:amp;)? KPIs/);
+      const riskIdx = text.indexOf('Risk Register');
+      const ddIdx = text.indexOf('Due Diligence Status');
+      const approvalsIdx = text.indexOf('Approvals Tracker');
+      const prosConsIdx = text.search(/Pros &(?:amp;)? Cons/);
+      expect(financialsIdx).toBeGreaterThan(-1);
+      expect(riskIdx).toBeGreaterThan(financialsIdx);
+      expect(ddIdx).toBeGreaterThan(riskIdx);
+      expect(approvalsIdx).toBeGreaterThan(ddIdx);
+      expect(prosConsIdx).toBeGreaterThan(approvalsIdx);
+    });
+
+    // ── All three sections carry platformBadge (no AI badge) ──────────
+    test('all three sections carry the PLATFORM DATA badge (not AI-ASSISTED)', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      // The doc should have PLATFORM DATA appearing multiple times now
+      // (existing Site Information / Overview / Comparables / Financials use it too).
+      const platformOccurrences = (text.match(/PLATFORM DATA/g) || []).length;
+      expect(platformOccurrences).toBeGreaterThanOrEqual(4); // existing 3+ + 3 new sections
+    });
+
+    // ── __internal helpers ────────────────────────────────────────────
+    describe('__internal helpers', () => {
+      test('labelFromCode snake_case → Title Case', () => {
+        expect(__internal.labelFromCode('deal_breaker')).toBe('Deal Breaker');
+        expect(__internal.labelFromCode('in_progress')).toBe('In Progress');
+        expect(__internal.labelFromCode('a_khata')).toBe('A Khata');
+        expect(__internal.labelFromCode(null)).toBe('–');
+        expect(__internal.labelFromCode('')).toBe('–');
+      });
+
+      test('severityColor maps tones for critical / high / medium / completed / validated / mitigated', () => {
+        // Just check it returns a non-empty 6-char hex (we don't need to pin exact palette tokens here)
+        expect(__internal.severityColor('critical')).toMatch(/^[0-9A-F]{6}$/i);
+        expect(__internal.severityColor('high')).toMatch(/^[0-9A-F]{6}$/i);
+        expect(__internal.severityColor('completed')).toMatch(/^[0-9A-F]{6}$/i);
+        expect(__internal.severityColor('validated')).toMatch(/^[0-9A-F]{6}$/i);
+        expect(__internal.severityColor('mitigated')).toMatch(/^[0-9A-F]{6}$/i);
+        // Critical and completed should NOT collide (sanity check)
+        expect(__internal.severityColor('critical')).not.toBe(__internal.severityColor('completed'));
+      });
+
+      test('severityColor returns muted-high fallback for unknown severity', () => {
+        const known = __internal.severityColor('medium');
+        const unknown = __internal.severityColor('not_a_real_severity');
+        expect(unknown).toBe(known); // both fall through to mutedHigh
+      });
+    });
+  });
 });

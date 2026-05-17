@@ -1037,6 +1037,324 @@ const buildFinancials = (ctx) => {
   return children;
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// PR-NX35 (2026-05-17) — Risk Register / DD Status / Approvals Tracker
+// ─────────────────────────────────────────────────────────────────────
+//
+// Three new platform-data sections that an institutional IC reviewer
+// expects to see in any underwriting report. Pre-NX35 the DOCX had
+// rich market-context + financials + AI-synthesised Pros & Cons but no
+// dedicated surface for the operator-curated risk register, the DD
+// checklist progress, or the Karnataka approval tracker — all of which
+// are first-class signals for "is this deal ready for IC?"
+//
+// All three sections:
+//   - Use platformBadge() (not AI-synthesised — these are DB-backed
+//     operator-curated facts; CLAUDE.md hard rule).
+//   - Render an honest empty-state line when the operator hasn't
+//     populated the underlying table yet.
+//   - Sit right after Financials & KPIs and before Pros & Cons so the
+//     reviewer reads the structured facts before the AI-synthesised
+//     interpretation.
+//
+// Severity / status colour coding follows palette tokens:
+//   - dataNegative for critical / blocker / overdue / issue
+//   - dataWarning  for high / flagged / in_progress
+//   - dataPositive for completed / validated / mitigated / resolved
+//   - mutedHigh    for low / secondary / pending / not_applicable
+
+const RISK_SEVERITY_RANK = { critical: 1, high: 2, medium: 3, low: 4 };
+const RISK_STATUS_RANK = { open: 1, flagged: 2, mitigated: 3, resolved: 4 };
+const DD_SEVERITY_RANK = { deal_breaker: 1, buildability_blocker: 2, commercial_blocker: 3, secondary: 4 };
+const DD_STATUS_RANK = { pending: 1, in_progress: 2, flagged: 3, completed: 4, not_applicable: 5 };
+const APPROVAL_STATUS_RANK = { issue: 1, in_progress: 2, pending: 3, validated: 4 };
+
+const labelFromCode = (code) => String(code || '–')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const severityColor = (severity) => {
+  const s = String(severity || '').toLowerCase();
+  if (s === 'critical' || s === 'deal_breaker' || s === 'issue') return HEX('dataNegative');
+  if (s === 'high' || s === 'buildability_blocker' || s === 'flagged' || s === 'in_progress') return HEX('dataWarning');
+  if (s === 'medium' || s === 'commercial_blocker') return HEX('mutedHigh');
+  if (s === 'completed' || s === 'validated' || s === 'mitigated' || s === 'resolved') return HEX('dataPositive');
+  return HEX('mutedHigh');
+};
+
+const buildRiskRegister = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Risk Register', { pageBreakBefore: true }));
+  children.push(platformBadge());
+
+  const summary = ctx.exportContext?.risks?.summary || {};
+  const items = Array.isArray(ctx.exportContext?.risks?.items) ? ctx.exportContext.risks.items : [];
+
+  // Honest empty-state.
+  if (items.length === 0) {
+    children.push(bodyPara(
+      'No risks have been logged for this deal yet. Manual input required — populate the Risk tab on the deal page before this section becomes IC-ready.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  // Summary line — uses the existing risk_summary aggregation shape
+  // (critical / high / medium / low). Fail-soft on missing fields.
+  const total = Number(summary.total || items.length);
+  const critical = Number(summary.critical || 0);
+  const high = Number(summary.high || 0);
+  const medium = Number(summary.medium || 0);
+  const low = Number(summary.low || 0);
+  const summaryParts = [];
+  if (critical > 0) summaryParts.push(`${critical} critical`);
+  if (high > 0) summaryParts.push(`${high} high`);
+  if (medium > 0) summaryParts.push(`${medium} medium`);
+  if (low > 0) summaryParts.push(`${low} low`);
+  const summaryText = summaryParts.length
+    ? `${total} risk${total === 1 ? '' : 's'} logged — ${summaryParts.join(', ')}.`
+    : `${total} risk${total === 1 ? '' : 's'} logged.`;
+  children.push(bodyPara(summaryText));
+
+  // Sort: severity ASC (critical first), then status (open first)
+  const sorted = [...items].sort((a, b) => {
+    const sevA = RISK_SEVERITY_RANK[String(a.severity || '').toLowerCase()] || 99;
+    const sevB = RISK_SEVERITY_RANK[String(b.severity || '').toLowerCase()] || 99;
+    if (sevA !== sevB) return sevA - sevB;
+    const stA = RISK_STATUS_RANK[String(a.status || '').toLowerCase()] || 99;
+    const stB = RISK_STATUS_RANK[String(b.status || '').toLowerCase()] || 99;
+    return stA - stB;
+  });
+
+  const headerRow = buildHeaderTableRow(['Severity', 'Category', 'Title', 'Status', 'Mitigation', 'Owner']);
+  const bodyRows = sorted.map((r, idx) => {
+    // Severity cell uses tone-coloured bold text for at-a-glance scan
+    const severityRun = new TextRun({
+      text: labelFromCode(r.severity),
+      font: FONT, size: 18, bold: true,
+      color: severityColor(r.severity),
+    });
+    return new TableRow({
+      children: [
+        new TableCell({
+          children: [new Paragraph({ children: [severityRun] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        ...[
+          labelFromCode(r.category),
+          firstText(r.title) || '–',
+          labelFromCode(r.status),
+          firstText(r.mitigation) || '–',
+          firstText(r.created_by_name) || (r.created_by ? 'Assigned' : 'System'),
+        ].map((value) => new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: String(value), font: FONT, size: 18, color: HEX('ink') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        })),
+      ],
+    });
+  });
+
+  children.push(new Table({
+    rows: [headerRow, ...bodyRows],
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: TABLE_BORDER,
+  }));
+  return children;
+};
+
+const buildDDStatus = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Due Diligence Status'));
+  children.push(platformBadge());
+
+  const summary = ctx.exportContext?.dd?.summary || {};
+  const items = Array.isArray(ctx.exportContext?.dd?.items) ? ctx.exportContext.dd.items : [];
+
+  if (items.length === 0) {
+    children.push(bodyPara(
+      'No DD checklist has been seeded for this deal yet. Manual input required — apply the asset-class template from the deal\'s DD tab before this section becomes IC-ready.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  // Summary — surfaces deal-breaker progress, the IC-critical KPI.
+  const totalRequired = Number(summary.total_required || 0);
+  const completedRequired = Number(summary.completed_required || summary.completed_count || 0);
+  const flagged = Number(summary.flagged_count || items.filter((i) => i.status === 'flagged').length);
+  const dealBreakersTotal = Number(summary.deal_breakers_total || items.filter((i) => i.severity === 'deal_breaker').length);
+  const dealBreakersDone = Number(summary.deal_breakers_done || items.filter((i) => i.severity === 'deal_breaker' && i.status === 'completed').length);
+  const dealBreakersPending = Math.max(0, dealBreakersTotal - dealBreakersDone);
+
+  const parts = [];
+  if (totalRequired > 0) parts.push(`${completedRequired} of ${totalRequired} required items completed`);
+  if (dealBreakersPending > 0) parts.push(`${dealBreakersPending} deal-breaker${dealBreakersPending === 1 ? '' : 's'} open`);
+  if (flagged > 0) parts.push(`${flagged} flagged`);
+  const summaryText = parts.length
+    ? `${parts.join('; ')}.`
+    : `${items.length} item${items.length === 1 ? '' : 's'} tracked.`;
+  children.push(bodyPara(summaryText));
+
+  // Sort: status ASC (pending → flagged → completed), then severity
+  // (deal_breaker first within each status bucket)
+  const sorted = [...items].sort((a, b) => {
+    const stA = DD_STATUS_RANK[String(a.status || '').toLowerCase()] || 99;
+    const stB = DD_STATUS_RANK[String(b.status || '').toLowerCase()] || 99;
+    if (stA !== stB) return stA - stB;
+    const sevA = DD_SEVERITY_RANK[String(a.severity || '').toLowerCase()] || 99;
+    const sevB = DD_SEVERITY_RANK[String(b.severity || '').toLowerCase()] || 99;
+    return sevA - sevB;
+  });
+
+  const headerRow = buildHeaderTableRow(['Category', 'Item', 'Severity', 'Status', 'Notes']);
+  const bodyRows = sorted.map((d, idx) => {
+    const severityRun = new TextRun({
+      text: labelFromCode(d.severity),
+      font: FONT, size: 18, bold: true,
+      color: severityColor(d.severity),
+    });
+    const statusRun = new TextRun({
+      text: labelFromCode(d.status),
+      font: FONT, size: 18, bold: true,
+      color: severityColor(d.status),
+    });
+    return new TableRow({
+      children: [
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: labelFromCode(d.category), font: FONT, size: 18, color: HEX('ink') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: firstText(d.item_name) || firstText(d.title) || '–', font: FONT, size: 18, color: HEX('ink') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [severityRun] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [statusRun] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: firstText(d.notes) || '–', font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+      ],
+    });
+  });
+
+  children.push(new Table({
+    rows: [headerRow, ...bodyRows],
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: TABLE_BORDER,
+  }));
+  return children;
+};
+
+const buildApprovalsTracker = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Approvals Tracker'));
+  children.push(platformBadge());
+
+  const summary = ctx.exportContext?.approvals?.summary || {};
+  const items = Array.isArray(ctx.exportContext?.approvals?.items) ? ctx.exportContext.approvals.items : [];
+
+  if (items.length === 0) {
+    children.push(bodyPara(
+      'No approvals have been seeded for this deal yet. Manual input required — apply the Karnataka template from the deal\'s Approvals tab (CDP/Zoning, DC Conversion, Khata, Sanctioned Building Plan, BCC, Fire NOC, BWSSB Water + Sewage, BESCOM Power, RERA, Environment Clearance).',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  // Summary — Karnataka-approval-aware progress line
+  const total = items.length;
+  const required = items.filter((a) => a.is_required !== false).length;
+  const validated = items.filter((a) => a.is_validated === true || String(a.status || '').toLowerCase() === 'validated').length;
+  const inProgress = items.filter((a) => String(a.status || '').toLowerCase() === 'in_progress').length;
+  const issue = items.filter((a) => String(a.status || '').toLowerCase() === 'issue').length;
+  const parts = [
+    `${required} required of ${total} tracked`,
+    `${validated} validated`,
+    inProgress > 0 ? `${inProgress} in progress` : null,
+    issue > 0 ? `${issue} with issue` : null,
+  ].filter(Boolean);
+  children.push(bodyPara(`${parts.join('; ')}.`));
+
+  // Sort: status (issue first → in_progress → pending → validated), then alphabetical by name
+  const sorted = [...items].sort((a, b) => {
+    const stA = APPROVAL_STATUS_RANK[String(a.status || '').toLowerCase()] || 99;
+    const stB = APPROVAL_STATUS_RANK[String(b.status || '').toLowerCase()] || 99;
+    if (stA !== stB) return stA - stB;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+
+  const headerRow = buildHeaderTableRow(['Approval', 'Required', 'Status', 'Reference #', 'Authority', 'Expiry', 'Next Action']);
+  const bodyRows = sorted.map((a, idx) => {
+    const statusRun = new TextRun({
+      text: labelFromCode(a.status),
+      font: FONT, size: 18, bold: true,
+      color: severityColor(a.status),
+    });
+    const requiredText = a.is_required === false ? 'Optional' : 'Required';
+    const requiredColor = a.is_required === false ? HEX('mutedHigh') : HEX('ink');
+    return new TableRow({
+      children: [
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: firstText(a.name) || labelFromCode(a.approval_type) || '–', font: FONT, size: 18, color: HEX('ink') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: requiredText, font: FONT, size: 18, color: requiredColor })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [statusRun] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: firstText(a.reference_number) || '–', font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: firstText(a.issuing_authority) || '–', font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: a.expiry_date ? formatDate(a.expiry_date) : '–', font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: firstText(a.next_action) || '–', font: FONT, size: 18, color: HEX('ink') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+      ],
+    });
+  });
+
+  children.push(new Table({
+    rows: [headerRow, ...bodyRows],
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: TABLE_BORDER,
+  }));
+  return children;
+};
+
 const buildProsCons = (ctx) => {
   const children = [];
   children.push(sectionHeading('Pros & Cons'));
@@ -1397,6 +1715,13 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     ...buildComparables(ctx),
     ...buildBetterAlternatives(ctx),
     ...buildFinancials(ctx),
+    // PR-NX35 (2026-05-17): IC-grade platform-data sections between
+    // Financials and Pros & Cons — operator-curated facts (risks /
+    // DD progress / approval tracker) come BEFORE the AI synthesis
+    // so the reviewer reads the structured truth before the narrative.
+    ...buildRiskRegister(ctx),
+    ...buildDDStatus(ctx),
+    ...buildApprovalsTracker(ctx),
     ...buildProsCons(ctx),
     ...buildOverallScore(ctx),
     ...buildDisclaimer(ctx),
@@ -1466,5 +1791,11 @@ module.exports = {
     DEAL_TYPE_LABELS,
     DEAL_STRUCTURE_LABELS,
     STAGE_LABELS,
+    // PR-NX35 (2026-05-17) — Risk / DD / Approvals sections
+    buildRiskRegister,
+    buildDDStatus,
+    buildApprovalsTracker,
+    labelFromCode,
+    severityColor,
   },
 };
