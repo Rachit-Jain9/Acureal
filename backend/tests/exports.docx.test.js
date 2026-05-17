@@ -497,4 +497,187 @@ describe('services/exports/docx/buildReport', () => {
       });
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-NX36 (2026-05-17): Provenance / Source Register
+  // ────────────────────────────────────────────────────────────────────
+  // Surfaces uploaded documents (with extraction status per doc) and
+  // the auto-fill audit trail in a dedicated section. Sits after the
+  // platform-data sections (risks/DD/approvals) and BEFORE Pros & Cons.
+  describe('PR-NX36: Provenance / Source Register', () => {
+    const JSZip = require('jszip');
+    const extractDocXmlText = async (buffer) => {
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml').async('string');
+      return docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    };
+
+    test('renders the "Provenance & Source Register" section heading', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Provenance &(?:amp;)? Source Register/);
+    });
+
+    test('renders empty-state when no documents and no auto-fill events', async () => {
+      const buffer = await buildDealReportDocx(minimalContext()); // no documents / provenance fields
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/No source documents or auto-fill events recorded/);
+    });
+
+    test('renders document table when documents are present', async () => {
+      const ctx = minimalContext();
+      ctx.documents = {
+        summary: { total: 2 },
+        items: [
+          { id: 'd1', name: 'sale-deed.pdf', file_type: 'application/pdf', doc_category: 'legal', created_at: '2026-04-15T00:00:00Z' },
+          { id: 'd2', name: 'sanctioned-plan.pdf', file_type: 'application/pdf', doc_category: 'approvals', created_at: '2026-04-20T00:00:00Z' },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // eyebrow() helper renders subsection labels as UPPERCASE.
+      expect(text).toMatch(/UPLOADED SOURCE DOCUMENTS/i);
+      expect(text).toMatch(/sale-deed\.pdf/);
+      expect(text).toMatch(/sanctioned-plan\.pdf/);
+      // Categories labelized
+      expect(text).toMatch(/Legal/);
+      expect(text).toMatch(/Approvals/);
+    });
+
+    test('document row surfaces extraction status when present', async () => {
+      const ctx = minimalContext();
+      ctx.documents = {
+        summary: { total: 1 },
+        items: [
+          { id: 'd1', name: 'sale-deed.pdf', file_type: 'application/pdf', doc_category: 'legal', created_at: '2026-04-15T00:00:00Z' },
+        ],
+      };
+      ctx.provenance = {
+        autoFillEvents: [],
+        extractionStatus: [
+          { id: 'ex1', document_id: 'd1', doc_type: 'sale_deed', provider: 'gemini', extraction_status: 'completed', field_count: 12, history_count: 1, extracted_at: '2026-04-15T00:30:00Z', created_at: '2026-04-15T00:30:00Z' },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // "12 fields · gemini"
+      expect(text).toMatch(/12 fields .* gemini/);
+    });
+
+    test('document with no extraction shows em-dash, errored extraction shows "Failed"', async () => {
+      const ctx = minimalContext();
+      ctx.documents = {
+        summary: { total: 2 },
+        items: [
+          { id: 'd1', name: 'no-extraction.pdf', file_type: 'application/pdf', doc_category: 'other', created_at: '2026-04-15T00:00:00Z' },
+          { id: 'd2', name: 'failed-extraction.pdf', file_type: 'application/pdf', doc_category: 'other', created_at: '2026-04-16T00:00:00Z' },
+        ],
+      };
+      ctx.provenance = {
+        autoFillEvents: [],
+        extractionStatus: [
+          { id: 'ex1', document_id: 'd2', doc_type: 'unknown', provider: 'gemini', extraction_status: 'error', field_count: 0, history_count: 0 },
+        ],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Failed/);
+    });
+
+    test('auto-fill events table renders when events are present', async () => {
+      const ctx = minimalContext();
+      ctx.documents = {
+        summary: { total: 0 },
+        items: [],
+      };
+      ctx.provenance = {
+        autoFillEvents: [
+          {
+            id: 'af1',
+            applied_at: '2026-04-20T10:00:00Z',
+            actor_id: 'u1',
+            applied_fields_count: 7,
+            source_extraction_ids: ['ex1', 'ex2'],
+            target_table: 'deals',
+            ontology_version: '1.0.0',
+            changed_fields: ['rera_number', 'negotiated_price_cr'],
+          },
+          {
+            id: 'af2',
+            applied_at: '2026-04-21T11:00:00Z',
+            actor_id: 'u1',
+            applied_fields_count: 4,
+            source_extraction_ids: ['ex3'],
+            target_table: 'properties',
+            ontology_version: '1.0.0',
+            changed_fields: ['survey_number', 'khata_no'],
+          },
+        ],
+        extractionStatus: [],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Eyebrow is uppercased; the arrow "→" is in the heading text
+      expect(text).toMatch(/AUTO-FILL EVENTS/);
+      // Field counts in event rows
+      expect(text).toMatch(/7 fields/);
+      expect(text).toMatch(/4 fields/);
+      // Target table labels
+      expect(text).toMatch(/Deal record/);
+      expect(text).toMatch(/Linked property/);
+      // Source extraction counts
+      expect(text).toMatch(/2 extractions/);
+      expect(text).toMatch(/1 extraction/);
+      // Ontology version stamp
+      expect(text).toMatch(/v1\.0\.0/);
+    });
+
+    test('truncates document list at 30 rows with a "showing first 30 of N" note', async () => {
+      const ctx = minimalContext();
+      ctx.documents = {
+        summary: { total: 35 },
+        items: Array.from({ length: 35 }, (_, i) => ({
+          id: `d${i}`,
+          name: `document-${i}.pdf`,
+          file_type: 'application/pdf',
+          doc_category: 'other',
+          created_at: '2026-04-15T00:00:00Z',
+        })),
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Showing first 30 of 35 documents/);
+    });
+
+    test('Provenance section sits after Approvals Tracker, before Pros & Cons', async () => {
+      const ctx = minimalContext();
+      // Need at least one doc to render the section body (not just empty-state)
+      ctx.documents = {
+        summary: { total: 1 },
+        items: [{ id: 'd1', name: 'sale-deed.pdf', file_type: 'application/pdf', doc_category: 'legal', created_at: '2026-04-15T00:00:00Z' }],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      const approvalsIdx = text.indexOf('Approvals Tracker');
+      const provenanceIdx = text.search(/Provenance &(?:amp;)? Source Register/);
+      const prosConsIdx = text.search(/Pros &(?:amp;)? Cons/);
+      expect(approvalsIdx).toBeGreaterThan(-1);
+      expect(provenanceIdx).toBeGreaterThan(approvalsIdx);
+      expect(prosConsIdx).toBeGreaterThan(provenanceIdx);
+    });
+
+    test('Provenance carries the PLATFORM DATA badge (not AI-ASSISTED)', async () => {
+      const ctx = minimalContext();
+      ctx.documents = {
+        summary: { total: 1 },
+        items: [{ id: 'd1', name: 'sale-deed.pdf', file_type: 'application/pdf', doc_category: 'legal', created_at: '2026-04-15T00:00:00Z' }],
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      const provenanceIdx = text.search(/Provenance &(?:amp;)? Source Register/);
+      // PLATFORM DATA badge must appear AFTER the Provenance heading
+      const platformAfter = text.indexOf('PLATFORM DATA', provenanceIdx);
+      expect(platformAfter).toBeGreaterThan(provenanceIdx);
+    });
+  });
 });

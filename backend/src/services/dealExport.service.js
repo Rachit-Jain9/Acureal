@@ -466,7 +466,17 @@ const getDealExportContext = async (dealId) => {
     sensitivity_matrix: sensitivity,
   };
 
-  const [ddSummaryResult, ddItemsResult, riskSummaryResult, riskItemsResult, approvalsResult, documentsResult, cityBenchmarks] = await Promise.all([
+  const [
+    ddSummaryResult,
+    ddItemsResult,
+    riskSummaryResult,
+    riskItemsResult,
+    approvalsResult,
+    documentsResult,
+    cityBenchmarks,
+    autoFillEventsResult,
+    extractionStatusResult,
+  ] = await Promise.all([
     query(
       `SELECT
         COUNT(*) FILTER (WHERE is_required) AS total_required,
@@ -528,6 +538,52 @@ const getDealExportContext = async (dealId) => {
       [dealId]
     ),
     fetchCityBenchmarks({ city: deal.city }).catch(() => []),
+    // PR-NX36 (2026-05-17) — auto-fill audit slice
+    //
+    // Surfaces every `apply-extractions` event for this deal so the DOCX
+    // Provenance / Source Register section can render a "what was extracted
+    // from which document, applied when, and to which table" timeline. The
+    // metadata.source='document_extraction' tag is written by
+    // dealApplyExtractions.service.js (PR-NX25). Soft-fails on 42P01 (table
+    // not yet migrated) so existing exports keep working.
+    query(
+      `SELECT
+         id, created_at, actor_id, before_json, after_json, metadata
+       FROM deal_audit_log
+       WHERE deal_id = $1
+         AND event_type = 'updated'
+         AND metadata ->> 'source' = 'document_extraction'
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [dealId]
+    ).catch((err) => {
+      if (err && err.code === '42P01') return { rows: [] }; // migration not yet applied
+      throw err;
+    }),
+    // PR-NX36 (2026-05-17) — per-document extraction status
+    //
+    // Surfaces which uploaded documents have been processed (Gemini OCR)
+    // and how many structured fields they produced. The DOCX Provenance
+    // section uses this to show "sale-deed.pdf — 12 fields extracted ·
+    // 7 applied to deal" per document. Soft-fails on missing table.
+    query(
+      `SELECT
+         id, document_id, extraction_status, doc_type, provider,
+         (CASE WHEN structured_fields IS NOT NULL
+               THEN (SELECT COUNT(*) FROM jsonb_object_keys(structured_fields))
+               ELSE 0 END) AS field_count,
+         (CASE WHEN correction_history IS NOT NULL
+               THEN jsonb_array_length(correction_history)
+               ELSE 0 END) AS history_count,
+         extracted_at, created_at
+       FROM document_extractions
+       WHERE deal_id = $1
+       ORDER BY created_at DESC`,
+      [dealId]
+    ).catch((err) => {
+      if (err && err.code === '42P01') return { rows: [] };
+      throw err;
+    }),
   ]);
 
   const ddSummary = {
@@ -667,6 +723,46 @@ const getDealExportContext = async (dealId) => {
     documents: {
       summary: documentSummary,
       items: documents,
+    },
+    // PR-NX36 (2026-05-17) — Provenance / Source Register payload.
+    //
+    // Consumed by the DOCX Provenance section. XLSX + PPTX ignore today
+    // (additive, backward-compatible). Two slices:
+    //
+    //   - autoFillEvents[]: every `apply-extractions` audit row with
+    //     metadata.source='document_extraction', shaped for direct render
+    //     into a "what was applied when, from which extraction" table.
+    //
+    //   - extractionStatus[]: per-document_extractions row showing which
+    //     uploaded docs were processed, by which provider, how many
+    //     structured fields they produced, and how many history entries
+    //     (corrections + apply events) they carry.
+    provenance: {
+      autoFillEvents: (autoFillEventsResult?.rows || []).map((row) => ({
+        id: row.id,
+        applied_at: row.created_at,
+        actor_id: row.actor_id,
+        applied_fields_count: Number(row.metadata?.applied_fields_count) || null,
+        source_extraction_ids: Array.isArray(row.metadata?.source_extraction_ids)
+          ? row.metadata.source_extraction_ids
+          : [],
+        target_table: row.metadata?.target_table || null,
+        ontology_version: row.metadata?.ontology_version || null,
+        changed_fields: row.after_json && typeof row.after_json === 'object'
+          ? Object.keys(row.after_json)
+          : [],
+      })),
+      extractionStatus: (extractionStatusResult?.rows || []).map((row) => ({
+        id: row.id,
+        document_id: row.document_id,
+        doc_type: row.doc_type,
+        provider: row.provider,
+        extraction_status: row.extraction_status,
+        field_count: Number(row.field_count) || 0,
+        history_count: Number(row.history_count) || 0,
+        extracted_at: row.extracted_at,
+        created_at: row.created_at,
+      })),
     },
     planning: await getPlanningContextForDeal(deal),
     readiness,

@@ -1355,6 +1355,194 @@ const buildApprovalsTracker = (ctx) => {
   return children;
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// PR-NX36 (2026-05-17) — Provenance / Source Register
+// ─────────────────────────────────────────────────────────────────────
+//
+// Institutional underwriting reports carry a traceable audit story:
+// every input value links to a source document, and every auto-applied
+// field links to the extraction event that produced it. This section
+// surfaces both: an uploaded-document inventory (with per-document
+// extraction status) and a chronological audit of auto-fill events.
+//
+// Pre-NX36 the only way to see this was the in-app Audit tab (PR-NX31).
+// The DOCX is what gets emailed to an LP / IC reviewer who never logs
+// in — they need the same provenance story on the page.
+
+const buildProvenance = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Provenance & Source Register'));
+  children.push(platformBadge());
+
+  const documents = Array.isArray(ctx.exportContext?.documents?.items)
+    ? ctx.exportContext.documents.items
+    : [];
+  const extractionStatus = Array.isArray(ctx.exportContext?.provenance?.extractionStatus)
+    ? ctx.exportContext.provenance.extractionStatus
+    : [];
+  const autoFillEvents = Array.isArray(ctx.exportContext?.provenance?.autoFillEvents)
+    ? ctx.exportContext.provenance.autoFillEvents
+    : [];
+
+  // If nothing at all is on file, render a single empty-state.
+  if (documents.length === 0 && autoFillEvents.length === 0) {
+    children.push(bodyPara(
+      'No source documents or auto-fill events recorded for this deal yet. Manual input required — upload source documents (sale deed, EC, khata extract, sanctioned plan, RERA certificate) via the deal\'s Documents tab to seed the provenance trail.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  // ── Uploaded documents subsection ────────────────────────────────
+  children.push(eyebrow('Uploaded source documents'));
+  if (documents.length === 0) {
+    children.push(bodyPara('No documents uploaded for this deal yet.', { italic: true, color: HEX('mutedHigh') }));
+  } else {
+    // Build a per-document extraction-status lookup so we can show
+    // "X fields extracted" against each document row.
+    const extractionByDocId = new Map();
+    for (const ex of extractionStatus) {
+      if (ex.document_id) extractionByDocId.set(ex.document_id, ex);
+    }
+
+    const headerRow = buildHeaderTableRow(['Document', 'Category', 'Type', 'Uploaded', 'Extraction']);
+    const bodyRows = documents.slice(0, 30).map((d, idx) => {
+      const ex = extractionByDocId.get(d.id);
+      let extractionCell;
+      if (!ex) {
+        extractionCell = '—';
+      } else if (ex.extraction_status === 'error') {
+        extractionCell = 'Failed';
+      } else if (ex.extraction_status === 'pending') {
+        extractionCell = 'Pending';
+      } else if (ex.field_count > 0) {
+        extractionCell = `${ex.field_count} field${ex.field_count === 1 ? '' : 's'} · ${ex.provider || 'unknown'}`;
+      } else {
+        extractionCell = labelFromCode(ex.extraction_status);
+      }
+      const extractionColor = ex?.extraction_status === 'error'
+        ? HEX('dataNegative')
+        : ex?.field_count > 0
+          ? HEX('dataPositive')
+          : HEX('mutedHigh');
+
+      return new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: firstText(d.name) || '–', font: FONT, size: 18, color: HEX('ink') })] })],
+            shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: labelFromCode(d.doc_category || 'other'), font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+            shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: firstText(d.file_type) || '–', font: FONT, size: 16, color: HEX('mutedHigh') })] })],
+            shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: d.created_at ? formatDate(d.created_at) : '–', font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+            shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: extractionCell, font: FONT, size: 18, bold: ex?.field_count > 0, color: extractionColor })] })],
+            shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          }),
+        ],
+      });
+    });
+    children.push(new Table({
+      rows: [headerRow, ...bodyRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TABLE_BORDER,
+    }));
+    if (documents.length > 30) {
+      children.push(bodyPara(
+        `Showing first 30 of ${documents.length} documents. Full inventory is on the deal's Documents tab.`,
+        { italic: true, color: HEX('mutedHigh'), size: 16 },
+      ));
+    }
+  }
+
+  // ── Auto-fill events subsection ─────────────────────────────────
+  children.push(eyebrow('Auto-fill events (extracted → applied)'));
+  if (autoFillEvents.length === 0) {
+    children.push(bodyPara(
+      'No auto-fill events have been applied to this deal. Operator can review extracted fields via the "Auto-fill from documents" surface on the Overview tab.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  } else {
+    const headerRow = buildHeaderTableRow(['Applied', 'Fields', 'Target', 'Source Extractions', 'Ontology']);
+    const bodyRows = autoFillEvents.slice(0, 30).map((e, idx) => new TableRow({
+      children: [
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: e.applied_at ? formatDate(e.applied_at) : '–', font: FONT, size: 18, color: HEX('mutedHigh') })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({
+            text: e.applied_fields_count != null
+              ? `${e.applied_fields_count} field${e.applied_fields_count === 1 ? '' : 's'}`
+              : `${e.changed_fields.length || 0} field${e.changed_fields.length === 1 ? '' : 's'}`,
+            font: FONT, size: 18, bold: true, color: HEX('dataPositive'),
+          })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({
+            text: e.target_table === 'deals'
+              ? 'Deal record'
+              : e.target_table === 'properties'
+                ? 'Linked property'
+                : labelFromCode(e.target_table || 'unknown'),
+            font: FONT, size: 18, color: HEX('ink'),
+          })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({
+            text: e.source_extraction_ids.length > 0
+              ? `${e.source_extraction_ids.length} extraction${e.source_extraction_ids.length === 1 ? '' : 's'}`
+              : '–',
+            font: FONT, size: 18, color: HEX('mutedHigh'),
+          })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({
+            text: e.ontology_version ? `v${e.ontology_version}` : '–',
+            font: FONT, size: 16, color: HEX('mutedHigh'),
+          })] })],
+          shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, fill: HEX('paperSubtle') } : undefined,
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        }),
+      ],
+    }));
+    children.push(new Table({
+      rows: [headerRow, ...bodyRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TABLE_BORDER,
+    }));
+    if (autoFillEvents.length > 30) {
+      children.push(bodyPara(
+        `Showing first 30 of ${autoFillEvents.length} auto-fill events. Full timeline is on the deal's Audit tab.`,
+        { italic: true, color: HEX('mutedHigh'), size: 16 },
+      ));
+    }
+  }
+
+  return children;
+};
+
 const buildProsCons = (ctx) => {
   const children = [];
   children.push(sectionHeading('Pros & Cons'));
@@ -1722,6 +1910,12 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     ...buildRiskRegister(ctx),
     ...buildDDStatus(ctx),
     ...buildApprovalsTracker(ctx),
+    // PR-NX36 (2026-05-17): Provenance / Source Register — uploaded
+    // documents + auto-fill audit trail. Belongs between the platform-
+    // data sections (risks/DD/approvals) and the AI-synthesised Pros
+    // & Cons because it ANSWERS "what's the platform's source for the
+    // facts above?" before the reviewer reads the AI's interpretation.
+    ...buildProvenance(ctx),
     ...buildProsCons(ctx),
     ...buildOverallScore(ctx),
     ...buildDisclaimer(ctx),
@@ -1797,5 +1991,7 @@ module.exports = {
     buildApprovalsTracker,
     labelFromCode,
     severityColor,
+    // PR-NX36 (2026-05-17) — Provenance section
+    buildProvenance,
   },
 };
