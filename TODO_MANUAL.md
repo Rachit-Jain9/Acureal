@@ -4,6 +4,13 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
+### Apply migration: `20260529_planning_district_demographics.sql` (Phase A2)
+Path: `database/migrations/20260529_planning_district_demographics.sql`. Idempotent. Inserts a single `evidence_facts` row (`fact_type='rmp_table', fact_key='planning_districts'`) containing all 42 Bengaluru Planning Districts with population, area, density, ward count, and village count extracted from RMP 2031 Volume-4 PDR. Until applied, the District Intelligence panel at `/admin/planning-intelligence` shows 42 stub rows with no demographics.
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260529_planning_district_demographics.sql
+```
+Or paste contents into Supabase SQL editor (Mumbai). The migration is ~17KB with the JSONB literal inline — copy-friendly. After applying, the trailing `SELECT` reports `rich_pd_facts = 1` and `total_pd_facts = 3` (existing 2 thin routing-key facts + the new rich one).
+
 ### ~~BBMP Guidance Value — Phase 2b LLM enrichment~~ — DONE 2026-05-17
 
 Closed out the same night. Final state: **9,913 / 9,913 streets (100%)** classified by zone + guidance bandwidth on Mumbai production. Achieved via:
