@@ -1,7 +1,7 @@
 # Exports rewrite — status tracker
 
 _Source plan: `~/.claude/plans/lets-work-on-exports-harmonic-backus.md`._
-_Last updated: 2026-05-11 (six-PR batch addressing operator's brutal-roast feedback). Update at the bottom of each session._
+_Last updated: 2026-05-17 (DOCX institutional-grade bundle PR-NX35 / 36 / 37 lands risk register, DD status, approvals tracker, provenance/source register, ToC, methodology appendix). Update at the bottom of each session._
 
 This file tracks the multi-PR investor-grade exports rebuild so future
 sessions can pick up where the last left off without re-reading the chat.
@@ -59,10 +59,13 @@ sessions can pick up where the last left off without re-reading the chat.
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
 
-**Status by format**:
-- **PPTX** ✅ feature-complete: editorial palette, asset-class cover artwork, score gauge, Decision Frame, content-rich dividers, density on every slide, Pros & Cons, Key Assumptions appendix, Disclaimer rebuild, Google Maps embed.
-- **XLSX** ✅ feature-complete: 4 visible sheets + hidden Calculations sheet, named ranges, locked formulas, conditional formatting on DSCR/IRR/margin, native IRR/NPV functions, sensitivity heatmap, Bull/Base/Bear scenarios, **native chart objects** (doughnut + clustered-column on Dashboard, live-recalc, asset-class-aware via post-write XML injection in PR #254). v2 is the default.
-- **DOCX** ✅ feature-complete: ~14 sections including all 6 phase-2 sections (Demographics, Why-this-area, Job Growth, Social Infra, Supply & Demand, Better Alternatives). AI-assisted vs Platform Data badges. Behind `DOCX_REPORT_ENABLED` flag.
+**Status by format** (updated 2026-05-17):
+
+- **PPTX** ✅ feature-complete + cross-product AI briefing (PR-NX18): editorial palette, asset-class cover artwork, score gauge, Decision Frame, content-rich dividers, density on every slide, Pros & Cons, Key Assumptions appendix, Disclaimer rebuild, Google Maps embed, AI-Assisted Briefing slide.
+- **XLSX** ✅ feature-complete + India localization I1–I16 + market-benchmark validators (PR-NX28 dev-side, PR-NX33 income-side DSCR / YoC) + cross-product AI briefing tab (PR-NX12) + auto-fill apply-extractions endpoint (PR-NX25) + chart fault tolerance (PR-NX24): 4 visible sheets + hidden Calculations sheet, named ranges, locked formulas, native IRR/NPV/sensitivity, Bull/Base/Bear scenarios, native chart objects (doughnut + clustered-column + combo + tornado), full India-localized cost lines (GST + Stamp Duty + Registration + RERA escrow + JDA structures + BBMP UAV property tax + Carpet/SBA loading factor + Lender ecosystem + Taxation block + Khata A/B + Premium FSI + Karnataka approvals + milestone escalation + asset-class-specific deep models for hospitality / retail / plotted / mixed-use / raw-land).
+- **DOCX** ✅ **20 sections structurally complete** as of 2026-05-17 (PR-NX35/36/37):
+  1. Cover · 2. Table of Contents · 3. AI-Assisted Briefing (PR-NX18) · 4. Executive Summary · 5. Site Information · 6. Overview · 7. Demographics · 8. Why This Area · 9. Job Growth & Micro-Market · 10. Social Infrastructure · 11. Supply & Demand Pipeline · 12. Comparable Transactions · 13. Better Alternatives · 14. Financials & KPIs · **15. Risk Register (PR-NX35)** · **16. Due Diligence Status (PR-NX35)** · **17. Approvals Tracker (PR-NX35)** · **18. Provenance & Source Register (PR-NX36)** · 19. Pros & Cons · 20. Overall Score · **21. Methodology & Assumptions (PR-NX37)** · 22. Disclaimer. AI-assisted vs Platform Data badges. SVG chart embeds (capital stack + cash flow trend + sensitivity tornado). `DOCX_REPORT_ENABLED=1` flipped in production 2026-05-17 — visible to all users.
+- **Document ingestion** ✅ end-to-end (PR-NX25 ontology + apply-extractions backend, PR-NX26 modal frontend, PR-NX30 Overview discoverability card, PR-NX31 AuditTab event rendering): upload sale deed / EC / khata extract → Gemini extracts → operator reviews + approves → deal + property populated with full audit trail surfaced on Overview, Documents, and Audit tabs.
 - **Paywall** ⏸ deferred per operator ("free for BETA testing").
 
 ✅ Done · 🟡 Partial / open · 🔴 Not started · ⏸ On hold
@@ -71,8 +74,7 @@ sessions can pick up where the last left off without re-reading the chat.
 
 ## Operator manual actions outstanding
 
-- [ ] Apply migration `database/migrations/20260527_export_events.sql` via
-  Supabase SQL Editor on Mumbai.
+- [x] ~~Apply migration `database/migrations/20260527_export_events.sql`~~ — applied 2026-05-17.
 - [x] ~~Set `MAPBOX_TOKEN`~~ — replaced with Google Maps Static API.
   `GOOGLE_MAPS_API_KEY` is set in Vercel and **Maps Static API** is
   enabled in the Google Cloud project (operator confirmed via screenshot
@@ -81,8 +83,8 @@ sessions can pick up where the last left off without re-reading the chat.
   feedback; env var no longer used.
 - [x] ~~Make XLSX v2 default~~ — flipped in PR #242. Operator can opt
   back to v1 via `?v=1` or `XLSX_V1_FORCE=1`.
-- [ ] Operator can flip `DOCX_REPORT_ENABLED=1` in Vercel to expose the
-  underwriting report to all users (currently admin-only).
+- [x] ~~Flip `DOCX_REPORT_ENABLED=1` in Vercel~~ — done 2026-05-17; the
+  DOCX underwriting report is now visible to all users.
 - [ ] Payment provider — operator confirmed "free for BETA testing" so
   paywall PR is deferred indefinitely. Re-open this row when paid plans
   go live.

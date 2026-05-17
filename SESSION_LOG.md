@@ -4,6 +4,56 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (night) — DOCX institutional-grade bundle: Risk / DD / Approvals / Provenance / ToC / Methodology (PR #365, #366, #367)
+
+After the operator confirmed every outstanding manual action (export-events migration applied, `DOCX_REPORT_ENABLED=1` flipped, Claude key rotated, auto-fill + market-benchmark smoke tests passed), pivoted to closing the DOCX institutional-grade depth gaps surfaced in the pending-tasks audit. Per the surveyed-and-stale `EXPORTS_REWRITE_STATUS.md`, DOCX claimed feature-complete with 15 sections — but compared to what an IC reviewer expects from a paid (₹4,999) institutional-grade underwriting report, the DOCX was missing dedicated Risk Register, DD Status, Approvals Tracker, Provenance trail, Table of Contents, and Methodology appendix. This batch closes all 6 gaps in 3 PRs.
+
+### PRs shipped + merged
+
+- **#365 — PR-NX35: Risk Register + DD Status + Approvals Tracker.** Three new platform-data sections (`buildRiskRegister`, `buildDDStatus`, `buildApprovalsTracker`) inserted between Financials and Pros & Cons in the DOCX. Pull from existing `exportContext.{risks, dd, approvals}.{summary, items}`. Each section: tone-coloured severity / status cells via `severityColor()` helper, tables sorted by severity / status with summary line up top, honest empty-state when the underlying DB table isn't populated (with explicit "apply Karnataka template" hint for Approvals). All three use `platformBadge()` (no AI synthesis) — IC reviewer reads structured truth BEFORE the AI Pros & Cons interpretation. Two new shared helpers exported via `__internal`: `labelFromCode` (snake_case → Title Case) and `severityColor` (severity/status → palette token). +12 tests.
+
+- **#366 — PR-NX36: Provenance & Source Register.** New section between Approvals Tracker and Pros & Cons that closes the audit-trust loop for institutional reviewers. Two subsections: (a) **Uploaded source documents** table with per-doc extraction status (e.g., "12 fields · gemini" / "Failed" / "Pending"); (b) **Auto-fill events (extracted → applied)** table pulling every `deal_audit_log` row where `metadata.source='document_extraction'` (the audit trail PR-NX25 writes when operator approves field application). Tone-coloured extraction status (green when fields > 0, red on error). 30-row truncation note for large inventories. Enriched `dealExport.service.js` `getDealExportContext()` with 2 parallel queries (autoFillEventsResult + extractionStatusResult), both soft-failing on 42P01 for backward compat. New `exportContext.provenance` slice; additive (XLSX/PPTX ignore today). +9 tests.
+
+- **#367 — PR-NX37: Table of Contents + Methodology & Assumptions appendix.** Two final structural additions that close the DOCX completeness gap:
+  - **Static Table of Contents** right after Cover. 20-entry list of every section in canonical order with AI-Assisted vs Platform Data tag per entry. Deliberately static (not Word's native `TableOfContents` field) so Google Docs preview / Word Online / older Word render entries on first paint without F9. New `SECTION_ORDER` constant is the single source of truth.
+  - **Methodology & Assumptions appendix** between Overall Score and Disclaimer. Names the deterministic TypeScript financial kernel + asset-class-specific models (residential RERA escrow, hospitality USALI, commercial NOI, plotted absorption, mixed-use blend, raw-land entitlement), states the no-AI-numerics rule, asserts cross-product consistency across XLSX + PPTX + DOCX, lists every India-specific encoding (GST tiers, Karnataka stamp duty, RERA 70/30, BBMP UAV, Khata A/B, JDA, lender ecosystem), and renders a 3-column table of every operator input the kernel consumed (alphabetical, 80-row truncation note for large models). +12 tests.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| exports.docx.test.js | 20 | 53 | +33 |
+| **Backend TOTAL** | **1,854** | **1,887** | **+33** |
+
+Zero pre-existing regressions across 105 backend suites. No frontend changes. No DB migrations.
+
+### Outcome for the operator
+
+**Before this batch:**
+- DOCX report had no dedicated Risk Register / DD Status / Approvals Tracker — operators saw AI Pros & Cons without first reading the operator-curated platform facts.
+- Source-document attribution lived only in the in-app Audit tab (PR-NX31); the printable DOCX never carried the provenance trail.
+- No Table of Contents at the top, no Methodology appendix at the bottom.
+- The two reference roadmap docs (`EXPORTS_REWRITE_STATUS.md`, `XLSX_INSTITUTIONAL_GRADE_ROADMAP.md`) were stale: 16 India-localization items marked 🔴 Open were actually shipped in PR-I1 through PR-I16.
+
+**After this batch:**
+1. **DOCX is now structurally complete** — 22 sections (Cover · ToC · AI-Assisted Briefing · Executive Summary · Site · Overview · Demographics · Why-area · Job Growth · Social Infra · Supply/Demand · Comparables · Better Alts · Financials · **Risk Register** · **DD Status** · **Approvals Tracker** · **Provenance** · Pros & Cons · Score · **Methodology** · Disclaimer).
+2. Every IC reviewer downloading the DOCX now sees the operator-curated truth (risks/DD/approvals) BEFORE the AI synthesis, the full provenance trail (uploaded docs + auto-fill events) for audit, and a methodology appendix naming the kernel + every assumption.
+3. `EXPORTS_REWRITE_STATUS.md` + `XLSX_INSTITUTIONAL_GRADE_ROADMAP.md` updated to reflect the actual production state.
+
+### Outstanding operator actions (still carried)
+
+1. **Smoke-test the new DOCX sections** on a real deal: confirm Risk Register / DD Status / Approvals Tracker populate when underlying tables are seeded; confirm Provenance section shows uploaded documents + auto-fill events; confirm Table of Contents appears on page 2 and Methodology appendix appears near the end.
+2. **No new manual actions** introduced by this batch (no migrations, no env vars, no operator setup required).
+
+### Recommendation for next session
+
+The DOCX is now structurally complete and audit-grade. The next-highest-leverage work from Strategic Review §VI:
+- **Adopt the ontology across deal-create / deal-edit forms** (frontend + backend express-validator pull from `@redip/real-estate-ontology` not `constants/domain.js`). Risk: medium — needs cross-check vs existing constants for drift.
+- **Provenance chips on deal fields** — render a tiny "from sale-deed.pdf" chip next to fields populated via auto-fill, driven by the same `deal_audit_log` metadata that PR-NX31 surfaces in the timeline and PR-NX36 surfaces in the DOCX. Cross-cutting visual change; 1–2 sessions.
+- **Live market-benchmark warnings on financial input forms** — port PR-NX28/NX33 validators to fire as the operator types in the Financials page, not only at export time. Needs a new `useBenchmarkBands(dealId)` hook + a server endpoint to ship comp percentiles. 1 session.
+
+---
+
 ## 2026-05-17 (afternoon/evening) — Auto-fill discoverability + AuditTab ingestion rendering + income-deal validators (PR #361, #362, #363)
 
 After the operator confirmed the overnight ingestion bundle and the BBMP enrichment closed, pivoted to follow-up work that **compounds the value of what shipped overnight**. The user asked for "highest priority right now" with "first principles thinking." First-principles question: what's the biggest *missed-opportunity* gap in the just-shipped auto-fill workflow? Answer: discoverability (operators landing on Overview tab don't know auto-fill exists) and trust (Audit timeline showed doc-ingestion events as generic "Edited" entries, indistinguishable from manual edits). Then completed PR-NX28's market-benchmark validators with income-deal coverage (DSCR + YoC spread).
