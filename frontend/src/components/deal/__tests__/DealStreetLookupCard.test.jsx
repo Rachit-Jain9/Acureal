@@ -155,4 +155,69 @@ describe('DealStreetLookupCard', () => {
     const link = screen.getByRole('link', { name: /Open full lookup/i });
     expect(link).toHaveAttribute('href', '/admin/master-plan?tab=intelligence');
   });
+
+  describe('Spread vs guidance tile', () => {
+    it('renders the spread % + signal when deal price and guidance band are both present', () => {
+      // Whitefield Main Road top match: Zone B, ₹5,001–7,000 → mid ₹6,000.5
+      // Deal: 11 cr / 2000 sqft = ₹55,000/sqft → spread ≈ +816% → bubble
+      renderWithRouter(
+        <DealStreetLookupCard
+          property={{ ...BENGALURU_PROPERTY, land_area_sqft: 2000 }}
+          deal={{ negotiated_price_cr: 11 }}
+        />
+      );
+      expect(screen.getByText(/Spread vs guidance/i)).toBeInTheDocument();
+      // +816.6% bubble signal
+      expect(screen.getByText(/\+816\.6%/)).toBeInTheDocument();
+      expect(screen.getByText(/Bubble risk/i)).toBeInTheDocument();
+      // Risk-adjusted entry = 6000.5 * 1.10 = 6601 rounded
+      expect(screen.getByText(/Risk-adj entry ₹6,601/)).toBeInTheDocument();
+    });
+
+    it('falls back to "Enter deal price to compute" when no price is available', () => {
+      renderWithRouter(
+        <DealStreetLookupCard
+          property={{ ...BENGALURU_PROPERTY, land_area_sqft: 2000 }}
+          deal={{}}
+        />
+      );
+      expect(screen.getByText(/Enter deal price to compute/i)).toBeInTheDocument();
+    });
+
+    it('falls back to "Top match has no zone yet" when matched row lacks guidance band', () => {
+      lookupQuery = {
+        data: {
+          ...SAMPLE,
+          rows: [{
+            id: 'r1',
+            street_name_en: 'WHITEFIELD MAIN ROAD, WHITEFIELD',
+            ward_no: 84, page_number: 297, aro_section: null,
+            zone_code: null,
+            guidance_value_band_min_inr: null,
+            guidance_value_band_max_inr: null,
+          }],
+        },
+        isLoading: false, isError: false, isFetching: false,
+      };
+      renderWithRouter(
+        <DealStreetLookupCard
+          property={{ ...BENGALURU_PROPERTY, land_area_sqft: 2000 }}
+          deal={{ negotiated_price_cr: 11 }}
+        />
+      );
+      expect(screen.getByText(/Top match has no zone yet/i)).toBeInTheDocument();
+    });
+
+    it('uses pricePerSqft directly when supplied on the property', () => {
+      renderWithRouter(
+        <DealStreetLookupCard
+          property={{ ...BENGALURU_PROPERTY, selling_rate_per_sqft: 6500 }}
+          deal={{}}
+        />
+      );
+      // Mid = 6000.5; price = 6500; spread ≈ +8.32% → fair
+      expect(screen.getByText(/\+8\.3%/)).toBeInTheDocument();
+      expect(screen.getByText(/Fair/i)).toBeInTheDocument();
+    });
+  });
 });

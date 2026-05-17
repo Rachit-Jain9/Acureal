@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, FileText, AlertTriangle, ArrowUpRight, Sparkles } from 'lucide-react';
+import { Search, MapPin, FileText, AlertTriangle, ArrowUpRight, Sparkles, TrendingUp } from 'lucide-react';
 import Badge from '../common/Badge';
 import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
+import { analyseGuidanceValueSpread } from '../../utils/guidanceValueAnalysis';
 
 // Inline 200ms debounce — keeps the BBMP street search responsive on the
 // deal page without firing on every keystroke.
@@ -92,8 +93,10 @@ function PanelSkeleton() {
 // Restricted-to-Bengaluru deal-side card. Renders the BBMP street lookup
 // pre-seeded from the deal's linked property and surfaces the matched
 // zone, ward, and guidance-value band — the three numbers a deal team
-// asks first when underwriting a Bengaluru transaction.
-export default function DealStreetLookupCard({ property }) {
+// asks first when underwriting a Bengaluru transaction. When the deal
+// has both a transaction price AND the matched street has guidance-value
+// enrichment, the card also renders a spread-vs-guidance signal tile.
+export default function DealStreetLookupCard({ property, deal }) {
   const seed = useMemo(() => deriveSearchSeed(property), [property]);
   const [searchInput, setSearchInput] = useState(seed);
   const debounced = useDebounced(searchInput, 200);
@@ -130,6 +133,24 @@ export default function DealStreetLookupCard({ property }) {
   const totalCount = summary.total ?? 0;
   const enrichedPct = totalCount > 0 ? Math.round((enrichedCount / totalCount) * 100) : 0;
 
+  // Spread vs guidance — only computable when the top match has a
+  // bandwidth and the deal has a transaction price. Falls back gracefully
+  // (kernel returns ok:false) when either side is missing.
+  const spreadAnalysis = useMemo(() => analyseGuidanceValueSpread({
+    transactionPriceCr: deal?.negotiated_price_cr ?? deal?.land_ask_price_cr ?? deal?.entry_value_cr,
+    landAreaSqft: property?.land_area_sqft ?? deal?.land_area_sqft,
+    pricePerSqft: property?.selling_rate_per_sqft ?? deal?.selling_rate_per_sqft,
+    guidanceMinInr: topMatch?.guidance_value_band_min_inr,
+    guidanceMaxInr: topMatch?.guidance_value_band_max_inr,
+  }), [deal, property, topMatch]);
+
+  const signalToneClass = {
+    success: 'text-data-positive',
+    neutral: 'text-content-secondary',
+    warn: 'text-data-negative',
+    danger: 'text-data-negative',
+  }[spreadAnalysis?.signal?.tone] || 'text-content-primary';
+
   return (
     <Card elevated className="p-5">
       <SectionHeader
@@ -148,7 +169,7 @@ export default function DealStreetLookupCard({ property }) {
         )}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
         <StatTile
           label="Top match zone"
           value={topMatch?.zone_code ? `Zone ${topMatch.zone_code}` : '—'}
@@ -163,6 +184,37 @@ export default function DealStreetLookupCard({ property }) {
             : '—'}
           footnote="per sqft (BBMP gazette band)"
         />
+        {spreadAnalysis.ok ? (
+          <StatTile
+            label={(
+              <span className="flex items-center gap-1">
+                <TrendingUp size={11} />
+                Spread vs guidance
+              </span>
+            )}
+            value={(
+              <span className={signalToneClass}>
+                {spreadAnalysis.spread_pct >= 0 ? '+' : ''}
+                {spreadAnalysis.spread_pct.toFixed(1)}%
+              </span>
+            )}
+            footnote={(
+              <span>
+                {spreadAnalysis.signal?.label} · Risk-adj entry ₹{fmt(spreadAnalysis.risk_adjusted_entry_inr)}
+              </span>
+            )}
+          />
+        ) : (
+          <StatTile
+            label="Spread vs guidance"
+            value="—"
+            footnote={spreadAnalysis.reason === 'price_missing'
+              ? 'Enter deal price to compute'
+              : spreadAnalysis.reason === 'guidance_missing'
+                ? 'Top match has no zone yet'
+                : 'Awaiting data'}
+          />
+        )}
         <StatTile
           label="Index coverage"
           value={`${fmt(enrichedCount)} / ${fmt(totalCount)}`}
