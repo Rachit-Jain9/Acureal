@@ -680,4 +680,169 @@ describe('services/exports/docx/buildReport', () => {
       expect(platformAfter).toBeGreaterThan(provenanceIdx);
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-NX37 (2026-05-17): Table of Contents + Methodology & Assumptions
+  // ────────────────────────────────────────────────────────────────────
+  describe('PR-NX37: Table of Contents + Methodology & Assumptions appendix', () => {
+    const JSZip = require('jszip');
+    const extractDocXmlText = async (buffer) => {
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml').async('string');
+      return docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    };
+
+    // ── Table of Contents ────────────────────────────────────────────
+    test('renders Table of Contents heading after Cover', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      // ToC heading exists
+      expect(text).toMatch(/Table of Contents/);
+      // ToC appears before AI-Assisted Briefing (the previous section 2)
+      const tocIdx = text.indexOf('Table of Contents');
+      const briefingIdx = text.indexOf('AI-Assisted Briefing');
+      expect(tocIdx).toBeGreaterThan(-1);
+      expect(briefingIdx).toBeGreaterThan(tocIdx);
+    });
+
+    test('Table of Contents lists every section in canonical order with numbers', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      // Every entry from SECTION_ORDER should appear as a numbered ToC line.
+      // Sample a few to confirm + check the numbering format.
+      // Numbers are " 1." through "20." (zero-padded with space when 1 digit).
+      expect(text).toMatch(/1\. *AI-Assisted Briefing/);
+      expect(text).toMatch(/2\. *Executive Summary/);
+      expect(text).toMatch(/13\. *Risk Register/);
+      expect(text).toMatch(/15\. *Approvals Tracker/);
+      expect(text).toMatch(/16\. *Provenance &(?:amp;)? Source Register/);
+      expect(text).toMatch(/19\. *Methodology &(?:amp;)? Assumptions/);
+      expect(text).toMatch(/20\. *Disclaimer/);
+    });
+
+    test('Table of Contents tags AI vs Platform per section', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      // AI-tagged lines exist (Briefing, Exec Summary, Why This Area, Pros & Cons)
+      const aiCount = (text.match(/· AI-Assisted/g) || []).length;
+      // Platform-tagged lines exist
+      const platformCount = (text.match(/· Platform Data/g) || []).length;
+      expect(aiCount).toBeGreaterThanOrEqual(4);
+      expect(platformCount).toBeGreaterThanOrEqual(10);
+    });
+
+    test('SECTION_ORDER exports the 20 canonical section names', () => {
+      expect(Array.isArray(__internal.SECTION_ORDER)).toBe(true);
+      expect(__internal.SECTION_ORDER).toHaveLength(20);
+      expect(__internal.SECTION_ORDER[0]).toBe('AI-Assisted Briefing');
+      expect(__internal.SECTION_ORDER[__internal.SECTION_ORDER.length - 1]).toBe('Disclaimer');
+    });
+
+    // ── Methodology & Assumptions ────────────────────────────────────
+    test('renders Methodology & Assumptions appendix before Disclaimer', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      const methodologyIdx = text.search(/Methodology &(?:amp;)? Assumptions/);
+      const disclaimerIdx = text.indexOf('Disclaimer');
+      expect(methodologyIdx).toBeGreaterThan(-1);
+      expect(disclaimerIdx).toBeGreaterThan(methodologyIdx);
+    });
+
+    test('Methodology section explains kernel + Indian operating reality', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/deterministic TypeScript financial kernel/);
+      expect(text).toMatch(/no AI numerics|No large language model ever produces a number/);
+      expect(text).toMatch(/cross-product consistency/i);
+      expect(text).toMatch(/RERA 70\/30 escrow|GST tiers|BBMP UAV/);
+    });
+
+    test('Methodology empty-state when no inputs provided', async () => {
+      const buffer = await buildDealReportDocx(minimalContext()); // no assumptions
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/No model inputs are recorded on this deal yet/);
+      // eyebrow uppercases — match either form
+      expect(text).toMatch(/0 ENTRIES|0 entries/i);
+    });
+
+    test('Methodology lists every operator input in the assumptions table', async () => {
+      const ctx = minimalContext();
+      ctx.assumptions = [
+        { key: 'sellRatePerSqft', label: 'Sell Rate Per Sqft', value: 12000 },
+        { key: 'baseRentPerSqftMonth', label: 'Base Rent Per Sqft Month', value: 95 },
+        { key: 'occupancyPct', label: 'Occupancy Pct', value: 0.85 },
+        { key: 'debtLTV', label: 'Debt L T V', value: 0.55 },
+        { key: 'debtRatePct', label: 'Debt Rate Pct', value: 0.105 },
+      ];
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      // Heading reflects the count (eyebrow renders uppercase)
+      expect(text).toMatch(/5 ENTRIES|5 entries/i);
+      // Each label appears alphabetically sorted
+      expect(text).toMatch(/Base Rent Per Sqft Month/);
+      expect(text).toMatch(/Debt L T V/);
+      expect(text).toMatch(/Sell Rate Per Sqft/);
+      // Values appear
+      expect(text).toMatch(/12000/);
+      expect(text).toMatch(/0\.85/);
+    });
+
+    test('Methodology truncates at 80 inputs with a note', async () => {
+      const ctx = minimalContext();
+      ctx.assumptions = Array.from({ length: 90 }, (_, i) => ({
+        key: `input${i.toString().padStart(3, '0')}`,
+        label: `Input ${i}`,
+        value: i,
+      }));
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Showing first 80 of 90 operator inputs/);
+    });
+
+    test('boolean and string assumption values render correctly', async () => {
+      const ctx = minimalContext();
+      ctx.assumptions = [
+        { key: 'isFlag', label: 'Is Flag', value: true },
+        { key: 'isOther', label: 'Is Other', value: false },
+        { key: 'label', label: 'Asset Class', value: 'residential_apartments' },
+      ];
+      const buffer = await buildDealReportDocx(ctx);
+      const text = await extractDocXmlText(buffer);
+      expect(text).toMatch(/Yes/);
+      expect(text).toMatch(/No/);
+      expect(text).toMatch(/residential_apartments/);
+    });
+
+    test('Methodology carries the PLATFORM DATA badge (not AI-ASSISTED)', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      const methodologyIdx = text.search(/Methodology &(?:amp;)? Assumptions/);
+      const platformAfter = text.indexOf('PLATFORM DATA', methodologyIdx);
+      expect(platformAfter).toBeGreaterThan(methodologyIdx);
+    });
+
+    test('End-to-end document order: Cover → ToC → Briefing → ... → Methodology → Disclaimer', async () => {
+      const buffer = await buildDealReportDocx(minimalContext());
+      const text = await extractDocXmlText(buffer);
+      const tocIdx = text.indexOf('Table of Contents');
+      const briefingIdx = text.indexOf('AI-Assisted Briefing');
+      const execIdx = text.indexOf('Executive Summary');
+      const financialsIdx = text.search(/Financials &(?:amp;)? KPIs/);
+      const provenanceIdx = text.search(/Provenance &(?:amp;)? Source Register/);
+      const prosConsIdx = text.search(/Pros &(?:amp;)? Cons/);
+      const scoreIdx = text.indexOf('Overall Score');
+      const methodologyIdx = text.search(/Methodology &(?:amp;)? Assumptions/);
+      const disclaimerIdx = text.indexOf('Disclaimer');
+      // Strict ordering check
+      expect(tocIdx).toBeGreaterThan(-1);
+      expect(briefingIdx).toBeGreaterThan(tocIdx);
+      expect(execIdx).toBeGreaterThan(briefingIdx);
+      expect(financialsIdx).toBeGreaterThan(execIdx);
+      expect(provenanceIdx).toBeGreaterThan(financialsIdx);
+      expect(prosConsIdx).toBeGreaterThan(provenanceIdx);
+      expect(scoreIdx).toBeGreaterThan(prosConsIdx);
+      expect(methodologyIdx).toBeGreaterThan(scoreIdx);
+      expect(disclaimerIdx).toBeGreaterThan(methodologyIdx);
+    });
+  });
 });
