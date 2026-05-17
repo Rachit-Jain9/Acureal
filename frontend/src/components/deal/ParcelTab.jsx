@@ -4,11 +4,13 @@ import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { ExternalLink, MapPin, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
 import { formatArea, formatDate } from '../../utils/format';
 import { SQFT_PER_ACRE } from '../../config/india';
-import { useProperties, useCreateProperty } from '../../hooks/useProperties';
+import { useProperties, useCreateProperty, useUpdateProperty } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
+import { toast } from '../common/Toast';
 import SiteWeatherCard from './SiteWeatherCard';
 import { SectionHeader, ErrorState } from '../../design-system';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
+import AutoFillParcelContextCard from './AutoFillParcelContextCard';
 
 function FieldRow({ label, value, span = false }) {
   if (!value && value !== 0) return null;
@@ -298,8 +300,44 @@ export default function ParcelTab({ canEdit }) {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
   const [showPicker, setShowPicker] = useState(false);
+  const updateProperty = useUpdateProperty();
   const hasProperty = !!deal.property_id;
   const hasLatLng = deal.lat != null && deal.lng != null;
+
+  // Auto-derive Apply handler — for any field we have a column for on
+  // `properties` today, persist via useUpdateProperty. For fields we don't
+  // (BBMP zone code, PD code, ward — these need a follow-up migration to
+  // get dedicated columns), surface what was picked so the user knows
+  // they're acknowledged without lying about persistence.
+  const handleAutoFillApply = async ({ pickedFields }) => {
+    if (!deal.property_id) {
+      toast.error('Link a property record before applying auto-derived values.');
+      return;
+    }
+    const updates = {};
+    if (pickedFields.coordinates?.lat != null && pickedFields.coordinates?.lng != null) {
+      updates.lat = pickedFields.coordinates.lat;
+      updates.lng = pickedFields.coordinates.lng;
+    }
+    const persistedCount = Object.keys(updates).length;
+    const acknowledgedCount = Object.keys(pickedFields).length - persistedCount;
+
+    if (persistedCount > 0) {
+      try {
+        await updateProperty.mutateAsync({ id: deal.property_id, data: updates });
+        // useUpdateProperty's onSuccess fires 'Property updated' toast.
+      } catch {
+        // useUpdateProperty's onError fires the error toast.
+        return;
+      }
+    }
+    if (acknowledgedCount > 0) {
+      toast.success(
+        `${persistedCount} field${persistedCount === 1 ? '' : 's'} written to property · ` +
+          `${acknowledgedCount} additional field${acknowledgedCount === 1 ? '' : 's'} acknowledged (full persistence in follow-up PR).`,
+      );
+    }
+  };
 
   const landAreaAcres =
     deal.land_area_sqft != null
@@ -312,6 +350,18 @@ export default function ParcelTab({ canEdit }) {
 
   return (
     <div className="space-y-6">
+      {/* Auto-Derive Parcel Context — the new killer feature. Renders only
+          when a property is linked AND the user has edit rights, since the
+          Apply handler writes to the linked property record. */}
+      {hasProperty && canEdit && (
+        <AutoFillParcelContextCard
+          defaultAddress={deal.property_address || deal.address || ''}
+          defaultLat={deal.lat || ''}
+          defaultLng={deal.lng || ''}
+          onApply={handleAutoFillApply}
+        />
+      )}
+
       {/* Property Link Banner */}
       {hasProperty ? (
         <div className="flex items-center justify-between bg-primary-50 border border-primary-100 rounded-xl px-4 py-3">
