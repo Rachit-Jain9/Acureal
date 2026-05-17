@@ -4,6 +4,58 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
+### BBMP Guidance Value — Phase 2b LLM enrichment (post-PRs #350-#355)
+
+**Status:** Schema + 9,913 streets seeded on Mumbai. 2,943 (30%) enriched with zone + guidance band via heuristic. Remaining ~70% need an LLM pass over the per-page PDF images.
+
+**Why this is manual:** the local `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` in `backend/.env` + `backend/.env.local` both return 401. Production Vercel keys are valid (updated 10h ago per dashboard) — easiest fix is to sync them locally.
+
+**One-time setup (~2 min):**
+```powershell
+# From repo root — overwrites .env.local with current production env (includes refreshed keys)
+cd backend
+vercel env pull .env.local --environment=production
+cd ..
+# Verify the key works:
+$env:NODE_PATH = "backend/node_modules"
+node -e "require('dotenv').config({path:'backend/.env.local'}); const {GoogleGenerativeAI}=require('@google/generative-ai'); (async()=>{const r=await new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({model:'gemini-2.5-flash'}).generateContent('Reply OK'); console.log('OK:', r.response.text().trim());})();"
+```
+
+**Run the enrichment (~15 min, < $1):**
+```powershell
+# Regenerate per-page PDFs if tmp/ was wiped (gitignored, so probably needed):
+$env:PYTHONIOENCODING = "utf-8"
+python scripts/split-guidance-value-pdf.py
+# Then run the enrichment (concurrent, idempotent — re-runnable on failure):
+node scripts/enrich-bbmp-street-zones.js
+```
+The script processes only pages where at least one street still has `zone_code IS NULL`, so re-runs are cheap. Expected output: ~351 page-callouts succeed, total updated rows takes the coverage from 30% → ~95-100%.
+
+**Verify post-run** in Supabase SQL editor:
+```sql
+SELECT
+  COUNT(*) FILTER (WHERE zone_code IS NOT NULL)::int AS enriched,
+  COUNT(*)::int AS total,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE zone_code IS NOT NULL) / COUNT(*), 1) AS coverage_pct
+FROM regulatory_data.bbmp_street_index;
+```
+Should report `coverage_pct` close to 100.
+
+### Delete the legacy Tokyo Supabase project (`lsbhrbvuynzqhdtzczco`)
+
+**Status:** Production is `niamgjbxxgmmffggumvj` (Mumbai). Tokyo (`lsbhrbvuynzqhdtzczco`) has been "still alive, awaiting explicit user go-ahead to delete after smoke-test bake-in period" for 11+ days. The BBMP street-index schema was applied to BOTH as a safety hedge — Tokyo has the schema but only Mumbai got the 9,913-row seed.
+
+**Why this is manual:** the Supabase MCP exposed to the agent only includes `pause_project` / `restore_project`, not `delete_project`. Deletion requires the dashboard or the Supabase Management API directly.
+
+**Steps:**
+1. Open https://supabase.com/dashboard/project/lsbhrbvuynzqhdtzczco/settings/general
+2. Scroll to "Delete project"
+3. Type the project name to confirm
+
+**Before clicking delete, sanity-check:**
+- Vercel env vars don't reference Tokyo anywhere (`vercel env ls | grep lsbhr` should return nothing).
+- (Optional) Run `pg_dump` for a final snapshot — no real data loss because all production data is on Mumbai.
+
 ### Apply migration: `20260526_ab_eval_runs.sql` (Tier 2 #14)
 Path: `database/migrations/20260526_ab_eval_runs.sql`. Idempotent. Adds `ab_eval_runs` + `ab_eval_results` tables that back the new `/dashboard/admin/ab-eval` page (PR #222). Until applied, the page still works for one-shot runs but does not persist past comparisons.
 ```powershell
