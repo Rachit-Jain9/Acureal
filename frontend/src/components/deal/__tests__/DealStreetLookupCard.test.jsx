@@ -156,6 +156,20 @@ describe('DealStreetLookupCard', () => {
     expect(link).toHaveAttribute('href', '/admin/master-plan?tab=intelligence');
   });
 
+  it('includes a Verify-on-Kaveri CTA pointing at the IGR portal in a new tab', () => {
+    renderWithRouter(<DealStreetLookupCard property={BENGALURU_PROPERTY} />);
+    expect(screen.getByText(/For an exact, current guidance value/i)).toBeInTheDocument();
+    const kaveri = screen.getByRole('link', { name: /Open Kaveri Online/i });
+    expect(kaveri).toHaveAttribute('href', 'https://kaveri.karnataka.gov.in/');
+    expect(kaveri).toHaveAttribute('target', '_blank');
+    expect(kaveri).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('renders a disclaimer making the BBMP-vs-IGR distinction explicit', () => {
+    renderWithRouter(<DealStreetLookupCard property={BENGALURU_PROPERTY} />);
+    expect(screen.getByText(/NOT IGR sale-deed guidance values/i)).toBeInTheDocument();
+  });
+
   describe('Spread vs guidance tile', () => {
     it('renders the spread % + signal when deal price and guidance band are both present', () => {
       // Whitefield Main Road top match: Zone B, ₹5,001–7,000 → mid ₹6,000.5

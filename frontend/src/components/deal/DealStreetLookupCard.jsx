@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, FileText, AlertTriangle, ArrowUpRight, Sparkles, TrendingUp } from 'lucide-react';
+import { Search, MapPin, FileText, AlertTriangle, ArrowUpRight, Sparkles, TrendingUp, ExternalLink, Shield } from 'lucide-react';
 import Badge from '../common/Badge';
 import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
@@ -266,6 +266,33 @@ export default function DealStreetLookupCard({ property, deal }) {
         )}
       </Card>
 
+      {/* Verify-on-Kaveri CTA — the gazette gives band-level ranges; the live IGR
+          Kaveri portal returns the exact, current SRO-specific guidance value for
+          a specific property type. We can't deep-link to a specific street (Kaveri
+          requires SRO + village + property-type form input), so we link to the
+          portal root and tell the user what to enter. */}
+      <div className="mt-3 flex items-start gap-2 rounded-md border border-hairline bg-bg-secondary/40 p-3">
+        <Shield size={14} className="mt-0.5 text-content-muted shrink-0" aria-hidden="true" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-content-primary leading-snug">
+            For an exact, current guidance value
+          </div>
+          <div className="text-[11px] text-content-muted mt-1 leading-relaxed">
+            Open the IGR Kaveri portal and run a query for this property's SRO (Sub-Registrar Office), village, and property type.
+            The BBMP gazette bandwidth above is a 2016 band; Kaveri returns the live published rate.
+          </div>
+          <a
+            href="https://kaveri.karnataka.gov.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-2"
+          >
+            Open Kaveri Online
+            <ExternalLink size={11} aria-hidden="true" />
+          </a>
+        </div>
+      </div>
+
       <div className="text-[11px] text-content-muted mt-3 flex items-start gap-1.5">
         <Sparkles size={11} className="mt-0.5 shrink-0" />
         <span>
@@ -277,7 +304,9 @@ export default function DealStreetLookupCard({ property, deal }) {
       <div className="text-[11px] text-content-muted mt-1 flex items-start gap-1.5">
         <AlertTriangle size={11} className="mt-0.5 shrink-0" />
         <span>
-          AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.
+          BBMP property-tax zones underpin this index — they are NOT IGR sale-deed guidance values, but the IGR
+          guidance bandwidth per zone is published in the same gazette and surfaced here. AI-extracted; verify
+          the ward and zone classification against the original PDF page before quoting in IC memos.
         </span>
       </div>
     </Card>
