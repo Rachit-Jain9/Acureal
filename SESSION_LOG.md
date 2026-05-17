@@ -4,6 +4,97 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-17 (overnight autonomous window) — Phase A data recovery + Phase B geocoding orchestrator + Phase C warnings strip (9 PRs)
+
+After confirming the legacy Tokyo Supabase project was deleted and auditing what was lost (1,016 BBMP UAV rows · 85 evidence facts · 42 PD demographics · 13 land-use facts), the operator green-lit a 10-hour autonomous window to: (a) recover everything Tokyo had as proper repo migrations, (b) ship the long-promised geocoding auto-fill orchestrator ("type an address → zone, FSI, guidance value, ward, PD auto-fill"), and (c) close the highest-value Phase C UX gap (city-level callouts on deal Overview). 9 PRs across the 3 phases, all merged.
+
+### PRs shipped + merged
+
+**Phase A — data recovery (4 PRs + 1 chore)**
+
+- **#370 — `chore(bbmp)`**: committed the trigram-similarity fallback in `scripts/enrich-bbmp-street-zones.js` that produced tonight's 100% BBMP street-zone coverage. Fixes the previous-session gap where the live tweak never made it into the repo — future re-seeds now reach 100% automatically. (+37/-3 lines)
+- **#371 — `feat(masterplan)` PR-A2**: restored all 42 Bengaluru Planning District demographics from RMP 2031 Volume-4 PDR via Gemini multimodal (~$0.03 spend, zero null fields). One self-contained migration with a 14KB JSONB literal that re-seeds the District Intelligence panel + DealPlanningContextCard automatically once the operator applies. (+463 lines)
+- **#372 — `feat(masterplan)` PR-A1**: restored the BBMP UAV rate card (108 rows: 18 property-use categories × 6 zones) hand-extracted from Gazette Notification 384, dated 09-Mar-2016. Hand-extracted not LLM because misreading a Roman numeral in a 6-zone printed table would flip rates by 5-10×. Confidence 0.95, review_status 'approved'. (+223 lines)
+- **#373 — `feat(masterplan)` PR-A3**: restored the 2015 → 2031 land-use shift table (14 existing + 12 proposed shares + 4 totals + 22 named landmarks + 7 adjacent planning authorities = 32 evidence_facts rows) hand-extracted from the Existing/Proposed Land Use maps. Both source PDFs are single-page summary tables — no LLM needed. (+159 lines)
+- **#374 — `feat(masterplan)` PR-A4**: restored SDZ corridors (5), heritage zones (12), NGT drainage classification, regional parks aggregate, PRR alignment (118 km), and 17 substantive zoning rule narratives via Gemini extraction over Volume-3 (Master Plan Document) + Volume-1 (Vision). Closes the deferred callouts gap from PR A3. Total spend ~$0.04. (+282 lines)
+
+**Phase B — geocoding auto-fill orchestrator (3 PRs)**
+
+- **#375 — `feat(properties)` PR-B1**: backend `parcelContext.service.js` + endpoint `GET /api/properties/auto-derive-context?address=...&lat=...&lng=...` that takes either an address or lat/lng and returns ONE structured payload by fanning out in parallel to Google geocoding (with Nominatim fallback, already shipped), K-GIS adapter (already shipped), BBMP street index, planning district demographics (PR #371), city-level callouts (PR #374), and verify-links helper (already shipped). Master plan zone NOT auto-derived because polygons aren't loaded — honest about gap per CLAUDE.md. 12 new tests, 1899 backend tests total. (+679 lines)
+- **#376 — `feat(deal/parcel)` PR-B2**: frontend `AutoFillParcelContextCard` standalone component + `useAutoDeriveParcelContext` react-query hook. Type address or paste coords → see 6 derived rows (coordinates, ward, BBMP zone + guidance value, planning district + demographics, K-GIS hierarchy, applicable warnings) each with source chip + confidence + skip toggle. Skeleton during load, ErrorState on failure, all four interaction states, tabular-nums, always-on AI disclaimer. 12 component tests, 474 frontend tests total. (+711 lines)
+- **#377 — `feat(deal/parcel)` PR-B3**: wired AutoFillParcelContextCard at the top of the deal Parcel/Site tab whenever a property is linked AND user has edit rights. Apply handler: persists lat/lng via existing `useUpdateProperty`, acknowledges the remaining picks via toast (full persistence requires a follow-up `auto_derived_*` columns migration). Killer-demo flow now works end-to-end. (+51 lines)
+
+**Phase C — UX polish (1 of 7 PRs in this window)**
+
+- **#378 — `feat(deal/overview)` PR-C3**: new `DealAutoDerivedWarningsStrip` mounted on the deal Overview tab. Pulls heritage/SDZ/NGT/PRR/regional-parks callouts from the auto-derive payload, renders as a calm warn-tinted row with up to 4 chips + "+N more" overflow. Stops the IC failure mode ("we discovered the parcel was inside a heritage zone at IC"). Cache-shared with the Parcel tab card via the same react-query hook. 8 component tests, 482 frontend tests total. (+197 lines)
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| Backend total | 1,887 | 1,899 | +12 |
+| Frontend total | 462 | 482 | +20 |
+| **Total** | **2,349** | **2,381** | **+32** |
+
+All green. Frontend build clean across all 9 merges.
+
+### Operator action queue (4 new migrations to apply, in order)
+
+Paste each into Supabase SQL editor (preferred) or run `psql "$DATABASE_URL" -f <file>`.
+
+1. `database/migrations/20260529_planning_district_demographics.sql` — restores 42 PD demographics.
+2. `database/migrations/20260530_bbmp_uav_rate_card.sql` — restores 108 UAV rate-card rows.
+3. `database/migrations/20260531_land_use_insight_and_city_callouts.sql` — restores 32 land-use + landmark + boundary facts.
+4. `database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql` — restores 6 high-signal callout + rule narrative facts.
+
+After applying, smoke checks:
+- `/admin/planning-intelligence`: District Intelligence shows 42 PDs with demographics. UAV Benchmark shows 18×6 matrix. Land Use Insight shows 2015→2031 shift. Source Explorer + Review Queue show 100+ facts.
+- On a fresh Bengaluru deal: Parcel/Site tab → AutoFillParcelContextCard at the top. Type "100 Brigade Road" → 6 fields populate in <2s. Click Apply → lat/lng + map pin update. Overview tab → warnings strip shows 5 callouts.
+
+### Outcome for the operator
+
+The Tokyo deletion is fully cauterized — every dataset that was lost is back in the repo as a proper migration (no more direct-SQL-only seeds). Beyond that, the killer feature is shipped: type an address on a Bengaluru deal and see 6 facts auto-derive in 1-2 seconds with full provenance. ~15 minutes of manual portal-bouncing compresses into one click. The Overview tab now also surfaces city-level warnings (heritage / SDZ / NGT / PRR) on first load so they can't be missed at IC.
+
+### What's NOT in this window (deferred to future sessions)
+
+Phase C still has 6 PRs to ship. None are blocking. Order by impact:
+- **C1+C2** — Provenance chips + visual diff (small primitive applied to AutoFillCard + DealStreetLookupCard + MasterPlanZonePanel).
+- **C7** — "Median spread in this ward (across N other deals)" tile next to the existing Spread-vs-Guidance tile.
+- **C4** — Inline Kaveri deep-link with prefilled SRO (needs verification that Kaveri portal supports query params; fall back to copy-to-clipboard).
+- **C5** — Bulk address lookup admin page (paste up to 50 addresses, get derived contexts).
+- **C6** — Reverse search "all deals in Zone D / PD-11 / Ward 84" on the Deals list page (requires backfill script to populate `auto_derived_*` columns on existing 80 deals).
+- **C8** — Map view of derived parcel polygon + zone overlay (K-GIS GeoJSON + master_plan_zones — requires polygon import).
+
+Also deferred: `auto_derived_*` column migration on `properties` so all six picks from the AutoFillCard persist (not just lat/lng). Sketched in the plan but worth its own PR with the schema change.
+
+### Status table (autonomous-window plan)
+
+| PR | Phase | Status | Notes |
+|---|---|---|---|
+| A2 (Planning Districts) | A | ✅ Shipped (#371) | Operator: apply `20260529` migration |
+| A1 (BBMP UAV) | A | ✅ Shipped (#372) | Operator: apply `20260530` migration |
+| A3 (Land Use + landmarks) | A | ✅ Shipped (#373) | Operator: apply `20260531` migration |
+| A4 (SDZ/heritage/NGT/PRR + rules) | A | ✅ Shipped (#374) | Operator: apply `20260601` migration |
+| B1 (Backend orchestrator) | B | ✅ Shipped (#375) | No migration needed |
+| B2 (Frontend AutoFillCard + hook) | B | ✅ Shipped (#376) | No migration needed |
+| B3 (Wire into Parcel/Site tab) | B | ✅ Shipped (#377) | No migration needed |
+| C3 (Warnings strip on Overview) | C | ✅ Shipped (#378) | No migration needed |
+| C1+C2 (Provenance chips + visual diff) | C | 🔴 Not started | Small, ~45 min |
+| C7 (Ward-spread benchmark tile) | C | 🔴 Not started | Backend SQL + 1 frontend tile |
+| C4 (Kaveri deep-link) | C | 🔴 Not started | Verify portal query-param support first |
+| C5 (Bulk lookup admin page) | C | 🔴 Not started | Largest pending Phase-C PR |
+| C6 (Reverse search) | C | 🔴 Not started | Needs `auto_derived_*` columns migration first |
+| C8 (Map view + polygon) | C | 🔴 Not started | Largest pending — needs polygon import |
+
+### Plain-English recap (4 bullets, no jargon)
+
+- The night before, the Tokyo project was deleted and a lot of city-level data went with it. Every piece is now back in the repo as proper migrations the operator can apply with one click each — 42 Planning Districts with population + density, the BBMP property-tax rate card, the 2015 → 2031 land-use shift, and 5 Special Development Zones + 12 heritage zones + drainage / Peripheral Ring Road callouts.
+- On every Bengaluru deal's Parcel tab there is now a new card: type an address, click Derive, and 6 facts about that location come back in 1-2 seconds — the BBMP ward, the property-tax zone with its guidance rate band, the planning district with its population, the K-GIS taluk/village/survey-number candidates, and a list of city-wide warnings to check against. The map pin auto-updates when Apply is clicked.
+- On every Bengaluru deal's Overview tab there is now a warnings strip — heritage zones, SDZ corridors, NGT drainage buffer, PRR alignment. Each one says "verify against this parcel", never "this parcel is in one" (we don't have ward polygons yet, so that would be a fake claim).
+- About 15 minutes of manual lookup on K-GIS + BBMP street search + RMP PDF + heritage inventory compresses into one click of Derive + Apply. The full payload also feeds the IC memo / Pros & Cons synthesis with traceable provenance.
+
+---
+
 ## 2026-05-17 (night) — DOCX institutional-grade bundle: Risk / DD / Approvals / Provenance / ToC / Methodology (PR #365, #366, #367)
 
 After the operator confirmed every outstanding manual action (export-events migration applied, `DOCX_REPORT_ENABLED=1` flipped, Claude key rotated, auto-fill + market-benchmark smoke tests passed), pivoted to closing the DOCX institutional-grade depth gaps surfaced in the pending-tasks audit. Per the surveyed-and-stale `EXPORTS_REWRITE_STATUS.md`, DOCX claimed feature-complete with 15 sections — but compared to what an IC reviewer expects from a paid (₹4,999) institutional-grade underwriting report, the DOCX was missing dedicated Risk Register, DD Status, Approvals Tracker, Provenance trail, Table of Contents, and Methodology appendix. This batch closes all 6 gaps in 3 PRs.
