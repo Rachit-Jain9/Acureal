@@ -92,11 +92,13 @@ export function useUavBenchmark(params = {}) {
 
 export function useStreetLookup(params = {}) {
   const search = String(params.search || '').trim();
+  const zone = params.zone || null;
+  const limit = params.limit ?? 50;
   return useQuery({
-    queryKey: ['master-plan-street-lookup', search, params.limit ?? 25],
+    queryKey: ['master-plan-street-lookup', search, zone, limit],
     queryFn: () => masterPlanAPI
-      .streetLookup({ search, limit: params.limit })
-      .then((r) => r.data.data ?? { query: search, total: 0, rows: [], disclaimer: '' }),
+      .streetLookup({ search, zone, limit })
+      .then((r) => r.data.data ?? { query: search, zone_filter: zone, rows: [], summary: {}, disclaimer: '' }),
     staleTime: 60 * 1000,
     keepPreviousData: true,
   });

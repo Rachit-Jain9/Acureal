@@ -554,6 +554,8 @@ export const masterPlanAPI = {
   reviewQueue: ()                      => api.get('/master-plan/intelligence/review-queue'),
   uavBenchmark: (params)               => api.get('/master-plan/intelligence/uav-benchmark', { params }),
   streetLookup: (params)               => api.get('/master-plan/intelligence/street-lookup', { params }),
+  // Keep both export names — `streetLookup` was added in PR #350; this
+  // alias is for any consumer that imports the same call by a clearer name.
 };
 
 // Parcel Intelligence admin / evidence operations
