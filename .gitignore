@@ -7,6 +7,9 @@ build/
 .vercel/
 supabase/.temp/
 
+# Local-only extraction outputs (regeneratable via scripts/*.py)
+tmp/
+
 # Environment files
 .env
 .env.local
