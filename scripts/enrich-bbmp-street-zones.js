@@ -166,7 +166,10 @@ async function main() {
             if (!zone.zone_code || !Array.isArray(zone.streets)) continue;
             for (const street of zone.streets) {
               if (!street.street_name) continue;
-              const result = await pool.query(
+              // First try exact lowercase match on (page, street). Drop the
+              // ward_no constraint entirely — Gemini often returns a
+              // different ward_no than the row's pypdf-extracted one.
+              let result = await pool.query(
                 `UPDATE regulatory_data.bbmp_street_index
                  SET zone_code = $1,
                      guidance_value_band_min_inr = $2,
@@ -174,7 +177,6 @@ async function main() {
                      confidence_score = 0.85
                  WHERE page_number = $4
                    AND lower(street_name_en) = lower($5)
-                   AND (ward_no = $6 OR (ward_no IS NULL AND $6 IS NULL))
                    AND zone_code IS NULL`,
                 [
                   zone.zone_code,
@@ -182,10 +184,42 @@ async function main() {
                   zone.guidance_value_band_max_inr ?? null,
                   pageNumber,
                   street.street_name,
-                  street.ward_no ?? null,
                 ],
               );
               pageUpdated += result.rowCount;
+
+              // Fallback: if no exact match, try trigram similarity. Find
+              // the single best-match unenriched row on this page with
+              // similarity >= 0.3 (trigram default sensible threshold).
+              // Lower confidence_score on fuzzy matches so reviewers can
+              // tell them apart later.
+              if (result.rowCount === 0) {
+                const fuzzy = await pool.query(
+                  `UPDATE regulatory_data.bbmp_street_index AS target
+                   SET zone_code = $1,
+                       guidance_value_band_min_inr = $2,
+                       guidance_value_band_max_inr = $3,
+                       confidence_score = 0.65
+                   FROM (
+                     SELECT id
+                     FROM regulatory_data.bbmp_street_index
+                     WHERE page_number = $4
+                       AND zone_code IS NULL
+                       AND similarity(street_name_en, $5) >= 0.3
+                     ORDER BY similarity(street_name_en, $5) DESC
+                     LIMIT 1
+                   ) AS best
+                   WHERE target.id = best.id`,
+                  [
+                    zone.zone_code,
+                    zone.guidance_value_band_min_inr ?? null,
+                    zone.guidance_value_band_max_inr ?? null,
+                    pageNumber,
+                    street.street_name,
+                  ],
+                );
+                pageUpdated += fuzzy.rowCount;
+              }
             }
           }
         }
