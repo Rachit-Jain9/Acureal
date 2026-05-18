@@ -31,23 +31,98 @@ const { fetchKgisContext } = require('./adapters/kgis.adapter');
 const masterplanService = require('./masterplan.service');
 const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
 
-const BENGALURU_BBOX = {
-  // Rough conservative bbox around the BMA. If a geocoded point falls
-  // outside this, we mark `withinBbmp = false` and skip the BBMP-specific
-  // derivations (street index, ward, BBMP zone).
-  minLat: 12.70,
-  maxLat: 13.30,
-  minLng: 77.30,
-  maxLng: 77.95,
+// BBMP (Bruhat Bengaluru Mahanagara Palike) city-corporation bbox.
+// Tightened 2026-05-18 from the prior BMA-wide rectangle (12.70-13.30,
+// 77.30-77.95) — that rectangle included all of BMA (Bangalore
+// Metropolitan Area), which covers neighbouring Planning Authorities
+// like Anekal, Hosakote, Nelamangala, Magadi, Kanakapura, Devanahalli,
+// Doddaballapur. Jigani-style addresses (lat ~12.78) landed inside the
+// loose bbox even though they're Anekal Planning Authority, not BBMP.
+//
+// New bounds approximate BBMP's 198-ward jurisdiction. Sources:
+//   - BBMP ward map (RMP 2031 Volume 4)
+//   - BMA / BBMP overlay published at K-GIS
+// The bbox is intentionally a hair generous so genuine fringe BBMP
+// wards aren't false-negative; the K-GIS-taluk override below catches
+// the false-positives the bbox lets through.
+const BBMP_BBOX = {
+  minLat: 12.83,  // BBMP South Zone (Banashankari fringe)
+  maxLat: 13.14,  // BBMP North Zone (Yelahanka new town fringe)
+  minLng: 77.45,  // BBMP West Zone (Vijayanagar fringe)
+  maxLng: 77.78,  // BBMP East Zone (Whitefield / Marathahalli fringe)
 };
 
-const isWithinBmaApprox = ({ lat, lng }) =>
+// Taluks that fall inside the BBMP bbox (false-positives) but are
+// actually governed by a separate Planning Authority. K-GIS returns
+// the taluk for any coordinate; we use that to override the bbox
+// check when K-GIS data is available.
+//
+// Bangalore Urban district taluks that ARE BBMP:
+//   Bangalore North, Bangalore South, Bangalore East, Yelahanka,
+//   Krishnarajapuram, Mahadevapura, Bommanahalli, Dasarahalli.
+// Everything else in or adjacent to BMA is NOT BBMP.
+const NON_BBMP_TALUKS = new Set([
+  'anekal',           // Anekal PA — Jigani, Bommasandra, Hosa Road
+  'hosakote',         // Hosakote PA — east, towards Whitefield-Hoskote rd
+  'nelamangala',      // Nelamangala PA — northwest
+  'magadi',           // Magadi PA — west
+  'kanakapura',       // Kanakapura PA — southwest
+  'devanahalli',      // Devanahalli PA — north, near airport
+  'doddaballapur',    // Doddaballapur PA — far north
+  'doddaballapura',   // alternate spelling sometimes returned by K-GIS
+  'ramanagara',       // Ramanagara — even further west
+  'bidadi',           // Bidadi PA — far west
+]);
+
+const isWithinBbmpBbox = ({ lat, lng }) =>
   Number.isFinite(lat) &&
   Number.isFinite(lng) &&
-  lat >= BENGALURU_BBOX.minLat &&
-  lat <= BENGALURU_BBOX.maxLat &&
-  lng >= BENGALURU_BBOX.minLng &&
-  lng <= BENGALURU_BBOX.maxLng;
+  lat >= BBMP_BBOX.minLat &&
+  lat <= BBMP_BBOX.maxLat &&
+  lng >= BBMP_BBOX.minLng &&
+  lng <= BBMP_BBOX.maxLng;
+
+// Decide whether the coordinate is inside BBMP city limits using a
+// two-stage check:
+//   Stage 1: BBMP bbox (rough). If outside → definitely outside.
+//   Stage 2: K-GIS taluk (authoritative). If the taluk K-GIS returned
+//            is a known non-BBMP Planning Authority, override the
+//            bbox's "yes" answer to "no" and surface the taluk in the
+//            reason so the frontend can render a specific banner.
+//
+// If K-GIS is unavailable or returned no taluk, fall back to bbox only.
+const detectBbmpJurisdiction = (coords, kgisHierarchy) => {
+  if (!Number.isFinite(coords?.lat) || !Number.isFinite(coords?.lng)) {
+    return { withinBbmp: false, detection_method: 'unknown', reason: null };
+  }
+  const insideBbox = isWithinBbmpBbox(coords);
+  if (!insideBbox) {
+    return {
+      withinBbmp: false,
+      detection_method: 'bbmp_bbox_check',
+      reason: 'Coordinate falls outside the BBMP city-limits bbox.',
+    };
+  }
+  const taluk = kgisHierarchy?.taluk ? String(kgisHierarchy.taluk).trim().toLowerCase() : null;
+  if (taluk && NON_BBMP_TALUKS.has(taluk)) {
+    return {
+      withinBbmp: false,
+      detection_method: 'kgis_taluk_override',
+      reason: `K-GIS placed this coordinate in ${kgisHierarchy.taluk} taluk, which is governed by a separate Planning Authority (not BBMP). BBMP street index, ward, and zone lookups are skipped.`,
+      kgis_taluk: kgisHierarchy.taluk,
+    };
+  }
+  return {
+    withinBbmp: true,
+    detection_method: taluk ? 'bbox_plus_kgis_taluk_confirmed' : 'bbmp_bbox_check',
+    reason: null,
+    kgis_taluk: kgisHierarchy?.taluk || null,
+  };
+};
+
+// Backwards-compat shim — kept for unit tests that referenced the
+// pre-2026-05-18 helper. Now an alias for the tighter BBMP bbox check.
+const isWithinBmaApprox = isWithinBbmpBbox;
 
 // Minimum geocoder confidence required before we run BBMP street index /
 // planning-district lookups on the returned coordinates. Calibrated from
@@ -272,11 +347,12 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
 
   const hasCoords = Number.isFinite(coords.lat) && Number.isFinite(coords.lng);
   const coordinatesTrustworthy = isCoordinateTrustworthy(coords);
-  // BBMP-specific lookups (street index, ward, zone, PD) require BOTH a
-  // bbox match AND trustworthy coordinates. A city-level Nominatim
-  // fallback can land inside the bbox geometrically while being wildly
-  // off the actual parcel — gate explicitly to prevent that bug.
-  const withinBmaApprox = hasCoords && coordinatesTrustworthy && isWithinBmaApprox(coords);
+  // Provisional BBMP check — uses the tighter BBMP bbox (PR-2 follow-up,
+  // 2026-05-18). Final BBMP decision is made AFTER K-GIS returns its
+  // taluk, because the bbox can false-positive on Anekal-style fringe
+  // addresses that geometrically land inside the rectangle.
+  const provisionallyInsideBbmp =
+    hasCoords && coordinatesTrustworthy && isWithinBbmpBbox(coords);
 
   // Tokens used for street-index + PD fuzzy matching. Prefer the
   // formatted address from Google because it's normalised.
@@ -285,8 +361,9 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
   // ─── Step 2-5: parallel data fetches ───────────────────────────────
   // K-GIS gets the coords regardless — it's geographic, not BBMP-scoped,
   // and returns its own confidence + status. Street index / PD lookups
-  // are gated on `withinBmaApprox` (which already enforces the trust
-  // threshold above).
+  // are gated on the provisional BBMP check. If K-GIS later reveals the
+  // taluk is non-BBMP, we discard the BBMP results (rare and OK — the
+  // BBMP search just returns nothing for those addresses anyway).
   const [kgisResult, streetIndexResult, pdMatched, callouts] = await Promise.all([
     hasCoords
       ? fetchKgisContext({ lat: coords.lat, lng: coords.lng }).catch((err) => ({
@@ -299,24 +376,46 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
           geometry_geojson: null,
         }))
       : Promise.resolve(null),
-    withinBmaApprox && tokens.length
+    provisionallyInsideBbmp && tokens.length
       ? masterplanService
           .searchBbmpStreets({ search: tokens[0], limit: 5 })
           .catch(() => ({ rows: [], summary: {} }))
       : Promise.resolve({ rows: [], summary: {} }),
-    withinBmaApprox ? matchPlanningDistrict(tokens) : Promise.resolve(null),
+    provisionallyInsideBbmp ? matchPlanningDistrict(tokens) : Promise.resolve(null),
     fetchApplicableCallouts(),
   ]);
 
+  // ─── Final BBMP jurisdiction decision (bbox + K-GIS taluk) ──────────
+  // Now that K-GIS has returned, apply the two-stage detection. If the
+  // taluk override fires, discard BBMP results to avoid surfacing a
+  // false "Ward N / Zone X" — the wards in the index are BBMP-only,
+  // so any "match" returned for an Anekal address is coincidental
+  // (rare since the address tokens won't intersect the BBMP street
+  // names) but worth guarding against.
+  const bbmpDetection = coordinatesTrustworthy
+    ? detectBbmpJurisdiction(coords, kgisResult?.hierarchy)
+    : { withinBbmp: false, detection_method: 'low_confidence_geocode_blocked', reason: null };
+  const withinBmaApprox = bbmpDetection.withinBbmp;
+  // If K-GIS just downgraded us from provisionally-in to confirmed-out
+  // (the Jigani case), wipe the BBMP results so the response is honest.
+  const finalStreetIndexResult =
+    provisionallyInsideBbmp && !withinBmaApprox
+      ? { rows: [], summary: streetIndexResult?.summary || {} }
+      : streetIndexResult;
+  const finalPdMatched =
+    provisionallyInsideBbmp && !withinBmaApprox ? null : pdMatched;
+
   // Enrich PD with demographics (separate await so we can use the matched
-  // PD's pd_code).
-  const planningDistrict = await enrichPdWithDemographics(pdMatched);
+  // PD's pd_code). Use finalPdMatched so the K-GIS taluk override
+  // correctly nulls the PD when the parcel is outside BBMP.
+  const planningDistrict = await enrichPdWithDemographics(finalPdMatched);
 
   // ─── Synthesise BBMP street + ward ──────────────────────────────────
   // Pick the best fuzzy hit on the BBMP street index. We rely on the
   // service's existing trigram + ILIKE ordering — the first row is the
-  // best candidate.
-  const streetRows = Array.isArray(streetIndexResult?.rows) ? streetIndexResult.rows : [];
+  // best candidate. Use finalStreetIndexResult so taluk-override
+  // empties out the rows when K-GIS confirms non-BBMP jurisdiction.
+  const streetRows = Array.isArray(finalStreetIndexResult?.rows) ? finalStreetIndexResult.rows : [];
   const streetMatch = streetRows[0] || null;
   const streetAlternates = streetRows.slice(1, 4);
 
@@ -405,10 +504,10 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
       withinBbmp: withinBmaApprox,
       detection_method: coordinatesGate.gated
         ? 'low_confidence_geocode_blocked'
-        : hasCoords
-          ? 'bma_bbox_check'
-          : 'unknown',
-      bbox: BENGALURU_BBOX,
+        : bbmpDetection.detection_method,
+      reason: bbmpDetection.reason,
+      kgis_taluk: bbmpDetection.kgis_taluk || kgisResult?.hierarchy?.taluk || null,
+      bbox: BBMP_BBOX,
       ward: bbmpWard,
     },
     streetIndex: {
@@ -430,7 +529,7 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
         zone_code: r.zone_code,
       })),
       search_token_used: tokens[0] || null,
-      search_summary: streetIndexResult?.summary || null,
+      search_summary: finalStreetIndexResult?.summary || null,
     },
     bbmpZone,
     masterPlanZone: {
@@ -455,10 +554,14 @@ module.exports = {
   deriveParcelContextFromAddress,
   // Exported for tests
   _internal: {
-    isWithinBmaApprox,
+    isWithinBmaApprox,        // backwards-compat alias for isWithinBbmpBbox
+    isWithinBbmpBbox,
+    detectBbmpJurisdiction,
     isCoordinateTrustworthy,
     extractAddressTokens,
     scorePdAgainstAddress,
     GEOCODE_TRUST_THRESHOLD,
+    BBMP_BBOX,
+    NON_BBMP_TALUKS,
   },
 };

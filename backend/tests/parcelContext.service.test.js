@@ -271,12 +271,15 @@ describe('parcelContext.service — low-confidence geocode gate (Jigani regressi
   });
 
   test('does NOT gate when caller supplies lat/lng directly (confidence is 1.0)', async () => {
+    // stubKgis has hierarchy.taluk='Bangalore South' (a BBMP taluk), so
+    // detection lands on 'bbox_plus_kgis_taluk_confirmed'. Without K-GIS
+    // taluk it would be 'bbmp_bbox_check'.
     fetchKgisContext.mockResolvedValueOnce(stubKgis);
 
     const ctx = await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
     expect(ctx.coordinatesGate.gated).toBe(false);
     expect(ctx.bbmpJurisdiction.withinBbmp).toBe(true);
-    expect(ctx.bbmpJurisdiction.detection_method).toBe('bma_bbox_check');
+    expect(ctx.bbmpJurisdiction.detection_method).toMatch(/^(bbmp_bbox_check|bbox_plus_kgis_taluk_confirmed)$/);
   });
 
   test('does NOT gate when geocoder returns high confidence + verified status', async () => {
@@ -290,7 +293,7 @@ describe('parcelContext.service — low-confidence geocode gate (Jigani regressi
     const ctx = await deriveParcelContextFromAddress({ address: '100 Brigade Road' });
     expect(ctx.coordinatesGate.gated).toBe(false);
     expect(ctx.bbmpJurisdiction.withinBbmp).toBe(true);
-    expect(ctx.bbmpJurisdiction.detection_method).toBe('bma_bbox_check');
+    expect(ctx.bbmpJurisdiction.detection_method).toMatch(/^(bbmp_bbox_check|bbox_plus_kgis_taluk_confirmed)$/);
     expect(masterplanService.searchBbmpStreets).toHaveBeenCalled();
   });
 
@@ -310,10 +313,159 @@ describe('parcelContext.service — low-confidence geocode gate (Jigani regressi
   });
 });
 
+describe('parcelContext.service — BBMP jurisdiction (bbox + K-GIS taluk override)', () => {
+  // Regression coverage for the 2026-05-18 follow-up: the prior bbox
+  // (12.70-13.30, 77.30-77.95) was BMA-wide, so Jigani-style addresses
+  // (Anekal taluk, lat ~12.78) false-positived as inside BBMP. Now:
+  //   Stage 1: tighter BBMP bbox (12.83-13.14, 77.45-77.78)
+  //   Stage 2: K-GIS taluk override (if taluk is Anekal/Hosakote/etc → not BBMP)
+
+  test('Jigani coords (12.78, 77.66) fall below the tightened BBMP bbox → outside BBMP', async () => {
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.7840, lng: 77.6587,
+      displayName: 'Jigani, Masthena Halli, Karnataka 560105',
+      provider: 'google_places', confidence: 0.85, status: 'verified',
+    });
+    fetchKgisContext.mockResolvedValueOnce({
+      provider: 'kgis', status: 'matched', confidence: 0.65,
+      hierarchy: { taluk: 'Anekal', village: 'Jigani', district: 'Bangalore Urban' },
+      survey_numbers: [], geometry_geojson: null,
+    });
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [stubStreetMatch], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ address: 'Thyme Park Apartments Jigani' });
+
+    // Jigani at lat 12.78 IS below BBMP bbox minLat of 12.83 → outside.
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(false);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('bbmp_bbox_check');
+    expect(ctx.bbmpJurisdiction.reason).toMatch(/outside the BBMP city-limits bbox/i);
+    // No fake BBMP fields surfaced.
+    expect(ctx.bbmpJurisdiction.ward).toBeNull();
+    expect(ctx.bbmpZone).toBeNull();
+    expect(ctx.streetIndex.match).toBeNull();
+    // K-GIS still surfaces the Anekal taluk for the operator to verify against.
+    expect(ctx.kgis.hierarchy.taluk).toBe('Anekal');
+    expect(ctx.bbmpJurisdiction.kgis_taluk).toBe('Anekal');
+  });
+
+  test('Coords inside BBMP bbox BUT K-GIS taluk is Anekal → override fires (false-positive caught)', async () => {
+    // Synthetic case: coords land inside the tighter BBMP bbox (so the
+    // bbox check passes), but K-GIS reveals the actual taluk is Anekal.
+    // The taluk override must downgrade withinBbmp to false and wipe
+    // any BBMP street/PD results returned during the parallel fetch.
+    fetchKgisContext.mockResolvedValueOnce({
+      provider: 'kgis', status: 'matched', confidence: 0.65,
+      hierarchy: { taluk: 'Anekal', village: 'Edge-case village', district: 'Bangalore Urban' },
+      survey_numbers: [], geometry_geojson: null,
+    });
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [stubStreetMatch], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.95, lng: 77.65 });
+    // Coords ARE inside bbox but taluk is Anekal → override.
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(false);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('kgis_taluk_override');
+    expect(ctx.bbmpJurisdiction.reason).toMatch(/Anekal taluk.*separate Planning Authority/i);
+    // BBMP street match returned during parallel fetch must be discarded.
+    expect(ctx.streetIndex.match).toBeNull();
+    expect(ctx.bbmpZone).toBeNull();
+  });
+
+  test('Central BLR coords + address + K-GIS confirming Bangalore South → withinBbmp true + ward/zone populate', async () => {
+    // Use the address path so tokens get extracted from the geocoded
+    // displayName, which means the BBMP street search actually runs
+    // and the ward/zone come through end-to-end.
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.97, lng: 77.59, displayName: '100 Brigade Road, Bengaluru, Karnataka, India',
+      provider: 'google', confidence: 0.92, status: 'verified',
+    });
+    fetchKgisContext.mockResolvedValueOnce({
+      provider: 'kgis', status: 'matched', confidence: 0.65,
+      hierarchy: { taluk: 'Bangalore South', village: 'Begur', district: 'Bangalore Urban' },
+      survey_numbers: [], geometry_geojson: null,
+    });
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [stubStreetMatch], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ address: '100 Brigade Road' });
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(true);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('bbox_plus_kgis_taluk_confirmed');
+    expect(ctx.bbmpJurisdiction.kgis_taluk).toBe('Bangalore South');
+    // BBMP ward + zone propagate correctly.
+    expect(ctx.bbmpJurisdiction.ward).toEqual(expect.objectContaining({ ward_no: 117 }));
+    expect(ctx.bbmpZone).toEqual(expect.objectContaining({ zone_code: 'A' }));
+  });
+
+  test('Central BLR coords with K-GIS down → falls back to bbox-only, withinBbmp true', async () => {
+    fetchKgisContext.mockResolvedValueOnce({
+      provider: 'kgis', status: 'error', confidence: 0,
+      hierarchy: null, survey_numbers: [], geometry_geojson: null,
+    });
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [stubStreetMatch], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.97, lng: 77.59 });
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(true);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('bbmp_bbox_check');
+    expect(ctx.bbmpJurisdiction.reason).toBeNull();
+  });
+
+  test('Mumbai coords still rejected (regression check vs prior Mumbai test)', async () => {
+    fetchKgisContext.mockResolvedValueOnce({
+      provider: 'kgis', status: 'partial', confidence: 0.35,
+      hierarchy: { district: 'Mumbai' }, survey_numbers: [], geometry_geojson: null,
+    });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 19.07, lng: 72.88 });
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(false);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('bbmp_bbox_check');
+    expect(masterplanService.searchBbmpStreets).not.toHaveBeenCalled();
+  });
+});
+
 describe('parcelContext.service — internal helpers', () => {
-  test('isWithinBmaApprox matches central BLR, rejects Mumbai', () => {
-    expect(_internal.isWithinBmaApprox({ lat: 12.97, lng: 77.59 })).toBe(true);
-    expect(_internal.isWithinBmaApprox({ lat: 19.07, lng: 72.88 })).toBe(false);
+  test('isWithinBmaApprox (alias) matches central BLR, rejects Mumbai + Jigani', () => {
+    expect(_internal.isWithinBmaApprox({ lat: 12.97, lng: 77.59 })).toBe(true);   // central BLR
+    expect(_internal.isWithinBmaApprox({ lat: 19.07, lng: 72.88 })).toBe(false);  // Mumbai
+    expect(_internal.isWithinBmaApprox({ lat: 12.78, lng: 77.66 })).toBe(false);  // Jigani — newly excluded
+  });
+
+  test('detectBbmpJurisdiction — bbox-only path', () => {
+    expect(_internal.detectBbmpJurisdiction({ lat: 12.97, lng: 77.59 }, null)).toMatchObject({
+      withinBbmp: true,
+      detection_method: 'bbmp_bbox_check',
+    });
+    expect(_internal.detectBbmpJurisdiction({ lat: 12.78, lng: 77.66 }, null)).toMatchObject({
+      withinBbmp: false,
+      detection_method: 'bbmp_bbox_check',
+    });
+  });
+
+  test('detectBbmpJurisdiction — taluk override fires for known non-BBMP taluks', () => {
+    for (const taluk of ['Anekal', 'Hosakote', 'Nelamangala', 'Magadi', 'Kanakapura', 'Devanahalli', 'Doddaballapur']) {
+      const result = _internal.detectBbmpJurisdiction({ lat: 12.95, lng: 77.65 }, { taluk });
+      expect(result.withinBbmp).toBe(false);
+      expect(result.detection_method).toBe('kgis_taluk_override');
+      expect(result.kgis_taluk).toBe(taluk);
+    }
+  });
+
+  test('detectBbmpJurisdiction — Bangalore Urban taluks are NOT overridden', () => {
+    for (const taluk of ['Bangalore North', 'Bangalore South', 'Bangalore East', 'Yelahanka']) {
+      const result = _internal.detectBbmpJurisdiction({ lat: 12.97, lng: 77.59 }, { taluk });
+      expect(result.withinBbmp).toBe(true);
+      expect(result.detection_method).toBe('bbox_plus_kgis_taluk_confirmed');
+    }
+  });
+
+  test('BBMP_BBOX is tighter than the old BMA-wide one', () => {
+    expect(_internal.BBMP_BBOX.minLat).toBe(12.83);
+    expect(_internal.BBMP_BBOX.maxLat).toBe(13.14);
+    expect(_internal.BBMP_BBOX.minLng).toBe(77.45);
+    expect(_internal.BBMP_BBOX.maxLng).toBe(77.78);
+  });
+
+  test('NON_BBMP_TALUKS includes the major adjacent Planning Authorities', () => {
+    expect(_internal.NON_BBMP_TALUKS.has('anekal')).toBe(true);
+    expect(_internal.NON_BBMP_TALUKS.has('hosakote')).toBe(true);
+    expect(_internal.NON_BBMP_TALUKS.has('nelamangala')).toBe(true);
   });
 
   test('isCoordinateTrustworthy honors caller-supplied + threshold + status', () => {
