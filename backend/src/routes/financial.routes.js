@@ -1,9 +1,33 @@
 const express = require('express');
 const { body } = require('express-validator');
 const financialService = require('../services/financial.service');
+const dealService = require('../services/deal.service');
+const { generateSensitivityNarrative } = require('../services/export.insights.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 const { FINANCIAL_ASSET_CLASSES } = require('../constants/assetClasses');
+
+// PR-NX48 (2026-05-19) — parse sensitivity_matrix JSONB into the shape
+// generateSensitivityNarrative expects. Mirrors normalizeSensitivityMatrix
+// in dealExport.service.js — kept inline to avoid cross-service imports
+// for a single helper.
+const parseSensitivityMatrix = (raw) => {
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  return {
+    variations: Array.isArray(parsed.variations) ? parsed.variations : [],
+    sellingRates: Array.isArray(parsed.sellingRates) ? parsed.sellingRates : [],
+    constructionCosts: Array.isArray(parsed.constructionCosts) ? parsed.constructionCosts : [],
+    irrGrid: Array.isArray(parsed.irrGrid) ? parsed.irrGrid : [],
+  };
+};
 
 const router = express.Router();
 
@@ -303,6 +327,65 @@ router.put(
     }
   }
 );
+
+// PR-NX48 (2026-05-19) — Live AI sensitivity-narrative endpoint.
+//
+// Surfaces the same 2-paragraph OpenAI synthesis (driver decomposition
+// + recommended stress tests) that ships in the DOCX Financials section
+// (PR-NX44), now consumable by the frontend FinancialsPage in the live
+// workspace — operators no longer need to download a DOCX to read the
+// AI sensitivity interpretation. Uses the same generateSensitivityNarrative
+// service so the XLSX / DOCX / PPTX / frontend all see identical content.
+//
+// Cascade: OpenAI (primary) → Claude (secondary) → unavailable. Returns
+// canonical envelope: { available, driver_decomposition_paragraph,
+// stress_test_paragraph, dominant_driver, confidence, provider,
+// fallbackReason, disclaimer }.
+//
+// Fast-no-op paths: missing sensitivity_matrix OR sparse grid (< 3 rows
+// or < 3 cols) → returns { available: false, reason } without firing
+// any AI call.
+//
+// Auth: authenticate only (all deal members can read sensitivity —
+// matches the GET /:dealId scope above).
+router.get('/:dealId/sensitivity-narrative', authenticate, async (req, res, next) => {
+  try {
+    const dealId = req.params.dealId;
+    const [deal, financials] = await Promise.all([
+      dealService.getDealById(dealId),
+      financialService.getFinancials(dealId).catch((err) => {
+        // 404 from getFinancials is a soft-fail — no financial row yet
+        // means no sensitivity to narrate. Return null, downstream
+        // generateSensitivityNarrative returns its own unavailable.
+        if (err?.statusCode === 404 || err?.status === 404) return null;
+        throw err;
+      }),
+    ]);
+    if (!deal) {
+      return res.status(404).json({ success: false, message: 'Deal not found' });
+    }
+    if (!financials) {
+      return res.json({ success: true, data: {
+        available: false,
+        reason: 'no financial model on this deal yet',
+        driver_decomposition_paragraph: null,
+        stress_test_paragraph: null,
+        dominant_driver: null,
+        confidence: null,
+      }});
+    }
+
+    const sensitivityMatrix = parseSensitivityMatrix(financials.sensitivity_matrix);
+    const narrative = await generateSensitivityNarrative({
+      deal,
+      sensitivityMatrix,
+      financials,
+    });
+    return res.json({ success: true, data: narrative });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // POST /financials/:dealId/sensitivity
 router.post('/:dealId/sensitivity', authenticate, async (req, res, next) => {

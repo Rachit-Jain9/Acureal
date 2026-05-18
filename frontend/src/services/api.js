@@ -273,6 +273,12 @@ export const financialsAPI = {
   calculate: (dealId, data) => api.post(`/financials/${dealId}/calculate`, data),
   update: (dealId, data) => api.put(`/financials/${dealId}`, data),
   sensitivity: (dealId, data) => api.post(`/financials/${dealId}/sensitivity`, data),
+  // PR-NX48 (2026-05-19) — live AI sensitivity narrative. Same OpenAI
+  // synthesis (driver decomposition + recommended stress tests) that
+  // ships in the DOCX Financials section (PR-NX44). Cascades OpenAI
+  // → Claude → unavailable. Frontend FinancialsPage consumes via
+  // useSensitivityNarrative.
+  sensitivityNarrative: (dealId) => api.get(`/financials/${dealId}/sensitivity-narrative`),
   scenarios: (dealId) => api.get(`/financials/${dealId}/scenarios`),
   // Authoritative provenance DAG — every KPI/cost/revenue node traces back
   // to user inputs. Use for "how was this number produced" drill-downs.
