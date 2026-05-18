@@ -131,6 +131,130 @@ describe('geocoder — Google Places fallback chain', () => {
     expect(placesCalls).toHaveLength(0);
   });
 
+  test('Geocoding returns approximate city-fallback → Places second-chance promotes to verified establishment (Jigani path with Maps Platform key)', async () => {
+    // Reproduces the live Jigani diagnostic on 2026-05-18:
+    //   Geocoding API returned `Jigani, Karnataka` at 0.45 / approximate
+    //   Places Text Search returned the apartment cluster at 0.85 / verified
+    // The chain enhancement promotes Places when it strictly beats
+    // Geocoding's approximate result.
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/geocode/json')) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            status: 'OK',
+            results: [
+              {
+                formatted_address: 'Jigani, Karnataka, India',
+                place_id: 'gc_jigani_locality',
+                geometry: { location: { lat: 12.7791, lng: 77.6436 } },
+                types: ['locality', 'political'], // not point-match → approximate path
+              },
+            ],
+          },
+        });
+      }
+      if (url.includes('/place/textsearch/json')) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            status: 'OK',
+            results: [
+              {
+                formatted_address: 'Thyme Park Apartments, Jigani, Masthena Halli, Karnataka 560105',
+                place_id: 'pl_thyme_park',
+                geometry: { location: { lat: 12.78399, lng: 77.65872 } },
+                types: ['establishment', 'point_of_interest'],
+              },
+            ],
+          },
+        });
+      }
+      return Promise.resolve(NOMINATIM_CITY_RESPONSE);
+    });
+
+    const result = await geocodeAddress('Thyme Park Apartments Jigani', 'Bengaluru', 'Karnataka', '560105');
+    expect(result.provider).toBe('google_places');
+    expect(result.status).toBe('verified');
+    expect(result.confidence).toBe(0.85);
+    expect(result.lat).toBeCloseTo(12.784, 2);
+    expect(result.lng).toBeCloseTo(77.659, 2);
+  });
+
+  test('Geocoding returns approximate AND Places ALSO returns approximate → keep Geocoding (no swap)', async () => {
+    // Edge case: Places returns a `geocode`-typed result at 0.65 — not
+    // strictly better than Geocoding's 0.45 approximate (within 0.1
+    // confidence delta). Stick with Geocoding so the gate banner fires
+    // and the operator switches to coordinate input.
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/geocode/json')) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            status: 'OK',
+            results: [
+              {
+                formatted_address: 'Some Locality',
+                place_id: 'gc_loc',
+                geometry: { location: { lat: 12.8, lng: 77.7 } },
+                types: ['locality'],
+              },
+            ],
+          },
+        });
+      }
+      if (url.includes('/place/textsearch/json')) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            status: 'OK',
+            results: [{
+              formatted_address: 'Some Place',
+              place_id: 'pl_some',
+              geometry: { location: { lat: 12.81, lng: 77.71 } },
+              types: ['geocode'],
+            }],
+          },
+        });
+      }
+      return Promise.resolve(NOMINATIM_CITY_RESPONSE);
+    });
+
+    const result = await geocodeAddress('Vague locality query', 'Bengaluru', 'Karnataka', null);
+    // Confidence delta 0.65 (Places) - 0.45 (Geocoding) = 0.20 > 0.10 → Places wins.
+    // But Places status is 'approximate' AND not establishment-typed, so the
+    // `placesIsBetter` check considers it only if confidence delta > 0.1.
+    // 0.65 - 0.45 = 0.20 > 0.10 → swap happens.
+    expect(result.provider).toBe('google_places');
+    expect(result.confidence).toBe(0.65);
+  });
+
+  test('High-confidence Geocoding (street_address) → Places never tried (short-circuit preserved)', async () => {
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/geocode/json')) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            status: 'OK',
+            results: [{
+              formatted_address: '100 Brigade Road, Bengaluru, Karnataka 560001, India',
+              place_id: 'gc_brigade',
+              geometry: { location: { lat: 12.97501, lng: 77.60501 } },
+              types: ['street_address'], // point-match → 0.92 verified
+            }],
+          },
+        });
+      }
+      return Promise.reject(new Error('Should not have called Places or Nominatim'));
+    });
+
+    const result = await geocodeAddress('100 Brigade Road BLR', 'Bengaluru', 'Karnataka', null);
+    expect(result.provider).toBe('google');
+    expect(result.confidence).toBe(0.92);
+    const placesCalls = axios.get.mock.calls.filter(([url]) => url.includes('/place/textsearch'));
+    expect(placesCalls).toHaveLength(0);
+  });
+
   test('Places returns geocode-typed result → confidence 0.65 + status approximate', async () => {
     axios.get.mockImplementation((url) => {
       if (url.includes('/geocode/json')) return Promise.resolve(GEOCODING_DENIED_RESPONSE);
