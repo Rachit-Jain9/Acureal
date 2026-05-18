@@ -369,6 +369,13 @@ function CoordinatesGateExplainer({ gate, kgisHierarchy, onSwitchToCoords }) {
 function OutsideBbmpExplainer({ data }) {
   const hier = data?.kgis?.hierarchy || {};
   const where = [hier.taluk, hier.district].filter(Boolean).join(', ');
+  const detection = data?.bbmpJurisdiction?.detection_method;
+  const taluk = data?.bbmpJurisdiction?.kgis_taluk || hier.taluk;
+  // Specific copy per detection method — tells the user EXACTLY why we
+  // think this is outside BBMP. The taluk-override case is the most
+  // helpful: it cites Anekal/Hosakote/etc by name so the user knows
+  // which Planning Authority's portal to use instead.
+  const isTalukOverride = detection === 'kgis_taluk_override';
   return (
     <div
       className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 text-xs text-amber-900 flex items-start gap-2"
@@ -376,16 +383,29 @@ function OutsideBbmpExplainer({ data }) {
     >
       <AlertTriangle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
       <div>
-        <span className="font-medium">This parcel sits outside BBMP city limits</span>
-        {where && (
+        <span className="font-medium">
+          {isTalukOverride
+            ? `This parcel is in ${taluk} taluk — outside BBMP`
+            : 'This parcel sits outside BBMP city limits'}
+        </span>
+        {isTalukOverride ? (
           <>
-            {' — '}
+            {'. '}
             <span>
-              K-GIS places it in <span className="font-medium">{where}</span>.
+              {taluk} is governed by a <span className="font-medium">separate Planning Authority</span>, not BBMP.
             </span>
           </>
-        )}{' '}
-        BBMP-specific fields (ward, property-tax zone, guidance bandwidth, Bengaluru planning district) don't apply here. The K-GIS hierarchy and city-wide warnings below are still useful — and the verify links open Bhoomi RTC / Kaveri EC scoped to the right taluk for an EC + survey lookup.
+        ) : (
+          where && (
+            <>
+              {' — '}
+              <span>
+                K-GIS places it in <span className="font-medium">{where}</span>.
+              </span>
+            </>
+          )
+        )}
+        {' '}BBMP-specific fields (ward, property-tax zone, guidance bandwidth, Bengaluru planning district) don't apply here. The K-GIS hierarchy and city-wide warnings below are still useful — and the verify links open Bhoomi RTC / Kaveri EC scoped to the right taluk for an EC + survey lookup.
       </div>
     </div>
   );
