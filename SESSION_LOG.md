@@ -4,6 +4,70 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-18 (late) — Phase C polish complete: provenance chips + Kaveri verify-links + bulk lookup admin + parcel mini-map (4 PRs)
+
+Closed out Phase C of the autonomous-window plan. Operator pre-cleared three blockers in this window: (a) ab-eval migration applied, (b) comps geocoding `--apply` run lifting 56 → 71 of 81 comps to precise pins, (c) C-6 permanently struck from the record (memory + repo, never to be re-proposed). The four remaining Phase C items shipped end-to-end:
+
+### PRs shipped + merged
+
+- **#390 — `feat(deal/parcel)` C-1**: `DerivedValueChip` primitive (`frontend/src/components/common/`) — small `(i)` chip showing source + confidence inline, hover/focus popover with full provenance (source, confidence %, age "derived 3s ago", per-row extras like PDF page / K-GIS taluk / BBMP street). Wired into all 6 AutoFillParcelContextCard rows; reusable on downstream cards in future PRs. 15 new tests. (+342/-10)
+- **#391 — `feat(deal/parcel)` C-4**: `VerifyLinksSection` (new) renders all 7 authority deep-links the backend has been emitting since PR #354 (Bhoomi RTC, Kaveri EC, BBMP e-Aasthi, K-RERA, IGR Guidance, K-GIS Cadastral, Google Maps satellite) with one-click "Copy + Open" affordance. Backend tighten: Kaveri `copy_text` is now SRO + Survey + Village + Hobli only (the canonical EC search keys) — no more PID/Khata/Bhoomi noise. 10 new tests. (+351/-2)
+- **#392 — `feat(admin/planning)` C-5**: `BulkAddressLookupPanel` mounted at the bottom of `/admin/planning-intelligence`. Paste up to 50 addresses, 5-at-a-time concurrency-limited runner against the same auto-derive endpoint, 10-column results table (Address · Status · Coords · Within BBMP · Zone · Ward · Guidance band · PD · K-GIS taluk · Warnings), "Copy as Excel-ready table" TSV button (intentionally NOT labelled as CSV per operator's standing rule from 2026-05-10). 13 new tests. (+647)
+- **#393 — `feat(deal/parcel)` C-8**: `DerivedParcelMiniMap` (240px compact map) mounted between AutoFillCard field rows and verify-links. Renders K-GIS GeoJSON polygon (blue stroke + 12% fill) when available, falls back to a 50m buffered orange-dashed circle when not — explicitly badged "Approximate boundary" so the operator never mistakes a placeholder for a survey-precise outline. Tile-layer toggle (Streets/Satellite), Google sat deep-link in chrome. Hidden when `coordinatesGate.gated` (red-banner case from PR #385). master_plan_zones polygon overlay deferred — that data isn't loaded yet. 13 new tests. (+465)
+
+### Operator actions completed mid-window
+
+- **Migration `20260526_ab_eval_runs.sql`** applied via Supabase SQL editor (operator confirmed "Success").
+- **Comps geocoding upgrade** ran `scripts/upgrade-comps-geocoding.mjs --apply --allow-cross-locality`. Pre-state 56/81 precise → post-state 71/81 precise (+15 upgraded, +5 already-good, +5 stage-2 low-precision kept, 0 errored). 5 cross-locality corrections flagged for manual `locality` column review (Sobha Lake Gardens, Embassy Verde, Brigade Horizon, Godrej MSR City, Birla Trimaya / Godrej MSR City) — operator can spot-check at leisure.
+
+### Memory + repo policy updates persisted in perpetuity
+
+- **C-6 permanently skipped**: new memory file `decisions_permanently_skipped.md` + index update in `MEMORY.md` — no future Claude or Cowork session will propose or surface C-6 again.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| Frontend total | 493 | 544 | +51 |
+
+Backend untouched in this window. All builds clean across all 4 merges.
+
+### Outcome for the operator
+
+Phase C of the autonomous-window plan is **100% complete** (C-1 ✅, C-3 ✅, C-4 ✅, C-5 ✅, C-6 🚫 permanently skipped, C-7 ✅, C-8 ✅ — with C-3 and C-7 having shipped in earlier windows). The auto-derive flow on the deal Parcel/Site tab is now fully polished:
+
+- Every auto-filled value has a `(i)` chip → click to see source + confidence + age + provenance details.
+- A small map below the field list shows exactly where Google placed the address (the pin) and what the parcel outline looks like (blue polygon from K-GIS or orange dashed-circle approximation).
+- All 7 authority portals (Bhoomi / Kaveri / BBMP / RERA / IGR / K-GIS / Google sat) are one click away with the right search payload pre-loaded on the clipboard.
+- On the admin Planning Intelligence page, a new panel lets the operator paste 50 addresses and screen them for BBMP-vs-not, zone, ward, guidance band in ~20 seconds.
+
+### Status table (autonomous-window plan, end-of-Phase-C)
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase A (4 PRs, data recovery) | ✅ Shipped | Operator applied 4 migrations in window 1 |
+| Phase B (3 PRs, geocoding orchestrator) | ✅ Shipped | Live end-to-end after operator removed GCP key referrer restriction |
+| Phase C-1 (provenance chips) | ✅ Shipped (#390) | This window |
+| Phase C-3 (Overview warnings strip) | ✅ Shipped (window 1) | #378 |
+| Phase C-4 (Kaveri verify-links section) | ✅ Shipped (#391) | This window |
+| Phase C-5 (bulk address lookup) | ✅ Shipped (#392) | This window |
+| Phase C-6 (reverse search filters) | 🚫 **Permanently skipped** | Operator decision 2026-05-18, never re-propose |
+| Phase C-7 (ward spread tile) | ✅ Shipped (window 2) | #383 |
+| Phase C-8 (mini-map) | ✅ Shipped (#393) | This window |
+
+### Plain-English recap (4 bullets, no jargon)
+
+- Every auto-filled box on the deal Parcel page now has a tiny `(i)` button. Hover or click it to see exactly where the number came from (Google? BBMP? K-GIS?), how confident, and how recent.
+- Below the boxes, there's now a small map showing where the address sits — with the actual parcel outline drawn in blue if K-GIS has it, or an orange dashed circle as a placeholder if not. Toggle between street view and satellite.
+- All 7 government portals (Bhoomi, Kaveri, BBMP, RERA, IGR, K-GIS, Google satellite) are now one click away. Click "Copy + Open" — it puts the right search text on your clipboard AND opens the portal in a new tab. Paste, search, done.
+- New admin tool: paste up to 50 addresses, get a table back with zone/ward/guidance/PD/warnings for each. Useful for screening leads before turning them into deals.
+
+### What's left to do
+
+Nothing in the autonomous-window plan. The plan is closed. Future work is unscoped — pick up when the operator surfaces new priorities.
+
+---
+
 ## 2026-05-18 (3-hour autonomous window) — full AutoFillCard persistence + out-of-BBMP clarity + ward spread benchmark (3 PRs + hotfix)
 
 Operator went to the gym; this window picked up the highest-impact pending work from the overnight Phase-C list — specifically the items that (a) close the loop on PR #377's "acknowledged but not persisted" half-truth, (b) fix the half-broken UI exposed when the operator first tried the AutoFillCard on a non-BBMP deal (Pointec Pens in Attibele Industrial Area), and (c) ship the Bayesian sanity-check tile that uses the just-restored UAV data. Plus a hotfix from a route-order bug the operator caught right before the gym (PR #380).
