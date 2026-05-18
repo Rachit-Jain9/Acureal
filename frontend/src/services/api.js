@@ -185,6 +185,11 @@ export const dealsAPI = {
   // graph + DD/risk scores + audit events + documents + activities +
   // waterfall so the deal page loads from a single round-trip.
   getWorkspace: (id) => api.get(`/deals/${id}/workspace`),
+  // PR-NX50 (2026-05-19) — field-provenance map for inline ProvenanceChip
+  // components. Returns `{ field_provenance: { <field>: {...} } }` listing
+  // every deal/property field that was auto-applied via document_extraction
+  // (PR-NX25 apply-extractions). Empty map when no auto-fill has happened.
+  fieldProvenance: (id) => api.get(`/deals/${id}/field-provenance`),
   create: (data) => api.post('/deals', data),
   update: (id, data) => api.put(`/deals/${id}`, data),
   archive: (id, reason) => api.patch(`/deals/${id}/archive`, { reason }),

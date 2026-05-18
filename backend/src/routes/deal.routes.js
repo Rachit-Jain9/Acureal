@@ -336,6 +336,140 @@ router.post(
   },
 );
 
+// PR-NX50 (2026-05-19) — Field-provenance endpoint for inline chips.
+//
+// Surfaces a map of every deal/property field that was auto-applied via
+// document_extraction (PR-NX25 `apply-extractions`). Frontend
+// ProvenanceChip components consume this to render an inline (i) chip
+// next to each auto-filled value, with a hover popover showing source
+// document + when + which extraction + ontology version.
+//
+// Returns shape:
+//   {
+//     field_provenance: {
+//       '<field_name>': {
+//         source: 'document_extraction',
+//         applied_at: ISO timestamp (latest),
+//         applied_by: user UUID,
+//         applied_by_name: human name (joined from users),
+//         applied_value: the value that was written,
+//         source_extraction_ids: string[],
+//         source_document_names: string[],
+//         source_document_types: string[],
+//         target_table: 'deals' | 'properties',
+//         ontology_version: string
+//       },
+//       ...
+//     },
+//     generated_at: ISO timestamp
+//   }
+//
+// When a field has been auto-filled multiple times, the LATEST entry is
+// returned (it's the value currently in the DB). Fields never auto-filled
+// don't appear in the map at all (the chip simply doesn't render).
+//
+// Auth: authenticate (read-only on visibility-scoped audit data).
+router.get(
+  '/:id/field-provenance',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const dealId = req.params.id;
+      // RLS visibility check via dealService first — 404 if not visible.
+      const deal = await dealService.getDealById(dealId);
+      if (!deal) {
+        return res.status(404).json({ success: false, message: 'Deal not found' });
+      }
+
+      // Query deal_audit_log for every document_extraction event on this
+      // deal, joining users for the actor name + document_extractions →
+      // documents for the source document names + types.
+      const { query: db } = require('../config/database');
+      const result = await db(
+        `WITH provenance_events AS (
+           SELECT
+             dal.id,
+             dal.created_at,
+             dal.actor_id,
+             dal.after_json,
+             dal.metadata,
+             u.name AS actor_name
+           FROM deal_audit_log dal
+           LEFT JOIN users u ON u.id = dal.actor_id
+           WHERE dal.deal_id = $1
+             AND dal.event_type = 'updated'
+             AND dal.metadata ->> 'source' = 'document_extraction'
+           ORDER BY dal.created_at DESC
+         )
+         SELECT
+           pe.id AS audit_id,
+           pe.created_at,
+           pe.actor_id,
+           pe.actor_name,
+           pe.after_json,
+           pe.metadata,
+           COALESCE(
+             json_agg(DISTINCT jsonb_build_object(
+               'extraction_id', ext.id,
+               'document_name', doc.name,
+               'doc_type',      ext.doc_type
+             )) FILTER (WHERE ext.id IS NOT NULL),
+             '[]'::json
+           ) AS source_documents
+         FROM provenance_events pe
+         LEFT JOIN LATERAL jsonb_array_elements_text(COALESCE(pe.metadata -> 'source_extraction_ids', '[]'::jsonb)) AS ext_id_text ON true
+         LEFT JOIN document_extractions ext ON ext.id::text = ext_id_text
+         LEFT JOIN documents doc ON doc.id = ext.document_id
+         GROUP BY pe.id, pe.created_at, pe.actor_id, pe.actor_name, pe.after_json, pe.metadata
+         ORDER BY pe.created_at DESC`,
+        [dealId],
+      ).catch((err) => {
+        // Soft-fail on missing table (42P01) — no audit log = no provenance.
+        if (err && err.code === '42P01') return { rows: [] };
+        throw err;
+      });
+
+      // Walk newest-first; first time we see a field, lock it in (so
+      // the LATEST overwrite wins). after_json keys are the field names.
+      const fieldProvenance = {};
+      for (const row of result.rows) {
+        const after = row.after_json || {};
+        const metadata = row.metadata || {};
+        const sourceDocs = Array.isArray(row.source_documents) ? row.source_documents : [];
+        const docNames = [...new Set(sourceDocs.map((d) => d.document_name).filter(Boolean))];
+        const docTypes = [...new Set(sourceDocs.map((d) => d.doc_type).filter(Boolean))];
+        const extractionIds = sourceDocs.map((d) => d.extraction_id).filter(Boolean);
+
+        for (const [fieldName, value] of Object.entries(after)) {
+          if (fieldProvenance[fieldName]) continue; // already locked in (newer row took it)
+          fieldProvenance[fieldName] = {
+            source: 'document_extraction',
+            applied_at: row.created_at,
+            applied_by: row.actor_id,
+            applied_by_name: row.actor_name,
+            applied_value: value,
+            source_extraction_ids: extractionIds,
+            source_document_names: docNames,
+            source_document_types: docTypes,
+            target_table: metadata.target_table || null,
+            ontology_version: metadata.ontology_version || null,
+          };
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          field_provenance: fieldProvenance,
+          generated_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /deals/bulk/reassign { ids: [...], assignedTo?: '<uuid>'|null }
 //
 // Sets `deals.assigned_to` on each id. assignedTo: null is "unassign".
