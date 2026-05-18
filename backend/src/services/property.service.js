@@ -646,6 +646,119 @@ const applyAutoDerivedContext = async (id, { picks = {}, derivedSource = null },
   return result.rows[0];
 };
 
+// Ward Spread Benchmark — pull every OTHER deal whose linked property
+// shares this property's auto_derived_ward_no, compute each deal's
+// spread % against its matched BBMP guidance bandwidth, and return the
+// percentile distribution. Powers the "median spread in this ward"
+// sanity-check tile on DealStreetLookupCard (PR-C7 from the
+// autonomous-window plan).
+//
+// Returns `{ ok: false, reason }` when:
+//   - ward_not_derived: this property has no auto_derived_ward_no
+//   - insufficient_data: fewer than 3 comparable deals in the ward
+//
+// All sample deals are filtered to the same org via RLS — analysts
+// don't see cross-org transaction prices through this surface.
+const getWardSpreadBenchmark = async (propertyId) => {
+  const property = await getPropertyById(propertyId);
+  const wardNo = property.auto_derived_ward_no;
+  if (wardNo === null || wardNo === undefined) {
+    return {
+      ok: false,
+      reason: 'ward_not_derived',
+      ward_no: null,
+      message: 'Apply the auto-derive context on this property first — the ward number is required to compute the benchmark.',
+    };
+  }
+
+  // Pull other-deal sample. Use the property's auto_derived guidance
+  // band when available, else fall back to the property's manual
+  // circle_rate_per_sqft. We need:
+  //   - the deal's effective per-sqft price (negotiated / ask / entry)
+  //   - the property's auto_derived guidance min/max so each deal's
+  //     spread is computed against its own gazette band
+  const sampleResult = await query(
+    `SELECT
+       d.id                                    AS deal_id,
+       d.name                                  AS deal_name,
+       d.negotiated_price_cr,
+       d.land_ask_price_cr,
+       d.entry_value_cr,
+       p.land_area_sqft,
+       p.selling_rate_per_sqft,
+       p.auto_derived_guidance_min_inr        AS guidance_min,
+       p.auto_derived_guidance_max_inr        AS guidance_max
+     FROM deals d
+     JOIN properties p ON p.id = d.property_id
+     WHERE p.auto_derived_ward_no = $2
+       AND p.id <> $1
+       AND d.organization_id = current_organization_id()
+       AND d.is_archived = FALSE
+       AND COALESCE(p.auto_derived_guidance_min_inr, p.auto_derived_guidance_max_inr) IS NOT NULL`,
+    [propertyId, wardNo],
+  );
+
+  // Compute per-deal spread % in JS (cleaner than nested SQL casts).
+  const samples = [];
+  for (const row of sampleResult.rows) {
+    const sqft = Number(row.land_area_sqft);
+    let pricePerSqft = Number(row.selling_rate_per_sqft);
+    if (!Number.isFinite(pricePerSqft) || pricePerSqft <= 0) {
+      const priceCr = Number(row.negotiated_price_cr ?? row.land_ask_price_cr ?? row.entry_value_cr);
+      if (!Number.isFinite(priceCr) || !Number.isFinite(sqft) || sqft <= 0) continue;
+      pricePerSqft = (priceCr * 10_000_000) / sqft;
+    }
+    const gMin = Number(row.guidance_min);
+    const gMax = Number(row.guidance_max);
+    let gMid;
+    if (Number.isFinite(gMin) && Number.isFinite(gMax)) gMid = (gMin + gMax) / 2;
+    else if (Number.isFinite(gMin)) gMid = gMin;
+    else if (Number.isFinite(gMax)) gMid = gMax;
+    else continue;
+    if (gMid <= 0) continue;
+    const spreadPct = ((pricePerSqft - gMid) / gMid) * 100;
+    samples.push({
+      deal_id: row.deal_id,
+      deal_name: row.deal_name,
+      price_per_sqft: Math.round(pricePerSqft),
+      spread_pct: Number(spreadPct.toFixed(1)),
+    });
+  }
+
+  if (samples.length < 3) {
+    return {
+      ok: false,
+      reason: 'insufficient_data',
+      ward_no: wardNo,
+      sample_size: samples.length,
+      message: `Only ${samples.length} other deal${samples.length === 1 ? '' : 's'} in ward ${wardNo} have enough data to benchmark. Need at least 3 to compute median + percentiles.`,
+    };
+  }
+
+  const spreads = samples.map((s) => s.spread_pct).sort((a, b) => a - b);
+  const percentile = (sorted, p) => {
+    const idx = (sorted.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  };
+
+  return {
+    ok: true,
+    ward_no: wardNo,
+    sample_size: samples.length,
+    median_spread_pct: Number(percentile(spreads, 0.5).toFixed(1)),
+    p25_spread_pct: Number(percentile(spreads, 0.25).toFixed(1)),
+    p75_spread_pct: Number(percentile(spreads, 0.75).toFixed(1)),
+    min_spread_pct: Number(spreads[0].toFixed(1)),
+    max_spread_pct: Number(spreads[spreads.length - 1].toFixed(1)),
+    samples: samples.slice(0, 10), // cap at 10 for response size; full set isn't useful to the deal team
+    disclaimer:
+      'Benchmark uses each deal\'s auto-derived BBMP guidance bandwidth as its own anchor. Sample drawn from the same ward as this property; cross-org data is filtered out via RLS. Verify against IGR-published sale-deed comps before quoting in IC.',
+  };
+};
+
 module.exports = {
   createProperty,
   getProperties,
@@ -655,4 +768,5 @@ module.exports = {
   geocodePropertyAddress,
   bulkGeocodeProperties,
   applyAutoDerivedContext,
+  getWardSpreadBenchmark,
 };

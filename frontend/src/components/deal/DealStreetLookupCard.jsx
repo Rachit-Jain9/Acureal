@@ -5,6 +5,7 @@ import Badge from '../common/Badge';
 import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
 import { analyseGuidanceValueSpread } from '../../utils/guidanceValueAnalysis';
+import WardSpreadBenchmarkTile from './WardSpreadBenchmarkTile';
 
 // Inline 200ms debounce — keeps the BBMP street search responsive on the
 // deal page without firing on every keystroke.
@@ -221,6 +222,16 @@ export default function DealStreetLookupCard({ property, deal }) {
           footnote={enrichedPct > 0 ? `${enrichedPct}% have a zone` : 'enrichment pending'}
         />
       </div>
+
+      {/* Ward-wide spread benchmark — Bayesian sanity check for this deal's
+          spread against other deals in the same BBMP ward. Renders only
+          when the ward has been auto-derived AND there are >=3 other
+          deals in the same ward; otherwise shows an honest "not ready"
+          hint (no defensive copy). */}
+      <WardSpreadBenchmarkTile
+        propertyId={property?.id}
+        currentDealSpreadPct={spreadAnalysis.ok ? spreadAnalysis.spread_pct : null}
+      />
 
       <div className="relative mt-3">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted pointer-events-none" />

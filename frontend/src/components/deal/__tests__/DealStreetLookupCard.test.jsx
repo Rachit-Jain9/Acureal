@@ -12,6 +12,15 @@ vi.mock('../../../hooks/useMasterPlan', () => ({
   },
 }));
 
+// WardSpreadBenchmarkTile (mounted by DealStreetLookupCard) pulls
+// useQuery internally. These tests don't wrap in QueryClientProvider,
+// so mock the underlying hook to a stable no-op default — the tile
+// renders nothing when ward isn't derived, matching prod behavior for
+// the unmodified test fixtures.
+vi.mock('../../../hooks/useWardSpreadBenchmark', () => ({
+  default: () => ({ data: null, isFetching: false }),
+}));
+
 import DealStreetLookupCard from '../DealStreetLookupCard';
 
 const SAMPLE = {

@@ -260,6 +260,11 @@ export const propertiesAPI = {
       picks: picks || {},
       derivedSource: derivedSource || null,
     }),
+  // Ward spread benchmark — percentile distribution of price-vs-guidance
+  // spread across other deals in the same BBMP ward as this property.
+  // Returns ok:false when ward isn't derived yet or sample < 3.
+  wardSpreadBenchmark: (id) =>
+    api.get(`/properties/${id}/ward-spread-benchmark`),
 };
 
 // Financials
