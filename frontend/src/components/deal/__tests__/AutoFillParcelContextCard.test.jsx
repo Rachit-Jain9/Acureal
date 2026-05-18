@@ -208,6 +208,36 @@ describe('AutoFillParcelContextCard', () => {
     expect(screen.getByText(/AI-assisted derivation/i)).toBeInTheDocument();
   });
 
+  it('hides BBMP-specific rows + shows OutsideBbmpExplainer when parcel is outside BBMP', () => {
+    mockHookState.data = {
+      ...samplePayload,
+      bbmpJurisdiction: { withinBbmp: false, ward: null },
+      bbmpZone: null,
+      planningDistrict: null,
+      // K-GIS still resolves; BBMP-adjacent (e.g. Attibele Industrial Area)
+      kgis: { hierarchy: { taluk: 'Anekal', village: 'Attibele', district: 'Bangalore Urban' }, status: 'matched', confidence: 0.65, survey_numbers: [] },
+    };
+    renderCard({ defaultAddress: 'Attibele Industrial Area' });
+
+    expect(screen.getByTestId('outside-bbmp-explainer')).toBeInTheDocument();
+    expect(screen.getByText(/sits outside BBMP city limits/i)).toBeInTheDocument();
+    expect(screen.getByText(/Anekal, Bangalore Urban/)).toBeInTheDocument();
+
+    // BBMP-specific rows are gone entirely (not even empty placeholders).
+    expect(screen.queryByTestId('auto-fill-row-ward')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('auto-fill-row-bbmp_zone')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('auto-fill-row-planning_district')).not.toBeInTheDocument();
+
+    // K-GIS + warnings + coords still render.
+    expect(screen.getByTestId('auto-fill-row-coordinates')).toBeInTheDocument();
+    expect(screen.getByTestId('auto-fill-row-kgis_hierarchy')).toBeInTheDocument();
+    expect(screen.getByTestId('auto-fill-row-applicable_warnings')).toBeInTheDocument();
+
+    // The summary chip switches to warn tone with the surrounding taluk.
+    expect(screen.getByText('Outside BBMP')).toBeInTheDocument();
+    expect(screen.getByText(/Anekal taluk/i)).toBeInTheDocument();
+  });
+
   it('disables Apply when there are no included fields', () => {
     mockHookState.data = samplePayload;
     const onApply = vi.fn();
