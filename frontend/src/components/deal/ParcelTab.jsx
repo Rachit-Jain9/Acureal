@@ -16,13 +16,22 @@ import SiteWeatherCard from './SiteWeatherCard';
 import { SectionHeader, ErrorState } from '../../design-system';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 import AutoFillParcelContextCard from './AutoFillParcelContextCard';
+// PR-NX50 (2026-05-19) — inline provenance chips on auto-filled fields.
+import ProvenanceChip from '../common/ProvenanceChip';
+import { useFieldProvenance } from '../../hooks/useFieldProvenance';
 
-function FieldRow({ label, value, span = false }) {
+function FieldRow({ label, value, span = false, field, provenance }) {
   if (!value && value !== 0) return null;
   return (
     <div className={span ? 'col-span-2 sm:col-span-3' : ''}>
       <dt className="text-xs text-content-muted mb-0.5">{label}</dt>
-      <dd className="text-sm font-medium text-content-primary">{value}</dd>
+      <dd className="text-sm font-medium text-content-primary inline-flex items-center gap-1">
+        <span>{value}</span>
+        {/* PR-NX50 (2026-05-19) — provenance chip renders inline when
+            this field was auto-filled from a document extraction. Chip
+            returns null when no entry exists for the field. */}
+        {field && provenance && <ProvenanceChip field={field} provenance={provenance} compact />}
+      </dd>
     </div>
   );
 }
@@ -308,6 +317,10 @@ export default function ParcelTab({ canEdit }) {
   const applyAutoDerived = useApplyAutoDerivedContext();
   const hasProperty = !!deal.property_id;
   const hasLatLng = deal.lat != null && deal.lng != null;
+  // PR-NX50 (2026-05-19) — field-provenance map for inline chips on
+  // auto-filled site-info fields. Empty when no auto-fill events fire.
+  const { data: provenanceData } = useFieldProvenance(dealId);
+  const fieldProvenance = provenanceData?.field_provenance || {};
 
   // Auto-derive Apply handler — sends every picked field to the dedicated
   // /properties/:id/apply-auto-derived-context endpoint, which persists
@@ -405,17 +418,21 @@ export default function ParcelTab({ canEdit }) {
       {/* Site Details Grid */}
       <div className="card-editorial">
         <SectionHeader size="sm" icon={MapPin} title="Site Information" />
+        {/* PR-NX50 (2026-05-19) — every FieldRow that maps to an
+            ontology-routed field passes `field={'<column>'}` + the
+            provenance map. The ProvenanceChip renders inline only when
+            the field was auto-applied from a document extraction. */}
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
           <FieldRow label="Property Name" value={deal.property_name} />
           <FieldRow label="City" value={deal.city} />
           <FieldRow label="State" value={deal.state} />
           <FieldRow label="Pincode" value={deal.pincode} />
-          <FieldRow label="Survey Number" value={deal.survey_number} />
-          <FieldRow label="PID" value={deal.pid} />
-          <FieldRow label="Khata No." value={deal.khata_no} />
-          <FieldRow label="Bhoomi ID" value={deal.bhoomi_id} />
-          <FieldRow label="Property RERA" value={deal.rera_registration_number} />
-          <FieldRow label="Zoning" value={deal.zoning} />
+          <FieldRow label="Survey Number" value={deal.survey_number} field="survey_number" provenance={fieldProvenance} />
+          <FieldRow label="PID" value={deal.pid} field="pid" provenance={fieldProvenance} />
+          <FieldRow label="Khata No." value={deal.khata_no} field="khata_no" provenance={fieldProvenance} />
+          <FieldRow label="Bhoomi ID" value={deal.bhoomi_id} field="bhoomi_id" provenance={fieldProvenance} />
+          <FieldRow label="Property RERA" value={deal.rera_registration_number} field="rera_registration_number" provenance={fieldProvenance} />
+          <FieldRow label="Zoning" value={deal.zoning} field="zoning" provenance={fieldProvenance} />
           <FieldRow
             label="Land Area (sqft)"
             value={
@@ -423,9 +440,11 @@ export default function ParcelTab({ canEdit }) {
                 ? Number(deal.land_area_sqft).toLocaleString('en-IN') + ' sqft'
                 : null
             }
+            field="land_area_sqft"
+            provenance={fieldProvenance}
           />
-          <FieldRow label="Land Area (acres)" value={landAreaAcres} />
-          <FieldRow label="Road Width (mtrs)" value={deal.road_width_mtrs} />
+          <FieldRow label="Land Area (acres)" value={landAreaAcres} field="land_area_acres" provenance={fieldProvenance} />
+          <FieldRow label="Road Width (mtrs)" value={deal.road_width_mtrs} field="road_width_mtrs" provenance={fieldProvenance} />
           <FieldRow
             label="Plot Dimensions"
             value={
@@ -434,9 +453,9 @@ export default function ParcelTab({ canEdit }) {
                 : null
             }
           />
-          <FieldRow label="Owner Name" value={deal.owner_name} />
-          <FieldRow label="Ownership Type" value={deal.ownership_type} />
-          <FieldRow label="Encumbrance Status" value={deal.encumbrance_status} />
+          <FieldRow label="Owner Name" value={deal.owner_name} field="owner_name" provenance={fieldProvenance} />
+          <FieldRow label="Ownership Type" value={deal.ownership_type} field="ownership_type" provenance={fieldProvenance} />
+          <FieldRow label="Encumbrance Status" value={deal.encumbrance_status} field="encumbrance_status" provenance={fieldProvenance} />
           <FieldRow
             label="Circle Rate"
             value={
@@ -444,9 +463,11 @@ export default function ParcelTab({ canEdit }) {
                 ? `₹${Number(deal.circle_rate_per_sqft).toLocaleString('en-IN')} / sqft`
                 : null
             }
+            field="circle_rate_per_sqft"
+            provenance={fieldProvenance}
           />
-          <FieldRow label="Existing FSI" value={deal.existing_fsi} />
-          <FieldRow label="Permissible FSI" value={deal.permissible_fsi} />
+          <FieldRow label="Existing FSI" value={deal.existing_fsi} field="existing_fsi" provenance={fieldProvenance} />
+          <FieldRow label="Permissible FSI" value={deal.permissible_fsi} field="permissible_fsi" provenance={fieldProvenance} />
           <FieldRow label="Geocode Status" value={geocodeLabel} />
           {deal.property_address && (
             <FieldRow label="Full Address" value={deal.property_address} span />
