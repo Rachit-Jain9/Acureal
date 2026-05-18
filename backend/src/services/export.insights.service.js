@@ -5,10 +5,28 @@
 // lands in ai_call_logs and respects the daily cost cap — the only consumer
 // of Claude that previously bypassed the router.
 const { getProviderAvailability } = require('./ai/providerRegistry');
-const { runClaudeReasoning } = require('./ai/aiRouter');
+const { runClaudeReasoning, runAI } = require('./ai/aiRouter');
 
 // Hard timeout so export routes never hang on a stalled model call.
 const MODEL_TIMEOUT_MS = 15000;
+
+// PR-NX40 (2026-05-18): bump maxTokens 700 → 1200 to give Claude headroom
+// to finish multi-paragraph IC opinions on hospitality / mixed-use deals
+// without mid-JSON truncation. Same fix shape as PR-NX24 for the briefing
+// service. Cost impact: +500 output tokens at Claude Sonnet 4.6 pricing
+// = $0.0075/export (~₹0.65) — negligible.
+const PROVIDER_MAX_TOKENS = 1200;
+
+// PR-NX40 (2026-05-18): one-line provider error → "Provider <status> <msg>"
+// so the DOCX footer can show the operator EXACTLY why the primary failed
+// when the secondary rescued the call. Mirrors describeProviderError from
+// dealBriefing.service.js (PR-NX21).
+const describeProviderError = (provider, err) => {
+  if (!err) return `${provider} failed (unknown reason)`;
+  const msg = String(err.message || err).slice(0, 120);
+  const status = err.status || err.statusCode || err.code || null;
+  return status ? `${provider} ${status} ${msg}` : `${provider} ${msg}`;
+};
 
 const withTimeout = (promise, ms, label) =>
   Promise.race([
@@ -157,6 +175,95 @@ SCHEMA:
 
 Provide 3 top_risks and 3 next_steps. Confidence reflects data completeness: "low" if financial_model is null or DD completion < 30%.`;
 
+// PR-NX40 (2026-05-18): coerce the parsed JSON into the canonical
+// `available: true` envelope. Extracted so primary + secondary providers
+// can share the same shape mapping (parse logic was duplicated otherwise).
+const coerceInsightsEnvelope = (parsed, extras = {}) => ({
+  available: true,
+  ic_opinion: typeof parsed.ic_opinion === 'string' ? parsed.ic_opinion.trim() : null,
+  top_risks: Array.isArray(parsed.top_risks)
+    ? parsed.top_risks
+        .filter((r) => r && (r.title || r.detail))
+        .slice(0, 5)
+        .map((r) => ({
+          title: String(r.title || '').trim(),
+          detail: String(r.detail || '').trim(),
+        }))
+    : [],
+  next_steps: Array.isArray(parsed.next_steps)
+    ? parsed.next_steps
+        .filter((s) => typeof s === 'string' && s.trim())
+        .slice(0, 5)
+        .map((s) => s.trim())
+    : [],
+  confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
+    ? parsed.confidence
+    : 'medium',
+  disclaimer:
+    'AI-generated Investor-Grade opinion based on stored deal data. Verify all facts and risks before any investment decision.',
+  ...extras,
+});
+
+// PR-NX40 (2026-05-18): single-provider call helpers. Each returns the
+// raw model text (string) or throws. The orchestrator below catches +
+// records fallbackReason, then tries the next provider.
+
+const callPrimaryClaude = async (payload, deal) => {
+  return withTimeout(
+    runClaudeReasoning({
+      task: 'export_insights',
+      systemPrompt: SYSTEM_PROMPT,
+      cachePrompt: true,
+      payload,
+      maxTokens: PROVIDER_MAX_TOKENS,
+      attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+      metadata: { kind: 'ic_opinion', attempt: 'primary' },
+    }),
+    MODEL_TIMEOUT_MS,
+    'Claude deal-insights call'
+  );
+};
+
+const callSecondaryOpenAI = async (payload, deal) => {
+  // Force OpenAI as the alternate provider via explicit `provider` arg.
+  // Mirrors the pattern in dealBriefing.service.js (PR-NX21) so failure
+  // diagnostics are consistent across XLSX briefing and DOCX IC opinion.
+  if (!runAI) return null;
+  const envelope = await withTimeout(
+    runAI({
+      task: 'export_insights',
+      provider: 'openai',
+      attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+      metadata: { kind: 'ic_opinion', attempt: 'secondary' },
+      run: async ({ providers, model }) => providers.runOpenAIReasoning({
+        systemPrompt: SYSTEM_PROMPT,
+        payload,
+        maxTokens: PROVIDER_MAX_TOKENS,
+        model,
+      }),
+    }),
+    MODEL_TIMEOUT_MS,
+    'OpenAI deal-insights call'
+  );
+  return envelope?.result || null;
+};
+
+/**
+ * Generate the IC opinion + top risks + next steps with multi-provider
+ * failover (PR-NX40 — 2026-05-18).
+ *
+ * Cascade: PRIMARY (Claude Sonnet 4.6) → SECONDARY (OpenAI GPT-5.4) →
+ * unavailable. ALWAYS returns a valid envelope — the caller can render
+ * without further error handling. The `fallbackReason` field tells the
+ * caller which path actually fired so the DOCX footer can surface
+ * accurate provenance to the operator.
+ *
+ * Pre-NX40 the function did one Claude call and returned `unavailable`
+ * on any failure. Operators on the Jigani deal saw the DOCX render
+ * "AI-generated investor-grade opinion is not available" — a silent
+ * outage with no diagnostic. Now the failover covers Claude timeouts,
+ * 429 rate-limits, malformed JSON, and Anthropic-side outages.
+ */
 const generateDealInsights = async ({
   deal,
   ddCounts,
@@ -178,8 +285,10 @@ const generateDealInsights = async ({
       'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
   });
 
-  if (!getProviderAvailability().gpt_compatible) {
-    return unavailable('OpenAI API key not configured');
+  const availability = getProviderAvailability();
+  if (!availability.gpt_compatible && !availability.claude) {
+    // Neither provider configured — nothing to call.
+    return unavailable('No AI provider configured (need ANTHROPIC_API_KEY or OPENAI_API_KEY)');
   }
 
   const payload = buildPayload({
@@ -193,57 +302,50 @@ const generateDealInsights = async ({
     cashFlowSummary,
   });
 
-  let raw;
-  try {
-    // aiRouter.runClaudeReasoning unwraps the providerRegistry envelope and
-    // returns the inner text directly. Stable SYSTEM_PROMPT across exports
-    // → opt into Anthropic prompt cache (0.1× input cost on cached portion).
-    raw = await withTimeout(
-      runClaudeReasoning({
-        task: 'export_insights',
-        systemPrompt: SYSTEM_PROMPT,
-        cachePrompt: true,
-        payload,
-        maxTokens: 700,
-        attach: { dealId: deal?.id, organizationId: deal?.organization_id },
-        metadata: { kind: 'ic_opinion' },
-      }),
-      MODEL_TIMEOUT_MS,
-      'Claude deal-insights call'
-    );
-  } catch (err) {
-    return unavailable(`Model call failed: ${err.message}`);
+  const fallbackReasons = [];
+
+  // ─── Attempt 1: PRIMARY (Claude) ──────────────────────────────────────
+  if (availability.claude) {
+    try {
+      const raw = await callPrimaryClaude(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceInsightsEnvelope(parsed, {
+          provider: 'claude-sonnet-4-6',
+          fallbackReason: null,
+        });
+      }
+      fallbackReasons.push('Claude returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('Claude', err));
+    }
+  } else {
+    fallbackReasons.push('Claude not configured');
   }
 
-  const parsed = parseModelJson(raw);
-  if (!parsed || typeof parsed !== 'object') {
-    return unavailable('Model returned unparseable content');
+  // ─── Attempt 2: SECONDARY (OpenAI) ────────────────────────────────────
+  if (availability.gpt_compatible) {
+    try {
+      const raw = await callSecondaryOpenAI(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceInsightsEnvelope(parsed, {
+          provider: 'gpt-5.4',
+          fallbackReason: fallbackReasons.length
+            ? `${fallbackReasons.join('; ')} — auto-failover succeeded on openai`
+            : null,
+        });
+      }
+      fallbackReasons.push('OpenAI returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('OpenAI', err));
+    }
+  } else {
+    fallbackReasons.push('OpenAI not configured');
   }
 
-  return {
-    available: true,
-    ic_opinion: typeof parsed.ic_opinion === 'string' ? parsed.ic_opinion.trim() : null,
-    top_risks: Array.isArray(parsed.top_risks)
-      ? parsed.top_risks
-          .filter((r) => r && (r.title || r.detail))
-          .slice(0, 5)
-          .map((r) => ({
-            title: String(r.title || '').trim(),
-            detail: String(r.detail || '').trim(),
-          }))
-      : [],
-    next_steps: Array.isArray(parsed.next_steps)
-      ? parsed.next_steps
-          .filter((s) => typeof s === 'string' && s.trim())
-          .slice(0, 5)
-          .map((s) => s.trim())
-      : [],
-    confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
-      ? parsed.confidence
-      : 'medium',
-    disclaimer:
-      'AI-generated Investor-Grade opinion based on stored deal data. Verify all facts and risks before any investment decision.',
-  };
+  // ─── Both failed ──────────────────────────────────────────────────────
+  return unavailable(fallbackReasons.join('; '));
 };
 
 module.exports = {

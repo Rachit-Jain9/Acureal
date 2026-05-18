@@ -581,12 +581,23 @@ const buildExecutiveSummary = (ctx) => {
   const ic = ctx.icOpinion || ctx.exportContext?.ai;
   if (ic && ic.ic_opinion) {
     children.push(bodyPara(ic.ic_opinion));
-    if (ic.confidence) {
-      children.push(bodyPara(`Confidence: ${ic.confidence}`, { italic: true, color: HEX('mutedHigh') }));
+    // PR-NX40 (2026-05-18): combine confidence + provider + auto-failover
+    // diagnostic into a single attribution line so the reader knows which
+    // model produced the opinion AND when a fallback rescued the call.
+    const attribution = [];
+    if (ic.confidence) attribution.push(`Confidence: ${ic.confidence}`);
+    if (ic.provider)   attribution.push(`Synthesis: ${ic.provider}`);
+    if (ic.fallbackReason) attribution.push(`auto-failover: ${ic.fallbackReason}`);
+    if (attribution.length) {
+      children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
     }
   } else {
+    // PR-NX40 (2026-05-18): surface the WHY when both providers failed
+    // so the operator knows whether it's a key issue, rate-limit, or
+    // outage — instead of a silent "not available" with no diagnostic.
+    const reason = ic?.reason ? ` (cause: ${ic.reason})` : '';
     children.push(bodyPara(
-      'AI-generated investor-grade opinion is not available for this deal. Please rely on the structured KPIs and risk register below for decision support.',
+      `AI-generated investor-grade opinion is not available for this deal${reason}. Please rely on the structured KPIs and risk register below for decision support.`,
       { italic: true, color: HEX('mutedHigh') },
     ));
   }
