@@ -1126,6 +1126,38 @@ const buildFinancials = (ctx) => {
   // Drivers ranked by absolute IRR range. Same data + math as the slide-16
   // tornado in the PPTX — surfaced here as an SVG embed so the DOCX report
   // gets the same analytical depth.
+  //
+  // PR-NX44 (2026-05-18) — Sensitivity narrative renders BEFORE the
+  // tornado so the IC reader sees "which inputs matter most + by how
+  // much + which stress tests" first, then the visual backing the claim.
+  const sensitivityNarrative = ctx.exportContext?.sensitivityNarrative || null;
+  if (sensitivityNarrative?.available
+      && (sensitivityNarrative.driver_decomposition_paragraph || sensitivityNarrative.stress_test_paragraph)) {
+    children.push(blank());
+    children.push(aiBadge());
+    if (sensitivityNarrative.dominant_driver) {
+      children.push(eyebrow(`Sensitivity analysis · Dominant driver: ${sensitivityNarrative.dominant_driver}`));
+    } else {
+      children.push(eyebrow('Sensitivity analysis'));
+    }
+    if (sensitivityNarrative.driver_decomposition_paragraph) {
+      children.push(bodyPara(sensitivityNarrative.driver_decomposition_paragraph));
+    }
+    if (sensitivityNarrative.stress_test_paragraph) {
+      children.push(blank());
+      children.push(eyebrow('Recommended stress tests'));
+      children.push(bodyPara(sensitivityNarrative.stress_test_paragraph));
+    }
+    // Attribution line.
+    const attribution = [];
+    if (sensitivityNarrative.confidence) attribution.push(`Confidence: ${sensitivityNarrative.confidence}`);
+    if (sensitivityNarrative.provider) attribution.push(`Synthesis: ${sensitivityNarrative.provider}`);
+    if (sensitivityNarrative.fallbackReason) attribution.push(`auto-failover: ${sensitivityNarrative.fallbackReason}`);
+    if (attribution.length) {
+      children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+    }
+  }
+
   const matrix = ctx.sensitivityMatrix;
   if (matrix && Array.isArray(matrix.irrGrid) && matrix.irrGrid.length >= 3
       && Array.isArray(matrix.sellingRates) && matrix.sellingRates.length >= 3

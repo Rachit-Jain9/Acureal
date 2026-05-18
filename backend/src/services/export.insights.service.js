@@ -545,12 +545,232 @@ const generateRiskNarrative = async ({ deal, riskCounts, items }) => {
   return unavailable(fallbackReasons.join('; '));
 };
 
+// ════════════════════════════════════════════════════════════════════════
+// PR-NX44 (2026-05-18) — Sensitivity narrative
+// ════════════════════════════════════════════════════════════════════════
+//
+// Pre-NX44 the DOCX Financials section showed the sensitivity tornado
+// chart (SVG embed) without a narrative answering "which inputs matter
+// most for THIS deal, and by how much?". IC reviewers ask exactly that
+// question — the tornado shows the magnitudes but not the implications.
+//
+// NX44 adds 2-paragraph synthesis ABOVE the tornado:
+//   Paragraph 1 — "Driver decomposition": which 2-3 inputs swing IRR
+//     most, by how many basis points each, ranked by impact.
+//   Paragraph 2 — "Recommended stress tests": top 2-3 stress-test
+//     scenarios the deal must pass before IC.
+//
+// Provider order is FLIPPED from NX43: OpenAI primary, Claude secondary.
+// Rationale: OpenAI excels at structured numerical reasoning; Claude
+// excels at narrative synthesis. Sensitivity analysis is fundamentally
+// numerical — pick the right tool for the job. Symmetric cascade fallback
+// ensures resilience either way.
+
+const SENSITIVITY_NARRATIVE_SYSTEM_PROMPT = `You are an investment-review analyst at an India-focused real estate private equity firm. You synthesize sensitivity analysis output into a 2-paragraph narrative for the IC memo.
+
+STRICT RULES:
+- Respond ONLY with valid JSON matching the schema below. No markdown fences, no prose before/after.
+- Reference only the numbers provided in the payload. Never invent driver impacts or stress-test outcomes.
+- Be quantitatively precise: cite specific bps (basis points) of IRR swing per driver.
+- Indian real estate context: sell rate per sqft, construction cost per sqft, exit cap rate, debt rate, LTV are standard sensitivity drivers.
+- Both paragraphs are tight: max 90 words each.
+
+SCHEMA:
+{
+  "driver_decomposition_paragraph": "1 paragraph (3-5 sentences, max 90 words) ranking the top 2-3 drivers by IRR swing magnitude. Cite specific bps deltas. Name which driver dominates and by what margin.",
+  "stress_test_paragraph": "1 paragraph (3-5 sentences, max 90 words) recommending 2-3 specific stress-test scenarios the deal must pass before IC. Frame each as a concrete what-if with expected IRR impact.",
+  "dominant_driver": "Short label naming the #1 driver (e.g., 'Sell Rate' or 'Construction Cost')",
+  "confidence": "high" | "medium" | "low"
+}
+
+Confidence reflects input completeness — "low" when grid has < 3 rows or < 3 cols, "high" when a full 5×5 grid plus base IRR is present.`;
+
+const buildSensitivityPayload = ({ deal, sensitivityMatrix, financials }) => {
+  if (!sensitivityMatrix) return null;
+  const irrGrid = Array.isArray(sensitivityMatrix.irrGrid) ? sensitivityMatrix.irrGrid : null;
+  const sellingRates = Array.isArray(sensitivityMatrix.sellingRates) ? sensitivityMatrix.sellingRates : [];
+  const constructionCosts = Array.isArray(sensitivityMatrix.constructionCosts) ? sensitivityMatrix.constructionCosts : [];
+  if (!irrGrid || irrGrid.length < 3 || sellingRates.length < 3 || constructionCosts.length < 3) {
+    return null;
+  }
+  const midRow = Math.floor(constructionCosts.length / 2);
+  const midCol = Math.floor(sellingRates.length / 2);
+  const baseIrr = num(irrGrid[midRow]?.[midCol]);
+  return {
+    deal: {
+      name: deal?.name,
+      asset_class: deal?.asset_class,
+      deal_structure: deal?.deal_structure,
+      city: deal?.city,
+    },
+    base_kpis: {
+      base_irr_pct: baseIrr,
+      total_cost_cr: num(financials?.total_cost_cr),
+      total_revenue_cr: num(financials?.total_revenue_cr),
+      gross_margin_pct: num(financials?.gross_margin_pct),
+      equity_multiple: num(financials?.equity_multiple),
+    },
+    sensitivity_grid: {
+      rows_axis_label: 'Construction cost per sqft (INR)',
+      cols_axis_label: 'Selling rate per sqft (INR)',
+      rows: constructionCosts,
+      cols: sellingRates,
+      irr_grid: irrGrid,
+    },
+    driver_ranges: {
+      sell_rate: {
+        low_irr: num(irrGrid[midRow]?.[0]),
+        high_irr: num(irrGrid[midRow]?.[sellingRates.length - 1]),
+        low_input: sellingRates[0],
+        high_input: sellingRates[sellingRates.length - 1],
+      },
+      construction_cost: {
+        low_irr: num(irrGrid[irrGrid.length - 1]?.[midCol]),
+        high_irr: num(irrGrid[0]?.[midCol]),
+        low_input: constructionCosts[constructionCosts.length - 1],
+        high_input: constructionCosts[0],
+      },
+    },
+  };
+};
+
+const coerceSensitivityEnvelope = (parsed, extras = {}) => ({
+  available: true,
+  driver_decomposition_paragraph: typeof parsed.driver_decomposition_paragraph === 'string'
+    ? parsed.driver_decomposition_paragraph.trim()
+    : null,
+  stress_test_paragraph: typeof parsed.stress_test_paragraph === 'string'
+    ? parsed.stress_test_paragraph.trim()
+    : null,
+  dominant_driver: typeof parsed.dominant_driver === 'string' ? parsed.dominant_driver.trim() : null,
+  confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
+    ? parsed.confidence
+    : 'medium',
+  disclaimer:
+    'AI-assisted sensitivity synthesis is informational only. Verify driver magnitudes against the tornado chart and the underlying 5×5 grid.',
+  ...extras,
+});
+
+const callPrimarySensitivityOpenAI = async (payload, deal) => {
+  if (!runAI) return null;
+  const envelope = await withTimeout(
+    runAI({
+      task: 'export_insights',
+      provider: 'openai',
+      attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+      metadata: { kind: 'sensitivity_narrative', attempt: 'primary' },
+      run: async ({ providers, model }) => providers.runOpenAIReasoning({
+        systemPrompt: SENSITIVITY_NARRATIVE_SYSTEM_PROMPT,
+        payload,
+        maxTokens: 900,
+        model,
+      }),
+    }),
+    MODEL_TIMEOUT_MS,
+    'OpenAI sensitivity-narrative call'
+  );
+  return envelope?.result || null;
+};
+
+const callSecondarySensitivityClaude = async (payload, deal) => withTimeout(
+  runClaudeReasoning({
+    task: 'export_insights',
+    systemPrompt: SENSITIVITY_NARRATIVE_SYSTEM_PROMPT,
+    cachePrompt: true,
+    payload,
+    maxTokens: 900,
+    attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+    metadata: { kind: 'sensitivity_narrative', attempt: 'secondary' },
+  }),
+  MODEL_TIMEOUT_MS,
+  'Claude sensitivity-narrative call'
+);
+
+/**
+ * Synthesize a 2-paragraph narrative covering the deal's sensitivity
+ * drivers + recommended stress tests.
+ *
+ * Cascade: OpenAI primary → Claude secondary → unavailable. OpenAI
+ * leads for numerical reasoning; Claude is the resilience layer.
+ *
+ * Returns unavailable+null fast when the sensitivity grid is too
+ * sparse (< 3 rows OR < 3 cols) — no synthesis worth attempting on
+ * a degenerate matrix.
+ */
+const generateSensitivityNarrative = async ({ deal, sensitivityMatrix, financials }) => {
+  const unavailable = (reason) => ({
+    available: false,
+    reason,
+    driver_decomposition_paragraph: null,
+    stress_test_paragraph: null,
+    dominant_driver: null,
+    confidence: null,
+    disclaimer:
+      'AI-assisted sensitivity synthesis is informational only. Verify driver magnitudes against the tornado chart.',
+  });
+
+  const payload = buildSensitivityPayload({ deal, sensitivityMatrix, financials });
+  if (!payload) {
+    return unavailable('insufficient sensitivity grid (< 3 rows or < 3 cols)');
+  }
+
+  const availability = getProviderAvailability();
+  if (!availability.gpt_compatible && !availability.claude) {
+    return unavailable('No AI provider configured (need ANTHROPIC_API_KEY or OPENAI_API_KEY)');
+  }
+
+  const fallbackReasons = [];
+
+  if (availability.gpt_compatible) {
+    try {
+      const raw = await callPrimarySensitivityOpenAI(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceSensitivityEnvelope(parsed, {
+          provider: 'gpt-5.4',
+          fallbackReason: null,
+        });
+      }
+      fallbackReasons.push('OpenAI returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('OpenAI', err));
+    }
+  } else {
+    fallbackReasons.push('OpenAI not configured');
+  }
+
+  if (availability.claude) {
+    try {
+      const raw = await callSecondarySensitivityClaude(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceSensitivityEnvelope(parsed, {
+          provider: 'claude-sonnet-4-6',
+          fallbackReason: fallbackReasons.length
+            ? `${fallbackReasons.join('; ')} — auto-failover succeeded on claude`
+            : null,
+        });
+      }
+      fallbackReasons.push('Claude returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('Claude', err));
+    }
+  } else {
+    fallbackReasons.push('Claude not configured');
+  }
+
+  return unavailable(fallbackReasons.join('; '));
+};
+
 module.exports = {
   generateDealInsights,
   generateRiskNarrative, // PR-NX43
+  generateSensitivityNarrative, // PR-NX44
   // Internal exports — used by the Tier-2 #14 A/B eval harness.
   SYSTEM_PROMPT,
   RISK_NARRATIVE_SYSTEM_PROMPT, // PR-NX43
+  SENSITIVITY_NARRATIVE_SYSTEM_PROMPT, // PR-NX44
   buildPayload,
   buildRiskNarrativePayload, // PR-NX43
+  buildSensitivityPayload, // PR-NX44
 };
