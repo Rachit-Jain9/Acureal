@@ -107,7 +107,19 @@ const buildVerificationLinks = ({ property = {}, kgis = {} } = {}) => {
   });
 
   // ── Kaveri (encumbrance) ──────────────────────────────────────────────
-  // Auth-walled. Same approach: hint + copy-paste.
+  // Auth-walled. Kaveri's EC search form takes SRO (sub-registrar office,
+  // mapped 1:1 with taluk) + survey number as the canonical search keys.
+  // We tighten copy_text to JUST those fields (plus village/hobli for
+  // disambiguation) so paste-into-Kaveri lands in the right form fields
+  // without the operator having to filter out PID / Khata / Bhoomi /
+  // RERA noise that's irrelevant for an EC lookup.
+  const kaveriCopyParts = [];
+  if (hierarchy.taluk) kaveriCopyParts.push(`SRO: ${hierarchy.taluk}`);
+  if (surveyNo) kaveriCopyParts.push(`Survey No: ${surveyNo}`);
+  if (hierarchy.village) kaveriCopyParts.push(`Village: ${hierarchy.village}`);
+  if (hierarchy.hobli) kaveriCopyParts.push(`Hobli: ${hierarchy.hobli}`);
+  if (property.owner_name) kaveriCopyParts.push(`Owner: ${property.owner_name}`);
+  const kaveriCopyText = kaveriCopyParts.join(' | ');
   links.push({
     key: 'kaveri_ec',
     label: 'Kaveri EC',
@@ -123,7 +135,19 @@ const buildVerificationLinks = ({ property = {}, kgis = {} } = {}) => {
       survey_number: presence(surveyNo),
       taluk: presence(hierarchy.taluk),
     },
-    copy_text: contextLines.join(' | '),
+    // Two payload shapes for the frontend's clipboard helper:
+    //   copy_text         — single line, paste-into-Kaveri-friendly
+    //   structured_search — keyed fields for richer UI (the new "Copy +
+    //                       Open Kaveri" button in PR-C4 reads this).
+    copy_text: kaveriCopyText || contextLines.join(' | '),
+    structured_search: {
+      sro: hierarchy.taluk || null,
+      survey_number: surveyNo || null,
+      village: hierarchy.village || null,
+      hobli: hierarchy.hobli || null,
+      district: hierarchy.district || null,
+      owner_name: property.owner_name || null,
+    },
   });
 
   // ── BBMP e-Aasthi ─────────────────────────────────────────────────────
