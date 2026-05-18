@@ -710,14 +710,16 @@ describe('services/exports/docx/buildReport', () => {
       const text = await extractDocXmlText(buffer);
       // Every entry from SECTION_ORDER should appear as a numbered ToC line.
       // Sample a few to confirm + check the numbering format.
-      // Numbers are " 1." through "20." (zero-padded with space when 1 digit).
+      // PR-NX45 (2026-05-18): added Document-Derived Insights at index 17,
+      // bumping Methodology to 20 and Disclaimer to 21.
       expect(text).toMatch(/1\. *AI-Assisted Briefing/);
       expect(text).toMatch(/2\. *Executive Summary/);
       expect(text).toMatch(/13\. *Risk Register/);
       expect(text).toMatch(/15\. *Approvals Tracker/);
       expect(text).toMatch(/16\. *Provenance &(?:amp;)? Source Register/);
-      expect(text).toMatch(/19\. *Methodology &(?:amp;)? Assumptions/);
-      expect(text).toMatch(/20\. *Disclaimer/);
+      expect(text).toMatch(/17\. *Document-Derived Insights/);
+      expect(text).toMatch(/20\. *Methodology &(?:amp;)? Assumptions/);
+      expect(text).toMatch(/21\. *Disclaimer/);
     });
 
     test('Table of Contents tags AI vs Platform per section', async () => {
@@ -731,11 +733,14 @@ describe('services/exports/docx/buildReport', () => {
       expect(platformCount).toBeGreaterThanOrEqual(10);
     });
 
-    test('SECTION_ORDER exports the 20 canonical section names', () => {
+    test('SECTION_ORDER exports the 21 canonical section names', () => {
+      // PR-NX45 (2026-05-18): added Document-Derived Insights → 21 sections.
       expect(Array.isArray(__internal.SECTION_ORDER)).toBe(true);
-      expect(__internal.SECTION_ORDER).toHaveLength(20);
+      expect(__internal.SECTION_ORDER).toHaveLength(21);
       expect(__internal.SECTION_ORDER[0]).toBe('AI-Assisted Briefing');
       expect(__internal.SECTION_ORDER[__internal.SECTION_ORDER.length - 1]).toBe('Disclaimer');
+      // PR-NX45: confirm the new section is positioned between Provenance and Pros & Cons.
+      expect(__internal.SECTION_ORDER).toContain('Document-Derived Insights');
     });
 
     // ── Methodology & Assumptions ────────────────────────────────────

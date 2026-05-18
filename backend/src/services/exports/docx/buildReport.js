@@ -407,6 +407,7 @@ const SECTION_ORDER = [
   'Due Diligence Status',
   'Approvals Tracker',
   'Provenance & Source Register',
+  'Document-Derived Insights', // PR-NX45 (2026-05-18)
   'Pros & Cons',
   'Overall Score',
   'Methodology & Assumptions',
@@ -1745,6 +1746,192 @@ const buildProvenance = (ctx) => {
   return children;
 };
 
+// ═══════════════════════════════════════════════════════════════════════
+// PR-NX45 (2026-05-18) — Document-Derived Insights section
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Sits between Provenance & Source Register and Pros & Cons. Renders:
+//   1. Per-doctype fact summary: groups extracted fields by sale_deed,
+//      ec, khata_extract, rera, etc. — surfaces the actual VALUES so the
+//      IC reviewer doesn't have to dig into the source documents.
+//   2. AI-synthesized 1-paragraph cross-document summary (what does the
+//      document set tell us about this deal?).
+//   3. 0-5 inconsistency findings: critical/high/medium/low — each with
+//      title, severity tone, description naming the contradicting docs,
+//      and a recommended next step.
+//
+// Auto-hidden entirely when no completed extractions exist (no empty-
+// state clutter for deals that haven't run doc-ingest yet).
+
+const DOC_INSIGHTS_SEVERITY_RANK = { critical: 1, high: 2, medium: 3, low: 4 };
+const DOC_INSIGHTS_SEVERITY_COLOR = {
+  critical: 'dataNegative',
+  high: 'dataWarning',
+  medium: 'mutedHigh',
+  low: 'mutedLow',
+};
+
+const buildDocumentInsights = (ctx) => {
+  const completedExtractions = Array.isArray(ctx.exportContext?.documents?.completedExtractions)
+    ? ctx.exportContext.documents.completedExtractions
+    : [];
+  const insights = ctx.exportContext?.documents?.insights || null;
+
+  // No-op early-exit when there's nothing to render.
+  if (completedExtractions.length === 0 && !insights?.available) {
+    return [];
+  }
+
+  const children = [];
+  children.push(sectionHeading('Document-Derived Insights', { pageBreakBefore: true }));
+  children.push(platformBadge());
+
+  // ─── Per-doctype extracted facts ────────────────────────────────────
+  if (completedExtractions.length > 0) {
+    children.push(bodyPara(
+      `${completedExtractions.length} document extraction${completedExtractions.length === 1 ? '' : 's'} surfaced — facts grouped by document type below.`,
+    ));
+    children.push(blank());
+
+    // Group by doc_type. Each group renders as: doctype eyebrow +
+    // key-value table of the extracted fields.
+    const byType = new Map();
+    for (const ext of completedExtractions) {
+      const docType = String(ext.doc_type || 'unknown');
+      if (!byType.has(docType)) byType.set(docType, []);
+      byType.get(docType).push(ext);
+    }
+
+    for (const [docType, extractions] of byType) {
+      const humanType = humanizeDocType(docType);
+      children.push(eyebrow(`${humanType} (${extractions.length})`));
+
+      // For each extraction in this group, render its top fields (capped
+      // at 8 per extraction to avoid runaway-table syndrome).
+      for (const ext of extractions) {
+        const fields = ext.structured_fields || {};
+        const fieldEntries = Object.entries(fields)
+          .filter(([_k, v]) => v != null && v !== '')
+          .slice(0, 8);
+
+        if (fieldEntries.length === 0) {
+          continue;
+        }
+
+        const rows = fieldEntries.map(([key, value]) => labelValueRow(
+          humanizeFieldKey(key),
+          formatExtractedValue(value),
+        ));
+        children.push(buildLabelValueTable(rows));
+
+        // Provider attribution
+        const providerLabel = ext.provider
+          ? `Extracted by ${ext.provider}${ext.extracted_at ? ` · ${formatDate(ext.extracted_at)}` : ''}`
+          : null;
+        if (providerLabel) {
+          children.push(bodyPara(providerLabel, { italic: true, color: HEX('mutedLow') }));
+        }
+        children.push(blank());
+      }
+    }
+  }
+
+  // ─── AI-synthesized cross-document analysis ────────────────────────
+  if (insights?.available) {
+    children.push(blank());
+    children.push(aiBadge());
+    children.push(eyebrow('Cross-document analysis'));
+
+    if (insights.summary_paragraph) {
+      children.push(bodyPara(insights.summary_paragraph));
+    }
+
+    // Findings — render each as title + severity-coloured chip + body
+    if (Array.isArray(insights.findings) && insights.findings.length > 0) {
+      children.push(blank());
+      children.push(eyebrow(`Inconsistency findings (${insights.findings.length})`));
+      const sortedFindings = [...insights.findings].sort((a, b) => {
+        const sevA = DOC_INSIGHTS_SEVERITY_RANK[a.severity] || 99;
+        const sevB = DOC_INSIGHTS_SEVERITY_RANK[b.severity] || 99;
+        return sevA - sevB;
+      });
+      for (const finding of sortedFindings) {
+        const colorToken = DOC_INSIGHTS_SEVERITY_COLOR[finding.severity] || 'mutedHigh';
+        // Severity-tinted title line
+        children.push(new Paragraph({
+          spacing: { before: 100, after: 40 },
+          children: [
+            new TextRun({
+              text: `[${String(finding.severity || 'medium').toUpperCase()}] `,
+              font: FONT, size: 20, bold: true, color: HEX(colorToken),
+            }),
+            new TextRun({
+              text: finding.title || '(untitled)',
+              font: FONT, size: 20, bold: true, color: HEX('ink'),
+            }),
+          ],
+        }));
+        if (finding.description) {
+          children.push(bodyPara(finding.description));
+        }
+        if (finding.recommendation) {
+          children.push(bodyPara(
+            `Recommended: ${finding.recommendation}`,
+            { italic: true, color: HEX('mutedHigh') },
+          ));
+        }
+      }
+    } else {
+      children.push(bodyPara(
+        'No inconsistencies detected across the extracted document set. (This is a positive signal — the documents on file corroborate one another.)',
+        { italic: true, color: HEX('mutedHigh') },
+      ));
+    }
+
+    // Attribution line
+    const attribution = [];
+    if (insights.confidence) attribution.push(`Confidence: ${insights.confidence}`);
+    if (insights.provider) attribution.push(`Synthesis: ${insights.provider}`);
+    if (insights.fallbackReason) attribution.push(`auto-failover: ${insights.fallbackReason}`);
+    if (attribution.length) {
+      children.push(blank());
+      children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+    }
+  }
+
+  return children;
+};
+
+// Helpers for the new section ── humanize doctype + field keys for the
+// table labels (e.g., "sale_deed" → "Sale Deed", "owner_name" → "Owner Name").
+const humanizeDocType = (docType) => String(docType || 'unknown')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const humanizeFieldKey = (key) => String(key || '')
+  .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Format a structured-field value for display. Objects/arrays serialize
+// to JSON; numbers stay as numbers; strings trim + truncate at 200 chars.
+const formatExtractedValue = (value) => {
+  if (value == null) return '–';
+  if (typeof value === 'number') return formatNumber(value);
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
+  }
+  // Objects / arrays — compact JSON, capped length
+  try {
+    const json = JSON.stringify(value);
+    return json.length > 200 ? `${json.slice(0, 200)}…` : json;
+  } catch {
+    return String(value).slice(0, 200);
+  }
+};
+
 const buildProsCons = (ctx) => {
   const children = [];
   children.push(sectionHeading('Pros & Cons'));
@@ -2223,6 +2410,13 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     // & Cons because it ANSWERS "what's the platform's source for the
     // facts above?" before the reviewer reads the AI's interpretation.
     ...buildProvenance(ctx),
+    // PR-NX45 (2026-05-18) — NEW SECTION: Document-Derived Insights.
+    // Surfaces extracted facts per doctype + AI-detected cross-document
+    // inconsistencies. Sits between Provenance (which lists "what was
+    // applied when from which document") and Pros & Cons (the AI
+    // synthesis section). Auto-hidden when no completed extractions
+    // exist — zero clutter for deals without doc-ingest.
+    ...buildDocumentInsights(ctx),
     ...buildProsCons(ctx),
     ...buildOverallScore(ctx),
     // PR-NX37 (2026-05-17): Methodology & Assumptions appendix — the
