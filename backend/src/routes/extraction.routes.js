@@ -3,6 +3,8 @@
 const express = require('express');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const extractionService = require('../services/extraction.service');
+const dealService = require('../services/deal.service');
+const { generateDocumentInsights } = require('../services/export.insights.service');
 const { query } = require('../config/database');
 const { getProviderAvailability } = require('../services/ai/providerRegistry');
 
@@ -110,6 +112,54 @@ router.get('/deals/:dealId/extractions', authenticate, async (req, res, next) =>
   try {
     const data = await extractionService.getDealExtractions(req.params.dealId);
     return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PR-NX49 (2026-05-19) — Live AI document-insights endpoint.
+//
+// Surfaces the same Claude-synthesized cross-document analysis +
+// 0-5 inconsistency findings that ships in the DOCX
+// Document-Derived Insights section (PR-NX45), now consumable by the
+// frontend DocumentsTab in the live workspace — operators no longer
+// need to download a DOCX to read the AI cross-document reasoning.
+// Uses the same generateDocumentInsights service so the DOCX / live
+// workspace see identical content per cross-product reconciliation.
+//
+// Cascade: Claude (primary) → OpenAI (secondary) → unavailable.
+//
+// Auto-no-op when no extractions have populated structured_fields
+// (zero AI cost on deals without doc-ingest).
+router.get('/deals/:dealId/document-insights', authenticate, async (req, res, next) => {
+  try {
+    const dealId = req.params.dealId;
+    // Fetch the deal (RLS-scoped) + every completed extraction with its
+    // merged structured_fields in parallel.
+    const [deal, dealExtractions] = await Promise.all([
+      dealService.getDealById(dealId),
+      extractionService.getDealExtractions(dealId),
+    ]);
+    if (!deal) {
+      return res.status(404).json({ success: false, message: 'Deal not found' });
+    }
+
+    // Reshape the extraction-service envelope to what
+    // generateDocumentInsights expects (it wants the raw structured_fields
+    // key; the service exposes merged fields under `fields`).
+    const items = Array.isArray(dealExtractions?.extractions)
+      ? dealExtractions.extractions
+      : [];
+    const reshaped = items.map((ext) => ({
+      id: ext.id,
+      document_id: ext.document_id,
+      doc_type: ext.doc_type,
+      provider: ext.provider || 'gemini', // not exposed on the merged shape; default to gemini per PR-NX25
+      structured_fields: ext.fields || {},
+    }));
+
+    const insights = await generateDocumentInsights({ deal, extractions: reshaped });
+    return res.json({ success: true, data: insights });
   } catch (err) {
     next(err);
   }
