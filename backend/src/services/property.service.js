@@ -551,6 +551,101 @@ const bulkGeocodeProperties = async ({ onlyStatus } = {}) => {
   return results;
 };
 
+// Dedicated apply path for the AutoFillParcelContextCard's payload.
+// Lives outside the generic updateProperty positional UPDATE so the
+// auto-derive flow can evolve without touching the 35-arg main writer
+// (and so analysts can `SELECT … WHERE auto_derived_at IS NOT NULL` to
+// audit which deals went through the orchestrator).
+//
+// `picks` is a subset of the AutoFillParcelContextCard rows the user
+// chose not to Skip. Any key absent from `picks` is left alone on the
+// row — we never null out a field the user didn't ask to apply.
+//
+// `derivedSource` is the full upstream payload, persisted to
+// auto_derived_source jsonb so future re-extractions can verify what
+// the orchestrator returned at the moment of apply (provenance trail
+// for IC defensibility — CLAUDE.md hard rule).
+const applyAutoDerivedContext = async (id, { picks = {}, derivedSource = null }, userId = null) => {
+  await getPropertyById(id); // ownership / RLS check; throws 404 if missing
+
+  const sets = ['auto_derived_at = NOW()', 'auto_derived_by = $2'];
+  const params = [id, userId];
+  let p = 3;
+
+  const push = (col, value) => {
+    if (value === undefined) return;
+    sets.push(`${col} = $${p}`);
+    params.push(value === null ? null : value);
+    p += 1;
+  };
+
+  // Coordinates — also written to the editable lat/lng so the map pin
+  // moves immediately (existing user-facing behaviour from PR B3).
+  if (picks.coordinates) {
+    const lat = picks.coordinates.lat ?? null;
+    const lng = picks.coordinates.lng ?? null;
+    push('auto_derived_lat', lat);
+    push('auto_derived_lng', lng);
+    if (lat !== null && lng !== null) {
+      push('lat', lat);
+      push('lng', lng);
+    }
+  }
+  if (picks.ward) push('auto_derived_ward_no', picks.ward.ward_no ?? null);
+  if (picks.bbmp_zone) {
+    push('auto_derived_zone_code', picks.bbmp_zone.zone_code ?? null);
+    push('auto_derived_guidance_min_inr', picks.bbmp_zone.guidance_value_band_min_inr ?? null);
+    push('auto_derived_guidance_max_inr', picks.bbmp_zone.guidance_value_band_max_inr ?? null);
+  }
+  if (picks.planning_district) {
+    push('auto_derived_pd_code', picks.planning_district.pd_code ?? null);
+    push('auto_derived_pd_name', picks.planning_district.pd_name ?? null);
+  }
+  if (picks.kgis_hierarchy) {
+    push('auto_derived_taluk', picks.kgis_hierarchy.taluk ?? null);
+    push('auto_derived_village', picks.kgis_hierarchy.village ?? null);
+  }
+
+  // Always persist the source payload (even on empty picks) so the row
+  // records who saw what at the moment of apply. Trim non-essential
+  // fields to keep the JSON column small (~5KB instead of ~50KB).
+  if (derivedSource && typeof derivedSource === 'object') {
+    const slim = {
+      coordinates: derivedSource.coordinates ?? null,
+      bbmpJurisdiction: derivedSource.bbmpJurisdiction ?? null,
+      bbmpZone: derivedSource.bbmpZone ?? null,
+      planningDistrict: derivedSource.planningDistrict ?? null,
+      kgis: derivedSource.kgis?.hierarchy
+        ? { hierarchy: derivedSource.kgis.hierarchy, status: derivedSource.kgis.status, confidence: derivedSource.kgis.confidence }
+        : null,
+      applicableWarnings: (derivedSource.applicableWarnings || []).map((w) => ({
+        kind: w.kind, fact_type: w.fact_type, fact_key: w.fact_key, severity: w.severity, item_count: w.item_count,
+      })),
+      derivedAt: derivedSource.derivedAt ?? null,
+      elapsedMs: derivedSource.elapsedMs ?? null,
+    };
+    push('auto_derived_source', JSON.stringify(slim));
+  }
+
+  // updated_at is always touched.
+  sets.push('updated_at = NOW()');
+
+  const result = await query(
+    `UPDATE properties
+     SET ${sets.join(', ')}
+     WHERE id = $1
+       AND organization_id = current_organization_id()
+     RETURNING *`,
+    params,
+  );
+
+  if (result.rows.length === 0) {
+    throw createError('Property not found.', 404);
+  }
+
+  return result.rows[0];
+};
+
 module.exports = {
   createProperty,
   getProperties,
@@ -559,4 +654,5 @@ module.exports = {
   deleteProperty,
   geocodePropertyAddress,
   bulkGeocodeProperties,
+  applyAutoDerivedContext,
 };

@@ -4,6 +4,13 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
+### Apply migration: `20260602_properties_auto_derived_context_columns.sql` (PR-1 follow-on)
+Path: `database/migrations/20260602_properties_auto_derived_context_columns.sql`. Idempotent. Adds 13 new `auto_derived_*` columns to `public.properties` plus 3 partial indexes (zone / PD / ward) for fast Phase-C-6 reverse-search filtering. Backs the new `PATCH /properties/:id/apply-auto-derived-context` endpoint so the AutoFillCard's Apply persists ALL 6 picks (not just lat/lng).
+```powershell
+psql "$DATABASE_URL" -f database/migrations/20260602_properties_auto_derived_context_columns.sql
+```
+Until applied, every Apply click returns `column "auto_derived_*" does not exist`. After applying, the persisted picks light up downstream surfaces on the next deal page render (no need to re-derive).
+
 ### Apply migration: `20260601_rmp_vol3_vol1_callouts_and_rules.sql` (Phase A4)
 Path: `database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql`. Idempotent. Inserts 6 evidence_facts rows extracted via Gemini from RMP 2031 Volume-3 + Volume-1: 5 SDZ corridors (Bellary/Old Madras/Sarjapur/Hosur/Mysuru roads), 12 heritage zones (Central Administrative, Raj Bhavan, etc.), regional parks aggregate, NGT drainage classification, Peripheral Ring Road alignment, and 17 substantive zoning rule narratives (FAR base, setback floor, etc.). All review_status='pending' so they land in the Review Queue for human verification. Until applied, DealPlanningContextCard's SDZ/heritage/NGT/PRR callouts stay empty.
 ```powershell
