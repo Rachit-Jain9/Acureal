@@ -3,6 +3,7 @@ const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
 const { generateDealInsights } = require('./export.insights.service');
+const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
 
@@ -39,6 +40,14 @@ const DEAL_EXPORT_SQL = `
     p.geocode_status,
     p.geocode_confidence,
     p.property_type,
+    -- PR-NX41 (2026-05-18) — auto-derived planning-district code lets the
+    -- DOCX Demographics section look up census + RMP facts. Set via
+    -- PR #381's apply-auto-derived-context endpoint. NULL on:
+    --   - non-Bengaluru deals (BBMP master plan only covers KA)
+    --   - deals that haven't run the AutoFillParcelContextCard derive yet
+    p.auto_derived_pd_code,
+    p.auto_derived_ward_no,
+    p.auto_derived_zone_code,
     u.name AS assigned_to_name,
     f.land_cost_cr,
     f.total_construction_cost_cr AS construction_cost_cr,
@@ -448,6 +457,85 @@ const fetchCityBenchmarks = async ({ city }) => {
   return result.rows;
 };
 
+// PR-NX41 (2026-05-18) — Demographics enrichment for the DOCX export.
+//
+// PR #381 added `auto_derived_pd_code` to public.properties via the
+// AutoFillParcelContextCard apply flow. PR A2 seeded the demographics
+// (population_2011, area_ha, gross_density_pph, wards_in_pd,
+// villages_count, notes) into regulatory_data.evidence_facts as a JSON
+// array keyed by pd_code. Pre-NX41 the DOCX Demographics section never
+// joined the two — every Bengaluru deal silently showed the "manual
+// input required" placeholder.
+//
+// This helper:
+//   1. Returns null fast when no auto_derived_pd_code is set
+//      (non-Bengaluru deal, or derive flow hasn't been run yet).
+//   2. Looks up the PD name from regulatory_data.planning_districts
+//      so the section header reads "Yelahanka (PD-07)" not just "PD-07".
+//   3. Calls enrichPdWithDemographics() which queries the evidence_facts
+//      JSON array and shape-maps to { population_2011, area_ha,
+//      gross_density_pph, wards_in_pd, villages_count, notes }.
+//   4. Maps the RMP-shape fields into the DOCX-renderer-friendly shape
+//      (population_total, population_density, etc.) while also passing
+//      through the PD-specific extras (wards, villages, area_ha) as
+//      direct fields the renderer can show inline.
+//   5. Soft-fails on any DB error so a missing planning_districts table
+//      doesn't crash the export.
+const fetchDealDemographics = async (deal) => {
+  const pdCode = deal?.auto_derived_pd_code;
+  if (!pdCode) return null;
+
+  try {
+    // Resolve pd_name + city so the section can label itself authoritatively.
+    const pdResult = await query(
+      `SELECT pd_code, pd_name, city
+       FROM regulatory_data.planning_districts
+       WHERE pd_code = $1
+       LIMIT 1`,
+      [pdCode],
+    );
+    if (!pdResult.rows.length) return null;
+    const pd = pdResult.rows[0];
+
+    // Enrich with the RMP demographics blob.
+    const enriched = await enrichPdWithDemographics(pd);
+    if (!enriched) return null;
+
+    // Shape-map RMP fields → DOCX-renderer-expected keys so the existing
+    // labelValueRow renderer in buildDemographics can pick them up
+    // without changes. Pass through the PD-specific extras alongside.
+    return {
+      // PD identity (rendered in header)
+      pd_code: enriched.pd_code,
+      pd_name: enriched.pd_name,
+      city: enriched.city,
+      // Census-shape fields (existing renderer keys)
+      population_total: enriched.population_2011 != null ? Number(enriched.population_2011) : null,
+      // gross_density_pph (persons per HECTARE) → persons / km² for
+      // operator readability. 1 km² = 100 ha.
+      population_density: enriched.gross_density_pph != null
+        ? Math.round(Number(enriched.gross_density_pph) * 100)
+        : null,
+      // PD-specific extras (rendered as new rows in NX41-extended buildDemographics)
+      area_ha: enriched.area_ha != null ? Number(enriched.area_ha) : null,
+      wards_in_pd: enriched.wards_in_pd != null ? Number(enriched.wards_in_pd) : null,
+      villages_count: enriched.villages_count != null ? Number(enriched.villages_count) : null,
+      notes: enriched.notes || null,
+      // Provenance — operator can verify which dataset the figures came from
+      source: 'BBMP RMP-2031 (2011 census base)',
+      vintage: 'Census 2011 + RMP planning facts',
+    };
+  } catch (err) {
+    // Soft-fail — log + return null so DOCX falls back to placeholder
+    // (better than crashing the entire export).
+    // eslint-disable-next-line no-console
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn(`[dealExport.demographics] fetch failed for pd=${pdCode}: ${err.message}`);
+    }
+    return null;
+  }
+};
+
 const getDealExportContext = async (dealId) => {
   const dealResult = await query(DEAL_EXPORT_SQL, [dealId]);
   if (!dealResult.rows.length) {
@@ -659,27 +747,33 @@ const getDealExportContext = async (dealId) => {
     residualLandValueCr: deal.residual_land_value_cr,
   });
 
-  const ai = await generateDealInsights({
-    deal,
-    ddCounts: ddSummary,
-    riskCounts: riskSummary,
-    financials: deal,
-    benchmarks,
-    topRiskFlags: riskItemsResult.rows.slice(0, 5),
-    topDdItems: ddItemsResult.rows
-      .filter((item) => !CLOSED_DD_STATUSES.has(item.status))
-      .slice(0, 5),
-    cashFlowSummary: cashFlows.summary,
-  }).catch((error) => ({
-    available: false,
-    reason: error.message,
-    ic_opinion: null,
-    top_risks: [],
-    next_steps: [],
-    confidence: null,
-    disclaimer:
-      'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
-  }));
+  // PR-NX41 (2026-05-18): demographics enrichment runs in parallel with
+  // the AI IC opinion call to keep export latency flat. Both are
+  // independent reads; one failing must not abort the other.
+  const [ai, demographics] = await Promise.all([
+    generateDealInsights({
+      deal,
+      ddCounts: ddSummary,
+      riskCounts: riskSummary,
+      financials: deal,
+      benchmarks,
+      topRiskFlags: riskItemsResult.rows.slice(0, 5),
+      topDdItems: ddItemsResult.rows
+        .filter((item) => !CLOSED_DD_STATUSES.has(item.status))
+        .slice(0, 5),
+      cashFlowSummary: cashFlows.summary,
+    }).catch((error) => ({
+      available: false,
+      reason: error.message,
+      ic_opinion: null,
+      top_risks: [],
+      next_steps: [],
+      confidence: null,
+      disclaimer:
+        'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
+    })),
+    fetchDealDemographics(deal).catch(() => null),
+  ]);
 
   return {
     deal,
@@ -706,6 +800,12 @@ const getDealExportContext = async (dealId) => {
       exportComps,
       benchmarks,
       cityBenchmarks,
+      // PR-NX41 (2026-05-18): planning-district demographics joined via
+      // properties.auto_derived_pd_code. Null when the deal hasn't run
+      // the AutoFillParcelContextCard derive yet OR is outside Bengaluru.
+      // DOCX buildDemographics renders this if populated; falls back to
+      // the "manual input required" placeholder otherwise.
+      demographics,
       pricingGapPct:
         num(deal.selling_rate_per_sqft) && num(benchmarks.median_rate_per_sqft)
           ? round(

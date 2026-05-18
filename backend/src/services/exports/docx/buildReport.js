@@ -703,9 +703,30 @@ const buildDemographics = (ctx) => {
   const populated = Object.keys(demo).some((k) => demo[k] != null && demo[k] !== '');
 
   if (populated) {
+    // PR-NX41 (2026-05-18): when a Bengaluru deal has auto_derived_pd_code
+    // populated, dealExport.service.fetchDealDemographics joins through to
+    // BBMP RMP-2031 + Census 2011 facts. Surface the PD identity line at
+    // the top of the section so the reader sees WHICH planning district
+    // these facts describe, then the demographic rows.
+    if (demo.pd_name || demo.pd_code) {
+      const pdLabel = [demo.pd_name, demo.pd_code ? `(${demo.pd_code})` : null]
+        .filter(Boolean)
+        .join(' ');
+      children.push(bodyPara(
+        `Planning District: ${pdLabel}${demo.city ? ` · ${demo.city}` : ''}`,
+        { italic: true, color: HEX('mutedHigh') },
+      ));
+    }
+
     const rows = [
-      demo.population_total      != null ? labelValueRow('Population (micro-market)', formatNumber(demo.population_total)) : null,
+      // Census-shape fields (existing renderer keys, kept for forward-compat)
+      demo.population_total      != null ? labelValueRow('Population (2011 census)',   formatNumber(demo.population_total)) : null,
       demo.population_density    != null ? labelValueRow('Population density',         `${formatNumber(demo.population_density)} / sq km`) : null,
+      // PR-NX41 (2026-05-18) — PD-specific extras (BBMP RMP-2031 facts)
+      demo.area_ha               != null ? labelValueRow('Planning District area',    `${formatNumber(demo.area_ha, 1)} hectares (${formatNumber(demo.area_ha / 100, 2)} km²)`) : null,
+      demo.wards_in_pd           != null ? labelValueRow('BBMP wards in PD',          formatNumber(demo.wards_in_pd)) : null,
+      demo.villages_count        != null ? labelValueRow('Revenue villages',          formatNumber(demo.villages_count)) : null,
+      // Census fields not present in RMP data (rendered when manually populated)
       demo.median_age            != null ? labelValueRow('Median age',                 `${formatNumber(demo.median_age, 1)} years`) : null,
       demo.median_household_inr  != null ? labelValueRow('Median household income',    `INR ${formatNumber(demo.median_household_inr, 1)} L / yr`) : null,
       demo.income_tier           != null ? labelValueRow('Income tier',                String(demo.income_tier)) : null,
@@ -713,10 +734,30 @@ const buildDemographics = (ctx) => {
       demo.working_population_pct != null ? labelValueRow('Working population',        `${formatNumber(demo.working_population_pct, 1)}%`) : null,
     ].filter(Boolean);
     children.push(buildLabelValueTable(rows));
+
+    // PR-NX41 (2026-05-18) — render the optional notes field (e.g.,
+    // "Eastern BMA growth corridor, mixed industrial-residential") as a
+    // single italic line below the table.
+    if (demo.notes) {
+      children.push(bodyPara(demo.notes, { italic: true, color: HEX('mutedHigh') }));
+    }
+
+    // Provenance line — operator can verify which dataset the figures came from.
+    if (demo.source) {
+      children.push(bodyPara(
+        `Source: ${demo.source}${demo.vintage ? ` · ${demo.vintage}` : ''}`,
+        { italic: true, color: HEX('mutedLow') },
+      ));
+    }
   } else {
     children.push(bodyPara(
       'Demographic data is not yet available for this micro-market. Manual input required — populate population, income tier, age mix, and literacy on the deal\'s market record before this section can render.',
       { italic: true, color: HEX('mutedHigh') },
+    ));
+    children.push(bodyPara(
+      // PR-NX41 (2026-05-18) — actionable hint for Bengaluru deals
+      'Bengaluru deals: open the Parcel tab → click "Derive parcel context" → Apply → re-download the report. The Planning District code unlocks BBMP RMP-2031 + Census 2011 facts.',
+      { italic: true, color: HEX('mutedLow') },
     ));
   }
   return children;
