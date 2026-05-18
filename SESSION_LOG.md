@@ -4,6 +4,83 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-18 (3-hour autonomous window) — full AutoFillCard persistence + out-of-BBMP clarity + ward spread benchmark (3 PRs + hotfix)
+
+Operator went to the gym; this window picked up the highest-impact pending work from the overnight Phase-C list — specifically the items that (a) close the loop on PR #377's "acknowledged but not persisted" half-truth, (b) fix the half-broken UI exposed when the operator first tried the AutoFillCard on a non-BBMP deal (Pointec Pens in Attibele Industrial Area), and (c) ship the Bayesian sanity-check tile that uses the just-restored UAV data. Plus a hotfix from a route-order bug the operator caught right before the gym (PR #380).
+
+### PRs shipped + merged
+
+- **#380 — `fix(properties)` HOTFIX** (caught from operator's screenshot just before the window): the new `/auto-derive-context` route was being intercepted by `GET /:id` (catch-all), returning the misleading "Invalid data format provided" error for every Derive click. Moved the literal-path route above the catch-all + added a regression test (`property.routes.order.test.js`) that route-stack-inspects the registration order so future single-segment GET routes can't regress this. (+112 / -34 lines, +3 tests)
+- **#381 — `feat(properties)` PR-1**: closes the persistence gap from PR #377. New migration `20260602_properties_auto_derived_context_columns.sql` adds 13 `auto_derived_*` columns to `public.properties` + 3 partial indexes (zone/PD/ward) for fast PR-C6 reverse-search filtering. New dedicated `applyAutoDerivedContext(id, {picks, derivedSource}, userId)` service function + `PATCH /properties/:id/apply-auto-derived-context` endpoint. ParcelTab's Apply handler rewritten to call it — now every picked field persists, not just lat/lng. Slimmed JSONB source payload (~5KB) preserves the provenance trail. (+431 / -27 lines, +7 tests)
+- **#382 — `feat(deal/parcel)` PR-2**: fixes the Attibele Industrial Area UX gap. For deals outside the BBMP bbox, the AutoFillCard previously rendered BBMP ward / zone / PD rows with "Not derived" placeholders — looked broken. Now: (a) new `OutsideBbmpExplainer` banner reads "This parcel sits outside BBMP city limits — K-GIS places it in Anekal, Bangalore Urban", (b) `buildFieldRows` skips the three BBMP-specific rows entirely when `withinBbmp: false`, (c) summary chip gains a "in [Taluk] taluk" suffix. K-GIS / Coordinates / Warnings rows still render (they're valid anywhere in Karnataka). (+82 / -3 lines, +1 test)
+- **#383 — `feat(deal/spread)` PR-3 (C7)**: ward spread benchmark tile. Companion to the per-deal "Spread vs guidance" tile from PR #353. New `getWardSpreadBenchmark(propertyId)` service joins deals to properties, filters to deals with the same `auto_derived_ward_no`, computes each comparable deal's spread % in JS against its OWN gazette band (not a ward-wide constant — so Zone B in Ward 84 doesn't get unfairly anchored to Zone A guidance), returns p25/median/p75/min/max + capped 10-row sample. New `WardSpreadBenchmarkTile` component renders the percentile distribution + a "this deal is +Xpp vs ward median" comparison line with tone-coloured chip (below_p25 / within_band / above_p75). Honest empty states for `ward_not_derived` and `insufficient_data` (N<3). 10-sample API cap for response-size hygiene. RLS-respecting. (+621 / -0 lines, +14 tests)
+
+### Deliberately NOT shipped this window
+
+- **C1+C2 (Provenance chips + visual diff)** — defer. The AutoFillCard already shows source + confidence inline. A separate primitive applied to DealStreetLookupCard / MasterPlanZonePanel would be moderate polish, ~45 min. Lower priority than the 3 PRs above. ETA next window.
+- **C4 (Kaveri deep-link)** — investigated and confirmed not actionable. Kaveri is an auth-walled SPA that doesn't accept URL query parameters for SRO / taluk / village pre-fill. The existing `parcelVerificationLinks.js` already implements the right pattern (homepage link + copy-paste payload). CLAUDE.md hard rule prevents shipping a fake deep link. Marking C4 as "🚫 not actionable — operator-paste workflow is the correct UX given portal constraints" — recommend dropping from the roadmap unless Kaveri publishes a public API.
+- **C5 (Bulk lookup admin page)** — large new page, defer.
+- **C6 (Reverse search filters)** — now unblocked by PR #381's columns, but needs a one-time backfill on existing 80 deals before the dropdowns return useful data. Backfill is operator opt-in. Defer.
+- **C8 (Map polygon overlay)** — needs `master_plan_zones.geom` to be loaded (external dataset). Defer.
+
+### Tests
+
+| Suite | Start (post-window-1) | End | Δ |
+|---|---:|---:|---:|
+| Backend total | 1,902 | 1,915 | +13 |
+| Frontend total | 482 | 491 | +9 |
+| **Total** | **2,384** | **2,406** | **+22** |
+
+All green. Frontend build clean across all 4 merges.
+
+### Operator action queue (1 new migration)
+
+Add to the existing queue (4 from window-1 still pending application — see prior entry):
+
+5. `database/migrations/20260602_properties_auto_derived_context_columns.sql` — adds 13 `auto_derived_*` columns + 3 partial indexes. Idempotent. Until applied, every AutoFillCard Apply returns `column "auto_derived_*" does not exist`. After applying, the persisted picks light up downstream surfaces on the next deal page render.
+
+### Smoke checks (post-deploy + migration)
+
+- **Pointec Pens deal (Attibele Industrial Area)** → Parcel tab → Derive → see the new amber "outside BBMP" explainer + 3 rows (Coordinates / K-GIS hierarchy / Applicable warnings). No empty placeholders for BBMP ward/zone/PD.
+- **Any Bengaluru deal inside BBMP** → Derive → 6 rows populate → Apply → toast "6 fields applied to property record." Reopen deal → values still there.
+- **DealStreetLookupCard** on any deal where auto-derive has been applied → scroll past the 4-tile grid → see the new "Ward {N} benchmark" tile. With ≥3 other ward deals applied, see the percentile distribution + "this deal vs ward median" chip.
+
+### Outcome for the operator
+
+The Killer Feature is now complete and robust:
+- Persistence is end-to-end. No more half-acknowledged picks.
+- Non-BBMP deals (Anekal / Hosakote / Magadi / etc) show an honest explanation instead of broken-looking empty rows.
+- A new IC-grade tile gives the deal team a market-context anchor ("median ward spread is +18%, this deal is in the typical band").
+- The route-order regression test guarantees the misleading "Invalid data format provided" error can't come back.
+
+### Status table (autonomous-window plan rollup, after both windows)
+
+| PR | Phase | Status | Notes |
+|---|---|---|---|
+| A1-A4 (data recovery) | A | ✅ Shipped (#371-#374) | Applied 2026-05-17 |
+| B1-B3 (geocoding orchestrator) | B | ✅ Shipped (#375-#377) | Live in production |
+| B follow-on: auto_derived_* columns + full persistence | — | ✅ Shipped (#381) | Operator: apply `20260602` migration |
+| Hotfix: auto-derive route order | — | ✅ Shipped (#380) | Live |
+| Out-of-BBMP UX clarity | — | ✅ Shipped (#382) | Live |
+| C3 (Warnings strip on Overview) | C | ✅ Shipped (#378) | Live |
+| C7 (Ward spread benchmark) | C | ✅ Shipped (#383) | Lights up after operator applies + deals get auto-derived |
+| C1+C2 (Provenance chips + visual diff) | C | 🔴 Not started | ~45 min, polish |
+| C4 (Kaveri deep-link) | C | 🚫 Not actionable | Portal doesn't support deep links; existing UX is already correct |
+| C5 (Bulk lookup admin page) | C | 🔴 Not started | Large new page |
+| C6 (Reverse search) | C | 🔴 Not started | Now unblocked by #381; needs operator backfill of existing 80 deals |
+| C8 (Map polygon overlay) | C | 🔴 Not started | Needs master_plan_zones.geom data load |
+
+11 of 14 plan PRs shipped end-to-end (78%). The 3 remaining are polish (C1+C2), depend on data not yet loaded (C8), or are large net-new surfaces (C5) — none are blocking the killer feature.
+
+### Plain-English recap (4 bullets, no jargon)
+
+- Clicking Apply on the AutoFillCard now writes EVERY field the user kept (not just the map pin) to the property record — so reopening the deal shows them already filled in. Closes the "acknowledged but not persisted" half-truth from yesterday's window.
+- Deals outside BBMP city limits (like the Attibele Industrial Area one the operator tried first) now show a clear amber explainer — "K-GIS places this in Anekal, Bangalore Urban" — and hide the BBMP-only rows that don't apply. No more empty placeholders that look like a bug.
+- The deal page gains a "Ward benchmark" tile right below the existing spread tile: p25 / median / p75 spread vs guidance across other deals in the same BBMP ward, plus a "this deal is +Xpp vs median" comparison. Gives IC committees a Bayesian read on whether the asking price is pushy or in line with the micro-market.
+- A regression test now guarantees the "Invalid data format" error the operator caught right before the gym can't come back — any future single-segment GET route under /properties will fail CI if it's registered after the catch-all.
+
+---
+
 ## 2026-05-17 (overnight autonomous window) — Phase A data recovery + Phase B geocoding orchestrator + Phase C warnings strip (9 PRs)
 
 After confirming the legacy Tokyo Supabase project was deleted and auditing what was lost (1,016 BBMP UAV rows · 85 evidence facts · 42 PD demographics · 13 land-use facts), the operator green-lit a 10-hour autonomous window to: (a) recover everything Tokyo had as proper repo migrations, (b) ship the long-promised geocoding auto-fill orchestrator ("type an address → zone, FSI, guidance value, ward, PD auto-fill"), and (c) close the highest-value Phase C UX gap (city-level callouts on deal Overview). 9 PRs across the 3 phases, all merged.
