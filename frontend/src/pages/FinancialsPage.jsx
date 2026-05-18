@@ -10,6 +10,10 @@ import { useFinancials, useCalculateFinancials } from '../hooks/useFinancials';
 import InputForm from '../components/financials/InputForm';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
+// PR-NX48 (2026-05-19) — AI sensitivity narrative panel that surfaces
+// the same OpenAI-synthesized driver decomposition + recommended
+// stress tests that ships in the DOCX Financials section (PR-NX44).
+import SensitivityNarrativePanel from '../components/financials/SensitivityNarrativePanel';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
 import AuditTimelineView from '../components/financials/AuditTimelineView';
 import JDAWaterfallPanel from '../components/financials/JDAWaterfallPanel';
@@ -173,6 +177,13 @@ export default function FinancialsPage() {
             baseKpis={normalizedFinancials.kpis}
             onEditInputs={scrollToInputs}
           />
+
+          {/* PR-NX48 (2026-05-19) — AI sensitivity narrative. Renders
+              ABOVE the tornado so the operator sees "which drivers
+              matter most + recommended stress tests" before the visual.
+              Hidden entirely when sensitivity grid is sparse / no
+              financial model exists (matches DOCX behavior). */}
+          <SensitivityNarrativePanel dealId={dealId} />
 
           <SensitivityTornado
             assetClass={normalizedFinancials.assetClass}
