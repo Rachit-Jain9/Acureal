@@ -4,6 +4,81 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (overnight) — DOCX AI-content uplift: 3 placeholder fixes + 3 new AI capabilities (PR #396, #397, #398, #399, #400, #401)
+
+After the operator downloaded the Jigani DOCX and shared it (`redip-Jigani-_Apartments-underwriting-2026-05-18.docx`), inspected the file and found 3 flagship AI sections silently falling back to "not available" placeholder text despite the back-end machinery being shipped. Pivoted to a 6-PR AI-content uplift bundle that (a) fixes the 3 silent failures and (b) adds 3 NEW AI-driven capabilities — using all 3 AI providers (Claude, OpenAI, Gemini) meaningfully across the report per the operator's "use all the AI APIs to make it better, more informative, with good content" directive.
+
+### PRs shipped + merged
+
+**Phase 1 — Fixes for silently-firing placeholders (3 PRs)**
+
+- **#396 — PR-NX40: IC opinion failover cascade.** The Executive Summary IC opinion rendered "AI-generated investor-grade opinion is not available" because `generateDealInsights` did one Claude call and returned `unavailable` on any failure. Applied PR-NX21's failover pattern: Claude (maxTokens bumped 700→1200) → OpenAI explicit override → unavailable. Returns canonical envelope with `provider` + `fallbackReason` fields; DOCX footer surfaces "Synthesis: claude-sonnet-4-6 · auto-failover: Claude 429 rate_limited — succeeded on openai" so operators see exactly which model produced the opinion and what went wrong. +9 tests.
+
+- **#397 — PR-NX41: Wire planning_district demographics.** The Demographics section was hardcoded to read `exportContext.market.demographics` but `dealExport.service` never wrote that key. Added `p.auto_derived_pd_code` (and ward/zone) to `DEAL_EXPORT_SQL`; new `fetchDealDemographics()` helper looks up the PD by code in `regulatory_data.planning_districts` and enriches via the existing `enrichPdWithDemographics()` function (which reads from `regulatory_data.evidence_facts`). Shape-maps RMP fields → DOCX-renderer keys with 100× ha→km² conversion. DOCX `buildDemographics` extended with 3 new rows (area in ha+km², BBMP wards in PD, revenue villages) + provenance line ("Source: BBMP RMP-2031 (2011 census base)"). Empty-state hint added: "Bengaluru deals: open the Parcel tab → click Derive → Apply → re-download." +5 tests.
+
+- **#398 — PR-NX42: Claude tertiary failover for narrative sections.** The Pros & Cons section rendered "AI-assisted Pros & Cons synthesis is not available" because the cascade was Gemini → OpenAI → unavailable with Claude (the resilience layer everywhere else in the AI stack) missing. Added `callClaude` (maxTokens 900) as the 3rd tier in `exportNarrative.service.generateSection`. Errors now collected from EVERY tier so the operator sees the full diagnostic. Affects all 4 narrative sections: prosCons, whyThisArea, cashflowLevers, demographicsSynthesis. +4 tests + 2 existing tests updated to reflect 3-tier cascade.
+
+**Phase 2 — NEW AI capabilities (3 PRs)**
+
+- **#399 — PR-NX43: Risk Register narrative synthesis (Claude primary).** Pre-NX43 the Risk Register showed the structured table only. Added `generateRiskNarrative` (Claude → OpenAI cascade) that produces 2 paragraphs ABOVE the table: (1) overall risk profile synthesis with severity-mix interpretation, (2) critical-spotlight callout explicitly naming each critical/high item with WHY-it-matters context for the asset class + structure. No-op fast paths on empty / all-closed risk lists (zero AI cost on clean deals). Render between the summary count line and the structured table — IC reader sees "what does this mean?" first, then the data. +10 tests.
+
+- **#400 — PR-NX44: Sensitivity narrative (OpenAI primary).** Pre-NX44 the Financials section showed the sensitivity tornado SVG without narrative. Added `generateSensitivityNarrative` with provider order FLIPPED to OpenAI primary, Claude secondary (rationale: sensitivity analysis is fundamentally numerical reasoning, OpenAI GPT-5.4 excels there). Produces 2 paragraphs: (1) driver decomposition ranking top 2-3 inputs by bps of IRR swing, (2) recommended stress tests as concrete what-ifs with expected IRR impact. Plus a `dominant_driver` short label rendered in the eyebrow. Auto-no-op on degenerate matrix (< 3×3 grid). +10 tests.
+
+- **#401 — PR-NX45: NEW Document-Derived Insights section (flagship).** 21st section in the DOCX, between Provenance and Pros & Cons. Two halves:
+  - **Per-doctype extracted facts** (data display, no AI call): groups completed extractions by `doc_type`, renders top 8 fields per extraction as label-value tables. Operator sees Owner Name / Survey Number / Consideration / etc. extracted from each sale deed / EC / khata / RERA cert — no more clicking into each doc to remember what's on it.
+  - **Cross-document analysis** (Claude primary, OpenAI secondary): `generateDocumentInsights` reads the structured_fields from all completed extractions and detects inconsistencies the human would miss in a 30-document deal package. Surfaces 0-5 findings with severity (critical = title/owner mismatch, high = survey/khata mismatch, medium = area/value, low = trivial), each with title + description naming the contradicting documents + recommendation. Plus a summary paragraph framing the document set.
+
+  Completes the "use all 3 AI APIs across the report" story: Gemini does extraction (PR-NX25) + narratives (NX42 primary), Claude does IC opinion (NX40) + risk synthesis (NX43) + cross-doc reasoning (NX45 primary), OpenAI does sensitivity (NX44 primary). Each section picks the right AI for the job + has the other two as failover layers. +12 new tests + 2 existing tests updated for the new 21-section count (was 20).
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| export.insights.failover.test.js (NEW) | 0 | 9 | +9 |
+| dealExport.demographics.test.js (NEW) | 0 | 5 | +5 |
+| exports.narrative.test.js | 22 | 26 | +4 |
+| export.insights.riskNarrative.test.js (NEW) | 0 | 10 | +10 |
+| export.insights.sensitivity.test.js (NEW) | 0 | 10 | +10 |
+| export.insights.docInsights.test.js (NEW) | 0 | 12 | +12 |
+| exports.docx.test.js | 51 | 53 | +2 (updates) |
+| **Backend TOTAL** | **1,940** | **1,990** | **+50** |
+
+Zero pre-existing regressions across 115 backend suites. All builds clean.
+
+### Outcome for the operator
+
+**Before this batch (Jigani DOCX, 2026-05-18):**
+- Executive Summary → placeholder "AI-generated investor-grade opinion is not available"
+- Demographics → placeholder "Demographic data is not yet available"
+- Pros & Cons → placeholder "AI-assisted Pros & Cons synthesis is not available"
+- Risk Register → structured table only (no narrative)
+- Financials → sensitivity tornado only (no interpretation)
+- No document-derived insights anywhere
+
+**After this batch:**
+- Executive Summary → real IC opinion (Claude with OpenAI failover, footer shows provenance)
+- Demographics → real BBMP RMP-2031 facts for Bengaluru deals with `auto_derived_pd_code`; honest hint to "run Derive on Parcel tab" otherwise
+- Pros & Cons → real Pros + Cons synthesis (Gemini → OpenAI → Claude cascade)
+- Risk Register → AI synthesis paragraphs ABOVE the structured table
+- Financials → sensitivity narrative ABOVE the tornado with bps-precise driver decomposition + stress-test recommendations
+- NEW Document-Derived Insights section → all extracted facts grouped by doctype + Claude-detected inconsistencies across the document set
+
+### Outstanding operator actions (still pending from earlier sessions)
+
+1. **Fix `BLOB_READ_WRITE_TOKEN`** in Vercel — still shows "Needs Attention" (Vercel Blob disconnect).
+2. **Fix `JWT_SECRET`** in Vercel — still shows "Needs Attention".
+3. **Smoke-test the Jigani DOCX again** after this batch deploys (~3 min): all 5 placeholder sections should now render real content; the brand-new Document-Derived Insights section should appear at position 17 between Provenance and Pros & Cons.
+
+### Recommendation for next session
+
+The DOCX is now richest, most-AI-leveraged export REDIP produces. Natural next-highest-leverage items from the strategic backlog:
+- **Adopt `@redip/real-estate-ontology` across deal-create / deal-edit forms** (Strategic Review §VI top-1, NOT STARTED)
+- **Provenance chips on individual deal fields** showing the source doc + extraction confidence inline (Strategic Review §VI top-2, NOT STARTED)
+- **Live market-benchmark warnings on financial input forms** (port PR-NX28/NX33 to fire at input time, not export time) — Strategic Review §VI top-3, NOT STARTED
+- **Same multi-provider failover pattern applied to the XLSX briefing service** — already shipped in PR-NX21 actually, but worth verifying the same diagnostics surface in the XLSX as in the DOCX
+
+---
+
 ## 2026-05-18 (late) — Phase C polish complete: provenance chips + Kaveri verify-links + bulk lookup admin + parcel mini-map (4 PRs)
 
 Closed out Phase C of the autonomous-window plan. Operator pre-cleared three blockers in this window: (a) ab-eval migration applied, (b) comps geocoding `--apply` run lifting 56 → 71 of 81 comps to precise pins, (c) C-6 permanently struck from the record (memory + repo, never to be re-proposed). The four remaining Phase C items shipped end-to-end:
