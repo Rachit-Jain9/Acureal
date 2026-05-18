@@ -348,9 +348,209 @@ const generateDealInsights = async ({
   return unavailable(fallbackReasons.join('; '));
 };
 
+// ════════════════════════════════════════════════════════════════════════
+// PR-NX43 (2026-05-18) — Risk Register narrative synthesis
+// ════════════════════════════════════════════════════════════════════════
+//
+// Pre-NX43 the DOCX Risk Register section rendered the structured table
+// only — every risk shown as a row but no synthesis answering the
+// "what does this RISK PROFILE mean for the deal?" question. Investment
+// committees ask exactly that question first. NX43 adds 2-paragraph
+// Claude-synthesized narrative ABOVE the table:
+//
+//   Paragraph 1 — Risk profile summary (overall picture, severity mix,
+//   what the cluster of risks says about deal quality).
+//
+//   Paragraph 2 — Critical risk deep-dive (specifically calls out the
+//   critical / high severity items with context on why each matters for
+//   THIS asset class + structure).
+//
+// Same failover cascade as generateDealInsights — Claude primary, OpenAI
+// secondary. Per-paragraph max 80 words. Cite-or-null per AI_ROADMAP §10:
+// references the actual risk titles from the structured table, never
+// invents new risks.
+
+const RISK_NARRATIVE_SYSTEM_PROMPT = `You are an investment-review analyst at an India-focused real estate private equity firm. You synthesize logged risk flags into a 2-paragraph narrative for the IC memo.
+
+STRICT RULES:
+- Respond ONLY with valid JSON matching the schema below. No markdown fences, no prose before/after.
+- Reference only the risks provided in the payload. Never invent risks, severities, or mitigations.
+- Be blunt about deal-killers. Risk synthesis that softens critical items is useless.
+- Indian real estate context: title risk, RERA compliance, BBMP/BDA approvals, JDA enforceability, conversion order absence are all material.
+- Both paragraphs are tight: max 80 words each.
+
+SCHEMA:
+{
+  "summary_paragraph": "1 paragraph (3-5 sentences, max 80 words) synthesizing the overall risk profile. Anchor in the severity counts. Name what kind of deal this risk mix suggests (clean / manageable / cautious / pass).",
+  "critical_spotlight_paragraph": "1 paragraph (3-5 sentences, max 80 words) explicitly naming each critical/high severity risk by its actual title from the payload. Explain WHY each one matters for this deal's asset class + structure.",
+  "confidence": "high" | "medium" | "low"
+}
+
+If no critical/high risks exist, set critical_spotlight_paragraph to a 1-sentence note that no critical or high-severity risks are currently logged. Confidence reflects data completeness.`;
+
+const buildRiskNarrativePayload = ({ deal, riskCounts, items }) => ({
+  deal: {
+    name: deal?.name || null,
+    asset_class: deal?.asset_class || null,
+    deal_structure: deal?.deal_structure || null,
+    stage: deal?.stage || null,
+    city: deal?.city || null,
+  },
+  risk_summary: {
+    total: items?.length || 0,
+    critical: num(riskCounts?.critical) || 0,
+    high: num(riskCounts?.high) || 0,
+    medium: num(riskCounts?.medium) || 0,
+    low: num(riskCounts?.low) || 0,
+  },
+  risk_flags: (items || []).slice(0, 12).map((r) => ({
+    title: r.title || '(untitled)',
+    severity: r.severity || null,
+    category: r.category || null,
+    status: r.status || null,
+    description: typeof r.description === 'string' ? r.description.slice(0, 240) : null,
+    mitigation: typeof r.mitigation === 'string' ? r.mitigation.slice(0, 200) : null,
+  })),
+});
+
+const coerceRiskNarrativeEnvelope = (parsed, extras = {}) => ({
+  available: true,
+  summary_paragraph: typeof parsed.summary_paragraph === 'string' ? parsed.summary_paragraph.trim() : null,
+  critical_spotlight_paragraph: typeof parsed.critical_spotlight_paragraph === 'string'
+    ? parsed.critical_spotlight_paragraph.trim()
+    : null,
+  confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
+    ? parsed.confidence
+    : 'medium',
+  disclaimer:
+    'AI-assisted risk synthesis is informational only. Verify against the structured risk register below and the deal Risk tab.',
+  ...extras,
+});
+
+const callPrimaryRiskNarrativeClaude = async (payload, deal) => withTimeout(
+  runClaudeReasoning({
+    task: 'export_insights',
+    systemPrompt: RISK_NARRATIVE_SYSTEM_PROMPT,
+    cachePrompt: true,
+    payload,
+    maxTokens: 900,
+    attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+    metadata: { kind: 'risk_narrative', attempt: 'primary' },
+  }),
+  MODEL_TIMEOUT_MS,
+  'Claude risk-narrative call'
+);
+
+const callSecondaryRiskNarrativeOpenAI = async (payload, deal) => {
+  if (!runAI) return null;
+  const envelope = await withTimeout(
+    runAI({
+      task: 'export_insights',
+      provider: 'openai',
+      attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+      metadata: { kind: 'risk_narrative', attempt: 'secondary' },
+      run: async ({ providers, model }) => providers.runOpenAIReasoning({
+        systemPrompt: RISK_NARRATIVE_SYSTEM_PROMPT,
+        payload,
+        maxTokens: 900,
+        model,
+      }),
+    }),
+    MODEL_TIMEOUT_MS,
+    'OpenAI risk-narrative call'
+  );
+  return envelope?.result || null;
+};
+
+/**
+ * Synthesize a 2-paragraph narrative covering the deal's risk profile.
+ * Cascade: Claude → OpenAI → unavailable. Same failover shape as
+ * generateDealInsights.
+ *
+ * Returns { available, summary_paragraph, critical_spotlight_paragraph,
+ *           confidence, disclaimer, provider, fallbackReason }.
+ *
+ * Returns unavailable+null narrative when items is empty or has only
+ * status='closed' rows — no synthesis call wasted on a clean deal.
+ */
+const generateRiskNarrative = async ({ deal, riskCounts, items }) => {
+  const unavailable = (reason) => ({
+    available: false,
+    reason,
+    summary_paragraph: null,
+    critical_spotlight_paragraph: null,
+    confidence: null,
+    disclaimer:
+      'AI-assisted risk synthesis is informational only. Verify against the structured risk register.',
+  });
+
+  // No-op fast paths.
+  if (!Array.isArray(items) || items.length === 0) {
+    return unavailable('no risks logged');
+  }
+  const openItems = items.filter((r) => {
+    const status = String(r?.status || '').toLowerCase();
+    return status !== 'closed' && status !== 'resolved' && status !== 'mitigated';
+  });
+  if (openItems.length === 0) {
+    return unavailable('all logged risks are closed/resolved/mitigated');
+  }
+
+  const availability = getProviderAvailability();
+  if (!availability.gpt_compatible && !availability.claude) {
+    return unavailable('No AI provider configured (need ANTHROPIC_API_KEY or OPENAI_API_KEY)');
+  }
+
+  const payload = buildRiskNarrativePayload({ deal, riskCounts, items: openItems });
+  const fallbackReasons = [];
+
+  if (availability.claude) {
+    try {
+      const raw = await callPrimaryRiskNarrativeClaude(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceRiskNarrativeEnvelope(parsed, {
+          provider: 'claude-sonnet-4-6',
+          fallbackReason: null,
+        });
+      }
+      fallbackReasons.push('Claude returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('Claude', err));
+    }
+  } else {
+    fallbackReasons.push('Claude not configured');
+  }
+
+  if (availability.gpt_compatible) {
+    try {
+      const raw = await callSecondaryRiskNarrativeOpenAI(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceRiskNarrativeEnvelope(parsed, {
+          provider: 'gpt-5.4',
+          fallbackReason: fallbackReasons.length
+            ? `${fallbackReasons.join('; ')} — auto-failover succeeded on openai`
+            : null,
+        });
+      }
+      fallbackReasons.push('OpenAI returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('OpenAI', err));
+    }
+  } else {
+    fallbackReasons.push('OpenAI not configured');
+  }
+
+  return unavailable(fallbackReasons.join('; '));
+};
+
 module.exports = {
   generateDealInsights,
+  generateRiskNarrative, // PR-NX43
   // Internal exports — used by the Tier-2 #14 A/B eval harness.
   SYSTEM_PROMPT,
+  RISK_NARRATIVE_SYSTEM_PROMPT, // PR-NX43
   buildPayload,
+  buildRiskNarrativePayload, // PR-NX43
 };

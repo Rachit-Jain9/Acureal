@@ -2,7 +2,7 @@ const { query } = require('../config/database');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
-const { generateDealInsights } = require('./export.insights.service');
+const { generateDealInsights, generateRiskNarrative } = require('./export.insights.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
@@ -747,10 +747,10 @@ const getDealExportContext = async (dealId) => {
     residualLandValueCr: deal.residual_land_value_cr,
   });
 
-  // PR-NX41 (2026-05-18): demographics enrichment runs in parallel with
-  // the AI IC opinion call to keep export latency flat. Both are
-  // independent reads; one failing must not abort the other.
-  const [ai, demographics] = await Promise.all([
+  // PR-NX41 + NX43 (2026-05-18): demographics + IC opinion + risk
+  // narrative all run in parallel to keep export latency flat. Each
+  // .catch()es independently so one failing never aborts the others.
+  const [ai, demographics, riskNarrative] = await Promise.all([
     generateDealInsights({
       deal,
       ddCounts: ddSummary,
@@ -773,6 +773,20 @@ const getDealExportContext = async (dealId) => {
         'AI-generated Investor-Grade opinion is informational only. Verify all facts and risks before any investment decision.',
     })),
     fetchDealDemographics(deal).catch(() => null),
+    // PR-NX43 (2026-05-18) — 2-paragraph Claude synthesis of the risk
+    // profile + critical-spotlight callout. Auto-no-op on empty / all-
+    // closed risk lists; otherwise cascades Claude → OpenAI → unavailable.
+    generateRiskNarrative({
+      deal,
+      riskCounts: riskSummary,
+      items: riskItemsResult.rows,
+    }).catch((error) => ({
+      available: false,
+      reason: error.message,
+      summary_paragraph: null,
+      critical_spotlight_paragraph: null,
+      confidence: null,
+    })),
   ]);
 
   return {
@@ -792,6 +806,11 @@ const getDealExportContext = async (dealId) => {
       summary: riskSummary,
       items: riskItemsResult.rows,
       recommendation,
+      // PR-NX43 (2026-05-18) — AI-synthesized 2-paragraph narrative
+      // (summary + critical-spotlight) consumed by DOCX buildRiskRegister.
+      // Null-shape returned for empty/all-closed risk lists so the
+      // existing structured-only render stays the default.
+      narrative: riskNarrative,
     },
     market: {
       projectType: compType,

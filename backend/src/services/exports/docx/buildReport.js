@@ -1227,6 +1227,10 @@ const buildRiskRegister = (ctx) => {
 
   const summary = ctx.exportContext?.risks?.summary || {};
   const items = Array.isArray(ctx.exportContext?.risks?.items) ? ctx.exportContext.risks.items : [];
+  // PR-NX43 (2026-05-18) — AI-synthesized 2-paragraph narrative covering
+  // the deal's overall risk profile + critical-spotlight callout. Null
+  // when no risks are logged OR when both Claude and OpenAI failed.
+  const narrative = ctx.exportContext?.risks?.narrative || null;
 
   // Honest empty-state.
   if (items.length === 0) {
@@ -1253,6 +1257,34 @@ const buildRiskRegister = (ctx) => {
     ? `${total} risk${total === 1 ? '' : 's'} logged — ${summaryParts.join(', ')}.`
     : `${total} risk${total === 1 ? '' : 's'} logged.`;
   children.push(bodyPara(summaryText));
+
+  // PR-NX43 (2026-05-18) — render the 2-paragraph AI synthesis BETWEEN
+  // the structured summary line and the table so the IC reader sees
+  // the "what does this mean?" before the "what specifically?". An
+  // amber AI badge prefaces the narrative per CLAUDE.md disclosure rule.
+  if (narrative?.available && (narrative.summary_paragraph || narrative.critical_spotlight_paragraph)) {
+    children.push(blank());
+    children.push(aiBadge());
+    if (narrative.summary_paragraph) {
+      children.push(eyebrow('Risk profile synthesis'));
+      children.push(bodyPara(narrative.summary_paragraph));
+    }
+    if (narrative.critical_spotlight_paragraph) {
+      children.push(blank());
+      children.push(eyebrow('Critical / high-severity spotlight'));
+      children.push(bodyPara(narrative.critical_spotlight_paragraph));
+    }
+    // Attribution line: confidence + provider + auto-failover diagnostic.
+    const attribution = [];
+    if (narrative.confidence) attribution.push(`Confidence: ${narrative.confidence}`);
+    if (narrative.provider) attribution.push(`Synthesis: ${narrative.provider}`);
+    if (narrative.fallbackReason) attribution.push(`auto-failover: ${narrative.fallbackReason}`);
+    if (attribution.length) {
+      children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+    }
+    children.push(blank());
+    children.push(eyebrow('Logged risk items')); // separator before the structured table
+  }
 
   // Sort: severity ASC (critical first), then status (open first)
   const sorted = [...items].sort((a, b) => {
