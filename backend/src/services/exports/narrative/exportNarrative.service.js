@@ -253,6 +253,39 @@ const callOpenAI = async ({ prompt, dealId, organizationId, cacheArgs }) => {
   }).then((envelope) => envelope.result);
 };
 
+// PR-NX42 (2026-05-18) — tertiary fallback: Claude Sonnet 4.6.
+//
+// Pre-NX42 the cascade was Gemini → OpenAI → unavailable. The Jigani
+// DOCX export silently rendered the "AI-assisted Pros & Cons synthesis
+// is not available" placeholder because both Gemini and OpenAI were
+// momentarily unreachable. Claude — wired everywhere else in the AI
+// stack — was not in the cascade. NX42 adds it.
+//
+// runClaudeReasoning is the same primitive used by dealBriefing.service
+// and export.insights.service so behavior is consistent. We extract the
+// inner text via the envelope's `.result` accessor.
+const callClaude = async ({ prompt, dealId, organizationId, cacheArgs }) => {
+  return runAI({
+    task: 'export_narrative',
+    provider: 'claude',
+    attach: { dealId, organizationId },
+    metadata: { prompt_version: SYSTEM_PROMPT_VERSION, fallback: 'claude' },
+    cache: cacheArgs,
+    run: async ({ providers, model }) => {
+      // Use the Claude reasoning primitive directly — same shape as the
+      // dealBriefing service so cost-cap + ai_call_logs telemetry works.
+      return providers.runClaudeReasoning({
+        systemPrompt: SYSTEM_PROMPT,
+        payload: prompt,
+        // Pros & Cons typically needs ~600 tokens; bump to 900 for
+        // headroom on retail / hospitality with complex CAM / USALI deals.
+        maxTokens: 900,
+        model,
+      });
+    },
+  }).then((envelope) => envelope.result);
+};
+
 const buildUserPrompt = (section, payload) => {
   const schema = SECTION_SCHEMAS[section];
   if (!schema) {
@@ -284,8 +317,10 @@ const generateSection = async ({
   }
 
   const availability = getProviderAvailability();
-  if (!availability.gemini && !availability.gpt_compatible) {
-    return unavailable('No narrative provider configured (Gemini and OpenAI keys missing)');
+  // PR-NX42 (2026-05-18) — Claude is now in the cascade. Allow the call
+  // to proceed as long as ANY one provider is configured.
+  if (!availability.gemini && !availability.gpt_compatible && !availability.claude) {
+    return unavailable('No narrative provider configured (Gemini, OpenAI, and Claude keys all missing)');
   }
 
   const prompt = buildUserPrompt(section, payload);
@@ -298,7 +333,10 @@ const generateSection = async ({
   };
 
   let raw = null;
-  let lastError = null;
+  // PR-NX42 (2026-05-18) — collect EVERY tier's error so the operator
+  // sees the full diagnostic when all three providers are down.
+  const errors = [];
+  let providerUsed = null;
 
   if (availability.gemini) {
     try {
@@ -307,10 +345,13 @@ const generateSection = async ({
         SECTION_TIMEOUT_MS,
         'Gemini narrative call',
       );
+      if (raw) providerUsed = 'gemini';
     } catch (err) {
-      lastError = err;
+      errors.push(`Gemini: ${err.message}`);
       raw = null;
     }
+  } else {
+    errors.push('Gemini not configured');
   }
 
   if (!raw && availability.gpt_compatible) {
@@ -320,16 +361,40 @@ const generateSection = async ({
         SECTION_TIMEOUT_MS,
         'OpenAI narrative call',
       );
+      if (raw) providerUsed = 'openai';
     } catch (err) {
-      lastError = err;
+      errors.push(`OpenAI: ${err.message}`);
       raw = null;
     }
+  } else if (!raw) {
+    errors.push('OpenAI not configured');
+  }
+
+  // PR-NX42 (2026-05-18) — tertiary Claude fallback. Closes the silent-
+  // outage gap from the Jigani DOCX where both Gemini and OpenAI were
+  // momentarily unreachable and the Pros & Cons section fell through to
+  // placeholder text. Claude is now the resilience layer the rest of the
+  // AI stack already uses.
+  if (!raw && availability.claude) {
+    try {
+      raw = await withTimeout(
+        callClaude({ prompt, dealId, organizationId, cacheArgs }),
+        SECTION_TIMEOUT_MS,
+        'Claude narrative call',
+      );
+      if (raw) providerUsed = 'claude';
+    } catch (err) {
+      errors.push(`Claude: ${err.message}`);
+      raw = null;
+    }
+  } else if (!raw) {
+    errors.push('Claude not configured');
   }
 
   if (!raw) {
-    return unavailable(
-      lastError ? `Provider call failed: ${lastError.message}` : 'No provider returned content',
-    );
+    // All available providers failed — surface the full diagnostic so
+    // the operator knows whether it's keys, rate-limits, or outage.
+    return unavailable(`All providers failed: ${errors.join('; ')}`);
   }
 
   const parsed = parseJson(raw);
@@ -348,6 +413,15 @@ const generateSection = async ({
   // Section-specific shape coercion. Always returns the canonical envelope
   // even when the model returned an unexpected key set — better to render
   // an empty section than crash the export.
+  //
+  // PR-NX42 (2026-05-18) — `provider` (gemini/openai/claude) lets DOCX /
+  // PPTX surface "Synthesis: claude · auto-failover: Gemini timed out;
+  // OpenAI 429..." in the footer so the operator knows which model
+  // produced the content and whether a fallback rescued the call.
+  const fallbackReason = errors.length > 0
+    ? `${errors.join('; ')} — auto-failover succeeded on ${providerUsed}`
+    : null;
+
   const base = {
     available: true,
     section,
@@ -355,6 +429,8 @@ const generateSection = async ({
     sources,
     disclaimer,
     rawProvider: raw,
+    provider: providerUsed,
+    fallbackReason,
   };
 
   if (section === 'whyThisArea') {
