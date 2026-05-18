@@ -355,16 +355,46 @@ const geocodeAddress = async (address, city, state, pincode) => {
   //      needs Places API enabled in GCP — likely already enabled because
   //      the autocomplete proxy uses it)
   //   3. Nominatim (free, rate-limited, last resort)
+  //
+  // Places is tried as a second-chance in TWO conditions:
+  //   (a) Geocoding returned null (denied / errored / not enabled)
+  //   (b) Geocoding returned a low-confidence approximate match — this
+  //       happens for apartment-name addresses (e.g. "Thyme Park
+  //       Apartments Jigani" geocodes to just "Jigani" at 0.45). Places
+  //       Text Search frequently resolves these to the specific
+  //       establishment with 0.85 confidence. The Jigani regression
+  //       (2026-05-18) motivated this second branch.
   let result;
   if (isGoogleConfigured()) {
     result = await geocodeWithGoogle(address, city, state, pincode);
-    // If Geocoding returned a non-result (REQUEST_DENIED, hard error,
-    // or no match) try Places Text Search before falling through.
-    if (result === null) {
+    const geocodingWasApproximate =
+      result && result.found === true && (
+        result.status === 'approximate' ||
+        (typeof result.confidence === 'number' && result.confidence < 0.7)
+      );
+
+    if (result === null || geocodingWasApproximate) {
       const placesResult = await geocodeWithGooglePlaces(address, city, state, pincode);
       if (placesResult?.found) {
-        result = placesResult;
-      } else {
+        // Prefer Places ONLY if it's strictly better than what Geocoding
+        // gave us. Verified (establishment) beats Geocoding's approximate;
+        // a Places `geocode`-typed 0.65 is a wash with Geocoding's 0.45
+        // city-fallback — only swap when Places is clearly verified or
+        // when Geocoding returned null.
+        const placesIsBetter =
+          result === null ||
+          placesResult.status === 'verified' ||
+          (typeof placesResult.confidence === 'number' &&
+           typeof result.confidence === 'number' &&
+           placesResult.confidence > result.confidence + 0.1);
+
+        if (placesIsBetter) {
+          result = placesResult;
+        }
+        // else: stick with Geocoding's approximate result — the gate
+        // banner in parcelContext.service will fire, the operator
+        // switches to coordinate input.
+      } else if (result === null) {
         // Both Google paths failed. Fall through to Nominatim — but
         // keep the Places failure message visible so the cached result
         // explains WHY we ended up at Nominatim.
@@ -376,6 +406,8 @@ const geocodeAddress = async (address, city, state, pincode) => {
           result.upstream_failure = placesResult.message;
         }
       }
+      // else: Geocoding's approximate result stays as the winner; Places
+      // didn't improve on it (or also failed). Gate will fire downstream.
     }
   } else {
     result = await geocodeWithNominatim(address, city, state, pincode);
