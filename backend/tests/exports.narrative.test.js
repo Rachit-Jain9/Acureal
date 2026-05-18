@@ -91,7 +91,9 @@ describe('services/exports/narrative/exportNarrative', () => {
       });
       const result = await narrative.generateSection({ section: 'whyThisArea', payload: {} });
       expect(result.available).toBe(false);
-      expect(result.reason).toMatch(/No narrative provider configured/);
+      // PR-NX42: reason now mentions all 3 providers since Claude is in
+      // the cascade.
+      expect(result.reason).toMatch(/Gemini, OpenAI, and Claude keys all missing/);
     });
 
     test('returns unavailable for unknown section', async () => {
@@ -194,14 +196,99 @@ describe('services/exports/narrative/exportNarrative', () => {
     });
 
     test('returns unavailable when all providers fail', async () => {
+      // PR-NX42: cascade is now Gemini → OpenAI → Claude. All three
+      // must reject for the function to return unavailable.
       aiRouter.runAI.mockRejectedValueOnce(new Error('Gemini boom'));
       aiRouter.runAI.mockRejectedValueOnce(new Error('OpenAI also down'));
+      aiRouter.runAI.mockRejectedValueOnce(new Error('Claude also down'));
       const result = await narrative.generateSection({
         section: 'whyThisArea',
         payload: { locality: 'Whitefield' },
       });
       expect(result.available).toBe(false);
-      expect(result.reason).toMatch(/Provider call failed/);
+      // PR-NX42: reason now collects EVERY tier's error so operators see
+      // the full diagnostic, not just the last failure.
+      expect(result.reason).toMatch(/All providers failed/);
+      expect(result.reason).toMatch(/Gemini: Gemini boom/);
+      expect(result.reason).toMatch(/OpenAI: OpenAI also down/);
+      expect(result.reason).toMatch(/Claude: Claude also down/);
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // PR-NX42 (2026-05-18) — Claude tertiary failover tests
+    // ──────────────────────────────────────────────────────────────
+    test('PR-NX42: Claude rescues when both Gemini and OpenAI fail', async () => {
+      // Gemini rejects → OpenAI rejects → Claude returns valid JSON.
+      aiRouter.runAI.mockRejectedValueOnce(new Error('Gemini quota exhausted'));
+      aiRouter.runAI.mockRejectedValueOnce(new Error('OpenAI 429 rate_limited'));
+      aiRouter.runAI.mockResolvedValueOnce({
+        result: JSON.stringify({ paragraphs: ['Claude rescued the call.'], summary: 'ok' }),
+        callId: 'mock-claude',
+        status: 'success',
+        latencyMs: 200,
+      });
+      const result = await narrative.generateSection({
+        section: 'whyThisArea',
+        payload: { locality: 'Whitefield' },
+      });
+      expect(aiRouter.runAI).toHaveBeenCalledTimes(3);
+      expect(result.available).toBe(true);
+      expect(result.paragraphs[0]).toBe('Claude rescued the call.');
+      expect(result.provider).toBe('claude');
+      expect(result.fallbackReason).toMatch(/Gemini: Gemini quota exhausted/);
+      expect(result.fallbackReason).toMatch(/OpenAI: OpenAI 429 rate_limited/);
+      expect(result.fallbackReason).toMatch(/auto-failover succeeded on claude/);
+    });
+
+    test('PR-NX42: provider=gemini and fallbackReason=null when Gemini works first time', async () => {
+      aiRouter.runAI.mockResolvedValueOnce({
+        result: JSON.stringify({ paragraphs: ['Clean Gemini call.'], summary: 'ok' }),
+        callId: 'mock-gemini',
+        status: 'success',
+        latencyMs: 80,
+      });
+      const result = await narrative.generateSection({
+        section: 'whyThisArea',
+        payload: { locality: 'Whitefield' },
+      });
+      expect(aiRouter.runAI).toHaveBeenCalledTimes(1);
+      expect(result.available).toBe(true);
+      expect(result.provider).toBe('gemini');
+      expect(result.fallbackReason).toBeNull();
+    });
+
+    test('PR-NX42: provider=openai and fallbackReason cites Gemini error when OpenAI rescues', async () => {
+      aiRouter.runAI.mockRejectedValueOnce(new Error('Gemini timeout'));
+      aiRouter.runAI.mockResolvedValueOnce({
+        result: JSON.stringify({ paragraphs: ['OpenAI rescued.'], summary: 'ok' }),
+        callId: 'mock-openai',
+        status: 'success',
+        latencyMs: 130,
+      });
+      const result = await narrative.generateSection({
+        section: 'whyThisArea',
+        payload: { locality: 'Whitefield' },
+      });
+      expect(result.provider).toBe('openai');
+      expect(result.fallbackReason).toMatch(/Gemini: Gemini timeout/);
+      expect(result.fallbackReason).toMatch(/auto-failover succeeded on openai/);
+    });
+
+    test('PR-NX42: skips Claude tier when Claude not configured', async () => {
+      // Operator with only Gemini + OpenAI keys (no ANTHROPIC_API_KEY).
+      providerRegistry.getProviderAvailability.mockReturnValue({
+        gemini: true, claude: false, gpt_compatible: true,
+      });
+      aiRouter.runAI.mockRejectedValueOnce(new Error('Gemini fail'));
+      aiRouter.runAI.mockRejectedValueOnce(new Error('OpenAI fail'));
+      const result = await narrative.generateSection({
+        section: 'whyThisArea',
+        payload: { locality: 'Whitefield' },
+      });
+      // Only 2 calls made (Gemini + OpenAI), no Claude attempt.
+      expect(aiRouter.runAI).toHaveBeenCalledTimes(2);
+      expect(result.available).toBe(false);
+      expect(result.reason).toMatch(/Claude not configured/);
     });
   });
 
