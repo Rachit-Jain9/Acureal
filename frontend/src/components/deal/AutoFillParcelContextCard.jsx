@@ -5,6 +5,7 @@ import Badge from '../common/Badge';
 import DerivedValueChip from '../common/DerivedValueChip';
 import useAutoDeriveParcelContext from '../../hooks/useAutoDeriveParcelContext';
 import VerifyLinksSection from './VerifyLinksSection';
+import DerivedParcelMiniMap from './DerivedParcelMiniMap';
 
 /**
  * AutoFillParcelContextCard — the headline UX from this autonomous-window
@@ -191,6 +192,11 @@ export default function AutoFillParcelContextCard({
             )
           )}
           <ResultRows fields={fields} skipped={skipped} onToggleSkip={toggleSkip} derivedAt={data?.derivedAt} />
+
+          {/* Derived-parcel mini-map (C-8). Renders the K-GIS parcel
+              polygon if available, else a 50m buffered circle around
+              the geocoded pin. Hidden when coordinatesGate fires. */}
+          <DerivedParcelMiniMap data={data} />
 
           {/* Authority verify-links section (C-4) — surfaces Bhoomi RTC,
               Kaveri EC, BBMP e-Aasthi, K-RERA, IGR Guidance, K-GIS
