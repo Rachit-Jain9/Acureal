@@ -173,6 +173,9 @@ export default function AutoFillParcelContextCard({
       {data && (
         <>
           <ResultsSummary data={data} />
+          {data.bbmpJurisdiction && !data.bbmpJurisdiction.withinBbmp && (
+            <OutsideBbmpExplainer data={data} />
+          )}
           <ResultRows fields={fields} skipped={skipped} onToggleSkip={toggleSkip} />
 
           <div className="mt-5 pt-4 border-t border-hairline flex items-center justify-between gap-3 flex-wrap">
@@ -271,11 +274,17 @@ function ResultsSkeleton() {
 
 function ResultsSummary({ data }) {
   const inside = data?.bbmpJurisdiction?.withinBbmp;
+  const taluk = data?.kgis?.hierarchy?.taluk;
   return (
     <div className="rounded-md bg-bg-secondary border border-hairline px-3 py-2 mb-3 text-xs text-content-secondary flex items-center gap-3 flex-wrap">
       <Badge tone={inside ? 'success' : 'warn'}>
         {inside ? 'Within BBMP' : 'Outside BBMP'}
       </Badge>
+      {!inside && taluk && (
+        <span className="text-content-secondary">
+          <span className="text-content-muted">in</span> {taluk} taluk
+        </span>
+      )}
       {data?.coordinates?.formatted_address && (
         <span className="truncate min-w-0">{data.coordinates.formatted_address}</span>
       )}
@@ -284,6 +293,35 @@ function ResultsSummary({ data }) {
           {Number(data.coordinates.lat).toFixed(5)}, {Number(data.coordinates.lng).toFixed(5)}
         </span>
       )}
+    </div>
+  );
+}
+
+// Honest explainer when a parcel sits outside BBMP city limits. Surfaces
+// the surrounding Planning Authority context (via K-GIS taluk/village)
+// + the verify-link hint, so the user understands WHY some rows are
+// missing instead of mistaking the empty UI for a bug.
+function OutsideBbmpExplainer({ data }) {
+  const hier = data?.kgis?.hierarchy || {};
+  const where = [hier.taluk, hier.district].filter(Boolean).join(', ');
+  return (
+    <div
+      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 text-xs text-amber-900 flex items-start gap-2"
+      data-testid="outside-bbmp-explainer"
+    >
+      <AlertTriangle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
+      <div>
+        <span className="font-medium">This parcel sits outside BBMP city limits</span>
+        {where && (
+          <>
+            {' — '}
+            <span>
+              K-GIS places it in <span className="font-medium">{where}</span>.
+            </span>
+          </>
+        )}{' '}
+        BBMP-specific fields (ward, property-tax zone, guidance bandwidth, Bengaluru planning district) don't apply here. The K-GIS hierarchy and city-wide warnings below are still useful — and the verify links open Bhoomi RTC / Kaveri EC scoped to the right taluk for an EC + survey lookup.
+      </div>
     </div>
   );
 }
@@ -337,9 +375,16 @@ function ResultRows({ fields, skipped, onToggleSkip }) {
 // Each row has: key (stable id), label, value (display string), rawValue
 // (what gets passed to onApply), source (provenance chip), confidence
 // (0-1), and optional fallback/note copy.
+//
+// When the parcel is outside BBMP, the BBMP-specific rows (ward, BBMP
+// zone, BBMP planning district) are NOT rendered as empty "Not derived"
+// placeholders — they're omitted entirely. The OutsideBbmpExplainer
+// above the row list tells the user why. This stops the half-broken
+// UI that the Attibele Industrial Area deal screenshot exposed.
 function buildFieldRows(data) {
   if (!data) return [];
   const rows = [];
+  const isInsideBbmp = !!data.bbmpJurisdiction?.withinBbmp;
 
   if (data.coordinates) {
     const c = data.coordinates;
@@ -356,7 +401,11 @@ function buildFieldRows(data) {
     });
   }
 
-  if (data.bbmpJurisdiction?.ward) {
+  // BBMP-specific rows are skipped entirely when the parcel sits outside
+  // BBMP city limits — the OutsideBbmpExplainer above the row list
+  // explains why. Avoids the half-broken "Not derived" placeholders the
+  // Attibele Industrial Area deal exposed.
+  if (isInsideBbmp && data.bbmpJurisdiction?.ward) {
     const w = data.bbmpJurisdiction.ward;
     rows.push({
       key: 'ward',
@@ -368,7 +417,7 @@ function buildFieldRows(data) {
     });
   }
 
-  if (data.bbmpZone) {
+  if (isInsideBbmp && data.bbmpZone) {
     const z = data.bbmpZone;
     const band =
       Number.isFinite(z.guidance_value_band_min_inr) && Number.isFinite(z.guidance_value_band_max_inr)
@@ -391,7 +440,7 @@ function buildFieldRows(data) {
     });
   }
 
-  if (data.planningDistrict) {
+  if (isInsideBbmp && data.planningDistrict) {
     const pd = data.planningDistrict;
     const meta = [
       pd.population_2011 ? `pop ${Number(pd.population_2011).toLocaleString('en-IN')}` : null,
