@@ -20,6 +20,10 @@ import { toast } from '../common/Toast';
 import { SectionHeader, SkeletonList } from '../../design-system';
 import SemanticSearchPanel from '../common/SemanticSearchPanel';
 import AutoFillFromDocumentsModal from './AutoFillFromDocumentsModal';
+// PR-NX49 (2026-05-19) — surface Claude's cross-document analysis +
+// inconsistency findings inline on the Documents tab. Same content
+// that ships in the DOCX Document-Derived Insights section (PR-NX45).
+import DocumentInsightsPanel from './DocumentInsightsPanel';
 import { formatDate } from '../../utils/format';
 import { downloadAxiosResponse } from '../../utils/download';
 
@@ -208,6 +212,11 @@ export default function DocumentsTab() {
       {/* Semantic search — find clauses / facts across the workspace's
           uploaded documents. Powered by pgvector + OpenAI embeddings. */}
       <SemanticSearchPanel dealId={dealId} />
+
+      {/* PR-NX49 (2026-05-19) — AI cross-document analysis. Same Claude
+          synthesis + findings as the DOCX Document-Derived Insights
+          section (PR-NX45). Renders nothing when no extractions exist. */}
+      <DocumentInsightsPanel dealId={dealId} />
 
       {/* Header */}
       <div className="flex items-center justify-between">

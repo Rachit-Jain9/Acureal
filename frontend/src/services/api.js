@@ -725,6 +725,11 @@ export const extractionAPI = {
   getResult:        (documentId)                                  => api.get(`/documents/${documentId}/extraction`),
   listForDeal:      (dealId)                                      => api.get(`/deals/${dealId}/extractions`),
   applyCorrections: (documentId, extractionId, corrections)       => api.put(`/documents/${documentId}/extraction/${extractionId}/corrections`, { corrections }),
+  // PR-NX49 (2026-05-19) — live AI cross-document insights. Returns
+  // Claude-synthesized summary + 0-5 inconsistency findings. Same
+  // service that powers the DOCX Document-Derived Insights section
+  // (PR-NX45). Cascades Claude → OpenAI → unavailable.
+  documentInsights: (dealId)                                      => api.get(`/deals/${dealId}/document-insights`),
   // PR-NX26 (2026-05-17): apply operator-approved extractions to the
   // deal + linked property. Backend validates each canonical_field
   // against the ontology, batches deal-level + property-level writes
