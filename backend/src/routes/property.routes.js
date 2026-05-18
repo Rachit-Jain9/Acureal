@@ -94,6 +94,48 @@ router.post(
   }
 );
 
+// GET /properties/auto-derive-context — orchestrator endpoint that takes
+// an address or (lat, lng) and returns a single payload with coordinates,
+// BBMP jurisdiction + ward, street-index match, BBMP property-tax zone +
+// guidance value, planning district + demographics, K-GIS hierarchy +
+// survey numbers + geometry, applicable city-level callouts (SDZ /
+// heritage / NGT / PRR), and verify-link payloads.
+//
+// CRITICAL: this route MUST stay above the `GET /:id` catch-all below.
+// Express matches routes in registration order, and `:id` greedily
+// captures any single-segment path — including `auto-derive-context`.
+// If this route moves below `/:id`, the request hits
+// `propertyService.getPropertyById('auto-derive-context')`, which
+// returns a UUID-format-violation error to the frontend. Adjacent
+// `/geocode/search` and `/geocode/place/:placeId` routes are safe
+// because they have two path segments.
+router.get(
+  '/auto-derive-context',
+  authenticate,
+  [
+    qv('address').optional({ values: 'falsy' }).trim().isLength({ max: 500 }),
+    qv('lat').optional({ values: 'falsy' }).isFloat({ min: -90, max: 90 }),
+    qv('lng').optional({ values: 'falsy' }).isFloat({ min: -180, max: 180 }),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const context = await parcelContextService.deriveParcelContextFromAddress({
+        address: req.query.address || null,
+        lat: req.query.lat ?? null,
+        lng: req.query.lng ?? null,
+      });
+      // Per-address cache header — the underlying geocode+K-GIS results
+      // are already cached at lower layers, but a 1-hour HTTP cache keeps
+      // back-to-back refreshes off the wire entirely.
+      res.set('Cache-Control', 'private, max-age=3600');
+      res.json({ success: true, data: context });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // GET /properties/:id
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
@@ -298,40 +340,6 @@ router.post('/bulk-geocode', authenticate, requireAdminOrAnalyst, async (req, re
     next(error);
   }
 });
-
-// GET /properties/auto-derive-context — orchestrator endpoint that takes
-// an address or (lat, lng) and returns a single payload with coordinates,
-// BBMP jurisdiction + ward, street-index match, BBMP property-tax zone +
-// guidance value, planning district + demographics, K-GIS hierarchy +
-// survey numbers + geometry, applicable city-level callouts (SDZ /
-// heritage / NGT / PRR), and verify-link payloads. Auth-required; the
-// frontend AutoFillParcelContextCard consumes this payload.
-router.get(
-  '/auto-derive-context',
-  authenticate,
-  [
-    qv('address').optional({ values: 'falsy' }).trim().isLength({ max: 500 }),
-    qv('lat').optional({ values: 'falsy' }).isFloat({ min: -90, max: 90 }),
-    qv('lng').optional({ values: 'falsy' }).isFloat({ min: -180, max: 180 }),
-  ],
-  handleValidation,
-  async (req, res, next) => {
-    try {
-      const context = await parcelContextService.deriveParcelContextFromAddress({
-        address: req.query.address || null,
-        lat: req.query.lat ?? null,
-        lng: req.query.lng ?? null,
-      });
-      // Per-address cache header — the underlying geocode+K-GIS results
-      // are already cached at lower layers, but a 1-hour HTTP cache keeps
-      // back-to-back refreshes off the wire entirely.
-      res.set('Cache-Control', 'private, max-age=3600');
-      res.json({ success: true, data: context });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
 
 // GET /properties/geocode/search — server-side Places Autocomplete proxy
 // Keeps the Google Maps API key server-side only. Frontend sends address text;
