@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { MapPin, Sparkles, RefreshCw, Check, AlertTriangle } from 'lucide-react';
 import { Card, SectionHeader, Skeleton } from '../../design-system';
 import Badge from '../common/Badge';
+import DerivedValueChip from '../common/DerivedValueChip';
 import useAutoDeriveParcelContext from '../../hooks/useAutoDeriveParcelContext';
 
 /**
@@ -188,7 +189,7 @@ export default function AutoFillParcelContextCard({
               <OutsideBbmpExplainer data={data} />
             )
           )}
-          <ResultRows fields={fields} skipped={skipped} onToggleSkip={toggleSkip} />
+          <ResultRows fields={fields} skipped={skipped} onToggleSkip={toggleSkip} derivedAt={data?.derivedAt} />
 
           <div className="mt-5 pt-4 border-t border-hairline flex items-center justify-between gap-3 flex-wrap">
             <div className="text-xs text-content-muted">
@@ -411,7 +412,7 @@ function OutsideBbmpExplainer({ data }) {
   );
 }
 
-function ResultRows({ fields, skipped, onToggleSkip }) {
+function ResultRows({ fields, skipped, onToggleSkip, derivedAt }) {
   return (
     <ul className="divide-y divide-hairline border border-hairline rounded-md overflow-hidden" data-testid="auto-fill-rows">
       {fields.map((f) => {
@@ -426,14 +427,12 @@ function ResultRows({ fields, skipped, onToggleSkip }) {
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="text-xs text-content-muted">{f.label}</span>
                 {f.source && (
-                  <Badge tone="info" className="!text-[10px]">
-                    {f.source}
-                  </Badge>
-                )}
-                {typeof f.confidence === 'number' && (
-                  <span className="text-[10px] text-content-muted tabular-nums">
-                    conf {(f.confidence * 100).toFixed(0)}%
-                  </span>
+                  <DerivedValueChip
+                    source={f.source}
+                    confidence={f.confidence}
+                    derivedAt={derivedAt}
+                    extras={f.chipExtras}
+                  />
                 )}
               </div>
               <div className={`text-sm font-medium ${f.value ? 'text-content-primary' : 'text-content-muted italic'}`}>
@@ -483,6 +482,12 @@ function buildFieldRows(data) {
       rawValue: { lat: c.lat, lng: c.lng },
       source: c.source || null,
       confidence: c.confidence ?? null,
+      chipExtras: [
+        { label: 'Provider', value: c.source },
+        { label: 'Status', value: c.status },
+        { label: 'Formatted', value: c.formatted_address },
+        { label: 'Place ID', value: c.place_id },
+      ],
     });
   }
 
@@ -499,6 +504,10 @@ function buildFieldRows(data) {
       rawValue: { ward_no: w.ward_no },
       source: 'BBMP street index',
       confidence: w.confidence ?? null,
+      chipExtras: [
+        { label: 'Match', value: w.source },
+        { label: 'Token', value: data.streetIndex?.search_token_used },
+      ],
     });
   }
 
@@ -522,6 +531,12 @@ function buildFieldRows(data) {
       source: z.source_street ? `${z.source_street} (p.${z.source_page})` : 'BBMP street index',
       confidence: z.confidence ?? null,
       note: band ? `Guidance bandwidth: ${band}` : 'Guidance bandwidth: not on file',
+      chipExtras: [
+        { label: 'Street', value: z.source_street },
+        { label: 'PDF page', value: z.source_page },
+        { label: 'Zone', value: z.zone_code },
+        { label: 'Band ₹', value: band },
+      ],
     });
   }
 
@@ -540,6 +555,13 @@ function buildFieldRows(data) {
       source: pd.source || 'address-fuzz',
       confidence: pd.confidence ?? null,
       note: meta || null,
+      chipExtras: [
+        { label: 'Match', value: pd.source },
+        { label: 'PD code', value: pd.pd_code },
+        { label: 'Population', value: pd.population_2011?.toLocaleString?.('en-IN') },
+        { label: 'Area', value: pd.area_ha ? `${pd.area_ha} ha` : null },
+        { label: 'Density', value: pd.gross_density_pph ? `${pd.gross_density_pph} PPH` : null },
+      ],
     });
   }
 
@@ -557,6 +579,13 @@ function buildFieldRows(data) {
         data.kgis?.survey_numbers?.length > 0
           ? `${data.kgis.survey_numbers.length} survey number candidate${data.kgis.survey_numbers.length === 1 ? '' : 's'} nearby`
           : null,
+      chipExtras: [
+        { label: 'District', value: h.district },
+        { label: 'Taluk', value: h.taluk },
+        { label: 'Hobli', value: h.hobli },
+        { label: 'Village', value: h.village },
+        { label: 'Surveys', value: data.kgis?.survey_numbers?.length },
+      ],
     });
   }
 
@@ -569,6 +598,10 @@ function buildFieldRows(data) {
       source: 'evidence_facts',
       confidence: null,
       note: data.applicableWarnings.map((w) => w.kind).filter(Boolean).slice(0, 4).join(' · '),
+      chipExtras: [
+        { label: 'Count', value: data.applicableWarnings.length },
+        { label: 'Kinds', value: data.applicableWarnings.map((w) => w.kind).filter(Boolean).join(', ') },
+      ],
     });
   }
 
