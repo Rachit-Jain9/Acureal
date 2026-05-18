@@ -252,6 +252,14 @@ export const propertiesAPI = {
     if (lng !== undefined && lng !== null && lng !== '') params.lng = lng;
     return api.get('/properties/auto-derive-context', { params });
   },
+  // Persists the picks the user kept from the AutoFillParcelContextCard
+  // to the auto_derived_* columns. Goes through a dedicated endpoint so
+  // the audit trail is clean and the generic update path stays untouched.
+  applyAutoDerivedContext: (id, { picks, derivedSource } = {}) =>
+    api.patch(`/properties/${id}/apply-auto-derived-context`, {
+      picks: picks || {},
+      derivedSource: derivedSource || null,
+    }),
 };
 
 // Financials

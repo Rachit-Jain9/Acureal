@@ -94,6 +94,35 @@ router.post(
   }
 );
 
+// PATCH /properties/:id/apply-auto-derived-context — persists the picks
+// the user kept from the AutoFillParcelContextCard (PR #376) to the
+// `auto_derived_*` columns added by 20260602 migration. Goes through a
+// dedicated path (not the generic updateProperty) so the audit trail is
+// clean and the surface stays small. Two-segment path so the `/:id`
+// catch-all below doesn't intercept; safe from the PR #380 ordering bug.
+router.patch(
+  '/:id/apply-auto-derived-context',
+  authenticate,
+  requireAdminOrAnalyst,
+  [
+    body('picks').optional().isObject(),
+    body('derivedSource').optional().isObject(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const property = await propertyService.applyAutoDerivedContext(
+        req.params.id,
+        { picks: req.body?.picks || {}, derivedSource: req.body?.derivedSource || null },
+        req.user.id,
+      );
+      res.json({ success: true, message: 'Auto-derived context applied.', data: property });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // GET /properties/auto-derive-context — orchestrator endpoint that takes
 // an address or (lat, lng) and returns a single payload with coordinates,
 // BBMP jurisdiction + ward, street-index match, BBMP property-tax zone +

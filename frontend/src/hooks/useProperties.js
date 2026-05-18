@@ -163,6 +163,28 @@ export function useVerifyParcelItem() {
   });
 }
 
+// Apply the AutoFillParcelContextCard's picks via the dedicated
+// /properties/:id/apply-auto-derived-context endpoint. Invalidates the
+// same caches as useUpdateProperty so the deal page reflects the new
+// auto_derived_* values without a manual refresh.
+export function useApplyAutoDerivedContext() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, picks, derivedSource }) =>
+      propertiesAPI.applyAutoDerivedContext(id, { picks, derivedSource }).then((r) => r.data),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['properties'] });
+      qc.invalidateQueries({ queryKey: ['property', id] });
+      qc.invalidateQueries({ queryKey: ['property', id, 'parcel-intelligence'] });
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      qc.invalidateQueries({ queryKey: ['deal'] });
+      qc.invalidateQueries({ queryKey: ['deal-workspace'] });
+    },
+    onError: (err) =>
+      toast.error(err.response?.data?.message || 'Failed to apply auto-derived context'),
+  });
+}
+
 export function useUnverifyParcelItem() {
   const qc = useQueryClient();
   return useMutation({
