@@ -15,6 +15,9 @@ import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
 import { SectionHeader, SkeletonList, Card } from '../../design-system';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
+// PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
+// ships in the DOCX Risk Register section) inline at the top of the tab.
+import RiskNarrativePanel from './RiskNarrativePanel';
 
 const RISK_CATEGORIES = [
   { value: 'title', label: 'Title' },
@@ -333,6 +336,12 @@ export default function RiskTab() {
     <div className="space-y-6">
       {/* Risk Score */}
       <RiskScoreCard score={score} flagCount={flags.length} />
+
+      {/* PR-NX47 (2026-05-19) — AI risk-profile synthesis. Same Claude
+          narrative as the DOCX Risk Register section (PR-NX43). Renders
+          NOTHING when no risks are logged or all are closed — defers
+          to the existing RiskScoreCard / table for that empty state. */}
+      <RiskNarrativePanel dealId={dealId} />
 
       {/* Add Flag */}
       <SectionHeader

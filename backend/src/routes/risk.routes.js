@@ -5,6 +5,8 @@ const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const riskService = require('../services/risk.service');
 const inconsistencyDetector = require('../services/inconsistencyDetector.service');
 const aiArtifacts = require('../services/aiArtifacts.service');
+const dealService = require('../services/deal.service');
+const { generateRiskNarrative } = require('../services/export.insights.service');
 const { query } = require('../config/database');
 
 const router = express.Router();
@@ -28,6 +30,70 @@ router.get('/deals/:dealId/risk/score', authenticate, async (req, res, next) => 
     next(err);
   }
 });
+
+// PR-NX47 (2026-05-19) — Live AI risk-narrative endpoint.
+//
+// Surfaces the same 2-paragraph Claude synthesis (risk profile summary
+// + critical-spotlight callout) that ships in the DOCX Risk Register
+// section (PR-NX43), now consumable by the frontend RiskTab in the live
+// workspace — operators no longer need to download the DOCX to read the
+// AI risk synthesis. Uses the same generateRiskNarrative service so the
+// XLSX / DOCX / PPTX / frontend all see identical content per
+// cross-product reconciliation rules.
+//
+// Cascade: Claude (primary) → OpenAI (secondary) → unavailable. Returns
+// canonical envelope: { available, summary_paragraph,
+// critical_spotlight_paragraph, confidence, provider, fallbackReason,
+// disclaimer }.
+//
+// Fast-no-op paths: zero risks logged OR all risks closed/resolved/
+// mitigated → returns { available: false, reason } without firing any
+// AI call.
+//
+// Auth: authenticate + analyst/admin (consistent with the DOCX export
+// route — same data, same gate).
+router.get(
+  '/deals/:dealId/risk-narrative',
+  authenticate,
+  requireAdminOrAnalyst,
+  async (req, res, next) => {
+    try {
+      const dealId = req.params.dealId;
+      // Fetch deal core (RLS-scoped) and risk items in parallel — both
+      // are independent reads.
+      const [deal, items] = await Promise.all([
+        dealService.getDealById(dealId),
+        riskService.listByDeal(dealId),
+      ]);
+      if (!deal) {
+        return res.status(404).json({ success: false, message: 'Deal not found' });
+      }
+
+      // Compute severity counts inline — same shape as the export
+      // pipeline's riskSummary so the service receives identical input
+      // regardless of which surface called it.
+      const riskCounts = items.reduce(
+        (acc, r) => {
+          const sev = String(r?.severity || '').toLowerCase();
+          const status = String(r?.status || '').toLowerCase();
+          if (status === 'open' || status === 'flagged') {
+            if (sev === 'critical') acc.critical += 1;
+            else if (sev === 'high') acc.high += 1;
+            else if (sev === 'medium') acc.medium += 1;
+            else if (sev === 'low') acc.low += 1;
+          }
+          return acc;
+        },
+        { critical: 0, high: 0, medium: 0, low: 0 },
+      );
+
+      const narrative = await generateRiskNarrative({ deal, riskCounts, items });
+      return res.json({ success: true, data: narrative });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // POST /deals/:dealId/risk
 router.post('/deals/:dealId/risk', authenticate, requireAdminOrAnalyst, async (req, res, next) => {

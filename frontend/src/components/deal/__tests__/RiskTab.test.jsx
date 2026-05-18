@@ -32,6 +32,20 @@ vi.mock('../../../hooks/useDealContext', () => ({
   useDealRecord: () => ({ name: 'Whitefield Plot 22' }),
 }));
 
+// PR-NX47 (2026-05-19) — the new RiskNarrativePanel mounted at the top
+// of RiskTab calls useRiskNarrative. Mock it as a no-op (available:
+// false) so the existing brief-panel tests don't see the new panel.
+vi.mock('../../../hooks/useRiskNarrative', () => ({
+  useRiskNarrative: () => ({
+    data: { available: false, reason: 'no risks logged' },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    isFetching: false,
+  }),
+}));
+
 vi.mock('../../../utils/downloadMarkdown', () => ({
   downloadMarkdown: (...args) => downloadMarkdownFn(...args),
   copyMarkdownToClipboard: (...args) => copyToClipboardFn(...args),

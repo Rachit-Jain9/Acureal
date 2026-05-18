@@ -554,6 +554,11 @@ export const riskAPI = {
   // narrative via Claude.
   runInconsistencyCheck: (dealId) => api.post(`/deals/${dealId}/risk/ai/inconsistency-check`),
   getRiskBrief:          (dealId) => api.get(`/deals/${dealId}/risk/ai/brief`),
+  // PR-NX47 (2026-05-19) — live AI risk narrative. Returns the same
+  // 2-paragraph Claude synthesis (summary + critical-spotlight) that
+  // ships in the DOCX Risk Register section (PR-NX43). Cascades Claude
+  // → OpenAI → unavailable. Frontend RiskTab consumes via useRiskNarrative.
+  narrative:             (dealId) => api.get(`/deals/${dealId}/risk-narrative`),
 };
 
 // Master Plan (regulatory zones)
