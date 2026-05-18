@@ -35,6 +35,7 @@ function listRoutes(r) {
 
 const SINGLE_SEGMENT_LITERAL_GET_ROUTES = [
   '/auto-derive-context',
+  '/geocode-diagnostic',
   // Add new literal single-segment routes here so the test catches
   // the order regression.
 ];
