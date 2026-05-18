@@ -552,6 +552,13 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
 
 module.exports = {
   deriveParcelContextFromAddress,
+  // PR-NX41 (2026-05-18) — exported for dealExport.service so the DOCX
+  // export pipeline can enrich the deal's auto_derived_pd_code with the
+  // 2011-census + RMP-table demographics that already live in
+  // regulatory_data.evidence_facts. Pre-NX41 the DOCX Demographics
+  // section silently fell through to a "manual input required" placeholder
+  // for every Bengaluru deal even though the data was present.
+  enrichPdWithDemographics,
   // Exported for tests
   _internal: {
     isWithinBmaApprox,        // backwards-compat alias for isWithinBbmpBbox
