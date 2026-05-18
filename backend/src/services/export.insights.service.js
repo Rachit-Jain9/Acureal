@@ -762,15 +762,238 @@ const generateSensitivityNarrative = async ({ deal, sensitivityMatrix, financial
   return unavailable(fallbackReasons.join('; '));
 };
 
+// ════════════════════════════════════════════════════════════════════════
+// PR-NX45 (2026-05-18) — Document-derived insights (Gemini extractions
+// surfaced + Claude cross-document reasoning)
+// ════════════════════════════════════════════════════════════════════════
+//
+// Pre-NX45 the DOCX report mentioned uploaded documents via the Provenance
+// section but never SURFACED what was actually extracted from them. The
+// operator had to download the report + then click into each document on
+// the deal page to know the sale-deed's owner name, the EC's encumbrance
+// status, the RERA cert's expiry date — exactly the facts an IC reviewer
+// asks about first.
+//
+// NX45 adds a new "Document-Derived Insights" section that:
+//   1. Surfaces high-confidence extracted facts grouped by doctype.
+//      Pure data display — uses what Gemini already extracted (PR-NX25).
+//   2. Detects cross-document inconsistencies via Claude reasoning:
+//      "Sale deed shows owner X but RTC shows owner Y" type findings.
+//      This is the institutional-grade differentiator: catches mismatches
+//      a human would miss in a 30-document deal package.
+//   3. Confidence summary: how many fields are high vs medium vs low.
+//
+// Provider strategy:
+//   - The DATA part (#1, #3) is deterministic — JS reads structured_fields
+//     and renders. No AI call.
+//   - The INSISTENCY DETECTION part (#2) is Claude — best at cross-document
+//     reasoning. OpenAI is the fallback for resilience.
+
+const DOC_INSIGHTS_SYSTEM_PROMPT = `You are an investment-review analyst at an India-focused real estate private equity firm. You compare facts extracted from multiple legal documents (sale deeds, ECs, khata extracts, RERA registrations, conversion orders) and surface inconsistencies that would matter to a credit committee.
+
+STRICT RULES:
+- Respond ONLY with valid JSON matching the schema below. No markdown fences, no prose before/after.
+- Only flag a finding if the documents EXPLICITLY contradict OR if one document is missing a fact another asserts. Do NOT invent contradictions.
+- Be specific: cite the document type AND the value seen in each document. Never write vague "documents disagree" without naming the values.
+- Indian context: owner names, survey numbers (with sub-divisions like 12/2A), khata numbers, RERA registration numbers, area, consideration value are the canonical fields to cross-check.
+- Severity: "critical" for title/owner mismatches, "high" for survey/khata mismatches, "medium" for area/value mismatches, "low" for trivial.
+
+SCHEMA:
+{
+  "summary_paragraph": "1 paragraph (3-5 sentences, max 90 words) summarizing what the extracted document set tells us about the deal. Reference the count of documents + which doctypes are present.",
+  "findings": [
+    {
+      "title": "Short title (max 10 words)",
+      "severity": "critical" | "high" | "medium" | "low",
+      "description": "1-2 sentence explanation naming the contradicting documents + the values seen in each.",
+      "recommendation": "Specific next step (max 15 words) to resolve the finding."
+    }
+  ],
+  "confidence": "high" | "medium" | "low"
+}
+
+Provide 0-5 findings. ZERO is the right answer when the documents agree. Confidence "low" when fewer than 2 documents are present or the document set lacks key doctypes (sale_deed, ec, rtc, khata).`;
+
+const buildDocInsightsPayload = ({ deal, extractions }) => {
+  // Group fields by doctype so Claude sees the documents as related groups
+  // rather than a flat list.
+  const docs = {};
+  for (const ext of extractions || []) {
+    if (!ext?.structured_fields || typeof ext.structured_fields !== 'object') continue;
+    const docType = String(ext.doc_type || 'unknown');
+    if (!docs[docType]) docs[docType] = [];
+    docs[docType].push({
+      extraction_id: ext.id,
+      provider: ext.provider || null,
+      // Only keep fields with truthy values to keep payload tight.
+      fields: Object.fromEntries(
+        Object.entries(ext.structured_fields)
+          .filter(([_k, v]) => v != null && v !== '')
+          .slice(0, 30) // cap per doc to avoid blowing the prompt budget
+      ),
+    });
+  }
+  return {
+    deal: {
+      name: deal?.name || null,
+      asset_class: deal?.asset_class || null,
+      city: deal?.city || null,
+      stated_owner_name: deal?.owner_name || null,
+      stated_survey_number: deal?.survey_number || null,
+    },
+    document_counts: Object.fromEntries(
+      Object.entries(docs).map(([k, arr]) => [k, arr.length])
+    ),
+    documents_by_type: docs,
+  };
+};
+
+const coerceDocInsightsEnvelope = (parsed, extras = {}) => ({
+  available: true,
+  summary_paragraph: typeof parsed.summary_paragraph === 'string' ? parsed.summary_paragraph.trim() : null,
+  findings: Array.isArray(parsed.findings)
+    ? parsed.findings
+        .filter((f) => f && (f.title || f.description))
+        .slice(0, 8)
+        .map((f) => ({
+          title: String(f.title || '').trim(),
+          severity: ['critical', 'high', 'medium', 'low'].includes(f.severity)
+            ? f.severity
+            : 'medium',
+          description: String(f.description || '').trim(),
+          recommendation: typeof f.recommendation === 'string' ? f.recommendation.trim() : null,
+        }))
+    : [],
+  confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'medium',
+  disclaimer:
+    'AI-assisted cross-document analysis is informational only. Verify each flagged finding against the source documents before relying on it.',
+  ...extras,
+});
+
+const callPrimaryDocInsightsClaude = async (payload, deal) => withTimeout(
+  runClaudeReasoning({
+    task: 'export_insights',
+    systemPrompt: DOC_INSIGHTS_SYSTEM_PROMPT,
+    cachePrompt: true,
+    payload,
+    maxTokens: 1200,
+    attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+    metadata: { kind: 'doc_insights', attempt: 'primary' },
+  }),
+  MODEL_TIMEOUT_MS,
+  'Claude doc-insights call'
+);
+
+const callSecondaryDocInsightsOpenAI = async (payload, deal) => {
+  if (!runAI) return null;
+  const envelope = await withTimeout(
+    runAI({
+      task: 'export_insights',
+      provider: 'openai',
+      attach: { dealId: deal?.id, organizationId: deal?.organization_id },
+      metadata: { kind: 'doc_insights', attempt: 'secondary' },
+      run: async ({ providers, model }) => providers.runOpenAIReasoning({
+        systemPrompt: DOC_INSIGHTS_SYSTEM_PROMPT,
+        payload,
+        maxTokens: 1200,
+        model,
+      }),
+    }),
+    MODEL_TIMEOUT_MS,
+    'OpenAI doc-insights call'
+  );
+  return envelope?.result || null;
+};
+
+/**
+ * Synthesize a cross-document insight pack: surface what was extracted,
+ * detect inconsistencies, summarize confidence.
+ *
+ * Returns unavailable+null fast when no extractions have actual
+ * structured_fields populated (zero AI cost on deals without doc-ingest).
+ *
+ * Cascade: Claude → OpenAI → unavailable.
+ */
+const generateDocumentInsights = async ({ deal, extractions }) => {
+  const unavailable = (reason) => ({
+    available: false,
+    reason,
+    summary_paragraph: null,
+    findings: [],
+    confidence: null,
+    disclaimer:
+      'AI-assisted cross-document analysis is informational only.',
+  });
+
+  const hasContent = Array.isArray(extractions)
+    && extractions.some((e) => e?.structured_fields
+      && typeof e.structured_fields === 'object'
+      && Object.keys(e.structured_fields).length > 0);
+  if (!hasContent) {
+    return unavailable('no extractions with structured_fields available');
+  }
+
+  const availability = getProviderAvailability();
+  if (!availability.gpt_compatible && !availability.claude) {
+    return unavailable('No AI provider configured (need ANTHROPIC_API_KEY or OPENAI_API_KEY)');
+  }
+
+  const payload = buildDocInsightsPayload({ deal, extractions });
+  const fallbackReasons = [];
+
+  if (availability.claude) {
+    try {
+      const raw = await callPrimaryDocInsightsClaude(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceDocInsightsEnvelope(parsed, {
+          provider: 'claude-sonnet-4-6',
+          fallbackReason: null,
+        });
+      }
+      fallbackReasons.push('Claude returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('Claude', err));
+    }
+  } else {
+    fallbackReasons.push('Claude not configured');
+  }
+
+  if (availability.gpt_compatible) {
+    try {
+      const raw = await callSecondaryDocInsightsOpenAI(payload, deal);
+      const parsed = parseModelJson(raw);
+      if (parsed && typeof parsed === 'object') {
+        return coerceDocInsightsEnvelope(parsed, {
+          provider: 'gpt-5.4',
+          fallbackReason: fallbackReasons.length
+            ? `${fallbackReasons.join('; ')} — auto-failover succeeded on openai`
+            : null,
+        });
+      }
+      fallbackReasons.push('OpenAI returned unparseable JSON');
+    } catch (err) {
+      fallbackReasons.push(describeProviderError('OpenAI', err));
+    }
+  } else {
+    fallbackReasons.push('OpenAI not configured');
+  }
+
+  return unavailable(fallbackReasons.join('; '));
+};
+
 module.exports = {
   generateDealInsights,
   generateRiskNarrative, // PR-NX43
   generateSensitivityNarrative, // PR-NX44
+  generateDocumentInsights, // PR-NX45
   // Internal exports — used by the Tier-2 #14 A/B eval harness.
   SYSTEM_PROMPT,
   RISK_NARRATIVE_SYSTEM_PROMPT, // PR-NX43
   SENSITIVITY_NARRATIVE_SYSTEM_PROMPT, // PR-NX44
+  DOC_INSIGHTS_SYSTEM_PROMPT, // PR-NX45
   buildPayload,
   buildRiskNarrativePayload, // PR-NX43
   buildSensitivityPayload, // PR-NX44
+  buildDocInsightsPayload, // PR-NX45
 };

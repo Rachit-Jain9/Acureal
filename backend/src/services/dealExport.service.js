@@ -2,7 +2,7 @@ const { query } = require('../config/database');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
-const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrative } = require('./export.insights.service');
+const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrative, generateDocumentInsights } = require('./export.insights.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
@@ -564,6 +564,10 @@ const getDealExportContext = async (dealId) => {
     cityBenchmarks,
     autoFillEventsResult,
     extractionStatusResult,
+    // PR-NX45 (2026-05-18) — completed extractions with their actual
+    // structured_fields, fed to generateDocumentInsights for the new
+    // Document-Derived Insights DOCX section.
+    completedExtractionsResult,
   ] = await Promise.all([
     query(
       `SELECT
@@ -672,7 +676,32 @@ const getDealExportContext = async (dealId) => {
       if (err && err.code === '42P01') return { rows: [] };
       throw err;
     }),
+    // PR-NX45 (2026-05-18) — fetch the FULL structured_fields JSON for
+    // completed extractions so the new DOCX "Document-Derived Insights"
+    // section can render extracted facts AND have Claude detect cross-
+    // document inconsistencies. Capped at 20 most-recent completed
+    // extractions to keep prompt budget manageable. Soft-fails on
+    // missing table.
+    query(
+      `SELECT id, document_id, doc_type, provider, structured_fields,
+              extracted_at
+         FROM document_extractions
+        WHERE deal_id = $1
+          AND extraction_status = 'completed'
+          AND structured_fields IS NOT NULL
+        ORDER BY extracted_at DESC NULLS LAST, created_at DESC
+        LIMIT 20`,
+      [dealId]
+    ).catch((err) => {
+      if (err && err.code === '42P01') return { rows: [] };
+      throw err;
+    }),
   ]);
+
+  // PR-NX45 (2026-05-18) — extract the completed extractions with
+  // structured_fields for the document-insights AI call. Empty array
+  // when table missing (42P01) or no completed extractions.
+  const completedExtractions = (completedExtractionsResult?.rows || []);
 
   const ddSummary = {
     total_required: Number(ddSummaryResult.rows[0]?.total_required || 0),
@@ -747,11 +776,11 @@ const getDealExportContext = async (dealId) => {
     residualLandValueCr: deal.residual_land_value_cr,
   });
 
-  // PR-NX41 + NX43 + NX44 (2026-05-18): demographics + IC opinion + risk
-  // narrative + sensitivity narrative all run in parallel to keep export
-  // latency flat. Each .catch()es independently so one failing never
-  // aborts the others.
-  const [ai, demographics, riskNarrative, sensitivityNarrative] = await Promise.all([
+  // PR-NX41 + NX43 + NX44 + NX45 (2026-05-18): demographics + IC opinion
+  // + risk narrative + sensitivity narrative + document insights all run
+  // in parallel to keep export latency flat. Each .catch()es independently
+  // so one failing never aborts the others.
+  const [ai, demographics, riskNarrative, sensitivityNarrative, documentInsights] = await Promise.all([
     generateDealInsights({
       deal,
       ddCounts: ddSummary,
@@ -802,6 +831,20 @@ const getDealExportContext = async (dealId) => {
       driver_decomposition_paragraph: null,
       stress_test_paragraph: null,
       dominant_driver: null,
+      confidence: null,
+    })),
+    // PR-NX45 (2026-05-18) — Claude (primary) cross-document reasoning
+    // over the completed extractions. Surfaces inconsistencies + a 1-
+    // paragraph summary of what the doc set tells us. Auto-no-op when
+    // no extractions have structured_fields populated.
+    generateDocumentInsights({
+      deal,
+      extractions: completedExtractions,
+    }).catch((error) => ({
+      available: false,
+      reason: error.message,
+      summary_paragraph: null,
+      findings: [],
       confidence: null,
     })),
   ]);
@@ -863,6 +906,15 @@ const getDealExportContext = async (dealId) => {
     documents: {
       summary: documentSummary,
       items: documents,
+      // PR-NX45 (2026-05-18) — full structured_fields per completed
+      // extraction so DOCX buildDocumentInsights can render extracted
+      // facts grouped by doctype. Capped at 20 rows; soft-empty when
+      // no doc-ingest has happened.
+      completedExtractions,
+      // PR-NX45 (2026-05-18) — Claude-synthesized cross-document insights
+      // (summary paragraph + 0-5 inconsistency findings). Null-shape
+      // when no extractions have structured_fields populated.
+      insights: documentInsights,
     },
     // PR-NX36 (2026-05-17) — Provenance / Source Register payload.
     //
