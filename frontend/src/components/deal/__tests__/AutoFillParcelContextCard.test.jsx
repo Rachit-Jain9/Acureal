@@ -208,6 +208,43 @@ describe('AutoFillParcelContextCard', () => {
     expect(screen.getByText(/AI-assisted derivation/i)).toBeInTheDocument();
   });
 
+  it('shows the high-severity CoordinatesGateExplainer + switch-to-coords button when geocode is gated', () => {
+    mockHookState.data = {
+      ...samplePayload,
+      coordinatesGate: {
+        gated: true,
+        reason: 'low_confidence_geocode',
+        threshold: 0.7,
+        confidence: 0.45,
+        provider: 'nominatim',
+        message: 'Geocoder returned an approximate match (confidence 45%, nominatim). BBMP street index, ward, zone, and Planning District lookups are skipped — those would chain on inaccurate coordinates and produce misleading values. Switch to "By coordinates" and paste a precise lat/lng (e.g. right-click the parcel pin in Google Maps → copy coordinates) to continue.',
+      },
+      bbmpJurisdiction: { withinBbmp: false, ward: null, detection_method: 'low_confidence_geocode_blocked' },
+      bbmpZone: null,
+      streetIndex: { match: null, alternates: [], search_token_used: null, search_summary: null },
+      planningDistrict: null,
+      kgis: { hierarchy: { taluk: 'Anekal', district: 'Bangalore Urban' }, status: 'matched', confidence: 0.65, survey_numbers: [] },
+    };
+    renderCard({ defaultAddress: 'Jigani, Bengaluru' });
+
+    const banner = screen.getByTestId('coordinates-gate-explainer');
+    expect(banner).toBeInTheDocument();
+    expect(banner.textContent).toMatch(/Geocode is approximate \(45% confidence, nominatim\)/i);
+    expect(banner.textContent).toMatch(/BBMP lookups skipped/i);
+    expect(banner.textContent).toMatch(/Anekal, Bangalore Urban/);
+    expect(banner.textContent).toMatch(/right-click the parcel pin/i);
+
+    // The lower-severity outside-BBMP explainer must NOT also fire when
+    // the gate is active (that would be double-warning noise).
+    expect(screen.queryByTestId('outside-bbmp-explainer')).not.toBeInTheDocument();
+
+    // Clicking the switch button should flip mode to coordinates.
+    const switchBtn = screen.getByRole('button', { name: /Switch to coordinate input/i });
+    fireEvent.click(switchBtn);
+    expect(screen.getByLabelText('Latitude')).toBeInTheDocument();
+    expect(screen.getByLabelText('Longitude')).toBeInTheDocument();
+  });
+
   it('hides BBMP-specific rows + shows OutsideBbmpExplainer when parcel is outside BBMP', () => {
     mockHookState.data = {
       ...samplePayload,

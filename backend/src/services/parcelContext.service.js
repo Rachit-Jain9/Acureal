@@ -49,6 +49,29 @@ const isWithinBmaApprox = ({ lat, lng }) =>
   lng >= BENGALURU_BBOX.minLng &&
   lng <= BENGALURU_BBOX.maxLng;
 
+// Minimum geocoder confidence required before we run BBMP street index /
+// planning-district lookups on the returned coordinates. Calibrated from
+// the Jigani screenshot bug (2026-05-18) where a Nominatim city-fallback
+// at 45% confidence resolved to central Bengaluru — and the downstream
+// BBMP ward / zone / PD lookups all chained on those wrong coords,
+// producing IC-defensibility-breaking output ("Ward 109 / Zone B from
+// North Park Road / PD-08 northeast inner urban" for a south-of-city
+// Jigani address). Anything below 0.7 is treated as point-uncertain and
+// the BBMP-specific lookups are skipped.
+const GEOCODE_TRUST_THRESHOLD = 0.7;
+
+const isCoordinateTrustworthy = (coords) => {
+  if (!coords) return false;
+  // Caller-supplied lat/lng are 1.0 by construction — trust them.
+  if (coords.source === 'caller_supplied') return true;
+  // Geocoder results need both a numeric confidence above the threshold
+  // AND a non-"approximate" status. Google's city-level fallback returns
+  // status='approximate' even when confidence reads 0.45.
+  const numericOk = typeof coords.confidence === 'number' && coords.confidence >= GEOCODE_TRUST_THRESHOLD;
+  const statusOk = coords.status !== 'approximate' && coords.status !== 'failed' && coords.status !== 'error';
+  return numericOk && statusOk;
+};
+
 // Pull the salient address tokens for searching the BBMP street index.
 // Drops stop-words like "Bengaluru/Bangalore/India/Karnataka" because
 // those would dominate the trigram similarity score.
@@ -248,14 +271,22 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
   }
 
   const hasCoords = Number.isFinite(coords.lat) && Number.isFinite(coords.lng);
-  const withinBmaApprox = hasCoords && isWithinBmaApprox(coords);
+  const coordinatesTrustworthy = isCoordinateTrustworthy(coords);
+  // BBMP-specific lookups (street index, ward, zone, PD) require BOTH a
+  // bbox match AND trustworthy coordinates. A city-level Nominatim
+  // fallback can land inside the bbox geometrically while being wildly
+  // off the actual parcel — gate explicitly to prevent that bug.
+  const withinBmaApprox = hasCoords && coordinatesTrustworthy && isWithinBmaApprox(coords);
 
   // Tokens used for street-index + PD fuzzy matching. Prefer the
   // formatted address from Google because it's normalised.
   const tokens = extractAddressTokens(coords.formatted_address || trimmedAddress);
 
   // ─── Step 2-5: parallel data fetches ───────────────────────────────
-  // K-GIS needs lat/lng. Street index + PD + warnings don't.
+  // K-GIS gets the coords regardless — it's geographic, not BBMP-scoped,
+  // and returns its own confidence + status. Street index / PD lookups
+  // are gated on `withinBmaApprox` (which already enforces the trust
+  // threshold above).
   const [kgisResult, streetIndexResult, pdMatched, callouts] = await Promise.all([
     hasCoords
       ? fetchKgisContext({ lat: coords.lat, lng: coords.lng }).catch((err) => ({
@@ -321,6 +352,46 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
     kgis: kgisResult || {},
   });
 
+  // ─── Coordinate-trust gate metadata ─────────────────────────────────
+  // Used by the frontend to render an explicit "geocode is approximate,
+  // BBMP lookups skipped" banner so the user knows WHY rows are missing
+  // and can switch to coords-input mode to recover.
+  const coordinatesGate = hasCoords && !coordinatesTrustworthy
+    ? {
+        gated: true,
+        reason: 'low_confidence_geocode',
+        threshold: GEOCODE_TRUST_THRESHOLD,
+        confidence: coords.confidence ?? null,
+        provider: coords.source ?? null,
+        message:
+          `Geocoder returned an approximate match (confidence ${
+            coords.confidence != null ? `${Math.round(coords.confidence * 100)}%` : 'unknown'
+          }, ${coords.source || 'unknown source'}). BBMP street index, ward, zone, and Planning District lookups are skipped — those would chain on inaccurate coordinates and produce misleading values. Switch to "By coordinates" and paste a precise lat/lng (e.g. right-click the parcel pin in Google Maps → copy coordinates) to continue.`,
+      }
+    : { gated: false };
+
+  // Prepend the gate as a high-severity warning so it's the FIRST callout
+  // the frontend renders. Better one extra warning than a silent half-
+  // truthful field list.
+  const allWarnings = coordinatesGate.gated
+    ? [
+        {
+          kind: 'Geocode is approximate',
+          fact_type: 'coordinate_uncertainty',
+          fact_key: 'low_confidence_geocode',
+          severity: 'high',
+          item_count: 1,
+          source_section: coords.source ?? null,
+          source_page: null,
+          confidence_score: coords.confidence ?? null,
+          verification_required: true,
+          message: coordinatesGate.message,
+          fact_value: null,
+        },
+        ...callouts,
+      ]
+    : callouts;
+
   // ─── Assemble payload ──────────────────────────────────────────────
   return {
     inputs: {
@@ -329,9 +400,14 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
       lng: numLng,
     },
     coordinates: coords,
+    coordinatesGate,
     bbmpJurisdiction: {
       withinBbmp: withinBmaApprox,
-      detection_method: hasCoords ? 'bma_bbox_check' : 'unknown',
+      detection_method: coordinatesGate.gated
+        ? 'low_confidence_geocode_blocked'
+        : hasCoords
+          ? 'bma_bbox_check'
+          : 'unknown',
       bbox: BENGALURU_BBOX,
       ward: bbmpWard,
     },
@@ -366,7 +442,7 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
     },
     planningDistrict,
     kgis: kgisResult,
-    applicableWarnings: callouts,
+    applicableWarnings: allWarnings,
     verifyLinks,
     aiDisclaimer:
       'AI-assisted parcel context — every derived value carries a source + confidence. Verify against the linked authority portals before quoting in IC memos.',
@@ -380,7 +456,9 @@ module.exports = {
   // Exported for tests
   _internal: {
     isWithinBmaApprox,
+    isCoordinateTrustworthy,
     extractAddressTokens,
     scorePdAgainstAddress,
+    GEOCODE_TRUST_THRESHOLD,
   },
 };

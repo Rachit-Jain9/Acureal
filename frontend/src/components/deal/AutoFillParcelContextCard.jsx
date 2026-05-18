@@ -173,8 +173,20 @@ export default function AutoFillParcelContextCard({
       {data && (
         <>
           <ResultsSummary data={data} />
-          {data.bbmpJurisdiction && !data.bbmpJurisdiction.withinBbmp && (
-            <OutsideBbmpExplainer data={data} />
+          {data.coordinatesGate?.gated ? (
+            <CoordinatesGateExplainer
+              gate={data.coordinatesGate}
+              kgisHierarchy={data.kgis?.hierarchy}
+              onSwitchToCoords={() => {
+                setMode('coords');
+                if (data.coordinates?.lat) setLatInput(String(data.coordinates.lat));
+                if (data.coordinates?.lng) setLngInput(String(data.coordinates.lng));
+              }}
+            />
+          ) : (
+            data.bbmpJurisdiction && !data.bbmpJurisdiction.withinBbmp && (
+              <OutsideBbmpExplainer data={data} />
+            )
           )}
           <ResultRows fields={fields} skipped={skipped} onToggleSkip={toggleSkip} />
 
@@ -293,6 +305,59 @@ function ResultsSummary({ data }) {
           {Number(data.coordinates.lat).toFixed(5)}, {Number(data.coordinates.lng).toFixed(5)}
         </span>
       )}
+    </div>
+  );
+}
+
+// Surfaces the "coordinates not trustworthy" gate prominently when the
+// geocoder returned an approximate match (e.g. Nominatim's city-level
+// fallback for a Jigani-style apartment address). Backend skipped BBMP /
+// PD lookups; this banner tells the user WHY and offers a one-click
+// path to recover by switching to coordinate-input mode and pasting a
+// precise lat/lng from Google Maps. Higher-severity styling than the
+// outside-BBMP banner because it indicates "data here is unreliable",
+// not "this jurisdiction is different".
+function CoordinatesGateExplainer({ gate, kgisHierarchy, onSwitchToCoords }) {
+  const taluk = kgisHierarchy?.taluk;
+  const district = kgisHierarchy?.district;
+  const confidencePct = gate?.confidence != null ? Math.round(gate.confidence * 100) : null;
+  return (
+    <div
+      className="rounded-md border border-red-300 bg-red-50 px-3 py-3 mb-3 flex items-start gap-2"
+      data-testid="coordinates-gate-explainer"
+    >
+      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-700" aria-hidden="true" />
+      <div className="flex-1 min-w-0 text-xs text-red-900">
+        <div className="font-semibold mb-1">
+          Geocode is approximate{confidencePct != null ? ` (${confidencePct}% confidence, ${gate.provider || 'unknown source'})` : ''} — BBMP lookups skipped
+        </div>
+        <p className="leading-relaxed">
+          The geocoder returned a city-level fallback rather than the exact parcel location, so
+          BBMP street / ward / zone / Planning District lookups were not run — those would chain
+          on inaccurate coordinates and produce misleading values (a known IC-defensibility risk).
+          {taluk && (
+            <>
+              {' '}K-GIS still resolved hierarchy to{' '}
+              <span className="font-medium">{taluk}{district ? `, ${district}` : ''}</span>, which
+              you can use to verify the parcel manually.
+            </>
+          )}
+        </p>
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          {onSwitchToCoords && (
+            <button
+              type="button"
+              onClick={onSwitchToCoords}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-red-700 text-white hover:bg-red-800 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 active:scale-[0.98]"
+            >
+              Switch to coordinate input
+            </button>
+          )}
+          <span className="text-[10px] text-red-800/80">
+            Tip: open the address in Google Maps, right-click the parcel pin, copy the lat/lng, paste here.
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
