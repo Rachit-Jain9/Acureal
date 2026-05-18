@@ -94,6 +94,24 @@ router.post(
   }
 );
 
+// GET /properties/:id/ward-spread-benchmark — compute the
+// price-vs-guidance spread percentile distribution across other deals
+// in the same BBMP ward as this property. Returns ok:false when the
+// ward hasn't been auto-derived yet (apply auto-derive first) or when
+// fewer than 3 comparable deals exist in the same ward.
+router.get(
+  '/:id/ward-spread-benchmark',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const data = await propertyService.getWardSpreadBenchmark(req.params.id);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // PATCH /properties/:id/apply-auto-derived-context — persists the picks
 // the user kept from the AutoFillParcelContextCard (PR #376) to the
 // `auto_derived_*` columns added by 20260602 migration. Goes through a
