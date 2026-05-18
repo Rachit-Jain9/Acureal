@@ -4,6 +4,7 @@ import { Card, SectionHeader, Skeleton } from '../../design-system';
 import Badge from '../common/Badge';
 import DerivedValueChip from '../common/DerivedValueChip';
 import useAutoDeriveParcelContext from '../../hooks/useAutoDeriveParcelContext';
+import VerifyLinksSection from './VerifyLinksSection';
 
 /**
  * AutoFillParcelContextCard — the headline UX from this autonomous-window
@@ -190,6 +191,12 @@ export default function AutoFillParcelContextCard({
             )
           )}
           <ResultRows fields={fields} skipped={skipped} onToggleSkip={toggleSkip} derivedAt={data?.derivedAt} />
+
+          {/* Authority verify-links section (C-4) — surfaces Bhoomi RTC,
+              Kaveri EC, BBMP e-Aasthi, K-RERA, IGR Guidance, K-GIS
+              Cadastral, Google Maps satellite. Renders only when the
+              backend returns a non-empty verifyLinks array. */}
+          <VerifyLinksSection verifyLinks={data.verifyLinks} />
 
           <div className="mt-5 pt-4 border-t border-hairline flex items-center justify-between gap-3 flex-wrap">
             <div className="text-xs text-content-muted">
