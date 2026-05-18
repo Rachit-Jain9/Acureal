@@ -2,7 +2,7 @@ const { query } = require('../config/database');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
-const { generateDealInsights, generateRiskNarrative } = require('./export.insights.service');
+const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrative } = require('./export.insights.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
@@ -747,10 +747,11 @@ const getDealExportContext = async (dealId) => {
     residualLandValueCr: deal.residual_land_value_cr,
   });
 
-  // PR-NX41 + NX43 (2026-05-18): demographics + IC opinion + risk
-  // narrative all run in parallel to keep export latency flat. Each
-  // .catch()es independently so one failing never aborts the others.
-  const [ai, demographics, riskNarrative] = await Promise.all([
+  // PR-NX41 + NX43 + NX44 (2026-05-18): demographics + IC opinion + risk
+  // narrative + sensitivity narrative all run in parallel to keep export
+  // latency flat. Each .catch()es independently so one failing never
+  // aborts the others.
+  const [ai, demographics, riskNarrative, sensitivityNarrative] = await Promise.all([
     generateDealInsights({
       deal,
       ddCounts: ddSummary,
@@ -787,6 +788,22 @@ const getDealExportContext = async (dealId) => {
       critical_spotlight_paragraph: null,
       confidence: null,
     })),
+    // PR-NX44 (2026-05-18) — 2-paragraph OpenAI synthesis of the
+    // sensitivity analysis (driver decomposition + recommended stress
+    // tests). Cascades OpenAI → Claude → unavailable. Auto-no-op when
+    // the sensitivity grid is too sparse (< 3 rows or < 3 cols).
+    generateSensitivityNarrative({
+      deal,
+      sensitivityMatrix: sensitivity,
+      financials: deal,
+    }).catch((error) => ({
+      available: false,
+      reason: error.message,
+      driver_decomposition_paragraph: null,
+      stress_test_paragraph: null,
+      dominant_driver: null,
+      confidence: null,
+    })),
   ]);
 
   return {
@@ -798,6 +815,10 @@ const getDealExportContext = async (dealId) => {
     assumptions: buildDynamicAssumptions(modelParams?.inputs || {}),
     cashFlows,
     sensitivity,
+    // PR-NX44 (2026-05-18) — AI-synthesized 2-paragraph driver
+    // decomposition + recommended stress tests, consumed by DOCX
+    // buildFinancials → renders above the sensitivity tornado chart.
+    sensitivityNarrative,
     dd: {
       summary: ddSummary,
       items: ddItemsResult.rows,
