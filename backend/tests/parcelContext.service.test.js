@@ -218,10 +218,112 @@ describe('parcelContext.service — master plan zone honesty rule', () => {
   });
 });
 
+describe('parcelContext.service — low-confidence geocode gate (Jigani regression)', () => {
+  // Reproduces the 2026-05-18 screenshot bug: user typed a Jigani
+  // address. Google had no key set; Nominatim fell back to central
+  // Bengaluru at 45% confidence. Downstream BBMP lookups chained on
+  // the WRONG coords and produced Ward 109 / Zone B / PD-08 — none
+  // of which apply to Jigani. The gate must skip those lookups when
+  // confidence < 0.7 AND mark the bbmpJurisdiction as gated.
+  test('gates BBMP street-index + PD lookups when geocoder confidence is below threshold', async () => {
+    geocodeAddress.mockResolvedValueOnce({
+      found: true,
+      lat: 12.97679,           // central Bengaluru (Cubbon Park)
+      lng: 77.59008,
+      displayName: 'Bengaluru, Karnataka, India',
+      placeId: null,
+      provider: 'nominatim',
+      confidence: 0.45,        // <-- below the 0.7 trust threshold
+      status: 'verified',      // Nominatim's loose 'verified' for city-level matches
+    });
+    fetchKgisContext.mockResolvedValueOnce({
+      provider: 'kgis', status: 'matched', confidence: 0.65,
+      hierarchy: { taluk: 'Anekal', village: 'Jigani' }, survey_numbers: [], geometry_geojson: null,
+    });
+
+    const ctx = await deriveParcelContextFromAddress({
+      address: 'block Thyme Park Apartments, No 704 A, Industrial Bypass, Jigani, Bengaluru, Karnataka 560105',
+    });
+
+    // The BBMP street search must NOT have fired — coords aren't trusted.
+    expect(masterplanService.searchBbmpStreets).not.toHaveBeenCalled();
+    // Jurisdiction must claim the gate, not the bbox match.
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(false);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('low_confidence_geocode_blocked');
+    // The streetIndex.match + bbmpZone + planningDistrict must be null.
+    expect(ctx.streetIndex.match).toBeNull();
+    expect(ctx.bbmpZone).toBeNull();
+    expect(ctx.bbmpJurisdiction.ward).toBeNull();
+    // K-GIS is still resolved (geographic, not BBMP-scoped).
+    expect(ctx.kgis.hierarchy.taluk).toBe('Anekal');
+    // The gate object surfaces the reason + message to the frontend.
+    expect(ctx.coordinatesGate.gated).toBe(true);
+    expect(ctx.coordinatesGate.reason).toBe('low_confidence_geocode');
+    expect(ctx.coordinatesGate.confidence).toBe(0.45);
+    expect(ctx.coordinatesGate.message).toMatch(/approximate match/i);
+    expect(ctx.coordinatesGate.message).toMatch(/Switch to "By coordinates"/i);
+    // The first applicable warning must be the gate notice (high severity).
+    expect(ctx.applicableWarnings[0]).toMatchObject({
+      kind: 'Geocode is approximate',
+      fact_type: 'coordinate_uncertainty',
+      severity: 'high',
+    });
+  });
+
+  test('does NOT gate when caller supplies lat/lng directly (confidence is 1.0)', async () => {
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
+    expect(ctx.coordinatesGate.gated).toBe(false);
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(true);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('bma_bbox_check');
+  });
+
+  test('does NOT gate when geocoder returns high confidence + verified status', async () => {
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.97, lng: 77.59, displayName: '100 Brigade Road, Bengaluru, Karnataka, India',
+      provider: 'google', confidence: 0.92, status: 'verified',
+    });
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [stubStreetMatch], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ address: '100 Brigade Road' });
+    expect(ctx.coordinatesGate.gated).toBe(false);
+    expect(ctx.bbmpJurisdiction.withinBbmp).toBe(true);
+    expect(ctx.bbmpJurisdiction.detection_method).toBe('bma_bbox_check');
+    expect(masterplanService.searchBbmpStreets).toHaveBeenCalled();
+  });
+
+  test('gates when status is "approximate" even if numeric confidence is above threshold', async () => {
+    // Edge case: Google's city-level fallback returns confidence ~0.45
+    // AND status='approximate'. The status check should fire regardless
+    // of numeric value.
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.97, lng: 77.59, displayName: 'Bengaluru, IN',
+      provider: 'google', confidence: 0.85, status: 'approximate',
+    });
+    fetchKgisContext.mockResolvedValueOnce({ provider: 'kgis', status: 'matched', confidence: 0.65, hierarchy: {}, survey_numbers: [], geometry_geojson: null });
+
+    const ctx = await deriveParcelContextFromAddress({ address: 'Bengaluru' });
+    expect(ctx.coordinatesGate.gated).toBe(true);
+    expect(masterplanService.searchBbmpStreets).not.toHaveBeenCalled();
+  });
+});
+
 describe('parcelContext.service — internal helpers', () => {
   test('isWithinBmaApprox matches central BLR, rejects Mumbai', () => {
     expect(_internal.isWithinBmaApprox({ lat: 12.97, lng: 77.59 })).toBe(true);
     expect(_internal.isWithinBmaApprox({ lat: 19.07, lng: 72.88 })).toBe(false);
+  });
+
+  test('isCoordinateTrustworthy honors caller-supplied + threshold + status', () => {
+    expect(_internal.isCoordinateTrustworthy({ source: 'caller_supplied', confidence: 1.0, status: 'verified' })).toBe(true);
+    expect(_internal.isCoordinateTrustworthy({ source: 'google', confidence: 0.92, status: 'verified' })).toBe(true);
+    expect(_internal.isCoordinateTrustworthy({ source: 'nominatim', confidence: 0.45, status: 'verified' })).toBe(false);
+    expect(_internal.isCoordinateTrustworthy({ source: 'google', confidence: 0.85, status: 'approximate' })).toBe(false);
+    expect(_internal.isCoordinateTrustworthy({ source: 'google', confidence: 0.92, status: 'failed' })).toBe(false);
+    expect(_internal.isCoordinateTrustworthy(null)).toBe(false);
+    expect(_internal.GEOCODE_TRUST_THRESHOLD).toBe(0.7);
   });
 
   test('extractAddressTokens drops stop-words + short tokens', () => {
