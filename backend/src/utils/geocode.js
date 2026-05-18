@@ -127,6 +127,84 @@ const geocodeWithGoogle = async (address, city, state, pincode) => {
   }
 };
 
+// ─── GOOGLE PLACES TEXT SEARCH (SECOND-TRY before Nominatim) ─────────────────
+//
+// Why this exists: the Google Geocoding API and Google Places API are
+// separate products with separate API-enable flags in GCP. Many operators
+// (correctly) enable Places (used by `/properties/geocode/search`
+// autocomplete) but forget to enable Geocoding — so geocodeWithGoogle
+// returns REQUEST_DENIED silently and the orchestrator falls all the way
+// through to Nominatim. Nominatim is fine for verified-street addresses
+// but routinely returns city-level fallbacks for apartment-name style
+// addresses (the Jigani regression on 2026-05-18 was caused by this).
+//
+// Places Text Search excels at exactly those addresses — apartment +
+// landmark + locality strings. It returns place_id + geometry + formatted
+// address, which we map to the same shape geocodeWithGoogle returns so
+// the orchestrator can treat the result identically.
+const geocodeWithGooglePlaces = async (address, city, state, pincode) => {
+  const parts = [address, city, state, pincode, 'India'].filter(Boolean);
+  const fullAddress = parts.join(', ');
+
+  if (!fullAddress || fullAddress === 'India') {
+    return { found: false, status: 'insufficient_data', message: 'Insufficient address data to geocode.', provider: 'google_places' };
+  }
+
+  try {
+    const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+      params: {
+        query: fullAddress,
+        region: 'in',
+        key: GOOGLE_MAPS_KEY(),
+      },
+      timeout: 10000,
+    });
+
+    const data = response.data;
+
+    if (data.status === 'REQUEST_DENIED') {
+      console.warn('[Geocode] Google Places denied:', data.error_message);
+      return { found: false, status: 'failed', message: `Google Places denied: ${data.error_message || 'API not authorised'}`, provider: 'google_places' };
+    }
+
+    if (data.status === 'OK' && data.results?.length > 0) {
+      const result = data.results[0];
+      const { lat, lng } = result.geometry.location;
+      // Places Text Search confidence is harder to derive than Geocoding's
+      // `types` array. Heuristic: an `establishment` (named place) hit is
+      // a high-confidence point match; a `geocode` hit on a vague query
+      // is approximate. Default conservatively to 0.85 for `establishment`
+      // and 0.65 for everything else — both above the 0.7 trust threshold's
+      // boundary only when establishment-typed.
+      const isEstablishment = (result.types || []).includes('establishment');
+      const confidence = isEstablishment ? 0.85 : 0.65;
+      const status = isEstablishment ? 'verified' : 'approximate';
+      return {
+        found: true,
+        lat,
+        lng,
+        displayName: result.formatted_address,
+        placeId: result.place_id,
+        status,
+        confidence,
+        message: `Google Places: ${result.formatted_address}`,
+        provider: 'google_places',
+        // Surface the Places types so the orchestrator can audit what was matched.
+        place_types: result.types || [],
+      };
+    }
+
+    if (data.status === 'ZERO_RESULTS') {
+      return { found: false, status: 'failed', message: 'No Google Places match.', provider: 'google_places' };
+    }
+
+    return { found: false, status: 'failed', message: `Google Places unexpected status: ${data.status}`, provider: 'google_places' };
+  } catch (error) {
+    console.error('[Geocode] Google Places error:', error.message);
+    return { found: false, status: 'failed', message: `Google Places error: ${error.message}`, provider: 'google_places' };
+  }
+};
+
 // ─── NOMINATIM (FALLBACK) ─────────────────────────────────────────────────────
 
 const geocodeWithNominatim = async (address, city, state, pincode) => {
@@ -270,12 +348,34 @@ const geocodeAddress = async (address, city, state, pincode) => {
   const cached = await readFromCache(cacheKey);
   if (cached) return cached;
 
-  // Live geocode
+  // Live geocode — provider chain:
+  //   1. Google Geocoding API (best for street addresses; needs Geocoding
+  //      API enabled in GCP)
+  //   2. Google Places Text Search (best for apartment/landmark/locality;
+  //      needs Places API enabled in GCP — likely already enabled because
+  //      the autocomplete proxy uses it)
+  //   3. Nominatim (free, rate-limited, last resort)
   let result;
   if (isGoogleConfigured()) {
     result = await geocodeWithGoogle(address, city, state, pincode);
+    // If Geocoding returned a non-result (REQUEST_DENIED, hard error,
+    // or no match) try Places Text Search before falling through.
     if (result === null) {
-      result = await geocodeWithNominatim(address, city, state, pincode);
+      const placesResult = await geocodeWithGooglePlaces(address, city, state, pincode);
+      if (placesResult?.found) {
+        result = placesResult;
+      } else {
+        // Both Google paths failed. Fall through to Nominatim — but
+        // keep the Places failure message visible so the cached result
+        // explains WHY we ended up at Nominatim.
+        result = await geocodeWithNominatim(address, city, state, pincode);
+        if (result && placesResult?.message && !placesResult.found) {
+          // Annotate the Nominatim result with the upstream Google
+          // failure context. The parcelContext.service surfaces this
+          // in the AutoFillCard so the operator sees the root cause.
+          result.upstream_failure = placesResult.message;
+        }
+      }
     }
   } else {
     result = await geocodeWithNominatim(address, city, state, pincode);
@@ -287,4 +387,43 @@ const geocodeAddress = async (address, city, state, pincode) => {
   return result;
 };
 
-module.exports = { geocodeAddress };
+// Diagnostic — runs the FULL provider chain (cache-skip) and returns the
+// raw output of each step + which step ultimately won. Used by the new
+// admin diagnostic endpoint so the operator can debug WHY a given
+// address falls back to Nominatim (almost always: Geocoding API not
+// enabled in GCP, even though Places might be).
+const geocodeDiagnostic = async (address, city, state, pincode) => {
+  const diagnostic = {
+    input: { address, city, state, pincode },
+    google_configured: isGoogleConfigured(),
+    google_geocoding: null,
+    google_places: null,
+    nominatim: null,
+    winner: null,
+  };
+
+  if (isGoogleConfigured()) {
+    diagnostic.google_geocoding = await geocodeWithGoogle(address, city, state, pincode);
+    diagnostic.google_places = await geocodeWithGooglePlaces(address, city, state, pincode);
+  }
+  diagnostic.nominatim = await geocodeWithNominatim(address, city, state, pincode);
+
+  if (diagnostic.google_geocoding?.found) diagnostic.winner = 'google_geocoding';
+  else if (diagnostic.google_places?.found) diagnostic.winner = 'google_places';
+  else if (diagnostic.nominatim?.found) diagnostic.winner = 'nominatim';
+  else diagnostic.winner = null;
+
+  return diagnostic;
+};
+
+module.exports = {
+  geocodeAddress,
+  geocodeDiagnostic,
+  // Exported for tests
+  _internal: {
+    isGoogleConfigured,
+    geocodeWithGoogle,
+    geocodeWithGooglePlaces,
+    geocodeWithNominatim,
+  },
+};

@@ -141,6 +141,34 @@ router.patch(
   },
 );
 
+// GET /properties/geocode-diagnostic — admin-only debug endpoint that
+// runs Google Geocoding + Google Places + Nominatim against the same
+// address and returns each provider's raw output. Used to debug why a
+// given address falls back to a low-confidence provider (almost always:
+// Geocoding API not enabled in GCP, even though Places API is).
+// Two-segment-equivalent path safe from the PR #380 ordering bug.
+router.get(
+  '/geocode-diagnostic',
+  authenticate,
+  requireAdminOrAnalyst,
+  [qv('address').notEmpty().withMessage('address query param required').trim().isLength({ max: 500 })],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const { geocodeDiagnostic } = require('../utils/geocode');
+      const diagnostic = await geocodeDiagnostic(
+        req.query.address,
+        req.query.city || 'Bengaluru',
+        req.query.state || 'Karnataka',
+        req.query.pincode || null,
+      );
+      res.json({ success: true, data: diagnostic });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // GET /properties/auto-derive-context — orchestrator endpoint that takes
 // an address or (lat, lng) and returns a single payload with coordinates,
 // BBMP jurisdiction + ward, street-index match, BBMP property-tax zone +
