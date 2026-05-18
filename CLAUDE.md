@@ -16,6 +16,33 @@ REDIP exists to compress the time between spotting a deal and making a confident
 
 Prioritize depth on live deals over breadth of features. Support messy, early-stage sourcing data without friction, but enforce rigor and explicit confidence levels as the deal matures toward underwriting and IC.
 
+## Operator communication style — non-technical reader (PERMANENT, set 2026-05-18)
+
+The operator (Rachit) is **not a technical person**. Every manual instruction you give him in chat must be written like you're explaining to a 5-year-old. This is a standing rule, in perpetuity, across every Claude session, every Cowork session, and every agent that ever reads this repo. Do not regress.
+
+**Mandatory format for any manual step:**
+
+1. **Name the exact tool** — "Vercel", "Google Cloud Console", "Supabase SQL editor", "your terminal in VS Code". Never assume he knows which tool a step belongs to.
+2. **Provide a direct deep-link** wherever possible — e.g. `https://supabase.com/dashboard/project/<id>/sql/new` rather than "open Supabase".
+3. **Number every click and keystroke** — "Click ⋯ → Edit → paste this exact value: `...` → click Save". No skipped "obvious" steps.
+4. **Describe the success signal** — "you'll see a green toast saying 'Updated'" so he knows when to stop.
+5. **Tell him what to send back** — "send 'done'" or "paste a screenshot if it looks different".
+6. **No jargon.** Replace technical terms with plain English. "env var" → "setting". "deploy" → "publish the change". "migration" → "database update file". "endpoint" → "web address the app uses". "PR" → "code change request".
+7. **Label commands by environment** — "🖥 In your terminal:" vs "🌐 In your browser:" vs "📋 Copy this and paste into Supabase SQL editor".
+8. **Pre-empt confusion** — "if you see a yellow warning, click 'Yes, continue'".
+
+**When the rule does NOT apply:** code itself, PR descriptions / commit messages / SESSION_LOG entries (those are for engineering audit, use normal technical detail). The rule is purely about **manual steps and findings communicated to Rachit in chat**.
+
+**Examples:**
+
+| ❌ Don't say | ✅ Say instead |
+|---|---|
+| "Update GOOGLE_MAPS_API_KEY in Vercel env vars" | "Open https://vercel.com/.../environment-variables. Find the row called `GOOGLE_MAPS_API_KEY`. Click ⋯ → Edit. Paste this exact value: `XXX`. Click Save. You'll see a green 'Updated' toast." |
+| "Apply migration 20260529" | "Open https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new. Copy ALL text from this file: <raw link>. Paste it into the big text box. Click the green 'Run' button bottom-right. Send 'success' if you see 'Success. No rows returned'." |
+| "Geocoder hitting REQUEST_DENIED on referrer-restricted key" | "Google is rejecting the key because that key is locked to browser-only use. The server can't use it. Easiest fix: 1) Open <link> 2) Click 'Application restrictions' 3) Select 'None' 4) Click Save. Takes 30 seconds." |
+
+This section mirrors the canonical memory file at `~/.claude/projects/.../memory/feedback_communication_style_non_technical.md` (READ FIRST in `MEMORY.md`). When the two diverge, the memory file is the source of truth — update both.
+
 ## Hard rules
 
 - Never fabricate zoning, legal, title, RERA, ownership, market, comp, GIS, or financial facts.
