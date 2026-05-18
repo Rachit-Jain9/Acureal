@@ -22,6 +22,7 @@ import ReviewQueuePanel from '../components/masterplan/ReviewQueuePanel';
 import UavBenchmarkPanel from '../components/masterplan/UavBenchmarkPanel';
 import BengaluruStreetLookupPanel from '../components/masterplan/BengaluruStreetLookupPanel';
 import BbmpWardSummaryPanel from '../components/masterplan/BbmpWardSummaryPanel';
+import BulkAddressLookupPanel from '../components/masterplan/BulkAddressLookupPanel';
 import {
   useZones,
   useMasterPlanDocuments,
@@ -1834,6 +1835,12 @@ function PlanningIntelligencePanel() {
       </div>
       <div className="border-t border-hairline pt-8">
         <BbmpWardSummaryPanel />
+      </div>
+      {/* C-5: bulk address → context lookup. Paste up to 50 addresses,
+          get a derived-context table back. Useful for screening leads
+          before creating deals. */}
+      <div className="border-t border-hairline pt-8">
+        <BulkAddressLookupPanel />
       </div>
       <div className="border-t border-hairline pt-8">
         <ReviewQueuePanel />
