@@ -15,6 +15,12 @@ vi.mock('../../../hooks/useAutoDeriveParcelContext', () => ({
   default: (...args) => mockHookFn(...args),
 }));
 
+// The mini-map is heavy (react-leaflet + leaflet) and not under test
+// here — stub it out so AutoFillCard tests stay fast + jsdom-friendly.
+vi.mock('../DerivedParcelMiniMap', () => ({
+  default: ({ data }) => (data?.coordinates?.lat ? <div data-testid="mini-map-stub" /> : null),
+}));
+
 import AutoFillParcelContextCard from '../AutoFillParcelContextCard';
 
 const renderCard = (props = {}) => {
