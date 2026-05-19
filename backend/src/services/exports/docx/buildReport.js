@@ -751,15 +751,35 @@ const buildDemographics = (ctx) => {
       ));
     }
   } else {
-    children.push(bodyPara(
-      'Demographic data is not yet available for this micro-market. Manual input required — populate population, income tier, age mix, and literacy on the deal\'s market record before this section can render.',
-      { italic: true, color: HEX('mutedHigh') },
-    ));
-    children.push(bodyPara(
-      // PR-NX41 (2026-05-18) — actionable hint for Bengaluru deals
-      'Bengaluru deals: open the Parcel tab → click "Derive parcel context" → Apply → re-download the report. The Planning District code unlocks BBMP RMP-2031 + Census 2011 facts.',
-      { italic: true, color: HEX('mutedLow') },
-    ));
+    // PR-NX67 (2026-05-19) — augment fallback. When REDIP has no
+    // structured Census/BBMP row for the micro-market, fall back to
+    // Claude's general-knowledge synthesis with disclaimer.
+    const augment = ctx.exportContext?.market?.aiAugment?.demographics;
+    if (augment?.available && augment.paragraph) {
+      children.push(bodyPara(
+        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
+        { bold: true, italic: true, color: HEX('dataWarning') },
+      ));
+      children.push(blank());
+      children.push(bodyPara(augment.paragraph));
+      const attribution = [];
+      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
+      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
+      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
+      if (attribution.length) {
+        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+      }
+    } else {
+      children.push(bodyPara(
+        'Demographic data is not yet available for this micro-market. Manual input required — populate population, income tier, age mix, and literacy on the deal\'s market record before this section can render.',
+        { italic: true, color: HEX('mutedHigh') },
+      ));
+      children.push(bodyPara(
+        // PR-NX41 (2026-05-18) — actionable hint for Bengaluru deals
+        'Bengaluru deals: open the Parcel tab → click "Derive parcel context" → Apply → re-download the report. The Planning District code unlocks BBMP RMP-2031 + Census 2011 facts.',
+        { italic: true, color: HEX('mutedLow') },
+      ));
+    }
   }
   return children;
 };
@@ -784,13 +804,41 @@ const buildWhyThisArea = (ctx) => {
         { italic: true, color: HEX('mutedHigh') },
       ));
     }
-  } else {
-    children.push(bodyPara(
-      'AI-assisted synthesis of why this micro-market matters could not be generated for this deal. ' +
-      'Populate locality, infrastructure proximity, and intelligence briefs on the deal record to enable this section.',
-      { italic: true, color: HEX('mutedHigh') },
-    ));
+    return children;
   }
+
+  // PR-NX67 (2026-05-19) — Augment fallback. When the strict generator
+  // couldn't produce content (no verified payload data), try the AI
+  // market-context augment layer. Carries an explicit "AI-generated from
+  // general knowledge — verify before IC" disclaimer.
+  const augment = ctx.exportContext?.market?.aiAugment?.whyThisArea;
+  if (augment?.available && Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0) {
+    children.push(bodyPara(
+      augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
+      { bold: true, italic: true, color: HEX('dataWarning') },
+    ));
+    children.push(blank());
+    augment.paragraphs.forEach((p) => { if (p && String(p).trim()) children.push(bodyPara(p)); });
+    if (augment.summary) {
+      children.push(blank());
+      children.push(bodyPara(`Summary: ${augment.summary}`, { bold: true, color: HEX('accent') }));
+    }
+    const attribution = [];
+    if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
+    if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
+    if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
+    if (augment.fallbackReason) attribution.push(`auto-failover: ${augment.fallbackReason}`);
+    if (attribution.length) {
+      children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+    }
+    return children;
+  }
+
+  children.push(bodyPara(
+    'AI-assisted synthesis of why this micro-market matters could not be generated for this deal. ' +
+    'Populate locality, infrastructure proximity, and intelligence briefs on the deal record to enable this section.',
+    { italic: true, color: HEX('mutedHigh') },
+  ));
   return children;
 };
 
@@ -819,10 +867,40 @@ const buildJobGrowth = (ctx) => {
       children.push(blank());
     });
   } else {
-    children.push(bodyPara(
-      'No verified intelligence briefs on micro-market job growth are linked to this deal yet. Manual input required — populate Market Intelligence with relevant briefs (GCC announcements, tech-park expansions, employment-area trends) to surface this section.',
-      { italic: true, color: HEX('mutedHigh') },
-    ));
+    // PR-NX67 (2026-05-19) — augment fallback. When no verified intelligence
+    // briefs are linked, fall back to Claude's general-knowledge synthesis
+    // of the employment + tech-park landscape for the named locality + city.
+    const augment = ctx.exportContext?.market?.aiAugment?.jobGrowth;
+    if (augment?.available && ((Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0)
+        || (Array.isArray(augment.bullets) && augment.bullets.length > 0))) {
+      children.push(bodyPara(
+        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
+        { bold: true, italic: true, color: HEX('dataWarning') },
+      ));
+      children.push(blank());
+      (augment.paragraphs || []).forEach((p) => {
+        if (p && String(p).trim()) children.push(bodyPara(p));
+      });
+      if (Array.isArray(augment.bullets) && augment.bullets.length > 0) {
+        children.push(blank());
+        children.push(bodyPara('Key economic anchors:', { bold: true }));
+        augment.bullets.forEach((b) => {
+          if (b && String(b).trim()) children.push(bodyPara(`•  ${b}`));
+        });
+      }
+      const attribution = [];
+      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
+      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
+      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
+      if (attribution.length) {
+        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+      }
+    } else {
+      children.push(bodyPara(
+        'No verified intelligence briefs on micro-market job growth are linked to this deal yet. Manual input required — populate Market Intelligence with relevant briefs (GCC announcements, tech-park expansions, employment-area trends) to surface this section.',
+        { italic: true, color: HEX('mutedHigh') },
+      ));
+    }
   }
   return children;
 };
@@ -882,10 +960,69 @@ const buildSocialInfrastructure = (ctx) => {
       borders: TABLE_BORDER,
     }));
   } else {
-    children.push(bodyPara(
-      'Social infrastructure proximity has not been ingested for this deal yet. Manual input required — populate the Property record with distances to nearby schools, hospitals, retail, transit, airport, and expressway.',
-      { italic: true, color: HEX('mutedHigh') },
-    ));
+    // PR-NX67 (2026-05-19) — augment fallback. When no infra_proximity data
+    // has been ingested, fall back to Claude's general-knowledge synthesis
+    // of well-known schools / hospitals / retail / transit for the locality.
+    const augment = ctx.exportContext?.market?.aiAugment?.socialInfrastructure;
+    if (augment?.available && augment.buckets && typeof augment.buckets === 'object') {
+      children.push(bodyPara(
+        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
+        { bold: true, italic: true, color: HEX('dataWarning') },
+      ));
+      children.push(blank());
+      const augLabels = {
+        schools:     'Schools / education',
+        hospitals:   'Hospitals / healthcare',
+        retail:      'Retail / malls',
+        transit:     'Metro / transit',
+        airport:     'Airport',
+        expressway:  'Expressway / highway',
+      };
+      const presenceTag = {
+        strong:    'Strong',
+        adequate:  'Adequate',
+        thin:      'Thin',
+        unknown:   '—',
+      };
+      const augRows = Object.entries(augLabels).map(([k, label]) => {
+        const bucket = augment.buckets[k];
+        if (!bucket || bucket.presence === 'unknown') return null;
+        const examples = Array.isArray(bucket.named_examples) && bucket.named_examples.length > 0
+          ? bucket.named_examples.join(', ')
+          : '';
+        const note = bucket.notes || '';
+        const value = [presenceTag[bucket.presence] || bucket.presence, examples, note]
+          .filter(Boolean)
+          .join(' · ');
+        return { label, value };
+      }).filter(Boolean);
+      if (augRows.length > 0) {
+        const headerRow = buildHeaderTableRow(['Category', 'Presence · Named examples · Notes']);
+        const bodyRows = augRows.map((r, idx) => buildBodyTableRow([r.label, r.value], { alt: idx % 2 === 1 }));
+        children.push(new Table({
+          rows: [headerRow, ...bodyRows],
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: TABLE_BORDER,
+        }));
+      } else {
+        children.push(bodyPara(
+          `AI could not identify named social-infrastructure anchors for this locality. ${augment.dataQuality === 'unknown' ? 'Locality is outside AI training depth.' : ''}`,
+          { italic: true, color: HEX('mutedHigh') },
+        ));
+      }
+      const attribution = [];
+      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
+      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
+      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
+      if (attribution.length) {
+        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+      }
+    } else {
+      children.push(bodyPara(
+        'Social infrastructure proximity has not been ingested for this deal yet. Manual input required — populate the Property record with distances to nearby schools, hospitals, retail, transit, airport, and expressway.',
+        { italic: true, color: HEX('mutedHigh') },
+      ));
+    }
   }
   return children;
 };
@@ -906,6 +1043,30 @@ const buildSupplyDemand = (ctx) => {
   const recentBenches = (Array.isArray(benches) ? benches : []).slice(0, 5);
 
   if (recentTxns.length === 0 && recentBenches.length === 0) {
+    // PR-NX67 (2026-05-19) — augment fallback. When no verified comps or
+    // benchmarks are loaded, fall back to Claude's general-knowledge
+    // synthesis of the supply/demand pipeline for the locality + asset class.
+    const augment = ctx.exportContext?.market?.aiAugment?.supplyDemandPipeline;
+    if (augment?.available && Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0) {
+      children.push(bodyPara(
+        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
+        { bold: true, italic: true, color: HEX('dataWarning') },
+      ));
+      children.push(blank());
+      augment.paragraphs.forEach((p) => { if (p && String(p).trim()) children.push(bodyPara(p)); });
+      if (augment.caution) {
+        children.push(blank());
+        children.push(bodyPara(`Caution: ${augment.caution}`, { bold: true, color: HEX('dataWarning') }));
+      }
+      const attribution = [];
+      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
+      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
+      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
+      if (attribution.length) {
+        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
+      }
+      return children;
+    }
     children.push(bodyPara(
       'No verified market transactions or micro-market benchmarks are linked to this deal yet. Manual input required — ingest recent transactions and benchmark medians from your verified comp source to enable this section.',
       { italic: true, color: HEX('mutedHigh') },
