@@ -105,6 +105,10 @@ function FitToBounds({ geometry, fallbackCenter, fallbackRadiusM }) {
 
   useEffect(() => {
     if (fittedRef.current) return;
+    // Defensive: map ref may briefly be undefined under React StrictMode
+    // double-mount; bail and let the next effect tick re-fire.
+    if (!map) return;
+
     if (geometry) {
       try {
         const layer = L.geoJSON(geometry);
@@ -115,16 +119,43 @@ function FitToBounds({ geometry, fallbackCenter, fallbackRadiusM }) {
           return;
         }
       } catch {
-        // fall through
+        // fall through to centre-only fit
       }
     }
+
     if (Array.isArray(fallbackCenter) && Number.isFinite(fallbackCenter[0])) {
-      const center = L.latLng(fallbackCenter[0], fallbackCenter[1]);
-      const circle = L.circle(center, { radius: fallbackRadiusM || 50 });
-      const bounds = circle.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18, animate: true, duration: 0.4 });
-        fittedRef.current = true;
+      // PR-NX76 (2026-05-19) — fix "Cannot read properties of undefined
+      // (reading 'layerPointToLatLng')" crash. The previous implementation
+      // built a free-floating L.circle() and called `.getBounds()` on it,
+      // but Leaflet's Circle.getBounds() internally calls
+      // `this._map.layerPointToLatLng(...)` to convert its pixel radius
+      // back to lat/lng. With no map attached, `_map` is undefined and
+      // the entire Parcel tab crashed at render time.
+      //
+      // Fix: compute the bounding box ourselves from the centre + the
+      // radius in metres using the small-angle approximation. ~111 km
+      // per degree of latitude; longitude per degree shrinks by
+      // cos(latitude). Plenty accurate for a 50m fit-bounds zoom.
+      const lat = Number(fallbackCenter[0]);
+      const lng = Number(fallbackCenter[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const radiusM = Number.isFinite(fallbackRadiusM) && fallbackRadiusM > 0
+          ? fallbackRadiusM
+          : 50;
+        const METRES_PER_DEG_LAT = 111_320;
+        const latDelta = radiusM / METRES_PER_DEG_LAT;
+        // Longitude metres per degree narrows with cos(latitude). Clamp
+        // to avoid /0 at the poles (irrelevant for India but defensive).
+        const cosLat = Math.max(0.0001, Math.cos((lat * Math.PI) / 180));
+        const lngDelta = radiusM / (METRES_PER_DEG_LAT * cosLat);
+        const bounds = L.latLngBounds(
+          L.latLng(lat - latDelta, lng - lngDelta),
+          L.latLng(lat + latDelta, lng + lngDelta),
+        );
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18, animate: true, duration: 0.4 });
+          fittedRef.current = true;
+        }
       }
     }
   }, [geometry, map, fallbackCenter, fallbackRadiusM]);
