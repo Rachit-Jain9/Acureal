@@ -32,8 +32,20 @@ vi.mock('leaflet', () => ({
   default: {
     icon: () => ({}),
     geoJSON: () => ({ getBounds: () => ({ isValid: () => false }) }),
+    // PR-NX76 (2026-05-19): `circle()` is no longer called by FitToBounds —
+    // the manual lat/lng bounds math replaced it. Mock kept for backward
+    // compat with any other consumer of L.circle on this component.
     circle: () => ({ getBounds: () => ({ isValid: () => false }) }),
     latLng: (lat, lng) => ({ lat, lng }),
+    // PR-NX76: new mock — FitToBounds now uses L.latLngBounds() directly
+    // to build the fit rectangle from the geocoded centre + a fallback
+    // radius (in metres). The mock returns a bounds-shaped stub with
+    // `isValid: true` so the fit branch fires under jsdom.
+    latLngBounds: (sw, ne) => ({
+      _southWest: sw,
+      _northEast: ne,
+      isValid: () => true,
+    }),
   },
 }));
 
