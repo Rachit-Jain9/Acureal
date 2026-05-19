@@ -113,11 +113,24 @@ const buildSlideManifest = (context) => {
     if (context.hasCashFlowSlide) {
       slides.push({ key: 'cashFlowSensitivity', title: 'Cash Flow & Sensitivity' });
     }
+
+    // PR-NX54 (2026-05-19): AI sensitivity narrative slide right after the
+    // cashFlowSensitivity tornado. Reader sees driver decomposition +
+    // recommended stress tests after the visual that backs the claim.
+    // Mirrors DOCX PR-NX44.
+    slides.push({ key: 'sensitivityNarrative', title: 'Sensitivity Analysis · Narrative' });
   }
 
   slides.push(
     { key: 'transactionSummary', title: 'Transaction Summary' },
     { key: 'risksMitigants', title: 'Risks & Mitigants' },
+    // PR-NX54 (2026-05-19): AI risk profile synthesis slide right after the
+    // structured Risks & Mitigants slide. Mirrors DOCX PR-NX43.
+    { key: 'riskNarrative', title: 'Risk Profile Synthesis' },
+    // PR-NX54 (2026-05-19): NEW Document-Derived Insights slide — Claude
+    // cross-document analysis + 0-5 inconsistency findings from the
+    // extracted document set. Mirrors DOCX PR-NX45.
+    { key: 'documentInsights', title: 'Document-Derived Insights' },
     { key: 'prosCons', title: 'Pros & Cons' },
     { key: 'nextSteps', title: 'Next Steps' },
     { key: 'keyAssumptions', title: 'Key Assumptions & Sources' },

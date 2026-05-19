@@ -2717,6 +2717,317 @@ const renderKeyAssumptions = (pptx, slide, context, pageNumber, totalSlides) => 
   );
 };
 
+// ═══════════════════════════════════════════════════════════════════════
+// PR-NX54 (2026-05-19) — 3 new AI narrative slides
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Cross-product parity with DOCX PR-NX43 / NX44 / NX45. The same
+// services that synthesize those DOCX sections (generateRiskNarrative,
+// generateSensitivityNarrative, generateDocumentInsights) already
+// populate `exportContext.risks.narrative`, `exportContext.sensitivityNarrative`,
+// `exportContext.documents.insights` via dealExport.service.
+//
+// These 3 PPTX slides read directly from `context.exportContext` and
+// render with the same disclosure pattern as renderBriefing — amber
+// disclosure banner at the top, content in card grid, provenance
+// footer with provider + confidence + auto-failover diagnostic.
+//
+// Each slide auto-falls-back to a templated "not available" panel when
+// the narrative envelope is `available: false` (rare — only when ALL
+// providers in the cascade fail), so the deck never breaks regardless
+// of AI provider state.
+
+// Helper: render the standard AI-narrative disclosure banner at the top
+// of any AI synthesis slide. Same pattern as renderBriefing.
+const renderAiDisclosureBanner = (pptx, slide, providerLabel, fallbackReason) => {
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 1.05, w: 12.33, h: 0.42,
+    fill: { color: COLORS.amber || 'C97B0E' },
+    line: { color: COLORS.amber || 'C97B0E', pt: 0.1 },
+  });
+  const text = providerLabel
+    ? `⚠ AI-Assisted Synthesis (provider: ${providerLabel}${fallbackReason ? ` · auto-failover: ${fallbackReason}` : ''}) — REQUIRES HUMAN REVIEW. Verify against source data before any IC decision.`
+    : '⚠ AI-Assisted Synthesis (provider: unavailable) — REQUIRES HUMAN REVIEW.';
+  slide.addText(text, {
+    x: 0.65, y: 1.08, w: 12.0, h: 0.36,
+    fontFace: FONT, fontSize: 9, bold: true, color: 'FFFFFF', valign: 'mid',
+  });
+};
+
+// Helper: render the standard attribution footer (confidence + provider + auto-failover).
+const renderAttributionFooter = (slide, narrative, generatedAt) => {
+  const parts = [];
+  if (narrative?.confidence) parts.push(`Confidence: ${narrative.confidence}`);
+  if (narrative?.provider) parts.push(`Synthesis: ${narrative.provider}`);
+  if (narrative?.fallbackReason) parts.push(`auto-failover: ${narrative.fallbackReason}`);
+  parts.push(`Generated ${formatDate(generatedAt)}`);
+  slide.addText(parts.join(' · '), {
+    x: 0.5, y: 6.78, w: 12.33, h: 0.18,
+    fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted,
+  });
+};
+
+// Helper: render an "unavailable" panel when the narrative didn't fire.
+const renderUnavailablePanel = (slide, slideTitle, reason) => {
+  slide.addText('Synthesis Unavailable', {
+    x: 0.5, y: 2.0, w: 12.33, h: 0.4,
+    fontFace: FONT, fontSize: 18, bold: true, color: COLORS.muted, align: 'center',
+  });
+  slide.addText(
+    reason
+      ? `The ${slideTitle} could not be generated — reason: ${reason}. The structured tables on the adjacent slide remain authoritative.`
+      : `The ${slideTitle} could not be generated for this deal. The structured tables on the adjacent slide remain authoritative.`,
+    {
+      x: 1.5, y: 2.6, w: 10.33, h: 1.0,
+      fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'top',
+    },
+  );
+};
+
+/**
+ * PR-NX54: Risk Profile Synthesis slide — Claude-synthesized 2-paragraph
+ * narrative (summary + critical spotlight) above the structured risks
+ * already shown on the Risks & Mitigants slide.
+ *
+ * Mirrors the DOCX Risk Register narrative section (PR-NX43).
+ * Always-available — when narrative is null we render the unavailable
+ * panel so the deck never breaks.
+ */
+const renderRiskNarrative = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(
+    pptx, slide, context,
+    'Risk Profile Synthesis',
+    pageNumber, totalSlides,
+    `${context.assetClassLabel} | AI-assisted interpretation of the risk register`,
+  );
+
+  const narrative = context.exportContext?.risks?.narrative || null;
+  const providerLabel = narrative?.provider || null;
+  renderAiDisclosureBanner(pptx, slide, providerLabel, narrative?.fallbackReason);
+
+  if (!narrative || narrative.available === false) {
+    renderUnavailablePanel(slide, 'risk profile synthesis', narrative?.reason);
+    renderAttributionFooter(slide, narrative, context.generatedAt);
+    return;
+  }
+
+  // Two-card grid: Summary paragraph (top) + Critical-spotlight (bottom)
+  const summary = narrative.summary_paragraph || 'No summary paragraph synthesized.';
+  const spotlight = narrative.critical_spotlight_paragraph || 'No critical/high-severity risks logged.';
+
+  // Summary card
+  slide.addText('SUMMARY', {
+    x: 0.5, y: 1.65, w: 6.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 1.92, w: 12.33, h: 1.95,
+    fill: { color: COLORS.paper },
+    line: { color: COLORS.hairline || 'D7DDE5', pt: 0.5 },
+  });
+  slide.addText(summary, {
+    x: 0.70, y: 2.02, w: 11.93, h: 1.75,
+    fontFace: FONT, fontSize: 12, color: COLORS.charcoal, valign: 'top',
+    paraSpaceBefore: 0, paraSpaceAfter: 0,
+  });
+
+  // Critical-spotlight card
+  slide.addText('CRITICAL / HIGH-SEVERITY SPOTLIGHT', {
+    x: 0.5, y: 4.02, w: 12.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 4.30, w: 12.33, h: 2.3,
+    fill: { color: COLORS.paper },
+    line: { color: COLORS.crimson || 'B23A48', pt: 1.5 },
+  });
+  slide.addText(spotlight, {
+    x: 0.70, y: 4.40, w: 11.93, h: 2.10,
+    fontFace: FONT, fontSize: 12, color: COLORS.charcoal, valign: 'top',
+    paraSpaceBefore: 0, paraSpaceAfter: 0,
+  });
+
+  renderAttributionFooter(slide, narrative, context.generatedAt);
+};
+
+/**
+ * PR-NX54: Sensitivity Analysis Narrative slide — OpenAI-synthesized
+ * 2-paragraph driver decomposition + recommended stress tests, above
+ * the cash-flow / sensitivity tornado already shown.
+ *
+ * Mirrors the DOCX Sensitivity narrative section (PR-NX44).
+ */
+const renderSensitivityNarrative = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(
+    pptx, slide, context,
+    'Sensitivity Analysis · Narrative',
+    pageNumber, totalSlides,
+    `${context.assetClassLabel} | AI-assisted driver decomposition + recommended stress tests`,
+  );
+
+  const narrative = context.exportContext?.sensitivityNarrative || null;
+  const providerLabel = narrative?.provider || null;
+  renderAiDisclosureBanner(pptx, slide, providerLabel, narrative?.fallbackReason);
+
+  if (!narrative || narrative.available === false) {
+    renderUnavailablePanel(slide, 'sensitivity narrative', narrative?.reason);
+    renderAttributionFooter(slide, narrative, context.generatedAt);
+    return;
+  }
+
+  // Dominant driver eyebrow (large, top of card area)
+  if (narrative.dominant_driver) {
+    slide.addText(`DOMINANT DRIVER: ${String(narrative.dominant_driver).toUpperCase()}`, {
+      x: 0.5, y: 1.65, w: 12.33, h: 0.30,
+      fontFace: FONT, fontSize: 11, bold: true, color: COLORS.plum || '6F1F4D', charSpace: 1.5,
+    });
+  }
+
+  const decomp = narrative.driver_decomposition_paragraph || 'No driver decomposition synthesized.';
+  const stress = narrative.stress_test_paragraph || 'No stress-test recommendations synthesized.';
+
+  // Decomposition card
+  slide.addText('DRIVER DECOMPOSITION', {
+    x: 0.5, y: 2.05, w: 12.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 2.32, w: 12.33, h: 1.95,
+    fill: { color: COLORS.paper },
+    line: { color: COLORS.hairline || 'D7DDE5', pt: 0.5 },
+  });
+  slide.addText(decomp, {
+    x: 0.70, y: 2.42, w: 11.93, h: 1.75,
+    fontFace: FONT, fontSize: 12, color: COLORS.charcoal, valign: 'top',
+    paraSpaceBefore: 0, paraSpaceAfter: 0,
+  });
+
+  // Recommended stress tests card
+  slide.addText('RECOMMENDED STRESS TESTS', {
+    x: 0.5, y: 4.42, w: 12.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 4.70, w: 12.33, h: 1.95,
+    fill: { color: COLORS.paper },
+    line: { color: COLORS.amber || 'C97B0E', pt: 1.0 },
+  });
+  slide.addText(stress, {
+    x: 0.70, y: 4.80, w: 11.93, h: 1.75,
+    fontFace: FONT, fontSize: 12, color: COLORS.charcoal, valign: 'top',
+    paraSpaceBefore: 0, paraSpaceAfter: 0,
+  });
+
+  renderAttributionFooter(slide, narrative, context.generatedAt);
+};
+
+/**
+ * PR-NX54: Document-Derived Insights slide — Claude-synthesized
+ * summary paragraph + 0-5 cross-document inconsistency findings,
+ * each with severity-coloured tag + description + recommendation.
+ *
+ * Mirrors the DOCX Document-Derived Insights section (PR-NX45).
+ */
+const FINDING_SEVERITY_COLOR = {
+  critical: COLORS.crimson || 'B23A48',
+  high:     COLORS.amber || 'C97B0E',
+  medium:   COLORS.muted || '6B7280',
+  low:      COLORS.muted || '6B7280',
+};
+
+const renderDocumentInsights = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(
+    pptx, slide, context,
+    'Document-Derived Insights',
+    pageNumber, totalSlides,
+    `${context.assetClassLabel} | Cross-document analysis + inconsistency findings`,
+  );
+
+  const insights = context.exportContext?.documents?.insights || null;
+  const providerLabel = insights?.provider || null;
+  renderAiDisclosureBanner(pptx, slide, providerLabel, insights?.fallbackReason);
+
+  if (!insights || insights.available === false) {
+    renderUnavailablePanel(slide, 'document-derived insights', insights?.reason);
+    renderAttributionFooter(slide, insights, context.generatedAt);
+    return;
+  }
+
+  // Summary paragraph (top card)
+  const summary = insights.summary_paragraph || 'No summary paragraph synthesized.';
+  slide.addText('CROSS-DOCUMENT SUMMARY', {
+    x: 0.5, y: 1.65, w: 12.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 1.92, w: 12.33, h: 1.4,
+    fill: { color: COLORS.paper },
+    line: { color: COLORS.hairline || 'D7DDE5', pt: 0.5 },
+  });
+  slide.addText(summary, {
+    x: 0.70, y: 2.02, w: 11.93, h: 1.20,
+    fontFace: FONT, fontSize: 12, color: COLORS.charcoal, valign: 'top',
+    paraSpaceBefore: 0, paraSpaceAfter: 0,
+  });
+
+  // Findings (bottom — list of up to 4 severity-coloured cards)
+  const findings = Array.isArray(insights.findings) ? insights.findings : [];
+  const sortedFindings = [...findings].sort((a, b) => {
+    const rankA = { critical: 1, high: 2, medium: 3, low: 4 }[a.severity] || 99;
+    const rankB = { critical: 1, high: 2, medium: 3, low: 4 }[b.severity] || 99;
+    return rankA - rankB;
+  });
+
+  slide.addText(`INCONSISTENCY FINDINGS (${sortedFindings.length})`, {
+    x: 0.5, y: 3.45, w: 12.0, h: 0.22,
+    fontFace: FONT, fontSize: 9, bold: true, color: COLORS.muted, charSpace: 1.6,
+  });
+
+  if (sortedFindings.length === 0) {
+    // Positive-signal panel
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0.5, y: 3.75, w: 12.33, h: 0.6,
+      fill: { color: 'ECFDF5' },
+      line: { color: '047857', pt: 0.5 },
+    });
+    slide.addText('✓  No inconsistencies detected across the extracted document set — a positive signal.', {
+      x: 0.70, y: 3.82, w: 11.93, h: 0.46,
+      fontFace: FONT, fontSize: 11, italic: true, color: '047857', valign: 'mid',
+    });
+  } else {
+    // Up to 4 finding cards, stacked vertically
+    const visible = sortedFindings.slice(0, 4);
+    const cardHeight = (6.55 - 3.75) / visible.length - 0.10;
+    visible.forEach((finding, idx) => {
+      const yOffset = 3.75 + idx * (cardHeight + 0.10);
+      const sevColor = FINDING_SEVERITY_COLOR[finding.severity] || COLORS.muted;
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 0.5, y: yOffset, w: 12.33, h: cardHeight,
+        fill: { color: COLORS.paper },
+        line: { color: sevColor, pt: 1.0 },
+      });
+      // Severity tag + title (single text line)
+      slide.addText([
+        { text: `[${String(finding.severity || 'medium').toUpperCase()}]  `, options: { color: sevColor, bold: true, fontSize: 11, fontFace: FONT } },
+        { text: finding.title || '(untitled)', options: { color: COLORS.charcoal, bold: true, fontSize: 11, fontFace: FONT } },
+      ], {
+        x: 0.70, y: yOffset + 0.10, w: 11.93, h: 0.28,
+      });
+      // Description + recommendation (single combined text)
+      const body = [
+        finding.description || '',
+        finding.recommendation ? `Recommended: ${finding.recommendation}` : '',
+      ].filter(Boolean).join('  ');
+      slide.addText(body, {
+        x: 0.70, y: yOffset + 0.38, w: 11.93, h: cardHeight - 0.48,
+        fontFace: FONT, fontSize: 9, color: COLORS.muted, valign: 'top', fit: 'shrink',
+      });
+    });
+  }
+
+  renderAttributionFooter(slide, insights, context.generatedAt);
+};
+
 module.exports = {
   renderCover,
   renderBriefing,
@@ -2738,4 +3049,8 @@ module.exports = {
   renderProsCons,
   renderKeyAssumptions,
   renderDisclaimer,
+  // PR-NX54 (2026-05-19) — 3 new AI narrative slides
+  renderRiskNarrative,
+  renderSensitivityNarrative,
+  renderDocumentInsights,
 };

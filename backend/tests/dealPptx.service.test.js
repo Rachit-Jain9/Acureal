@@ -716,4 +716,118 @@ describe('dealPptx.service', () => {
       });
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // PR-NX54 (2026-05-19) — 3 new AI narrative slides
+  // ──────────────────────────────────────────────────────────────────
+  describe('PR-NX54: 3 new AI narrative slides (cross-product parity with DOCX)', () => {
+    test('slide manifest inserts sensitivityNarrative after cashFlowSensitivity', () => {
+      const exportContext = createExportContext();
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-19T10:00:00Z',
+      });
+      const manifest = baseContext.slideManifest;
+      const cashFlowIdx = manifest.findIndex((s) => s.key === 'cashFlowSensitivity');
+      const sensNarrIdx = manifest.findIndex((s) => s.key === 'sensitivityNarrative');
+      expect(cashFlowIdx).toBeGreaterThan(-1);
+      expect(sensNarrIdx).toBe(cashFlowIdx + 1);
+      expect(manifest[sensNarrIdx].title).toMatch(/Sensitivity Analysis.*Narrative/);
+    });
+
+    test('slide manifest inserts riskNarrative after risksMitigants', () => {
+      const exportContext = createExportContext();
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-19T10:00:00Z',
+      });
+      const manifest = baseContext.slideManifest;
+      const risksIdx = manifest.findIndex((s) => s.key === 'risksMitigants');
+      const riskNarrIdx = manifest.findIndex((s) => s.key === 'riskNarrative');
+      expect(risksIdx).toBeGreaterThan(-1);
+      expect(riskNarrIdx).toBe(risksIdx + 1);
+      expect(manifest[riskNarrIdx].title).toBe('Risk Profile Synthesis');
+    });
+
+    test('slide manifest inserts documentInsights after riskNarrative, before prosCons', () => {
+      const exportContext = createExportContext();
+      const baseContext = __testables.buildDeckContext(exportContext, {
+        brandName: 'REDIP', generatedAt: '2026-05-19T10:00:00Z',
+      });
+      const manifest = baseContext.slideManifest;
+      const riskNarrIdx = manifest.findIndex((s) => s.key === 'riskNarrative');
+      const docInsightsIdx = manifest.findIndex((s) => s.key === 'documentInsights');
+      const prosConsIdx = manifest.findIndex((s) => s.key === 'prosCons');
+      expect(docInsightsIdx).toBe(riskNarrIdx + 1);
+      expect(docInsightsIdx).toBeLessThan(prosConsIdx);
+      expect(manifest[docInsightsIdx].title).toBe('Document-Derived Insights');
+    });
+
+    test('all 3 narrative slides render WITHOUT exception when narratives are present in exportContext', () => {
+      const exportContext = createExportContext();
+      // Populate the 3 new narratives in shape generateDealInsights returns
+      exportContext.risks = exportContext.risks || {};
+      exportContext.risks.narrative = {
+        available: true,
+        summary_paragraph: 'Risk profile dominated by legal exposure.',
+        critical_spotlight_paragraph: 'Conversion order pending is the single dealbreaker.',
+        confidence: 'high',
+        provider: 'claude-sonnet-4-6',
+        fallbackReason: null,
+      };
+      exportContext.sensitivityNarrative = {
+        available: true,
+        driver_decomposition_paragraph: 'Sell rate dominates with 800 bps IRR swing.',
+        stress_test_paragraph: 'Stress 1: sell rate −10% takes IRR to 14%.',
+        dominant_driver: 'Sell Rate',
+        confidence: 'high',
+        provider: 'gpt-5.4',
+        fallbackReason: null,
+      };
+      exportContext.documents = exportContext.documents || {};
+      exportContext.documents.insights = {
+        available: true,
+        summary_paragraph: '3 documents on file.',
+        findings: [
+          { title: 'Owner mismatch', severity: 'critical', description: 'sale deed vs RTC', recommendation: 'order khata' },
+          { title: 'Area mismatch', severity: 'high', description: 'sale deed 12,500 vs khata 12,400', recommendation: 'survey' },
+        ],
+        confidence: 'high',
+        provider: 'claude-sonnet-4-6',
+        fallbackReason: null,
+      };
+      // Render the deck in a subprocess (pptxgenjs can't be required directly from this VM)
+      const result = execFileSync(
+        'node',
+        ['-e', `(async () => {
+          const { __testables } = require('./src/services/dealPptx.service');
+          const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+          const exportContext = ${JSON.stringify(exportContext)};
+          const buffer = await buildDealDeckPptx(exportContext, { brandName: 'REDIP', userName: 'test' });
+          process.stdout.write(String(buffer.length));
+        })().catch((e) => { console.error(e); process.exit(1); });`],
+        { encoding: 'utf-8', cwd: process.cwd() },
+      );
+      const bufferLen = parseInt(result, 10);
+      expect(bufferLen).toBeGreaterThan(10000); // PPTX always > 10KB
+    });
+
+    test('all 3 narrative slides render WITHOUT exception when narratives are unavailable (fallback path)', () => {
+      const exportContext = createExportContext();
+      // All 3 narratives unavailable → renderUnavailablePanel for each
+      exportContext.risks = { narrative: { available: false, reason: 'no risks logged' } };
+      exportContext.sensitivityNarrative = { available: false, reason: 'sparse grid' };
+      exportContext.documents = { insights: { available: false, reason: 'no extractions' } };
+      const result = execFileSync(
+        'node',
+        ['-e', `(async () => {
+          const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+          const exportContext = ${JSON.stringify(exportContext)};
+          const buffer = await buildDealDeckPptx(exportContext, { brandName: 'REDIP', userName: 'test' });
+          process.stdout.write(String(buffer.length));
+        })().catch((e) => { console.error(e); process.exit(1); });`],
+        { encoding: 'utf-8', cwd: process.cwd() },
+      );
+      const bufferLen = parseInt(result, 10);
+      expect(bufferLen).toBeGreaterThan(10000);
+    });
+  });
 });
