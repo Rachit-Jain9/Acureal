@@ -4,6 +4,75 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (late-morning, continuation) — Shared frontend taxonomies + dashboard polish (PR #416, #417)
+
+Continuing the autonomous block after the post-Calculate panel + XLSX AI-Synthesis bundle landed. First-principles pick of two contained, high-value items:
+
+1. **Strategic Review §VI top-1 foundation** — Pre-NX59 the deal taxonomies (asset_class + deal_structure) were duplicated in 4 places across the frontend: hardcoded `<option>` lists in DealsPage's create form + local `ASSET_CLASS_LABELS` constants in DealsPage AND DealDetailPage + local `DEAL_STRUCTURE_LABELS` constants in both. That's drift risk every time someone adds an asset class. NX59 collapses to a single source of truth on the frontend, paving the way for full `@redip/real-estate-ontology` adoption.
+
+2. **Dashboard feel-check pass** — A read of `docs/FRONTEND_GUIDELINES.md` §12 surfaced concrete misses on DashboardWidgets that NX60 fixes: KPI tiles weren't using the count-up infra the design system already exports, the City pie chart had `isAnimationActive={false}` hardcoded (so it just popped), and the loading skeletons in 2 widgets weren't surfacing `role="status"` for screen readers.
+
+### PRs shipped + merged
+
+- **#416 — PR-NX59: Centralize ASSET_CLASS + DEAL_STRUCTURE frontend taxonomies.**
+  - New `frontend/src/utils/dealStructures.js` — exports `DEAL_STRUCTURE_CONFIG` (8 {value,label} entries matching backend `DEAL_STRUCTURES` enum), full + compact label maps, derived value list.
+  - DealsPage.jsx — replaced hardcoded `<option>` lists (10 asset class + 8 deal structure entries) with `.map()` over the shared configs. Local label aliases preserve the existing call sites but point at the shared source.
+  - DealDetailPage.jsx — same change. Local `DEAL_STRUCTURE_LABELS` and `ASSET_CLASS_LABELS` constants now alias the shared utility exports.
+  - +6 frontend tests covering the new utility (8-value match against backend enum, config shape, full + compact label completeness, compact-vs-full divergence guard).
+  - Future: full ontology adoption (Strategic Review §VI top-1) becomes a 1-file change to dealStructures.js + assetClasses.js once the backend/ontology taxonomies are reconciled.
+
+- **#417 — PR-NX60: Dashboard polish per FRONTEND_GUIDELINES feel-check.**
+  - Wired count-up on all 4 KPI tiles (Pipeline Value, Active Deals, Avg IRR, Investor-Grade). MetricTile has supported `useCountUp` via the `format` callback since the design system shipped — but the dashboard passed pre-formatted strings, so the animation never fired. Now numbers tick smoothly over 600ms on refresh.
+  - City Distribution pie chart: re-enabled first-render draw-in (700ms ease-out per §7 spec). Pre-NX60 `isAnimationActive` was hardcoded `false` — the pie just popped.
+  - Pipeline Distribution bar chart: tuned animation duration from recharts' default 1500ms down to 700ms (matches §2 timing table).
+  - AiCostSummaryWidget + AuditTrailTailWidget inline skeletons: added `role="status"` + `aria-busy` + `aria-label` per §9 a11y. AuditTrailTailWidget's 3-row skeleton also gets 60ms stagger across siblings per §4.
+
+### Outcome for the operator
+
+**Before:**
+- Asset class added to backend → had to remember to update DealsPage + DealDetailPage local label maps + the hardcoded form `<option>` list. Easy to miss one.
+- Dashboard refresh → KPI numbers just snapped to new values. No motion, no "something changed" signal.
+- City pie chart → popped into existence on first render.
+- Screen reader users → no announcement when AI cost / audit-trail widgets fetched.
+
+**After:**
+- Single source of truth for asset_class + deal_structure on the frontend; future ontology adoption is a 1-file diff.
+- KPI numbers count up smoothly over 600ms on every refresh — operator sees that something changed and what changed.
+- City pie chart draws in over 700ms with a decelerating ease; bar chart animates in 700ms instead of 1500ms.
+- Screen readers announce "Loading AI cost summary" / "Loading recent audit events".
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| dealStructures.test.js (NEW) | 0 | 6 | +6 |
+| All other frontend suites | 609 | 609 | 0 |
+| **Frontend TOTAL** | **609** | **615** | **+6** |
+| Backend (untouched) | 2,039 | 2,039 | 0 |
+
+Frontend production build clean (49.51s). Zero regressions.
+
+### Architecture wins
+
+- **DRY on the frontend:** dealStructures.js + assetClasses.js are now the only 2 files that encode these taxonomies on the frontend. Pre-NX59 there were 4 places.
+- **Design-system primitive `MetricTile.format` is now actually used in production** (was a built-but-unused capability). NX60 demonstrates the count-up wiring pattern so other surfaces (FinancialsPage KPIStatCard, etc.) can follow.
+- **Chart animation timing centralized to spec values** — operators reviewing the dashboard see consistent 700ms draw-in across all chart types, matching the §2 timing table.
+
+### Outstanding operator actions
+
+1. **Fix `BLOB_READ_WRITE_TOKEN` + `JWT_SECRET` in Vercel** — still "Needs Attention". (User said skip; flagged for audit trail.)
+2. **Smoke-test the live dashboard** to feel the new count-up + pie animation on a real refetch.
+3. **Karnataka API access** — long-standing TODO_LEGAL blocker.
+
+### Recommendation for next session
+
+- **"One Brain" Phase A — Read consolidation** (TODO_ARCHITECTURE §1). Entry criteria all met (legacy engines retired, kernel is sole runtime). New `GET /api/deals/:id/workspace` endpoint that returns all 4 domains (Zoning, Financials, DD, Comps) in one grounded payload; frontend migrates 7 parallel queries to 1. ~1 sprint scope. Largest single-PR architecture win available.
+- **Adopt `@redip/real-estate-ontology` as the actual source** that dealStructures.js + assetClasses.js read from (requires resolving the 8-value backend vs 4-value ontology mismatch on deal_structure). NX59 is the foundation.
+- **Wire count-up on FinancialsPage KPIStatCard** — same pattern as NX60. Half-session refactor (needs `format` prop plumbed through KPIStatCard which currently takes pre-formatted strings).
+- **Per-element stagger on page-level SkeletonKpi grid** — requires SkeletonKpi to accept `animationDelay` prop (design-system change).
+
+---
+
 ## 2026-05-19 (late-morning, continuation) — Post-Calculate underwriting panel + XLSX AI-Synthesis tab (PR #413, #414)
 
 Operator pushed for "deep first-principles review + best work + verify end-to-end + commit/push/deploy/merge as appropriate". After landing the 4-PR bundle earlier in the morning (#409 / #410 / #411 / #412), applied first-principles to pick the 2 highest-leverage follow-ons:
