@@ -24,18 +24,25 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
           <BarChart3 size={16} className="text-accent" />
           Cash Flows
         </h3>
+        {/* PR-NX65 (2026-05-19) — proper interaction states per
+            FRONTEND_GUIDELINES §3: every interactive element needs default
+            + hover + focus-visible + active. Pre-NX65 the toggle buttons
+            had only the hover state. Added focus ring + active scale-down
+            for keyboard / tactile feedback. */}
         <div className="flex rounded-lg border border-hairline overflow-hidden text-xs font-medium">
           <button
             type="button"
             onClick={() => setView('quarterly')}
-            className={`px-3 py-1.5 transition-colors ${view === 'quarterly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
+            className={`px-3 py-1.5 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ${view === 'quarterly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
+            aria-pressed={view === 'quarterly'}
           >
             Quarterly
           </button>
           <button
             type="button"
             onClick={() => setView('yearly')}
-            className={`px-3 py-1.5 transition-colors border-l border-hairline ${view === 'yearly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
+            className={`px-3 py-1.5 transition-colors duration-150 ease-out border-l border-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ${view === 'yearly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
+            aria-pressed={view === 'yearly'}
           >
             Yearly
           </button>
@@ -43,14 +50,42 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
       </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
+          {/* PR-NX65 — chart polish matching DashboardWidgets conventions:
+              - grid stroke uses CSS var with 50% opacity (was hardcoded #f0f0f0
+                which is invisible in dark theme)
+              - axis ticks use CSS var for text-muted (was inheriting default)
+              - reference line uses CSS var (was hardcoded #94a3b8)
+              - bar fills use CSS vars for data-positive/negative (was
+                hardcoded #22c55e / #ef4444)
+              - tooltip mirrors the dashboard tooltipStyle (uses bg-elevated
+                + border + shadow + tabular-nums) for cross-page consistency
+              - first-render draw-in tuned to 700ms ease-out per §2 timing table */}
           <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={view === 'quarterly' && !isIncome ? 1 : 0} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(0)} Cr`} />
-            <Tooltip formatter={(v) => [formatCrores(v), 'Net Cash Flow']} contentStyle={{ borderRadius: '8px', fontSize: '13px' }} />
-            <ReferenceLine y={0} stroke="#94a3b8" />
-            <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-              {data.map((entry, i) => <Cell key={i} fill={entry.value >= 0 ? '#22c55e' : '#ef4444'} />)}
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" strokeOpacity={0.5} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} axisLine={{ stroke: 'var(--color-border-primary)' }} tickLine={false} interval={view === 'quarterly' && !isIncome ? 1 : 0} />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(0)} Cr`} />
+            <Tooltip
+              formatter={(v) => [formatCrores(v), 'Net Cash Flow']}
+              contentStyle={{
+                borderRadius: '8px',
+                border: '1px solid var(--color-border-primary)',
+                backgroundColor: 'var(--color-bg-elevated)',
+                color: 'var(--color-text-primary)',
+                fontSize: '12px',
+                fontFeatureSettings: '"tnum"',
+                boxShadow: 'var(--shadow-elevated)',
+                padding: '8px 10px',
+              }}
+              cursor={{ fill: 'var(--color-brand-accent-soft)' }}
+            />
+            <ReferenceLine y={0} stroke="var(--color-border-strong)" strokeOpacity={0.7} />
+            <Bar dataKey="value" radius={[3, 3, 0, 0]} animationDuration={700} animationEasing="ease-out">
+              {data.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={entry.value >= 0 ? 'var(--color-data-positive)' : 'var(--color-data-negative)'}
+                />
+              ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
