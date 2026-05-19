@@ -23,6 +23,11 @@ import BuildabilitySummary from './BuildabilitySummary';
 import AiSynthesisPanel from './AiSynthesisPanel';
 import DealQaBox from './DealQaBox';
 import AutoFillReadyCard from './AutoFillReadyCard';
+// PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
+// key-metric card. Extends the chip that already ships in ParcelTab
+// (PR-NX50) to the Overview tab where operators land first.
+import ProvenanceChip from '../common/ProvenanceChip';
+import { useFieldProvenance } from '../../hooks/useFieldProvenance';
 import DealAutoDerivedWarningsStrip from './DealAutoDerivedWarningsStrip';
 import {
   formatCrores,
@@ -119,6 +124,11 @@ const STAGE_NEXT_STEPS = {
 export default function OverviewTab() {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
+  // PR-NX53 (2026-05-19) — field-provenance map for inline chip on the
+  // Land Area card. Returns empty when no auto-fill events fire — chip
+  // simply doesn't render.
+  const { data: provenanceData } = useFieldProvenance(dealId);
+  const fieldProvenance = provenanceData?.field_provenance || {};
 
   const financials = deal.financials;
   const stageHistory = deal.stage_history || [];
@@ -167,8 +177,12 @@ export default function OverviewTab() {
             <MapPin size={14} className="text-content-muted" />
             <span className="text-xs text-content-secondary uppercase tracking-wide">Land Area</span>
           </div>
-          <p className="text-xl font-bold text-content-primary">
-            {deal.land_area_sqft ? formatArea(deal.land_area_sqft) : '-'}
+          <p className="text-xl font-bold text-content-primary inline-flex items-center gap-1.5">
+            <span>{deal.land_area_sqft ? formatArea(deal.land_area_sqft) : '-'}</span>
+            {/* PR-NX53 (2026-05-19) — inline provenance chip. Renders nothing
+                when land_area_sqft wasn't auto-filled from a document
+                extraction; renders an (i) chip with hover popover otherwise. */}
+            <ProvenanceChip field="land_area_sqft" provenance={fieldProvenance} />
           </p>
           {deal.land_area_sqft && (
             <p className="text-xs text-content-muted mt-1">
