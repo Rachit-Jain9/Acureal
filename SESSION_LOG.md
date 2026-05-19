@@ -4,6 +4,73 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (late-morning, continuation) — Post-Calculate underwriting panel + XLSX AI-Synthesis tab (PR #413, #414)
+
+Operator pushed for "deep first-principles review + best work + verify end-to-end + commit/push/deploy/merge as appropriate". After landing the 4-PR bundle earlier in the morning (#409 / #410 / #411 / #412), applied first-principles to pick the 2 highest-leverage follow-ons:
+
+1. **Complete PR-NX52** — the helpers `computeDscrWarning` + `computeYocSpreadWarning` shipped in NX52 but never got their post-Calculate panel wiring. The XLSX-export market-benchmark validators have been catching DSCR + YoC band breaches for months, but the operator only saw them at download time. This was Strategic Review §VI top-2's last loose end.
+2. **XLSX cross-product parity** for the 3 AI narratives (Risk / Sensitivity / Document Insights). DOCX has had them since NX43-NX45 and PPTX since NX54 (this morning). XLSX was the last format without them — leaving the cross-product reconciliation rule incomplete.
+
+### PRs shipped + merged
+
+- **#413 — PR-NX56: Post-Calculate DSCR + YoC vs Exit Cap benchmark panel on FinancialsPage.** Closes the loop on PR-NX52. Reads the actual kernel-computed `kpis.dscr` / `kpis.yieldOnCost` / `kpis.exitCapRate`, compares to the same RBI + IC thresholds the XLSX validators use, renders amber/red BenchmarkWarning chips inline below the KPI tile strip — the moment Calculate returns, not 5 hours later in the downloaded workbook.
+  - New `computeKernelWarnings(kpis, inputs, thresholds)` pure helper. Returns array of `{kind:'dscr'|'yoc', severity:'critical'|'warn', label, detail}`. DSCR < 1.20 → warn; DSCR < 1.00 → critical. YoC vs Exit Cap < 50 bps → warn (thin); < 0 bps → critical (negative — developer earns less than passive buyer).
+  - New `<PostCalcBenchmarkPanel>` card. Hidden while bands load, hidden when no thresholds, hidden when no evaluable KPIs. Quiet green "all clear" pill when KPIs are evaluable AND within band. Amber/red flags when out of band, with explicit copy on what to adjust (DebtLTV / DebtRatePct / LoanTermYears).
+  - Frontend tests: 591 → 609 (+18). Frontend build clean. Zero regressions.
+
+- **#414 — PR-NX57: XLSX AI Synthesis tab — cross-product parity with DOCX (NX43/44/45) + PPTX (NX54).** New consolidated sheet inserted between Executive Briefing + Dashboard. Three sections, one per AI narrative:
+  - **Risk Profile Synthesis** — Claude's summary + critical-spotlight paragraphs, severity-banded header (red).
+  - **Sensitivity Analysis · Narrative** — OpenAI's dominant-driver eyebrow + driver decomposition + recommended stress tests.
+  - **Document-Derived Insights** — Claude's cross-document summary + severity-coloured inconsistency findings (capped at 6 with "+N more" overflow line) OR a green positive-signal panel on zero findings.
+  - All 3 sections read DIRECTLY from `ctx.exportContext.{risks.narrative|sensitivityNarrative|documents.insights}` — same envelopes the DOCX + PPTX consume. Zero new service calls.
+  - Each section auto-falls-back to a polite "Synthesis Unavailable" placeholder when the narrative envelope is `available:false` (cascade failed) — workbook never breaks.
+  - Reaches the 8-worksheet cap exactly (1. Executive Briefing → 2. AI Synthesis → 3. Dashboard → 4. Inputs → 5. Cash Flow Engine → 6. Monthly Cash Flow → 7. Debt Sizing → 8. Calculations).
+  - Backend tests for this sheet: +10. Existing position-pinned tests (sheet2.xml → Dashboard) updated to sheet3.xml.
+
+### Outcome for the operator
+
+**Before this batch:**
+- Operator hit Calculate, saw DSCR = 1.05× on a KPI tile, and had to MENTALLY remember the RBI floor is 1.20×.
+- Operator saw YoC 7.0% and Exit Cap 7.5% in two different places; spread math was done in their head.
+- The XLSX export had the IC summary briefing on tab 1 but NONE of the deeper Risk / Sensitivity / Document AI narratives — operators who lived in Excel never saw the AI-synthesized analysis the DOCX/PPTX had.
+
+**After this batch:**
+1. **DSCR + YoC band breaches surface inline on FinancialsPage** — amber chips with exact values, the threshold, and what to adjust. Critical (DSCR < 1.0, negative spread) get the red tone.
+2. **Quiet green "all clear" pill** when both DSCR + YoC are within band — explicit reassurance, not silent absence.
+3. **XLSX has the 3 AI narratives on a dedicated "AI Synthesis" tab** — second tab in the workbook, right after Executive Briefing. Same wording / structure / disclosure pattern as DOCX + PPTX. Cross-product reconciliation rule is now satisfied across all 4 surfaces (live workspace + DOCX + PPTX + XLSX).
+
+### Architecture wins
+
+- **Single source of truth for benchmark thresholds is now used in 3 surfaces**: XLSX export validators (PR-NX28/33), live input-time predictive warnings (PR-NX52), and live post-Calculate kernel-output warnings (PR-NX56). All three import the same named constants from `marketBenchmarkValidator`. Zero drift risk.
+- **AI Synthesis sheet adds ZERO new service calls** — reads from the same `exportContext.risks.narrative` / `sensitivityNarrative` / `documents.insights` envelopes that the DOCX + PPTX renderers consume. The narratives are computed once in `dealExport.service.generateExportContext` and ALL three formats render the same data.
+- **Graceful unavailable fallback** consistent across formats — when an AI provider cascade fails, every surface shows a polite "Synthesis Unavailable — structured data remains authoritative" message rather than a blank/broken section.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| useBenchmarkBands.test.jsx | 13 | 24 | +11 |
+| PostCalcBenchmarkPanel.test.jsx (NEW) | 0 | 7 | +7 |
+| exports.xlsxV2.test.js (PR-NX57) | 222 | 232 | +10 |
+| **Backend TOTAL** | **2,029** | **2,039** | **+10** |
+| **Frontend TOTAL** | **591** | **609** | **+18** |
+
+Zero pre-existing regressions across 120+ backend + 63 frontend suites. Frontend build clean.
+
+### Outstanding operator actions (still pending from earlier sessions)
+
+1. **Fix `BLOB_READ_WRITE_TOKEN` + `JWT_SECRET` in Vercel** — both show "Needs Attention". (User said skip; flagged again for audit trail.)
+2. **Smoke-test PR-NX47 through PR-NX57** on a real deal — see the live AI panels + post-Calculate warnings fire end-to-end against actual data.
+3. **Karnataka API access** — long-standing TODO_LEGAL blocker.
+
+### Recommendation for next session
+
+- **Adopt `@redip/real-estate-ontology` in deal-create / deal-edit forms** (Strategic Review §VI top-1, still NOT STARTED) — the last unfinished item from the Tier-1 backlog. Removes drift risk between 3 places that encode asset_class / deal_structure / exit_strategy.
+- **"One Brain" unified DealContext — Phase A read consolidation** — single `/api/deals/:id/workspace` endpoint serving all tabs. Entry criteria are still met. Largest single-PR architecture win available.
+- **Audit dashboard skeleton/animation behaviour against `docs/FRONTEND_GUIDELINES.md`** — feel-check pass section 12. Easy, high-polish, low-risk.
+
+---
+
 ## 2026-05-19 (mid-morning, 4-PR follow-on) — Live warnings + Overview chip + 3 PPTX AI narrative slides (PR #409, #410, #411)
 
 Operator said "deep technical review + highest-impact pending work + 10 hours" — applied first-principles to pick a hybrid bundle of (1) the long-pending Strategic Review §VI top-2 item (live market-benchmark warnings on FinancialsPage), (2) extension of yesterday's ProvenanceChip work onto the Overview tab, and (3) cross-product parity for the 3 new DOCX AI capabilities (Risk / Sensitivity / Document Insights narratives) by adding them as PPTX slides. Operator goal: "seamless and well-integrated across modules, professional, sophisticated, state-of-the-art, free of errors."
