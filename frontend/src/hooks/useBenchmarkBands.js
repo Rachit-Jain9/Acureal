@@ -111,6 +111,86 @@ export function computeDscrWarning({ noiCr, totalCostCr, debtLTV, debtRatePct, l
 }
 
 /**
+ * Post-Calculate kernel-warning helper (PR-NX56 — 2026-05-19).
+ *
+ * Reads the ACTUAL kernel-computed `kpis.dscr`, `kpis.yieldOnCost`, and
+ * `kpis.exitCapRate` (with fallback to `inputs.exitCapRate`) from the
+ * normalized financials response, compares against the live thresholds
+ * shipped by `useBenchmarkBands`, and returns a flat array of severity-
+ * tagged warnings ready for `<BenchmarkWarning>` rendering.
+ *
+ * Unit conventions (matches kernel output / `normalizeFinancials`):
+ *   - `kpis.dscr`         — ratio (1.20×, NOT %)
+ *   - `kpis.yieldOnCost`  — percent (8.5, NOT 0.085)
+ *   - `kpis.exitCapRate`  — percent (7.5, NOT 0.075)
+ *
+ * The predictive helpers `computeDscrWarning` + `computeYocSpreadWarning`
+ * above are for INPUT TIME (before Calculate); this one is for AFTER
+ * Calculate when we have the actual kernel output and don't need to
+ * recompute from raw inputs.
+ *
+ * Returns:
+ *   Array<{ kind: 'dscr'|'yoc', severity: 'critical'|'warn', label: string, detail: string }>
+ *
+ * Empty array → all kernel KPIs are within band (panel hides).
+ */
+export function computeKernelWarnings(kpis, inputs, thresholds) {
+  const warnings = [];
+  if (!kpis || !thresholds) return warnings;
+
+  // DSCR floor check — applies to any asset class that has a kernel DSCR
+  // (income-family + structured-debt deals). Compare actual ratio to floor.
+  const dscr = Number(kpis.dscr);
+  const floor = Number(thresholds.rbiDscrFloor);
+  if (Number.isFinite(dscr) && dscr > 0 && Number.isFinite(floor) && floor > 0 && dscr < floor) {
+    const isCritical = dscr < 1.00;
+    warnings.push({
+      kind: 'dscr',
+      severity: isCritical ? 'critical' : 'warn',
+      label: isCritical
+        ? `DSCR ${dscr.toFixed(2)}× — does NOT cover annual debt service`
+        : `DSCR ${dscr.toFixed(2)}× — below RBI Master Direction floor of ${floor.toFixed(2)}×`,
+      detail: isCritical
+        ? `Computed DSCR ${dscr.toFixed(2)}× means NOI is insufficient to cover annual debt service from operations alone. Only feasible if sponsor injects equity from outside cash flow — flag as critical for IC.`
+        : `Computed DSCR ${dscr.toFixed(2)}× is below the RBI Master Direction floor of ${floor.toFixed(2)}×. Reduce DebtLTV, lower DebtRatePct, or extend LoanTermYears to improve coverage.`,
+    });
+  }
+
+  // YoC vs Exit Cap spread — income family only (yield-on-cost only
+  // meaningful for income-generating assets). Both values are stored as
+  // percentages by the kernel; convert (% - %) → bps via × 100.
+  const yocPct = Number(kpis.yieldOnCost);
+  const capPct = Number(kpis.exitCapRate ?? inputs?.exitCapRate);
+  const minBps = Number(thresholds.yocVsExitCapMinSpreadBps);
+  if (
+    Number.isFinite(yocPct) && yocPct > 0 &&
+    Number.isFinite(capPct) && capPct > 0 &&
+    Number.isFinite(minBps) && minBps > 0
+  ) {
+    const spreadBps = Math.round((yocPct - capPct) * 100);
+    if (spreadBps < minBps) {
+      if (spreadBps < 0) {
+        warnings.push({
+          kind: 'yoc',
+          severity: 'critical',
+          label: `Negative YoC vs Exit Cap spread (${Math.abs(spreadBps)} bps deficit)`,
+          detail: `Yield-on-Cost ${yocPct.toFixed(2)}% is BELOW Exit Cap Rate ${capPct.toFixed(2)}%. Developer earns LESS than a passive buyer of the stabilised asset — no economic reward for taking on development risk. Reconsider the deal structure or exit assumption.`,
+        });
+      } else {
+        warnings.push({
+          kind: 'yoc',
+          severity: 'warn',
+          label: `Thin YoC vs Exit Cap spread (${spreadBps} bps)`,
+          detail: `Yield-on-Cost ${yocPct.toFixed(2)}% vs Exit Cap ${capPct.toFixed(2)}% leaves only ${spreadBps} bps. Conventional IC threshold is ${minBps}-200 bps; thin spread leaves no margin for cost overruns or lease-up delays.`,
+        });
+      }
+    }
+  }
+
+  return warnings;
+}
+
+/**
  * Yield-on-Cost vs Exit Cap spread warning. Income-family only.
  * Mirrors validateYocVsExitCapSpread (PR-NX33).
  */

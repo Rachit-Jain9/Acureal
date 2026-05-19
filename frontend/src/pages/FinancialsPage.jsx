@@ -14,6 +14,11 @@ import SensitivityTornado from '../components/financials/SensitivityTornado';
 // the same OpenAI-synthesized driver decomposition + recommended
 // stress tests that ships in the DOCX Financials section (PR-NX44).
 import SensitivityNarrativePanel from '../components/financials/SensitivityNarrativePanel';
+// PR-NX56 (2026-05-19) — Post-Calculate panel that compares the actual
+// kernel-computed DSCR + YoC/Exit-Cap spread against the same RBI + IC
+// thresholds the XLSX-export validators (PR-NX28 / NX33) enforce. Closes
+// the loop with the input-time predictive warnings from PR-NX52.
+import PostCalcBenchmarkPanel from '../components/financials/PostCalcBenchmarkPanel';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
 import AuditTimelineView from '../components/financials/AuditTimelineView';
 import JDAWaterfallPanel from '../components/financials/JDAWaterfallPanel';
@@ -170,6 +175,18 @@ export default function FinancialsPage() {
       {hasResults && (
         <>
           <KPICards kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} inputs={normalizedFinancials.inputs} />
+
+          {/* PR-NX56 (2026-05-19) — Underwriting-benchmark panel sits
+              directly under the KPI tile strip. Surfaces DSCR-below-floor
+              and YoC-vs-Exit-Cap-spread warnings from the same thresholds
+              the XLSX export validates against — but live, on the screen,
+              the moment Calculate completes. Hidden when bands not yet
+              loaded; renders quiet "all clear" green pill when within band. */}
+          <PostCalcBenchmarkPanel
+            dealId={dealId}
+            kpis={normalizedFinancials.kpis}
+            inputs={normalizedFinancials.inputs}
+          />
 
           <WhatIfSliders
             assetClass={normalizedFinancials.assetClass}
