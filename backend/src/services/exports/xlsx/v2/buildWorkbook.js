@@ -70,6 +70,15 @@ const FONT = palette.FONTS.body;
 // Amortization" at 26 chars.
 const SHEETS = {
   executiveBriefing: 'Executive Briefing',
+  // PR-NX57 (2026-05-19): cross-product parity with DOCX PR-NX43/44/45 +
+  // PPTX PR-NX54. Consolidated AI-synthesis sheet — 3 sections, one per
+  // narrative: Risk Profile Synthesis, Sensitivity Analysis Narrative,
+  // Document-Derived Insights. Reads directly from
+  // exportContext.risks.narrative / .sensitivityNarrative / .documents.insights
+  // (already plumbed by dealExport.service). Graceful "Synthesis Unavailable"
+  // fallback per section so the workbook never breaks when an AI provider
+  // is down.
+  aiSynthesis: 'AI Synthesis',
   dashboard: 'Dashboard',
   qaSources: 'Export QA & Sources',
   inputs: 'Inputs & Assumptions',
@@ -5247,6 +5256,263 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   return sheet;
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// PR-NX57 (2026-05-19) — AI Synthesis sheet
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Cross-product parity with DOCX (PR-NX43 / NX44 / NX45) + PPTX (PR-NX54).
+// Pre-NX57 the XLSX had the Executive Briefing's 1-paragraph summary + 4
+// bullets, but none of the deeper AI-synthesized narratives the DOCX +
+// PPTX surface:
+//
+//   - Risk Profile Synthesis     (Claude — risk summary + critical spotlight)
+//   - Sensitivity Narrative      (OpenAI — driver decomposition + stress tests)
+//   - Document-Derived Insights  (Claude — cross-document summary + findings)
+//
+// All three already populate `ctx.exportContext.risks.narrative`,
+// `ctx.exportContext.sensitivityNarrative`, and `ctx.exportContext.documents.insights`
+// via dealExport.service. The renderer reads them directly — no new service
+// calls — and falls back to a polite "Synthesis Unavailable" sub-section
+// when an envelope is `available: false`, so the workbook never breaks
+// regardless of AI provider state.
+//
+// Sheet layout (8 columns wide, matching Executive Briefing's chrome):
+//
+//   Row 1   — title banner
+//   Row 2   — deal-identity subtitle
+//   Row 3   — AI-Assisted disclosure banner (amber)
+//   Row 4   — spacer
+//
+//   ── Risk Profile Synthesis (rows 5–17) ──
+//   ── Sensitivity Narrative (rows 19–31) ──
+//   ── Document-Derived Insights (rows 33–N) ──
+const buildAiSynthesisSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.aiSynthesis, {
+    views: [{ showGridLines: false, state: 'normal' }],
+  });
+  sheet.columns = [
+    { width: 28 }, { width: 28 }, { width: 28 }, { width: 28 },
+    { width: 28 }, { width: 28 }, { width: 22 }, { width: 22 },
+  ];
+
+  // Row 1 — title banner.
+  sheet.mergeCells('A1:H1');
+  const titleCell = sheet.getCell('A1');
+  titleCell.value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | AI Synthesis`;
+  titleCell.font = { name: FONT, size: 14, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  titleCell.fill = FILL(palette.xlsx('accent'));
+  titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  titleCell.protection = { locked: true };
+  sheet.getRow(1).height = 32;
+
+  // Row 2 — deal identity subtitle.
+  sheet.mergeCells('A2:H2');
+  const subtitleCell = sheet.getCell('A2');
+  subtitleCell.value = buildDealIdentityLine(ctx);
+  subtitleCell.font = { name: FONT, size: 10, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  subtitleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+  subtitleCell.protection = { locked: true };
+  sheet.getRow(2).height = 22;
+
+  // Row 3 — AI-Assisted disclosure (mandatory per CLAUDE.md "Every AI
+  // output must carry 'AI-assisted — requires human review' label").
+  sheet.mergeCells('A3:H3');
+  const disclosureCell = sheet.getCell('A3');
+  disclosureCell.value = '⚠ AI-Assisted Analysis Notes — REQUIRES HUMAN REVIEW. All synthesis below is produced by LLMs (Claude / OpenAI cascade) from the structured risk register, sensitivity grid, and extracted-document facts already in the workbook. Verify against the underlying source data on the Inputs / Sensitivity sheets and the original uploaded documents before any IC decision.';
+  disclosureCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+  disclosureCell.fill = FILL(palette.xlsx('dataWarning'));
+  disclosureCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+  disclosureCell.protection = { locked: true };
+  sheet.getRow(3).height = 44;
+
+  // Row 4 spacer
+  sheet.getRow(4).height = 8;
+
+  // ── Helper: render a section header band (full width, indented text) ──
+  const renderSectionBand = (rowNum, label, toneArgb) => {
+    sheet.mergeCells(`A${rowNum}:H${rowNum}`);
+    const cell = sheet.getCell(`A${rowNum}`);
+    cell.value = label;
+    cell.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('paperElevated') }, charSpace: 1.6 };
+    cell.fill = FILL(toneArgb);
+    cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    cell.protection = { locked: true };
+    sheet.getRow(rowNum).height = 22;
+  };
+
+  // ── Helper: render an eyebrow row (small uppercase label) ──
+  const renderEyebrow = (rowNum, label) => {
+    sheet.mergeCells(`A${rowNum}:H${rowNum}`);
+    const cell = sheet.getCell(`A${rowNum}`);
+    cell.value = label;
+    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') }, charSpace: 1.4 };
+    cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    cell.protection = { locked: true };
+    sheet.getRow(rowNum).height = 16;
+  };
+
+  // ── Helper: render a body-text row (wrapped paragraph) ──
+  const renderBodyText = (rowNum, text, heightUnits = 56) => {
+    sheet.mergeCells(`A${rowNum}:H${rowNum}`);
+    const cell = sheet.getCell(`A${rowNum}`);
+    cell.value = text || '—';
+    cell.font = { name: FONT, size: 10.5, color: { argb: palette.xlsx('ink') } };
+    cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
+    cell.protection = { locked: true };
+    sheet.getRow(rowNum).height = heightUnits;
+  };
+
+  // ── Helper: render an attribution footer (italic muted small) ──
+  const renderAttribution = (rowNum, narrative) => {
+    sheet.mergeCells(`A${rowNum}:H${rowNum}`);
+    const cell = sheet.getCell(`A${rowNum}`);
+    const parts = [];
+    if (narrative?.confidence) parts.push(`Confidence: ${narrative.confidence}`);
+    if (narrative?.provider) parts.push(`Synthesis: ${narrative.provider}`);
+    if (narrative?.fallbackReason) parts.push(`auto-failover: ${narrative.fallbackReason}`);
+    cell.value = parts.length ? parts.join(' · ') : 'Provider metadata unavailable.';
+    cell.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    cell.protection = { locked: true };
+    sheet.getRow(rowNum).height = 16;
+  };
+
+  // ── Helper: render a "Synthesis Unavailable" placeholder block ──
+  const renderUnavailable = (rowNum, sectionName, reason) => {
+    sheet.mergeCells(`A${rowNum}:H${rowNum}`);
+    const cell = sheet.getCell(`A${rowNum}`);
+    cell.value = reason
+      ? `Synthesis Unavailable — ${sectionName} could not be generated. Reason: ${reason}. The structured data on the adjacent sheets remains authoritative.`
+      : `Synthesis Unavailable — ${sectionName} could not be generated for this deal. The structured data on the adjacent sheets remains authoritative.`;
+    cell.font = { name: FONT, size: 10.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    cell.fill = FILL(palette.xlsx('paperSubtle'));
+    cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+    cell.protection = { locked: true };
+    sheet.getRow(rowNum).height = 48;
+  };
+
+  // ── SECTION 1: Risk Profile Synthesis ──────────────────────────────
+  renderSectionBand(5, 'RISK PROFILE SYNTHESIS', palette.xlsx('dataNegative'));
+  const riskNarrative = ctx.exportContext?.risks?.narrative || null;
+
+  if (riskNarrative?.available && (riskNarrative.summary_paragraph || riskNarrative.critical_spotlight_paragraph)) {
+    renderEyebrow(6, 'SUMMARY');
+    renderBodyText(7, riskNarrative.summary_paragraph || '—', 56);
+    renderEyebrow(8, 'CRITICAL / HIGH-SEVERITY SPOTLIGHT');
+    renderBodyText(9, riskNarrative.critical_spotlight_paragraph || 'No critical or high-severity risks logged.', 56);
+    renderAttribution(10, riskNarrative);
+  } else {
+    renderUnavailable(6, 'risk profile synthesis', riskNarrative?.reason);
+  }
+
+  sheet.getRow(11).height = 12; // spacer
+
+  // ── SECTION 2: Sensitivity Analysis Narrative ──────────────────────
+  renderSectionBand(12, 'SENSITIVITY ANALYSIS · NARRATIVE', palette.xlsx('accent'));
+  const sensitivityNarrative = ctx.exportContext?.sensitivityNarrative || null;
+
+  if (sensitivityNarrative?.available
+      && (sensitivityNarrative.driver_decomposition_paragraph || sensitivityNarrative.stress_test_paragraph)) {
+    if (sensitivityNarrative.dominant_driver) {
+      renderEyebrow(13, `DOMINANT DRIVER: ${String(sensitivityNarrative.dominant_driver).toUpperCase()}`);
+    } else {
+      renderEyebrow(13, 'DOMINANT DRIVER: NOT IDENTIFIED');
+    }
+    renderEyebrow(14, 'DRIVER DECOMPOSITION');
+    renderBodyText(15, sensitivityNarrative.driver_decomposition_paragraph || '—', 56);
+    renderEyebrow(16, 'RECOMMENDED STRESS TESTS');
+    renderBodyText(17, sensitivityNarrative.stress_test_paragraph || '—', 56);
+    renderAttribution(18, sensitivityNarrative);
+  } else {
+    renderUnavailable(13, 'sensitivity narrative', sensitivityNarrative?.reason);
+  }
+
+  sheet.getRow(19).height = 12; // spacer
+
+  // ── SECTION 3: Document-Derived Insights ───────────────────────────
+  renderSectionBand(20, 'DOCUMENT-DERIVED INSIGHTS', palette.xlsx('inkDeep'));
+  const docInsights = ctx.exportContext?.documents?.insights || null;
+
+  if (docInsights?.available && (docInsights.summary_paragraph || (Array.isArray(docInsights.findings) && docInsights.findings.length > 0))) {
+    renderEyebrow(21, 'CROSS-DOCUMENT SUMMARY');
+    renderBodyText(22, docInsights.summary_paragraph || '—', 56);
+
+    const findings = Array.isArray(docInsights.findings) ? docInsights.findings : [];
+    const sortedFindings = [...findings].sort((a, b) => {
+      const rank = { critical: 1, high: 2, medium: 3, low: 4 };
+      return (rank[a.severity] || 99) - (rank[b.severity] || 99);
+    });
+
+    if (sortedFindings.length === 0) {
+      // Positive-signal panel — quiet green band, one line.
+      sheet.mergeCells('A23:H23');
+      const goodCell = sheet.getCell('A23');
+      goodCell.value = '✓  No inconsistencies detected across the extracted document set — a positive signal.';
+      goodCell.font = { name: FONT, size: 10.5, italic: true, color: { argb: palette.xlsx('dataPositive') } };
+      goodCell.fill = FILL('ECFDF5');
+      goodCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+      goodCell.protection = { locked: true };
+      sheet.getRow(23).height = 22;
+      renderAttribution(24, docInsights);
+    } else {
+      renderEyebrow(23, `INCONSISTENCY FINDINGS (${sortedFindings.length})`);
+      // Each finding gets 2 rows: a severity-tagged title + a body row.
+      // Cap at 6 findings so the workbook doesn't grow unbounded.
+      const visible = sortedFindings.slice(0, 6);
+      let rowCursor = 24;
+      visible.forEach((finding) => {
+        const sev = String(finding.severity || 'medium').toUpperCase();
+        const sevArgb =
+          finding.severity === 'critical' ? palette.xlsx('dataNegative')
+          : finding.severity === 'high' ? palette.xlsx('dataWarning')
+          : palette.xlsx('mutedHigh');
+        // Title row
+        sheet.mergeCells(`A${rowCursor}:H${rowCursor}`);
+        const titleC = sheet.getCell(`A${rowCursor}`);
+        titleC.value = {
+          richText: [
+            { text: `[${sev}]  `, font: { name: FONT, size: 10.5, bold: true, color: { argb: sevArgb } } },
+            { text: finding.title || '(untitled finding)', font: { name: FONT, size: 10.5, bold: true, color: { argb: palette.xlsx('ink') } } },
+          ],
+        };
+        titleC.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        titleC.protection = { locked: true };
+        sheet.getRow(rowCursor).height = 18;
+        rowCursor += 1;
+
+        // Body row (description + optional recommendation)
+        const body = [
+          finding.description || '',
+          finding.recommendation ? `Recommended: ${finding.recommendation}` : '',
+        ].filter(Boolean).join('  ');
+        sheet.mergeCells(`A${rowCursor}:H${rowCursor}`);
+        const bodyC = sheet.getCell(`A${rowCursor}`);
+        bodyC.value = body || '—';
+        bodyC.font = { name: FONT, size: 10, color: { argb: palette.xlsx('mutedHigh') } };
+        bodyC.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
+        bodyC.protection = { locked: true };
+        sheet.getRow(rowCursor).height = 36;
+        rowCursor += 1;
+      });
+      if (sortedFindings.length > visible.length) {
+        sheet.mergeCells(`A${rowCursor}:H${rowCursor}`);
+        const moreC = sheet.getCell(`A${rowCursor}`);
+        moreC.value = `+ ${sortedFindings.length - visible.length} more finding(s) — see live workspace Documents tab for the full set.`;
+        moreC.font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+        moreC.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        moreC.protection = { locked: true };
+        sheet.getRow(rowCursor).height = 14;
+        rowCursor += 1;
+      }
+      renderAttribution(rowCursor, docInsights);
+    }
+  } else {
+    renderUnavailable(21, 'document-derived insights', docInsights?.reason);
+  }
+
+  return sheet;
+};
+
 /**
  * Dashboard sheet — KPI summary cards + native Excel chart for sources/uses.
  */
@@ -8266,6 +8532,12 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // diving into the numbers. ChartInjector caller below targets the
   // Dashboard by name, not file index, so its addition doesn't shift charts.
   buildExecutiveBriefingSheet(workbook, ctx);
+  // PR-NX57 (2026-05-19) — AI Synthesis sheet sits BETWEEN the IC-facing
+  // Executive Briefing (1-paragraph summary + bullets) and the analytical
+  // Dashboard. Consolidates the 3 deeper AI narratives (Risk synthesis,
+  // Sensitivity decomposition, Document-derived insights) into one tab so
+  // the workbook has cross-product parity with the DOCX + PPTX exports.
+  buildAiSynthesisSheet(workbook, ctx);
   buildDashboardSheet(workbook, ctx);
   const { definedNames } = buildInputsSheet(workbook, ctx);
   if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
@@ -8604,10 +8876,13 @@ const validateXlsxBufferForDownload = async (xlsxBuffer, options = {}) => {
     const workbookXml = await workbookXmlFile.async('string');
     const sheetCount = (workbookXml.match(/<sheet\b/g) || []).length;
     // PR-NX7 (2026-05-15): raised the ceiling from 7 → 8 to accommodate
-    // the Executive Briefing sheet (first tab, IC-facing summary). 8 is
-    // the new operator-blessed maximum.
-    if (sheetCount > 8) {
-      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; maximum allowed is 8.`, 'Remove or merge non-essential worksheets before download.');
+    // the Executive Briefing sheet (first tab, IC-facing summary).
+    // PR-NX57 (2026-05-19): raised the ceiling from 8 → 9 to accommodate
+    // the new AI Synthesis sheet (second tab — cross-product parity with
+    // DOCX + PPTX). Hospitality deals reach exactly 9 (the extra USALI
+    // sheet); non-hospitality stays at 8. 9 is the new ceiling.
+    if (sheetCount > 9) {
+      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; maximum allowed is 9.`, 'Remove or merge non-essential worksheets before download.');
     }
     if (workbookXml.includes('Export QA &amp; Sources') || workbookXml.includes('Export QA & Sources')) {
       add(SHEETS.qaSources, 'Export QA & Sources must be merged into Inputs & Assumptions.', 'Remove the standalone QA worksheet before download.');
