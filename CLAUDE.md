@@ -53,7 +53,13 @@ This section mirrors the canonical memory file at `~/.claude/projects/.../memory
 - Never reintroduce top-level `Properties`, `Documents`, or `Actions` navigation as primary workflows.
 - Never auto-generate or imply legal conclusions on title, zoning, RERA compliance, or approvals. AI outputs must be framed as "extraction/synthesis aid" with clear disclaimers and human verification prompts.
 - Never expose unverified market intelligence or comps as authoritative. Always surface source, freshness, and confidence level — or "No verified feed available."
-- Every AI-synthesized narrative (risk summary, DD brief, IC memo) must carry a prominent "AI-assisted — requires human review" label in both UI and exported outputs.
+- AI disclosure policy (operator override 2026-05-19, supersedes earlier rule): the customer-facing surface should NOT lean on AI as a marketing concept. Specifically:
+  - **DOCX exports**: a single quiet first-page disclaimer (Arial 7pt italic muted) covers model-assisted synthesis for the whole report. No per-section "AI-Assisted" banners, no "REQUIRES HUMAN REVIEW" pills, no provider names (Claude / OpenAI / gpt-N / Sonnet), no auto-failover JSON in footers, no cross-product reconciliation copy.
+  - **PPTX exports**: no mention of AI usage anywhere. No disclosure banners on slides. Cover/contents/briefing slide titles use plain product language ("Executive Briefing", not "AI-Assisted Briefing"). Generation footers carry only the date.
+  - **XLSX exports**: no mention of AI usage anywhere. Tabs use neutral names ("Analysis Notes", not "AI Synthesis"). No amber disclosure banners.
+  - **In-app UI**: the existing `aiBadge` and confidence chips on the live workspace stay (operator-facing only). Customer-facing exports are the constrained surface.
+  - **Audit trail and admin tooling** (the `/dashboard/admin/ai-usage` page when it ships) MAY surface provider names + auto-failover diagnostics — those are operator-only.
+  - **The deterministic-kernel guarantee is technical, not promotional**. All numbers come from the kernel; AI is restricted to interpretive prose. State this in the cover-page disclaimer but don't repeat the framing per section.
 - Preserve an immutable audit trail for every material change to a deal (stage, financials, risks, approvals, DD items). This is non-negotiable for investor-grade reporting.
 
 ## Current information architecture

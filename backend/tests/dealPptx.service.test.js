@@ -656,7 +656,7 @@ describe('dealPptx.service', () => {
   // Same shared `generateDealBriefing` service used by XLSX (PR-NX7/12)
   // and DOCX (PR-NX18 sibling). All three render identical headline
   // language for the same deal.
-  describe('PR-NX18: AI-Assisted Briefing slide', () => {
+  describe('PR-NX18: Executive Briefing slide', () => {
     test('slide manifest places briefing as slide 2 (right after Cover)', () => {
       const exportContext = createExportContext();
       const baseContext = __testables.buildDeckContext(exportContext, {
@@ -665,7 +665,10 @@ describe('dealPptx.service', () => {
       const manifest = baseContext.slideManifest;
       expect(manifest[0].key).toBe('cover');
       expect(manifest[1].key).toBe('briefing');
-      expect(manifest[1].title).toBe('AI-Assisted Briefing');
+      // PR-NX74 (2026-05-19) — was "AI-Assisted Briefing"; renamed to
+      // "Executive Briefing" per operator policy (PPTX must not surface
+      // AI usage anywhere).
+      expect(manifest[1].title).toBe('Executive Briefing');
       expect(manifest[2].key).toBe('contents');
     });
 

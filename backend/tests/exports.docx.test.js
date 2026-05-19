@@ -229,7 +229,7 @@ describe('services/exports/docx/buildReport', () => {
   // ────────────────────────────────────────────────────────────────────
   // Cross-product parity with XLSX Executive Briefing (PR-NX7 / PR-NX12)
   // and PPTX briefing slide. Same shared `generateDealBriefing` service.
-  describe('PR-NX18: AI-Assisted Briefing section (cross-product parity)', () => {
+  describe('PR-NX18 + NX74: Executive Briefing section (cross-product parity)', () => {
     const JSZip = require('jszip');
 
     const extractDocXmlText = async (buffer) => {
@@ -239,23 +239,27 @@ describe('services/exports/docx/buildReport', () => {
       return docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     };
 
-    test('DOCX includes "AI-Assisted Briefing" section heading', async () => {
+    test('DOCX includes "Executive Briefing" section heading (renamed from "AI-Assisted Briefing" per PR-NX74)', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      expect(text).toMatch(/AI-Assisted Briefing/);
+      expect(text).toMatch(/Executive Briefing/);
+      // PR-NX74: the loud per-section AI-Assisted Briefing label is gone.
+      expect(text).not.toMatch(/AI-Assisted Briefing/);
     });
 
-    test('DOCX includes mandatory disclosure banner per CLAUDE.md', async () => {
+    test('PR-NX74: DOCX has cover-page Arial-7pt disclaimer but no per-section "REQUIRES HUMAN REVIEW" banner', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      expect(text).toMatch(/REQUIRES HUMAN REVIEW/);
-      expect(text).toMatch(/AI-Assisted Briefing/);
+      // Cover-page disclaimer is the single canonical reference to AI usage.
+      expect(text).toMatch(/model-assisted synthesis/i);
+      expect(text).toMatch(/deterministic underwriting kernel/i);
+      // Per-section "REQUIRES HUMAN REVIEW" banners are removed.
+      expect(text).not.toMatch(/REQUIRES HUMAN REVIEW/);
     });
 
     test('DOCX briefing surfaces asset-class-aware language for residential', async () => {
-      const buffer = await buildDealReportDocx(minimalContext()); // residential_apartments
+      const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      // Residential briefing per PR-NX12: "launch price"
       expect(text).toMatch(/launch price|gross margin|RERA/);
     });
 
@@ -268,9 +272,7 @@ describe('services/exports/docx/buildReport', () => {
       };
       const buffer = await buildDealReportDocx(ctx);
       const text = await extractDocXmlText(buffer);
-      // Hospitality per PR-NX12: "USALI economics" + "keys"
       expect(text).toMatch(/USALI|keys|ADR|hospitality/i);
-      // MUST NOT use generic rent-based language for hospitality
       expect(text).not.toMatch(/rent inputs pending × \d+% occupancy/);
     });
 
@@ -286,17 +288,26 @@ describe('services/exports/docx/buildReport', () => {
       expect(text).toMatch(/office|rent|occupancy/i);
     });
 
-    test('DOCX briefing includes a footer attributing the shared service to XLSX + PPTX', async () => {
+    test('PR-NX74: DOCX footer does not leak provider name, auto-failover JSON, or cross-product copy', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      expect(text).toMatch(/Synthesis:/);
-      expect(text).toMatch(/cross-product consistency|XLSX|PPTX/i);
+      // Pre-NX74 the footer said: "Synthesis: Claude Sonnet 4.6 · auto-
+      // failover: 401 {error JSON} · This briefing mirrors the AI-assisted
+      // Executive Briefing tab in the XLSX export and the AI-Assisted
+      // Briefing slide in the PPTX deck — all three reuse the same
+      // shared service for cross-product consistency." — all stripped.
+      expect(text).not.toMatch(/Synthesis: (Claude|OpenAI|gpt)/);
+      expect(text).not.toMatch(/auto-failover/);
+      expect(text).not.toMatch(/cross-product consistency/);
+      expect(text).not.toMatch(/AI-assisted Executive Briefing tab/);
+      expect(text).not.toMatch(/authentication_error/);
+      expect(text).not.toMatch(/invalid x-api-key/);
     });
 
     test('DOCX briefing precedes Executive Summary (briefing is section 2, exec summary is section 3)', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      const briefingIdx = text.indexOf('AI-Assisted Briefing');
+      const briefingIdx = text.indexOf('Executive Briefing');
       const execIdx = text.indexOf('Executive Summary');
       expect(briefingIdx).toBeGreaterThan(-1);
       expect(execIdx).toBeGreaterThan(-1);
@@ -696,11 +707,10 @@ describe('services/exports/docx/buildReport', () => {
     test('renders Table of Contents heading after Cover', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      // ToC heading exists
       expect(text).toMatch(/Table of Contents/);
-      // ToC appears before AI-Assisted Briefing (the previous section 2)
+      // ToC appears before Executive Briefing (section 1 after PR-NX74 rename).
       const tocIdx = text.indexOf('Table of Contents');
-      const briefingIdx = text.indexOf('AI-Assisted Briefing');
+      const briefingIdx = text.indexOf('Executive Briefing');
       expect(tocIdx).toBeGreaterThan(-1);
       expect(briefingIdx).toBeGreaterThan(tocIdx);
     });
@@ -708,11 +718,9 @@ describe('services/exports/docx/buildReport', () => {
     test('Table of Contents lists every section in canonical order with numbers', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      // Every entry from SECTION_ORDER should appear as a numbered ToC line.
-      // Sample a few to confirm + check the numbering format.
-      // PR-NX45 (2026-05-18): added Document-Derived Insights at index 17,
-      // bumping Methodology to 20 and Disclaimer to 21.
-      expect(text).toMatch(/1\. *AI-Assisted Briefing/);
+      // PR-NX74 (2026-05-19): section 1 renamed from "AI-Assisted
+      // Briefing" to "Executive Briefing" per operator policy.
+      expect(text).toMatch(/1\. *Executive Briefing/);
       expect(text).toMatch(/2\. *Executive Summary/);
       expect(text).toMatch(/13\. *Risk Register/);
       expect(text).toMatch(/15\. *Approvals Tracker/);
@@ -722,24 +730,21 @@ describe('services/exports/docx/buildReport', () => {
       expect(text).toMatch(/21\. *Disclaimer/);
     });
 
-    test('Table of Contents tags AI vs Platform per section', async () => {
+    test('PR-NX74: Table of Contents no longer tags AI vs Platform per section', async () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
-      // AI-tagged lines exist (Briefing, Exec Summary, Why This Area, Pros & Cons)
-      const aiCount = (text.match(/· AI-Assisted/g) || []).length;
-      // Platform-tagged lines exist
-      const platformCount = (text.match(/· Platform Data/g) || []).length;
-      expect(aiCount).toBeGreaterThanOrEqual(4);
-      expect(platformCount).toBeGreaterThanOrEqual(10);
+      // Pre-NX74 the ToC tagged each entry as "· AI-Assisted" or
+      // "· Platform Data". Removed per operator policy.
+      expect(text).not.toMatch(/· AI-Assisted/);
+      expect(text).not.toMatch(/· Platform Data/);
     });
 
     test('SECTION_ORDER exports the 21 canonical section names', () => {
-      // PR-NX45 (2026-05-18): added Document-Derived Insights → 21 sections.
       expect(Array.isArray(__internal.SECTION_ORDER)).toBe(true);
       expect(__internal.SECTION_ORDER).toHaveLength(21);
-      expect(__internal.SECTION_ORDER[0]).toBe('AI-Assisted Briefing');
+      // PR-NX74 (2026-05-19) — first section renamed "AI-Assisted Briefing" → "Executive Briefing".
+      expect(__internal.SECTION_ORDER[0]).toBe('Executive Briefing');
       expect(__internal.SECTION_ORDER[__internal.SECTION_ORDER.length - 1]).toBe('Disclaimer');
-      // PR-NX45: confirm the new section is positioned between Provenance and Pros & Cons.
       expect(__internal.SECTION_ORDER).toContain('Document-Derived Insights');
     });
 
@@ -757,8 +762,10 @@ describe('services/exports/docx/buildReport', () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
       expect(text).toMatch(/deterministic TypeScript financial kernel/);
-      expect(text).toMatch(/no AI numerics|No large language model ever produces a number/);
-      expect(text).toMatch(/cross-product consistency/i);
+      // PR-NX74: the "no AI numerics" / "no large language model ever
+      // produces a number" callout was removed from the Methodology
+      // section per operator policy. The deterministic-kernel guarantee
+      // is intact via the previous assertion.
       expect(text).toMatch(/RERA 70\/30 escrow|GST tiers|BBMP UAV/);
     });
 
@@ -830,7 +837,8 @@ describe('services/exports/docx/buildReport', () => {
       const buffer = await buildDealReportDocx(minimalContext());
       const text = await extractDocXmlText(buffer);
       const tocIdx = text.indexOf('Table of Contents');
-      const briefingIdx = text.indexOf('AI-Assisted Briefing');
+      // PR-NX74 (2026-05-19): section renamed "AI-Assisted Briefing" → "Executive Briefing".
+      const briefingIdx = text.indexOf('Executive Briefing');
       const execIdx = text.indexOf('Executive Summary');
       const financialsIdx = text.search(/Financials &(?:amp;)? KPIs/);
       const provenanceIdx = text.search(/Provenance &(?:amp;)? Source Register/);

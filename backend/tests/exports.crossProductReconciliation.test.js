@@ -264,10 +264,21 @@ describe('Cross-export reconciliation (PR-NX19)', () => {
       expect(pptxText).not.toMatch(/GST \d+% on under-construction sale/i);
     });
 
-    test('All three formats include the mandatory "REQUIRES HUMAN REVIEW" disclosure', () => {
-      expect(xlsxText).toMatch(/REQUIRES HUMAN REVIEW/i);
-      expect(docxText).toMatch(/REQUIRES HUMAN REVIEW/i);
-      expect(pptxText).toMatch(/REQUIRES HUMAN REVIEW/i);
+    test('PR-NX74: NONE of the three formats leak provider names or "REQUIRES HUMAN REVIEW" banners', () => {
+      // Operator policy 2026-05-19: XLSX + PPTX must not surface AI usage
+      // anywhere. DOCX gets ONE small Arial 7pt cover-page disclaimer
+      // (covered by other DOCX tests). The pre-NX74 loud "AI-ASSISTED
+      // ... REQUIRES HUMAN REVIEW" banners + provider attribution lines
+      // (Synthesis: gpt-5.4, Provider: Claude Sonnet 4.6, auto-failover:
+      // <raw error JSON>) are all gone.
+      [xlsxText, pptxText].forEach((text) => {
+        expect(text).not.toMatch(/REQUIRES HUMAN REVIEW/i);
+        expect(text).not.toMatch(/Synthesis: (Claude|OpenAI|gpt|claude)/i);
+        expect(text).not.toMatch(/Provider: (Claude|OpenAI|gpt)/i);
+        expect(text).not.toMatch(/auto-failover/);
+        expect(text).not.toMatch(/invalid x-api-key/);
+        expect(text).not.toMatch(/authentication_error/);
+      });
     });
 
     test('All three formats include the deal name', () => {

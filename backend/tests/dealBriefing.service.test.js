@@ -324,47 +324,52 @@ describe('dealBriefing.service (PR-NX7)', () => {
       expect(wb.worksheets[0].name).toBe('Executive Briefing');
     });
 
-    test('Executive Briefing carries mandatory AI disclosure label', async () => {
+    test('PR-NX74: Executive Briefing row 3 is now a spacer (AI disclosure stripped per operator policy)', async () => {
+      // Pre-NX74: A3 carried the loud amber "⚠ AI-Assisted Briefing
+      // (synthesis: ...) — REQUIRES HUMAN REVIEW..." banner. Operator
+      // 2026-05-19 directive: XLSX must not surface AI usage anywhere.
+      // Row 3 is now a thin spacer; the banner is gone.
       const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const sheet = wb.getWorksheet('Executive Briefing');
-      const disclosure = String(sheet.getCell('A3').value);
-      expect(disclosure).toMatch(/REQUIRES HUMAN REVIEW/i);
-      // PR-NX14 (2026-05-15): unified prefix — both paths start with
-      // "⚠ AI-Assisted Briefing" so operators see a consistent label
-      // regardless of which synthesis engine produced the prose.
-      expect(disclosure).toMatch(/AI-Assisted Briefing/);
+      const row3Value = String(sheet.getCell('A3').value || '');
+      expect(row3Value).not.toMatch(/REQUIRES HUMAN REVIEW/i);
+      expect(row3Value).not.toMatch(/AI-Assisted/);
+      expect(row3Value).not.toMatch(/synthesis:/);
     });
 
-    test('PR-NX14: Executive Briefing prefix is unified across AI + templated paths', async () => {
-      // Templated path (skipAiBriefing forces fallback)
+    test('PR-NX74: generation footer (row 17) does not leak provider name or auto-failover JSON', async () => {
       const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const sheet = wb.getWorksheet('Executive Briefing');
-      const disclosure = String(sheet.getCell('A3').value);
-      // Both paths share the "⚠ AI-Assisted Briefing" prefix
-      expect(disclosure.startsWith('⚠ AI-Assisted Briefing')).toBe(true);
-      // The synthesis path is indicated in parentheses
-      expect(disclosure).toMatch(/synthesis:/);
-      // Templated path explicitly says so
-      expect(disclosure).toMatch(/templated fallback/i);
+      const footer = String(sheet.getCell('A17').value || '');
+      expect(footer).toMatch(/^Generated:/);
+      // No provider name (Claude Sonnet 4.6 / gpt-5.4 / openai / claude)
+      expect(footer).not.toMatch(/Provider:/);
+      expect(footer).not.toMatch(/Synthesis:/);
+      expect(footer).not.toMatch(/Claude/i);
+      expect(footer).not.toMatch(/openai/i);
+      // No auto-failover JSON / error trace
+      expect(footer).not.toMatch(/auto-failover/);
+      expect(footer).not.toMatch(/api[_-]?key/i);
     });
 
-    test('PR-NX14: Executive Briefing meta row reports Claude (post-NX9), not OpenAI gpt-4o', async () => {
-      // When AI path fires (currently fallback in test env), the meta
-      // row should NOT contain the stale "OpenAI gpt-4o" string from
-      // pre-NX9 default.
+    test('PR-NX74: Executive Briefing meta row exposes ONLY the generation date — no provider names, no env-var hints', async () => {
+      // Pre-NX74 the meta row leaked the model id (OpenAI gpt-4o /
+      // Claude Sonnet 4.6) and even hinted at the env var to fix when
+      // AI failed. Operator removed all of that. Row 17 is now just
+      // `Generated: <iso-date>`.
       const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const sheet = wb.getWorksheet('Executive Briefing');
       const meta = String(sheet.getCell('A17').value);
-      expect(meta).not.toMatch(/OpenAI gpt-4o/);
-      // For templated-fallback path, meta should mention the operator-actionable
-      // remediation (ANTHROPIC_API_KEY env var)
-      expect(meta).toMatch(/ANTHROPIC_API_KEY|AI_PROVIDER_NARRATIVE_SYNTHESIS|Claude/);
+      expect(meta).toMatch(/^Generated:/);
+      expect(meta).not.toMatch(/OpenAI|gpt|Claude|Sonnet/i);
+      expect(meta).not.toMatch(/ANTHROPIC_API_KEY|AI_PROVIDER_NARRATIVE_SYNTHESIS/);
+      expect(meta).not.toMatch(/auto-failover/);
     });
 
     test('Executive Briefing has 4 bullet rows (rows 9-12)', async () => {
@@ -389,15 +394,18 @@ describe('dealBriefing.service (PR-NX7)', () => {
       expect(String(sheet.getCell('A15').value).length).toBeGreaterThan(10);
     });
 
-    test('Executive Briefing footnote (row 18) explains the AI-assisted disclosure', async () => {
+    test('PR-NX74: Executive Briefing footnote (row 18) carries the verify-source-documents prompt without naming AI', async () => {
       const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       const sheet = wb.getWorksheet('Executive Briefing');
       const footnote = String(sheet.getCell('A18').value);
-      expect(footnote).toContain('Disclosure');
-      expect(footnote).toContain('AI-assisted');
-      expect(footnote).toMatch(/number.*sourced.*Inputs.*kernel/i);
+      // PR-NX74: dropped the "Disclosure: This Executive Briefing is an
+      // AI-assisted synthesis..." prose. The institutional
+      // "verify against source documents" prompt remains.
+      expect(footnote).not.toMatch(/AI-assisted/);
+      expect(footnote).toMatch(/source documents/i);
+      expect(footnote).toMatch(/RERA|GST|BBMP/);
     });
 
     test('Briefing adapts to deal family (income vs development) in bullets', async () => {
@@ -426,11 +434,10 @@ describe('dealBriefing.service (PR-NX7)', () => {
       const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      // PR-NX57 (2026-05-19): AI Synthesis inserted at position 2 between
-      // Executive Briefing and Dashboard. Dashboard moved from index 1 to 2.
-      // Chart injector uses findIndex(name === 'Dashboard') so this shift
-      // is internally handled — this test just guards the visible order.
-      expect(wb.worksheets[1].name).toBe('AI Synthesis');
+      // PR-NX57 (2026-05-19): "AI Synthesis" sheet inserted at position 2.
+      // PR-NX74 (2026-05-19): tab renamed to "Analysis Notes" per operator
+      // policy (XLSX must not surface AI usage).
+      expect(wb.worksheets[1].name).toBe('Analysis Notes');
       expect(wb.worksheets[2].name).toBe('Dashboard');
       // Chart specs should still inject — verify a Dashboard cell has its
       // expected formula content from the existing builder.
