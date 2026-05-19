@@ -200,10 +200,13 @@ router.get(
         lat: req.query.lat ?? null,
         lng: req.query.lng ?? null,
       });
-      // Per-address cache header — the underlying geocode+K-GIS results
-      // are already cached at lower layers, but a 1-hour HTTP cache keeps
-      // back-to-back refreshes off the wire entirely.
-      res.set('Cache-Control', 'private, max-age=3600');
+      // PR-NX79 (2026-05-19) — dropped browser cache from 1 hour to 60s.
+      // The 1-hour cache was actively hurting iteration: when the backend
+      // geocoder was fixed (PR-NX78), users still saw stale UI for an hour
+      // because their browser held onto the old 200 response. 60 seconds
+      // is enough to dedupe back-to-back identical Derive clicks but short
+      // enough that re-deriving after a real change picks up fresh data.
+      res.set('Cache-Control', 'private, max-age=60');
       res.json({ success: true, data: context });
     } catch (error) {
       next(error);
