@@ -4,6 +4,74 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (mid-morning, 4-PR follow-on) — Live warnings + Overview chip + 3 PPTX AI narrative slides (PR #409, #410, #411)
+
+Operator said "deep technical review + highest-impact pending work + 10 hours" — applied first-principles to pick a hybrid bundle of (1) the long-pending Strategic Review §VI top-2 item (live market-benchmark warnings on FinancialsPage), (2) extension of yesterday's ProvenanceChip work onto the Overview tab, and (3) cross-product parity for the 3 new DOCX AI capabilities (Risk / Sensitivity / Document Insights narratives) by adding them as PPTX slides. Operator goal: "seamless and well-integrated across modules, professional, sophisticated, state-of-the-art, free of errors."
+
+### PRs shipped + merged
+
+- **#409 — PR-NX52: Live market-benchmark warnings on Financials inputs (Strategic Review §VI top-2 — LANDED).** The XLSX-export market-benchmark validators (PR-NX28 #348 + PR-NX33 #363) ran only at export time — operators could save bad inputs that don't surface for hours. NX52 wires the same thresholds into FinancialsPage so warnings fire AS THE OPERATOR TYPES.
+  - New `getBenchmarkBands(comps)` export on marketBenchmarkValidator — returns structured `{ count, verifiedCount, bands:{p25,p50,p75,p95}, thresholds:{rbiDscrFloor,yocVsExitCapMinSpreadBps,yocVsExitCapHealthyBps,compCoverageMinForBands} }`. Bands null when < 3 verified comps.
+  - New `GET /api/deals/:id/benchmark-bands` route — fetches nearby comps (5 km, project_type from asset_class), returns the band data + thresholds + location context. 404 on missing deal, null bands on no coordinates.
+  - Frontend: `useBenchmarkBands(dealId)` hook + 3 pure warning-computation helpers (`computeSellRateWarning`, `computeDscrWarning`, `computeYocSpreadWarning`) that mirror the XLSX validators' rules. Sell-rate warning wired into InputForm; DSCR + YoC helpers ready for follow-up wiring after kernel-output values become available post-calculate.
+  - New `<BenchmarkWarning>` component with severity tones (amber for warn / red for critical) + AlertTriangle / AlertOctagon icons. +12 backend tests + 18 frontend tests.
+
+- **#410 — PR-NX53: ProvenanceChip on OverviewTab Land Area card.** Extends PR-NX50's ParcelTab chip wiring to the Overview tab where operators land first. Only Land Area gets the chip — `asset_class` and `land_ask_price_cr` aren't in the ontology extraction_field_map today. Same `useFieldProvenance` + `<ProvenanceChip>` from PR-NX50 — no new patterns.
+
+- **#411 — PR-NX54: 3 NEW PPTX AI narrative slides (cross-product parity with DOCX PR-NX43 / NX44 / NX45).** The DOCX got 3 new AI sections in the overnight bundle; the PPTX (the investor-facing deck) had none of them. NX54 adds:
+  - **Risk Profile Synthesis** slide after Risks & Mitigants — 2-card layout (Summary + Critical Spotlight). Mirrors DOCX PR-NX43.
+  - **Sensitivity Analysis · Narrative** slide after Cash Flow & Sensitivity — Dominant Driver eyebrow + Driver Decomposition card + Recommended Stress Tests card. Mirrors DOCX PR-NX44.
+  - **Document-Derived Insights** slide after Risk Narrative, before Pros & Cons — Cross-Document Summary + severity-sorted Inconsistency Findings list (or positive-signal green panel on 0 findings). Mirrors DOCX PR-NX45.
+  - All 3 slides reuse `context.exportContext.risks.narrative` / `sensitivityNarrative` / `documents.insights` — already populated by dealExport.service since the DOCX work. No new service calls. Each slide ALWAYS renders — falls back to a polite "Synthesis Unavailable" panel when the narrative envelope is `available: false`. +5 tests (manifest placement + render-succeeds when narratives present AND when unavailable).
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| getBenchmarkBands.test.js (NEW) | 0 | 12 | +12 |
+| BenchmarkWarning.test.jsx (NEW) | 0 | 5 | +5 |
+| useBenchmarkBands.test.jsx (NEW) | 0 | 13 | +13 |
+| dealPptx.service.test.js | 17 | 22 | +5 |
+| **Backend TOTAL** | **2,012** | **2,029** | **+17** |
+| **Frontend TOTAL** | **573** | **591** | **+18** |
+
+Zero pre-existing regressions across 120 backend + 58 frontend suites. All builds clean.
+
+### Outcome for the operator
+
+**Before this batch:**
+- Operator typed bad SellRatePerSqft into the Financials inputs → no warning. Saved → exported workbook 5 hours later → THEN saw the validator warn in the XLSX Export QA section.
+- Overview tab key-metric cards never showed provenance — only the ParcelTab fields had chips.
+- Investor PPTX deck had structured Risks / Sensitivity / Documents slides but NO AI synthesis on any of them.
+
+**After this batch:**
+1. **As the operator types in Financials inputs**, sell-rate warnings appear inline below the input. Same rule as the XLSX validator: above p95 of nearby verified comps → amber "above 95th percentile" warning; below p25 → "below 25th percentile" warning.
+2. **Overview tab Land Area card** now shows a tiny (i) chip when the value was auto-filled from a document extraction. Hover for source document + applied date + ontology version.
+3. **PPTX deck now has 3 NEW AI narrative slides**. Investors get the same Claude/OpenAI synthesis the DOCX has — no more "structured tables only" gap.
+
+### Architecture wins
+
+- **Single source of truth for benchmark thresholds**: The RBI DSCR floor (1.20), YoC vs ExitCap spread bands, comp-coverage minimum live as named exports on marketBenchmarkValidator. Both the XLSX export validator AND the live-warning helpers consume the same constants — zero drift risk. Every future surface (live financial-input warnings, dashboard cards, KPI ribbons) just imports the same source.
+- **PPTX slides read directly from exportContext**: No new precomputation needed for the 3 new slides. The DOCX work (NX43/44/45) already plumbed the narratives onto exportContext via dealExport.service. PPTX renderers read them straight. Cross-format parity for free.
+- **All AI panels have graceful fallback**: Every narrative slide / panel auto-falls-back to a polite "Synthesis Unavailable" rendering when no narrative was generated. Deck / DOCX never breaks regardless of AI provider state.
+
+### Outstanding operator actions (still pending from earlier sessions)
+
+1. **Fix `BLOB_READ_WRITE_TOKEN` + `JWT_SECRET` in Vercel** — both show "Needs Attention". (User said skip; flagged again for SESSION_LOG audit trail.)
+2. **Smoke-test the live AI panels (PR-NX47/48/49/50)** + new live warnings (PR-NX52) + new PPTX slides (PR-NX54) on a real deal.
+3. **Karnataka API access** — long-standing TODO_LEGAL blocker.
+
+### Recommendation for next session
+
+After this bundle, the AI-content stack in REDIP is parity-complete across DOCX + PPTX + live workspace. Natural next priorities:
+
+- **Wire DSCR + YoC live warnings into a post-Calculate panel on FinancialsPage** — the helpers shipped in NX52 are ready; just need a small panel that reads from the computed financial-graph and renders 2-3 warnings inline. ~0.5 session.
+- **Adopt `@redip/real-estate-ontology` in deal-create / deal-edit forms** (Strategic Review §VI top-1, still NOT STARTED) — removes drift risk between 3 places that encode asset_class / deal_structure / exit_strategy.
+- **XLSX cross-product parity for the 3 new AI narratives** — XLSX should get Risk + Sensitivity + Document Insights tabs/sections matching the DOCX/PPTX. ~1 session.
+- **"One Brain" unified DealContext — Phase A read consolidation** — single `/api/deals/:id/workspace` endpoint serving all tabs. Entry criteria still met.
+
+---
+
 ## 2026-05-19 (early morning, continuation) — Live workspace AI: 4-PR bundle bringing DOCX AI capabilities into the live frontend (PR #403, #404, #405, #406)
 
 After the operator said "go" on the next bundle, applied first-principles reasoning: the 6 AI capabilities shipped in the overnight bundle (PR-NX40 through NX45) are ALL invisible in the live workspace — operators have to download a DOCX to see them. That's a discoverability + utility gap that beats every Tier-1 backlog item in impact. Pivoted to bringing 4 of those capabilities + the long-pending Strategic Review §VI top-2 (provenance chips) into the live frontend.
