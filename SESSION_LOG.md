@@ -4,6 +4,90 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (mid-day, operator-prompted) — AI market-context augment layer for the 5 placeholder DOCX sections (PR #424)
+
+Operator opened the Jigani Word report and flagged that 5 sections were showing "Manual input required" / "could not be generated" placeholders: Why This Area, Demographics, Job Growth & Micro-Market, Social Infrastructure, Supply & Demand Pipeline. Wanted to use AI to fill these — explicitly framed as the start of a premium AI tier ("We will charge users for this").
+
+### The diagnosis
+
+The existing AI narrative service (`export.insights.service.js` + `exportNarrative.service.js`) is correctly STRICT — per CLAUDE.md "never invent... if a fact is missing, say so plainly." That's the right behaviour when REDIP has verified payload data (sale deeds, ingested comps, structured intelligence briefs). But it produces placeholders for sourcing-stage deals like Jigani where REDIP has no structured market payload yet.
+
+### PR shipped + merged
+
+- **#424 — PR-NX67: AI market-context augment layer.** A NEW parallel AI service that uses Claude's general knowledge of Bengaluru micro-markets to fill those 5 sections with specific, asset-class-aware content — only as a SECOND-CHANCE FALLBACK when REDIP's structured payload is empty. Verified data always wins.
+  - **New service** `backend/src/services/aiMarketContext.service.js` (~450 lines):
+    - 5 section schemas (whyThisArea, demographics, jobGrowth, socialInfrastructure, supplyDemandPipeline) — each with a different output shape.
+    - **System prompt explicitly allows general-knowledge synthesis** but FORBIDS invented numbers ("never quote specific INR/sqft, km, %"). Model prompted to name only stable, well-known facts (tech parks, malls, metro stations, hospitals).
+    - **Cascade**: Claude Sonnet 4.6 primary (best Indian-market knowledge, least confabulation risk) → OpenAI GPT-5.4 fallback → unavailable. Gemini NOT in this cascade (reserved for extraction).
+    - **English-only validation** (defence-in-depth regex against Devanagari / Kannada / Tamil / Telugu / CJK / Arabic).
+    - **aiRouter cache** (90-day TTL keyed on deal + section + payload + prompt).
+    - **Env-flag kill switch** `AI_MARKET_CONTEXT_ENABLED=false` disables globally; defaults to true.
+    - `generateAllSections()` fires all 5 in parallel — one failure doesn't abort the rest.
+  - **dealExport.service.js**: calls `generateAllSections` in the existing parallel Promise.all() block. Result plumbed onto `exportContext.market.aiAugment.*`.
+  - **DOCX builder**: 5 section builders enhanced with a 3-tier render path:
+    1. Structured verified payload (current behavior) — **always wins**.
+    2. AI augment (NEW) — fallback when payload empty.
+    3. "Manual input required" placeholder — fallback when augment also unavailable.
+    Each augment render shows: amber disclosure bar → content → attribution footer (provider + confidence + knowledge depth + auto-failover diagnostic).
+
+### Outcome for the operator
+
+**Before:** Jigani DOCX → 5 sections show generic "Manual input required" placeholders.
+
+**After:** Jigani DOCX → 5 sections show specific Bengaluru-context narratives with prominent "AI-GENERATED FROM GENERAL KNOWLEDGE" disclaimer + attribution footer. Verified payload (when present) still wins; augment fills the gap.
+
+### Hard guarantees
+
+- Verified payload data always wins. Augment only fills empty sections.
+- Numbers never invented (no specific INR/sqft, km, %). AI prompted to use qualitative framing only.
+- Specific buy/pass recommendations never generated.
+- English only (defence-in-depth regex).
+- Disclaimer on every augmented section per CLAUDE.md.
+- Env flag kill switch for emergencies.
+
+### Pricing gate (per operator's choice)
+
+Ungated for now. Env flag stub `AI_MARKET_CONTEXT_ENABLED` in place — flip to false to disable globally, or layer per-org entitlement check later. Doesn't slow current shipping.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| aiMarketContext.service.test.js (NEW) | 0 | 17 | +17 |
+| dealExport.service tests | 11 | 11 | 0 |
+| All 14 export suites | 476 | 476 | 0 |
+| **Backend TOTAL** | **2,049** | **2,066** | **+17** |
+
+No regressions. All 3 modified files pass syntax check.
+
+### Operator-facing — verify the change
+
+🌐 **Open** https://redip.vercel.app/dashboard/reports
+1. Pick the Jigani deal.
+2. Click "Generate Word Report" (or whatever the download button says).
+3. Open the downloaded .docx in Microsoft Word.
+4. Scroll to the "Why This Area", "Demographics", "Job Growth & Micro-Market", "Social Infrastructure", and "Supply & Demand Pipeline" sections.
+5. Each should now show:
+   - An amber bar at the top of the section: "AI-GENERATED FROM GENERAL KNOWLEDGE..."
+   - Specific Bengaluru-context content (e.g. ITPL / EPIP for Whitefield).
+   - A small italic footer: "Synthesis: claude · Confidence: medium · Knowledge depth: specific".
+6. **Send "looks right" once verified, or paste a screenshot if any section still shows the old "Manual input required" placeholder.**
+
+### Outstanding follow-ups
+
+1. **PPTX + XLSX cross-product parity** for the 5 new augment narratives. PPTX has 3 AI slides (NX54); XLSX has the AI Synthesis sheet (NX57). Adding the 5 augment sections to both is mechanical — queued for NX68+.
+2. **Per-org entitlement gate** for the premium AI tier. Small DB column + admin toggle. ~0.5 session.
+3. **PPTX cover + 5-page mini deck variants** that pull from the augment layer — investor-pitch quick artifact.
+4. **Operator-facing toggle** on the Reports page: "Generate with AI market narratives" checkbox so the operator can opt in/out per export.
+
+### Recommendation for next session
+
+- Ship NX68 + NX69 to extend the augment layer to PPTX + XLSX (cross-product parity).
+- Add the per-org entitlement gate.
+- Then validate end-to-end by running a real Jigani export and reviewing each augmented section for hallucination patterns. Tune the system prompt if any section over-invents.
+
+---
+
 ## 2026-05-19 (late-morning, continuation) — FinancialsPage CashFlowChart polish (PR #422)
 
 Single small PR closing out the morning's chart-polish thread (NX60 dashboard → NX63 FinancialsPage KPIs → NX65 CashFlowChart). A §12 feel-check on the Financials page's Cash Flows chart turned up 5 concrete misses against `docs/FRONTEND_GUIDELINES.md`.
