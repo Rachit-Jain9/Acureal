@@ -4,6 +4,75 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (late-morning, continuation) — Phase A selector fix + FinancialsPage count-up (PR #419, #420)
+
+Continuing the autonomous block. Two contained, high-value items:
+
+1. **Real production bug** in `useDealContext` selector hooks — they were reading from field paths that DIDN'T EXIST on the actual `/api/deals/:id/workspace` response. Tests passed because the test mocks used the SAME wrong shape. Selectors silently returned `null` / `[]` in production. NX62 aligns the contract.
+
+2. **Continuation of NX60's count-up polish** — the FinancialsPage KPI tiles (going through KPIStatCard → MetricTile) didn't have the `format` prop pass-through, so the design-system count-up infra never fired on Calculate. NX63 wires it.
+
+### PRs shipped + merged
+
+- **#419 — PR-NX62: Align useDealContext selector hooks with the real `/api/deals/:id/workspace` shape.**
+  - The 6 existing selectors read from the wrong paths:
+    | Pre-NX62 (broken) | Actual backend shape |
+    |---|---|
+    | `workspace.financials.kpis` | `workspace.financial.summary.model_params.kpis` |
+    | `workspace.risk_flags` | `workspace.risk.flags` |
+    | `workspace.events` | `workspace.financial.auditEvents` |
+    | `workspace.documents` (array) | `workspace.documents.documents` (wrapped) |
+  - Added 6 new selectors that round out the payload: `useDealDDItems`, `useDealDDScore`, `useDealRiskScore`, `useDealApprovals`, `useDealFinancialSummary`, `useDealReadiness`.
+  - `useDealRedFlags` gets a defensive fallback to `deal.risk_flags` for partially-shaped payloads.
+  - Test mocks rewritten to match the actual backend shape (mirrors `backend/tests/dealWorkspace.service.test.js` fixture).
+  - Tests: 11 → 19 selector tests on the frontend. The 6 backend contract tests already pin the shape — they continue to pass.
+
+- **#420 — PR-NX63: Wire count-up animation on FinancialsPage KPI tiles.**
+  - `KPIStatCard.jsx` accepts a new `format` prop and forwards it to `MetricTile` in both code paths (with and without provenance metadata).
+  - `ResultPanels.jsx` switched all 13 KPI tile call sites (across development / income / hospitality asset families) from pre-formatted strings to raw numeric values + format functions. Mirrors the pattern PR-NX60 established for the dashboard.
+  - Behavior: every Calculate now triggers a 600ms ease-out count-up on the tiles. `prefers-reduced-motion: reduce` snaps instantly.
+
+### Outcome for the operator
+
+**Before:**
+- Anyone calling `useDealKpis()` or `useDealRedFlags()` in a component received `null` / `[]` instead of real data. Just no UI critical-path was depending on them yet, so the bug went unnoticed.
+- On the FinancialsPage, IRR went `18.4%` → `20.1%` instantly on Calculate. No motion, no "did it change?" signal.
+
+**After:**
+- `useDealContext` selector hooks now return real workspace data. Future tab migrations (DocumentsTab, DDTab, RiskTab, etc.) can drop their per-domain useQuery hooks in favor of the shared workspace selectors.
+- FinancialsPage KPI tiles tick smoothly to new values over 600ms — operators see WHAT changed without having to remember the old value.
+
+### Architecture wins
+
+- **Single source of truth for the workspace contract** — backend `dealWorkspace.service.js` + its 6 tests pin the shape; frontend `useDealContext.jsx` selectors now match. Future shape changes will surface immediately because both sides reference the same field paths.
+- **Count-up wiring pattern is now consistent across BOTH KPI-tile surfaces** — DashboardPage's MetricTile + FinancialsPage's KPIStatCard. Same `format` prop convention; same 600ms ease-out; same `prefers-reduced-motion` handling.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| useDealContext.test.jsx | 11 | 19 | +8 |
+| All other frontend suites | 612 | 612 | 0 |
+| **Frontend TOTAL** | **615** | **623** | **+8** |
+| Backend (untouched) | 2,039 | 2,039 | 0 |
+
+Frontend production build clean (23.56s). Zero regressions across 64 suites.
+
+### Outstanding operator actions
+
+1. **Fix `BLOB_READ_WRITE_TOKEN` + `JWT_SECRET` in Vercel** — still "Needs Attention".
+2. **Smoke-test the live dashboard + financials page** to feel the new count-up on real refetches / Calculate clicks.
+3. **Karnataka API access** — long-standing TODO_LEGAL blocker.
+
+### Recommendation for next session
+
+- **Phase A1 — migrate first tab to useDealContext selectors.** Pick DocumentsTab (smallest delta) or DDTab — drop `useDocuments(dealId)` / `useDDItems(dealId)` per-domain useQuery in favor of `useDealDocuments()` / `useDealDDItems()` from the shared workspace context. Sets the pattern for the other 3 tabs.
+- **Adopt `@redip/real-estate-ontology` as the source of truth** that frontend `dealStructures.js` + `assetClasses.js` read from. Requires resolving the 8-value backend vs 4-value ontology mismatch on `deal_structure`.
+- **Per-element stagger on page-level `SkeletonKpi` grid** — requires `SkeletonKpi` to accept an `animationDelay` prop (design-system change).
+- **Run the FRONTEND_GUIDELINES §12 feel-check on a non-dashboard page** (Financials page polish, deal-detail tabs, modals). Likely to surface similar small wins.
+
+---
+
 ## 2026-05-19 (late-morning, continuation) — Shared frontend taxonomies + dashboard polish (PR #416, #417)
 
 Continuing the autonomous block after the post-Calculate panel + XLSX AI-Synthesis bundle landed. First-principles pick of two contained, high-value items:
