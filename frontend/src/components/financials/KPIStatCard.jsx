@@ -233,6 +233,12 @@ export default function KPIStatCard({
   // eslint-disable-next-line no-unused-vars
   title, value, subtitle, icon, trend, accent, kpiKey,
   assetClass, inputs, confidence,
+  // PR-NX63 (2026-05-19) — when `value` is a numeric KPI from the kernel
+  // AND `format` is supplied, MetricTile's `useCountUp` hook animates from
+  // previous → next over 600ms (FRONTEND_GUIDELINES §5 "Live data — surface
+  // change, don't hide it"). Pre-NX63 the FinancialsPage KPI tiles passed
+  // pre-formatted strings, so the count-up never fired on Calculate.
+  format,
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -267,6 +273,7 @@ export default function KPIStatCard({
       <MetricTile
         label={title}
         value={value}
+        format={format}
         footnote={subtitle}
         delta={delta}
         tone={tone}
@@ -297,6 +304,7 @@ export default function KPIStatCard({
       <MetricTile
         label={title}
         value={value}
+        format={format}
         footnote={subtitle}
         delta={delta}
         tone={tone}
