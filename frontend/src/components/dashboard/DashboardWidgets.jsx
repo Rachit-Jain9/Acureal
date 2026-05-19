@@ -31,6 +31,19 @@ export function SectionCard({ title, children, action, eyebrow }) {
 }
 
 // ── KPI strip ──────────────────────────────────────────────────────────────
+// PR-NX60 (2026-05-19) — every KPI now passes raw numeric `value` + a
+// `format` callback so MetricTile's built-in `useCountUp` hook animates
+// the value smoothly from previous → next over 600ms whenever the
+// dashboard refetches (per docs/FRONTEND_GUIDELINES.md §5 "Live data —
+// surface change, don't hide it"). Pre-NX60 the KPI tiles passed
+// pre-formatted strings, so the count-up never fired even though the
+// design-system primitive supported it.
+//
+// Format functions guard against null/undefined so a missing stat falls
+// back to the em-dash convention (FRONTEND_GUIDELINES §11).
+const formatCroresWithDash = (n) => (Number.isFinite(n) ? formatCrores(n) : '—');
+const formatPctWithDash = (n) => (Number.isFinite(n) ? formatPct(n) : '—');
+const formatIntWithDash = (n) => (Number.isFinite(n) ? n.toLocaleString('en-IN') : '—');
 export function KpiStripWidget({ stats = {} }) {
   const activeDeals     = stats.active_deals_count   || 0;
   const pipelineValue   = stats.total_pipeline_value_cr || 0;
@@ -41,19 +54,22 @@ export function KpiStripWidget({ stats = {} }) {
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <MetricTile
         label="Pipeline Value"
-        value={formatCrores(pipelineValue)}
+        value={pipelineValue}
+        format={formatCroresWithDash}
         footnote="Cumulative ask · active deals"
       />
       <MetricTile
         label="Active Deals"
         value={activeDeals}
+        format={formatIntWithDash}
         footnote="Live in pipeline"
         delta={dealsWithRisk > 0 ? `${dealsWithRisk} with open risk` : null}
         tone={dealsWithRisk > 0 ? 'down' : 'neutral'}
       />
       <MetricTile
         label="Avg IRR"
-        value={formatPct(avgIrr)}
+        value={avgIrr}
+        format={formatPctWithDash}
         footnote="Across modelled deals"
         delta={avgIrr >= 20 ? 'Above 20% bench' : avgIrr >= 12 ? null : 'Below bench'}
         tone={avgIrr >= 20 ? 'up' : avgIrr >= 12 ? 'neutral' : 'down'}
@@ -61,6 +77,7 @@ export function KpiStripWidget({ stats = {} }) {
       <MetricTile
         label="Investor-Grade"
         value={icReadyDeals}
+        format={formatIntWithDash}
         footnote="IC-ready · fully vetted"
         delta={icReadyDeals > 0 ? 'Ready to deploy' : null}
         tone={icReadyDeals > 0 ? 'up' : 'neutral'}
@@ -138,7 +155,10 @@ export function PipelineChartWidget({ stage_distribution = [], chartPalette, too
             <XAxis dataKey="stage" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} axisLine={{ stroke: 'var(--color-border-primary)' }} tickLine={false} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-brand-accent-soft)' }} />
-            <Bar dataKey="count" fill={accentBarFill} radius={[3, 3, 0, 0]} name="Deals" />
+            {/* PR-NX60: 700ms draw-in matches FRONTEND_GUIDELINES §7
+                (recharts default is 1500ms which feels sluggish on a
+                small KPI-adjacent chart). */}
+            <Bar dataKey="count" fill={accentBarFill} radius={[3, 3, 0, 0]} name="Deals" animationDuration={700} animationEasing="ease-out" />
           </BarChart>
         </ResponsiveContainer>
       ) : (
@@ -166,7 +186,14 @@ export function CitiesChartWidget({ cities_distribution = [], chartPalette, tool
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-center">
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} innerRadius={58} paddingAngle={3} stroke="transparent" isAnimationActive={false}>
+              {/* PR-NX60 (2026-05-19): re-enable first-render draw-in
+                  with 700ms decelerating cubic-bezier per FRONTEND_GUIDELINES §7
+                  "Charts and data viz must be alive · First render: bars/lines/
+                  pie segments draw in over 700ms". Pre-NX60 isAnimationActive
+                  was hardcoded false — the pie just popped. Update animations
+                  during data refresh stay smooth via recharts' default
+                  inter-render tween. */}
+              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} innerRadius={58} paddingAngle={3} stroke="transparent" isAnimationActive animationDuration={700} animationEasing="ease-out">
                 {data.map((item, idx) => (
                   <Cell key={item.name} fill={chartPalette[idx % chartPalette.length]} />
                 ))}
@@ -329,7 +356,9 @@ export function AiCostSummaryWidget() {
       }
     >
       {isLoading ? (
-        <div className="h-24 bg-bg-secondary rounded animate-pulse" />
+        // PR-NX60: a11y per FRONTEND_GUIDELINES §9 — loading indicators
+        // get role="status" + aria-busy so screen readers announce them.
+        <div className="h-24 bg-bg-secondary rounded animate-pulse" role="status" aria-busy="true" aria-label="Loading AI cost summary" />
       ) : !summary ? (
         <p className="text-sm text-content-muted">No AI usage data yet.</p>
       ) : (
@@ -403,9 +432,17 @@ export function AuditTrailTailWidget() {
       }
     >
       {isLoading ? (
-        <div className="space-y-2">
+        // PR-NX60: a11y per FRONTEND_GUIDELINES §9 — role="status" +
+        // aria-busy so screen readers announce the loading state.
+        // FRONTEND_GUIDELINES §4 also asks for staggered shimmer
+        // (50-80ms across siblings) to feel alive — done via animation-delay.
+        <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading recent audit events">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-10 bg-bg-secondary rounded animate-pulse" />
+            <div
+              key={i}
+              className="h-10 bg-bg-secondary rounded animate-pulse"
+              style={{ animationDelay: `${i * 60}ms` }}
+            />
           ))}
         </div>
       ) : events.length === 0 ? (
