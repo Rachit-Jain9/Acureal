@@ -4,40 +4,22 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
-### Apply migration: `20260602_properties_auto_derived_context_columns.sql` (PR-1 follow-on)
-Path: `database/migrations/20260602_properties_auto_derived_context_columns.sql`. Idempotent. Adds 13 new `auto_derived_*` columns to `public.properties` plus 3 partial indexes (zone / PD / ward) for fast Phase-C-6 reverse-search filtering. Backs the new `PATCH /properties/:id/apply-auto-derived-context` endpoint so the AutoFillCard's Apply persists ALL 6 picks (not just lat/lng).
-```powershell
-psql "$DATABASE_URL" -f database/migrations/20260602_properties_auto_derived_context_columns.sql
-```
-Until applied, every Apply click returns `column "auto_derived_*" does not exist`. After applying, the persisted picks light up downstream surfaces on the next deal page render (no need to re-derive).
+_(no migrations pending — all Phase A1-A4 + the auto-derived columns migration confirmed applied 2026-05-19 via the operator running the migration-audit query in Supabase SQL editor; see DONE entries below)_
 
-### Apply migration: `20260601_rmp_vol3_vol1_callouts_and_rules.sql` (Phase A4)
-Path: `database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql`. Idempotent. Inserts 6 evidence_facts rows extracted via Gemini from RMP 2031 Volume-3 + Volume-1: 5 SDZ corridors (Bellary/Old Madras/Sarjapur/Hosur/Mysuru roads), 12 heritage zones (Central Administrative, Raj Bhavan, etc.), regional parks aggregate, NGT drainage classification, Peripheral Ring Road alignment, and 17 substantive zoning rule narratives (FAR base, setback floor, etc.). All review_status='pending' so they land in the Review Queue for human verification. Until applied, DealPlanningContextCard's SDZ/heritage/NGT/PRR callouts stay empty.
-```powershell
-psql "$DATABASE_URL" -f database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql
-```
-Volume-6 zoning regulations not in this PR — hit Gemini's output-token budget on the full inventory pass; needs a narrower chunked extraction in a follow-up.
+### ~~Apply migration: `20260602_properties_auto_derived_context_columns.sql`~~ — DONE 2026-05-18
+Path: `database/migrations/20260602_properties_auto_derived_context_columns.sql`. Adds 13 `auto_derived_*` columns to `public.properties` + 3 partial indexes (zone / PD / ward). Backs the `PATCH /properties/:id/apply-auto-derived-context` endpoint so AutoFillCard Apply persists all 6 picks. Verified applied via `information_schema.columns` check 2026-05-19.
 
-### Apply migration: `20260531_land_use_insight_and_city_callouts.sql` (Phase A3)
-Path: `database/migrations/20260531_land_use_insight_and_city_callouts.sql`. Idempotent. Inserts 32 evidence_facts rows: 14 existing (2015) + 12 proposed (2031) land-use shares + 4 totals (BMA area, developable area, agriculture-outside-developable, LPA of BDA) + 1 landmark aggregate (22 named landmarks) + 1 boundary aggregate (7 adjacent planning authorities). Hand-extracted from the RMP 2031 Existing/Proposed Land Use maps, confidence 0.95. Until applied, the Land Use Insight panel at `/admin/planning-intelligence` and the DealPlanningContextCard on every Bengaluru deal's Zoning tab render empty.
-```powershell
-psql "$DATABASE_URL" -f database/migrations/20260531_land_use_insight_and_city_callouts.sql
-```
-SDZ corridors, heritage zones, NGT drainage classification, regional parks, and PRR alignment detail are NOT in this PR — those need a Volume-6 deeper Gemini multimodal pass (deferred to a follow-up). The card will show empty for those callouts.
+### ~~Apply migration: `20260601_rmp_vol3_vol1_callouts_and_rules.sql`~~ — DONE 2026-05-17
+Path: `database/migrations/20260601_rmp_vol3_vol1_callouts_and_rules.sql`. 6 evidence_facts rows from RMP 2031 Volume-3 + Volume-1: 5 SDZ corridors, 12 heritage zones, regional parks, NGT drainage, PRR alignment, 17 zoning rule narratives. Verified applied via 6-row evidence_facts coverage check 2026-05-19. (Volume-6 zoning regulations still deferred — needs narrower chunked Gemini extraction.)
 
-### Apply migration: `20260530_bbmp_uav_rate_card.sql` (Phase A1)
-Path: `database/migrations/20260530_bbmp_uav_rate_card.sql`. Idempotent. Inserts 108 rows into `regulatory_data.bbmp_uav_entries` — the BBMP Unit Area Value rate card from Gazette Notification 384 dated 09-Mar-2016 (18 property-use categories × 6 zones). Hand-extracted from the gazette tables, confidence 0.95, review_status 'approved'. Until applied, the UAV Benchmark panel at `/admin/planning-intelligence` renders an empty matrix.
-```powershell
-psql "$DATABASE_URL" -f database/migrations/20260530_bbmp_uav_rate_card.sql
-```
-Or paste into Supabase SQL editor. Trailing `SELECT` reports per-zone row counts (each of A-F should show 18 uses, 18 rows).
+### ~~Apply migration: `20260531_land_use_insight_and_city_callouts.sql`~~ — DONE 2026-05-17
+Path: `database/migrations/20260531_land_use_insight_and_city_callouts.sql`. 32 evidence_facts rows: land-use shares (existing + proposed), totals, landmarks, boundaries. Verified applied via 32-fact coverage check 2026-05-19. (SDZ / heritage / NGT detail shipped via 20260601 above.)
 
-### Apply migration: `20260529_planning_district_demographics.sql` (Phase A2)
-Path: `database/migrations/20260529_planning_district_demographics.sql`. Idempotent. Inserts a single `evidence_facts` row (`fact_type='rmp_table', fact_key='planning_districts'`) containing all 42 Bengaluru Planning Districts with population, area, density, ward count, and village count extracted from RMP 2031 Volume-4 PDR. Until applied, the District Intelligence panel at `/admin/planning-intelligence` shows 42 stub rows with no demographics.
-```powershell
-psql "$DATABASE_URL" -f database/migrations/20260529_planning_district_demographics.sql
-```
-Or paste contents into Supabase SQL editor (Mumbai). The migration is ~17KB with the JSONB literal inline — copy-friendly. After applying, the trailing `SELECT` reports `rich_pd_facts = 1` and `total_pd_facts = 3` (existing 2 thin routing-key facts + the new rich one).
+### ~~Apply migration: `20260530_bbmp_uav_rate_card.sql`~~ — DONE 2026-05-17
+Path: `database/migrations/20260530_bbmp_uav_rate_card.sql`. 108 rows into `regulatory_data.bbmp_uav_entries` — BBMP UAV rate card from Gazette Notification 384 (18 use categories × 6 zones). Verified applied 2026-05-19 (108 UAV rows confirmed).
+
+### ~~Apply migration: `20260529_planning_district_demographics.sql`~~ — DONE 2026-05-17
+Path: `database/migrations/20260529_planning_district_demographics.sql`. Single `evidence_facts` row containing all 42 Bengaluru Planning Districts with population, area, density, ward count, village count from RMP 2031 Volume-4 PDR. Verified applied 2026-05-19 (42 PDs confirmed in evidence_facts).
 
 ### ~~BBMP Guidance Value — Phase 2b LLM enrichment~~ — DONE 2026-05-17
 
