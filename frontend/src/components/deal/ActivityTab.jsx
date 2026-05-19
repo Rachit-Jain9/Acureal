@@ -13,10 +13,14 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { useDealContext } from '../../hooks/useDealContext';
+// PR-NX72 (2026-05-19) — Phase A1.1: ActivityTab read path migrated to the
+// shared workspace cache via useDealActivities selector. Mutations stay on
+// per-domain hooks but already invalidate `['deal-workspace', dealId]` so
+// the cache refreshes automatically.
+import { useDealContext, useDealActivities } from '../../hooks/useDealContext';
 import { clsx } from 'clsx';
 import {
-  useActivities,
+  // PR-NX72: useActivities dropped — activities now read from shared workspace cache.
   useCreateActivity,
   useUpdateActivityStatus,
   useDeleteActivity,
@@ -60,8 +64,9 @@ function ActivityIcon({ type }) {
 }
 
 export default function ActivityTab() {
-  const { dealId } = useDealContext();
-  const { data: activitiesData, isLoading, isError, refetch } = useActivities(dealId);
+  // PR-NX72: read activities + loading state from shared workspace cache.
+  const { dealId, isLoading, isError, refetch } = useDealContext();
+  const activities = useDealActivities();
   const createActivity = useCreateActivity();
   const updateStatus = useUpdateActivityStatus();
   const deleteActivity = useDeleteActivity();
@@ -69,11 +74,8 @@ export default function ActivityTab() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(buildForm());
 
-  const activities = Array.isArray(activitiesData)
-    ? activitiesData
-    : Array.isArray(activitiesData?.data)
-      ? activitiesData.data
-      : [];
+  // `activities` is now provided directly by useDealActivities (always
+  // a flat array). Removed the redundant runtime array-coercion block.
 
   // Sort descending by date
   const sorted = [...activities].sort(

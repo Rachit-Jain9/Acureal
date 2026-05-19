@@ -5,8 +5,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 // renders, Copy + Download buttons, expand/collapse. We only stub the
 // hooks the brief surface depends on.
 
-const useRiskFlagsFn = vi.fn();
-const useRiskScoreFn = vi.fn();
+// PR-NX72 (2026-05-19) — RiskTab no longer calls useRiskFlags / useRiskScore
+// directly; those reads come from the shared workspace cache via
+// useDealRedFlags + useDealRiskScore. Mocks updated to reflect the new
+// dependency surface.
 const useCreateRiskFlagFn = vi.fn(() => ({ mutateAsync: vi.fn() }));
 const useUpdateRiskFlagFn = vi.fn(() => ({ mutateAsync: vi.fn() }));
 const useDeleteRiskFlagFn = vi.fn(() => ({ mutate: vi.fn() }));
@@ -18,8 +20,8 @@ const copyToClipboardFn = vi.fn();
 const buildArtifactFilenameFn = vi.fn(() => 'whitefield-plot-22-risk-brief-2026-05-09.md');
 
 vi.mock('../../../hooks/useRiskFlags', () => ({
-  useRiskFlags: (...args) => useRiskFlagsFn(...args),
-  useRiskScore: (...args) => useRiskScoreFn(...args),
+  // PR-NX72: useRiskFlags + useRiskScore no longer consumed by RiskTab —
+  // mocks for those hooks are dropped. Keep mutation + brief hooks.
   useCreateRiskFlag: (...args) => useCreateRiskFlagFn(...args),
   useUpdateRiskFlag: (...args) => useUpdateRiskFlagFn(...args),
   useDeleteRiskFlag: (...args) => useDeleteRiskFlagFn(...args),
@@ -27,9 +29,14 @@ vi.mock('../../../hooks/useRiskFlags', () => ({
   useRiskBrief: (...args) => useRiskBriefFn(...args),
 }));
 
+// PR-NX72: useDealContext now provides isLoading/isError/refetch (shared
+// workspace state). useDealRedFlags + useDealRiskScore are the selector
+// hooks RiskTab reads from.
 vi.mock('../../../hooks/useDealContext', () => ({
-  useDealContext: () => ({ dealId: 'd-1' }),
+  useDealContext: () => ({ dealId: 'd-1', isLoading: false, isError: false, refetch: vi.fn() }),
   useDealRecord: () => ({ name: 'Whitefield Plot 22' }),
+  useDealRedFlags: () => [],
+  useDealRiskScore: () => null,
 }));
 
 // PR-NX47 (2026-05-19) — the new RiskNarrativePanel mounted at the top
@@ -58,9 +65,9 @@ beforeEach(() => {
   downloadMarkdownFn.mockReset();
   copyToClipboardFn.mockReset();
   copyToClipboardFn.mockResolvedValue(true);
-  useRiskFlagsFn.mockReturnValue({ data: [], isLoading: false, isError: false, refetch: vi.fn() });
-  useRiskScoreFn.mockReturnValue({ data: null });
   useRiskBriefFn.mockReturnValue({ data: null });
+  // PR-NX72: useRiskFlags/useRiskScore mock resets removed — the selector
+  // hooks now return [] / null from the static vi.mock factory above.
 });
 
 describe('RiskTab — AI Risk Brief panel', () => {

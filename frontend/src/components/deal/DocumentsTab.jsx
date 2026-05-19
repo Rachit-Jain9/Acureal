@@ -12,9 +12,16 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useDocuments, useUploadDocument, useDeleteDocument, useExtractDocument } from '../../hooks/useDocuments';
+// PR-NX72 (2026-05-19) — Phase A1.1: DocumentsTab read path migrated from
+// its own `useDocuments(dealId)` React-Query call to the shared
+// `useDealDocuments()` selector backed by the workspace endpoint. One
+// network round-trip per deal page load (workspace) instead of two (deal
+// metadata + documents). Mutations stay on useUploadDocument /
+// useDeleteDocument / useExtractDocument — they already invalidate the
+// `['deal-workspace', dealId]` query key so the shared cache stays fresh.
+import { useUploadDocument, useDeleteDocument, useExtractDocument } from '../../hooks/useDocuments';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
-import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
+import { useDealContext, useDealRecord, useDealDocuments } from '../../hooks/useDealContext';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import { SectionHeader, SkeletonList } from '../../design-system';
@@ -67,9 +74,14 @@ function formatDocType(docType) {
 }
 
 export default function DocumentsTab() {
-  const { dealId } = useDealContext();
+  // PR-NX72 (2026-05-19) — Phase A1.1: read deal + documents + loading
+  // state from the shared workspace cache (1 query) instead of running
+  // a parallel useDocuments(dealId) query. Mutations below still invalidate
+  // `['deal-workspace', dealId]` (see useDocuments.js lines 87, 102, 123)
+  // so the shared cache refreshes automatically on upload / extract / delete.
+  const { dealId, isLoading, isError, refetch } = useDealContext();
   const dealRecord = useDealRecord();
-  const { data: docsData, isLoading, isError, refetch } = useDocuments(dealId);
+  const docs = useDealDocuments();
   const { data: extractionData } = useDealExtractions(dealId);
   const uploadDoc = useUploadDocument();
   const deleteDoc = useDeleteDocument();
@@ -93,14 +105,10 @@ export default function DocumentsTab() {
     [extractionData?.field_map],
   );
 
-  // The API returns { data: [...] } or an array directly
-  const docs = Array.isArray(docsData)
-    ? docsData
-    : Array.isArray(docsData?.documents)
-      ? docsData.documents
-      : Array.isArray(docsData?.data)
-        ? docsData.data
-      : [];
+  // PR-NX72 (2026-05-19) — `docs` is now provided directly by the shared
+  // `useDealDocuments()` selector (always a flat array — handles all the
+  // server-side shapes internally). Removed the redundant runtime
+  // array-coercion block.
 
   // Group by category
   const grouped = CATEGORIES.reduce((acc, cat) => {

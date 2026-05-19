@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { ShieldAlert, Plus, Trash2, AlertCircle, Loader2, Edit2, X, Check, Sparkles, Brain, Copy, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
-  useRiskFlags,
-  useRiskScore,
+  // PR-NX72: useRiskFlags + useRiskScore dropped — flags + score now read
+  // from the shared workspace cache via useDealRedFlags / useDealRiskScore.
   useCreateRiskFlag,
   useUpdateRiskFlag,
   useDeleteRiskFlag,
@@ -14,7 +14,7 @@ import Badge from '../common/Badge';
 import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
 import { SectionHeader, SkeletonList, Card } from '../../design-system';
-import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
+import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore } from '../../hooks/useDealContext';
 // PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
 // ships in the DOCX Risk Register section) inline at the top of the tab.
 import RiskNarrativePanel from './RiskNarrativePanel';
@@ -258,9 +258,13 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
 }
 
 export default function RiskTab() {
-  const { dealId } = useDealContext();
-  const { data: flagsData, isLoading, isError, refetch } = useRiskFlags(dealId);
-  const { data: scoreData } = useRiskScore(dealId);
+  // PR-NX72 (2026-05-19) — Phase A1.1: RiskTab read path migrated to the
+  // shared workspace cache via useDealRedFlags + useDealRiskScore selectors.
+  // Mutations stay on per-domain hooks but already invalidate
+  // `['deal-workspace', dealId]` so the cache refreshes automatically.
+  const { dealId, isLoading, isError, refetch } = useDealContext();
+  const flags = useDealRedFlags();
+  const scoreData = useDealRiskScore();
   const createFlag = useCreateRiskFlag();
   const updateFlag = useUpdateRiskFlag();
   const deleteFlag = useDeleteRiskFlag();
@@ -289,12 +293,9 @@ export default function RiskTab() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(buildForm());
 
-  const flags = Array.isArray(flagsData)
-    ? flagsData
-    : Array.isArray(flagsData?.data)
-      ? flagsData.data
-      : [];
-
+  // PR-NX72: `flags` is now provided directly by useDealRedFlags() (handles
+  // shape coercion + null fallback internally). Removed the redundant
+  // runtime array-coercion block.
   const score = scoreData?.score ?? null;
 
   // Group by category

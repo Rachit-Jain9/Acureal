@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { useDealContext } from '../../hooks/useDealContext';
+// PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
+// workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
+// stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
+// so the cache refreshes automatically.
+import { useDealContext, useDealDDItems, useDealDDScore } from '../../hooks/useDealContext';
 import {
   ClipboardList,
   Plus,
@@ -13,8 +17,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
-  useDDItems,
-  useDDScore,
+  // PR-NX72: useDDItems + useDDScore dropped — items + score now read
+  // from the shared workspace cache via useDealDDItems / useDealDDScore above.
   useCreateDDItem,
   useUpdateDDItem,
   useUpdateDDItemStatus,
@@ -108,8 +112,13 @@ const buildApprovalForm = () => ({
 // ----------------------- DD Section -----------------------
 
 function DDSection({ dealId }) {
-  const { data: ddData, isLoading, isError, refetch } = useDDItems(dealId);
-  const { data: scoreData } = useDDScore(dealId);
+  // PR-NX72 (2026-05-19) — Phase A1.1: DDTab now reads items + score + loading
+  // state from the shared workspace cache instead of running per-domain
+  // useDDItems + useDDScore queries. Mutations still invalidate
+  // `['deal-workspace', dealId]` so the cache refreshes automatically.
+  const { isLoading, isError, refetch } = useDealContext();
+  const items = useDealDDItems();
+  const scoreData = useDealDDScore();
   const createItem = useCreateDDItem();
   const updateItem = useUpdateDDItem();
   const updateStatus = useUpdateDDItemStatus();
@@ -120,7 +129,6 @@ function DDSection({ dealId }) {
   const [form, setForm] = useState(buildDDForm());
   const [collapsed, setCollapsed] = useState({});
 
-  const items = Array.isArray(ddData) ? ddData : Array.isArray(ddData?.data) ? ddData.data : [];
   const score = scoreData?.score ?? null;
   const completed = scoreData?.completed_count ?? 0;
   const total = scoreData?.total_required ?? items.length;
