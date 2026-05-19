@@ -336,6 +336,98 @@ router.post(
   },
 );
 
+// PR-NX52 (2026-05-19) — Live market-benchmark bands endpoint.
+//
+// Surfaces the SAME thresholds the XLSX-export market-benchmark
+// validators (PR-NX28 + PR-NX33) use, but at INPUT TIME so the
+// FinancialsPage can show inline warnings as the operator types
+// — instead of 5 hours later when they download the workbook.
+//
+// Returns:
+//   {
+//     bands: { p25, p50, p75, p95 } | null,    // rate_per_sqft percentiles from VERIFIED nearby comps
+//     count: int,                              // total nearby comps
+//     verifiedCount: int,                      // verified subset (the only ones bands trust)
+//     thresholds: {
+//       rbiDscrFloor: 1.20,                    // PR-NX33's DSCR floor
+//       yocVsExitCapMinSpreadBps: 50,          // PR-NX33's YoC vs ExitCap thin-spread threshold
+//       yocVsExitCapHealthyBps: 200,           // healthy development premium
+//       compCoverageMinForBands: 5,            // below this and bands carry low confidence
+//     },
+//     location: { lat, lng, radius_km, project_type } | null,
+//   }
+//
+// Frontend `useBenchmarkBands(dealId)` fetches this on mount + when the
+// user navigates between deals. Cache for 5 min — bands change only when
+// new comps are added.
+//
+// Returns null bands when:
+//   - Deal has no lat/lng (can't search nearby comps)
+//   - Fewer than 3 verified comps within 5 km (too thin for meaningful percentiles)
+//
+// Auth: authenticate (read-only).
+router.get('/:id/benchmark-bands', authenticate, async (req, res, next) => {
+  try {
+    const dealId = req.params.id;
+    const deal = await dealService.getDealById(dealId);
+    if (!deal) {
+      return res.status(404).json({ success: false, message: 'Deal not found' });
+    }
+
+    const { getBenchmarkBands } = require('../services/exports/xlsx/v2/marketBenchmarkValidator');
+    const { getCompsNearLocation } = require('../services/comps.service');
+    const { inferAssetClass } = require('../utils/assetClass');
+
+    // Coords come from the deal's joined property (property_lat / property_lng
+    // in the dealSelect SQL) OR the deal's own lat/lng fallback.
+    const lat = deal.property_lat || deal.lat;
+    const lng = deal.property_lng || deal.lng;
+    if (lat == null || lng == null) {
+      return res.json({
+        success: true,
+        data: {
+          bands: null,
+          count: 0,
+          verifiedCount: 0,
+          thresholds: getBenchmarkBands([]).thresholds,
+          location: null,
+          reason: 'no coordinates — link a geocoded property to enable bands',
+        },
+      });
+    }
+
+    const assetClass = inferAssetClass(deal);
+    // Map asset_class → comps project_type (residential / office / retail / industrial / hospitality)
+    const projectType = (() => {
+      const ac = String(assetClass || '').toLowerCase();
+      if (ac === 'commercial_office') return 'office';
+      if (ac === 'retail') return 'retail';
+      if (ac === 'industrial_warehousing') return 'industrial';
+      if (ac === 'hospitality') return 'hospitality';
+      return 'residential';
+    })();
+
+    const radiusKm = 5;
+    const comps = await getCompsNearLocation(Number(lat), Number(lng), radiusKm, projectType);
+    const result = getBenchmarkBands(comps);
+
+    return res.json({
+      success: true,
+      data: {
+        ...result,
+        location: {
+          lat: Number(lat),
+          lng: Number(lng),
+          radius_km: radiusKm,
+          project_type: projectType,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PR-NX50 (2026-05-19) — Field-provenance endpoint for inline chips.
 //
 // Surfaces a map of every deal/property field that was auto-applied via

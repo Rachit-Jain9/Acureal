@@ -20,6 +20,12 @@ import {
   getDefaultValues,
   getFinancialModelLabel,
 } from './fieldDefs';
+// PR-NX52 (2026-05-19) — live market-benchmark warnings on financial
+// inputs. Fires the same thresholds the XLSX-export validators
+// (PR-NX28/NX33) use, but at INPUT TIME so the operator catches
+// mistakes as they type instead of 5 hours later at export.
+import { useBenchmarkBands, computeSellRateWarning } from '../../hooks/useBenchmarkBands';
+import BenchmarkWarning from './BenchmarkWarning';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -145,6 +151,14 @@ export default function InputForm({
   const modelAssetClass = getModelAssetClass(assetClass);
   const { data: defaultsData } = useDefaultsMeta(modelAssetClass);
   const defaultsMeta = defaultsData?.effective || null;
+  // PR-NX52 — live benchmark bands for this deal. Bands are null when
+  // location is missing, < 3 verified comps in 5 km, or the deal lacks
+  // a financial model. The warning helper short-circuits in those cases.
+  const { data: benchmarkData } = useBenchmarkBands(deal?.id);
+  const sellRateWarning = computeSellRateWarning(
+    inputs.sellingRatePerSqft ? Number(inputs.sellingRatePerSqft) : null,
+    benchmarkData?.bands,
+  );
 
   useEffect(() => {
     if (initialValues) setInputs(buildInitialInputs(initialValues, assetClass, deal, prefill));
@@ -278,6 +292,14 @@ export default function InputForm({
                 onWheel={(e) => e.target.blur()}
                 className="input w-full"
               />
+            )}
+            {/* PR-NX52 (2026-05-19) — Live market-benchmark warning on
+                SellingRatePerSqft. Fires when the typed value is above
+                p95 or below p25 of verified nearby comps. Same threshold
+                as the XLSX-export validator (PR-NX28). Renders nothing
+                when input is within band / no bands available. */}
+            {field.name === 'sellingRatePerSqft' && (
+              <BenchmarkWarning warning={sellRateWarning} />
             )}
           </div>
         ))}

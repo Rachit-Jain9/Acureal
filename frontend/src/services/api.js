@@ -190,6 +190,11 @@ export const dealsAPI = {
   // every deal/property field that was auto-applied via document_extraction
   // (PR-NX25 apply-extractions). Empty map when no auto-fill has happened.
   fieldProvenance: (id) => api.get(`/deals/${id}/field-provenance`),
+  // PR-NX52 (2026-05-19) — live market-benchmark bands (sell-rate p25/p50/p75/p95
+  // from verified nearby comps + RBI DSCR floor + YoC-vs-ExitCap spread
+  // thresholds). Surfaces the SAME thresholds the XLSX-export market-benchmark
+  // validators (PR-NX28/NX33) use, at INPUT TIME on FinancialsPage.
+  benchmarkBands: (id) => api.get(`/deals/${id}/benchmark-bands`),
   create: (data) => api.post('/deals', data),
   update: (id, data) => api.put(`/deals/${id}`, data),
   archive: (id, reason) => api.patch(`/deals/${id}/archive`, { reason }),
