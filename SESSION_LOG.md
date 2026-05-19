@@ -4,6 +4,77 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (evening, operator-reported) — ActivityTab hotfix + strip AI branding from exports (PR #431)
+
+Operator opened the downloaded Jigani DOCX + reviewed live deal pages. Three issues reported:
+
+1. **Activity tab on any deal** threw `Something went wrong on this page · i is not iterable`. Production-broken from PR-NX72 (Phase A1 tab migration).
+2. **Downloaded Jigani Word report** leaked provider names + raw provider error JSON. Screenshot showed: `⚠ AI-Assisted Briefing (synthesis: gpt-5.4) — REQUIRES HUMAN REVIEW` + a footer pasting `auto-failover: primary 401 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CbCDwRY4V"`. Operator: *"too much AI, AI, AI feels more like a marketing gimmick than a product."*
+3. **Parcel "Derive parcel context"** returned a 45%-confidence nominatim city-level fallback for the Jigani address, blocking BBMP lookups (deferred to operator-side fix below).
+
+### PR shipped + merged
+
+- **#431 — PR-NX74: ActivityTab hotfix + strip AI branding from DOCX/PPTX/XLSX exports.**
+
+  **Part 1: HOTFIX.** `activityService.listActivities()` returns `{data:[...], pagination:{...}}` — my Phase A1 selector returned the wrapped object instead of unwrapping `.data`. `[...activities].sort(...)` in ActivityTab line 81 threw "is not iterable" (minified to "i is not iterable"). Added a defensive `coerceArray()` helper that unwraps both `{data:[...]}` (paginated service responses) and `{documents:[...]}` (documentService) envelopes. Applied to all 6 array selectors so the same bug class can't bite another tab. Also restored the `useDealRedFlags` fallback that my earlier refactor broke (empty array short-circuited the `deal.risk_flags` fallback). +7 frontend tests covering the defensive shape coercion + a "the spread doesn't throw" smoke test for the original bug.
+
+  **Part 2: AI branding cleanup.** Operator-directed policy override, recorded in CLAUDE.md so future sessions don't re-introduce banners.
+  - **DOCX**: ONE small first-page Arial 7pt italic disclaimer covers the whole report. The loud cover banner ("AI-ASSISTED DRAFT — REQUIRES HUMAN REVIEW") is gone. Per-section AI badges → quiet spacers. "AI-Assisted Briefing" section → "Executive Briefing". 14 per-section provider/auto-failover attribution lines stripped via Python regex sweep. Footer simplified to date only. ToC entries no longer tagged `· AI-Assisted` / `· Platform Data`. Methodology + Disclaimer copy trimmed of "AI-Assisted vs Platform Data" framing.
+  - **PPTX**: `renderAiDisclosureBanner` is now a no-op. `renderAttributionFooter` shows only the date. Briefing slide title → "Executive Briefing". Disclaimer slide's two-column "AI-Assisted vs Platform Data" badge row → single full-width neutral grounding paragraph. "AI-assisted prose carries notice" bullet removed from Hard Rules.
+  - **XLSX**: Executive Briefing row-3 amber disclosure banner removed. Row-17 meta simplified to `Generated: <date>`. Row-18 footnote stripped of "AI-assisted synthesis" framing. "AI Synthesis" tab renamed to "Analysis Notes". Attribution helper keeps Confidence but strips provider name.
+  - **No provider names** (Claude / OpenAI / gpt-N / Sonnet) appear anywhere in customer-facing exports.
+  - **No raw error JSON / auto-failover traces** leak into report footers.
+  - **No cross-product reconciliation copy** that customers shouldn't see.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| Frontend total | 623 | 630 | +7 |
+| Backend XLSX V2 (PR-NX57 + briefing) | 233 | 233 | 0 (assertions inverted) |
+| Backend dealBriefing + dealPptx + DOCX + recon | 154 | 154 | 0 (assertions inverted) |
+
+Several test cases inverted from "expects loud banner" → "expects no banner / no provider name / no failover JSON" to lock the new policy in.
+
+### Geocoding "OUTSIDE BBMP" — operator-side fix recipe (not a code change)
+
+The current behavior is INTENTIONAL: when geocoding returns < 70% confidence, BBMP street / ward / zone / Planning District lookups are skipped (they would chain on inaccurate coordinates → misleading IC-defensibility values). The system falls through to Nominatim → city-level fallback when Google Geocoding / Google Places fail.
+
+For the Jigani address — `block Thyme Park Apartments, No 704 A, Industrial Bypass, Jigani, Bengaluru, Karnataka 560105` — the screenshot showed `12.97679, 77.59008` (45% confidence, nominatim provider). That coordinate is Bengaluru city centre, not Jigani — which is why "OUTSIDE BBMP" fires (Jigani is south of BBMP).
+
+Two ways to fix:
+
+**Quick workaround (any deal, 30 seconds):**
+1. In the Parcel / Site tab, click **"By coordinates"** instead of "By address".
+2. Open Google Maps in a new tab → search the address → right-click the parcel pin → click the lat/lng to copy.
+3. Paste into the coordinates field. Click **Derive**.
+4. Confidence becomes 100% (user-input), the gate releases, BBMP lookups run, you get accurate ward / zone / Planning District data.
+
+**Permanent fix (one-time, ~5 minutes):**
+- The backend Google Geocoding API call is silently returning `REQUEST_DENIED` (or similar) — that's why the cascade falls all the way to Nominatim.
+- Cause: the GCP key set as `GOOGLE_MAPS_API_KEY` in Vercel either (a) does not have the Geocoding API + Places API enabled, OR (b) has HTTP-referrer restrictions that block server-side calls (which have no referrer header).
+- Fix:
+  1. Open https://console.cloud.google.com/apis/credentials → find the API key matching `GOOGLE_MAPS_API_KEY` in Vercel.
+  2. Click ⋯ → Edit API key.
+  3. Under **API restrictions**: ensure both **"Geocoding API"** AND **"Places API"** are checked. Save if you had to add them.
+  4. Under **Application restrictions**: set to **"None"** (this is the server-side key; restrictions are not appropriate). Save.
+  5. Wait ~60 seconds for changes to propagate. Re-run the parcel derive on Jigani.
+- Operator confirmation: send "looks good" once the derive returns rooftop-confidence coordinates + BBMP ward / zone / PD rows populate.
+
+### Operator-facing — verify the change
+
+🌐 In your browser:
+1. Open **https://redip.vercel.app/dashboard/deals/<jigani-id>?tab=activity** — should load the Activity tab without the "i is not iterable" error.
+2. Open the Reports page → re-generate the Jigani Word doc → check:
+   - Cover page now has a small italic 7pt line about model-assisted synthesis (instead of the loud "AI-ASSISTED DRAFT" banner).
+   - "Executive Briefing" section heading (was "AI-Assisted Briefing").
+   - No amber "⚠ AI-Assisted Briefing (synthesis: gpt-5.4) — REQUIRES HUMAN REVIEW" pill anywhere.
+   - No `auto-failover: ... {error JSON}` strings anywhere.
+3. Re-generate the PowerPoint deck → 2nd slide is "Executive Briefing" (was "AI-Assisted Briefing"). No amber AI banners on any slide.
+4. Re-generate the Excel workbook → 2nd tab is "Analysis Notes" (was "AI Synthesis"). No amber banner row in either tab.
+
+---
+
 ## 2026-05-19 (afternoon, 2-hour autonomous block) — Architecture wins: chart polish + Phase A1 tab migration (PR #428, #429)
 
 Operator parked the 5 paid-BETA features (PPTX/XLSX parity, admin usage dashboard, per-export checkbox, request-more-quota) for a future session and asked me to focus 2 hours on the 3 standing architecture wins instead. After deep review of TODO_ARCHITECTURE + the SESSION_LOG recommendations:
