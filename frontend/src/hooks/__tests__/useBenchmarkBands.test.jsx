@@ -3,6 +3,7 @@ import {
   computeSellRateWarning,
   computeDscrWarning,
   computeYocSpreadWarning,
+  computeKernelWarnings,
 } from '../useBenchmarkBands';
 
 describe('PR-NX52 — computeSellRateWarning', () => {
@@ -116,5 +117,91 @@ describe('PR-NX52 — computeYocSpreadWarning', () => {
     expect(w.severity).toBe('critical');
     expect(w.label).toMatch(/Negative YoC vs Exit Cap spread/);
     expect(w.label).toMatch(/100 bps deficit/);
+  });
+});
+
+describe('PR-NX56 — computeKernelWarnings (post-Calculate)', () => {
+  const thresholds = {
+    rbiDscrFloor: 1.20,
+    yocVsExitCapMinSpreadBps: 50,
+  };
+
+  it('returns empty array when kpis is null', () => {
+    expect(computeKernelWarnings(null, {}, thresholds)).toEqual([]);
+  });
+
+  it('returns empty array when thresholds is null', () => {
+    expect(computeKernelWarnings({ dscr: 0.5 }, {}, null)).toEqual([]);
+  });
+
+  it('returns empty array when all KPIs are within band', () => {
+    const kpis = { dscr: 1.65, yieldOnCost: 9.5, exitCapRate: 7.5 }; // DSCR ok, spread 200bps
+    expect(computeKernelWarnings(kpis, {}, thresholds)).toEqual([]);
+  });
+
+  it('flags DSCR below 1.20 as warn (not critical when >= 1.00)', () => {
+    const kpis = { dscr: 1.05 };
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('dscr');
+    expect(w[0].severity).toBe('warn');
+    expect(w[0].label).toMatch(/DSCR 1\.05×/);
+    expect(w[0].label).toMatch(/below RBI Master Direction floor/);
+  });
+
+  it('flags DSCR below 1.00 as critical', () => {
+    const kpis = { dscr: 0.85 };
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('dscr');
+    expect(w[0].severity).toBe('critical');
+    expect(w[0].label).toMatch(/does NOT cover annual debt service/);
+  });
+
+  it('flags thin YoC vs Exit Cap spread as warn', () => {
+    const kpis = { yieldOnCost: 7.75, exitCapRate: 7.50 }; // 25 bps
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('yoc');
+    expect(w[0].severity).toBe('warn');
+    expect(w[0].label).toMatch(/Thin YoC vs Exit Cap spread/);
+    expect(w[0].label).toMatch(/25 bps/);
+  });
+
+  it('flags negative YoC vs Exit Cap spread as critical', () => {
+    const kpis = { yieldOnCost: 6.50, exitCapRate: 7.50 }; // -100 bps
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('yoc');
+    expect(w[0].severity).toBe('critical');
+    expect(w[0].label).toMatch(/Negative YoC vs Exit Cap spread/);
+    expect(w[0].label).toMatch(/100 bps deficit/);
+  });
+
+  it('falls back to inputs.exitCapRate when kpis.exitCapRate is missing', () => {
+    const kpis = { yieldOnCost: 7.50 };
+    const inputs = { exitCapRate: 8.00 }; // -50 bps
+    const w = computeKernelWarnings(kpis, inputs, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('yoc');
+    expect(w[0].severity).toBe('critical');
+  });
+
+  it('returns BOTH warnings when DSCR + YoC both trip', () => {
+    const kpis = { dscr: 0.95, yieldOnCost: 7.00, exitCapRate: 7.50 }; // both trip
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(2);
+    expect(w.find((x) => x.kind === 'dscr')).toBeTruthy();
+    expect(w.find((x) => x.kind === 'yoc')).toBeTruthy();
+  });
+
+  it('skips YoC check when only yieldOnCost is present (no exit cap)', () => {
+    const kpis = { yieldOnCost: 7.50 };
+    expect(computeKernelWarnings(kpis, {}, thresholds)).toEqual([]);
+  });
+
+  it('skips DSCR check when DSCR is null or 0 (asset class without debt)', () => {
+    expect(computeKernelWarnings({ dscr: null }, {}, thresholds)).toEqual([]);
+    expect(computeKernelWarnings({ dscr: 0 }, {}, thresholds)).toEqual([]);
   });
 });
