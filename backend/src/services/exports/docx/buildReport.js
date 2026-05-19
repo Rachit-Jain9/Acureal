@@ -322,6 +322,42 @@ const platformBadge = () =>
 
 const blank = () => new Paragraph({ children: [new TextRun({ text: '' })], spacing: { before: 40, after: 40 } });
 
+// PR-NX69 (2026-05-19) — quota-exceeded callout. When the AI augment layer
+// was bypassed because the caller exhausted their BETA free quota, surface
+// a clear "Premium AI Insights · Quota Exceeded" message in place of the
+// generic "Manual input required" placeholder. Renders nothing for the
+// other deny reasons (unauthenticated, check_failed) — those fall through
+// to the existing placeholder text.
+const augmentQuotaCallout = (envelope) => {
+  if (!envelope || envelope.available) return null;
+  if (envelope.reason !== 'quota_exceeded') return null;
+  return [
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: ' PREMIUM AI INSIGHTS · QUOTA EXCEEDED ',
+          font: FONT,
+          size: 16,
+          bold: true,
+          color: HEX('paperElevated'),
+          shading: { type: ShadingType.CLEAR, fill: HEX('dataWarning') },
+        }),
+      ],
+      spacing: { before: 60, after: 60 },
+    }),
+    new Paragraph({
+      children: [new TextRun({
+        text:
+          'AI-generated market context is a premium feature. You have used your '
+          + `${envelope.quotaUsed || 0} of ${envelope.quotaLimit || 1} free underwriting report${(envelope.quotaLimit || 1) === 1 ? '' : 's'}. `
+          + 'To unlock more AI-generated underwriting reports, contact your REDIP administrator.',
+        font: FONT, size: 18, italics: true, color: HEX('dataWarning'),
+      })],
+      spacing: { before: 40, after: 80 },
+    }),
+  ];
+};
+
 // ─────────────────────────────────────────────────────────────────────────
 // Section builders
 // ─────────────────────────────────────────────────────────────────────────
@@ -751,10 +787,17 @@ const buildDemographics = (ctx) => {
       ));
     }
   } else {
-    // PR-NX67 (2026-05-19) — augment fallback. When REDIP has no
-    // structured Census/BBMP row for the micro-market, fall back to
-    // Claude's general-knowledge synthesis with disclaimer.
+    // PR-NX67 + NX69 (2026-05-19) — augment fallback or quota callout.
+    // When REDIP has no structured Census/BBMP row, fall back to Claude's
+    // general-knowledge synthesis (NX67); if the user has exhausted their
+    // BETA free quota, surface a "Premium AI · Quota Exceeded" message
+    // (NX69) instead of the generic placeholder.
     const augment = ctx.exportContext?.market?.aiAugment?.demographics;
+    const quotaCallout = augmentQuotaCallout(augment);
+    if (quotaCallout) {
+      children.push(...quotaCallout);
+      return children;
+    }
     if (augment?.available && augment.paragraph) {
       children.push(bodyPara(
         augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
@@ -807,11 +850,13 @@ const buildWhyThisArea = (ctx) => {
     return children;
   }
 
-  // PR-NX67 (2026-05-19) — Augment fallback. When the strict generator
-  // couldn't produce content (no verified payload data), try the AI
-  // market-context augment layer. Carries an explicit "AI-generated from
-  // general knowledge — verify before IC" disclaimer.
+  // PR-NX67 + NX69 (2026-05-19) — augment fallback or quota callout.
   const augment = ctx.exportContext?.market?.aiAugment?.whyThisArea;
+  const quotaCallout = augmentQuotaCallout(augment);
+  if (quotaCallout) {
+    children.push(...quotaCallout);
+    return children;
+  }
   if (augment?.available && Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0) {
     children.push(bodyPara(
       augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
@@ -867,10 +912,13 @@ const buildJobGrowth = (ctx) => {
       children.push(blank());
     });
   } else {
-    // PR-NX67 (2026-05-19) — augment fallback. When no verified intelligence
-    // briefs are linked, fall back to Claude's general-knowledge synthesis
-    // of the employment + tech-park landscape for the named locality + city.
+    // PR-NX67 + NX69 (2026-05-19) — augment fallback or quota callout.
     const augment = ctx.exportContext?.market?.aiAugment?.jobGrowth;
+    const quotaCallout = augmentQuotaCallout(augment);
+    if (quotaCallout) {
+      children.push(...quotaCallout);
+      return children;
+    }
     if (augment?.available && ((Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0)
         || (Array.isArray(augment.bullets) && augment.bullets.length > 0))) {
       children.push(bodyPara(
@@ -960,10 +1008,13 @@ const buildSocialInfrastructure = (ctx) => {
       borders: TABLE_BORDER,
     }));
   } else {
-    // PR-NX67 (2026-05-19) — augment fallback. When no infra_proximity data
-    // has been ingested, fall back to Claude's general-knowledge synthesis
-    // of well-known schools / hospitals / retail / transit for the locality.
+    // PR-NX67 + NX69 (2026-05-19) — augment fallback or quota callout.
     const augment = ctx.exportContext?.market?.aiAugment?.socialInfrastructure;
+    const quotaCallout = augmentQuotaCallout(augment);
+    if (quotaCallout) {
+      children.push(...quotaCallout);
+      return children;
+    }
     if (augment?.available && augment.buckets && typeof augment.buckets === 'object') {
       children.push(bodyPara(
         augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
@@ -1043,10 +1094,13 @@ const buildSupplyDemand = (ctx) => {
   const recentBenches = (Array.isArray(benches) ? benches : []).slice(0, 5);
 
   if (recentTxns.length === 0 && recentBenches.length === 0) {
-    // PR-NX67 (2026-05-19) — augment fallback. When no verified comps or
-    // benchmarks are loaded, fall back to Claude's general-knowledge
-    // synthesis of the supply/demand pipeline for the locality + asset class.
+    // PR-NX67 + NX69 (2026-05-19) — augment fallback or quota callout.
     const augment = ctx.exportContext?.market?.aiAugment?.supplyDemandPipeline;
+    const quotaCallout = augmentQuotaCallout(augment);
+    if (quotaCallout) {
+      children.push(...quotaCallout);
+      return children;
+    }
     if (augment?.available && Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0) {
       children.push(bodyPara(
         augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
