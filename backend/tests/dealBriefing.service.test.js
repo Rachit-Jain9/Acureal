@@ -422,11 +422,16 @@ describe('dealBriefing.service (PR-NX7)', () => {
       expect(devBullets).toMatch(/JDA|RERA|milestone|Progressive Sale/i);
     });
 
-    test('Dashboard remains the 2nd sheet (chart injection still targets correctly)', async () => {
+    test('Dashboard remains the 3rd sheet (chart injection still targets correctly)', async () => {
       const buffer = await buildDealWorkbookV2(minimalIncomeCtx(), { skipAiBriefing: true });
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      expect(wb.worksheets[1].name).toBe('Dashboard');
+      // PR-NX57 (2026-05-19): AI Synthesis inserted at position 2 between
+      // Executive Briefing and Dashboard. Dashboard moved from index 1 to 2.
+      // Chart injector uses findIndex(name === 'Dashboard') so this shift
+      // is internally handled — this test just guards the visible order.
+      expect(wb.worksheets[1].name).toBe('AI Synthesis');
+      expect(wb.worksheets[2].name).toBe('Dashboard');
       // Chart specs should still inject — verify a Dashboard cell has its
       // expected formula content from the existing builder.
       const dash = wb.getWorksheet('Dashboard');

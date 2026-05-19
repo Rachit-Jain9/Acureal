@@ -136,14 +136,17 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
     test('produced workbook stays editable and within the 8-worksheet structure', async () => {
       // PR-NX7 (2026-05-15): Executive Briefing added as the FIRST tab.
+      // PR-NX57 (2026-05-19): AI Synthesis added as the SECOND tab (after
+      // Executive Briefing, before Dashboard) — cross-product parity with
+      // DOCX + PPTX Risk / Sensitivity / Document-Insights narratives.
       // Total now 8 sheets:
       //   1. Executive Briefing (FIRST — AI-assisted IC summary)
-      //   2. Dashboard
-      //   3. Inputs & Assumptions
-      //   4. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
-      //   5. Monthly Cash Flow
-      //   6. Debt Sizing & Amortization
-      //   7. Unit Mix (when applicable)
+      //   2. AI Synthesis (NEW — 3 deeper AI narratives)
+      //   3. Dashboard
+      //   4. Inputs & Assumptions
+      //   5. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
+      //   6. Monthly Cash Flow
+      //   7. Debt Sizing & Amortization
       //   8. Calculations            (hidden audit trail)
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
@@ -151,6 +154,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const names = wb.worksheets.map((ws) => ws.name);
       expect(names).toEqual([
         'Executive Briefing',
+        'AI Synthesis',
         'Dashboard',
         'Inputs & Assumptions',
         'Cash Flow Engine',
@@ -1204,12 +1208,13 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const drawingXml = await zip.file('xl/drawings/drawing1.xml').async('string');
       expect(drawingXml).toMatch(/<xdr:oneCellAnchor>/);
 
-      // PR-NX7: Dashboard is now sheet2.xml (Executive Briefing is sheet1.xml).
-      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
+      // PR-NX7: Dashboard was sheet2.xml (Executive Briefing is sheet1.xml).
+      // PR-NX57: Dashboard moved to sheet3.xml after AI Synthesis inserted at position 2.
+      const sheetXml = await zip.file('xl/worksheets/sheet3.xml').async('string');
       expect(sheetXml).toMatch(/<drawing\s+r:id="rId\d+"\s*\/>/);
 
       // Sheet rels include the drawing rel
-      const sheetRels = await zip.file('xl/worksheets/_rels/sheet2.xml.rels').async('string');
+      const sheetRels = await zip.file('xl/worksheets/_rels/sheet3.xml.rels').async('string');
       expect(sheetRels).toMatch(/drawings\/drawing1\.xml/);
 
       // Content types declares each chart + the drawing
@@ -1221,8 +1226,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     test('Dashboard ships native Excel sparklines for KPI trend cells', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const zip = await JSZip.loadAsync(buffer);
-      // PR-NX7: Dashboard is sheet2.xml (Executive Briefing is sheet1.xml).
-      const sheetXml = await zip.file('xl/worksheets/sheet2.xml').async('string');
+      // PR-NX7: Dashboard was sheet2.xml (Executive Briefing is sheet1.xml).
+      // PR-NX57: Dashboard moved to sheet3.xml after AI Synthesis inserted at position 2.
+      const sheetXml = await zip.file('xl/worksheets/sheet3.xml').async('string');
 
       expect(sheetXml).toContain('<x14:sparklineGroups>');
       expect(sheetXml).toContain('<xm:sqref>B9</xm:sqref>');
@@ -1248,8 +1254,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     test('Inputs sheet comments are serialized before table parts so Excel opens without repair', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const zip = await JSZip.loadAsync(buffer);
-      // PR-NX7: Inputs is sheet3.xml (Executive Briefing + Dashboard ahead of it).
-      const sheetXml = await zip.file('xl/worksheets/sheet3.xml').async('string');
+      // PR-NX7: Inputs was sheet3.xml (Executive Briefing + Dashboard ahead of it).
+      // PR-NX57: Inputs moved to sheet4.xml after AI Synthesis inserted between Briefing + Dashboard.
+      const sheetXml = await zip.file('xl/worksheets/sheet4.xml').async('string');
 
       const legacyDrawingIndex = sheetXml.indexOf('<legacyDrawing');
       const tablePartsIndex = sheetXml.indexOf('<tableParts');
@@ -3167,15 +3174,16 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
 
       test('PR-NX15 HOTFIX: hospitality Dashboard sheet has 50+ cells after generation (not empty after auto-repair)', async () => {
-        // Direct sanity check on the raw XML: Dashboard sheet (sheet2.xml)
+        // Direct sanity check on the raw XML: Dashboard sheet
         // must contain real <c r="..."> cell entries, not the empty
         // <sheetData/> that triggers Excel auto-repair scrubbing.
         const buffer = await buildDealWorkbookV2(hospitalityCtx());
         const zip = await JSZip.loadAsync(buffer);
-        // Hospitality has USALI sheet inserted at position 4 — so the
-        // Dashboard is at position 2 (after Executive Briefing), and
-        // sheet2.xml is the Dashboard.
-        const dashFile = zip.file('xl/worksheets/sheet2.xml');
+        // PR-NX57: AI Synthesis is now position 2 (between Executive
+        // Briefing + Dashboard), so Dashboard is sheet3.xml. Hospitality
+        // USALI then inserts AFTER Inputs, not before Dashboard, so
+        // Dashboard's position is unchanged from the non-hospitality case.
+        const dashFile = zip.file('xl/worksheets/sheet3.xml');
         expect(dashFile).toBeTruthy();
         const xml = await dashFile.async('string');
         expect(xml).not.toMatch(/<sheetData\s*\/>/);
@@ -3388,7 +3396,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         await check('redevelopment', true);
         await check('residential_apartments', false);
         await check('commercial_office', false);
-      });
+      }, 30000); // 4× buildDealWorkbookV2 → needs explicit timeout under full-suite load
 
       test('Blended Sale Rate DERIVED = sum of component_share × component_rate', async () => {
         const buffer = await buildDealWorkbookV2(mixedCtx());
@@ -4347,9 +4355,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
 
       test('PR-NX11 HOTFIX: Dashboard sheet XML contains real cell content (not stripped by Excel-style repair)', async () => {
-        // Direct assertion that sheet2.xml (Dashboard, the 2nd visible sheet
-        // after Executive Briefing) is not an empty shell. The Pointec Pens
-        // bug produced a sheet with literally <sheetData/> and nothing else.
+        // Direct assertion that the Dashboard sheet XML is not an empty shell.
+        // (Lookup is by sheet-name text "Dashboard" so it's robust to position
+        // changes — PR-NX57 moved Dashboard from sheet2.xml to sheet3.xml after
+        // AI Synthesis was inserted at position 2.) The Pointec Pens bug
+        // produced a sheet with literally <sheetData/> and nothing else.
         const buffer = await buildDealWorkbookV2(minimalContext());
         const zip = await JSZip.loadAsync(buffer);
         const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
@@ -4868,5 +4878,205 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         });
       });
     });
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// PR-NX57 (2026-05-19) — AI Synthesis sheet
+// ───────────────────────────────────────────────────────────────────────────
+describe('PR-NX57 — AI Synthesis sheet', () => {
+  // Sample narrative envelopes matching the shapes that dealExport.service
+  // plumbs onto exportContext via generateRiskNarrative / generateSensitivityNarrative
+  // / generateDocumentInsights.
+  const RISK_NARRATIVE_OK = {
+    available: true,
+    provider: 'Claude Sonnet 4.6',
+    confidence: 'medium',
+    summary_paragraph: 'The deal has 3 medium-severity risks concentrated in title and approvals.',
+    critical_spotlight_paragraph: 'One critical encumbrance on parcel 12B requires resolution before financial close.',
+  };
+  const SENS_NARRATIVE_OK = {
+    available: true,
+    provider: 'OpenAI gpt-5.4',
+    confidence: 'high',
+    dominant_driver: 'Sell Rate',
+    driver_decomposition_paragraph: 'Sell rate drives 62% of IRR variance; construction cost 28%; financing 10%.',
+    stress_test_paragraph: 'Recommend stressing sell rate by -10% and construction cost by +12% simultaneously.',
+  };
+  const DOC_INSIGHTS_OK = {
+    available: true,
+    provider: 'Claude Sonnet 4.6',
+    confidence: 'medium',
+    summary_paragraph: 'Cross-document analysis confirms title chain is consistent with the sale deed dates.',
+    findings: [
+      {
+        severity: 'high',
+        title: 'EC date mismatch with sale deed',
+        description: 'Encumbrance certificate is dated 2024-08-15 but the sale deed is dated 2024-09-02.',
+        recommendation: 'Re-pull the EC dated after the sale deed registration.',
+      },
+      {
+        severity: 'medium',
+        title: 'Khata extract carpet area differs from RERA filing',
+        description: 'Khata extract shows 1,235 sqft carpet; RERA filing shows 1,260 sqft.',
+        recommendation: 'Verify which area is authoritative for stamp duty calc.',
+      },
+    ],
+  };
+
+  const contextWithNarratives = () => {
+    const ctx = minimalContext();
+    ctx.risks = { narrative: RISK_NARRATIVE_OK };
+    ctx.sensitivityNarrative = SENS_NARRATIVE_OK;
+    ctx.documents = { insights: DOC_INSIGHTS_OK };
+    return ctx;
+  };
+
+  test('renders the AI Synthesis sheet as the second tab', async () => {
+    const buffer = await buildDealWorkbookV2(contextWithNarratives());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    expect(wb.worksheets[1].name).toBe('AI Synthesis');
+  });
+
+  test('renders title + disclosure banner', async () => {
+    const buffer = await buildDealWorkbookV2(contextWithNarratives(), { brandName: 'REDIP' });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    expect(sheet).toBeDefined();
+    expect(String(sheet.getCell('A1').value)).toContain('AI Synthesis');
+    expect(String(sheet.getCell('A1').value)).toContain('REDIP');
+    expect(String(sheet.getCell('A3').value)).toContain('AI-Assisted Analysis Notes');
+    expect(String(sheet.getCell('A3').value)).toContain('REQUIRES HUMAN REVIEW');
+  });
+
+  test('renders all 3 section bands with the expected labels', async () => {
+    const buffer = await buildDealWorkbookV2(contextWithNarratives());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    expect(String(sheet.getCell('A5').value)).toBe('RISK PROFILE SYNTHESIS');
+    expect(String(sheet.getCell('A12').value)).toBe('SENSITIVITY ANALYSIS · NARRATIVE');
+    expect(String(sheet.getCell('A20').value)).toBe('DOCUMENT-DERIVED INSIGHTS');
+  });
+
+  test('renders the risk synthesis paragraphs when narrative is available', async () => {
+    const buffer = await buildDealWorkbookV2(contextWithNarratives());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    expect(String(sheet.getCell('A7').value)).toContain('3 medium-severity risks');
+    expect(String(sheet.getCell('A9').value)).toContain('critical encumbrance on parcel 12B');
+    expect(String(sheet.getCell('A10').value)).toContain('Confidence: medium');
+    expect(String(sheet.getCell('A10').value)).toContain('Claude Sonnet 4.6');
+  });
+
+  test('renders sensitivity narrative with dominant driver eyebrow + decomposition + stress tests', async () => {
+    const buffer = await buildDealWorkbookV2(contextWithNarratives());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    expect(String(sheet.getCell('A13').value)).toContain('DOMINANT DRIVER: SELL RATE');
+    expect(String(sheet.getCell('A15').value)).toContain('Sell rate drives 62% of IRR');
+    expect(String(sheet.getCell('A17').value)).toContain('Recommend stressing sell rate by -10%');
+    expect(String(sheet.getCell('A18').value)).toContain('OpenAI gpt-5.4');
+  });
+
+  test('renders document insights summary + findings cards', async () => {
+    const buffer = await buildDealWorkbookV2(contextWithNarratives());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    expect(String(sheet.getCell('A22').value)).toContain('Cross-document analysis confirms');
+    expect(String(sheet.getCell('A23').value)).toContain('INCONSISTENCY FINDINGS (2)');
+    // Title row uses richText — flatten and check the severity tag + title text are present.
+    const finding1Title = sheet.getCell('A24').value;
+    const flatten = (v) => (v && v.richText)
+      ? v.richText.map((r) => r.text).join('')
+      : String(v || '');
+    expect(flatten(finding1Title)).toContain('[HIGH]');
+    expect(flatten(finding1Title)).toContain('EC date mismatch');
+    expect(String(sheet.getCell('A25').value)).toContain('Encumbrance certificate is dated 2024-08-15');
+    expect(flatten(sheet.getCell('A26').value)).toContain('[MEDIUM]');
+    expect(flatten(sheet.getCell('A26').value)).toContain('Khata extract carpet area differs');
+  });
+
+  test('falls back to "Synthesis Unavailable" panels when narratives are unavailable', async () => {
+    const ctx = minimalContext();
+    ctx.risks = { narrative: { available: false, reason: 'all providers failed' } };
+    ctx.sensitivityNarrative = { available: false };
+    ctx.documents = { insights: { available: false } };
+
+    const buffer = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    // Risk synthesis row 6 (the row immediately after the section band)
+    expect(String(sheet.getCell('A6').value)).toContain('Synthesis Unavailable');
+    expect(String(sheet.getCell('A6').value)).toContain('all providers failed');
+    // Sensitivity unavailable row 13
+    expect(String(sheet.getCell('A13').value)).toContain('Synthesis Unavailable');
+    // Document insights unavailable row 21
+    expect(String(sheet.getCell('A21').value)).toContain('Synthesis Unavailable');
+  });
+
+  test('falls back gracefully when narrative payloads are entirely missing', async () => {
+    // No risks / sensitivityNarrative / documents keys on the context at all.
+    const buffer = await buildDealWorkbookV2(minimalContext());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    // Sheet must still exist and contain the section bands + unavailable copy.
+    expect(sheet).toBeDefined();
+    expect(String(sheet.getCell('A5').value)).toBe('RISK PROFILE SYNTHESIS');
+    expect(String(sheet.getCell('A6').value)).toContain('Synthesis Unavailable');
+  });
+
+  test('shows positive-signal panel when findings array is empty', async () => {
+    const ctx = minimalContext();
+    ctx.documents = {
+      insights: {
+        available: true,
+        provider: 'Claude Sonnet 4.6',
+        summary_paragraph: 'All extracted documents are mutually consistent.',
+        findings: [],
+      },
+    };
+    const buffer = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    expect(String(sheet.getCell('A22').value)).toContain('All extracted documents are mutually consistent');
+    expect(String(sheet.getCell('A23').value)).toContain('No inconsistencies detected');
+  });
+
+  test('caps findings at 6 and shows "+N more" overflow line', async () => {
+    const findings = Array.from({ length: 9 }, (_, i) => ({
+      severity: 'medium',
+      title: `Finding ${i + 1}`,
+      description: `Description ${i + 1}`,
+    }));
+    const ctx = minimalContext();
+    ctx.documents = {
+      insights: {
+        available: true,
+        summary_paragraph: 'Multiple findings.',
+        findings,
+      },
+    };
+    const buffer = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet('AI Synthesis');
+    // 6 findings × 2 rows = 12 rows after the eyebrow at row 23.
+    // Row 24-35 → findings, row 36 → "+N more" overflow line.
+    expect(String(sheet.getCell('A23').value)).toContain('INCONSISTENCY FINDINGS (9)');
+    let overflowFound = false;
+    sheet.eachRow((row) => {
+      const v = String(row.getCell(1).value || '');
+      if (v.includes('+ 3 more finding')) overflowFound = true;
+    });
+    expect(overflowFound).toBe(true);
   });
 });
