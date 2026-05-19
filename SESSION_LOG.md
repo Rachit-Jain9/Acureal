@@ -4,6 +4,85 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (afternoon, 2-hour autonomous block) — Architecture wins: chart polish + Phase A1 tab migration (PR #428, #429)
+
+Operator parked the 5 paid-BETA features (PPTX/XLSX parity, admin usage dashboard, per-export checkbox, request-more-quota) for a future session and asked me to focus 2 hours on the 3 standing architecture wins instead. After deep review of TODO_ARCHITECTURE + the SESSION_LOG recommendations:
+
+**Picked 2 of the 3 architecture items** (quality > quantity):
+1. Chart polish across remaining 5 Financials components — mechanical, low-risk, visible improvement
+2. Phase A1 — migrate the 4 most-used deal tabs to the shared workspace cache
+
+**Deferred to a future session**: Ontology adoption in deal-create/edit forms. The frontend's `DEAL_STRUCTURES` (8 values: outright/jv/jda/revenue_share/area_share/profit_share/ground_lease/hybrid) DISAGREES with the ontology's `deal_structure` taxonomy (4 values: outright_purchase/jda_revenue_share/jda_area_share/development_management). That's a product decision (which vocabulary wins?), not a clean refactor — needs operator input.
+
+### PRs shipped + merged
+
+- **#428 — PR-NX71: Chart polish + BETA roadmap doc.**
+  - **FinancialVisualizationLayer.jsx** (4 charts: Terminal Value, NOI Progression, Cap-Rate Sensitivity, Cash Flow Waterfall, Return Progression): replaced 6 hardcoded grid + reference-line + disabled-bar hex literals with shared CSS-var constants (`GRID_STROKE`, `REFERENCE_LINE_STROKE`, `NEUTRAL_BAR_FILL`, `ACCENT_HIGHLIGHT_STROKE`). Axis ticks pinned to `var(--color-text-muted)`. Matches dashboard + CashFlowChart (PR-NX65) conventions; flips correctly across light/dark themes.
+  - **KPIStatCard.jsx**: provenance Info button replaced 2 hardcoded amber hex literals with Tailwind `amber-50` / `amber-800` tokens. Added `focus-visible:ring-2` + ease-out timing.
+  - **ReferenceMenu.jsx**: 2 occurrences of `text-[#c2410c]` replaced with `text-orange-700`.
+  - **NEW `docs/BETA_AI_TIER_ROADMAP.md`** captures the 5 paid-BETA features queued for future implementation (PPTX/XLSX parity, admin usage dashboard, per-export checkbox, request-more-quota workflow). Includes implementation order recommendation (~7 hours total) so the next session can pick up cleanly.
+
+- **#429 — PR-NX72: Phase A1 — migrate 4 deal tabs to shared workspace cache.**
+  - **DocumentsTab**: `useDocuments(dealId)` → `useDealDocuments()`. Dropped redundant array-coercion block.
+  - **DDTab**: `useDDItems` + `useDDScore` → `useDealDDItems()` + `useDealDDScore()`.
+  - **RiskTab**: `useRiskFlags` + `useRiskScore` → `useDealRedFlags()` + `useDealRiskScore()`.
+  - **ActivityTab**: `useActivities` → `useDealActivities()`.
+  - All 4 tabs now read `isLoading`, `isError`, `refetch` from `useDealContext()` (shared workspace state) instead of from their own per-domain query.
+  - Mutations all stay on their existing per-domain hooks — they ALREADY invalidate `['deal-workspace', dealId]` (verified via grep: useDocuments 3×, useDDItems 5×, useRiskFlags 4×, useActivities 4× = 16 mutation sites pre-wired). Cache stays fresh automatically.
+  - **AuditTab intentionally NOT migrated** — needs the 50-event `include_outputs_summary=true` projection that the workspace endpoint doesn't carry (workspace's auditEvents slice is the 25-event tail without outputs summary). Would require a backend extension to the workspace endpoint — separate PR.
+  - RiskTab.test.jsx updated: removed `useRiskFlags` + `useRiskScore` mocks (no longer consumed), added mocks for the new selector hooks.
+
+### Outcome for the operator
+
+**Before:**
+- Open a deal page → 7+ parallel HTTP requests (deal metadata, documents, dd-items, dd-score, risk-flags, risk-score, activities, etc.). Each tab waits for its own response.
+- Chart chrome inconsistent: dashboard uses CSS vars, FinancialsPage chart components use hardcoded hex. Grid lines nearly invisible in dark mode for the 4 FinancialsPage charts.
+- The KPI tile (i) provenance button used hardcoded amber hex codes.
+
+**After:**
+- Open a deal page → 1 HTTP request (the workspace endpoint returns all 4 domains in one grounded payload). Tabs share loading + error state; content lands together. Faster TTI on slower connections.
+- All chart chrome on FinancialsPage matches dashboard conventions: CSS-var grid + reference lines, muted-text axis ticks, theme-correct in light + dark.
+- KPI Info button uses Tailwind amber tokens + adds focus ring.
+
+### Architecture impact
+
+- **Phase A "Read consolidation" exit criteria met** for the 4 most-used deal tabs. This was the longest-standing item in TODO_ARCHITECTURE.md.
+- **Unblocks Phase B** (shared cache invalidation across modules — zoning writes invalidate financial summary, comp writes invalidate benchmark card, DD status transitions surface in the Financials confidence badge).
+- **Unblocks Phase C** (full DealContext provider refactor — components migrate from independent queries to context consumption).
+- Old per-domain hooks (useDocuments, useDDItems, useRiskFlags, useActivities) are still exported and used by mutation paths. No deletion needed; just one less consumer of the read path each.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| RiskTab.test.jsx (updated mocks) | 6 | 6 | 0 |
+| All other frontend suites | 617 | 617 | 0 |
+| **Frontend TOTAL** | **623** | **623** | **0** |
+| Backend (untouched) | 2,083 | 2,083 | 0 |
+
+Zero regressions. Frontend production build clean (20.44s).
+
+### Outstanding for next session
+
+1. **All 5 paid-BETA features** (catalogued in `docs/BETA_AI_TIER_ROADMAP.md`). When pricing is ready, pick them up in the recommended sprint order (~7 hours total work).
+2. **Ontology adoption in deal-create/edit forms**. BLOCKED on product decision: backend uses 8 deal_structure values, ontology uses 4. Pick one vocabulary (or expand ontology to 8) before implementing.
+3. **Phase A2** — extend the workspace endpoint to carry the 50-event `include_outputs_summary` projection so AuditTab can also migrate off useDealEvents.
+4. **Phase B / C** — shared cache invalidation + DealContext provider full refactor. Now unblocked by Phase A1.
+5. **HospitalityProformaSection.jsx + ProvenanceGraphView.jsx** chart polish (semantic palette migration, not 1:1 hex swap).
+
+### Operator verify steps
+
+🌐 In your browser, open https://redip.vercel.app/dashboard/deals
+1. Pick any deal → click into it.
+2. **Watch network tab in DevTools** (Cmd+Option+I → Network) — open the deal and you should see ONE request to `/api/deals/:id/workspace` (plus the auth check + a few statics), instead of 7+ parallel domain requests like before.
+3. Click through the Documents, DD, Risk, Activity tabs — content should be already loaded (instant tab switch) instead of each tab triggering its own fetch.
+4. Try uploading a document → it should appear in the Documents tab AND the deal-detail page header counter should refresh (proves the shared cache invalidates correctly).
+5. Open the Financials page → Cash Flows chart, Terminal Value panel, NOI Progression chart, Cap-Rate Sensitivity, Cash Flow Waterfall, Return Progression: grid lines should be subtle but visible in dark mode (were nearly invisible before).
+
+Send "all good" once verified.
+
+---
+
 ## 2026-05-19 (mid-day, operator-prompted) — BETA per-user quota gate on the AI augment layer (PR #426)
 
 Operator follow-up to PR-NX67 (the AI augment layer): "Or can we keep it one free underwriting report per user for BETA stage? I assume it is going to cost credits so keep it one per user except for me (I am admin)." Attached a Supabase screenshot confirming rachitj579@gmail.com is `role='admin'`.
