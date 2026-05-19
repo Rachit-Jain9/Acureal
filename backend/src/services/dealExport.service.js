@@ -10,6 +10,9 @@ const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrativ
 // an explicit "AI-generated from general knowledge — verify before IC"
 // disclaimer per CLAUDE.md.
 const aiMarketContext = require('./aiMarketContext.service');
+// PR-NX69 (2026-05-19) — BETA per-user quota for the AI augment layer.
+// Free tier: 1 augmented report per user. Admin/owner: unlimited.
+const aiAugmentEntitlement = require('./aiAugmentEntitlement.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
@@ -543,7 +546,14 @@ const fetchDealDemographics = async (deal) => {
   }
 };
 
-const getDealExportContext = async (dealId) => {
+const getDealExportContext = async (dealId, options = {}) => {
+  // PR-NX69 (2026-05-19) — caller passes { userId, userRole } from
+  // req.user so the AI augment layer can enforce the BETA per-user quota
+  // (1 free report; admin/owner unlimited). Backward-compat: when callers
+  // omit options, entitlement check treats the request as unauthenticated
+  // and denies the augment — preserving the option for batch / cron jobs
+  // to opt out of consuming quota.
+  const { userId = null, userRole = null } = options;
   const dealResult = await query(DEAL_EXPORT_SQL, [dealId]);
   if (!dealResult.rows.length) {
     return null;
@@ -854,31 +864,66 @@ const getDealExportContext = async (dealId) => {
       findings: [],
       confidence: null,
     })),
-    // PR-NX67 (2026-05-19) — AI market-context augment layer. Fires the 5
-    // generators in parallel (Claude/OpenAI cascade) so when REDIP has no
-    // structured market data for a deal (typical for sourcing-stage deals
-    // like Jigani), the DOCX section renderers can fall back to specific,
-    // asset-class-aware AI prose with explicit "verify before IC" disclaimers
-    // — instead of showing the generic "Manual input required" placeholder.
-    // Returns an object keyed by section name. Disabled by env flag
-    // AI_MARKET_CONTEXT_ENABLED=false.
-    aiMarketContext.generateAllSections({
-      payload: {
-        locality: deal.micro_market || deal.city || null,
-        city: deal.city || null,
-        asset_class: deal.asset_class || null,
-        property_name: deal.property_name || deal.name || null,
-        micro_market: deal.micro_market || null,
-        zoning: deal.zoning || null,
-        deal_type: deal.deal_type || null,
-      },
-      dealId: deal.id,
-      organizationId: deal.organization_id || null,
-    }).catch((error) => {
-      // Never block the export. If the whole augment layer dies, just log
-      // and return all-unavailable envelopes so the renderers fall through
-      // to the existing "Manual input required" placeholders.
-      console.warn('[dealExport] aiMarketContext.generateAllSections failed:', error.message);
+    // PR-NX67 + NX69 (2026-05-19) — AI market-context augment layer with
+    // BETA per-user quota gate. The augment fires only when the caller has
+    // remaining quota (or is admin/owner — unlimited). On exhaustion the
+    // generator is bypassed and a special envelope is returned so the
+    // DOCX renderer can emit a "Premium AI Insights · Quota Exceeded"
+    // message INSTEAD of the generic "Manual input required" placeholder.
+    //
+    // Usage counter is incremented ONLY after the augment actually produced
+    // at least one available:true narrative — so Claude outages don't burn
+    // a user's free report.
+    (async () => {
+      const entitlement = await aiAugmentEntitlement.checkEntitlement({ userId, userRole });
+      if (!entitlement.allowed) {
+        // Quota exhausted or check failed — synthesize a deny envelope
+        // shaped like a per-section unavailable so renderers don't need
+        // to change their existing aiAugment[...] reads.
+        const denyEnvelope = {
+          available: false,
+          reason: entitlement.reason, // 'quota_exceeded' | 'unauthenticated' | 'user_not_found' | 'check_failed'
+          quotaLimit: entitlement.limit,
+          quotaUsed: entitlement.used,
+        };
+        return aiMarketContext.SECTION_KEYS.reduce((acc, key) => {
+          acc[key] = denyEnvelope;
+          return acc;
+        }, { _entitlement: entitlement });
+      }
+      const narratives = await aiMarketContext.generateAllSections({
+        payload: {
+          locality: deal.micro_market || deal.city || null,
+          city: deal.city || null,
+          asset_class: deal.asset_class || null,
+          property_name: deal.property_name || deal.name || null,
+          micro_market: deal.micro_market || null,
+          zoning: deal.zoning || null,
+          deal_type: deal.deal_type || null,
+        },
+        dealId: deal.id,
+        organizationId: deal.organization_id || null,
+      });
+      // Record usage ONLY if at least one section produced real content.
+      // Claude-down scenario → all envelopes return available:false →
+      // user is not charged (next export retries fresh).
+      const anyAvailable = Object.values(narratives || {})
+        .some((env) => env && env.available === true);
+      if (anyAvailable && !entitlement.unlimited) {
+        const recorded = await aiAugmentEntitlement.recordUsage({ userId, userRole });
+        narratives._entitlement = {
+          ...entitlement,
+          recorded: recorded.recorded,
+          newCount: recorded.newCount,
+        };
+      } else {
+        narratives._entitlement = entitlement;
+      }
+      return narratives;
+    })().catch((error) => {
+      // Never block the export. If the entitlement/augment chain throws,
+      // log and return empty so renderers fall through to placeholders.
+      console.warn('[dealExport] aiMarketContext + entitlement chain failed:', error.message);
       return {};
     }),
   ]);

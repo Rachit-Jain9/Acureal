@@ -299,7 +299,13 @@ router.get(
   async (req, res, next) => {
     try {
       {
-      const exportContext = await getDealExportContext(req.params.dealId);
+      // PR-NX69 (2026-05-19) — pass userId + userRole so the AI augment
+      // layer can enforce the BETA 1-free-report-per-user quota.
+      // Admin/owner roles get unlimited.
+      const exportContext = await getDealExportContext(req.params.dealId, {
+        userId: req.user?.id || null,
+        userRole: req.user?.role || null,
+      });
       if (!exportContext) {
         return res.status(404).json({ success: false, message: 'Deal not found.' });
       }
@@ -1163,7 +1169,11 @@ router.get(
     try {
       const dealId = req.params.dealId;
 
-      const exportContext = await getDealExportContext(dealId);
+      // PR-NX69 — pass userId + userRole for BETA quota gate on the AI augment.
+      const exportContext = await getDealExportContext(dealId, {
+        userId: req.user?.id || null,
+        userRole: req.user?.role || null,
+      });
 
       if (!exportContext) {
         return res.status(404).json({ success: false, message: 'Deal not found.' });
@@ -1231,7 +1241,11 @@ router.get(
       }
 
       const dealId = req.params.dealId;
-      const exportContext = await getDealExportContext(dealId);
+      // PR-NX69 — pass userId + userRole for BETA quota gate on the AI augment.
+      const exportContext = await getDealExportContext(dealId, {
+        userId: req.user?.id || null,
+        userRole: req.user?.role || null,
+      });
       if (!exportContext) {
         return res.status(404).json({ success: false, message: 'Deal not found.' });
       }
@@ -1303,7 +1317,11 @@ router.get(
   async (req, res, next) => {
     try {
       {
-      const exportContext = await getDealExportContext(req.params.dealId);
+      // PR-NX69 — pass userId + userRole for BETA quota gate on the AI augment.
+      const exportContext = await getDealExportContext(req.params.dealId, {
+        userId: req.user?.id || null,
+        userRole: req.user?.role || null,
+      });
       if (!exportContext) {
         return res.status(404).json({ success: false, message: 'Deal not found.' });
       }
