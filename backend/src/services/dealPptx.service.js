@@ -50,6 +50,11 @@ const {
   renderProsCons,
   renderKeyAssumptions,
   renderDisclaimer,
+  // PR-NX54 (2026-05-19) — 3 new AI narrative slides (cross-product
+  // parity with DOCX PR-NX43 / NX44 / NX45)
+  renderRiskNarrative,
+  renderSensitivityNarrative,
+  renderDocumentInsights,
 } = require('./exports/pptx/slides');
 // PR-NX18 (2026-05-16): the asset-class × structure × exit-strategy aware
 // briefing service is shared across all three export formats (XLSX, DOCX,
@@ -151,8 +156,12 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
     case 'dividerFinancial': addSectionDivider(pptx, slide, context, 'Financial Summary', `${context.assetClassLabel} | current underwriting outputs`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('financial', context) }); return;
     case 'financialOverview': renderFinancialOverview(pptx, slide, context, pageNumber, totalSlides); return;
     case 'cashFlowSensitivity': renderCashFlowSensitivity(pptx, slide, context, pageNumber, totalSlides); return;
+    // PR-NX54 (2026-05-19) — 3 new AI narrative slides
+    case 'sensitivityNarrative': renderSensitivityNarrative(pptx, slide, context, pageNumber, totalSlides); return;
     case 'transactionSummary': renderTransactionSummary(pptx, slide, context, pageNumber, totalSlides); return;
     case 'risksMitigants': renderRisksMitigants(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'riskNarrative': renderRiskNarrative(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'documentInsights': renderDocumentInsights(pptx, slide, context, pageNumber, totalSlides); return;
     case 'prosCons': renderProsCons(pptx, slide, context, pageNumber, totalSlides); return;
     case 'nextSteps': renderNextSteps(pptx, slide, context, pageNumber, totalSlides); return;
     case 'keyAssumptions': renderKeyAssumptions(pptx, slide, context, pageNumber, totalSlides); return;
