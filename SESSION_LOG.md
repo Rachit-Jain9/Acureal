@@ -4,6 +4,46 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (late-morning, continuation) — FinancialsPage CashFlowChart polish (PR #422)
+
+Single small PR closing out the morning's chart-polish thread (NX60 dashboard → NX63 FinancialsPage KPIs → NX65 CashFlowChart). A §12 feel-check on the Financials page's Cash Flows chart turned up 5 concrete misses against `docs/FRONTEND_GUIDELINES.md`.
+
+### PR shipped + merged
+
+- **#422 — PR-NX65: CashFlowChart polish per FRONTEND_GUIDELINES feel-check.**
+  - Grid stroke `#f0f0f0` (invisible in dark theme) → `var(--color-border-primary)` with 50% opacity.
+  - Reference line `#94a3b8` → `var(--color-border-strong)` with 70% opacity.
+  - Bar fills `#22c55e` / `#ef4444` → `var(--color-data-positive)` / `var(--color-data-negative)`.
+  - Bar animation duration 1500ms (recharts default) → 700ms ease-out per §2 timing table (matches dashboard).
+  - Tooltip contentStyle expanded to match dashboard's tooltipStyle (bg-elevated + border + shadow + tabular-nums) for cross-page consistency.
+  - Axis ticks pinned to `var(--color-text-muted)`; default axis lines + tick lines removed (dashboard convention).
+  - Quarterly/Yearly toggle buttons gained the 2 missing §3 interaction states: `focus-visible:ring-2` and `active:scale-[0.98]`. Plus `aria-pressed` for screen readers.
+
+### Outcome for the operator
+
+**Before:** Chart looked slightly different from dashboard charts (color tokens vs hardcoded hex). Grid lines barely visible in dark theme. 1.5s draw-in felt sluggish. Toggle had no focus indicator.
+
+**After:** Chart visually matches dashboard. Theme-correct in both light + dark. 700ms snappy draw-in. Keyboard users see the focus ring.
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| Frontend total | 623 | 623 | 0 |
+
+No structural changes — pure styling + a11y. Frontend production build clean (26.03s).
+
+### Outstanding operator actions
+
+Same as previous bundle. No new blockers.
+
+### Recommendation for next session
+
+- **Same migration to other 5 financials components** that still have hardcoded hex (`FinancialVisualizationLayer.jsx`, `HospitalityProformaSection.jsx`, `KPIStatCard.jsx`, `ProvenanceGraphView.jsx`, `ReferenceMenu.jsx`). Each its own small PR ≤ 50 lines.
+- All earlier recommendations still stand: Phase A1 tab migration, ontology adoption, SkeletonKpi stagger, §12 feel-check on other pages.
+
+---
+
 ## 2026-05-19 (late-morning, continuation) — Phase A selector fix + FinancialsPage count-up (PR #419, #420)
 
 Continuing the autonomous block. Two contained, high-value items:
