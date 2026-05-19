@@ -3,6 +3,13 @@ const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { getCompsNearLocation } = require('./comps.service');
 const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrative, generateDocumentInsights } = require('./export.insights.service');
+// PR-NX67 (2026-05-19) — AI market-context augment layer. Generates 5
+// market-context sections (Why This Area, Demographics, Job Growth,
+// Social Infrastructure, Supply & Demand Pipeline) from Claude's general
+// knowledge when REDIP's structured payload is empty. Each section carries
+// an explicit "AI-generated from general knowledge — verify before IC"
+// disclaimer per CLAUDE.md.
+const aiMarketContext = require('./aiMarketContext.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
@@ -776,11 +783,11 @@ const getDealExportContext = async (dealId) => {
     residualLandValueCr: deal.residual_land_value_cr,
   });
 
-  // PR-NX41 + NX43 + NX44 + NX45 (2026-05-18): demographics + IC opinion
-  // + risk narrative + sensitivity narrative + document insights all run
-  // in parallel to keep export latency flat. Each .catch()es independently
-  // so one failing never aborts the others.
-  const [ai, demographics, riskNarrative, sensitivityNarrative, documentInsights] = await Promise.all([
+  // PR-NX41 + NX43 + NX44 + NX45 + NX67 (2026-05-18 → 2026-05-19): demographics
+  // + IC opinion + risk narrative + sensitivity narrative + document insights
+  // + AI market-context augment all run in parallel to keep export latency flat.
+  // Each .catch()es independently so one failing never aborts the others.
+  const [ai, demographics, riskNarrative, sensitivityNarrative, documentInsights, aiMarketContextNarratives] = await Promise.all([
     generateDealInsights({
       deal,
       ddCounts: ddSummary,
@@ -847,6 +854,33 @@ const getDealExportContext = async (dealId) => {
       findings: [],
       confidence: null,
     })),
+    // PR-NX67 (2026-05-19) — AI market-context augment layer. Fires the 5
+    // generators in parallel (Claude/OpenAI cascade) so when REDIP has no
+    // structured market data for a deal (typical for sourcing-stage deals
+    // like Jigani), the DOCX section renderers can fall back to specific,
+    // asset-class-aware AI prose with explicit "verify before IC" disclaimers
+    // — instead of showing the generic "Manual input required" placeholder.
+    // Returns an object keyed by section name. Disabled by env flag
+    // AI_MARKET_CONTEXT_ENABLED=false.
+    aiMarketContext.generateAllSections({
+      payload: {
+        locality: deal.micro_market || deal.city || null,
+        city: deal.city || null,
+        asset_class: deal.asset_class || null,
+        property_name: deal.property_name || deal.name || null,
+        micro_market: deal.micro_market || null,
+        zoning: deal.zoning || null,
+        deal_type: deal.deal_type || null,
+      },
+      dealId: deal.id,
+      organizationId: deal.organization_id || null,
+    }).catch((error) => {
+      // Never block the export. If the whole augment layer dies, just log
+      // and return all-unavailable envelopes so the renderers fall through
+      // to the existing "Manual input required" placeholders.
+      console.warn('[dealExport] aiMarketContext.generateAllSections failed:', error.message);
+      return {};
+    }),
   ]);
 
   return {
@@ -889,6 +923,19 @@ const getDealExportContext = async (dealId) => {
       // DOCX buildDemographics renders this if populated; falls back to
       // the "manual input required" placeholder otherwise.
       demographics,
+      // PR-NX67 (2026-05-19) — AI market-context augment narratives.
+      // Five envelopes (whyThisArea, demographics, jobGrowth,
+      // socialInfrastructure, supplyDemandPipeline) — each carries
+      // { available, paragraphs|paragraph|bullets|buckets, summary?, caution?,
+      //   provider, confidence, dataQuality, disclaimer, fallbackReason }.
+      // Consumed by the DOCX section builders as a SECOND-CHANCE FALLBACK
+      // when REDIP's structured payload (intelligence_briefs, infra_proximity,
+      // demographics fact-row) is empty for the deal.
+      //
+      // NEVER overrides verified structured data — only fills the gap when
+      // structured data is absent. Operator can disable globally via the
+      // AI_MARKET_CONTEXT_ENABLED=false env flag.
+      aiAugment: aiMarketContextNarratives || {},
       pricingGapPct:
         num(deal.selling_rate_per_sqft) && num(benchmarks.median_rate_per_sqft)
           ? round(
