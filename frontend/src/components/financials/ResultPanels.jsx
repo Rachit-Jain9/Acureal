@@ -7,6 +7,18 @@ import { Card } from '../../design-system';
 import { INCOME_CLASSES, HOSPITALITY_CLASSES, getModelAssetClass } from './fieldDefs';
 import { formatCrores, formatPct, formatINR, formatArea } from '../../utils/format';
 
+// PR-NX63 (2026-05-19) — format helpers passed to KPIStatCard so the
+// MetricTile useCountUp hook animates from previous → next over 600ms
+// every time the kernel recomputes. Pre-NX63 the call sites pre-formatted
+// the value to a string, so the count-up never fired on Calculate.
+// Mirrors the pattern PR-NX60 introduced for the dashboard KPI strip.
+const formatCroresWithDash = (n) => (Number.isFinite(n) ? formatCrores(n) : '-');
+const formatPctWithDash = (n) => (Number.isFinite(n) ? formatPct(n) : '-');
+const formatINRPerNightWithDash = (n) => (Number.isFinite(n) ? formatINR(n, 0) : '-');
+const formatYieldPctWithDash = (n) => (Number.isFinite(n) ? `${n.toFixed(2)}%` : '-');
+const formatEquityMultipleWithDash = (n) => (Number.isFinite(n) ? `${n.toFixed(2)}x` : '-');
+const formatDscrWithDash = (n) => (Number.isFinite(n) ? `${n.toFixed(2)}x` : '-');
+
 export function KPICards({ kpis, assetClass, inputs }) {
   const modelAssetClass = getModelAssetClass(assetClass);
   const isIncome = INCOME_CLASSES.has(modelAssetClass);
@@ -16,10 +28,10 @@ export function KPICards({ kpis, assetClass, inputs }) {
   if (isHospitality) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPIStatCard kpiKey="revPAR"    {...commonProps} title="RevPAR"         value={kpis.revPAR != null ? formatINR(kpis.revPAR, 0) : '-'} subtitle="₹/key/night (stabilized)"    icon={IndianRupee} />
-        <KPIStatCard kpiKey="noi"       {...commonProps} title="Stabilized NOI" value={formatCrores(kpis.noi)}                                subtitle="All keys · ₹ Cr / year"       icon={TrendingUp} />
-        <KPIStatCard kpiKey="irr"       {...commonProps} title="IRR"            value={formatPct(kpis.irr)}                                  subtitle="Unlevered, through exit"      icon={Percent} />
-        <KPIStatCard kpiKey="exitValue" {...commonProps} title="Exit Value"     value={formatCrores(kpis.exitValue)}                         subtitle="NOI / exit cap rate"          icon={DollarSign} />
+        <KPIStatCard kpiKey="revPAR"    {...commonProps} title="RevPAR"         value={kpis.revPAR}    format={formatINRPerNightWithDash} subtitle="₹/key/night (stabilized)" icon={IndianRupee} />
+        <KPIStatCard kpiKey="noi"       {...commonProps} title="Stabilized NOI" value={kpis.noi}       format={formatCroresWithDash}      subtitle="All keys · ₹ Cr / year"   icon={TrendingUp} />
+        <KPIStatCard kpiKey="irr"       {...commonProps} title="IRR"            value={kpis.irr}       format={formatPctWithDash}         subtitle="Unlevered, through exit"  icon={Percent} />
+        <KPIStatCard kpiKey="exitValue" {...commonProps} title="Exit Value"     value={kpis.exitValue} format={formatCroresWithDash}      subtitle="NOI / exit cap rate"      icon={DollarSign} />
       </div>
     );
   }
@@ -27,10 +39,10 @@ export function KPICards({ kpis, assetClass, inputs }) {
   if (isIncome) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPIStatCard kpiKey="noi"          {...commonProps} title="Stabilized NOI" value={formatCrores(kpis.noi)}                                                      subtitle="Net Operating Income / yr" icon={IndianRupee} />
-        <KPIStatCard kpiKey="yieldOnCost"  {...commonProps} title="Yield on Cost"  value={kpis.yieldOnCost != null ? `${kpis.yieldOnCost.toFixed(2)}%` : '-'}           subtitle="NOI / Total Dev. Cost"     icon={Percent} />
-        <KPIStatCard kpiKey="irr"          {...commonProps} title="IRR"            value={formatPct(kpis.irr)}                                                         subtitle="Unlevered, through exit"   icon={TrendingUp} />
-        <KPIStatCard kpiKey="exitValue"    {...commonProps} title="Exit Value"     value={formatCrores(kpis.exitValue)}                                                subtitle="At exit cap rate"          icon={DollarSign} />
+        <KPIStatCard kpiKey="noi"          {...commonProps} title="Stabilized NOI" value={kpis.noi}         format={formatCroresWithDash}    subtitle="Net Operating Income / yr" icon={IndianRupee} />
+        <KPIStatCard kpiKey="yieldOnCost"  {...commonProps} title="Yield on Cost"  value={kpis.yieldOnCost} format={formatYieldPctWithDash}  subtitle="NOI / Total Dev. Cost"     icon={Percent} />
+        <KPIStatCard kpiKey="irr"          {...commonProps} title="IRR"            value={kpis.irr}         format={formatPctWithDash}       subtitle="Unlevered, through exit"   icon={TrendingUp} />
+        <KPIStatCard kpiKey="exitValue"    {...commonProps} title="Exit Value"     value={kpis.exitValue}   format={formatCroresWithDash}    subtitle="At exit cap rate"          icon={DollarSign} />
       </div>
     );
   }
@@ -38,12 +50,12 @@ export function KPICards({ kpis, assetClass, inputs }) {
   const hasDscr = kpis.dscr != null;
   return (
     <div className={`grid grid-cols-2 ${hasDscr ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
-      <KPIStatCard kpiKey="irr"            {...commonProps} title="IRR"             value={formatPct(kpis.irr)}                                                subtitle="Internal Rate of Return"     icon={TrendingUp} />
-      <KPIStatCard kpiKey="npv"            {...commonProps} title="NPV"             value={formatCrores(kpis.npv)}                                             subtitle="Net Present Value"           icon={IndianRupee} />
-      <KPIStatCard kpiKey="equityMultiple" {...commonProps} title="Equity Multiple" value={kpis.equityMultiple != null ? `${kpis.equityMultiple.toFixed(2)}x` : '-'} subtitle="Return on equity invested" icon={DollarSign} />
-      <KPIStatCard kpiKey="rlv"            {...commonProps} title="RLV"             value={formatCrores(kpis.rlv)}                                             subtitle="Residual Land Value"         icon={Percent} />
+      <KPIStatCard kpiKey="irr"            {...commonProps} title="IRR"             value={kpis.irr}            format={formatPctWithDash}             subtitle="Internal Rate of Return"      icon={TrendingUp} />
+      <KPIStatCard kpiKey="npv"            {...commonProps} title="NPV"             value={kpis.npv}            format={formatCroresWithDash}          subtitle="Net Present Value"            icon={IndianRupee} />
+      <KPIStatCard kpiKey="equityMultiple" {...commonProps} title="Equity Multiple" value={kpis.equityMultiple} format={formatEquityMultipleWithDash}  subtitle="Return on equity invested"    icon={DollarSign} />
+      <KPIStatCard kpiKey="rlv"            {...commonProps} title="RLV"             value={kpis.rlv}            format={formatCroresWithDash}          subtitle="Residual Land Value"          icon={Percent} />
       {hasDscr && (
-        <KPIStatCard kpiKey="dscr"         {...commonProps} title="DSCR"            value={`${kpis.dscr.toFixed(2)}x`}                                         subtitle="Revenue / total debt service" icon={Percent} />
+        <KPIStatCard kpiKey="dscr"         {...commonProps} title="DSCR"            value={kpis.dscr}           format={formatDscrWithDash}            subtitle="Revenue / total debt service" icon={Percent} />
       )}
     </div>
   );
