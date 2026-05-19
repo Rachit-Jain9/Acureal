@@ -39,30 +39,20 @@ import {
   PROPERTY_TYPE_LABELS,
 } from '../utils/format';
 import { buildLandPricingPreview } from '../utils/landPricing';
+// PR-NX59 (2026-05-19) — single source of truth for taxonomies shared
+// across the create form, the deals list chip column, and the deal
+// detail edit form. Removes 4 duplicate copies (asset_class in DealsPage
+// + DealDetailPage, deal_structure in DealsPage + DealDetailPage) and
+// guarantees the create-form <option> list stays in lock-step with the
+// list-chip labels. Foundation for future @redip/real-estate-ontology
+// adoption (Strategic Review §VI top-1).
+import { ASSET_CLASS_CONFIG, ASSET_CLASS_LABELS as SHARED_ASSET_CLASS_LABELS } from '../utils/assetClasses';
+import { DEAL_STRUCTURE_CONFIG, DEAL_STRUCTURE_LABELS_COMPACT } from '../utils/dealStructures';
 
-const ASSET_CLASS_LABELS = {
-  residential_apartments: 'Residential Apts',
-  plotted_development: 'Plotted Dev',
-  villas: 'Villas',
-  commercial_office: 'Commercial Office',
-  retail: 'Retail',
-  industrial_warehousing: 'Industrial/WH',
-  hospitality: 'Hospitality',
-  mixed_use: 'Mixed Use',
-  raw_land: 'Raw Land',
-  redevelopment: 'Redevelopment',
-};
-
-const DEAL_STRUCTURE_LABELS = {
-  outright: 'Outright',
-  jv: 'JV',
-  jda: 'JDA',
-  revenue_share: 'Rev Share',
-  area_share: 'Area Share',
-  profit_share: 'Profit Share',
-  ground_lease: 'Ground Lease',
-  hybrid: 'Hybrid',
-};
+// Local aliases preserve readability at the existing call sites; both
+// values come from the shared utility files.
+const ASSET_CLASS_LABELS = SHARED_ASSET_CLASS_LABELS;
+const DEAL_STRUCTURE_LABELS = DEAL_STRUCTURE_LABELS_COMPACT;
 
 const INITIAL_FORM = {
   propertyId: '',
@@ -1005,29 +995,23 @@ export default function DealsPage() {
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Asset Class</label>
                   <select name="assetClass" value={form.assetClass} onChange={handleFormChange} className="input w-full">
-                    <option value="residential_apartments">Residential Apartments</option>
-                    <option value="plotted_development">Plotted Development</option>
-                    <option value="villas">Villas</option>
-                    <option value="commercial_office">Commercial Office</option>
-                    <option value="retail">Retail</option>
-                    <option value="industrial_warehousing">Industrial / Warehousing</option>
-                    <option value="hospitality">Hospitality</option>
-                    <option value="mixed_use">Mixed Use</option>
-                    <option value="raw_land">Raw Land</option>
-                    <option value="redevelopment">Redevelopment</option>
+                    {/* PR-NX59: render directly from the shared
+                        ASSET_CLASS_CONFIG so future ontology updates land
+                        in one place. */}
+                    {ASSET_CLASS_CONFIG.map((ac) => (
+                      <option key={ac.value} value={ac.value}>{ac.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="col-span-2 md:col-span-1">
                   <label className="block text-sm font-medium text-content-secondary mb-1">Deal Structure</label>
                   <select name="dealStructure" value={form.dealStructure} onChange={handleFormChange} className="input w-full">
-                    <option value="outright">Outright Purchase</option>
-                    <option value="jv">JV (Joint Venture)</option>
-                    <option value="jda">JDA (Development Agreement)</option>
-                    <option value="revenue_share">Revenue Share</option>
-                    <option value="area_share">Area Share</option>
-                    <option value="profit_share">Profit Share</option>
-                    <option value="ground_lease">Ground Lease</option>
-                    <option value="hybrid">Hybrid</option>
+                    {/* PR-NX59: render directly from the shared
+                        DEAL_STRUCTURE_CONFIG so the create form, edit form,
+                        and list chips stay in lock-step. */}
+                    {DEAL_STRUCTURE_CONFIG.map((ds) => (
+                      <option key={ds.value} value={ds.value}>{ds.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
