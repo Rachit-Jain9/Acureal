@@ -10,6 +10,12 @@ import {
   useDealEvents,
   useDealDocuments,
   useDealActivities,
+  useDealDDItems,
+  useDealDDScore,
+  useDealRiskScore,
+  useDealApprovals,
+  useDealFinancialSummary,
+  useDealReadiness,
 } from '../useDealContext';
 
 // Mock the underlying network hook so the provider can render synchronously
@@ -75,14 +81,46 @@ describe('useDealContext', () => {
   });
 });
 
-describe('selector hooks', () => {
+describe('selector hooks — match backend dealWorkspace.service.js shape (PR-NX62)', () => {
+  // This shape mirrors the actual `GET /api/deals/:id/workspace` response.
+  // See backend/src/services/dealWorkspace.service.js getDealWorkspace().
+  // Pre-NX62 the tests used a synthetic shape that didn't match — so the
+  // selectors passed tests but silently returned null/[] in production.
+  const kpis = { irr: 18, npv: 12.5, dscr: 1.45 };
+  const ddItems = [{ id: 'dd-a', item_type: 'title_deed' }];
+  const ddScore = { total_required: 12, completed_required: 8 };
+  const riskFlags = [{ id: 'flag-a', severity: 'high' }];
+  const riskScore = { critical: 0, high: 1, medium: 2 };
+  const auditEvents = [{ id: 'event-a', event_type: 'calculate_and_save' }];
+  const documentsArray = [{ id: 'doc-a', name: 'EC.pdf' }];
+  const activities = [{ id: 'act-a', activity_type: 'note' }];
+  const approvals = [{ id: 'app-a', authority: 'BBMP' }];
+  const readiness = { summary: 'IC-ready', nextSteps: ['Schedule IC'] };
   const workspace = {
     deal: { id: 'deal-1', name: 'Whitefield acres' },
-    financials: { kpis: { irr_pct: 18, npv_cr: 12.5 } },
-    risk_flags: [{ id: 'flag-a', severity: 'high' }],
-    events: [{ id: 'event-a', event_type: 'calculate_and_save' }],
-    documents: [{ id: 'doc-a', name: 'EC.pdf' }],
-    activities: [{ id: 'act-a', activity_type: 'note' }],
+    financial: {
+      summary: {
+        model_params: { kpis },
+        irr_pct: 18,
+      },
+      scenarios: [],
+      graph: null,
+      auditEvents,
+    },
+    dd: {
+      items: ddItems,
+      score: ddScore,
+    },
+    risk: {
+      flags: riskFlags,
+      score: riskScore,
+    },
+    approvals,
+    documents: { documents: documentsArray, grouped: {} },
+    activities,
+    waterfall: { jda: null, jv: null },
+    readiness,
+    generatedAt: '2026-05-19T08:00:00Z',
   };
 
   it('useDealRecord returns the deal slice', () => {
@@ -92,39 +130,97 @@ describe('selector hooks', () => {
     expect(result.current).toEqual(workspace.deal);
   });
 
-  it('useDealKpis returns the kpis slice', () => {
+  it('useDealKpis returns the kernel kpis from financial.summary.model_params.kpis', () => {
     const { result } = renderHook(() => useDealKpis(), {
       wrapper: buildWrapper(workspace),
     });
-    expect(result.current).toEqual(workspace.financials.kpis);
+    expect(result.current).toEqual(kpis);
   });
 
-  it('useDealRedFlags returns the risk_flags array', () => {
+  it('useDealRedFlags returns workspace.risk.flags', () => {
     const { result } = renderHook(() => useDealRedFlags(), {
       wrapper: buildWrapper(workspace),
     });
-    expect(result.current).toEqual(workspace.risk_flags);
+    expect(result.current).toEqual(riskFlags);
   });
 
-  it('useDealEvents returns the events array', () => {
+  it('useDealRedFlags falls back to deal.risk_flags when risk slice missing', () => {
+    // Defensive fallback for partially-shaped workspace.
+    const partial = { deal: { id: 'deal-1', risk_flags: riskFlags } };
+    const { result } = renderHook(() => useDealRedFlags(), {
+      wrapper: buildWrapper(partial),
+    });
+    expect(result.current).toEqual(riskFlags);
+  });
+
+  it('useDealEvents returns workspace.financial.auditEvents', () => {
     const { result } = renderHook(() => useDealEvents(), {
       wrapper: buildWrapper(workspace),
     });
-    expect(result.current).toEqual(workspace.events);
+    expect(result.current).toEqual(auditEvents);
   });
 
-  it('useDealDocuments returns the documents array', () => {
+  it('useDealDocuments unwraps the {documents, grouped} envelope', () => {
     const { result } = renderHook(() => useDealDocuments(), {
       wrapper: buildWrapper(workspace),
     });
-    expect(result.current).toEqual(workspace.documents);
+    expect(result.current).toEqual(documentsArray);
+  });
+
+  it('useDealDocuments accepts a flat array for backward compat', () => {
+    const { result } = renderHook(() => useDealDocuments(), {
+      wrapper: buildWrapper({ documents: documentsArray }),
+    });
+    expect(result.current).toEqual(documentsArray);
   });
 
   it('useDealActivities returns the activities array', () => {
     const { result } = renderHook(() => useDealActivities(), {
       wrapper: buildWrapper(workspace),
     });
-    expect(result.current).toEqual(workspace.activities);
+    expect(result.current).toEqual(activities);
+  });
+
+  it('useDealDDItems returns workspace.dd.items', () => {
+    const { result } = renderHook(() => useDealDDItems(), {
+      wrapper: buildWrapper(workspace),
+    });
+    expect(result.current).toEqual(ddItems);
+  });
+
+  it('useDealDDScore returns workspace.dd.score', () => {
+    const { result } = renderHook(() => useDealDDScore(), {
+      wrapper: buildWrapper(workspace),
+    });
+    expect(result.current).toEqual(ddScore);
+  });
+
+  it('useDealRiskScore returns workspace.risk.score', () => {
+    const { result } = renderHook(() => useDealRiskScore(), {
+      wrapper: buildWrapper(workspace),
+    });
+    expect(result.current).toEqual(riskScore);
+  });
+
+  it('useDealApprovals returns workspace.approvals', () => {
+    const { result } = renderHook(() => useDealApprovals(), {
+      wrapper: buildWrapper(workspace),
+    });
+    expect(result.current).toEqual(approvals);
+  });
+
+  it('useDealFinancialSummary returns workspace.financial.summary', () => {
+    const { result } = renderHook(() => useDealFinancialSummary(), {
+      wrapper: buildWrapper(workspace),
+    });
+    expect(result.current).toEqual(workspace.financial.summary);
+  });
+
+  it('useDealReadiness returns workspace.readiness with safe defaults', () => {
+    const { result } = renderHook(() => useDealReadiness(), {
+      wrapper: buildWrapper(workspace),
+    });
+    expect(result.current).toEqual(readiness);
   });
 
   it('selector hooks default to safe empty values when workspace is null', () => {
@@ -135,5 +231,14 @@ describe('selector hooks', () => {
     expect(renderHook(() => useDealEvents(), { wrapper }).result.current).toEqual([]);
     expect(renderHook(() => useDealDocuments(), { wrapper }).result.current).toEqual([]);
     expect(renderHook(() => useDealActivities(), { wrapper }).result.current).toEqual([]);
+    expect(renderHook(() => useDealDDItems(), { wrapper }).result.current).toEqual([]);
+    expect(renderHook(() => useDealDDScore(), { wrapper }).result.current).toBeNull();
+    expect(renderHook(() => useDealRiskScore(), { wrapper }).result.current).toBeNull();
+    expect(renderHook(() => useDealApprovals(), { wrapper }).result.current).toEqual([]);
+    expect(renderHook(() => useDealFinancialSummary(), { wrapper }).result.current).toBeNull();
+    expect(renderHook(() => useDealReadiness(), { wrapper }).result.current).toEqual({
+      summary: null,
+      nextSteps: [],
+    });
   });
 });

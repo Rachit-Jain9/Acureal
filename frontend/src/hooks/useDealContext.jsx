@@ -65,6 +65,26 @@ export function useDealContext() {
 // ── Selector hooks ─────────────────────────────────────────────────────────
 // Each returns a stable reference via `useMemo` so a consumer rerenders
 // only when its own slice changes.
+//
+// PR-NX62 (2026-05-19) — CONTRACT ALIGNMENT WITH BACKEND.
+// Pre-NX62 the selectors read fields like `workspace.financials.kpis`,
+// `workspace.risk_flags`, `workspace.events`, `workspace.documents` (the
+// `documents` array directly). NONE of those paths existed on the actual
+// `GET /api/deals/:id/workspace` response — the backend returns:
+//
+//   workspace.financial.summary.model_params.kpis  (NOT workspace.financials.kpis)
+//   workspace.risk.flags                            (NOT workspace.risk_flags)
+//   workspace.financial.auditEvents                 (NOT workspace.events)
+//   workspace.documents.documents                   (an object wrapping the array,
+//                                                    NOT a flat array)
+//
+// As a result, every consumer of these selectors silently received
+// `null` or `[]` in production while the tests passed because the test
+// mocks used the SAME wrong shape the selectors expected. This PR fixes
+// the contract and updates the tests to mock the actual backend shape.
+//
+// Source of truth for the response shape: `backend/src/services/dealWorkspace.service.js`
+// `getDealWorkspace` — keep this comment in sync if that file changes.
 
 export function useDealRecord() {
   const { workspace } = useDealContext();
@@ -73,25 +93,100 @@ export function useDealRecord() {
 
 export function useDealKpis() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.financials?.kpis || null, [workspace?.financials?.kpis]);
+  return useMemo(
+    () => workspace?.financial?.summary?.model_params?.kpis || null,
+    [workspace?.financial?.summary?.model_params?.kpis],
+  );
 }
 
+/**
+ * Returns the deal's risk flags array. Source: workspace.risk.flags
+ * (composed from `deal.risk_flags` server-side; see dealWorkspace.service.js).
+ * Falls back to the legacy `deal.risk_flags` shape for defensive read so a
+ * partially-shaped workspace (e.g. error path that filled in only the deal)
+ * still surfaces flags.
+ */
 export function useDealRedFlags() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.risk_flags || [], [workspace?.risk_flags]);
+  return useMemo(
+    () => workspace?.risk?.flags || workspace?.deal?.risk_flags || [],
+    [workspace?.risk?.flags, workspace?.deal?.risk_flags],
+  );
 }
 
+/**
+ * Returns the kernel audit-event tail. Source: workspace.financial.auditEvents
+ * (server limit ACTIVITY/EVENT cap; see dealWorkspace.service.js).
+ */
 export function useDealEvents() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.events || [], [workspace?.events]);
+  return useMemo(
+    () => workspace?.financial?.auditEvents || [],
+    [workspace?.financial?.auditEvents],
+  );
 }
 
+/**
+ * Returns the documents array. Source: workspace.documents.documents
+ * (server wraps the array in `{documents, grouped}` for easy access to
+ * both views — this selector returns the flat array only).
+ */
 export function useDealDocuments() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.documents || [], [workspace?.documents]);
+  return useMemo(() => {
+    const docs = workspace?.documents;
+    if (Array.isArray(docs)) return docs;
+    if (Array.isArray(docs?.documents)) return docs.documents;
+    return [];
+  }, [workspace?.documents]);
 }
 
 export function useDealActivities() {
   const { workspace } = useDealContext();
   return useMemo(() => workspace?.activities || [], [workspace?.activities]);
+}
+
+// PR-NX62 — additional Phase A selectors that round out the workspace
+// payload. These mirror the backend shape exactly so future tab migrations
+// (Phase A1 — DocumentsTab, DDTab, RiskTab, ActivityTab) can drop their
+// per-domain useQuery hooks in favor of these.
+
+/**
+ * Returns the DD items array + the score envelope. Source:
+ * workspace.dd.items + workspace.dd.score.
+ */
+export function useDealDDItems() {
+  const { workspace } = useDealContext();
+  return useMemo(() => workspace?.dd?.items || [], [workspace?.dd?.items]);
+}
+
+export function useDealDDScore() {
+  const { workspace } = useDealContext();
+  return useMemo(() => workspace?.dd?.score || null, [workspace?.dd?.score]);
+}
+
+export function useDealRiskScore() {
+  const { workspace } = useDealContext();
+  return useMemo(() => workspace?.risk?.score || null, [workspace?.risk?.score]);
+}
+
+export function useDealApprovals() {
+  const { workspace } = useDealContext();
+  return useMemo(() => workspace?.approvals || [], [workspace?.approvals]);
+}
+
+export function useDealFinancialSummary() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.financial?.summary || null,
+    [workspace?.financial?.summary],
+  );
+}
+
+export function useDealReadiness() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.readiness || { summary: null, nextSteps: [] },
+    [workspace?.readiness],
+  );
 }
