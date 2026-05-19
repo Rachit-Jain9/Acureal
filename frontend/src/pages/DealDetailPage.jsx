@@ -34,6 +34,13 @@ import {
   PRIORITY_CONFIG,
   DEAL_TYPE_LABELS,
 } from '../utils/format';
+// PR-NX59 (2026-05-19) — shared taxonomy source. Replaces the local
+// DEAL_STRUCTURE_LABELS + ASSET_CLASS_LABELS constants that used to
+// live below; values now match exactly what the create form in
+// DealsPage renders, so a deal edited here can never have a structure
+// label that mismatches what was offered at creation time.
+import { ASSET_CLASS_LABELS as SHARED_ASSET_CLASS_LABELS } from '../utils/assetClasses';
+import { DEAL_STRUCTURE_LABELS as SHARED_DEAL_STRUCTURE_LABELS } from '../utils/dealStructures';
 
 // Tab components
 import OverviewTab from '../components/deal/OverviewTab';
@@ -61,29 +68,10 @@ const TABS = [
   { id: 'audit',      label: 'Audit' },
 ];
 
-const DEAL_STRUCTURE_LABELS = {
-  outright:       'Outright Purchase',
-  jv:             'JV (Joint Venture)',
-  jda:            'JDA (Dev Agreement)',
-  revenue_share:  'Revenue Share',
-  area_share:     'Area Share',
-  profit_share:   'Profit Share',
-  ground_lease:   'Ground Lease',
-  hybrid:         'Hybrid',
-};
-
-const ASSET_CLASS_LABELS = {
-  residential_apartments: 'Residential Apts',
-  plotted_development:    'Plotted Development',
-  villas:                 'Villas',
-  commercial_office:      'Commercial Office',
-  retail:                 'Retail',
-  industrial_warehousing: 'Industrial / WH',
-  hospitality:            'Hospitality',
-  mixed_use:              'Mixed Use',
-  raw_land:               'Raw Land',
-  redevelopment:          'Redevelopment',
-};
+// PR-NX59 — local aliases preserve readability at the existing call sites;
+// values come from the shared utility files (single source of truth).
+const DEAL_STRUCTURE_LABELS = SHARED_DEAL_STRUCTURE_LABELS;
+const ASSET_CLASS_LABELS = SHARED_ASSET_CLASS_LABELS;
 
 const buildEditForm = (deal) => ({
   name:               deal.name || '',
