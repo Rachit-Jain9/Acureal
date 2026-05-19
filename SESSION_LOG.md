@@ -4,6 +4,91 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-19 (mid-day, operator-prompted) — BETA per-user quota gate on the AI augment layer (PR #426)
+
+Operator follow-up to PR-NX67 (the AI augment layer): "Or can we keep it one free underwriting report per user for BETA stage? I assume it is going to cost credits so keep it one per user except for me (I am admin)." Attached a Supabase screenshot confirming rachitj579@gmail.com is `role='admin'`.
+
+### What shipped — PR #426 (PR-NX69)
+
+Per-user quota gate on the AI augment layer. Every regular user gets ONE free augmented report during BETA; admins (role='admin' OR 'owner') get unlimited.
+
+**Architecture (3 layers — single concern each):**
+
+1. **Migration** `database/migrations/20260604_ai_augment_usage_quota.sql`
+   - Adds 2 columns to `users`: `ai_augment_reports_used` (INTEGER NOT NULL DEFAULT 0) + `ai_augment_last_used_at` (TIMESTAMP WITH TIME ZONE).
+   - Backfills every existing row to 0 explicitly so NULL-handling bugs surface immediately.
+   - Safe to re-run (uses IF NOT EXISTS).
+   - **Operator must apply via Supabase SQL editor before this code goes live.**
+
+2. **Entitlement service** `backend/src/services/aiAugmentEntitlement.service.js`
+   - `checkEntitlement({ userId, userRole })` returns 6 possible envelopes: admin (unlimited), under_limit (with remaining count), quota_exceeded, unauthenticated, user_not_found, check_failed.
+   - Admin/owner short-circuits before any DB read (hot-path optimization).
+   - **Defensive DB re-check**: if the DB row says admin but the JWT says analyst (stale token after a role promotion), we honor the DB.
+   - `recordUsage({ userId, userRole })` increments counter + bumps timestamp. Admins never recorded (avoids miscount if role flips back to analyst later).
+   - Never throws. Hot-path safe.
+
+3. **Hook + Renderer**
+   - `dealExport.service.getDealExportContext(dealId, options)` — new `userId` + `userRole` options. Whole augment chain is now wrapped: check entitlement → call augment → record usage ONLY if at least one section produced content.
+   - **Outage protection**: if Claude is down and all envelopes return unavailable, NO counter bump. The user is not punished for our outage.
+   - `buildReport.js` — new `augmentQuotaCallout(envelope)` helper renders a 2-paragraph "PREMIUM AI INSIGHTS · QUOTA EXCEEDED" amber block when `envelope.reason === 'quota_exceeded'`. Wired into all 5 augmented sections (Why This Area, Demographics, Job Growth, Social Infra, Supply Pipeline).
+   - All 4 export.routes.js call sites updated to pass `{ userId: req.user?.id, userRole: req.user?.role }`.
+
+### Outcome for the operator
+
+**For rachitj579@gmail.com (role=admin):**
+- Nothing changes. Always gets the full AI-augmented report.
+
+**For any non-admin user:**
+- First report → augmented as before. Counter goes from 0 → 1.
+- Second+ report → 5 AI sections show: *"PREMIUM AI INSIGHTS · QUOTA EXCEEDED — You have used your 1 of 1 free underwriting reports. To unlock more AI-generated underwriting reports, contact your REDIP administrator."*
+- Everything else in the report (financials, comps, risks, DD, approvals) unaffected.
+
+### Operator manual step — REQUIRED before this goes live
+
+🌐 **Open** https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new
+
+📋 **Copy ALL of this and paste into the big text box:**
+
+```sql
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS ai_augment_reports_used INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS ai_augment_last_used_at TIMESTAMP WITH TIME ZONE;
+
+UPDATE users
+SET ai_augment_reports_used = 0
+WHERE ai_augment_reports_used IS NULL;
+```
+
+Click the green **Run** button (bottom-right of the editor).
+
+✅ **Success signal**: green "Success. No rows returned" message appears.
+
+❌ **If you see a red error** — paste the error text back to chat.
+
+(Without this migration, the augment layer silently fails with errors logged to Vercel functions. The rest of the export still works; the 5 AI sections just stay as the original "Manual input required" placeholders.)
+
+### Tests
+
+| Suite | Start | End | Δ |
+|---|---:|---:|---:|
+| aiAugmentEntitlement.service.test.js (NEW) | 0 | 17 | +17 |
+| All 14 export suites | 476 | 476 | 0 |
+| **Backend TOTAL** | **2,066** | **2,083** | **+17** |
+
+No regressions. All 6 modified files pass syntax check.
+
+### Outstanding follow-ups (in priority order)
+
+1. **Per-org pool / monthly reset** — when BETA pricing graduates beyond "1 per user forever," swap the column counter for a dedicated `ai_augment_usage` table with org_id + period_start. Same `checkEntitlement` / `recordUsage` API — internal change only.
+2. **Admin "usage dashboard"** — show per-user counters in /dashboard/admin so the operator can spot abuse patterns or grant additional quota to specific users.
+3. **Operator-facing toggle** on the Reports page — "Generate with AI market narratives" checkbox so users can opt OUT of consuming their quota if they only need the structured report.
+4. **PPTX + XLSX cross-product parity** for the 5 new augment narratives + quota callout (PPTX got 3 narrative slides in NX54; XLSX got AI Synthesis sheet in NX57; both need the 5 new augment sections + quota-exceeded messaging).
+5. **Email notification** when a user hits their quota — gentle nudge to contact admin.
+
+---
+
 ## 2026-05-19 (mid-day, operator-prompted) — AI market-context augment layer for the 5 placeholder DOCX sections (PR #424)
 
 Operator opened the Jigani Word report and flagged that 5 sections were showing "Manual input required" / "could not be generated" placeholders: Why This Area, Demographics, Job Growth & Micro-Market, Social Infrastructure, Supply & Demand Pipeline. Wanted to use AI to fill these — explicitly framed as the start of a premium AI tier ("We will charge users for this").
