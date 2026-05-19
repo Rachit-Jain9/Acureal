@@ -30,11 +30,40 @@ const isGoogleConfigured = () => {
   return key && !/your[_-]/i.test(key) && !key.startsWith('[') && key.startsWith('AIza');
 };
 
+// PR-NX78 (2026-05-19) — Dedupe address parts before sending to Google.
+//
+// Bug: parcelContext.service.js calls
+//   geocodeAddress(trimmedAddress, 'Bengaluru', 'Karnataka', null)
+// where `trimmedAddress` is the user-typed string which OFTEN already
+// includes ", Bengaluru, Karnataka 560105" at the end. The previous
+// `[address, city, state, pincode, 'India'].join(', ')` then produced
+// "..., Jigani, Bengaluru, Karnataka 560105, Bengaluru, Karnataka, India"
+// with duplicated tokens — Google Geocoding returns a low-confidence
+// random match (Jigani diagnostic: 0.3 approximate to "ITI Colony" in
+// north Bengaluru) because the parser gets confused by the redundancy.
+//
+// Fix: only append city/state/pincode/country if they're not already
+// substrings of the address (case-insensitive). The clean
+// non-redundant address is what Google Places returns 0.85 verified on.
+const buildFullAddress = (address, city, state, pincode) => {
+  const baseAddress = String(address || '').trim();
+  const baseLower = baseAddress.toLowerCase();
+  const candidates = [
+    baseAddress,
+    city && !baseLower.includes(String(city).toLowerCase()) ? city : null,
+    state && !baseLower.includes(String(state).toLowerCase()) ? state : null,
+    pincode && !baseLower.includes(String(pincode).toLowerCase()) ? pincode : null,
+    !baseLower.includes('india') ? 'India' : null,
+  ];
+  return candidates.filter(Boolean).join(', ');
+};
+
 // ─── GOOGLE MAPS ──────────────────────────────────────────────────────────────
 
 const geocodeWithGoogle = async (address, city, state, pincode) => {
-  const parts = [address, city, state, pincode, 'India'].filter(Boolean);
-  const fullAddress = parts.join(', ');
+  // PR-NX78: use the dedupe helper so we don't send Google a redundant
+  // "..., Jigani, Bengaluru, Karnataka 560105, Bengaluru, Karnataka, India" string.
+  const fullAddress = buildFullAddress(address, city, state, pincode);
 
   if (!fullAddress || fullAddress === 'India') {
     return { found: false, status: 'insufficient_data', message: 'Insufficient address data to geocode.' };
@@ -143,8 +172,7 @@ const geocodeWithGoogle = async (address, city, state, pincode) => {
 // address, which we map to the same shape geocodeWithGoogle returns so
 // the orchestrator can treat the result identically.
 const geocodeWithGooglePlaces = async (address, city, state, pincode) => {
-  const parts = [address, city, state, pincode, 'India'].filter(Boolean);
-  const fullAddress = parts.join(', ');
+  const fullAddress = buildFullAddress(address, city, state, pincode);
 
   if (!fullAddress || fullAddress === 'India') {
     return { found: false, status: 'insufficient_data', message: 'Insufficient address data to geocode.', provider: 'google_places' };
@@ -208,8 +236,7 @@ const geocodeWithGooglePlaces = async (address, city, state, pincode) => {
 // ─── NOMINATIM (FALLBACK) ─────────────────────────────────────────────────────
 
 const geocodeWithNominatim = async (address, city, state, pincode) => {
-  const parts = [address, city, state, pincode, 'India'].filter(Boolean);
-  const fullAddress = parts.join(', ');
+  const fullAddress = buildFullAddress(address, city, state, pincode);
 
   if (!fullAddress || fullAddress === 'India') {
     return { found: false, status: 'insufficient_data', message: 'Insufficient address data to geocode.' };
@@ -341,82 +368,126 @@ const writeToCache = async (cacheKey, result) => {
 
 // ─── PUBLIC API ───────────────────────────────────────────────────────────────
 
+// PR-NX78 (2026-05-19) — Geocoder cascade rewrite.
+//
+// What changed and why:
+//   - OLD order was Geocoding → Places → Nominatim. That works for clean
+//     street addresses but fails on Indian apartment/landmark/locality
+//     strings like "Thyme Park Apartments, Jigani" — Google Geocoding
+//     returns a low-confidence approximate match (Jigani diagnostic: 0.3
+//     to "ITI Colony, north Bengaluru"), and the fallback logic was too
+//     conservative ("place is verified" required) so the bad Geocoding
+//     result often won.
+//   - NEW order is Places → Geocoding → Nominatim. Places Text Search
+//     excels at Indian apartment/landmark addresses (diagnostic on Jigani:
+//     0.85 verified at the exact parcel). Geocoding becomes the second
+//     try (good for clean street addresses with sublocality/route types).
+//     Nominatim stays as last-resort.
+//   - Every branch logs one structured line ("[Geocode orchestrator] …")
+//     so Vercel function logs show the full decision path. If something
+//     still returns Nominatim, the logs reveal exactly why.
 const geocodeAddress = async (address, city, state, pincode) => {
   const cacheKey = normalizeCacheKey(address, city, state, pincode);
 
-  // Try cache first
   const cached = await readFromCache(cacheKey);
-  if (cached) return cached;
-
-  // Live geocode — provider chain:
-  //   1. Google Geocoding API (best for street addresses; needs Geocoding
-  //      API enabled in GCP)
-  //   2. Google Places Text Search (best for apartment/landmark/locality;
-  //      needs Places API enabled in GCP — likely already enabled because
-  //      the autocomplete proxy uses it)
-  //   3. Nominatim (free, rate-limited, last resort)
-  //
-  // Places is tried as a second-chance in TWO conditions:
-  //   (a) Geocoding returned null (denied / errored / not enabled)
-  //   (b) Geocoding returned a low-confidence approximate match — this
-  //       happens for apartment-name addresses (e.g. "Thyme Park
-  //       Apartments Jigani" geocodes to just "Jigani" at 0.45). Places
-  //       Text Search frequently resolves these to the specific
-  //       establishment with 0.85 confidence. The Jigani regression
-  //       (2026-05-18) motivated this second branch.
-  let result;
-  if (isGoogleConfigured()) {
-    result = await geocodeWithGoogle(address, city, state, pincode);
-    const geocodingWasApproximate =
-      result && result.found === true && (
-        result.status === 'approximate' ||
-        (typeof result.confidence === 'number' && result.confidence < 0.7)
-      );
-
-    if (result === null || geocodingWasApproximate) {
-      const placesResult = await geocodeWithGooglePlaces(address, city, state, pincode);
-      if (placesResult?.found) {
-        // Prefer Places ONLY if it's strictly better than what Geocoding
-        // gave us. Verified (establishment) beats Geocoding's approximate;
-        // a Places `geocode`-typed 0.65 is a wash with Geocoding's 0.45
-        // city-fallback — only swap when Places is clearly verified or
-        // when Geocoding returned null.
-        const placesIsBetter =
-          result === null ||
-          placesResult.status === 'verified' ||
-          (typeof placesResult.confidence === 'number' &&
-           typeof result.confidence === 'number' &&
-           placesResult.confidence > result.confidence + 0.1);
-
-        if (placesIsBetter) {
-          result = placesResult;
-        }
-        // else: stick with Geocoding's approximate result — the gate
-        // banner in parcelContext.service will fire, the operator
-        // switches to coordinate input.
-      } else if (result === null) {
-        // Both Google paths failed. Fall through to Nominatim — but
-        // keep the Places failure message visible so the cached result
-        // explains WHY we ended up at Nominatim.
-        result = await geocodeWithNominatim(address, city, state, pincode);
-        if (result && placesResult?.message && !placesResult.found) {
-          // Annotate the Nominatim result with the upstream Google
-          // failure context. The parcelContext.service surfaces this
-          // in the AutoFillCard so the operator sees the root cause.
-          result.upstream_failure = placesResult.message;
-        }
-      }
-      // else: Geocoding's approximate result stays as the winner; Places
-      // didn't improve on it (or also failed). Gate will fire downstream.
-    }
-  } else {
-    result = await geocodeWithNominatim(address, city, state, pincode);
+  if (cached) {
+    console.log(
+      '[Geocode orchestrator] cache_hit',
+      JSON.stringify({ cacheKey, provider: cached.provider, confidence: cached.confidence, status: cached.status }),
+    );
+    return cached;
   }
 
-  // Cache the result (even failures, to avoid hammering the API)
-  if (result) await writeToCache(cacheKey, result);
+  console.log(
+    '[Geocode orchestrator] cache_miss; google_configured=',
+    isGoogleConfigured(),
+  );
 
-  return result;
+  if (!isGoogleConfigured()) {
+    const nominatim = await geocodeWithNominatim(address, city, state, pincode);
+    console.log(
+      '[Geocode orchestrator] no_google_falling_to_nominatim',
+      JSON.stringify({ found: nominatim?.found, confidence: nominatim?.confidence, status: nominatim?.status }),
+    );
+    if (nominatim) await writeToCache(cacheKey, nominatim);
+    return nominatim;
+  }
+
+  // ── Step 1: Google Places Text Search (PRIMARY for India parcels) ─────
+  const placesResult = await geocodeWithGooglePlaces(address, city, state, pincode);
+  console.log(
+    '[Geocode orchestrator] step=1_places',
+    JSON.stringify({
+      found: placesResult?.found,
+      confidence: placesResult?.confidence,
+      status: placesResult?.status,
+      placeId: placesResult?.placeId,
+      types: placesResult?.place_types,
+    }),
+  );
+
+  // Accept a Places result that's verified OR has confidence ≥ 0.7.
+  // Places `establishment` hits are 0.85 → reliable. `geocode` hits at
+  // 0.65 still beat Nominatim's 0.45 city-fallback, but we'd rather
+  // confirm via Geocoding first.
+  if (placesResult?.found && (placesResult.status === 'verified' || (placesResult.confidence ?? 0) >= 0.7)) {
+    console.log('[Geocode orchestrator] winner=google_places (high-confidence)');
+    await writeToCache(cacheKey, placesResult);
+    return placesResult;
+  }
+
+  // ── Step 2: Google Geocoding API (BACKUP for clean street addresses) ─
+  const geocodingResult = await geocodeWithGoogle(address, city, state, pincode);
+  console.log(
+    '[Geocode orchestrator] step=2_geocoding',
+    JSON.stringify({
+      found: geocodingResult?.found,
+      confidence: geocodingResult?.confidence,
+      status: geocodingResult?.status,
+    }),
+  );
+
+  // If Geocoding returned a high-confidence point match, prefer it
+  // (sublocality/route/premise types are 0.92).
+  if (geocodingResult?.found && (geocodingResult.confidence ?? 0) >= 0.7 && geocodingResult.status !== 'approximate') {
+    console.log('[Geocode orchestrator] winner=google_geocoding (high-confidence)');
+    await writeToCache(cacheKey, geocodingResult);
+    return geocodingResult;
+  }
+
+  // Both Google paths returned low-confidence. Pick the better of the
+  // two if either found anything — Places is usually still better than
+  // Geocoding's city fallback for India apartments.
+  if (placesResult?.found && (placesResult.confidence ?? 0) > (geocodingResult?.confidence ?? 0)) {
+    console.log('[Geocode orchestrator] winner=google_places (best of low-confidence)');
+    await writeToCache(cacheKey, placesResult);
+    return placesResult;
+  }
+  if (geocodingResult?.found) {
+    console.log('[Geocode orchestrator] winner=google_geocoding (best of low-confidence)');
+    await writeToCache(cacheKey, geocodingResult);
+    return geocodingResult;
+  }
+
+  // ── Step 3: Nominatim (last resort) ──────────────────────────────────
+  const nominatim = await geocodeWithNominatim(address, city, state, pincode);
+  console.log(
+    '[Geocode orchestrator] step=3_nominatim',
+    JSON.stringify({ found: nominatim?.found, confidence: nominatim?.confidence, status: nominatim?.status }),
+  );
+
+  if (nominatim?.found) {
+    // Annotate with upstream Google diagnostics so the AutoFillCard can
+    // explain WHY we fell to Nominatim.
+    if (placesResult?.message && !placesResult.found) nominatim.upstream_places_failure = placesResult.message;
+    if (geocodingResult?.message && !geocodingResult.found) nominatim.upstream_geocoding_failure = geocodingResult.message;
+    console.log('[Geocode orchestrator] winner=nominatim (last resort)');
+    await writeToCache(cacheKey, nominatim);
+    return nominatim;
+  }
+
+  console.warn('[Geocode orchestrator] ALL_PROVIDERS_FAILED for', cacheKey);
+  return null;
 };
 
 // Diagnostic — runs the FULL provider chain (cache-skip) and returns the
