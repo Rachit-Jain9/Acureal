@@ -359,8 +359,74 @@ const runMarketBenchmarkValidators = (ctx, core, addIssue) => {
   }
 };
 
+// PR-NX52 (2026-05-19) — Exposed for the live-warnings endpoint.
+//
+// The XLSX export validators (above) emit string warnings AT EXPORT TIME
+// only. The Financials page wants the SAME thresholds AT INPUT TIME so
+// operators see the warning as they type — not 5 hours later when they
+// download the workbook. getBenchmarkBands returns the structured
+// numeric thresholds the frontend needs to compute its own warnings via
+// the same rules.
+//
+// Returns:
+//   {
+//     count,            // total comps passed in
+//     verifiedCount,    // verified comp count (the only ones percentile bands trust)
+//     bands: {          // null when verifiedCount < 3 (too thin for percentiles)
+//       p25, p50, p75, p95
+//     },
+//     thresholds: {
+//       rbiDscrFloor: 1.20,
+//       yocVsExitCapMinSpreadBps: 50,    // below this triggers "thin development premium"
+//       yocVsExitCapHealthyBps: 200,     // at-or-above this is silent in validator
+//       compCoverageMinForBands: 5,      // below this and bands carry low confidence
+//     },
+//   }
+const RBI_DSCR_FLOOR_BPS = 12000; // 1.20 × 10_000 — bps form for frontend comparisons
+const YOC_VS_EXIT_CAP_MIN_SPREAD_BPS = 50;
+const YOC_VS_EXIT_CAP_HEALTHY_SPREAD_BPS = 200;
+const COMP_COVERAGE_MIN_FOR_BANDS = 5;
+
+const getBenchmarkBands = (comps) => {
+  if (!Array.isArray(comps)) {
+    return {
+      count: 0,
+      verifiedCount: 0,
+      bands: null,
+      thresholds: {
+        rbiDscrFloor: RBI_DSCR_FLOOR,
+        yocVsExitCapMinSpreadBps: YOC_VS_EXIT_CAP_MIN_SPREAD_BPS,
+        yocVsExitCapHealthyBps: YOC_VS_EXIT_CAP_HEALTHY_SPREAD_BPS,
+        compCoverageMinForBands: COMP_COVERAGE_MIN_FOR_BANDS,
+      },
+    };
+  }
+  const rates = extractVerifiedRatesPerSqft(comps);
+  const bands = rates.length >= 3
+    ? {
+      p25: percentileNearestRank(rates, 0.25),
+      p50: percentileNearestRank(rates, 0.50),
+      p75: percentileNearestRank(rates, 0.75),
+      p95: percentileNearestRank(rates, 0.95),
+    }
+    : null;
+  return {
+    count: comps.length,
+    verifiedCount: rates.length,
+    bands,
+    thresholds: {
+      rbiDscrFloor: RBI_DSCR_FLOOR,
+      yocVsExitCapMinSpreadBps: YOC_VS_EXIT_CAP_MIN_SPREAD_BPS,
+      yocVsExitCapHealthyBps: YOC_VS_EXIT_CAP_HEALTHY_SPREAD_BPS,
+      compCoverageMinForBands: COMP_COVERAGE_MIN_FOR_BANDS,
+    },
+  };
+};
+
 module.exports = {
   runMarketBenchmarkValidators,
+  // PR-NX52 (2026-05-19) — exported for the live /api/deals/:id/benchmark-bands route
+  getBenchmarkBands,
   // Exported for tests
   __internal: {
     asFiniteNumber,
@@ -372,5 +438,9 @@ module.exports = {
     validateDscrFloor,
     validateYocVsExitCapSpread,
     RBI_DSCR_FLOOR,
+    RBI_DSCR_FLOOR_BPS,
+    YOC_VS_EXIT_CAP_MIN_SPREAD_BPS,
+    YOC_VS_EXIT_CAP_HEALTHY_SPREAD_BPS,
+    COMP_COVERAGE_MIN_FOR_BANDS,
   },
 };
