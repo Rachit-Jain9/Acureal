@@ -1,11 +1,16 @@
 'use strict';
 
 /**
- * Coverage for the Google Places Text Search fallback added 2026-05-18
- * after the Jigani regression. The fix's invariant: when Google
- * Geocoding API returns REQUEST_DENIED (typical when the operator
- * enabled Places but forgot Geocoding in GCP), we MUST try Places
- * Text Search before falling all the way through to Nominatim.
+ * Coverage for the geocoder cascade.
+ *
+ * PR-NX78 (2026-05-19) — cascade reordered to PLACES-FIRST after the
+ * Jigani live-diagnostic confirmed Places returns 0.85 verified for
+ * the exact parcel while Geocoding returns 0.3 approximate to a wrong
+ * locality. Places is now the primary; Geocoding is a backup; Nominatim
+ * is last resort.
+ *
+ * Earlier coverage (Places-as-fallback, Geocoding-first) is preserved
+ * conceptually but the assertions are updated to match the new order.
  *
  * Axios is mocked at the module level; the database mock returns no
  * cache rows so the geocoder always runs live.
@@ -102,7 +107,7 @@ describe('geocoder — Google Places fallback chain', () => {
     expect(result.place_types).toContain('establishment');
   });
 
-  test('Both Google paths denied → falls through to Nominatim BUT annotates upstream_failure', async () => {
+  test('PR-NX78: Both Google paths denied → falls through to Nominatim BUT annotates upstream failures', async () => {
     axios.get.mockImplementation((url) => {
       if (url.includes('/geocode/json')) return Promise.resolve(GEOCODING_DENIED_RESPONSE);
       if (url.includes('/place/textsearch/json')) return Promise.resolve(PLACES_DENIED_RESPONSE);
@@ -113,22 +118,51 @@ describe('geocoder — Google Places fallback chain', () => {
 
     expect(result.found).toBe(true);
     expect(result.provider).toBe('nominatim');
-    expect(result.upstream_failure).toMatch(/Google Places denied/);
-    expect(result.upstream_failure).toMatch(/not authorised/);
+    // New cascade annotates both upstream failures separately so the
+    // AutoFillCard can surface "places denied + geocoding denied" not just one.
+    expect(result.upstream_places_failure).toMatch(/Google Places denied/);
+    expect(result.upstream_places_failure).toMatch(/not authorised/);
   });
 
-  test('Geocoding API succeeds → never calls Places API (short-circuit)', async () => {
+  test('PR-NX78: high-confidence Places verified → Geocoding never tried (short-circuit on primary)', async () => {
     axios.get.mockImplementation((url) => {
-      if (url.includes('/geocode/json')) return Promise.resolve(GEOCODING_OK_BRIGADE_ROAD);
-      return Promise.reject(new Error('Should not have called Places or Nominatim'));
+      if (url.includes('/place/textsearch/json')) return Promise.resolve(PLACES_OK_RESPONSE);
+      return Promise.reject(new Error('Should not have called Geocoding or Nominatim'));
     });
 
-    const result = await geocodeAddress('100 Brigade Road-uncached', 'Bengaluru', 'Karnataka', null);
+    const result = await geocodeAddress('Thyme Park Apartments Jigani', 'Bengaluru', 'Karnataka', '560105');
 
+    expect(result.provider).toBe('google_places');
+    expect(result.confidence).toBe(0.85);
+    const geocodingCalls = axios.get.mock.calls.filter(([url]) => url.includes('/geocode/json'));
+    expect(geocodingCalls).toHaveLength(0);
+  });
+
+  test('PR-NX78: Places returns low-confidence → falls through to high-confidence Geocoding', async () => {
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/place/textsearch/json')) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            status: 'OK',
+            results: [{
+              formatted_address: 'Brigade Road area',
+              place_id: 'pl_brigade_area',
+              geometry: { location: { lat: 12.97, lng: 77.60 } },
+              types: ['geocode'], // not establishment → confidence 0.65
+            }],
+          },
+        });
+      }
+      if (url.includes('/geocode/json')) return Promise.resolve(GEOCODING_OK_BRIGADE_ROAD);
+      return Promise.reject(new Error('Should not have called Nominatim'));
+    });
+
+    const result = await geocodeAddress('100 Brigade Road BLR', 'Bengaluru', 'Karnataka', null);
+
+    // Geocoding's 0.92 verified > Places 0.65 geocode-typed → Geocoding wins.
     expect(result.provider).toBe('google');
     expect(result.confidence).toBe(0.92);
-    const placesCalls = axios.get.mock.calls.filter(([url]) => url.includes('/place/textsearch'));
-    expect(placesCalls).toHaveLength(0);
   });
 
   test('Geocoding returns approximate city-fallback → Places second-chance promotes to verified establishment (Jigani path with Maps Platform key)', async () => {
@@ -181,28 +215,13 @@ describe('geocoder — Google Places fallback chain', () => {
     expect(result.lng).toBeCloseTo(77.659, 2);
   });
 
-  test('Geocoding returns approximate AND Places ALSO returns approximate → keep Geocoding (no swap)', async () => {
-    // Edge case: Places returns a `geocode`-typed result at 0.65 — not
-    // strictly better than Geocoding's 0.45 approximate (within 0.1
-    // confidence delta). Stick with Geocoding so the gate banner fires
-    // and the operator switches to coordinate input.
+  test('PR-NX78: Places low-confidence (0.65) and Geocoding low-confidence (0.45) → highest wins (Places)', async () => {
+    // Both Google providers return below-threshold (< 0.7) results. The
+    // new cascade picks the higher-confidence one. Places at 0.65 beats
+    // Geocoding's 0.45 city-fallback. This is the desirable behavior for
+    // Indian apartment/landmark addresses where Places usually has the
+    // better partial match.
     axios.get.mockImplementation((url) => {
-      if (url.includes('/geocode/json')) {
-        return Promise.resolve({
-          status: 200,
-          data: {
-            status: 'OK',
-            results: [
-              {
-                formatted_address: 'Some Locality',
-                place_id: 'gc_loc',
-                geometry: { location: { lat: 12.8, lng: 77.7 } },
-                types: ['locality'],
-              },
-            ],
-          },
-        });
-      }
       if (url.includes('/place/textsearch/json')) {
         return Promise.resolve({
           status: 200,
@@ -217,45 +236,29 @@ describe('geocoder — Google Places fallback chain', () => {
           },
         });
       }
-      return Promise.resolve(NOMINATIM_CITY_RESPONSE);
-    });
-
-    const result = await geocodeAddress('Vague locality query', 'Bengaluru', 'Karnataka', null);
-    // Confidence delta 0.65 (Places) - 0.45 (Geocoding) = 0.20 > 0.10 → Places wins.
-    // But Places status is 'approximate' AND not establishment-typed, so the
-    // `placesIsBetter` check considers it only if confidence delta > 0.1.
-    // 0.65 - 0.45 = 0.20 > 0.10 → swap happens.
-    expect(result.provider).toBe('google_places');
-    expect(result.confidence).toBe(0.65);
-  });
-
-  test('High-confidence Geocoding (street_address) → Places never tried (short-circuit preserved)', async () => {
-    axios.get.mockImplementation((url) => {
       if (url.includes('/geocode/json')) {
         return Promise.resolve({
           status: 200,
           data: {
             status: 'OK',
             results: [{
-              formatted_address: '100 Brigade Road, Bengaluru, Karnataka 560001, India',
-              place_id: 'gc_brigade',
-              geometry: { location: { lat: 12.97501, lng: 77.60501 } },
-              types: ['street_address'], // point-match → 0.92 verified
+              formatted_address: 'Some Locality',
+              place_id: 'gc_loc',
+              geometry: { location: { lat: 12.8, lng: 77.7 } },
+              types: ['locality'],
             }],
           },
         });
       }
-      return Promise.reject(new Error('Should not have called Places or Nominatim'));
+      return Promise.resolve(NOMINATIM_CITY_RESPONSE);
     });
 
-    const result = await geocodeAddress('100 Brigade Road BLR', 'Bengaluru', 'Karnataka', null);
-    expect(result.provider).toBe('google');
-    expect(result.confidence).toBe(0.92);
-    const placesCalls = axios.get.mock.calls.filter(([url]) => url.includes('/place/textsearch'));
-    expect(placesCalls).toHaveLength(0);
+    const result = await geocodeAddress('Vague locality query', 'Bengaluru', 'Karnataka', null);
+    expect(result.provider).toBe('google_places');
+    expect(result.confidence).toBe(0.65);
   });
 
-  test('Places returns geocode-typed result → confidence 0.65 + status approximate', async () => {
+  test('PR-NX78: Places returns geocode-typed result → confidence 0.65 + status approximate', async () => {
     axios.get.mockImplementation((url) => {
       if (url.includes('/geocode/json')) return Promise.resolve(GEOCODING_DENIED_RESPONSE);
       if (url.includes('/place/textsearch/json')) {
