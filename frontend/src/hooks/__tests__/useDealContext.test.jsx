@@ -241,4 +241,82 @@ describe('selector hooks — match backend dealWorkspace.service.js shape (PR-NX
       nextSteps: [],
     });
   });
+
+  // PR-NX74 HOTFIX — workspace.activities is the `{data:[...], pagination:{...}}`
+  // envelope from listActivities(); useDealActivities must unwrap it.
+  // Same defensive coercion is now in useDealDDItems / useDealApprovals /
+  // useDealRedFlags / useDealEvents — protects against any service that
+  // returns the same envelope shape.
+  describe('PR-NX74: defensive {data:[...]} envelope unwrap', () => {
+    it('useDealActivities unwraps the {data:[...], pagination} envelope (production bug from listActivities)', () => {
+      const envelope = {
+        activities: { data: activities, pagination: { total: 1, page: 1, limit: 50 } },
+      };
+      const { result } = renderHook(() => useDealActivities(), {
+        wrapper: buildWrapper(envelope),
+      });
+      expect(result.current).toEqual(activities);
+      // The smoke test that proves the bug is fixed:
+      expect(() => [...result.current]).not.toThrow();
+    });
+
+    it('useDealActivities still returns a flat array when given one (backward compat)', () => {
+      const flat = { activities: activities };
+      const { result } = renderHook(() => useDealActivities(), {
+        wrapper: buildWrapper(flat),
+      });
+      expect(result.current).toEqual(activities);
+    });
+
+    it('useDealDDItems unwraps the {data:[...]} envelope', () => {
+      const envelope = { dd: { items: { data: ddItems, pagination: { total: 1 } } } };
+      const { result } = renderHook(() => useDealDDItems(), {
+        wrapper: buildWrapper(envelope),
+      });
+      expect(result.current).toEqual(ddItems);
+    });
+
+    it('useDealRedFlags unwraps the {data:[...]} envelope', () => {
+      const envelope = { risk: { flags: { data: riskFlags } } };
+      const { result } = renderHook(() => useDealRedFlags(), {
+        wrapper: buildWrapper(envelope),
+      });
+      expect(result.current).toEqual(riskFlags);
+    });
+
+    it('useDealEvents unwraps the {data:[...]} envelope', () => {
+      const events = [{ id: 'ev-1' }];
+      const envelope = { financial: { auditEvents: { data: events } } };
+      const { result } = renderHook(() => useDealEvents(), {
+        wrapper: buildWrapper(envelope),
+      });
+      expect(result.current).toEqual(events);
+    });
+
+    it('useDealApprovals unwraps the {data:[...]} envelope', () => {
+      const envelope = { approvals: { data: approvals } };
+      const { result } = renderHook(() => useDealApprovals(), {
+        wrapper: buildWrapper(envelope),
+      });
+      expect(result.current).toEqual(approvals);
+    });
+
+    it('all array selectors return [] for unrecognised wrapper shapes', () => {
+      const junk = {
+        activities: { foo: 'bar' },
+        dd: { items: { foo: 'bar' } },
+        risk: { flags: 42 },
+        financial: { auditEvents: 'oops' },
+        approvals: { foo: 'bar' },
+        documents: { foo: 'bar' },
+      };
+      const wrapper = buildWrapper(junk);
+      expect(renderHook(() => useDealActivities(), { wrapper }).result.current).toEqual([]);
+      expect(renderHook(() => useDealDDItems(), { wrapper }).result.current).toEqual([]);
+      expect(renderHook(() => useDealRedFlags(), { wrapper }).result.current).toEqual([]);
+      expect(renderHook(() => useDealEvents(), { wrapper }).result.current).toEqual([]);
+      expect(renderHook(() => useDealApprovals(), { wrapper }).result.current).toEqual([]);
+      expect(renderHook(() => useDealDocuments(), { wrapper }).result.current).toEqual([]);
+    });
+  });
 });

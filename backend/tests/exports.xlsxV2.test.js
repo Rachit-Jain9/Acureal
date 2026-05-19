@@ -141,7 +141,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       // DOCX + PPTX Risk / Sensitivity / Document-Insights narratives.
       // Total now 8 sheets:
       //   1. Executive Briefing (FIRST — AI-assisted IC summary)
-      //   2. AI Synthesis (NEW — 3 deeper AI narratives)
+      //   2. Analysis Notes (NEW — renamed from "AI Synthesis" per PR-NX74)
       //   3. Dashboard
       //   4. Inputs & Assumptions
       //   5. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
@@ -154,7 +154,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const names = wb.worksheets.map((ws) => ws.name);
       expect(names).toEqual([
         'Executive Briefing',
-        'AI Synthesis',
+        'Analysis Notes',
         'Dashboard',
         'Inputs & Assumptions',
         'Cash Flow Engine',
@@ -4936,26 +4936,30 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const buffer = await buildDealWorkbookV2(contextWithNarratives());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    expect(wb.worksheets[1].name).toBe('AI Synthesis');
+    expect(wb.worksheets[1].name).toBe('Analysis Notes');
   });
 
-  test('renders title + disclosure banner', async () => {
+  test('PR-NX74: renders title; row-3 disclosure banner stripped per operator policy', async () => {
     const buffer = await buildDealWorkbookV2(contextWithNarratives(), { brandName: 'REDIP' });
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     expect(sheet).toBeDefined();
-    expect(String(sheet.getCell('A1').value)).toContain('AI Synthesis');
+    expect(String(sheet.getCell('A1').value)).toContain('Analysis Notes');
     expect(String(sheet.getCell('A1').value)).toContain('REDIP');
-    expect(String(sheet.getCell('A3').value)).toContain('AI-Assisted Analysis Notes');
-    expect(String(sheet.getCell('A3').value)).toContain('REQUIRES HUMAN REVIEW');
+    // PR-NX74 (2026-05-19): the loud A3 amber "⚠ AI-Assisted Analysis
+    // Notes — REQUIRES HUMAN REVIEW" banner was removed. XLSX must not
+    // surface AI usage anywhere.
+    const a3 = String(sheet.getCell('A3').value || '');
+    expect(a3).not.toMatch(/AI-Assisted/);
+    expect(a3).not.toMatch(/REQUIRES HUMAN REVIEW/);
   });
 
   test('renders all 3 section bands with the expected labels', async () => {
     const buffer = await buildDealWorkbookV2(contextWithNarratives());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     expect(String(sheet.getCell('A5').value)).toBe('RISK PROFILE SYNTHESIS');
     expect(String(sheet.getCell('A12').value)).toBe('SENSITIVITY ANALYSIS · NARRATIVE');
     expect(String(sheet.getCell('A20').value)).toBe('DOCUMENT-DERIVED INSIGHTS');
@@ -4965,29 +4969,31 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const buffer = await buildDealWorkbookV2(contextWithNarratives());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     expect(String(sheet.getCell('A7').value)).toContain('3 medium-severity risks');
     expect(String(sheet.getCell('A9').value)).toContain('critical encumbrance on parcel 12B');
+    // PR-NX74: attribution row keeps Confidence but strips provider name.
     expect(String(sheet.getCell('A10').value)).toContain('Confidence: medium');
-    expect(String(sheet.getCell('A10').value)).toContain('Claude Sonnet 4.6');
+    expect(String(sheet.getCell('A10').value)).not.toMatch(/Claude|OpenAI|gpt/);
   });
 
   test('renders sensitivity narrative with dominant driver eyebrow + decomposition + stress tests', async () => {
     const buffer = await buildDealWorkbookV2(contextWithNarratives());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     expect(String(sheet.getCell('A13').value)).toContain('DOMINANT DRIVER: SELL RATE');
     expect(String(sheet.getCell('A15').value)).toContain('Sell rate drives 62% of IRR');
     expect(String(sheet.getCell('A17').value)).toContain('Recommend stressing sell rate by -10%');
-    expect(String(sheet.getCell('A18').value)).toContain('OpenAI gpt-5.4');
+    // PR-NX74: attribution row no longer surfaces the provider name.
+    expect(String(sheet.getCell('A18').value || '')).not.toMatch(/OpenAI|gpt/);
   });
 
   test('renders document insights summary + findings cards', async () => {
     const buffer = await buildDealWorkbookV2(contextWithNarratives());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     expect(String(sheet.getCell('A22').value)).toContain('Cross-document analysis confirms');
     expect(String(sheet.getCell('A23').value)).toContain('INCONSISTENCY FINDINGS (2)');
     // Title row uses richText — flatten and check the severity tag + title text are present.
@@ -5011,7 +5017,7 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const buffer = await buildDealWorkbookV2(ctx);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     // Risk synthesis row 6 (the row immediately after the section band)
     expect(String(sheet.getCell('A6').value)).toContain('Synthesis Unavailable');
     expect(String(sheet.getCell('A6').value)).toContain('all providers failed');
@@ -5026,7 +5032,7 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const buffer = await buildDealWorkbookV2(minimalContext());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     // Sheet must still exist and contain the section bands + unavailable copy.
     expect(sheet).toBeDefined();
     expect(String(sheet.getCell('A5').value)).toBe('RISK PROFILE SYNTHESIS');
@@ -5046,7 +5052,7 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const buffer = await buildDealWorkbookV2(ctx);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     expect(String(sheet.getCell('A22').value)).toContain('All extracted documents are mutually consistent');
     expect(String(sheet.getCell('A23').value)).toContain('No inconsistencies detected');
   });
@@ -5068,7 +5074,7 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const buffer = await buildDealWorkbookV2(ctx);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    const sheet = wb.getWorksheet('AI Synthesis');
+    const sheet = wb.getWorksheet('Analysis Notes');
     // 6 findings × 2 rows = 12 rows after the eyebrow at row 23.
     // Row 24-35 → findings, row 36 → "+N more" overflow line.
     expect(String(sheet.getCell('A23').value)).toContain('INCONSISTENCY FINDINGS (9)');

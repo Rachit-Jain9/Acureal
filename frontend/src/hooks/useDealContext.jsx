@@ -99,6 +99,30 @@ export function useDealKpis() {
   );
 }
 
+// PR-NX74 (2026-05-19) HOTFIX — every array selector below is defensive
+// against the SERVICE wrapper shape some backend services return.
+// Specifically: `listActivities()` in activity.service.js returns
+// `{data: [...], pagination: {...}}`, NOT a flat array. When the workspace
+// endpoint passes that through as `workspace.activities`, a consumer doing
+// `[...activities].sort()` (ActivityTab line 81) throws "is not iterable"
+// in production (minifies to "i is not iterable").
+//
+// Each array selector now defensively handles all THREE shapes:
+//   1. a flat array              [item, item]                    ✓
+//   2. a `{data: [...]}` envelope `{data: [item, item], ...}`    ✓ (unwraps)
+//   3. null/undefined             — returns []                    ✓
+//
+// useDealDocuments additionally unwraps the `{documents: [...]}` envelope
+// that `documentService.getDocuments()` returns.
+const coerceArray = (value, primaryKey = 'data') => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value[primaryKey])) return value[primaryKey];
+    if (Array.isArray(value.data)) return value.data;
+  }
+  return [];
+};
+
 /**
  * Returns the deal's risk flags array. Source: workspace.risk.flags
  * (composed from `deal.risk_flags` server-side; see dealWorkspace.service.js).
@@ -109,7 +133,14 @@ export function useDealKpis() {
 export function useDealRedFlags() {
   const { workspace } = useDealContext();
   return useMemo(
-    () => workspace?.risk?.flags || workspace?.deal?.risk_flags || [],
+    () => {
+      // Prefer workspace.risk.flags when the risk slice is present (even
+      // if empty — `[]` is a legitimate "no flags logged" state). Fall back
+      // to deal.risk_flags only when the risk slice itself is absent
+      // (partially-shaped workspace from error-path degradation).
+      if (workspace?.risk?.flags !== undefined) return coerceArray(workspace.risk.flags);
+      return coerceArray(workspace?.deal?.risk_flags);
+    },
     [workspace?.risk?.flags, workspace?.deal?.risk_flags],
   );
 }
@@ -121,7 +152,7 @@ export function useDealRedFlags() {
 export function useDealEvents() {
   const { workspace } = useDealContext();
   return useMemo(
-    () => workspace?.financial?.auditEvents || [],
+    () => coerceArray(workspace?.financial?.auditEvents),
     [workspace?.financial?.auditEvents],
   );
 }
@@ -133,17 +164,15 @@ export function useDealEvents() {
  */
 export function useDealDocuments() {
   const { workspace } = useDealContext();
-  return useMemo(() => {
-    const docs = workspace?.documents;
-    if (Array.isArray(docs)) return docs;
-    if (Array.isArray(docs?.documents)) return docs.documents;
-    return [];
-  }, [workspace?.documents]);
+  return useMemo(
+    () => coerceArray(workspace?.documents, 'documents'),
+    [workspace?.documents],
+  );
 }
 
 export function useDealActivities() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.activities || [], [workspace?.activities]);
+  return useMemo(() => coerceArray(workspace?.activities), [workspace?.activities]);
 }
 
 // PR-NX62 — additional Phase A selectors that round out the workspace
@@ -157,7 +186,7 @@ export function useDealActivities() {
  */
 export function useDealDDItems() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.dd?.items || [], [workspace?.dd?.items]);
+  return useMemo(() => coerceArray(workspace?.dd?.items), [workspace?.dd?.items]);
 }
 
 export function useDealDDScore() {
@@ -172,7 +201,7 @@ export function useDealRiskScore() {
 
 export function useDealApprovals() {
   const { workspace } = useDealContext();
-  return useMemo(() => workspace?.approvals || [], [workspace?.approvals]);
+  return useMemo(() => coerceArray(workspace?.approvals), [workspace?.approvals]);
 }
 
 export function useDealFinancialSummary() {

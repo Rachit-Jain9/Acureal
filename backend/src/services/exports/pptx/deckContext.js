@@ -70,7 +70,7 @@ const buildSlideManifest = (context) => {
   // XLSX; PPTX + DOCX had no asset-class-aware briefing.
   const slides = [
     { key: 'cover', title: context.dealTitle },
-    { key: 'briefing', title: 'AI-Assisted Briefing' },
+    { key: 'briefing', title: 'Executive Briefing' }, // PR-NX74 (2026-05-19) — renamed; PPTX must not surface AI usage per operator policy.
     { key: 'contents', title: 'Contents' },
     { key: 'decisionFrame', title: 'Decision Frame & Composite Score' },
     { key: 'dividerOpportunity', title: 'The Opportunity' },

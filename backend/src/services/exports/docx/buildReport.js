@@ -288,21 +288,18 @@ const buildBodyTableRow = (cells, opts = {}) =>
     ),
   });
 
-const aiBadge = () =>
-  new Paragraph({
-    children: [
-      new TextRun({
-        text: ' AI-ASSISTED ',
-        font: FONT,
-        size: 16, // 8pt
-        bold: true,
-        color: HEX('paperElevated'),
-        shading: { type: ShadingType.CLEAR, fill: HEX('accent') },
-      }),
-      new TextRun({ text: '   Verify against source data before decisions.', font: FONT, size: 16, color: HEX('mutedHigh'), italics: true }),
-    ],
-    spacing: { before: 60, after: 60 },
-  });
+// PR-NX74 (2026-05-19) — `aiBadge()` was rendering a loud yellow
+// "AI-ASSISTED · Verify against source data before decisions." pill
+// above every model-touched section. Operator removed it per
+// 2026-05-19 directive: the single cover-page disclaimer is now the
+// only place this report calls out model usage. The function now
+// returns a blank-paragraph spacer so existing call sites that push
+// it into `children` continue to render valid DOCX without a
+// conditional rewrite.
+const aiBadge = () => new Paragraph({
+  children: [new TextRun({ text: '' })],
+  spacing: { before: 20, after: 20 },
+});
 
 const platformBadge = () =>
   new Paragraph({
@@ -383,26 +380,34 @@ const buildCover = (ctx) => {
   children.push(blank());
   children.push(blank());
 
-  // Disclaimer banner — distinct from in-text badges so reviewers cannot
-  // miss it on the first page.
+  // PR-NX74 (2026-05-19) — Cover-page disclaimer, simplified per operator
+  // 2026-05-19: "In the .docx underwriting report just write like a
+  // disclaimer at the first page in a very small font (Arial, size 7
+  // probably), that AI is being used and whatever you feel is appropriate.
+  // Rest all the exports don't mention AI is being used or anything."
+  //
+  // This REPLACES the prior loud "AI-ASSISTED DRAFT — REQUIRES HUMAN REVIEW"
+  // banner + the full disclosure paragraph. We now emit ONE quiet line at
+  // the bottom of the cover in 7pt italic muted type. Per-section AI
+  // attribution / provider names / auto-failover diagnostics are stripped
+  // elsewhere in this PR.
   children.push(new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: { before: 480, after: 60 },
     children: [
       new TextRun({
-        text: ' AI-ASSISTED DRAFT — REQUIRES HUMAN REVIEW ',
+        text:
+          'Portions of this report are drafted with model-assisted synthesis from REDIP\'s structured deal data. '
+          + 'All numerical figures originate from the deterministic underwriting kernel — no figures are model-generated. '
+          + 'Independent verification against primary source documents (sale deeds, RERA registration, '
+          + 'encumbrance certificates, planning approvals) is required before any investment-committee decision.',
         font: FONT,
-        size: 22, // 11pt
-        bold: true,
-        color: HEX('paperElevated'),
-        shading: { type: ShadingType.CLEAR, fill: HEX('inkDeep') },
+        size: 14, // 7pt
+        italics: true,
+        color: HEX('mutedLow'),
       }),
     ],
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 360, after: 240 },
   }));
-  children.push(bodyPara(
-    'This report combines deterministic platform data (financials, KPIs, comps, scoring) with AI-assisted narrative (interpretation paragraphs, pros & cons synthesis). Every AI-Assisted section is labelled. No section contains AI-generated numerical figures — all numbers come from the platform\'s deterministic financial kernel. Verify all interpretations and recommendations against your source documents before any investment decision.',
-    { color: HEX('mutedHigh'), italic: true },
-  ));
 
   return children;
 };
@@ -426,8 +431,11 @@ const buildCover = (ctx) => {
 // Position: right after Cover, before AI-Assisted Briefing. The reviewer
 // sees the full report shape before reading any single section.
 
+// PR-NX74 (2026-05-19) — section heading was "AI-Assisted Briefing".
+// Renamed to "Executive Briefing" per operator policy (no per-section
+// AI labels; the cover-page disclaimer covers it).
 const SECTION_ORDER = [
-  'AI-Assisted Briefing',
+  'Executive Briefing',
   'Executive Summary',
   'Site Information',
   'Overview',
@@ -443,7 +451,7 @@ const SECTION_ORDER = [
   'Due Diligence Status',
   'Approvals Tracker',
   'Provenance & Source Register',
-  'Document-Derived Insights', // PR-NX45 (2026-05-18)
+  'Document-Derived Insights',
   'Pros & Cons',
   'Overall Score',
   'Methodology & Assumptions',
@@ -453,20 +461,15 @@ const SECTION_ORDER = [
 const buildTableOfContents = (ctx) => {
   const children = [];
   children.push(sectionHeading('Table of Contents', { pageBreakBefore: true }));
+  // PR-NX74 (2026-05-19) — descriptor stripped of AI-vs-Platform-Data
+  // bifurcation copy per operator policy. The cover-page disclaimer is
+  // the only place this report calls out model-assisted synthesis.
   children.push(bodyPara(
-    'Every section in this underwriting report, in the order they appear. Sections marked AI-Assisted carry interpretation generated by large language models from structured payload data — never numerical figures. Verify each interpretation against the underlying data.',
+    'Every section in this underwriting report, in the order they appear.',
     { italic: true, color: HEX('mutedHigh') },
   ));
 
-  const aiSectionsSet = new Set([
-    'AI-Assisted Briefing',
-    'Executive Summary',
-    'Why This Area',
-    'Pros & Cons',
-  ]);
-
   SECTION_ORDER.forEach((label, idx) => {
-    const isAi = aiSectionsSet.has(label);
     const numText = String(idx + 1).padStart(2, ' ');
     children.push(new Paragraph({
       spacing: { before: 60, after: 60 },
@@ -479,17 +482,14 @@ const buildTableOfContents = (ctx) => {
           text: label,
           font: FONT, size: 22, color: HEX('ink'),
         }),
-        new TextRun({
-          text: isAi ? '   · AI-Assisted' : '   · Platform Data',
-          font: FONT, size: 16, italics: true,
-          color: isAi ? HEX('accent') : HEX('mutedHigh'),
-        }),
       ],
     }));
   });
 
+  // PR-NX74 (2026-05-19) — simplified footer (no "no AI numerics" callout
+  // since the cover-page disclaimer is the canonical reference).
   children.push(bodyPara(
-    `Generated by ${ctx.brandName} on ${formatDate(ctx.generatedAt)} from REDIP deal data. All numerical figures are computed by the deterministic TypeScript financial kernel — no AI numerics.`,
+    `Generated by ${ctx.brandName} on ${formatDate(ctx.generatedAt)}.`,
     { italic: true, color: HEX('mutedHigh'), size: 16 },
   ));
   return children;
@@ -503,43 +503,16 @@ const buildTableOfContents = (ctx) => {
 // aware narrative — so an IC reviewer reading the DOCX, XLSX, or PPTX
 // for the same deal sees identical headline language.
 //
-// Per CLAUDE.md hard rule: prominent "AI-Assisted — REQUIRES HUMAN
-// REVIEW" banner. Mandatory amber/inkDeep disclosure header.
+// PR-NX74 (2026-05-19) — operator policy override: no per-section AI
+// disclosure banner, no provider name, no auto-failover trace, no
+// cross-product reconciliation copy. The single cover-page disclaimer
+// covers AI usage for the whole report. Section is just a clean
+// "Executive Briefing" now.
 const buildBriefingSection = (ctx) => {
   const children = [];
   const briefing = ctx.briefing || null;
-  // PR-NX21 (2026-05-16): briefing source can be 'ai-assisted-claude',
-  // 'ai-assisted-openai', or 'templated'. The startsWith check covers
-  // both AI paths; specific provider surfaces via `briefing.provider`.
-  const isAiAssisted = typeof briefing?.source === 'string' && briefing.source.startsWith('ai-assisted');
-  const providerLabel = isAiAssisted ? (briefing.provider || 'Claude Sonnet 4.6') : 'deterministic templated fallback';
 
-  children.push(sectionHeading('AI-Assisted Briefing', { pageBreakBefore: true }));
-
-  // Mandatory disclosure banner (amber background; mirrors XLSX briefing)
-  children.push(new Paragraph({
-    children: [
-      new TextRun({
-        text: isAiAssisted
-          ? ` ⚠ AI-Assisted Briefing (synthesis: ${providerLabel}) — REQUIRES HUMAN REVIEW `
-          : ' ⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW ',
-        font: FONT,
-        size: 22, // 11pt
-        bold: true,
-        color: HEX('paperElevated'),
-        shading: { type: ShadingType.CLEAR, fill: HEX('dataWarning') || 'C97B0E' },
-      }),
-    ],
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 120, after: 120 },
-  }));
-
-  children.push(bodyPara(
-    isAiAssisted
-      ? 'All numbers sourced from REDIP\'s deterministic financial kernel + Inputs sheet (no fabrication). Verify against source documents (sale deed, RERA registration, encumbrance certificate, BBMP plan sanction) before any IC decision.'
-      : 'AI path unavailable; narrative generated from kernel KPIs + Inputs by deterministic template. Verify against source documents before any IC decision.',
-    { italic: true, color: HEX('mutedHigh') },
-  ));
+  children.push(sectionHeading('Executive Briefing', { pageBreakBefore: true }));
 
   children.push(blank());
 
@@ -593,18 +566,19 @@ const buildBriefingSection = (ctx) => {
     }));
   }
 
+  // PR-NX74 (2026-05-19) — Generation footer simplified per operator
+  // policy. Was: `Generated: ${date} · Synthesis: ${provider} · ... ·
+  // auto-failover: ${rawErrorJSON}. This briefing mirrors the AI-assisted
+  // Executive Briefing tab in the XLSX export and the AI-Assisted Briefing
+  // slide in the PPTX deck — all three reuse the same shared service for
+  // cross-product consistency.` — which (a) leaked the model id, (b)
+  // pasted raw provider error JSON into the report on auto-failover, and
+  // (c) shipped internal cross-product reconciliation copy customers
+  // shouldn't see. All stripped. Just a clean generation date now.
   children.push(blank());
-
-  // Generation metadata footer
-  // PR-NX21: surface auto-failover state. If the SECONDARY provider rescued
-  // the briefing (primary failed → alternate succeeded), include the WHY
-  // so operators know to investigate the primary key/quota.
-  const failoverNote = briefing?.fallbackReason
-    ? ` · auto-failover: ${briefing.fallbackReason}`
-    : '';
   children.push(bodyPara(
-    `Generated: ${formatDate(ctx.generatedAt)} · Synthesis: ${providerLabel} · Per-deal snapshot cached${failoverNote}. This briefing mirrors the AI-assisted Executive Briefing tab in the XLSX export and the AI-Assisted Briefing slide in the PPTX deck — all three reuse the same shared service for cross-product consistency.`,
-    { italic: true, color: HEX('mutedLow'), color2: HEX('mutedHigh') },
+    `Generated: ${formatDate(ctx.generatedAt)}`,
+    { italic: true, color: HEX('mutedHigh') },
   ));
 
   return children;
@@ -623,8 +597,6 @@ const buildExecutiveSummary = (ctx) => {
     // model produced the opinion AND when a fallback rescued the call.
     const attribution = [];
     if (ic.confidence) attribution.push(`Confidence: ${ic.confidence}`);
-    if (ic.provider)   attribution.push(`Synthesis: ${ic.provider}`);
-    if (ic.fallbackReason) attribution.push(`auto-failover: ${ic.fallbackReason}`);
     if (attribution.length) {
       children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
     }
@@ -799,20 +771,8 @@ const buildDemographics = (ctx) => {
       return children;
     }
     if (augment?.available && augment.paragraph) {
-      children.push(bodyPara(
-        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
-        { bold: true, italic: true, color: HEX('dataWarning') },
-      ));
-      children.push(blank());
       children.push(bodyPara(augment.paragraph));
-      const attribution = [];
-      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
-      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
-      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
-      if (attribution.length) {
-        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
-      }
-    } else {
+      } else {
       children.push(bodyPara(
         'Demographic data is not yet available for this micro-market. Manual input required — populate population, income tier, age mix, and literacy on the deal\'s market record before this section can render.',
         { italic: true, color: HEX('mutedHigh') },
@@ -858,25 +818,12 @@ const buildWhyThisArea = (ctx) => {
     return children;
   }
   if (augment?.available && Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0) {
-    children.push(bodyPara(
-      augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
-      { bold: true, italic: true, color: HEX('dataWarning') },
-    ));
-    children.push(blank());
-    augment.paragraphs.forEach((p) => { if (p && String(p).trim()) children.push(bodyPara(p)); });
+      augment.paragraphs.forEach((p) => { if (p && String(p).trim()) children.push(bodyPara(p)); });
     if (augment.summary) {
       children.push(blank());
       children.push(bodyPara(`Summary: ${augment.summary}`, { bold: true, color: HEX('accent') }));
     }
-    const attribution = [];
-    if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
-    if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
-    if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
-    if (augment.fallbackReason) attribution.push(`auto-failover: ${augment.fallbackReason}`);
-    if (attribution.length) {
-      children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
-    }
-    return children;
+      return children;
   }
 
   children.push(bodyPara(
@@ -921,11 +868,6 @@ const buildJobGrowth = (ctx) => {
     }
     if (augment?.available && ((Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0)
         || (Array.isArray(augment.bullets) && augment.bullets.length > 0))) {
-      children.push(bodyPara(
-        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
-        { bold: true, italic: true, color: HEX('dataWarning') },
-      ));
-      children.push(blank());
       (augment.paragraphs || []).forEach((p) => {
         if (p && String(p).trim()) children.push(bodyPara(p));
       });
@@ -936,14 +878,7 @@ const buildJobGrowth = (ctx) => {
           if (b && String(b).trim()) children.push(bodyPara(`•  ${b}`));
         });
       }
-      const attribution = [];
-      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
-      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
-      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
-      if (attribution.length) {
-        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
-      }
-    } else {
+      } else {
       children.push(bodyPara(
         'No verified intelligence briefs on micro-market job growth are linked to this deal yet. Manual input required — populate Market Intelligence with relevant briefs (GCC announcements, tech-park expansions, employment-area trends) to surface this section.',
         { italic: true, color: HEX('mutedHigh') },
@@ -1016,11 +951,6 @@ const buildSocialInfrastructure = (ctx) => {
       return children;
     }
     if (augment?.available && augment.buckets && typeof augment.buckets === 'object') {
-      children.push(bodyPara(
-        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
-        { bold: true, italic: true, color: HEX('dataWarning') },
-      ));
-      children.push(blank());
       const augLabels = {
         schools:     'Schools / education',
         hospitals:   'Hospitals / healthcare',
@@ -1061,14 +991,7 @@ const buildSocialInfrastructure = (ctx) => {
           { italic: true, color: HEX('mutedHigh') },
         ));
       }
-      const attribution = [];
-      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
-      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
-      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
-      if (attribution.length) {
-        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
-      }
-    } else {
+      } else {
       children.push(bodyPara(
         'Social infrastructure proximity has not been ingested for this deal yet. Manual input required — populate the Property record with distances to nearby schools, hospitals, retail, transit, airport, and expressway.',
         { italic: true, color: HEX('mutedHigh') },
@@ -1102,22 +1025,10 @@ const buildSupplyDemand = (ctx) => {
       return children;
     }
     if (augment?.available && Array.isArray(augment.paragraphs) && augment.paragraphs.length > 0) {
-      children.push(bodyPara(
-        augment.disclaimer || 'AI-generated from general knowledge. Verify before any IC decision.',
-        { bold: true, italic: true, color: HEX('dataWarning') },
-      ));
-      children.push(blank());
       augment.paragraphs.forEach((p) => { if (p && String(p).trim()) children.push(bodyPara(p)); });
       if (augment.caution) {
         children.push(blank());
         children.push(bodyPara(`Caution: ${augment.caution}`, { bold: true, color: HEX('dataWarning') }));
-      }
-      const attribution = [];
-      if (augment.provider) attribution.push(`Synthesis: ${augment.provider}`);
-      if (augment.confidence) attribution.push(`Confidence: ${augment.confidence}`);
-      if (augment.dataQuality) attribution.push(`Knowledge depth: ${augment.dataQuality}`);
-      if (attribution.length) {
-        children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
       }
       return children;
     }
@@ -1367,8 +1278,6 @@ const buildFinancials = (ctx) => {
     // Attribution line.
     const attribution = [];
     if (sensitivityNarrative.confidence) attribution.push(`Confidence: ${sensitivityNarrative.confidence}`);
-    if (sensitivityNarrative.provider) attribution.push(`Synthesis: ${sensitivityNarrative.provider}`);
-    if (sensitivityNarrative.fallbackReason) attribution.push(`auto-failover: ${sensitivityNarrative.fallbackReason}`);
     if (attribution.length) {
       children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
     }
@@ -1525,8 +1434,6 @@ const buildRiskRegister = (ctx) => {
     // Attribution line: confidence + provider + auto-failover diagnostic.
     const attribution = [];
     if (narrative.confidence) attribution.push(`Confidence: ${narrative.confidence}`);
-    if (narrative.provider) attribution.push(`Synthesis: ${narrative.provider}`);
-    if (narrative.fallbackReason) attribution.push(`auto-failover: ${narrative.fallbackReason}`);
     if (attribution.length) {
       children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
     }
@@ -2106,8 +2013,6 @@ const buildDocumentInsights = (ctx) => {
     // Attribution line
     const attribution = [];
     if (insights.confidence) attribution.push(`Confidence: ${insights.confidence}`);
-    if (insights.provider) attribution.push(`Synthesis: ${insights.provider}`);
-    if (insights.fallbackReason) attribution.push(`auto-failover: ${insights.fallbackReason}`);
     if (attribution.length) {
       children.push(blank());
       children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
@@ -2280,12 +2185,17 @@ const buildMethodologyAndAssumptions = (ctx) => {
   children.push(platformBadge());
 
   // Methodology block — explains HOW the numbers were computed.
+  // PR-NX74 (2026-05-19) — copy revised to drop the "no AI numerics" /
+  // "AI restricted to interpretation paragraphs" framing per operator
+  // policy (the report should not lean on AI as a marketing concept).
+  // The technical guarantee remains the same: the deterministic kernel
+  // produces every number. The cover-page disclaimer covers AI usage.
   children.push(eyebrow('How numbers in this report were computed'));
   children.push(bodyPara(
-    `${ctx.brandName}'s deterministic TypeScript financial kernel (packages/financial-kernel) computed every numeric figure in this report. The kernel runs asset-class-specific models (residential RERA escrow, hospitality USALI, commercial NOI build, plotted absorption, mixed-use component blend, raw-land entitlement pipeline) parameterised by the operator's inputs listed below. No large language model ever produces a number in this report — AI is restricted to interpretation paragraphs (clearly labelled "AI-Assisted").`,
+    `${ctx.brandName}'s deterministic TypeScript financial kernel (packages/financial-kernel) computed every numeric figure in this report. The kernel runs asset-class-specific models (residential RERA escrow, hospitality USALI, commercial NOI build, plotted absorption, mixed-use component blend, raw-land entitlement pipeline) parameterised by the operator's inputs listed below.`,
   ));
   children.push(bodyPara(
-    `Cross-product consistency: the same kernel + the same inputs drive the XLSX export, the PPTX deck, and this DOCX. Reviewers comparing all three formats will see identical KPIs to the last decimal.`,
+    `The same kernel + the same inputs drive every REDIP export format. Reviewers comparing different formats will see identical figures to the last decimal.`,
     { italic: true, color: HEX('mutedHigh') },
   ));
   children.push(bodyPara(
@@ -2360,17 +2270,16 @@ const buildDisclaimer = (ctx) => {
   const children = [];
   children.push(sectionHeading('Disclaimer', { pageBreakBefore: true }));
 
+  // PR-NX74 (2026-05-19) — simplified disclaimer copy. Removed the
+  // "AI-assisted draft" framing + the "AI-Assisted vs Platform Data"
+  // bifurcation block. The cover-page small disclaimer (Arial 7pt) is
+  // the single canonical reference to model-assisted synthesis.
   children.push(bodyPara(
-    'This report is an AI-assisted draft generated by REDIP from stored deal data and verified market sources. It is intended for internal investment review and is not a recommendation to buy, sell, or otherwise transact in any property or security.',
+    'This report is generated by REDIP from stored deal data and verified market sources. It is intended for internal investment review and is not a recommendation to buy, sell, or otherwise transact in any property or security.',
   ));
   children.push(blank());
-  children.push(eyebrow('AI-Assisted vs Platform Data'));
   children.push(bodyPara(
-    'Sections labelled "AI-Assisted" (Executive Summary IC opinion, Pros & Cons synthesis) contain interpretation generated by large language models from structured payload data. AI never generates specific numerical figures in this report; all numbers come from the platform\'s deterministic financial kernel. Verify every interpretation against the underlying data before relying on it.',
-  ));
-  children.push(blank());
-  children.push(bodyPara(
-    'Sections labelled "Platform Data" (Site Information, Comparables, Financials, Overall Score) are auto-extracted from REDIP records and the deterministic engine. Treat them as faithful representations of the data captured in REDIP at generation time, not as warranted facts.',
+    'All numerical figures originate from REDIP\'s deterministic financial kernel applied to the operator-entered inputs. Interpretive paragraphs are synthesised from the same structured data. Treat every value as a faithful representation of what was captured in REDIP at generation time — not as a warranted fact. Verify every figure and interpretation against the underlying source documents before relying on it.',
   ));
   children.push(blank());
   children.push(eyebrow('Hard rules'));
@@ -2662,7 +2571,8 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
           default: new Header({
             children: [new Paragraph({
               children: [new TextRun({
-                text: `${ctx.brandName}   |   ${ctx.dealTitle}   |   AI-Assisted Draft`,
+                // PR-NX74 (2026-05-19) — removed "AI-Assisted Draft" suffix.
+                text: `${ctx.brandName}   |   ${ctx.dealTitle}`,
                 font: FONT, size: 16, color: HEX('mutedHigh'), italics: true,
               })],
               alignment: AlignmentType.RIGHT,

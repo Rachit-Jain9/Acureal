@@ -78,7 +78,7 @@ const SHEETS = {
   // (already plumbed by dealExport.service). Graceful "Synthesis Unavailable"
   // fallback per section so the workbook never breaks when an AI provider
   // is down.
-  aiSynthesis: 'AI Synthesis',
+  aiSynthesis: 'Analysis Notes', // PR-NX74 (2026-05-19) — was "AI Synthesis"; operator policy: XLSX must not surface AI usage.
   dashboard: 'Dashboard',
   qaSources: 'Export QA & Sources',
   inputs: 'Inputs & Assumptions',
@@ -5085,13 +5085,10 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   ];
 
   const briefing = ctx.briefing || buildTemplatedBriefing(buildNumericSnapshot(ctx));
-  // PR-NX21 (2026-05-16): the briefing source can now be one of:
-  //   - 'ai-assisted-claude'  — primary Claude succeeded
-  //   - 'ai-assisted-openai'  — secondary OpenAI succeeded (Claude failed first)
-  //   - 'templated'           — both AI providers failed; deterministic narrative
-  // `startsWith('ai-assisted')` covers both AI paths; the specific provider is
-  // surfaced separately via `briefing.provider`.
-  const isAiAssisted = typeof briefing.source === 'string' && briefing.source.startsWith('ai-assisted');
+  // PR-NX74 (2026-05-19) — `isAiAssisted` source-branching removed.
+  // The XLSX briefing no longer distinguishes "AI-assisted" vs "templated"
+  // in the rendered output (operator policy: XLSX does not surface AI
+  // usage). Briefing content renders the same regardless of source.
 
   // Row 1 — title banner. Accent fill (copper) so the operator immediately
   // knows this is the IC-facing briefing.
@@ -5114,31 +5111,12 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   subtitleCell.protection = { locked: true };
   sheet.getRow(2).height = 22;
 
-  // Row 3 — AI-Assisted disclosure (mandatory per CLAUDE.md "Every AI-
-  // synthesized narrative must carry a prominent 'AI-assisted — requires
-  // human review' label").
-  sheet.mergeCells('A3:H3');
-  const disclosureCell = sheet.getCell('A3');
-  // PR-NX14 (2026-05-15): unified disclosure prefix. Pre-fix the AI path
-  // said "⚠ AI-Assisted Synthesis" and the templated path said
-  // "⚠ Templated Synthesis" — two different prefixes for what is
-  // conceptually the same governance label (per CLAUDE.md "Every AI
-  // output must carry 'AI-assisted — requires human review' label").
-  // Operators flagged the inconsistency: when the AI failed they
-  // sometimes thought they were looking at a different feature. Now
-  // both paths share the same "⚠ AI-Assisted Briefing" prefix, with
-  // the synthesis path indicated in parentheses so operators see
-  // exactly which engine produced the prose.
-  disclosureCell.value = isAiAssisted
-    ? '⚠ AI-Assisted Briefing (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW. All numbers sourced from the deterministic financial kernel + Inputs sheet (no fabrication). Verify against source documents before any IC decision.'
-    : '⚠ AI-Assisted Briefing (synthesis: deterministic templated fallback) — REQUIRES HUMAN REVIEW. AI path unavailable; narrative generated from deal\'s kernel KPIs + inputs by deterministic template. Verify against source documents before any IC decision.';
-  disclosureCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-  disclosureCell.fill = FILL(palette.xlsx('dataWarning'));
-  disclosureCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-  disclosureCell.protection = { locked: true };
-  sheet.getRow(3).height = 32;
-
-  // Row 4 blank spacer
+  // PR-NX74 (2026-05-19) — operator policy: XLSX must NOT surface AI usage
+  // anywhere. The amber row-3 disclosure banner ("⚠ AI-Assisted Briefing
+  // (synthesis: Claude Sonnet 4.6) — REQUIRES HUMAN REVIEW...") is removed
+  // entirely. Row 3 now serves as a thin spacer so the rest of the sheet
+  // layout (rows 5+ summary/key-points/risk-note) doesn't reflow.
+  sheet.getRow(3).height = 6;
   sheet.getRow(4).height = 8;
 
   // Row 5 — "Summary" section title
@@ -5212,42 +5190,23 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   // Row 16 blank spacer
   sheet.getRow(16).height = 12;
 
-  // Row 17 — generation metadata
+  // Row 17 — generation metadata (PR-NX74: simplified — no provider /
+  // failover JSON; XLSX must not surface AI usage per operator policy).
   sheet.mergeCells('A17:H17');
   const metaCell = sheet.getCell('A17');
-  // PR-NX14 (2026-05-15): fix the AI provider metadata. Pre-fix this
-  // read "Provider: OpenAI gpt-4o" — wrong since PR-NX9 (2026-05-15)
-  // routed `narrative_synthesis` to Claude Sonnet 4.6. Operators
-  // reading the footer were misled about which model produced the
-  // briefing. Now reflects the actual model from the briefing payload.
-  // (Falls back to a generic "AI provider" label when the source
-  // doesn't carry the model id — defensive against future schema drift.)
-  const aiProviderLabel = briefing.provider || briefing.model || 'Claude Sonnet 4.6';
-  // PR-NX21 (2026-05-16): surface auto-failover state in the footer.
-  // - When the SECONDARY provider rescued the briefing (Claude failed →
-  //   OpenAI succeeded), include "via auto-failover" + the reason the
-  //   primary failed so operators know the briefing is real-AI but the
-  //   primary provider needs attention.
-  // - When BOTH providers failed and we're on templated, surface the
-  //   concatenated WHY (e.g., "Claude 401 invalid_api_key; OpenAI 429")
-  //   instead of the generic "AI path unavailable" message. Operator
-  //   instantly knows what to fix.
-  const failoverNote = briefing.fallbackReason
-    ? ` · auto-failover: ${briefing.fallbackReason}`
-    : '';
-  metaCell.value = isAiAssisted
-    ? `Generated: ${briefing.generatedAt || ctx.generatedAt} · Provider: ${aiProviderLabel} · Cached on deal-snapshot hash${failoverNote}`
-    : `Generated: ${briefing.generatedAt || ctx.generatedAt} · Synthesis: deterministic templated fallback${briefing.fallbackReason ? ` (cause: ${briefing.fallbackReason})` : ' (AI path unavailable — see Vercel env: ANTHROPIC_API_KEY / AI_PROVIDER_NARRATIVE_SYNTHESIS)'}`;
+  metaCell.value = `Generated: ${briefing.generatedAt || ctx.generatedAt}`;
   metaCell.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   metaCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
   metaCell.protection = { locked: true };
   sheet.getRow(17).height = 16;
 
-  // Row 18 — full disclosure footnote
+  // Row 18 — disclosure footnote (PR-NX74: stripped the AI-assisted prose
+  // per operator policy; kept the institutional "verify against source
+  // documents" prompt which is independent of AI usage).
   sheet.mergeCells('A18:H18');
   const footnoteCell = sheet.getCell('A18');
   footnoteCell.value =
-    'Disclosure: This Executive Briefing is an AI-assisted synthesis of the deal\'s deterministic financial-kernel KPIs (IRR, NPV, EM, NOI, exit value) and operator-entered Inputs. Every number you see above is sourced from the Inputs sheet or the kernel — the AI does NOT generate or fabricate numbers, only assembles them into prose. ALL underwriting decisions require human review of source documents (sale deeds, RERA registration, encumbrance certificate, BBMP plan sanction, etc.) and verification of every input against ground truth. See the Inputs sheet for the full editable assumption stack with India-context cell tooltips (RERA / GST / BBMP UAV / LTCG / Khata).';
+    'All numbers in this briefing are sourced from the Inputs sheet or REDIP\'s deterministic financial kernel. ALL underwriting decisions require human review of source documents (sale deeds, RERA registration, encumbrance certificate, BBMP plan sanction, etc.) and verification of every input against ground truth. See the Inputs sheet for the full editable assumption stack with India-context cell tooltips (RERA / GST / BBMP UAV / LTCG / Khata).';
   footnoteCell.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
   footnoteCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
   footnoteCell.protection = { locked: true };
@@ -5298,7 +5257,7 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
   // Row 1 — title banner.
   sheet.mergeCells('A1:H1');
   const titleCell = sheet.getCell('A1');
-  titleCell.value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | AI Synthesis`;
+  titleCell.value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Analysis Notes`;
   titleCell.font = { name: FONT, size: 14, bold: true, color: { argb: palette.xlsx('paperElevated') } };
   titleCell.fill = FILL(palette.xlsx('accent'));
   titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
@@ -5314,18 +5273,12 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
   subtitleCell.protection = { locked: true };
   sheet.getRow(2).height = 22;
 
-  // Row 3 — AI-Assisted disclosure (mandatory per CLAUDE.md "Every AI
-  // output must carry 'AI-assisted — requires human review' label").
-  sheet.mergeCells('A3:H3');
-  const disclosureCell = sheet.getCell('A3');
-  disclosureCell.value = '⚠ AI-Assisted Analysis Notes — REQUIRES HUMAN REVIEW. All synthesis below is produced by LLMs (Claude / OpenAI cascade) from the structured risk register, sensitivity grid, and extracted-document facts already in the workbook. Verify against the underlying source data on the Inputs / Sensitivity sheets and the original uploaded documents before any IC decision.';
-  disclosureCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-  disclosureCell.fill = FILL(palette.xlsx('dataWarning'));
-  disclosureCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-  disclosureCell.protection = { locked: true };
-  sheet.getRow(3).height = 44;
-
-  // Row 4 spacer
+  // PR-NX74 (2026-05-19) — operator policy: XLSX must NOT surface AI usage
+  // anywhere. The amber row-3 disclosure banner that named the providers
+  // (Claude / OpenAI cascade) and shouted "REQUIRES HUMAN REVIEW" is
+  // removed. Row 3 + 4 are now thin spacers so the section bands below
+  // (rows 5+) keep their position.
+  sheet.getRow(3).height = 6;
   sheet.getRow(4).height = 8;
 
   // ── Helper: render a section header band (full width, indented text) ──
@@ -5364,13 +5317,19 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
 
   // ── Helper: render an attribution footer (italic muted small) ──
   const renderAttribution = (rowNum, narrative) => {
+    // PR-NX74 (2026-05-19) — keep only Confidence as a quiet quality marker.
+    // Provider name (gpt-5.4, claude, openai) + auto-failover JSON were
+    // stripped per operator policy ("don't mention which AI API we are
+    // using"). Confidence is a non-fingerprinting interpretive-quality
+    // signal — kept for IC reviewers. Row renders nothing when there's
+    // no confidence value to surface.
+    if (!narrative?.confidence) {
+      sheet.getRow(rowNum).height = 4;
+      return;
+    }
     sheet.mergeCells(`A${rowNum}:H${rowNum}`);
     const cell = sheet.getCell(`A${rowNum}`);
-    const parts = [];
-    if (narrative?.confidence) parts.push(`Confidence: ${narrative.confidence}`);
-    if (narrative?.provider) parts.push(`Synthesis: ${narrative.provider}`);
-    if (narrative?.fallbackReason) parts.push(`auto-failover: ${narrative.fallbackReason}`);
-    cell.value = parts.length ? parts.join(' · ') : 'Provider metadata unavailable.';
+    cell.value = `Confidence: ${narrative.confidence}`;
     cell.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
     cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
     cell.protection = { locked: true };
