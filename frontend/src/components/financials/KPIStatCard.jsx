@@ -286,10 +286,15 @@ export default function KPIStatCard({
       type="button"
       onClick={() => setOpen((v) => !v)}
       className={clsx(
-        'p-1 rounded-full transition-colors',
+        // PR-NX71 (2026-05-19): replaced 2 hardcoded hex literals
+        // (#fff1ea bg, #9a3412 text) with the Tailwind premium-amber
+        // palette tokens which honour the design-token system + flip
+        // correctly across light/dark themes.
+        'p-1 rounded-full transition-colors duration-150 ease-out',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
         open
-          ? 'bg-[#fff1ea] text-[#9a3412]'
-          : 'text-stone-400 hover:bg-[#fff1ea] hover:text-[#9a3412]',
+          ? 'bg-amber-50 text-amber-800'
+          : 'text-stone-400 hover:bg-amber-50 hover:text-amber-800',
       )}
       title="See formula, drivers, and source"
       aria-label="Show KPI provenance"

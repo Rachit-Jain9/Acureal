@@ -43,8 +43,20 @@ const safeNumber = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) 
 // Recharts tick props — `fontVariantNumeric: 'tabular-nums'` keeps axis
 // labels column-aligned per FRONTEND_GUIDELINES §7. Hoisted to module scope
 // so identity is stable and Recharts doesn't redraw on every render.
-const AXIS_TICK = { fontSize: 11, fontVariantNumeric: 'tabular-nums' };
-const AXIS_TICK_SMALL = { fontSize: 10, fontVariantNumeric: 'tabular-nums' };
+// PR-NX71 (2026-05-19): `fill` pinned to var(--color-text-muted) so axis
+// labels flip correctly across light/dark themes (was inheriting recharts
+// default which was invisible in dark theme).
+const AXIS_TICK = { fontSize: 11, fontVariantNumeric: 'tabular-nums', fill: 'var(--color-text-muted)' };
+const AXIS_TICK_SMALL = { fontSize: 10, fontVariantNumeric: 'tabular-nums', fill: 'var(--color-text-muted)' };
+
+// PR-NX71 (2026-05-19): shared chart-chrome constants. Replaces 6 hardcoded
+// hex literals (#e5e7eb grid, #64748b reference line) scattered across the
+// 5 chart components in this file. CSS vars flip correctly across themes
+// and match the dashboard + Cash Flows chart conventions (PR-NX65).
+const GRID_STROKE = 'var(--color-border-primary)';
+const REFERENCE_LINE_STROKE = 'var(--color-border-strong)';
+const NEUTRAL_BAR_FILL = 'var(--color-text-disabled)'; // used for inactive bar variants
+const ACCENT_HIGHLIGHT_STROKE = 'var(--color-brand-accent)';
 
 const tooltipStyle = {
   backgroundColor: 'var(--color-bg-elevated)',
@@ -200,7 +212,7 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={comparison} layout="vertical" margin={{ left: 20, right: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
                 <XAxis type="number" tickFormatter={(v) => `${Number(v).toFixed(0)}`} tick={AXIS_TICK} />
                 <YAxis dataKey="label" type="category" tick={AXIS_TICK} width={140} />
                 <Tooltip content={<Tip />} />
@@ -208,8 +220,8 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
                   {comparison.map((entry) => (
                     <Cell
                       key={entry.method}
-                      fill={entry.active ? PHASE_COLORS.terminal : '#cbd5e1'}
-                      stroke={entry.active ? '#7c3aed' : undefined}
+                      fill={entry.active ? PHASE_COLORS.terminal : NEUTRAL_BAR_FILL}
+                      stroke={entry.active ? ACCENT_HIGHLIGHT_STROKE : undefined}
                       strokeWidth={entry.active ? 2 : 0}
                     />
                   ))}
@@ -261,7 +273,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
                 <stop offset="100%" stopColor={PHASE_COLORS.noi} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
             <XAxis dataKey="year" tick={AXIS_TICK} />
             <YAxis
               yAxisId="left"
@@ -342,7 +354,7 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
                 <stop offset="100%" stopColor={PHASE_COLORS.sensitivityLo} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
             <XAxis
               dataKey="cap"
               tick={AXIS_TICK}
@@ -363,9 +375,9 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
             />
             <ReferenceLine
               x={Number(currentCap.toFixed(2))}
-              stroke="#0f172a"
+              stroke="var(--color-text-primary)"
               strokeDasharray="4 4"
-              label={{ value: 'Current', fontSize: 10, position: 'top', fill: '#0f172a' }}
+              label={{ value: 'Current', fontSize: 10, position: 'top', fill: 'var(--color-text-primary)' }}
             />
             <ReferenceDot
               x={Number(currentCap.toFixed(2))}
@@ -429,11 +441,11 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
       <div className="p-4 h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} stackOffset="sign">
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
             <XAxis dataKey="quarter" tick={AXIS_TICK_SMALL} />
             <YAxis tick={AXIS_TICK} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
             <Tooltip content={<Tip />} />
-            <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
+            <ReferenceLine y={0} stroke={REFERENCE_LINE_STROKE} strokeWidth={1} />
             <Bar dataKey="construction" name="Construction" stackId="a" fill={PHASE_COLORS.construction} />
             <Bar dataKey="operating"    name="Operating"    stackId="a" fill={PHASE_COLORS.operating} />
             <Bar dataKey="terminal"     name="Terminal"     stackId="a" fill={PHASE_COLORS.terminal} />
@@ -480,17 +492,17 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
                 <stop offset="100%" stopColor={PHASE_COLORS.construction} stopOpacity={0.35} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
             <XAxis dataKey="quarter" tick={AXIS_TICK_SMALL} />
             <YAxis tick={AXIS_TICK} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
             <Tooltip content={<Tip />} />
-            <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
+            <ReferenceLine y={0} stroke={REFERENCE_LINE_STROKE} strokeWidth={1} />
             {breakEvenIdx > 0 && (
               <ReferenceLine
                 x={`Q${breakEvenIdx}`}
-                stroke="#059669"
+                stroke="var(--color-data-positive)"
                 strokeDasharray="4 4"
-                label={{ value: 'Break-even', fontSize: 10, fill: '#059669', position: 'top' }}
+                label={{ value: 'Break-even', fontSize: 10, fill: 'var(--color-data-positive)', position: 'top' }}
               />
             )}
             <Area
@@ -589,7 +601,7 @@ export function CostCompositionChart({ costs }) {
       <div className="p-4 h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={items} layout="vertical" margin={{ left: 30, right: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
             <XAxis
               type="number"
               tick={AXIS_TICK_SMALL}

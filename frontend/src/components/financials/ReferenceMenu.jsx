@@ -34,7 +34,7 @@ export default function ReferenceMenu({ assetClass }) {
         onClick={() => setMenuOpen((v) => !v)}
         className="inline-flex items-center gap-2 rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:border-stone-900 hover:text-stone-900"
       >
-        <BookOpen size={13} className="text-[#c2410c]" />
+        <BookOpen size={13} className="text-orange-700" />
         <span className="uppercase tracking-[0.12em]">Reference</span>
         <ChevronDown size={12} className="text-stone-500" />
       </button>
@@ -51,7 +51,7 @@ export default function ReferenceMenu({ assetClass }) {
                 onClick={() => pick('methodology')}
                 className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-stone-50"
               >
-                <Sparkles size={14} className="mt-0.5 text-[#c2410c]" />
+                <Sparkles size={14} className="mt-0.5 text-orange-700" />
                 <div>
                   <div className="text-sm font-medium text-stone-900">Methodology</div>
                   <div className="text-[11px] text-stone-500 leading-snug">
