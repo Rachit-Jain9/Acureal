@@ -1,4 +1,5 @@
 require('./config/loadEnv');
+require('./config/validateEnv').validateEnv();
 
 const express = require('express');
 const cors = require('cors');
