@@ -4738,3 +4738,48 @@ Shipped instead the buildable half of Phase 2.3 — PR #454 (PR-NX98):
 - Phase 2.3 — the DPA + Acceptable Use legal documents (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel for the DPA / AUP.
 
+
+## 2026-05-20 - Plan rewrite + Workstream B (the Deal Risk Radar) shipped
+
+### What was worked on
+
+The plan was reorganised from a linear phase list into the **product plan**,
+structured around seven outcome workstreams (Provenance Spine, Risk Sentinel,
+Data Network, Adaptive Face, Spatial Canvas, Foundations, Compliance Close-out)
+with the trust-engine thesis up front. WhatsApp intake was marked deferred per
+the operator; the comp-ranker ML model stays deferred (the existing
+deterministic scorer is sound).
+
+Then shipped the first slice of **Workstream B — the Risk Sentinel** — PR #456
+(PR-NX100), the **Deal Risk Radar**:
+- A new `riskRadar.service.js` + `GET /deals/:dealId/risk/radar` — a
+  deterministic, no-AI synthesis across five failure modes (Title & Ownership,
+  Approvals & Regulatory, Financial, Physical & Technical, Market & Demand).
+  For each it computes a posture — flagged / cleared / **unverified** — from
+  the deal's own risk flags, due-diligence items, and approvals, with
+  explainable signals. "Unverified" is a first-class state: a check nobody has
+  run is surfaced as loudly as a confirmed risk. No schema change.
+- A new `RiskRadarPanel` pinned to the top of the Risk tab — a calm pre-mortem
+  board.
+- 14 new tests (11 backend, 3 frontend).
+
+### Plain-English recap
+- The Risk tab now opens with a "Risk Radar" — a standing checklist of what most often sinks a deal in India: title, approvals, money, the site, the market.
+- For each, it says plainly whether it is cleared, flagged as a problem, or simply not checked yet.
+- Why it matters: REDIP now warns about the *unchecked* things — the blind spots that cause expensive surprises — not just the risks someone already wrote down.
+
+### PRs opened / merged
+- PR #456 - `feat(risk): Deal Risk Radar — standing per-failure-mode pre-mortem (PR-NX100)` - opened, CI green, merged.
+- PR #457 - `docs: session log for the Risk Radar session (PR-NX101)` - this entry.
+
+### Validation
+- Backend: 130 suites / 2164 tests green. Frontend: 68 files / 645 tests green. Production build clean.
+- All CI checks passed on #456. No migration — the radar is pure read synthesis.
+
+### What's left to do
+- Workstream B continued — surface a compact radar on the deal Overview tab; B4 promoter track-record scoring.
+- Workstream A — the Provenance Spine (claims model, confidence bands, IC memo as an audited view).
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
