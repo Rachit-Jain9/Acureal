@@ -27,6 +27,14 @@ const RECOMMENDED = [
   { key: 'ANTHROPIC_API_KEY', why: 'narrative-synthesis fallback' },
 ];
 
+// Recognizable key prefixes per AI provider — used for a boot-time sanity
+// check so a wrong / corrupted key is caught here, not as a runtime 401.
+const AI_KEY_FORMATS = [
+  { key: 'ANTHROPIC_API_KEY', prefix: 'sk-ant-', label: 'an Anthropic key' },
+  { key: 'OPENAI_API_KEY', prefix: 'sk-', label: 'an OpenAI key' },
+  { key: 'GEMINI_API_KEY', prefix: 'AIza', label: 'a Google AI Studio key' },
+];
+
 // A value is a placeholder if it is empty, carries a copy-me marker from
 // .env.example, or is a bracketed token. getJwtSecret() only catches
 // "your_" — this also catches the "replace-with-..." form .env.example uses.
@@ -76,6 +84,21 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
     const value = process.env[key];
     if (value && !isPlaceholder(value) && value.length < 16) {
       warnings.push(`${key} is shorter than 16 characters — use a longer random value.`);
+    }
+  }
+
+  // AI provider keys have recognizable prefixes. A present-but-malformed key
+  // (wrong key pasted, surrounding quotes, truncated, stray whitespace) only
+  // surfaces much later as a cryptic 401 at call time — catch the obvious
+  // cases at boot instead.
+  for (const { key, prefix, label } of AI_KEY_FORMATS) {
+    const raw = process.env[key];
+    if (!raw || isPlaceholder(raw)) continue;
+    if (raw !== raw.trim()) {
+      warnings.push(`${key} has leading/trailing whitespace — it is trimmed before use, but fix the stored value.`);
+    }
+    if (!raw.trim().startsWith(prefix)) {
+      warnings.push(`${key} does not look like ${label} (expected it to start with "${prefix}") — the provider will reject it with a 401.`);
     }
   }
 
