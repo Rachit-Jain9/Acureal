@@ -4908,3 +4908,55 @@ PR #462 (PR-NX106):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: apply migration `20260609_deal_promoter_profiles.sql`; Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-20 - Workstream A (Provenance Spine) — Confidence Range
+
+### What was worked on
+
+Slice 2 of Workstream A, the natural follow-up to the Model Confidence panel.
+Model Confidence reports how many inputs are set for the deal vs. on benchmark
+defaults; Confidence Range answers what that uncertainty does to the headline
+numbers.
+
+PR #464 (PR-NX108):
+- New `confidenceRange.service.js` — for each headline KPI (IRR, NPV, equity
+  multiple) it reports a deterministic range: the kernel re-run with every
+  still-unverified assumption swept across its cited benchmark band. Only
+  unverified assumptions widen the range; an input the analyst set for the
+  deal is trusted and contributes nothing — so verifying inputs visibly
+  tightens the band.
+- No engine change. It re-runs the existing deterministic kernel with
+  perturbed inputs — the same mechanism financial.service already uses for
+  sensitivity / scenarios / the provenance graph. Every range endpoint is a
+  real, reproducible kernel run, never a fabricated probability interval.
+- Per-input drivers ranked by impact ("verify this assumption next"), each
+  citing its benchmark source.
+- New `GET /financials/:dealId/confidence-range` route; soft-fails to
+  { available: false } for a missing model or uncatalogued class.
+- The Model Confidence material-input catalogue is now a shared export so the
+  two Provenance-Spine panels classify inputs identically.
+- New `ConfidenceRangePanel` on the Financials page, directly below Model
+  Confidence — range bars per KPI, an expandable driver breakdown, an honest
+  footnote (the range is not a probability forecast).
+- 14 new tests (7 backend, 7 frontend).
+
+### Plain-English recap
+- The Financials page now shows a "Confidence Range" card under Model Confidence: for IRR, NPV and equity multiple it shows a range, not just a single number — how far the headline figure could move because of assumptions nobody has verified.
+- Expand it to see which assumptions are responsible, biggest first, each with the benchmark it came from — a ready-made "go check these" list.
+- Why it matters: "IRR 18.4%" hides how solid or shaky it is. This turns it into an honest range, and ties it to the work of verifying inputs — verify an assumption and the range shrinks.
+
+### PRs opened / merged
+- PR #464 - `feat(financials): Confidence Range — KPI bands from unverified assumptions (PR-NX108)` - opened, CI green, merged.
+- PR #465 - `docs: session log for the Confidence Range session (PR-NX109)` - this entry.
+
+### Validation
+- Backend: 133 suites / 2195 tests green. Frontend: 72 files / 666 tests green. Production build clean.
+- All CI checks passed on #464. No migration — read-side only.
+
+### What's left to do
+- Workstream A continued — the claim graph / IC memo as a fully traceable audited view; optionally thread the confidence range into the KPI tiles themselves.
+- Workstream C — relevance-signal capture + the standing extraction-quality system (cheap, compounding).
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
