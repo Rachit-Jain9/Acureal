@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, KeyRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { User, Shield, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, KeyRound } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
@@ -443,6 +444,27 @@ export default function SettingsPage() {
             </button>
           </form>
         )}
+      </div>
+
+      {/* Privacy & data — DPDP rights: see / download data, manage consent.
+          Links to the dedicated Privacy Centre (PrivacyCentrePage). */}
+      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+        <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
+          <Shield size={18} />
+          Privacy & your data
+        </h3>
+        <p className="text-xs text-content-secondary mb-4 max-w-2xl">
+          See exactly what personal data REDIP holds about you, download a copy, manage
+          your consent choices for each purpose, and exercise your rights under the
+          Digital Personal Data Protection Act, 2023.
+        </p>
+        <Link
+          to="/dashboard/privacy"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+        >
+          <Shield size={14} />
+          Open Privacy Centre
+        </Link>
       </div>
 
       {/* Preferences Section */}

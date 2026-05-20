@@ -172,6 +172,22 @@ export const legalAPI = {
   recordAcceptance: (documentIds) => api.post('/legal/me/accept', { documentIds }),
 };
 
+// Consent — DPDP §6 granular per-purpose consent ledger.
+// `get` returns { purposes, state, available, history }; `update` appends one
+// or more decisions ({ purpose: boolean }) and returns the fresh state.
+export const consentAPI = {
+  get: () => api.get('/consent'),
+  update: (decisions) => api.put('/consent', { decisions }),
+};
+
+// Privacy Centre — DSAR (DPDP §11). `overview` is the page read model;
+// `exportData` returns the full machine-readable personal-data export.
+// Password is re-verified server-side for password accounts.
+export const privacyAPI = {
+  overview: () => api.get('/privacy/overview'),
+  exportData: (password) => api.post('/privacy/export', password ? { password } : {}),
+};
+
 // Deals
 export const dealsAPI = {
   list: (params) => api.get('/deals', { params }),

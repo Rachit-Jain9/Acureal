@@ -42,6 +42,7 @@ const CompsPage = lazy(() => import('./pages/CompsPage'));
 const DealComparePage = lazy(() => import('./pages/DealComparePage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const PrivacyCentrePage = lazy(() => import('./pages/PrivacyCentrePage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
 const ParcelIntelligenceAdminPage = lazy(() => import('./pages/ParcelIntelligenceAdminPage'));
@@ -143,6 +144,7 @@ export default function App() {
           <Route path="compare" element={withSuspense(<DealComparePage />)} />
           <Route path="reports" element={withSuspense(<ReportsPage />)} />
           <Route path="settings" element={withSuspense(<SettingsPage />)} />
+          <Route path="privacy" element={withSuspense(<PrivacyCentrePage />)} />
           {/* Admin / data-curation surfaces — moved out of Settings (which is now
               personal profile only). Old /settings/* paths kept as redirects so
               existing bookmarks don't break. */}
