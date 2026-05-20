@@ -4481,3 +4481,47 @@ Read three external research documents (an India proptech legal research pack, a
 - Operator: rotate the Supabase database password flagged in the data-use document; set up and monitor the security@redip.in mailbox.
 - Next sessions, per the approved plan file: Phase 1.2 (AI-prompt PII redaction + prompt-injection guard), Phase 1.3 (security_events incident-register table), Phase 2 (enterprise-diligence pack — granular consent, Privacy Centre, DPA, RoPA, breach runbook), Phase 3 (anonymized-benchmark-layer foundation), Phase 4 (broader architecture — One Brain DealContext, ontology adoption).
 
+
+## 2026-05-20 - Security hardening: Phase 0 + Phase 1 completed
+
+### What was worked on
+Continued the operator-approved compliance & security plan. Merged the four
+Phase-0/1 pull requests opened earlier the same day (#436 boot-time env
+validation, #437 httpOnly-only session token, #438 security overview, #439
+session log). Did a focused technical review — confirmed the codebase is
+mature and clean (zero FIXME/HACK markers, the "One Brain" unified deal
+endpoint already shipped, AI layer mature) — then shipped the final two
+Phase-1 items.
+
+PR #440 — a `security_events` incident register: a new table + service that
+records security-relevant events (account lockouts, AI cost-cap breaches,
+suspected breaches, vendor incidents) with severity, status, and the
+CERT-In / DPDP reporting clocks. Fail-open and migration-tolerant.
+
+PR #441 — Aadhaar/PAN redaction in the document-extraction pipeline:
+extracted text and fields are scrubbed of PAN and spaced-Aadhaar numbers
+before they are stored, indexed for search, or sent to the second AI pass.
+Deliberately precise — khata / survey / company names are never masked.
+
+With these, Phase 0 and Phase 1 of the approved plan are complete.
+
+### Plain-English recap
+- REDIP now has a dedicated place to log and track security incidents, with the legal reporting deadlines attached to each one.
+- Identity numbers (PAN, Aadhaar) in uploaded documents are now automatically blanked out of everything REDIP stores and processes after it reads the document.
+- The earlier safety work — fail-safe startup, the secure login token, and the investor security document — is live on the site.
+- Why it matters: the platform's whole Phase-0/1 security baseline is now shipped, which is the groundwork an institutional investor's security review expects.
+
+### PRs opened / merged
+- PR #436, #437, #438, #439 — merged.
+- PR #440 - `feat(security): security_events incident register table + service (PR-NX84)` - opened, CI green, merged.
+- PR #441 - `feat(ai): redact Aadhaar/PAN in the document-extraction pipeline (PR-NX85)` - opened, CI green, merged.
+
+### Validation
+- Full backend suite green at every step (2079 -> 2091 -> 2092 tests, 124 suites).
+- All CI checks passed on #440 and #441 (backend, frontend, financial kernel, audit/migration lint, Vercel deploy).
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260605_security_events.sql` in the Supabase SQL editor. The deployed code is safe without it (the service is migration-tolerant); the table just needs to exist before incidents can be recorded.
+- Operator: rotate the Supabase database password noted earlier; set up and monitor the security@redip.in mailbox.
+- Next: Phase 2 of the plan — granular consent (`user_consents`), the Privacy Centre (see / export / delete-my-data), the DPA + Acceptable Use legal documents (needs counsel review), the public subprocessor page, the RoPA, and operationalizing the breach runbook.
+
