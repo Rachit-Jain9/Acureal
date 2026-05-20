@@ -3,6 +3,7 @@
 const express = require('express');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const riskService = require('../services/risk.service');
+const riskRadarService = require('../services/riskRadar.service');
 const inconsistencyDetector = require('../services/inconsistencyDetector.service');
 const aiArtifacts = require('../services/aiArtifacts.service');
 const dealService = require('../services/deal.service');
@@ -26,6 +27,22 @@ router.get('/deals/:dealId/risk/score', authenticate, async (req, res, next) => 
   try {
     const score = await riskService.getRiskScore(req.params.dealId);
     return res.json({ success: true, data: score });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /deals/:dealId/risk/radar
+//
+// Workstream B — the Deal Risk Radar: a standing, deterministic pre-mortem.
+// For each failure mode (title, approvals, financial, physical, market) it
+// synthesises a posture — cleared / unverified / flagged — from the deal's
+// risk flags, due-diligence items, and approvals, surfacing "not yet verified"
+// as a first-class state. No AI; every posture and signal is explainable.
+router.get('/deals/:dealId/risk/radar', authenticate, async (req, res, next) => {
+  try {
+    const radar = await riskRadarService.getRiskRadar(req.params.dealId);
+    return res.json({ success: true, data: radar });
   } catch (err) {
     next(err);
   }
