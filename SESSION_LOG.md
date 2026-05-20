@@ -4525,3 +4525,82 @@ With these, Phase 0 and Phase 1 of the approved plan are complete.
 - Operator: rotate the Supabase database password noted earlier; set up and monitor the security@redip.in mailbox.
 - Next: Phase 2 of the plan — granular consent (`user_consents`), the Privacy Centre (see / export / delete-my-data), the DPA + Acceptable Use legal documents (needs counsel review), the public subprocessor page, the RoPA, and operationalizing the breach runbook.
 
+
+## 2026-05-20 - AI outage fixes + Phase 2 (consent + diligence pack) + Phase 3.1
+
+### What was worked on
+
+Two threads in one session.
+
+**Thread 1 — the AI provider outage.** The AI Provider Health widget was
+all-red. A code-level investigation found three genuine, separate bugs (not
+expired keys):
+
+- PR #443 / #444 area — AI API keys were read from environment variables
+  without trimming, so a trailing newline on a stored key produced a
+  `401 invalid x-api-key` on every call. Fixed by trimming keys at the
+  provider boundary and adding a boot-time key-format check that warns on
+  whitespace or a wrong provider prefix. (Migration `20260606` also widened
+  the `ai_call_logs` status constraint so `cache_hit` / `cost_capped` rows
+  stop being rejected, and corrected the health-page success-rate maths.)
+- PR #445 — `providerRegistry.js` never exported the raw client getters
+  (`getGeminiClient` / `getOpenAIClient` / `getAnthropicClient`), so the
+  export narrative + market-context cascades threw "client unavailable" for
+  Gemini and OpenAI on every call. Fixed by adding the getters to the
+  module's exports.
+- PR #446 — a DOCX export produced a corrupt file because the site-map
+  image was added without an image type, writing a `.undefined` media part.
+  Fixed by setting `type: 'png'`.
+
+All four AI/export fixes were merged; migration `20260606` was applied by
+the operator.
+
+**Thread 2 — Phase 2 + Phase 3.1 of the compliance plan.**
+
+- PR #447 (PR-NX91) — granular per-purpose consent, backend foundation. A
+  new append-only `user_consents` ledger (migration `20260607`), a
+  `consent.service.js` (record / withdraw / read current state / history,
+  with graceful degradation until the table is migrated), and a
+  `/api/consent` route. Four purposes: product improvement, anonymized
+  benchmarking, marketing, AI processing. A withdrawal is a new row, never
+  an update, so consent history is fully auditable. 20 new unit tests.
+  This satisfies DPDP §6 "specific" consent and is the prerequisite for the
+  Phase 3 benchmark layer. CI green; awaiting operator merge.
+
+- PR #448 (PR-NX92) — the diligence documentation pack + the data model.
+  New: a Record of Processing Activities (`docs/legal/ropa.md`), a Backup &
+  Disaster Recovery posture (`docs/legal/backup_and_dr.md`), and a
+  five-layer data-governance model (`docs/DATA_GOVERNANCE.md`) that maps
+  every table to a sensitivity layer and defines the cross-tenant boundary
+  rules for the benchmark feature. Reconciled: the Data Retention Policy
+  (it claimed erasure was "manual / Phase 4" — it is in fact a live daily
+  cron) and the breach runbook (now opens a `security_events` row and
+  references the DR procedure). `SECURITY.md` §16 roadmap refreshed.
+  Documentation only; CI green; awaiting operator merge.
+
+- PR #449 (PR-NX93) — this session-log entry.
+
+### Plain-English recap
+- The AI features are fixed — the all-red health widget was three real code bugs (untrimmed keys, missing internal wiring, a bad image export), not expired API keys; all three are fixed and live.
+- The platform can now remember a user's separate yes/no choices for things like marketing or sharing anonymized data — with a full, tamper-proof history — once the matching database update is applied.
+- The written evidence an enterprise investor's security team asks for now exists: a data-processing map, a disaster-recovery plan, an honest retention policy, and the rulebook for keeping one customer's deal data separate from another's.
+- Why it matters: this clears the AI outage and delivers the bulk of the enterprise-diligence groundwork that institutional investors expect before they commit.
+
+### PRs opened / merged
+- PR #443, #444, #445, #446 — AI outage + DOCX export fixes — opened, CI green, merged.
+- PR #447 - `feat(consent): DPDP §6 per-purpose consent ledger (PR-NX91)` - opened, CI green (127 suites / 2134 tests), awaiting operator merge.
+- PR #448 - `docs(compliance): diligence pack + five-layer data model (PR-NX92)` - opened, CI green, awaiting operator merge.
+- PR #449 - `docs: session log for the AI-fix + Phase 2/3.1 session (PR-NX93)` - this entry.
+
+### Validation
+- Full backend suite green: 127 suites / 2134 tests (includes 20 new consent tests).
+- `consent.routes.js` smoke-loaded cleanly; `server.js` route mount verified by the suite's app-mounting tests.
+- All CI checks passed on #447 and #448 (backend, frontend, financial kernel, audit/migration lint, Vercel deploy).
+- PR #448 is documentation only — no code paths touched; every factual claim cross-checked against `retentionSweep.service.js`, `accountClosure.service.js`, `vercel.json`, and the migration set.
+
+### What's left to do
+- Operator: merge PR #447, then apply migration `database/migrations/20260607_user_consents.sql` in the Supabase SQL editor (the deployed code is migration-tolerant, but the table must exist before consent can be recorded). Then merge PR #448 and #449.
+- Operator: confirm the Supabase plan tier / PITR status and record it in `backup_and_dr.md`; run one backup restore drill; fill the Incident Lead / Legal Liaison names and drill date in the breach runbook before external launch.
+- Operator: set up and monitor the `security@redip.in` mailbox; engage Indian legal counsel for the DPA + Acceptable Use documents (Phase 2.3 is blocked on counsel — those texts must not be authored unilaterally).
+- Next: Phase 2.2 — the Privacy Centre (see / download / correct my data, consent management UI), which depends on PR #447 being merged. Phase 2.3 — DPA / AUP (counsel) + the public subprocessor page. Phase 3.2 / 3.3 — the org-level "do not benchmark" switch and the `included_in_aggregate` eligibility flag, deliberately deferred per the plan until a real benchmark query exists. Phase 4 — broader architecture.
+
