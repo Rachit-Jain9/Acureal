@@ -4695,3 +4695,46 @@ Then shipped the first working slice — PR #452 (PR-NX96):
 - Phase 4 — broader architecture (ontology adoption; verified-comps validators at input time).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel for the DPA / AUP.
 
+
+## 2026-05-20 - Public sub-processor page + comp-ranker review
+
+### What was worked on
+
+Reviewed the comp-similarity scorer ahead of the operator-approved Phase 5.3
+"comp-ranking ML model". `backend/src/utils/compSimilarity.js` is already a
+sound, deterministic, explainable 6-factor scorer (distance, asset class, BHK,
+vintage, size band, amenities), surfaced in the deal Comps tab. A trained ML
+ranker was **deferred** — premature (no relevance training data yet) and a
+regression in the explainability the underwriting domain (and CLAUDE.md)
+require. The honest version waits for real relevance signal.
+
+Shipped instead the buildable half of Phase 2.3 — PR #454 (PR-NX98):
+- A public `/subprocessors` page listing the third-party services REDIP uses
+  (Supabase, Vercel, Anthropic, OpenAI, Google, Resend), the data each handles,
+  and where it runs, with a data-residency note. Linked from the public footer.
+  Mirrors the other public legal pages.
+- `SECURITY.md` §16 reconciled — granular consent + self-service data
+  access/export → "In place" (Privacy Centre), sub-processor page → "In place",
+  DPA → "Planned — pending legal counsel".
+- 3 component tests.
+
+### Plain-English recap
+- There's now a public page that openly lists every outside company REDIP uses to run the platform, what each does, and which country it operates in.
+- It's linked from the footer on the public pages.
+- Why it matters: enterprise security reviewers expect this transparency, and it's now a finished page rather than a checklist promise.
+
+### PRs opened / merged
+- PR #454 - `feat(legal): publish the public sub-processor disclosure page (PR-NX98)` - opened, CI green, merged.
+- PR #455 - `docs: session log for the sub-processor-page session (PR-NX99)` - this entry.
+
+### Validation
+- Frontend: 67 files / 642 tests green. Production build clean. Backend untouched.
+- All CI checks passed on #454.
+
+### What's left to do
+- Phase 5.3 — the comp-ranking model: deferred until there is real comp-relevance training signal; the existing deterministic scorer stands.
+- Phase 5.2 (full) — promote the A/B eval harness to a standing quality system.
+- Phase 4.2 — ontology adoption across deal forms.
+- Phase 2.3 — the DPA + Acceptable Use legal documents (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel for the DPA / AUP.
+
