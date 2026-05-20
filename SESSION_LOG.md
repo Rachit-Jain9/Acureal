@@ -4783,3 +4783,40 @@ Then shipped the first slice of **Workstream B — the Risk Sentinel** — PR #4
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-20 - Workstream B continued — Risk Radar on the deal front page
+
+### What was worked on
+
+Continued Workstream B (the Risk Sentinel). The full Risk Radar shipped on the
+Risk tab in PR-NX100; this slice puts the sentinel where it belongs — on the
+deal's front page.
+
+PR #458 (PR-NX102):
+- A new `RiskRadarStrip` — a compact, one-glance per-failure-mode posture strip
+  (Title / Approvals / Financial / Physical / Market, each cleared /
+  not-verified / flagged), pinned to the Overview tab below the Deal Pulse
+  ribbon. The whole strip links through to the full radar on the Risk tab.
+- Reuses the `/risk/radar` read from PR-NX100 — no new backend, no migration.
+- Stays quiet on the front page if the radar can't load. 3 component tests.
+
+### Plain-English recap
+- A deal's front page now shows a small "Risk Radar" line — five quick verdicts on what most often sinks a deal (title, approvals, money, the site, the market): cleared, flagged, or not checked yet.
+- Clicking it opens the full breakdown on the Risk tab.
+- Why it matters: the deal team sees the warning the moment they open a deal, instead of going to look for it — which is the whole point of a sentinel.
+
+### PRs opened / merged
+- PR #458 - `feat(risk): surface a compact Risk Radar on the deal Overview (PR-NX102)` - opened, CI green, merged.
+- PR #459 - `docs: session log for the Overview Risk Radar session (PR-NX103)` - this entry.
+
+### Validation
+- Frontend: 69 files / 648 tests green. Production build clean. Backend untouched.
+- All CI checks passed on #458. No migration.
+
+### What's left to do
+- Workstream B — B4 promoter track-record scoring (a structured, scored field; needs a small data-model decision).
+- Workstream A — the Provenance Spine (claims model, confidence bands, IC memo as an audited view) — the large, high-leverage piece; needs careful multi-session work.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
