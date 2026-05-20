@@ -51,6 +51,19 @@ export function useScenarios(dealId) {
   });
 }
 
+// Workstream A (Provenance Spine) — read-side model-confidence summary for a
+// saved financial model: how many key inputs are set for this deal vs. still
+// on REDIP's benchmark defaults. Read-only display; no toast on error — the
+// panel hides itself when the payload is unavailable.
+export function useModelConfidence(dealId) {
+  return useQuery({
+    queryKey: ['model-confidence', dealId],
+    queryFn: () => financialsAPI.modelConfidence(dealId).then((r) => r.data.data),
+    enabled: !!dealId,
+    retry: 1,
+  });
+}
+
 // Provenance-carrying defaults registry for the current asset class. The
 // effective map merges globals with per-class overrides. Values are static
 // at kernel-build time, so stale-time is long.

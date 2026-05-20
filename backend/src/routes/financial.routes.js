@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const financialService = require('../services/financial.service');
+const modelConfidenceService = require('../services/modelConfidence.service');
 const dealService = require('../services/deal.service');
 const { generateSensitivityNarrative } = require('../services/export.insights.service');
 const { authenticate, requireRole } = require('../middleware/auth');
@@ -420,6 +421,26 @@ router.get('/:dealId/financial-graph', authenticate, async (req, res, next) => {
   try {
     const graph = await financialService.getFinancialGraph(req.params.dealId);
     res.json({ success: true, data: graph });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /financials/:dealId/model-confidence — Workstream A (Provenance Spine).
+//
+// Deterministic, read-side summary of how much of the saved underwriting
+// rests on inputs set specifically for THIS deal versus inputs still on
+// REDIP's cited benchmark library. Changes no math, touches no kernel.
+//
+// Returns either { available: true, dealSetCount, defaultCount, total,
+// confidencePct, band, inputs[] } or { available: false, reason } — the
+// service never throws for a missing model / uncatalogued class, so the
+// panel can simply hide itself. Auth: authenticate only (same read scope
+// as GET /:dealId).
+router.get('/:dealId/model-confidence', authenticate, async (req, res, next) => {
+  try {
+    const summary = await modelConfidenceService.getModelConfidence(req.params.dealId);
+    res.json({ success: true, data: summary });
   } catch (error) {
     next(error);
   }
