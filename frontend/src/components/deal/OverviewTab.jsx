@@ -25,6 +25,8 @@ import DealQaBox from './DealQaBox';
 import AutoFillReadyCard from './AutoFillReadyCard';
 // Workstream B — compact Risk Radar pinned to the deal front page.
 import RiskRadarStrip from './RiskRadarStrip';
+// Workstream A — compact model-trust verdict beside the financial numbers.
+import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
 // key-metric card. Extends the chip that already ships in ParcelTab
 // (PR-NX50) to the Overview tab where operators land first.
@@ -332,6 +334,11 @@ export default function OverviewTab() {
           </div>
         </CollapsibleCard>
       )}
+
+      {/* Workstream A — model-trust verdict, sitting with the financial
+          numbers. Gated on `financials`; the strip also self-hides when
+          the model class is not yet catalogued. */}
+      {financials && <ModelTrustSummary dealId={dealId} />}
 
       {propertyForBuildability && (
         <CollapsibleCard

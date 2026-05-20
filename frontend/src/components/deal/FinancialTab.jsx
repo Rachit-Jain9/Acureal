@@ -4,6 +4,9 @@ import { clsx } from 'clsx';
 import { formatCrores, formatPct, formatArea } from '../../utils/format';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
 import AuditTimelineView from '../financials/AuditTimelineView';
+// Workstream A (Provenance Spine) — the model-trust verdict, carried from
+// the DCF page to the deal workspace so it travels with the numbers.
+import ModelTrustSummary from '../financials/ModelTrustSummary';
 import { SectionHeader } from '../../design-system';
 import { useDealRecord } from '../../hooks/useDealContext';
 
@@ -103,6 +106,10 @@ export default function FinancialTab() {
         }
         className="mb-0"
       />
+
+      {/* Workstream A — how grounded these numbers are, and the range the
+          unverified assumptions imply. Hides itself when uncatalogued. */}
+      <ModelTrustSummary dealId={dealId} />
 
       {/* Returns */}
       <div className="card-editorial">
