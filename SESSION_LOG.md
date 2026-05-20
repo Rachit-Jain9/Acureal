@@ -4453,3 +4453,31 @@ Fixed the XLSX export behavior that could make formula-heavy worksheets such as 
 ### What's left to do
 Re-download Pointec from production and open it in Excel to confirm the Cash Flow Engine displays values immediately.
 
+
+## 2026-05-20 - Compliance, security & data-governance: plan + Phase 0/1 kickoff
+
+### What was worked on
+Read three external research documents (an India proptech legal research pack, a data-use & security strategy, and a Karnataka/Bengaluru legal-privacy-compliance pack) word for word, then audited the actual REDIP codebase against every recommendation in them. Finding: the codebase already implements most of what the documents proposed building (Postgres RLS multi-tenancy, MFA, Google OAuth, full httpOnly-cookie auth, versioned legal documents with auditable acceptance, HMAC-signed audit trail, scheduled DPDP erasure, daily retention cron, strong security headers + CSP). Produced one unified, verified compliance / security / data-governance / architecture plan — operator-approved — that closes only the genuine gaps and is oriented to passing an institutional investor's security & privacy diligence. Began executing it.
+
+### Plain-English recap
+- REDIP now refuses to start in production if a critical security setting is missing or left as a placeholder — it fails safe instead of running insecurely.
+- The secret that keeps you signed in is no longer kept anywhere a malicious browser script could read it; it lives only in a protected cookie.
+- There is now a clear, honest security & privacy document that answers the questionnaire funds and banks send during diligence.
+- Why it matters: these are the first concrete steps toward REDIP passing an institutional investor's security review.
+
+### PRs opened / merged
+- PR #436 - `chore(config): fail-closed boot-time env validation + refresh .env.example (PR-NX80)` - opened; awaiting operator merge.
+- PR #437 - `fix(auth): stop persisting the access token in browser storage (PR-NX81)` - opened; awaiting operator merge.
+- PR #438 - `docs: add security & privacy overview for diligence (PR-NX82)` - opened; awaiting operator merge.
+
+### Validation
+- PR #436: full backend suite 2079 tests / 123 suites pass; new validateEnv test covers 6 cases.
+- PR #437: full backend suite 2079 tests pass; full frontend suite 630 tests / 64 files pass; production build clean.
+- PR #438: docs-only; no code paths affected.
+- Live login smoke check (DevTools storage shows no token) is listed as a manual step in PR #437 — it needs a running stack + a test account.
+
+### What's left to do
+- Operator: merge PR #436, #437, #438 (each merge publishes to the live site); merge PR #436 first.
+- Operator: rotate the Supabase database password flagged in the data-use document; set up and monitor the security@redip.in mailbox.
+- Next sessions, per the approved plan file: Phase 1.2 (AI-prompt PII redaction + prompt-injection guard), Phase 1.3 (security_events incident-register table), Phase 2 (enterprise-diligence pack — granular consent, Privacy Centre, DPA, RoPA, breach runbook), Phase 3 (anonymized-benchmark-layer foundation), Phase 4 (broader architecture — One Brain DealContext, ontology adoption).
+
