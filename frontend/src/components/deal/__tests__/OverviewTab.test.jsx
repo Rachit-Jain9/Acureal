@@ -48,6 +48,12 @@ vi.mock('../BuildabilitySummary', () => ({
   default: () => null,
 }));
 
+// Workstream B — RiskRadarStrip is its own component with its own test;
+// stub it so this OverviewTab test stays focused.
+vi.mock('../RiskRadarStrip', () => ({
+  default: () => null,
+}));
+
 import OverviewTab from '../OverviewTab';
 
 const renderWithProviders = (ui) => {
