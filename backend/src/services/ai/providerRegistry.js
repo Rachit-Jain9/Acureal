@@ -464,6 +464,15 @@ const runOpenAIEmbedding = async ({
 module.exports = {
   getProviderAvailability,
   getRoutingConfig,
+  // Raw SDK client getters. runAI passes this whole module to a task's
+  // run() callback as `providers`; exportNarrative.service.js and
+  // aiMarketContext.service.js need raw client access for text-only
+  // generations the run* helpers don't cover. Without these on the export
+  // surface, `providers.getGeminiClient` was undefined and those callers'
+  // Gemini / OpenAI cascade legs always threw "<provider> client unavailable".
+  getGeminiClient,
+  getAnthropicClient,
+  getOpenAIClient,
   runGeminiInline,
   runClaudeReasoning,
   runClaudeReasoningStream,
