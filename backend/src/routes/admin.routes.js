@@ -16,6 +16,7 @@ const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const aiUsageService = require('../services/aiUsage.service');
 const aiHealthService = require('../services/aiHealth.service'); // PR-NX22
+const learningSignalsService = require('../services/learningSignals.service'); // PR-NX96
 const routingConfigService = require('../services/ai/routingConfig');
 const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 const { query } = require('../config/database');
@@ -112,6 +113,25 @@ router.get('/ai-health', authenticate, requireRole('admin', 'analyst'), async (r
   try {
     const snapshot = await aiHealthService.getHealthSnapshot();
     res.json({ success: true, data: snapshot });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/extraction-quality?days=90
+//
+// PR-NX96 (Phase 5.2 seed): extraction-accuracy from real human corrections.
+// Aggregates the `extraction_field_review` learning signals into a per-field
+// correction rate — "which fields does the model get wrong" — over a trailing
+// window. Operator-only (per the AI-disclosure policy this stays off the
+// customer surface). Soft-fails to an empty shape if 20260608 is unapplied.
+//
+// Org-scoped via current_organization_id() inside the aggregate query.
+router.get('/extraction-quality', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const days = req.query.days ? parseInt(req.query.days, 10) : 90;
+    const data = await learningSignalsService.getExtractionAccuracy({ days });
+    res.json({ success: true, data });
   } catch (error) {
     next(error);
   }

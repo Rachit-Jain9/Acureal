@@ -14,6 +14,12 @@ vi.mock('../../hooks/useAiUsage', () => ({
   useAiUsage: (...args) => useAiUsageMock(...args),
 }));
 
+// The extraction-accuracy widget does its own fetch; stub it so this page
+// test stays focused on the cost dashboard and offline.
+vi.mock('../../components/admin/ExtractionQualityWidget', () => ({
+  default: () => null,
+}));
+
 import AdminAiUsagePage from '../AdminAiUsagePage';
 
 const renderPage = () => {

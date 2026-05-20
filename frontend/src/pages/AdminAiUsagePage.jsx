@@ -19,6 +19,7 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { Card, SectionHeader, SkeletonList, ErrorState } from '../design-system';
 import { useAiUsage } from '../hooks/useAiUsage';
+import ExtractionQualityWidget from '../components/admin/ExtractionQualityWidget';
 
 // Admin-only AI cost / latency dashboard.
 //
@@ -535,6 +536,10 @@ export default function AdminAiUsagePage() {
           </p>
         </>
       )}
+
+      {/* Phase 5.2 — extraction accuracy from real human corrections. Own
+          fetch, so it renders independently of the cost dashboard above. */}
+      <ExtractionQualityWidget days={days} />
     </div>
   );
 }
