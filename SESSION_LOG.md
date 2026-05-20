@@ -4960,3 +4960,46 @@ PR #464 (PR-NX108):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-20 - Workstream A (Provenance Spine) — Model Trust integration
+
+### What was worked on
+
+Cross-module integration. The two Provenance-Spine signals shipped earlier —
+Model Confidence (PR-NX106) and Confidence Range (PR-NX108) — lived only on
+the DCF Underwriting page, the model builder's surface. The person reviewing
+a deal works on the deal Overview and Financial tab, which carried no trust
+signal. This closes that gap.
+
+PR #466 (PR-NX110):
+- New `ModelTrustSummary` — a compact strip that fuses both signals into one
+  glance: the confidence headline (% of inputs set for the deal + band) and
+  the headline-KPI ranges (IRR / NPV / equity multiple), with a link through
+  to the full breakdown.
+- Pure display — reuses the existing model-confidence + confidence-range
+  endpoints. No new backend, no schema change. Self-hides when the deal has
+  no financial model or the class is uncatalogued.
+- Wired into the deal Overview (beside the Financial Summary card) and the
+  deal Financial tab (above the Returns card).
+- 6 new frontend tests; OverviewTab test stubs the new component.
+
+### Plain-English recap
+- The deal Overview and the deal's Financial tab now show a "Model Trust" strip: at a glance, how much of the financial model is built on facts entered for this deal, and the range the headline numbers could move within.
+- It links straight to the full confidence breakdown on the underwriting page.
+- Why it matters: the "how much can I trust this model" signal used to be visible only to the analyst building the model. Now it travels with the deal — whoever opens it to review or sign off sees it immediately.
+
+### PRs opened / merged
+- PR #466 - `feat(deal): carry the Model Trust verdict into the deal workspace (PR-NX110)` - opened, CI green, merged.
+- PR #467 - `docs: session log for the Model Trust integration session (PR-NX111)` - this entry.
+
+### Validation
+- Frontend: 73 files / 672 tests green. Production build clean. Backend untouched.
+- All CI checks passed on #466. No migration — frontend-only.
+
+### What's left to do
+- Workstream A continued — the claim graph / IC memo as a fully traceable audited view; optionally thread the confidence range into the KPI tiles themselves.
+- Workstream C — relevance-signal capture + the standing extraction-quality system (cheap, compounding).
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
