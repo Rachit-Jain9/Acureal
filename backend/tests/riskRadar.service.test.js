@@ -14,11 +14,12 @@ const riskRadar = require('../src/services/riskRadar.service');
 const DEAL_ID = 'deal-1';
 
 // Configure the three reads by inspecting the SQL.
-const wire = ({ risk = [], dd = [], approvals = [] } = {}) => {
+const wire = ({ risk = [], dd = [], approvals = [], promoter = [] } = {}) => {
   query.mockImplementation((sql) => {
     if (/FROM risk_flags/.test(sql)) return Promise.resolve({ rows: risk });
     if (/FROM dd_items/.test(sql)) return Promise.resolve({ rows: dd });
     if (/FROM approval_items/.test(sql)) return Promise.resolve({ rows: approvals });
+    if (/deal_promoter_profiles/.test(sql)) return Promise.resolve({ rows: promoter });
     return Promise.resolve({ rows: [] });
   });
 };
@@ -45,12 +46,34 @@ describe('category mapping', () => {
 });
 
 describe('getRiskRadar', () => {
-  test('a brand-new deal returns five unverified categories', async () => {
+  test('a brand-new deal returns six unverified categories', async () => {
     wire({});
     const radar = await riskRadar.getRiskRadar(DEAL_ID);
-    expect(radar.categories).toHaveLength(5);
+    expect(radar.categories).toHaveLength(6);
     expect(radar.categories.every((c) => c.posture === 'unverified')).toBe(true);
     expect(radar.overall_posture).toBe('unverified');
+  });
+
+  test('includes a promoter/execution category fed by the promoter profile', async () => {
+    wire({
+      promoter: [
+        {
+          promoter_name: 'Acme Builders',
+          delivered_on_time: 8,
+          delivered_delayed: 2,
+          rera_registered: true,
+          rera_complaints: 2,
+          total_projects: 12,
+        },
+      ],
+    });
+    const radar = await riskRadar.getRiskRadar(DEAL_ID);
+    expect(radar.categories).toHaveLength(6);
+    const promoter = cat(radar, 'promoter_execution');
+    expect(promoter).toBeTruthy();
+    // RERA complaints on record → the failure mode is flagged.
+    expect(promoter.posture).toBe('flagged');
+    expect(radar.overall_posture).toBe('flagged');
   });
 
   test('an open critical risk flag flags its category and the overall posture', async () => {

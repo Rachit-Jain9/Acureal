@@ -591,6 +591,13 @@ export const riskAPI = {
   narrative:             (dealId) => api.get(`/deals/${dealId}/risk-narrative`),
 };
 
+// Promoter / builder track record (B4). `get` returns { profile, assessment };
+// `upsert` is a full-document save of the promoter profile.
+export const promoterAPI = {
+  get:    (dealId)       => api.get(`/deals/${dealId}/promoter`),
+  upsert: (dealId, data) => api.put(`/deals/${dealId}/promoter`, data),
+};
+
 // Master Plan (regulatory zones)
 export const masterPlanAPI = {
   listZones:    (params)              => api.get('/master-plan/zones', { params }),
