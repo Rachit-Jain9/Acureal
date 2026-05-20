@@ -200,18 +200,18 @@ receive personal or deal data.
 ## 16. Known gaps and remediation roadmap
 
 REDIP is on an active security and privacy hardening program. The following
-items are in progress and tracked:
+items are tracked; status is current as of the date above:
 
 | Item | Status |
 |---|---|
-| Granular, per-purpose consent (separate from bundled Terms/Privacy acceptance) | Planned |
+| Automatic redaction of sensitive ID numbers before AI calls (defense-in-depth) | In place |
+| Dedicated security-incident register | In place |
+| Maintained Record of Processing Activities (RoPA) | In place |
+| Granular, per-purpose consent (separate from bundled Terms/Privacy acceptance) | In progress — backend consent ledger built |
 | Self-service "see / export my data" (DPDP access & portability) | Planned — erasure already self-service |
-| Automatic redaction of sensitive ID numbers before AI calls (defense-in-depth) | In progress |
-| Dedicated security-incident register | In progress |
-| Published Data Processing Agreement and public sub-processor page | Planned |
-| Maintained Record of Processing Activities (RoPA) | Planned |
+| Backup & disaster-recovery posture and recovery procedure | Documented — restore drill pending |
 | India-resident security-log retention for the CERT-In 180-day requirement | In progress |
-| Documented and tested backup-restore drill (RTO/RPO) | Planned |
+| Published Data Processing Agreement and public sub-processor page | Planned |
 | Independent penetration test; SOC 2 / ISO 27001 readiness | Planned |
 | Legal-counsel sign-off on public-facing policies before external launch | Planned |
 
