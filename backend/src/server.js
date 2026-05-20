@@ -44,6 +44,7 @@ const compsReviewQueueRoutes = require('./routes/compsReviewQueue.routes');
 const ingestRoutes = require('./routes/ingest.routes');
 const consentRoutes = require('./routes/consent.routes');
 const privacyRoutes = require('./routes/privacy.routes');
+const promoterRoutes = require('./routes/promoter.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -177,6 +178,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api', ddRoutes);
 app.use('/api', approvalsRoutes);
 app.use('/api', riskRoutes);
+app.use('/api', promoterRoutes);
 app.use('/api', extractionRoutes);
 app.use('/api/fx', fxRoutes);
 app.use('/api/cron', parcelCronRoutes);

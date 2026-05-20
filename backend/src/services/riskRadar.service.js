@@ -15,6 +15,7 @@
  */
 
 const { query } = require('../config/database');
+const promoterProfileService = require('./promoterProfile.service');
 
 // The failure-mode categories the radar reports. Each is backed by real data:
 // risk_flags categories, dd_items categories, and (for approvals) the
@@ -238,6 +239,11 @@ const getRiskRadar = async (dealId) => {
     const c = byKey[cat.key];
     return { ...c, ...assessCategory(c) };
   });
+
+  // Sixth failure mode — promoter / execution (B4). Computed from the deal's
+  // promoter track-record profile; migration-tolerant (an unrecorded or
+  // pre-migration profile reads as 'unverified'), so the radar never breaks.
+  categories.push(await promoterProfileService.getPromoterRadarCategory(dealId));
 
   const overall_posture = categories.some((c) => c.posture === 'flagged')
     ? 'flagged'

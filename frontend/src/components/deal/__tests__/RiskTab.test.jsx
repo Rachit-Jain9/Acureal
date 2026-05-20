@@ -58,6 +58,10 @@ vi.mock('../../../hooks/useRiskNarrative', () => ({
 // focused (and so they don't need a QueryClient for useRiskRadar).
 vi.mock('../RiskRadarPanel', () => ({ default: () => null }));
 
+// B4 — the PromoterProfileCard is likewise its own component with its own
+// test; stub it so this RiskTab test stays focused and offline.
+vi.mock('../PromoterProfileCard', () => ({ default: () => null }));
+
 vi.mock('../../../utils/downloadMarkdown', () => ({
   downloadMarkdown: (...args) => downloadMarkdownFn(...args),
   copyMarkdownToClipboard: (...args) => copyToClipboardFn(...args),

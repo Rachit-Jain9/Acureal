@@ -20,6 +20,8 @@ import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore } from
 import RiskNarrativePanel from './RiskNarrativePanel';
 // Workstream B — the standing Deal Risk Radar, pinned to the top of the tab.
 import RiskRadarPanel from './RiskRadarPanel';
+// Workstream B (B4) — promoter / builder track record.
+import PromoterProfileCard from './PromoterProfileCard';
 
 const RISK_CATEGORIES = [
   { value: 'title', label: 'Title' },
@@ -339,6 +341,9 @@ export default function RiskTab() {
     <div className="space-y-6">
       {/* Risk Radar — standing deterministic pre-mortem across failure modes. */}
       <RiskRadarPanel dealId={dealId} />
+
+      {/* Promoter & Execution — the verified builder track record (B4). */}
+      <PromoterProfileCard dealId={dealId} />
 
       {/* Risk Score */}
       <RiskScoreCard score={score} flagCount={flags.length} />

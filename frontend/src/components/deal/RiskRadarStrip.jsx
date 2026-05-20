@@ -19,6 +19,7 @@ const SHORT_LABEL = {
   financial: 'Financial',
   physical_technical: 'Physical',
   market: 'Market',
+  promoter_execution: 'Promoter',
 };
 
 const POSTURE = {
