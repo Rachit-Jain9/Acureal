@@ -37,13 +37,11 @@ const isSessionBootstrapRequest = (config) => {
     || url.endsWith('/auth/refresh');
 };
 
-// Request interceptor — attaches the legacy Authorization header for any
-// session that still has a JWT in localStorage / sessionStorage. New
-// sessions issued after PR #142 use httpOnly cookies and never write to
-// storage, so this branch is a back-compat path that can be removed once
-// every active token has rolled over.
+// Request interceptor — the session travels in httpOnly cookies
+// (`withCredentials` above), so no Authorization header is ever attached:
+// the access token is not JS-readable by design. We only read the cached
+// `user` to forward the active organization id.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const rawUser = localStorage.getItem('user') || sessionStorage.getItem('user');
   const skipSessionHeaders = isSessionBootstrapRequest(config);
   let activeOrganizationId = null;
@@ -55,9 +53,6 @@ api.interceptors.request.use((config) => {
     activeOrganizationId = null;
   }
 
-  if (token && !skipSessionHeaders) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
   if (activeOrganizationId && !skipSessionHeaders && !config.headers['X-Organization-Id']) {
     config.headers['X-Organization-Id'] = activeOrganizationId;
   }
@@ -84,12 +79,12 @@ const performRefresh = async () => {
 };
 
 const clearLocalSession = () => {
-  // Wipe legacy token/user copies so the next reload doesn't re-attach a
-  // dead Authorization header.
-  localStorage.removeItem('token');
+  // Drop the cached user profile, and sweep any legacy access token left
+  // over from a pre-cookie session so a stale identity cannot linger.
   localStorage.removeItem('user');
-  sessionStorage.removeItem('token');
   sessionStorage.removeItem('user');
+  localStorage.removeItem('token');
+  sessionStorage.removeItem('token');
 };
 
 api.interceptors.response.use(
