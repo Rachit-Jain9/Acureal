@@ -69,6 +69,16 @@ describe('aiHealth.service (PR-NX22)', () => {
         last7d: { calls: 50, successRate: 0.60 },
       })).toBe('degraded');
     });
+
+    test('cache_hit as the last known call with no recent window → healthy', () => {
+      // A cache_hit landing as the most-recent call must not flip a provider
+      // to degraded just because it is not literally 'success'.
+      expect(classifyHealth({
+        configured: true,
+        lastCall: { status: 'cache_hit' },
+        last7d: { calls: 0, successRate: null },
+      })).toBe('healthy');
+    });
   });
 
   describe('worstBand — pick the most concerning band across providers', () => {
@@ -197,6 +207,65 @@ describe('aiHealth.service (PR-NX22)', () => {
       // successRate counts cache hits as success ((95 + 2) / 100 = 0.97)
       expect(claude.last7d.successRate).toBe(0.97);
       expect(claude.healthBand).toBe('healthy');
+    });
+
+    test('cost_capped calls are excluded from the success rate', async () => {
+      mockQuery.mockImplementation((sql, params) => {
+        const provider = params?.[0];
+        if (provider === 'openai') {
+          if (sql.includes('LIMIT 1')) {
+            return Promise.resolve({ rows: [{
+              status: 'success', created_at: '2026-05-20T00:00:00Z', latency_ms: 900,
+              task: 'reasoning', error_code: null, error_message: null,
+            }] });
+          }
+          return Promise.resolve({ rows: [{
+            success_count: '8', error_count: '0', timeout_count: '0',
+            cache_hit_count: '0', cost_capped_count: '50', latencies: [900],
+          }] });
+        }
+        if (sql.includes('LIMIT 1')) return Promise.resolve({ rows: [] });
+        return Promise.resolve({ rows: [{
+          success_count: '0', error_count: '0', timeout_count: '0',
+          cache_hit_count: '0', cost_capped_count: '0', latencies: null,
+        }] });
+      });
+      const snap = await aiHealth.getHealthSnapshot();
+      const openai = snap.providers.find((p) => p.provider === 'openai');
+      // 50 cost-capped calls must NOT drag the rate down — 8 / 8 = 1.0.
+      expect(openai.last7d.calls).toBe(8);
+      expect(openai.last7d.costCappedCount).toBe(50);
+      expect(openai.last7d.successRate).toBe(1);
+      expect(openai.healthBand).toBe('healthy');
+    });
+
+    test('timeout calls count as failures in the success rate', async () => {
+      mockQuery.mockImplementation((sql, params) => {
+        const provider = params?.[0];
+        if (provider === 'gemini') {
+          if (sql.includes('LIMIT 1')) {
+            return Promise.resolve({ rows: [{
+              status: 'timeout', created_at: '2026-05-20T00:00:00Z', latency_ms: 30000,
+              task: 'document_extraction', error_code: 'ETIMEDOUT', error_message: 'timed out',
+            }] });
+          }
+          return Promise.resolve({ rows: [{
+            success_count: '5', error_count: '0', timeout_count: '5',
+            cache_hit_count: '0', cost_capped_count: '0', latencies: [1000, 1000, 1000, 1000, 1000],
+          }] });
+        }
+        if (sql.includes('LIMIT 1')) return Promise.resolve({ rows: [] });
+        return Promise.resolve({ rows: [{
+          success_count: '0', error_count: '0', timeout_count: '0',
+          cache_hit_count: '0', cost_capped_count: '0', latencies: null,
+        }] });
+      });
+      const snap = await aiHealth.getHealthSnapshot();
+      const gemini = snap.providers.find((p) => p.provider === 'gemini');
+      expect(gemini.last7d.calls).toBe(10);
+      expect(gemini.last7d.timeoutCount).toBe(5);
+      expect(gemini.last7d.successRate).toBe(0.5);
+      expect(gemini.healthBand).toBe('degraded');
     });
 
     test('soft-fails when ai_call_logs query throws (RLS / missing table)', async () => {
