@@ -4649,3 +4649,49 @@ PR #450 (PR-NX94):
 - Phase 4 — broader architecture (ontology adoption across deal forms; porting the verified-comps validators to fire at financial-input time).
 - Operator: confirm the Supabase backup tier and run a restore drill; fill the breach-runbook names; set up the `security@redip.in` mailbox; engage counsel for the DPA / AUP.
 
+
+## 2026-05-20 - Phase 5 added to the plan + Phase 5.1 (learning loop) shipped
+
+### What was worked on
+
+Extended the plan with a new **Phase 5 — The Learning Loop**: a measured
+"data flywheel" where REDIP improves from the documents it processes and the
+corrections users make. The operator's framing ("auto-learning, reinforcement
+learning, auto-adaptive") was translated into the honest, deliverable version —
+operationalised feedback loops with hard guardrails (learning never touches the
+deterministic kernel; nothing auto-applies; all data use is consent-gated). The
+operator approved capturing usage signal (consent-gated), building REDIP's own
+small ML comp-ranker, and deferring the market-understanding payoff.
+
+Then shipped the first working slice — PR #452 (PR-NX96):
+- A new `improvement_signals` table (Layer-5 telemetry, migration `20260608`)
+  and `learningSignals.service.js`. When a reviewer corrects an AI document
+  extraction, REDIP now records — per field — whether it was corrected. The
+  capture is values-free (field names only, never values), consent-gated (the
+  reviewer's `product_improvement` consent decides whether the row is
+  attributed), and fire-and-forget (it can never break the correction flow).
+- An extraction-accuracy aggregate + `GET /api/admin/extraction-quality`, and
+  an operator-only `ExtractionQualityWidget` on the admin AI-usage page that
+  shows the running accuracy and the weakest fields.
+- 12 new tests (8 backend, 4 frontend).
+
+### Plain-English recap
+- REDIP now keeps score of how accurately it reads documents — every time someone reviews and corrects an AI extraction, it records which fields it got right and wrong (field names only, never the actual values).
+- An operator-only screen shows the running accuracy and which fields are weakest — the shortlist for improving the AI.
+- Why it matters: this is the first real "REDIP gets better the more it's used" loop — everyday review work now feeds measurable quality improvement.
+
+### PRs opened / merged
+- PR #452 - `feat(learning): extraction-review signal capture + accuracy widget (PR-NX96)` - opened, CI green, merged.
+- PR #453 - `docs: session log for the learning-loop session (PR-NX97)` - this entry.
+
+### Validation
+- Backend: 129 suites / 2153 tests green. Frontend: 66 files / 639 tests green. Frontend production build clean.
+- All CI checks passed on #452.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260608_improvement_signals.sql` in the Supabase SQL editor (the code is migration-tolerant — signal capture is a silent no-op and the widget shows a "being set up" message until the table exists).
+- Phase 5.3 — the comp-similarity ML ranker (operator-approved), and promoting the A/B eval harness to a standing quality system (Phase 5.2 full).
+- Phase 2.3 — DPA / AUP (counsel) + the public subprocessor page.
+- Phase 4 — broader architecture (ontology adoption; verified-comps validators at input time).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel for the DPA / AUP.
+
