@@ -655,6 +655,11 @@ const buildSiteInformation = async (ctx) => {
         children.push(eyebrow('Site map'));
         children.push(new Paragraph({
           children: [new ImageRun({
+            // `type` is mandatory — without it the docx library writes the
+            // media part as `<hash>.undefined` with no [Content_Types].xml
+            // entry, producing a file Word must "repair" on open. The site
+            // map always comes back from the Google Static Maps API as PNG.
+            type: 'png',
             data: mapBuffer,
             transformation: { width: 540, height: 304 },
             altText: { title: 'Site map', description: `Site location at ${ctx.locationLine}`, name: 'site-map' },
