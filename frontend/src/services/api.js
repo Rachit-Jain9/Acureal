@@ -575,6 +575,9 @@ export const riskAPI = {
   update: (dealId, id, data) => api.put(`/deals/${dealId}/risk/${id}`, data),
   delete: (dealId, id)       => api.delete(`/deals/${dealId}/risk/${id}`),
   score:  (dealId)           => api.get(`/deals/${dealId}/risk/score`),
+  // Workstream B — the Deal Risk Radar: a deterministic per-failure-mode
+  // pre-mortem (posture cleared / not-verified / flagged).
+  radar:  (dealId)           => api.get(`/deals/${dealId}/risk/radar`),
   // Tier-1 #4 — cross-document inconsistency detector. Runs deterministic
   // comparators across the deal's Gemini extractions, persists findings
   // as risk_flags with source='ai_detector', and synthesises a risk_brief

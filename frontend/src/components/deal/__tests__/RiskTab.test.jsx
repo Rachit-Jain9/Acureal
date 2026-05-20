@@ -53,6 +53,11 @@ vi.mock('../../../hooks/useRiskNarrative', () => ({
   }),
 }));
 
+// Workstream B — the RiskRadarPanel mounted at the top of RiskTab is its own
+// component with its own test; stub it so these brief-panel tests stay
+// focused (and so they don't need a QueryClient for useRiskRadar).
+vi.mock('../RiskRadarPanel', () => ({ default: () => null }));
+
 vi.mock('../../../utils/downloadMarkdown', () => ({
   downloadMarkdown: (...args) => downloadMarkdownFn(...args),
   copyMarkdownToClipboard: (...args) => copyToClipboardFn(...args),

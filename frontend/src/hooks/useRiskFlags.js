@@ -25,6 +25,7 @@ export function useCreateRiskFlag() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Risk flag added');
     },
@@ -39,6 +40,7 @@ export function useUpdateRiskFlag() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Risk flag updated');
     },
@@ -53,6 +55,7 @@ export function useDeleteRiskFlag() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       toast.success('Risk flag removed');
     },
@@ -71,6 +74,7 @@ export function useRunInconsistencyCheck() {
     onSuccess: (data, dealId) => {
       qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
+      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-brief', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
       const flagged = data?.persisted_flag_ids?.length ?? 0;
@@ -95,5 +99,17 @@ export function useRiskBrief(dealId) {
     queryFn: () => riskAPI.getRiskBrief(dealId).then((r) => r.data.data),
     enabled: !!dealId,
     staleTime: 60_000,
+  });
+}
+
+// Workstream B — the Deal Risk Radar: a deterministic per-failure-mode
+// pre-mortem. Refetches on mount so DD / approval edits made on other tabs
+// are reflected when the analyst returns to the Risk tab.
+export function useRiskRadar(dealId) {
+  return useQuery({
+    queryKey: ['risk-radar', dealId],
+    queryFn: () => riskAPI.radar(dealId).then((r) => r.data.data),
+    enabled: !!dealId,
+    staleTime: 30_000,
   });
 }

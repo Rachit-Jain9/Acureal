@@ -18,6 +18,8 @@ import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore } from
 // PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
 // ships in the DOCX Risk Register section) inline at the top of the tab.
 import RiskNarrativePanel from './RiskNarrativePanel';
+// Workstream B — the standing Deal Risk Radar, pinned to the top of the tab.
+import RiskRadarPanel from './RiskRadarPanel';
 
 const RISK_CATEGORIES = [
   { value: 'title', label: 'Title' },
@@ -335,6 +337,9 @@ export default function RiskTab() {
 
   return (
     <div className="space-y-6">
+      {/* Risk Radar — standing deterministic pre-mortem across failure modes. */}
+      <RiskRadarPanel dealId={dealId} />
+
       {/* Risk Score */}
       <RiskScoreCard score={score} flagCount={flags.length} />
 
