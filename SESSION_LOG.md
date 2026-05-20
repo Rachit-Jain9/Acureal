@@ -4863,3 +4863,48 @@ PR #460 (PR-NX104):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-20 - Workstream A (Provenance Spine) — Model Confidence
+
+### What was worked on
+
+Opened Workstream A — the Provenance Spine — with its safest first slice: a
+read-side Model Confidence summary. No engine change, no kernel change, no new
+database table; the classification is deterministic and stores nothing.
+
+PR #462 (PR-NX106):
+- New `modelConfidence.service.js` — reads a saved model's persisted input set
+  (`model_params.inputs`, exactly what the analyst's form submitted) and
+  classifies each material input as either deal-set (a deal-specific fact, or
+  an assumption moved off the benchmark) or default (still on REDIP's cited
+  benchmark). An assumption is credited as deal-set only when it provably
+  departs from the kernel's `getDefaultMeta` citation — conservative by
+  design, so the panel under-claims rather than over-claims confidence.
+- New `GET /financials/:dealId/model-confidence` route; never errors for a
+  missing model or uncatalogued class — the panel just hides.
+- New `ModelConfidencePanel` on the Financials page — headline %, proportion
+  bar, band chip (Well-grounded / Mixed basis / Assumption-led) and an
+  expandable per-input breakdown showing each input's basis + benchmark
+  source. States plainly it is not a document-verification check.
+- 17 new tests (10 backend, 7 frontend).
+
+### Plain-English recap
+- After you calculate a financial model, REDIP now shows a "Model Confidence" card — one number telling you how much of the model is set for this specific deal versus still running on REDIP's standard benchmark assumptions.
+- Open the breakdown to see every key input tagged deal-specific or benchmark-default, and which benchmark each default came from.
+- Why it matters: a model built mostly on placeholder assumptions used to look exactly as solid as one built on verified deal facts. Now the team sees the difference instantly — and knows which assumptions to nail down before IC.
+
+### PRs opened / merged
+- PR #462 - `feat(financials): Model Confidence summary — deal-set vs benchmark inputs (PR-NX106)` - opened, CI green, awaiting operator merge.
+- PR #463 - `docs: session log for the Model Confidence session (PR-NX107)` - this entry.
+
+### Validation
+- Backend: 132 suites / 2188 tests green. Frontend: 71 files / 659 tests green. Production build clean.
+- All CI checks passed on #462. No migration — read-side only.
+
+### What's left to do
+- Operator: merge PR #462 to publish the Model Confidence panel.
+- Workstream A continued — the deeper provenance work: confidence bands on IRR/NPV (the in-kernel change, a careful follow-up) and the claim graph / IC memo as an audited view.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: apply migration `20260609_deal_promoter_profiles.sql`; Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
