@@ -23,6 +23,8 @@ import BuildabilitySummary from './BuildabilitySummary';
 import AiSynthesisPanel from './AiSynthesisPanel';
 import DealQaBox from './DealQaBox';
 import AutoFillReadyCard from './AutoFillReadyCard';
+// Workstream B — compact Risk Radar pinned to the deal front page.
+import RiskRadarStrip from './RiskRadarStrip';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
 // key-metric card. Extends the chip that already ships in ParcelTab
 // (PR-NX50) to the Overview tab where operators land first.
@@ -229,6 +231,11 @@ export default function OverviewTab() {
       {readiness && (
         <DealPulseRibbon readiness={readiness} keyRisks={keyRisks} />
       )}
+
+      {/* Risk Radar — compact per-failure-mode posture, pinned to the front
+          page so the sentinel is seen before it is asked for; links through
+          to the full radar on the Risk tab. */}
+      <RiskRadarStrip dealId={dealId} />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves
