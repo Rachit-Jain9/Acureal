@@ -26,6 +26,7 @@ const {
 } = require('./ai/extractionPrompts');
 const { tryParseAndValidate } = require('./ai/aiRouter');
 const { detectLanguage } = require('./ai/languageDetect');
+const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
 const log = require('../lib/logger').child({ module: 'extraction' });
 
@@ -492,7 +493,15 @@ async function extractStoredFileFields({
     cache: extractionCache,
     metadata: extractionMetadata,
   });
-  const rawText = extraction.rawText;
+  // Redact Aadhaar / PAN before the extracted text or fields reach the
+  // Claude normalization pass, the OpenAI embedding index, or storage.
+  // The raw file already went to Gemini (unavoidable to read it at all);
+  // this is the defense-in-depth step CLAUDE.md mandates for everything
+  // downstream of extraction.
+  const { text: rawText, count: rawRedactionCount } = redactText(extraction.rawText || '');
+  if (rawRedactionCount > 0) {
+    log.info('pii_redacted_raw_text', { doc_type: docType, redactions: rawRedactionCount });
+  }
 
   // Best-effort language detection on the extracted text. This populates
   // the `ai_call_logs.language` column on the NEXT call (Claude
@@ -532,6 +541,17 @@ async function extractStoredFileFields({
     structuredFields = toPlainObject(parseJsonResponse(rawText));
   } catch (e) {
     parseError = `JSON parse failed: ${e.message}`;
+  }
+
+  // Catch identity numbers that survived the free-text pass — a bare
+  // Aadhaar under an `aadhaar`-named field has no PAN/spacing pattern to
+  // match, so it is masked here by field key.
+  if (structuredFields) {
+    const { fields, count: fieldRedactionCount } = redactFields(structuredFields);
+    structuredFields = fields;
+    if (fieldRedactionCount > 0) {
+      log.info('pii_redacted_fields', { doc_type: docType, redactions: fieldRedactionCount });
+    }
   }
 
   // Surface the fallback path in extraction_error so reviewers can see why a
