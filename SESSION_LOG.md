@@ -4604,3 +4604,48 @@ the operator.
 - Operator: set up and monitor the `security@redip.in` mailbox; engage Indian legal counsel for the DPA + Acceptable Use documents (Phase 2.3 is blocked on counsel — those texts must not be authored unilaterally).
 - Next: Phase 2.2 — the Privacy Centre (see / download / correct my data, consent management UI), which depends on PR #447 being merged. Phase 2.3 — DPA / AUP (counsel) + the public subprocessor page. Phase 3.2 / 3.3 — the org-level "do not benchmark" switch and the `included_in_aggregate` eligibility flag, deliberately deferred per the plan until a real benchmark query exists. Phase 4 — broader architecture.
 
+
+## 2026-05-20 - Phase 2.2 — Privacy Centre shipped
+
+### What was worked on
+
+Built and shipped the Privacy Centre — Phase 2.2 of the compliance plan, and
+the user-facing surface for the granular-consent backend (PR-NX91). After a
+deep review of the frontend (routing, the Settings page, the design system,
+the existing grievance page) and the relevant backend schemas, the feature was
+built as one well-integrated vertical slice.
+
+PR #450 (PR-NX94):
+- Backend — a new DSAR (Data Subject Access Request) service implementing the
+  DPDP §11 right of access: a page overview (profile, workspaces, legal
+  acceptances, active sessions) and a full machine-readable personal-data
+  export. The export is identity-gated — password accounts must re-enter their
+  password so a stolen session cannot one-click exfiltrate the file; OAuth-only
+  accounts are verified by the session. New `/api/privacy` routes, rate-limited.
+  No schema change — the service is pure read aggregation.
+- Frontend — a new Privacy Centre page at `/dashboard/privacy`: see your data,
+  per-purpose consent switches (wired live to the consent ledger), legal
+  agreements accepted, active sign-ins, a password-confirmed data download, a
+  link to the Grievance Officer, and account closure (reused). Reachable from a
+  new "Privacy & your data" card in Settings.
+- 16 new tests (11 backend DSAR, 5 frontend page).
+
+### Plain-English recap
+- There is now a "Privacy & your data" screen where a user can see exactly what REDIP knows about them, download a copy as a file, and individually switch things like marketing email or anonymised benchmarking on or off.
+- It is reachable from Settings, and it covers the rights — see, download, consent, complain, delete — that India's data-protection law gives every user.
+- Why it matters: it turns the consent engine shipped earlier into something a user (and an enterprise security reviewer) can actually see and use.
+
+### PRs opened / merged
+- PR #450 - `feat(privacy): Privacy Centre — DPDP §11 data access, export & consent UI (PR-NX94)` - opened, CI green, merged.
+- PR #451 - `docs: session log for the Privacy Centre session (PR-NX95)` - this entry.
+
+### Validation
+- Backend: 128 suites / 2145 tests green. Frontend: 65 files / 635 tests green. Frontend production build clean.
+- All CI checks passed on #450 (backend, frontend, financial kernel, audit/migration lint, Vercel deploy).
+
+### What's left to do
+- Phase 2.3 — publish the DPA + Acceptable Use legal documents (blocked on Indian legal counsel — must not be authored unilaterally) and the public subprocessor page (deferred to land alongside the counsel-reviewed legal docs).
+- Phase 3.2 / 3.3 — the org-level "do not benchmark" switch and the `included_in_aggregate` eligibility flag, deliberately deferred per the plan until a real benchmark query exists.
+- Phase 4 — broader architecture (ontology adoption across deal forms; porting the verified-comps validators to fire at financial-input time).
+- Operator: confirm the Supabase backup tier and run a restore drill; fill the breach-runbook names; set up the `security@redip.in` mailbox; engage counsel for the DPA / AUP.
+
