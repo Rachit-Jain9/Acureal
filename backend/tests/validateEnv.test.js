@@ -91,4 +91,41 @@ describe('validateEnv', () => {
     expect(result.ok).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
   });
+
+  const setCriticalEnv = () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.VERCEL;
+    process.env.DATABASE_URL = REAL_DB_URL;
+    process.env.JWT_SECRET = REAL_SECRET_A;
+    process.env.DEAL_EVENTS_HMAC_KEY = REAL_SECRET_B;
+  };
+
+  test('warns when an AI key has the wrong provider prefix', () => {
+    setCriticalEnv();
+    process.env.ANTHROPIC_API_KEY = 'sk-proj-this-is-not-an-anthropic-key';
+    const { validateEnv } = load();
+    const result = validateEnv({ exitOnFailure: false });
+    expect(result.warnings.some((w) => /ANTHROPIC_API_KEY does not look like/.test(w))).toBe(true);
+  });
+
+  test('warns when an AI key has surrounding whitespace', () => {
+    setCriticalEnv();
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-api03-a-valid-looking-key-value\n';
+    const { validateEnv } = load();
+    const result = validateEnv({ exitOnFailure: false });
+    expect(result.warnings.some((w) => /ANTHROPIC_API_KEY has leading\/trailing whitespace/.test(w))).toBe(true);
+    // The trimmed value still has the right prefix, so no format warning.
+    expect(result.warnings.some((w) => /ANTHROPIC_API_KEY does not look like/.test(w))).toBe(false);
+  });
+
+  test('correctly-formatted AI keys produce no format or whitespace warning', () => {
+    setCriticalEnv();
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-api03-a-valid-looking-anthropic-key';
+    process.env.OPENAI_API_KEY = 'sk-a-valid-looking-openai-key';
+    process.env.GEMINI_API_KEY = 'AIza-a-valid-looking-google-key';
+    const { validateEnv } = load();
+    const result = validateEnv({ exitOnFailure: false });
+    expect(result.warnings.some((w) => /does not look like/.test(w))).toBe(false);
+    expect(result.warnings.some((w) => /whitespace/.test(w))).toBe(false);
+  });
 });

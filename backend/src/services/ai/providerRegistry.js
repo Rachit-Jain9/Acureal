@@ -1,5 +1,10 @@
 'use strict';
 
+// API keys pasted into a hosting dashboard very often carry an invisible
+// trailing newline or space. Providers reject those with a 401, so every
+// key is read through this helper, which trims at the single point of use.
+const readApiKey = (name) => (process.env[name] || '').trim();
+
 const hasConfiguredValue = (value) => !!value && !/your[_-]/i.test(value) && !String(value).startsWith('[');
 
 let geminiClient = null;
@@ -23,9 +28,9 @@ const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
 const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
 const getProviderAvailability = () => ({
-  gemini: hasConfiguredValue(process.env.GEMINI_API_KEY),
-  claude: hasConfiguredValue(process.env.ANTHROPIC_API_KEY),
-  gpt_compatible: hasConfiguredValue(process.env.OPENAI_API_KEY),
+  gemini: hasConfiguredValue(readApiKey('GEMINI_API_KEY')),
+  claude: hasConfiguredValue(readApiKey('ANTHROPIC_API_KEY')),
+  gpt_compatible: hasConfiguredValue(readApiKey('OPENAI_API_KEY')),
 });
 
 const getRoutingConfig = () => ({
@@ -53,7 +58,7 @@ const getGeminiClient = () => {
 
   if (!geminiClient) {
     const { GoogleGenerativeAI } = require('@google/generative-ai');
-    geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    geminiClient = new GoogleGenerativeAI(readApiKey('GEMINI_API_KEY'));
   }
 
   return geminiClient;
@@ -66,7 +71,7 @@ const getAnthropicClient = () => {
 
   if (!anthropicClient) {
     const { Anthropic } = require('@anthropic-ai/sdk');
-    anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    anthropicClient = new Anthropic({ apiKey: readApiKey('ANTHROPIC_API_KEY') });
   }
 
   return anthropicClient;
@@ -86,7 +91,7 @@ const getOpenAIClient = () => {
   }
   if (!openaiClient) {
     const { OpenAI } = require('openai');
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    openaiClient = new OpenAI({ apiKey: readApiKey('OPENAI_API_KEY') });
   }
   return openaiClient;
 };
