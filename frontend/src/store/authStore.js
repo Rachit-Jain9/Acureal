@@ -13,12 +13,16 @@ const getRequestErrorMessage = (err, fallbackMessage) => {
   return fallbackMessage;
 };
 
-// Prefer localStorage over sessionStorage when both exist
-const getStoredToken = () =>
-  localStorage.getItem('token') || sessionStorage.getItem('token') || null;
+// The session itself lives entirely in httpOnly cookies the browser
+// manages — the access token is NEVER written to JS-readable storage, so
+// no XSS payload can read it. We cache only the non-secret `user` profile
+// so the UI can render the signed-in state without a round-trip. Storage
+// tier mirrors "Remember me": localStorage survives a browser restart,
+// sessionStorage clears on close.
+const USER_KEY = 'user';
 
 const getStoredUser = () => {
-  const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
+  const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
   try {
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -26,57 +30,54 @@ const getStoredUser = () => {
   }
 };
 
-const saveSession = (token, user, rememberMe) => {
+const clearSession = () => {
+  localStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(USER_KEY);
+  // Sweep the legacy access token from any pre-cookie session so a stale
+  // copy can never linger in JS-readable storage.
+  localStorage.removeItem('token');
+  sessionStorage.removeItem('token');
+};
+
+const saveSession = (user, rememberMe) => {
   clearSession();
   const storage = rememberMe ? localStorage : sessionStorage;
-  storage.setItem('token', token);
-  storage.setItem('user', JSON.stringify(user));
+  storage.setItem(USER_KEY, JSON.stringify(user));
 };
 
 const persistUser = (user) => {
-  if (localStorage.getItem('token')) {
-    localStorage.setItem('user', JSON.stringify(user));
+  if (localStorage.getItem(USER_KEY)) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
     return;
   }
-
-  if (sessionStorage.getItem('token')) {
-    sessionStorage.setItem('user', JSON.stringify(user));
-  }
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
-const getSessionPersistence = () => (localStorage.getItem('token') ? 'persistent' : 'session');
-
-const clearSession = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  sessionStorage.removeItem('token');
-  sessionStorage.removeItem('user');
-};
+const getSessionPersistence = () => (localStorage.getItem(USER_KEY) ? 'persistent' : 'session');
 
 const useAuthStore = create((set) => ({
   user: getStoredUser(),
-  token: getStoredToken(),
-  isAuthenticated: !!getStoredToken(),
+  isAuthenticated: !!getStoredUser(),
   loading: false,
   error: null,
+  sessionPersistence: getSessionPersistence(),
 
   login: async (email, password, rememberMe = false) => {
     set({ loading: true, error: null });
     try {
       const { data } = await authAPI.login({ email, password });
 
-      // MFA branch — backend returned a challenge, not tokens. The login
-      // form intercepts this return shape and shows the 6-digit code prompt.
+      // MFA branch — backend returned a challenge, not a session. The login
+      // form intercepts this shape and shows the 6-digit code prompt.
       if (data?.mfaRequired) {
         set({ loading: false });
         return { mfaRequired: true, challenge: data.data?.challenge, expiresAt: data.data?.expiresAt, rememberMe };
       }
 
-      const { user, token } = data.data;
-      saveSession(token, user, rememberMe);
+      const { user } = data.data;
+      saveSession(user, rememberMe);
       set({
         user,
-        token,
         isAuthenticated: true,
         loading: false,
         sessionPersistence: rememberMe ? 'persistent' : 'session',
@@ -93,11 +94,10 @@ const useAuthStore = create((set) => ({
     set({ loading: true, error: null });
     try {
       const { data } = await authAPI.mfaVerify(challenge, code);
-      const { user, token } = data.data;
-      saveSession(token, user, rememberMe);
+      const { user } = data.data;
+      saveSession(user, rememberMe);
       set({
         user,
-        token,
         isAuthenticated: true,
         loading: false,
         sessionPersistence: rememberMe ? 'persistent' : 'session',
@@ -114,11 +114,10 @@ const useAuthStore = create((set) => ({
     set({ loading: true, error: null });
     try {
       const { data } = await authAPI.register(formData);
-      const { user, token } = data.data;
-      saveSession(token, user, rememberMe);
+      const { user } = data.data;
+      saveSession(user, rememberMe);
       set({
         user,
-        token,
         isAuthenticated: true,
         loading: false,
         sessionPersistence: rememberMe ? 'persistent' : 'session',
@@ -144,11 +143,10 @@ const useAuthStore = create((set) => ({
         acceptedPrivacyVersion,
         invitationToken,
       });
-      const { user, token } = data.data;
-      saveSession(token, user, rememberMe);
+      const { user } = data.data;
+      saveSession(user, rememberMe);
       set({
         user,
-        token,
         isAuthenticated: true,
         loading: false,
         sessionPersistence: rememberMe ? 'persistent' : 'session',
@@ -171,7 +169,7 @@ const useAuthStore = create((set) => ({
       // ignored
     }
     clearSession();
-    set({ user: null, token: null, isAuthenticated: false, sessionPersistence: 'session' });
+    set({ user: null, isAuthenticated: false, sessionPersistence: 'session' });
   },
 
   updateProfile: async (data) => {
@@ -202,7 +200,6 @@ const useAuthStore = create((set) => ({
   },
 
   clearError: () => set({ error: null }),
-  sessionPersistence: getSessionPersistence(),
 }));
 
 export default useAuthStore;

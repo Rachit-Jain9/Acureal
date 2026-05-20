@@ -17,10 +17,10 @@ const log = require('../lib/logger').child({ module: 'auth.routes' });
 const router = express.Router();
 
 // On every successful auth (login, register, google), issue a fresh
-// refresh-token family and set BOTH cookies (15-min access + 30-day
-// refresh). The access JWT is also returned in the response body for
-// backward compatibility with SPAs still on the localStorage path; once
-// every client has cycled to cookies, that body field can be retired.
+// refresh-token family and set BOTH httpOnly cookies (15-min access +
+// 30-day refresh). The access JWT travels ONLY in the cookie — it is
+// deliberately never returned in the response body, so no JavaScript
+// (and therefore no XSS payload) can read it.
 const issueSessionCookies = async (res, { user, token }, requestContext = {}) => {
   setAccessCookie(res, token);
   const { rawToken: refreshToken } = await refreshTokenService.issueFamily({
@@ -29,6 +29,15 @@ const issueSessionCookies = async (res, { user, token }, requestContext = {}) =>
     userAgent: requestContext.userAgent || null,
   });
   setRefreshCookie(res, refreshToken);
+};
+
+// Response body for a successful auth. Carries the user profile (and, for
+// Google, the login/bind/register mode) but never the raw access token —
+// that lives only in the httpOnly cookie set by issueSessionCookies().
+const sessionResponseData = (result) => {
+  const data = { user: result.user };
+  if (result.mode) data.mode = result.mode;
+  return data;
 };
 
 // Fire-and-forget: dispatch the verification email in the background after
@@ -126,7 +135,7 @@ router.post(
       res.status(201).json({
         success: true,
         message: 'Account created successfully.',
-        data: result,
+        data: sessionResponseData(result),
       });
     } catch (error) {
       next(error);
@@ -240,7 +249,7 @@ router.post(
         userAgent: req.headers['user-agent'] || null,
       });
 
-      res.status(status).json({ success: true, message, data: result });
+      res.status(status).json({ success: true, message, data: sessionResponseData(result) });
     } catch (error) {
       next(error);
     }
@@ -293,7 +302,7 @@ router.post(
       return res.json({
         success: true,
         message: 'Login successful.',
-        data: result,
+        data: sessionResponseData(result),
       });
     } catch (error) {
       return next(error);
@@ -321,7 +330,7 @@ router.post(
         ipAddress: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
       });
-      return res.json({ success: true, message: 'MFA verified.', data: result });
+      return res.json({ success: true, message: 'MFA verified.', data: sessionResponseData(result) });
     } catch (error) {
       const status = error.statusCode || 401;
       if (status >= 500) return next(error);
@@ -438,7 +447,7 @@ router.post('/refresh', async (req, res, next) => {
 
     res.json({
       success: true,
-      data: { user: authContext.user, token: accessToken },
+      data: { user: authContext.user },
     });
   } catch (error) {
     // On any rotation failure (unknown token / expired / family killed),
