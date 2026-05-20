@@ -54,6 +54,13 @@ vi.mock('../RiskRadarStrip', () => ({
   default: () => null,
 }));
 
+// Workstream A — ModelTrustSummary is its own component with its own test
+// and its own React Query hooks; stub it so this OverviewTab test stays
+// focused.
+vi.mock('../../financials/ModelTrustSummary', () => ({
+  default: () => null,
+}));
+
 import OverviewTab from '../OverviewTab';
 
 const renderWithProviders = (ui) => {
