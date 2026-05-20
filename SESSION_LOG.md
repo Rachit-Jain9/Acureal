@@ -4820,3 +4820,46 @@ PR #458 (PR-NX102):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-20 - Workstream B (B4) — promoter track record shipped
+
+### What was worked on
+
+Finished Workstream B with B4 — promoter / builder track record. Promoter
+execution risk is a named catastrophic Indian-RE failure mode the deal model
+had no home for; this gives it one and wires it into the Risk Radar.
+
+PR #460 (PR-NX104):
+- New migration `20260609` — `deal_promoter_profiles`, one row per deal: the
+  analyst's verified findings on the promoter (identity, delivery history,
+  RERA standing), with verified_by / verified_at provenance.
+- New `promoterProfile.service.js` — get / full-document upsert + a
+  deterministic execution posture (cleared / unverified / flagged) from the
+  delivery rate, RERA registration, and complaint count. No AI; migration-
+  tolerant.
+- New `/deals/:dealId/promoter` routes. The Risk Radar gains a sixth failure
+  mode — Promoter & Execution — fed by that posture.
+- New `PromoterProfileCard` on the Risk tab (view + edit); the Overview radar
+  strip shows the Promoter chip too.
+- 17 new tests (13 backend, 4 frontend).
+
+### Plain-English recap
+- REDIP can now record and judge a builder's track record — projects delivered on time vs. late, RERA registration, complaints — and give a plain verdict.
+- "Promoter & Execution" is now the sixth item on the deal's Risk Radar.
+- Why it matters: a promoter who chronically delivers late is one of the biggest, most predictable ways an Indian real-estate deal goes wrong — and until now REDIP had nowhere to even write that down.
+
+### PRs opened / merged
+- PR #460 - `feat(risk): promoter track-record profile + 6th Risk Radar mode (PR-NX104)` - opened, CI green, merged.
+- PR #461 - `docs: session log for the promoter track-record session (PR-NX105)` - this entry.
+
+### Validation
+- Backend: 131 suites / 2178 tests green. Frontend: 70 files / 652 tests green. Production build clean.
+- All CI checks passed on #460.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260609_deal_promoter_profiles.sql` in the Supabase SQL editor (the code is migration-tolerant — the promoter card shows "not verified" until the table exists).
+- Workstream A — the Provenance Spine (claims model, confidence bands, IC memo as an audited view) — the large, high-leverage piece; needs careful multi-session work.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
