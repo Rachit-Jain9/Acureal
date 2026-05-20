@@ -43,6 +43,7 @@ const legalRoutes = require('./routes/legal.routes');
 const compsReviewQueueRoutes = require('./routes/compsReviewQueue.routes');
 const ingestRoutes = require('./routes/ingest.routes');
 const consentRoutes = require('./routes/consent.routes');
+const privacyRoutes = require('./routes/privacy.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -142,6 +143,7 @@ app.use('/api/intelligence', heavyLimiter);
 app.use('/api/exports', heavyLimiter);
 app.use('/api/extraction', heavyLimiter);
 app.use('/api/fx/refresh', heavyLimiter);
+app.use('/api/privacy', heavyLimiter);
 app.use('/api', generalLimiter);
 
 // Body parsing
@@ -188,6 +190,7 @@ app.use('/api/legal', legalRoutes);
 app.use('/api/comps-review-queue', compsReviewQueueRoutes);
 app.use('/api/ingest', ingestRoutes);
 app.use('/api/consent', consentRoutes);
+app.use('/api/privacy', privacyRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
