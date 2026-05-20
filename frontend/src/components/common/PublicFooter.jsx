@@ -39,6 +39,12 @@ export default function PublicFooter({ className = '' }) {
           >
             Grievance
           </Link>
+          <Link
+            to="/subprocessors"
+            className="hover:text-stone-900 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40 rounded"
+          >
+            Sub-processors
+          </Link>
         </nav>
       </div>
     </footer>

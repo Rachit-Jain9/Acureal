@@ -207,11 +207,12 @@ items are tracked; status is current as of the date above:
 | Automatic redaction of sensitive ID numbers before AI calls (defense-in-depth) | In place |
 | Dedicated security-incident register | In place |
 | Maintained Record of Processing Activities (RoPA) | In place |
-| Granular, per-purpose consent (separate from bundled Terms/Privacy acceptance) | In progress — backend consent ledger built |
-| Self-service "see / export my data" (DPDP access & portability) | Planned — erasure already self-service |
+| Granular, per-purpose consent (separate from bundled Terms/Privacy acceptance) | In place |
+| Self-service "see / export my data" (DPDP access & portability) | In place — Privacy Centre |
+| Public sub-processor disclosure page | In place |
 | Backup & disaster-recovery posture and recovery procedure | Documented — restore drill pending |
 | India-resident security-log retention for the CERT-In 180-day requirement | In progress |
-| Published Data Processing Agreement and public sub-processor page | Planned |
+| Published Data Processing Agreement (DPA) | Planned — pending legal counsel |
 | Independent penetration test; SOC 2 / ISO 27001 readiness | Planned |
 | Legal-counsel sign-off on public-facing policies before external launch | Planned |
 
