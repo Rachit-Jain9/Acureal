@@ -55,6 +55,7 @@ const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
 const CookiesPage = lazy(() => import('./pages/legal/CookiesPage'));
 const GrievancePage = lazy(() => import('./pages/legal/GrievancePage'));
+const SubprocessorsPage = lazy(() => import('./pages/legal/SubprocessorsPage'));
 const VerifyEmailPage = lazy(() => import('./pages/legal/VerifyEmailPage'));
 
 function ProtectedRoute({ children }) {
@@ -117,6 +118,7 @@ export default function App() {
         <Route path="/privacy" element={withSuspense(<PrivacyPage />)} />
         <Route path="/cookies" element={withSuspense(<CookiesPage />)} />
         <Route path="/grievance" element={withSuspense(<GrievancePage />)} />
+        <Route path="/subprocessors" element={withSuspense(<SubprocessorsPage />)} />
         <Route path="/verify-email" element={withSuspense(<VerifyEmailPage />)} />
 
         {/* Authenticated app — all under /dashboard */}
