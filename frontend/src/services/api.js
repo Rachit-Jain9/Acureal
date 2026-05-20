@@ -304,6 +304,11 @@ export const financialsAPI = {
   // Authoritative provenance DAG — every KPI/cost/revenue node traces back
   // to user inputs. Use for "how was this number produced" drill-downs.
   financialGraph: (dealId) => api.get(`/financials/${dealId}/financial-graph`),
+  // Workstream A (Provenance Spine) — read-side model-confidence summary:
+  // how many key inputs are set for THIS deal vs. on REDIP benchmark
+  // defaults. Returns { available, dealSetCount, defaultCount, total,
+  // confidencePct, band, inputs[] }. Never errors for a missing model.
+  modelConfidence: (dealId) => api.get(`/financials/${dealId}/model-confidence`),
   // Immutable, HMAC-signed audit trail. `events` lists the most recent
   // calc/scenario/sensitivity runs; `verifyEvent` re-hashes stored JSON and
   // re-signs with the current key; `replayEvent` additionally re-runs the
