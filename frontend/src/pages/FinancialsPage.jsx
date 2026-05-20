@@ -19,9 +19,10 @@ import SensitivityNarrativePanel from '../components/financials/SensitivityNarra
 // thresholds the XLSX-export validators (PR-NX28 / NX33) enforce. Closes
 // the loop with the input-time predictive warnings from PR-NX52.
 import PostCalcBenchmarkPanel from '../components/financials/PostCalcBenchmarkPanel';
-// Workstream A (Provenance Spine) — read-side model-confidence summary:
-// how many key inputs are set for this deal vs. on REDIP benchmark defaults.
+// Workstream A (Provenance Spine) — read-side model-confidence summary +
+// the deterministic KPI ranges driven by the still-unverified assumptions.
 import ModelConfidencePanel from '../components/financials/ModelConfidencePanel';
+import ConfidenceRangePanel from '../components/financials/ConfidenceRangePanel';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
 import AuditTimelineView from '../components/financials/AuditTimelineView';
 import JDAWaterfallPanel from '../components/financials/JDAWaterfallPanel';
@@ -192,9 +193,11 @@ export default function FinancialsPage() {
           />
 
           {/* Workstream A — how much of this model is set for the deal
-              vs. running on REDIP benchmark defaults. Hides itself when
-              the model class is not yet catalogued. */}
+              vs. running on REDIP benchmark defaults, and the deterministic
+              KPI ranges those unverified assumptions imply. Both hide
+              themselves when the model class is not yet catalogued. */}
           <ModelConfidencePanel dealId={dealId} />
+          <ConfidenceRangePanel dealId={dealId} />
 
           <WhatIfSliders
             assetClass={normalizedFinancials.assetClass}
