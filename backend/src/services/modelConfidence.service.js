@@ -311,6 +311,10 @@ async function getModelConfidence(dealId) {
 
 module.exports = {
   getModelConfidence,
+  // The material-input catalogue is the shared source of truth for which
+  // inputs are deal facts vs. benchmark assumptions. confidenceRange.service
+  // consumes it so the two Provenance-Spine panels stay perfectly aligned.
+  MATERIAL_INPUTS_BY_CLASS,
   // Exported for unit tests.
   _internal: { classifyInput, bandFor, numericOrNull, MATERIAL_INPUTS_BY_CLASS },
 };
