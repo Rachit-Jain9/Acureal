@@ -3,6 +3,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const intelligenceService = require('../services/intelligence.service');
 const icMemoService = require('../services/icMemo.service');
+const icEvidenceService = require('../services/icEvidence.service');
 const monitoring = require('../services/monitoring.supabase');
 const { computeInvestorPackage: invokeKernelHandler } = require('../engines/investorPackage.adapter');
 const { authenticate, requireRole } = require('../middleware/auth');
@@ -349,6 +350,26 @@ router.get(
       });
     } catch (error) {
       return next(error);
+    }
+  },
+);
+
+// GET /intelligence/ic-memo/:dealId/evidence — Workstream A (Provenance Spine).
+//
+// The deterministic evidence ledger beneath the IC memo: every material number
+// the IC decision rests on, each with an honest typed source (kernel-computed,
+// analyst-set, REDIP benchmark, deal records, verified feed). No AI — this is
+// the auditable claim layer the AI narrative sits on top of. Soft-fails to
+// { available: false } so the panel can hide.
+router.get(
+  '/ic-memo/:dealId/evidence',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const ledger = await icEvidenceService.getEvidenceLedger(req.params.dealId);
+      res.json({ success: true, data: ledger });
+    } catch (error) {
+      next(error);
     }
   },
 );

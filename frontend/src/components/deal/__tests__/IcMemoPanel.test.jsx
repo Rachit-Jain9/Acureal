@@ -24,6 +24,12 @@ vi.mock('../../../utils/downloadMarkdown', () => ({
   buildArtifactFilename: (...args) => buildArtifactFilenameFn(...args),
 }));
 
+// Workstream A — IcMemoEvidence is its own component with its own test and
+// its own React Query hook; stub it so this IcMemoPanel test stays focused.
+vi.mock('../IcMemoEvidence', () => ({
+  default: () => null,
+}));
+
 import IcMemoPanel from '../IcMemoPanel';
 
 beforeEach(() => {

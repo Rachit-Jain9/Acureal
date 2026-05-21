@@ -16,6 +16,9 @@ import Badge from '../common/Badge';
 import { SectionHeader } from '../../design-system';
 import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
+// Workstream A (Provenance Spine) — the deterministic evidence ledger beneath
+// the memo: every material number traced to its source.
+import IcMemoEvidence from './IcMemoEvidence';
 
 /**
  * IC Memo panel (Tier-2 #13).
@@ -185,6 +188,13 @@ export default function IcMemoPanel({ dealId, dealName }) {
           {error}
         </p>
       )}
+
+      {/* Workstream A — the deterministic evidence ledger beneath the memo:
+          every material number traced to its source. Renders whether or not
+          the AI narrative has been generated; hides itself when unavailable. */}
+      <div className="mt-4">
+        <IcMemoEvidence dealId={dealId} />
+      </div>
 
       {text ? (
         <div className="mt-4 space-y-2">
