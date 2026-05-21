@@ -188,6 +188,14 @@ export const privacyAPI = {
   exportData: (password) => api.post('/privacy/export', password ? { password } : {}),
 };
 
+// Organization-level settings — Workstream C2. The benchmark-contribution
+// control: the org half of the Layer-4 anonymized-benchmark consent gate.
+export const organizationAPI = {
+  getBenchmarkSetting: () => api.get('/organization/benchmark-setting'),
+  setBenchmarkSetting: (optedOut) =>
+    api.put('/organization/benchmark-setting', { optedOut }),
+};
+
 // Deals
 export const dealsAPI = {
   list: (params) => api.get('/deals', { params }),

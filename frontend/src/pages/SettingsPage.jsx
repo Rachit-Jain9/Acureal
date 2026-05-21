@@ -12,6 +12,7 @@ import AIUsageWidget from '../components/admin/AIUsageWidget';
 import AIHealthWidget from '../components/admin/AIHealthWidget'; // PR-NX23
 import CloseAccountCard from '../components/common/CloseAccountCard';
 import MfaCard from '../components/common/MfaCard';
+import OrgBenchmarkCard from '../components/common/OrgBenchmarkCard';
 
 const CURRENCY_OPTIONS = [
   { value: 'crores', label: 'Crores (Cr)' },
@@ -565,6 +566,10 @@ export default function SettingsPage() {
           ))}
         </div>
       )}
+
+      {/* Org benchmark contribution — Workstream C2. Same owner/admin gate
+          as the Market Intelligence Notes card above. */}
+      {(user?.role === 'owner' || user?.role === 'admin') && <OrgBenchmarkCard />}
 
       {/* Currency Section */}
       <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
