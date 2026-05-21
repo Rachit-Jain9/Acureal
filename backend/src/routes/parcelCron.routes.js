@@ -10,6 +10,7 @@ const { requireCronAuth } = require('../middleware/cronAuth');
 const { runSweep } = require('../services/parcelCacheSweep.service');
 const { runSweep: runRetentionSweep } = require('../services/retentionSweep.service');
 const queueService = require('../services/compsReviewQueue.service');
+const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 
 const router = express.Router();
 
@@ -52,6 +53,22 @@ router.get('/comps-queue/process-pending', requireCronAuth, async (req, res, nex
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit, 10) || 5, 25) : 5;
     const summary = await queueService.processPendingBatchAcrossOrgs({ limitPerOrg: limit });
     res.json({ success: true, scheduled: true, ...summary });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/cron/quality-baseline/daily
+// Workstream C3 — the standing AI-quality monitor's automatic trigger. Runs
+// a baseline of the current production reasoning model against the held-out
+// fixtures for each monitored task and persists it, so the quality trend
+// accrues a fresh data point every day. Cron-secret-gated; the run is
+// attributed to the oldest organisation (the eval measures REDIP's own AI,
+// not tenant data). Fail-soft per task — runScheduledBaselines never throws.
+router.get('/quality-baseline/daily', requireCronAuth, async (req, res, next) => {
+  try {
+    const summary = await abEvalPersistence.runScheduledBaselines();
+    res.json({ success: true, ...summary });
   } catch (error) {
     next(error);
   }

@@ -5467,3 +5467,43 @@ vercel.json addition once a cadence is chosen).
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-22 - Workstream C3 — auto-scheduled quality baseline
+
+### What was worked on
+
+The standing AI-quality monitor (PR-NX127) tracked quality from baseline
+runs, but a baseline only ran when an operator clicked the button. This adds
+the automatic daily trigger so the trend accrues a fresh point on its own.
+
+PR-NX128:
+- `abEvalPersistence.service.js` — `runScheduledBaselines()`: resolves the
+  organisation to attribute the run to (the oldest org — the eval measures
+  REDIP's own AI, not tenant data), then runs a baseline for each monitored
+  task. Fail-soft per task; never throws.
+- `/api/cron/quality-baseline/daily` in `parcelCron.routes.js`, cron-secret-
+  gated by the shared `requireCronAuth` — the same posture as the four
+  existing crons.
+- `vercel.json` — a crons entry at 04:15 UTC daily.
+
+Cost: 2 tasks × 1 candidate × 10 fixtures ≈ 20 AI calls/day, within the
+existing daily AI cost cap. The fixture count matches the operator-triggered
+baseline so scheduled and manual runs stay comparable on the trend.
+
+### Plain-English recap
+- REDIP's AI-quality gauge now checks itself automatically once a day, instead of only when someone clicks "Run baseline".
+- Every morning it scores the current AI against the test deals and adds a point to the trend — so a quality slip surfaces on its own.
+
+### PRs opened / merged
+- PR-NX128 - `feat(ai-quality): auto-schedule the daily quality baseline` - opened, CI-verified, merged.
+
+### Validation
+- Backend: 139 suites / 2272 tests green. No migration; no frontend change.
+
+### What's left to do
+- Workstream D1 — the stage-adaptive deal workspace — in progress this block.
+- Workstream E — the spatial canvas (E1 layered cadastral map, E2 3D massing).
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+

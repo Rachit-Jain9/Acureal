@@ -524,9 +524,69 @@ const runBaselineAndPersist = async ({
     limit,
   });
 
+// ── Scheduled baseline (the daily cron) ──────────────────────────────────
+
+/**
+ * Resolve the organisation a scheduled (cron) baseline is attributed to.
+ * The quality baseline measures REDIP's own production AI, which is
+ * identical for every tenant — it is not per-tenant data. It is recorded
+ * once, against the oldest organisation (the operator's primary workspace).
+ * Soft-fails to null if the table is unavailable.
+ */
+const resolveBaselineOrganizationId = async () => {
+  try {
+    const { rows } = await query(
+      'SELECT id FROM public.organizations ORDER BY created_at ASC, id ASC LIMIT 1',
+    );
+    return rows[0]?.id || null;
+  } catch (err) {
+    if (SOFT_ERROR_CODES.has(err?.code)) {
+      warnSoft(err, 'resolveBaselineOrganizationId');
+      return null;
+    }
+    throw err;
+  }
+};
+
+/**
+ * Run a scheduled baseline for every monitored task — the engine behind the
+ * daily quality-baseline cron. Each task runs independently: one task
+ * failing (a provider outage, the daily cost cap) never aborts the others.
+ * Never throws — always returns a summary the cron route can serialise.
+ */
+const runScheduledBaselines = async ({ limit = 10 } = {}) => {
+  const organizationId = await resolveBaselineOrganizationId();
+  if (!organizationId) {
+    return { scheduled: true, ran: 0, skipped: true, reason: 'no_organization', tasks: [] };
+  }
+
+  const tasks = [];
+  for (const task of TREND_TASKS) {
+    try {
+      const result = await runBaselineAndPersist({ organizationId, task, limit });
+      tasks.push({
+        task,
+        status: result.status,
+        run_id: result.run_id,
+        error: result.error_message || null,
+      });
+    } catch (err) {
+      tasks.push({ task, status: 'failed', run_id: null, error: err.message || String(err) });
+    }
+  }
+
+  return {
+    scheduled: true,
+    ran: tasks.filter((t) => t.status === 'completed').length,
+    organization_id: organizationId,
+    tasks,
+  };
+};
+
 module.exports = {
   runAndPersist,
   runBaselineAndPersist,
+  runScheduledBaselines,
   getQualityTrendByTask,
   createRun,
   finalizeRun,

@@ -443,6 +443,57 @@ describe('getQualityTrendByTask', () => {
   });
 });
 
+// ── runScheduledBaselines (Workstream C3 — the daily cron) ───────────────
+
+describe('runScheduledBaselines', () => {
+  const baselineResult = {
+    ...sampleEvalResult,
+    candidate_ids: ['claude:default'],
+    results: { 'claude:default': sampleEvalResult.results['claude:c46'] },
+    deltas: [],
+  };
+
+  beforeEach(() => {
+    fs.existsSync.mockReturnValue(true);
+    fs.readFileSync.mockReturnValue(JSON.stringify(buildFixtures(30)));
+    harness.runEval.mockReset();
+  });
+
+  test('resolves an organisation and runs a baseline for every monitored task', async () => {
+    query.mockResolvedValue({ rows: [{ id: 'org-1' }] });
+    harness.runEval.mockResolvedValue(baselineResult);
+
+    const out = await persistence.runScheduledBaselines({ limit: 2 });
+
+    expect(out.scheduled).toBe(true);
+    expect(out.tasks).toHaveLength(persistence.TREND_TASKS.length);
+    expect(out.ran).toBe(persistence.TREND_TASKS.length);
+    expect(out.tasks.every((t) => t.status === 'completed')).toBe(true);
+  });
+
+  test('skips cleanly when no organisation exists', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // the org-resolution query
+    const out = await persistence.runScheduledBaselines();
+    expect(out.skipped).toBe(true);
+    expect(out.reason).toBe('no_organization');
+    expect(out.ran).toBe(0);
+  });
+
+  test('one task failing does not abort the others', async () => {
+    query.mockResolvedValue({ rows: [{ id: 'org-1' }] });
+    harness.runEval
+      .mockRejectedValueOnce(new Error('daily cost cap tripped'))
+      .mockResolvedValue(baselineResult);
+
+    const out = await persistence.runScheduledBaselines({ limit: 1 });
+
+    expect(out.tasks).toHaveLength(2);
+    expect(out.ran).toBe(1);
+    expect(out.tasks.some((t) => t.status === 'failed')).toBe(true);
+    expect(out.tasks.some((t) => t.status === 'completed')).toBe(true);
+  });
+});
+
 // ── buildSummaryByCandidate ──────────────────────────────────────────────
 
 describe('buildSummaryByCandidate', () => {
