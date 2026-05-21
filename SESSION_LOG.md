@@ -5097,3 +5097,49 @@ PR #472 (PR-NX116) — CI de-flake + this log entry:
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream A3 — the IC memo Evidence Ledger
+
+### What was worked on
+
+Delivered A3 — the IC memo's numbers traced to their evidence. The memo's
+prose is AI-authored and carries the "requires human review" disclaimer; its
+numbers must not, and now they don't.
+
+PR #473 (PR-NX117):
+- New `icEvidence.service.js` builds the deterministic claim layer beneath
+  the memo — every material figure with an honest, typed, traceable source.
+  Pure composer over engines REDIP already runs deterministically: the
+  financial kernel (KPIs + cost/revenue), Model Confidence (each input,
+  analyst-set vs. cited benchmark), the Risk Radar (risk / diligence /
+  approval counts), the comp-reliance log, and the deal record. No AI — a
+  figure with no honest source is simply not asserted.
+- `GET /intelligence/ic-memo/:dealId/evidence` — soft-fails to
+  { available: false }.
+- New `IcMemoEvidence` panel inside the IC memo surface: a collapsible
+  "Evidence & Sources" ledger, each number click-to-expand to its source
+  detail, grouped by category, with a per-source-type summary. States
+  plainly that every figure is deterministic — the AI narrative is only the
+  interpretive layer on top.
+- 12 new tests (6 backend, 6 frontend).
+
+### Plain-English recap
+- The IC memo now has an "Evidence & Sources" panel: every number behind the deal — IRR, NPV, costs, each assumption, the risk counts, the comps relied on — tagged with where it came from, click-to-expand for how it was produced.
+- Why it matters: an IC can challenge any figure and get a straight, instant answer. The memo's numbers are an auditable ledger; the AI is confined to the narrative. The Provenance Spine now reaches the decision artifact.
+
+### PRs opened / merged
+- PR #473 - `feat(ic-memo): an Evidence Ledger — every IC-memo number traced to its source (PR-NX117)` - opened, CI green, merged.
+- PR #474 - `docs: session log for the IC memo Evidence Ledger session (PR-NX118)` - this entry.
+
+### Validation
+- Backend: 135 suites / 2212 tests green. Frontend: 75 files / 682 tests green; run exits 0. Production build clean.
+- All CI checks passed on #473. No migration — read-side only.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` if not yet done.
+- Workstream A — Provenance Spine substantially complete (model confidence, confidence range, model-trust integration, IC-memo verification, the Evidence Ledger). A possible further step: a deal-wide "show provenance" toggle, or threading the confidence range into the KPI tiles.
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker once enough reliance data accrues.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
