@@ -5345,3 +5345,70 @@ PR #481 (PR-NX125):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream C2 — org-level benchmark-contribution consent
+
+### What was worked on
+
+Workstream C2 of the product plan — the Data Network's consent foundation.
+`docs/DATA_GOVERNANCE.md` §3 specifies that no deal data enters the planned
+anonymized cross-tenant benchmark layer unless BOTH gate conditions hold: the
+contributing user has granted `anonymized_benchmarking` consent, AND the owning
+organization has not engaged an org-level "do not benchmark" opt-out. The
+per-user half shipped with the consent ledger (20260607); this session built
+the org-level half and the gate that combines them.
+
+A deep review settled the model: the per-user `anonymized_benchmarking` consent
+already exists, so C2 is specifically the org-level authority on top — an
+organization is the data fiduciary that owns its deal data, so whether that
+data joins a shared pool is an org decision that sits above any analyst's. The
+DATA_GOVERNANCE doc had already specified the exact two-condition gate.
+
+PR #482 (PR-NX126):
+- New migration `20260612_organization_consents.sql` — an append-only org-level
+  data-governance ledger, the same shape and posture as `user_consents`
+  (org-scoped RLS, no write policy, newest row per (org, purpose) wins). Sole
+  purpose today: `benchmark_opt_out`.
+- `organizationConsent.service.js` — recordOrgConsent / getOrgConsentState /
+  isBenchmarkingOptedOut / getOrgConsentHistory. Append-only, migration-tolerant.
+- `benchmarkEligibility.service.js` — the deterministic gate. evaluateEligibility
+  combines the per-user consent and the org opt-out into one
+  included_in_aggregate verdict with reasons; computed live (retroactive
+  withdrawal); fails closed.
+- `/api/organization` routes — GET benchmark-setting (any member) + PUT
+  (owner/admin only); mounted in server.js.
+- A Market-benchmark-contribution card in the owner/admin section of the
+  Settings page — the opt-out toggle, dual-consent copy, the caller's own
+  eligibility, last-changed provenance.
+- `docs/DATA_GOVERNANCE.md` Layer 4 status updated — the consent gate is now
+  built end to end.
+
+Also this session, earlier: shipped + merged PR #481 (PR-NX125, the standing
+extraction-quality system) — see the entry above; production deploy succeeded.
+Declined F1 (the migration squash) with a written rationale — it cannot be
+proven safe without a fresh database this machine cannot host, and it is
+housekeeping with disaster-recovery downside and no user benefit; recommended
+deferring it until a real second environment exists.
+
+### Plain-English recap
+- An organisation's owner or admin now has a clear switch in Settings to opt the whole organisation out of ever contributing its data to market benchmarks.
+- One server-side gate decides eligibility, combining that org switch with each user's own consent — and nothing is shared today; no benchmark feature is live yet.
+- It matters because consent is now asked and recorded before any data could ever be collected — the only correct order.
+
+### PRs opened / merged
+- PR #481 - `feat(learning): standing extraction-quality system (PR-NX125)` - merged; production deploy green.
+- PR #482 - `feat(governance): org-level benchmark-contribution consent + the Layer-4 eligibility gate (PR-NX126)` - opened, awaiting CI + operator merge. This session-log entry ships in the same PR.
+
+### Validation
+- Backend: 139 suites / 2262 tests green. Frontend: 78 files / 700 tests green; run exits 0; production build clean.
+- `node scripts/lint-migrations.js` — 85 migrations clean (39 org-scoped, 33 RLS-protected).
+- The Settings card is auth-gated (needs a logged-in owner/admin) — covered by 9 component tests, not browser-verified.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260612_organization_consents.sql`.
+- Operator: merge PR #482 once CI is green.
+- Workstream C continued — the standing A/B eval / golden-set quality harness (C3 full) needs operator-curated golden fixtures and has an AI-cost tradeoff; C4 (benchmark statistics) and C5 (learned comp-ranker) stay deferred until real data accrues.
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) genuinely need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
