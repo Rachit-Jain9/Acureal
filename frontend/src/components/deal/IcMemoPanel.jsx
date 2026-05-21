@@ -263,7 +263,7 @@ export default function IcMemoPanel({ dealId, dealName }) {
 
           {meta && meta.generatedAt && (
             <p className="text-xs text-content-muted">
-              Generated {new Date(meta.generatedAt).toLocaleString('en-IN')} · 8 IC sections synthesized from deal financials, risk flags, DD items, approval status, comps, and Bengaluru market benchmarks
+              Generated {new Date(meta.generatedAt).toLocaleString('en-IN')} · 8 IC sections synthesized from deal financials, risk flags, DD items, approval status, the deterministic verification posture (model confidence + Risk Radar), comps, and Bengaluru market benchmarks
             </p>
           )}
         </div>

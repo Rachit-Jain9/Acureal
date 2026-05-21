@@ -36,6 +36,14 @@ const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runClaudeReasoningStream } = require('./ai/aiRouter');
 const aiArtifacts = require('./aiArtifacts.service');
 const numericalVerifier = require('./numericalVerifier.service');
+// Deterministic trust-signal services (Workstreams A, B, C). The IC memo —
+// REDIP's decision artifact — must be honest about what has been verified, so
+// it is fed the same postures the workspace shows the analyst.
+const riskRadarService = require('./riskRadar.service');
+const modelConfidenceService = require('./modelConfidence.service');
+const confidenceRangeService = require('./confidenceRange.service');
+const promoterProfileService = require('./promoterProfile.service');
+const compRelianceService = require('./compReliance.service');
 const { getRequestContext } = require('../lib/requestContext');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const log = require('../lib/logger').child({ module: 'icMemo' });
@@ -51,7 +59,7 @@ OUTPUT FORMAT — strict, in this order:
 # {Deal Name} — IC Memo
 
 ## 1. Executive Summary
-A single short paragraph (3-5 sentences). What it is, what it costs, what it returns, why now, what the IC is being asked to approve.
+A single short paragraph (3-5 sentences). What it is, what it costs, what it returns, why now, what the IC is being asked to approve. End with one clause on the deal's verification posture from the supplied \`verification\` block — how much of the financial model is set for this deal vs. on benchmark defaults, and whether any Risk Radar failure mode is flagged or still unverified.
 
 ## 2. Deal Snapshot
 A markdown table with: Asset Class, Stage, Land Area, Ask / Negotiated Price, Modelled IRR, NPV, Equity Multiple, Asset City. Tabular numerals. Use the supplied numbers verbatim — do not invent.
@@ -72,14 +80,89 @@ Short bullet list of outstanding diligence items. Pull from the supplied dd_item
 Pull from the supplied approval_items. State which are pending vs received. If pending count > 0, this is a yellow light at minimum.
 
 ## 8. Recommendation
-Single paragraph. ONE OF: "Recommend approval", "Recommend approval subject to conditions", "Hold pending [specific items]", "Decline". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt."
+Single paragraph. ONE OF: "Recommend approval", "Recommend approval subject to conditions", "Hold pending [specific items]", "Decline". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt." Weigh the supplied \`verification\` block: if the financial model is assumption-led, or any Risk Radar category is flagged or unverified, a clean "Recommend approval" is not available — name those specific items as explicit conditions or holds.
 
 RULES:
 - Every number in your memo must come from the supplied data — do not invent.
+- A \`verification\` block is supplied — REDIP's deterministic engines (not AI) reporting the model-confidence level, the Risk Radar posture for each failure mode, the promoter posture, and the count of analyst-relied comps. Treat it as ground truth: never contradict it, and state plainly what it shows is NOT yet verified.
 - If a field is null/empty, say so explicitly ("Not yet modelled", "Pending"). Never silently omit.
 - Tone: senior partner briefing the IC, not marketing copy.
 - Markdown only — use proper headings, tables, and bullets.
 - 700-1200 words total. Compress aggressively; this is not a prospectus.`;
+
+/**
+ * Assemble the deterministic trust posture for a deal — Workstreams A, B, C.
+ *
+ * The IC memo is a decision document; it must not recommend over risk the
+ * platform has already flagged as unverified. This composes the same postures
+ * the workspace shows the analyst — model confidence, the confidence range,
+ * the Risk Radar, promoter execution, analyst-relied comps — into one compact
+ * block the memo author treats as ground truth.
+ *
+ * Every signal is wrapped: a trust-service hiccup degrades that one field to
+ * null, never breaks IC-memo generation. Pure deterministic data — the LLM
+ * only narrates it, never computes it.
+ */
+const buildVerificationContext = async (dealId) => {
+  const [mc, cr, radar, promoter, reliedIds] = await Promise.all([
+    modelConfidenceService.getModelConfidence(dealId).catch(() => null),
+    confidenceRangeService.getConfidenceRange(dealId).catch(() => null),
+    riskRadarService.getRiskRadar(dealId).catch(() => null),
+    promoterProfileService.getProfileWithAssessment(dealId).catch(() => null),
+    compRelianceService.listReliedCompIds(dealId).catch(() => []),
+  ]);
+
+  const modelConfidence =
+    mc && mc.available
+      ? {
+          confidencePct: mc.confidencePct,
+          band: mc.band,
+          dealSetCount: mc.dealSetCount,
+          total: mc.total,
+        }
+      : null;
+
+  let confidenceRange = null;
+  if (cr && cr.available && Array.isArray(cr.kpis) && cr.kpis.length > 0) {
+    const primary = cr.kpis.find((k) => k.key === cr.primaryKpi) || cr.kpis[0];
+    if (primary) {
+      confidenceRange = {
+        kpi: primary.label,
+        base: primary.base,
+        low: primary.low,
+        high: primary.high,
+        unverifiedInputs: cr.unverifiedCount,
+      };
+    }
+  }
+
+  const riskRadar =
+    radar && Array.isArray(radar.categories)
+      ? {
+          overallPosture: radar.overall_posture,
+          flagged: radar.categories.filter((c) => c.posture === 'flagged').map((c) => c.label),
+          unverified: radar.categories
+            .filter((c) => c.posture === 'unverified')
+            .map((c) => c.label),
+        }
+      : null;
+
+  const promoterPosture =
+    promoter && promoter.assessment
+      ? {
+          posture: promoter.assessment.posture,
+          recorded: promoter.assessment.summary?.recorded === true,
+        }
+      : null;
+
+  return {
+    modelConfidence,
+    confidenceRange,
+    riskRadar,
+    promoter: promoterPosture,
+    reliedCompCount: Array.isArray(reliedIds) ? reliedIds.length : 0,
+  };
+};
 
 const buildIcMemoInput = async (dealId) => {
   // Gate: deal must be visible to the user. Same RLS condition as the
@@ -94,6 +177,7 @@ const buildIcMemoInput = async (dealId) => {
     riskResult,
     ddResult,
     approvalResult,
+    verificationContext,
   ] = await Promise.all([
     query(
       `SELECT d.id, d.name, d.stage, d.priority, d.deal_type, d.notes,
@@ -169,6 +253,7 @@ const buildIcMemoInput = async (dealId) => {
         LIMIT 20`,
       [dealId],
     ).catch(() => ({ rows: [] })),
+    buildVerificationContext(dealId),
   ]);
 
   const deal = dealResult.rows[0];
@@ -261,6 +346,10 @@ const buildIcMemoInput = async (dealId) => {
       expiryDate: a.expiry_date,
       available: a.is_available,
     })),
+    // Deterministic trust posture (Workstreams A, B, C) — the memo author
+    // treats this as ground truth and cannot recommend over what it flags
+    // as unverified.
+    verification: verificationContext,
   };
 
   return { systemPrompt: SYSTEM_PROMPT, payload, dealName: deal.name };
@@ -435,6 +524,7 @@ const getCached = async (dealId) =>
 
 module.exports = {
   buildIcMemoInput,
+  buildVerificationContext,
   generate,
   stream,
   getCached,
