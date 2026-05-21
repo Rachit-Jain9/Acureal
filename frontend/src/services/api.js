@@ -760,6 +760,12 @@ export const adminAPI = {
   listAbEvalRuns: (limit = 50) => api.get('/admin/ab-eval/runs', { params: { limit } }),
   getAbEvalRun: (id) => api.get(`/admin/ab-eval/runs/${id}`),
   runAbEval: (body) => api.post('/admin/ab-eval/runs', body),
+  // Workstream C3 — the standing quality monitor. `getAbEvalQualityTrend`
+  // is the trend read-model; `runAbEvalBaseline` scores the current
+  // production config against the fixtures and feeds the trend.
+  getAbEvalQualityTrend: (days = 90) =>
+    api.get('/admin/ab-eval/quality-trend', { params: { days } }),
+  runAbEvalBaseline: (body) => api.post('/admin/ab-eval/baseline', body),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

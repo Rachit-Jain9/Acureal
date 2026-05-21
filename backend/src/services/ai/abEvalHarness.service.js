@@ -174,8 +174,11 @@ const runEval = async ({
   if (!Array.isArray(fixtures) || fixtures.length === 0) {
     throw new Error('At least one fixture is required.');
   }
-  if (!Array.isArray(candidates) || candidates.length < 2) {
-    throw new Error('A/B requires at least 2 candidates.');
+  // One candidate = a single-config "baseline" run (quality monitoring);
+  // two or more = an A/B comparison. The pairwise-delta loop below simply
+  // yields nothing for a single candidate.
+  if (!Array.isArray(candidates) || candidates.length < 1) {
+    throw new Error('At least one candidate is required.');
   }
 
   const cfg = TASKS[task];

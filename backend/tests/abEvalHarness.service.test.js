@@ -147,8 +147,23 @@ describe('runEval', () => {
     await expect(runEval({
       task: 'parcel_narrative',
       fixtures: [fixtures[0]],
-      candidates: [{ id: 'a', runner: jest.fn() }],
-    })).rejects.toThrow(/at least 2/i);
+      candidates: [],
+    })).rejects.toThrow(/at least one candidate/i);
+  });
+
+  test('accepts a single candidate (baseline mode) and produces no deltas', async () => {
+    const runner = jest.fn(({ payload }) => Promise.resolve(cleanText(payload)));
+    const result = await runEval({
+      task: 'parcel_narrative',
+      fixtures,
+      candidates: [{ id: 'claude:default', runner }],
+    });
+    expect(runner).toHaveBeenCalledTimes(3);
+    expect(result.candidate_ids).toEqual(['claude:default']);
+    expect(result.results['claude:default']).toBeDefined();
+    expect(result.results['claude:default'].summary.fixtures).toBe(3);
+    // A single candidate has no pair to compare against.
+    expect(result.deltas).toEqual([]);
   });
 
   test('throws on unknown task', async () => {

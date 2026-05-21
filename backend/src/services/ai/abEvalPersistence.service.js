@@ -288,33 +288,142 @@ const getRunDetail = async (runId) => {
   }
 };
 
+// ── Quality trend — the standing quality monitor ─────────────────────────
+
+// Tasks the standing quality trend covers — the two prose tasks the
+// deterministic scorer in abEvalScoring.js is calibrated for.
+const TREND_TASKS = Object.freeze(['parcel_narrative', 'export_insights']);
+
+// A baseline overall score this many points below the trailing average of
+// prior baselines flags as a quality regression.
+const REGRESSION_THRESHOLD_PTS = 5;
+
+const emptyTrend = () => ({
+  available: true,
+  run_count: 0,
+  series: [],
+  latest: null,
+  baseline_avg: null,
+  delta: null,
+  regression: false,
+});
+
+/**
+ * Standing-quality read model. Aggregates the *baseline* eval runs (single
+ * candidate — the current production config) per task over a trailing
+ * window into a quality trend: the score series, the latest score, the
+ * trailing-average baseline, the delta, and a regression flag.
+ *
+ * A/B comparison runs (2+ candidates) are deliberately excluded — only
+ * like-for-like baseline runs are comparable over time. Baselines are
+ * identified by a single-element `candidate_ids`, so no schema change is
+ * needed to tell the two run kinds apart.
+ *
+ * Soft-fails to `available: false` if the persistence table is not present.
+ */
+const getQualityTrendByTask = async ({ days = 90 } = {}) => {
+  const windowDays = Math.max(1, Math.min(Number(days) || 90, 365));
+  const result = {
+    available: true,
+    window_days: windowDays,
+    tasks: {},
+    generated_at: new Date().toISOString(),
+  };
+  for (const t of TREND_TASKS) result.tasks[t] = emptyTrend();
+
+  try {
+    const { rows } = await query(
+      `SELECT id, task, summary_json, created_at
+         FROM ab_eval_runs
+        WHERE organization_id = current_organization_id()
+          AND status = 'completed'
+          AND task = ANY($1)
+          AND array_length(candidate_ids, 1) = 1
+          AND created_at > NOW() - ($2 || ' days')::interval
+        ORDER BY created_at ASC`,
+      [[...TREND_TASKS], windowDays],
+    );
+
+    const byTask = {};
+    for (const t of TREND_TASKS) byTask[t] = [];
+    for (const row of rows) {
+      if (!byTask[row.task]) continue;
+      // A baseline run's summary_json carries exactly one candidate entry.
+      const summary =
+        row.summary_json && typeof row.summary_json === 'object'
+          ? Object.values(row.summary_json)[0]
+          : null;
+      if (!summary || typeof summary.avg_overall !== 'number') continue;
+      byTask[row.task].push({
+        run_id: row.id,
+        date: row.created_at,
+        overall: summary.avg_overall,
+        hallucination:
+          typeof summary.avg_hallucination === 'number' ? summary.avg_hallucination : null,
+        tone: typeof summary.avg_tone === 'number' ? summary.avg_tone : null,
+      });
+    }
+
+    for (const t of TREND_TASKS) {
+      const series = byTask[t];
+      if (series.length === 0) continue; // result.tasks[t] stays emptyTrend()
+      const latest = series[series.length - 1];
+      const prior = series.slice(0, -1);
+      const baselineAvg = prior.length
+        ? Math.round(prior.reduce((sum, p) => sum + p.overall, 0) / prior.length)
+        : null;
+      const delta = baselineAvg === null ? null : latest.overall - baselineAvg;
+      result.tasks[t] = {
+        available: true,
+        run_count: series.length,
+        series,
+        latest,
+        baseline_avg: baselineAvg,
+        delta,
+        regression: delta !== null && delta <= -REGRESSION_THRESHOLD_PTS,
+      };
+    }
+    return result;
+  } catch (err) {
+    if (SOFT_ERROR_CODES.has(err?.code)) {
+      warnSoft(err, 'getQualityTrendByTask');
+      return {
+        available: false,
+        window_days: windowDays,
+        tasks: {},
+        generated_at: new Date().toISOString(),
+      };
+    }
+    throw err;
+  }
+};
+
 // ── End-to-end run ───────────────────────────────────────────────────────
 
 const COST_PER_CALL_HEURISTIC_USD = 0.012;
 const MAX_FIXTURES_PER_RUN = 50; // hard cap to keep web requests bounded
 
+// A baseline run scores the current production reasoning config. Claude is
+// REDIP's reasoning provider (CLAUDE.md AI routing); the bare 'claude' spec
+// resolves through resolveRunner to the env-configured model, so a baseline
+// always tracks whatever production is actually running.
+const BASELINE_CANDIDATE_SPEC = 'claude';
+
 /**
- * Execute an A/B eval and persist the results. Sync-blocking — the
- * route awaits this and returns the run row when done. For 30 fixtures
- * × 2 candidates × ~3s/call ≈ 180s total which exceeds Vercel's 60s
- * function timeout. The route is therefore admin-only and runs against
- * a `--limit`-capped fixture slice (default 10) to fit inside the
+ * Shared run-and-persist core. `candidateSpecs` is one entry (a baseline /
+ * quality-monitoring run) or two-plus (an A/B comparison). Sync-blocking —
+ * the route awaits this and returns the run row when done; the fixture
+ * slice is `--limit`-capped (default 10) to fit inside the function
  * timeout. Larger runs go through the CLI.
  */
-const runAndPersist = async ({
+const runAndPersistCore = async ({
   organizationId,
   triggeredBy = null,
   task = 'parcel_narrative',
-  candidateSpecs,            // ['claude:claude-sonnet-4-6', 'openai:gpt-5.4-mini']
+  candidateSpecs,
   fixturesPath = DEFAULT_FIXTURES_PATH,
-  limit = 10,                // small default so the web run fits in 60s
+  limit = 10,
 }) => {
-  if (!Array.isArray(candidateSpecs) || candidateSpecs.length < 2) {
-    throw Object.assign(
-      new Error('At least two candidate specs required (e.g. ["claude:default","openai:default"])'),
-      { statusCode: 400 },
-    );
-  }
   if (!['parcel_narrative', 'export_insights'].includes(task)) {
     throw Object.assign(
       new Error(`Unknown task '${task}'. Choose: parcel_narrative | export_insights`),
@@ -379,8 +488,46 @@ const runAndPersist = async ({
   };
 };
 
+/**
+ * A/B comparison — execute and persist an eval of two or more candidates.
+ * Surfaced on the Run-A/B card of the admin page.
+ */
+const runAndPersist = async (args = {}) => {
+  if (!Array.isArray(args.candidateSpecs) || args.candidateSpecs.length < 2) {
+    throw Object.assign(
+      new Error('At least two candidate specs required (e.g. ["claude:default","openai:default"]).'),
+      { statusCode: 400 },
+    );
+  }
+  return runAndPersistCore(args);
+};
+
+/**
+ * Baseline — execute and persist a single run of the current production
+ * reasoning config against the fixtures, for standing quality monitoring.
+ * The resulting run carries a single-element `candidate_ids`, which is how
+ * getQualityTrendByTask tells baselines apart from A/B runs.
+ */
+const runBaselineAndPersist = async ({
+  organizationId,
+  triggeredBy = null,
+  task = 'parcel_narrative',
+  fixturesPath = DEFAULT_FIXTURES_PATH,
+  limit = 10,
+} = {}) =>
+  runAndPersistCore({
+    organizationId,
+    triggeredBy,
+    task,
+    candidateSpecs: [BASELINE_CANDIDATE_SPEC],
+    fixturesPath,
+    limit,
+  });
+
 module.exports = {
   runAndPersist,
+  runBaselineAndPersist,
+  getQualityTrendByTask,
   createRun,
   finalizeRun,
   listRuns,
@@ -388,5 +535,7 @@ module.exports = {
   loadFixtures,
   buildSummaryByCandidate,
   MAX_FIXTURES_PER_RUN,
+  TREND_TASKS,
+  REGRESSION_THRESHOLD_PTS,
   DEFAULT_FIXTURES_PATH,
 };

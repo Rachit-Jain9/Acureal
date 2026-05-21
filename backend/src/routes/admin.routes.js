@@ -250,4 +250,47 @@ router.post('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res
   }
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// Standing quality monitor — Workstream C3. Promotes the on-demand A/B
+// harness into a continuous quality signal: a baseline run scores the
+// current production config, and the trend tracks it over time.
+// ──────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/ab-eval/quality-trend?days=90
+//
+// Aggregates the baseline eval runs (single current-production candidate)
+// per AI task over a trailing window into a quality trend: the score
+// series, the latest score, the trailing-average baseline, the delta, and
+// a regression flag. Soft-fails to an empty shape if ab_eval is unavailable.
+router.get('/ab-eval/quality-trend', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const days = req.query.days ? parseInt(req.query.days, 10) : 90;
+    const data = await abEvalPersistence.getQualityTrendByTask({ days });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/ab-eval/baseline
+//
+// Runs a single-config baseline of the current production reasoning model
+// against the fixture set, persists it, and so feeds the standing quality
+// trend. Body: { task?, limit? }. Sync — blocks until the run completes
+// (~30s for the default 10-fixture slice).
+router.post('/ab-eval/baseline', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { task = 'parcel_narrative', limit = 10 } = req.body || {};
+    const run = await abEvalPersistence.runBaselineAndPersist({
+      organizationId: req.user.organization_id,
+      triggeredBy: req.user.id,
+      task,
+      limit,
+    });
+    return res.json({ success: true, data: run });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = router;
