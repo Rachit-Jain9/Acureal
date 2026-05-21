@@ -5192,3 +5192,52 @@ PR #475 (PR-NX119):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream F (foundations) — migration-lint tenant-isolation guard
+
+### What was worked on
+
+The foundations/hygiene pass began with the migration lint. A deep review
+showed the two biggest F items are not safe to do autonomously — F1 (squash
+78+ migrations into a baseline) cannot be verified without an operator-run
+DB rebuild, and F2 (delete the dark-mode `!important` safety net) would need
+every legacy `bg-white`/`bg-gray-*` component migrated first or dark mode
+breaks app-wide. So this block did the genuinely safe, high-value F3.
+
+PR #477 (PR-NX121):
+- The CI migration lint checked filenames / empty files / CONCURRENTLY but
+  not the convention that matters most — every tenant-scoped table must
+  carry row-level security. A table with an organization_id column and no
+  RLS is a cross-org data leak.
+- `scripts/lint-migrations.js` now enforces, corpus-wide: any table CREATEd
+  with an organization_id/org_id column must have ENABLE ROW LEVEL SECURITY
+  somewhere; a documented RLS_EXEMPT allowlist (6 entries) covers the
+  market-intelligence + regulatory_data reference tables deliberately
+  isolated by service-layer org-filtering. Plus a CREATE TABLE idempotency
+  rule, and SQL-comment stripping so prose can never read as a statement.
+- A full audit of all 83 migrations came back clean — 37 org-scoped tables,
+  31 RLS-protected, 6 documented-exempt. No real gap; the lint now
+  permanently prevents one.
+- Script refactored for testability; new test — 12 cases incl. a standing
+  assertion the live corpus passes.
+
+### Plain-English recap
+- Added an automated safety check to the build pipeline: the worst multi-tenant bug — one customer seeing another's data — is now impossible to merge. A future database change that adds a customer-scoped table without the isolation rule fails the build with an explanation.
+- An audit of all 83 existing database changes confirmed they are already correct — this locks in a good state.
+
+### PRs opened / merged
+- PR #477 - `chore(db): enforce tenant-isolation + idempotency in the migration lint (PR-NX121)` - opened, CI green, merged.
+- PR #478 - `docs: session log for the migration-lint hardening (PR-NX122)` - this entry.
+
+### Validation
+- Backend: 136 suites / 2224 tests green. The lint exits 0 over all 83 migrations.
+- All CI checks passed on #477.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` if not yet done.
+- Workstream F — F3 done; F5 already shipped (PR-NX52). F1 (schema squash) and F2 (theme-token / dark-mode-hack removal) genuinely need operator involvement — F1 needs an operator-run DB-rebuild verification, F2 needs visual QA across light + dark mode. F4 (ontology adoption — deal forms reading asset classes from `@redip/real-estate-ontology`) is a clean focused next step.
+- Workstream A — Provenance Spine complete and accuracy-hardened; optional polish remains.
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
