@@ -25,7 +25,7 @@ const consentService = require('./consent.service');
 
 const PG_UNDEFINED_TABLE = '42P01';
 
-const SIGNAL_TYPES = Object.freeze(['extraction_field_review']);
+const SIGNAL_TYPES = Object.freeze(['extraction_field_review', 'comp_reliance']);
 // Consent purpose that gates user-attributed signal capture.
 const LEARNING_CONSENT_PURPOSE = 'product_improvement';
 
@@ -115,6 +115,81 @@ const recordExtractionReviewSignals = async ({ extraction, corrections, userId }
 };
 
 /**
+ * Capture a comp-reliance signal — Workstream C1, the data-network seed.
+ *
+ * Appends ONE values-free row recording that an analyst marked (or unmarked)
+ * a comp as relied-upon for a deal, alongside the deterministic scorer's
+ * verdict at that moment. This is the ground truth a future learned
+ * comp-ranker needs: "the analyst relied on a comp the scorer ranked Nth".
+ *
+ * `detail` carries org-internal references (deal_id, comp_id) and the
+ * scorer's numeric outputs — no document field values, no PII — so it stays
+ * within the values-free posture of improvement_signals.
+ *
+ * Never throws — returns 1 on write, 0 on any failure — so the reliance
+ * toggle is never broken by telemetry capture.
+ *
+ * @param {object} input
+ * @param {string} input.organizationId  the deal's organisation.
+ * @param {string} input.dealId          the deal the comp was relied on for.
+ * @param {string} input.compId          the comp marked / unmarked.
+ * @param {boolean} input.relied         true = marked relied-on, false = unmarked.
+ * @param {number|null} input.similarityScore  scorer composite [0,1] at toggle time.
+ * @param {number|null} input.similarityRank   the comp's rank in the ranked list.
+ * @param {number|null} input.rateDeltaPct     comp rate vs subject benchmark, signed %.
+ * @param {string|null} input.userId     the acting user (consent-gated).
+ */
+const recordCompRelianceSignal = async ({
+  organizationId = null,
+  dealId,
+  compId,
+  relied,
+  similarityScore = null,
+  similarityRank = null,
+  rateDeltaPct = null,
+  userId = null,
+} = {}) => {
+  try {
+    if (!dealId || !compId) return 0;
+
+    // Attach the user only with product_improvement consent; else anonymous.
+    let resolvedUserId = null;
+    if (userId) {
+      try {
+        const consented = await consentService.hasConsent(userId, LEARNING_CONSENT_PURPOSE);
+        resolvedUserId = consented ? userId : null;
+      } catch {
+        resolvedUserId = null;
+      }
+    }
+
+    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+    const detail = {
+      deal_id: String(dealId),
+      comp_id: String(compId),
+      relied_on: relied === true,
+      similarity_score: num(similarityScore),
+      similarity_rank: num(similarityRank),
+      rate_delta_pct: num(rateDeltaPct),
+    };
+
+    await query(
+      `INSERT INTO public.improvement_signals (organization_id, user_id, signal_type, detail)
+       VALUES ($1, $2, 'comp_reliance', $3::jsonb)`,
+      [organizationId, resolvedUserId, JSON.stringify(detail)]
+    );
+    return 1;
+  } catch (err) {
+    if (isMissingTable(err)) {
+      log.warn('improvement_signals table missing — apply migration 20260608');
+    } else {
+      log.warn('comp_reliance_signal_capture_failed', { error: err.message });
+    }
+    return 0;
+  }
+};
+
+/**
  * Extraction-accuracy read model (Phase 5.2 seed). Aggregates the
  * extraction_field_review signals over a trailing window into a per-(doc_type,
  * field) correction rate plus an overall rollup. Org-scoped via
@@ -188,5 +263,6 @@ const getExtractionAccuracy = async ({ days = 90 } = {}) => {
 module.exports = {
   SIGNAL_TYPES,
   recordExtractionReviewSignals,
+  recordCompRelianceSignal,
   getExtractionAccuracy,
 };
