@@ -111,9 +111,12 @@ facts contributed by many tenants so that REDIP can show "how does this deal
 compare to the market" using REDIP's *own* deal flow rather than only external
 feeds.
 
-**Status: to be built.** No Layer-4 tables exist yet. This document defines the
-layer ahead of implementation so the consent gate and the eligibility flag have a
-specification to build against (compliance plan Phase 3).
+**Status: the consent gate is built; the statistics are deferred.** Both halves
+of the gate now exist — the per-user `anonymized_benchmarking` consent
+(`user_consents`, 20260607) and the org-level opt-out (`organization_consents`,
+20260612), combined deterministically by `benchmarkEligibility.service.js`. No
+Layer-4 *aggregate* tables exist yet: the k-anonymity statistics wait for a real
+consumer and enough contributing organisations (plan C4).
 
 **The gate — both conditions must hold for a deal to contribute a Layer-4 row:**
 

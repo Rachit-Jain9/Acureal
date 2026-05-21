@@ -5345,3 +5345,125 @@ PR #481 (PR-NX125):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream C2 — org-level benchmark-contribution consent
+
+### What was worked on
+
+Workstream C2 of the product plan — the Data Network's consent foundation.
+`docs/DATA_GOVERNANCE.md` §3 specifies that no deal data enters the planned
+anonymized cross-tenant benchmark layer unless BOTH gate conditions hold: the
+contributing user has granted `anonymized_benchmarking` consent, AND the owning
+organization has not engaged an org-level "do not benchmark" opt-out. The
+per-user half shipped with the consent ledger (20260607); this session built
+the org-level half and the gate that combines them.
+
+A deep review settled the model: the per-user `anonymized_benchmarking` consent
+already exists, so C2 is specifically the org-level authority on top — an
+organization is the data fiduciary that owns its deal data, so whether that
+data joins a shared pool is an org decision that sits above any analyst's. The
+DATA_GOVERNANCE doc had already specified the exact two-condition gate.
+
+PR #482 (PR-NX126):
+- New migration `20260612_organization_consents.sql` — an append-only org-level
+  data-governance ledger, the same shape and posture as `user_consents`
+  (org-scoped RLS, no write policy, newest row per (org, purpose) wins). Sole
+  purpose today: `benchmark_opt_out`.
+- `organizationConsent.service.js` — recordOrgConsent / getOrgConsentState /
+  isBenchmarkingOptedOut / getOrgConsentHistory. Append-only, migration-tolerant.
+- `benchmarkEligibility.service.js` — the deterministic gate. evaluateEligibility
+  combines the per-user consent and the org opt-out into one
+  included_in_aggregate verdict with reasons; computed live (retroactive
+  withdrawal); fails closed.
+- `/api/organization` routes — GET benchmark-setting (any member) + PUT
+  (owner/admin only); mounted in server.js.
+- A Market-benchmark-contribution card in the owner/admin section of the
+  Settings page — the opt-out toggle, dual-consent copy, the caller's own
+  eligibility, last-changed provenance.
+- `docs/DATA_GOVERNANCE.md` Layer 4 status updated — the consent gate is now
+  built end to end.
+
+Also this session, earlier: shipped + merged PR #481 (PR-NX125, the standing
+extraction-quality system) — see the entry above; production deploy succeeded.
+Declined F1 (the migration squash) with a written rationale — it cannot be
+proven safe without a fresh database this machine cannot host, and it is
+housekeeping with disaster-recovery downside and no user benefit; recommended
+deferring it until a real second environment exists.
+
+### Plain-English recap
+- An organisation's owner or admin now has a clear switch in Settings to opt the whole organisation out of ever contributing its data to market benchmarks.
+- One server-side gate decides eligibility, combining that org switch with each user's own consent — and nothing is shared today; no benchmark feature is live yet.
+- It matters because consent is now asked and recorded before any data could ever be collected — the only correct order.
+
+### PRs opened / merged
+- PR #481 - `feat(learning): standing extraction-quality system (PR-NX125)` - merged; production deploy green.
+- PR #482 - `feat(governance): org-level benchmark-contribution consent + the Layer-4 eligibility gate (PR-NX126)` - opened, awaiting CI + operator merge. This session-log entry ships in the same PR.
+
+### Validation
+- Backend: 139 suites / 2262 tests green. Frontend: 78 files / 700 tests green; run exits 0; production build clean.
+- `node scripts/lint-migrations.js` — 85 migrations clean (39 org-scoped, 33 RLS-protected).
+- The Settings card is auth-gated (needs a logged-in owner/admin) — covered by 9 component tests, not browser-verified.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260612_organization_consents.sql`.
+- Operator: merge PR #482 once CI is green.
+- Workstream C continued — the standing A/B eval / golden-set quality harness (C3 full); C4 (benchmark statistics) and C5 (learned comp-ranker) stay deferred until real data accrues.
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) genuinely need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
+
+## 2026-05-21 - Workstream C3 — the standing AI-quality monitor
+
+### What was worked on
+
+Workstream C3 — promoting the on-demand A/B eval harness (Tier-2 #14) into a
+standing quality system that continuously signals whether REDIP's production
+AI quality is holding.
+
+A deep review corrected an earlier wrong conclusion (recorded in the C2 entry
+above) that C3 was "blocked on operator-curated golden fixtures / fabrication".
+The harness's scorer (`abEvalScoring.js`) is fully deterministic JS —
+hallucination = facts not present in the input snapshot; tone = regex voice
+checks — and the 30 fixtures are synthetic eval *inputs*, not invented facts
+shown to users. The harness is the right foundation; the genuine gap was the
+monitoring lens.
+
+PR #483 (PR-NX127):
+- `runEval` now accepts a single candidate — a one-config "baseline" run, not
+  only two-plus for an A/B comparison.
+- `abEvalPersistence.service.js` — a shared run-and-persist core;
+  `runBaselineAndPersist` (scores the current production reasoning config);
+  `getQualityTrendByTask` — the read-model aggregating baseline runs per task
+  into a score series, the latest score, the trailing-average baseline, the
+  delta, and a regression flag. No migration — baselines are told apart from
+  A/B runs by a single-element `candidate_ids`.
+- `/api/admin/ab-eval` — GET quality-trend + POST baseline, admin-gated.
+- A "Standing quality" panel atop the admin A/B page — per task: the latest
+  score, the trend delta, a regression flag, a one-click Run-baseline trigger.
+
+No fabrication, no LLM judge, no autonomous spend — a baseline is operator-
+triggered (~$0.12 for the 10-fixture default); automatic scheduling is a
+deliberate cost decision left to the operator (a daily cron is a small
+vercel.json addition once a cadence is chosen).
+
+### Plain-English recap
+- REDIP's tool for comparing two AI models head-to-head is now also a continuous quality gauge — an operator clicks "Run baseline" and REDIP scores its current AI against a fixed set of test deals, then tracks that score over time.
+- If quality slips below the recent average, the page flags a "regression" — catching the AI getting worse before a customer ever notices.
+- It matters because it makes AI quality a measured, monitored number, not a hope.
+
+### PRs opened / merged
+- PR #483 - `feat(ai-quality): promote the A/B eval harness into a standing quality monitor (PR-NX127)` - opened, CI green, awaiting operator merge. No migration. (This session-log entry ships in the C2 PR #482, not #483, so the two feature PRs stay conflict-free in any merge order.)
+
+### Validation
+- Backend: 137 suites / 2250 tests green. Frontend: 78 files / 697 tests green; run exits 0; production build clean.
+- `node scripts/lint-migrations.js` — 84 migrations clean (no migration added).
+- The admin quality panel is auth-gated (admin-only) — covered by 6 component tests, not browser-verified.
+
+### What's left to do
+- Operator: merge PR #482 (org benchmark consent — apply migration `20260612` first) and PR #483 (standing quality monitor — no migration), in any order; both CI-green.
+- Workstream C — C1, the extraction-quality system, C2 and C3 are all shipped. C4 (benchmark statistics) and C5 (learned comp-ranker) stay deferred until real contributing data accrues. Optional C3 follow-up: a daily cron to run baselines automatically (a recurring-cost decision, ~₹300/month).
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) genuinely need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
