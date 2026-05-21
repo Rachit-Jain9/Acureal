@@ -339,6 +339,110 @@ describe('runAndPersist', () => {
   });
 });
 
+// ── runBaselineAndPersist (Workstream C3) ────────────────────────────────
+
+describe('runBaselineAndPersist', () => {
+  beforeEach(() => {
+    fs.existsSync.mockReturnValue(true);
+    fs.readFileSync.mockReturnValue(JSON.stringify(buildFixtures(30)));
+  });
+
+  test('runs a single baseline candidate and persists the run', async () => {
+    query.mockResolvedValue({ rows: [{ id: 'run-b1', started_at: '2026-05-21T00:00:00Z' }] });
+    harness.runEval.mockResolvedValue({
+      ...sampleEvalResult,
+      candidate_ids: ['claude:default'],
+      results: { 'claude:default': sampleEvalResult.results['claude:c46'] },
+      deltas: [],
+    });
+
+    const out = await persistence.runBaselineAndPersist({
+      organizationId: ORG_ID,
+      triggeredBy: USER_ID,
+      task: 'parcel_narrative',
+      limit: 3,
+    });
+
+    expect(out.status).toBe('completed');
+    expect(out.fixtures).toBe(3);
+    expect(out.total_calls).toBe(3); // 1 candidate × 3 fixtures
+
+    // The harness ran exactly one candidate — that is what makes this a
+    // baseline rather than an A/B comparison.
+    expect(harness.runEval.mock.calls[0][0].candidates).toHaveLength(1);
+  });
+
+  test('rejects an unknown task', async () => {
+    await expect(
+      persistence.runBaselineAndPersist({ organizationId: ORG_ID, task: 'fictional_task' }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+// ── getQualityTrendByTask (Workstream C3) ────────────────────────────────
+
+describe('getQualityTrendByTask', () => {
+  const baselineRow = (task, overall, daysAgo) => ({
+    id: `run-${task}-${overall}`,
+    task,
+    summary_json: {
+      'claude:default': {
+        avg_overall: overall,
+        avg_hallucination: overall + 2,
+        avg_tone: overall - 3,
+      },
+    },
+    created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+  });
+
+  test('aggregates baseline runs into a per-task trend with delta + regression', async () => {
+    // Two parcel_narrative baselines, ascending by date: 88 then 80.
+    query.mockResolvedValueOnce({
+      rows: [
+        baselineRow('parcel_narrative', 88, 10),
+        baselineRow('parcel_narrative', 80, 1),
+      ],
+    });
+    const out = await persistence.getQualityTrendByTask({ days: 90 });
+    expect(out.available).toBe(true);
+
+    const t = out.tasks.parcel_narrative;
+    expect(t.run_count).toBe(2);
+    expect(t.latest.overall).toBe(80);
+    expect(t.baseline_avg).toBe(88);
+    expect(t.delta).toBe(-8);
+    expect(t.regression).toBe(true); // −8 ≤ −5 threshold
+
+    // export_insights had no baselines → an empty, non-regressed trend.
+    expect(out.tasks.export_insights.run_count).toBe(0);
+    expect(out.tasks.export_insights.regression).toBe(false);
+  });
+
+  test('a single baseline yields a latest score but no delta', async () => {
+    query.mockResolvedValueOnce({ rows: [baselineRow('export_insights', 91, 2)] });
+    const t = (await persistence.getQualityTrendByTask({})).tasks.export_insights;
+    expect(t.run_count).toBe(1);
+    expect(t.latest.overall).toBe(91);
+    expect(t.baseline_avg).toBeNull();
+    expect(t.delta).toBeNull();
+    expect(t.regression).toBe(false);
+  });
+
+  test('the query restricts to single-candidate (baseline) runs', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await persistence.getQualityTrendByTask({});
+    expect(query.mock.calls[0][0]).toMatch(/array_length\(candidate_ids, 1\) = 1/);
+  });
+
+  test('soft-fails to available:false when the table is missing', async () => {
+    const err = new Error('relation "ab_eval_runs" does not exist');
+    err.code = '42P01';
+    query.mockRejectedValueOnce(err);
+    const out = await persistence.getQualityTrendByTask({});
+    expect(out.available).toBe(false);
+  });
+});
+
 // ── buildSummaryByCandidate ──────────────────────────────────────────────
 
 describe('buildSummaryByCandidate', () => {

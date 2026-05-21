@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   Layers,
+  Loader2,
   Play,
   RefreshCcw,
   TrendingDown,
@@ -105,6 +106,149 @@ const pickWinner = (summaryByCandidate) => {
 };
 
 // ── Run trigger card ───────────────────────────────────────────────────────
+
+// ── Standing quality trend — Workstream C3 ───────────────────────────────
+
+const TREND_TASKS = ['parcel_narrative', 'export_insights'];
+const TREND_TASK_LABELS = {
+  parcel_narrative: 'Parcel verdict narrative',
+  export_insights: 'Export deck IC opinion',
+};
+
+// Eval overall score (0–100, 0.6 hallucination + 0.4 tone): ≥80 healthy,
+// <60 weak.
+const qualityTone = (score) => {
+  if (score == null) return 'text-content-muted';
+  if (score >= 80) return 'text-data-positive';
+  if (score < 60) return 'text-data-negative';
+  return 'text-content-primary';
+};
+
+/**
+ * The standing quality monitor. Each baseline run scores the current
+ * production reasoning config against the held-out fixtures; this panel
+ * shows, per task, the latest score, the delta vs the trailing baseline,
+ * a regression flag, and a one-click "run baseline" trigger.
+ */
+export function QualityTrendPanel() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
+  const [runningTask, setRunningTask] = useState(null);
+
+  const load = useCallback(() => {
+    setError(false);
+    adminAPI
+      .getAbEvalQualityTrend()
+      .then((res) => setData(res?.data?.data || null))
+      .catch(() => setError(true));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runBaseline = async (task) => {
+    setRunningTask(task);
+    try {
+      await adminAPI.runAbEvalBaseline({ task });
+      toast.success(`Baseline recorded — ${TREND_TASK_LABELS[task] || task}.`);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Baseline run failed.');
+    } finally {
+      setRunningTask(null);
+    }
+  };
+
+  return (
+    <Card className="p-4">
+      <SectionHeader
+        size="sm"
+        eyebrow="Standing quality"
+        title="AI quality trend"
+        sub="Each baseline scores the current production model against the held-out fixtures. The trend shows whether quality is holding — deterministic scoring, no LLM judge."
+      />
+
+      {!data && !error && (
+        <div className="mt-3"><SkeletonList rows={2} columns={1} /></div>
+      )}
+
+      {error && (
+        <div className="mt-3">
+          <ErrorState tone="warn" title="Couldn't load the quality trend">
+            This is a display issue — the metric is non-critical.
+          </ErrorState>
+        </div>
+      )}
+
+      {data && !data.available && (
+        <p className="mt-3 text-xs text-content-muted">
+          Quality tracking is being set up — the eval tables are not migrated yet.
+        </p>
+      )}
+
+      {data && data.available && (
+        <div className="mt-3 space-y-2">
+          {TREND_TASKS.map((task) => {
+            const t = data.tasks?.[task] || null;
+            const latest = t?.latest || null;
+            const delta = t?.delta;
+            const isRunning = runningTask === task;
+            return (
+              <div
+                key={task}
+                className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-content-primary">
+                    {TREND_TASK_LABELS[task] || task}
+                  </p>
+                  <p className="text-[11px] text-content-muted mt-0.5">
+                    {t && t.run_count > 0
+                      ? `${t.run_count} baseline${t.run_count === 1 ? '' : 's'} · last ${data.window_days} days`
+                      : 'No baseline recorded yet — run one to start the trend.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {latest && (
+                    <div className="text-right">
+                      <div
+                        className={clsx(
+                          'text-xl font-bold tabular-nums leading-none',
+                          qualityTone(latest.overall),
+                        )}
+                      >
+                        {latest.overall}
+                      </div>
+                      <div className="text-[10px] text-content-muted mt-0.5">overall / 100</div>
+                    </div>
+                  )}
+                  {delta != null && (
+                    <Badge tone={t.regression ? 'danger' : delta >= 0 ? 'success' : 'warn'}>
+                      {delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : '± 0'}
+                      {t.regression ? ' · regression' : ''}
+                    </Badge>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => runBaseline(task)}
+                    disabled={runningTask !== null}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  >
+                    {isRunning ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <Play size={11} />
+                    )}
+                    {isRunning ? 'Running…' : 'Run baseline'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function RunTriggerCard({ onRunComplete }) {
   const [task, setTask] = useState('parcel_narrative');
@@ -511,6 +655,8 @@ export default function AdminAbEvalPage() {
           </button>
         }
       />
+
+      <QualityTrendPanel />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <RunTriggerCard onRunComplete={refresh} />
