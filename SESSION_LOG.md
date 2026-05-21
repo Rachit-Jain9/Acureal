@@ -5143,3 +5143,52 @@ PR #473 (PR-NX117):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Provenance Spine hardening — input-default drift fixed
+
+### What was worked on
+
+A correctness pass that hardens the accuracy of the entire Provenance Spine.
+An audit found the financial form's default seeds had drifted from the
+kernel's cited benchmark registry across five asset classes — 11 values — so
+the form was pre-filling numbers the kernel does not endorse.
+
+PR #475 (PR-NX119):
+- The drift mattered because Model Confidence, Confidence Range and the
+  Evidence Ledger all classify an input by comparing its value to the kernel
+  registry. A non-registry pre-fill, left untouched, was being mistaken for a
+  deliberate analyst choice — the trust signals over-stated how much of a
+  model was genuinely deal-set.
+- `fieldDefs.js` — 11 seeds synced to the kernel's effective default
+  (residential marketing cost; plotted project duration; retail opex +
+  discount rate; industrial rent escalation, vacancy + discount rate;
+  hospitality F&B revenue, other revenue, GOP margin, EBITDA margin). The
+  kernel registry is the cited authority; the form follows it.
+- New contract test `fieldDefsDefaults.contract.test.js` — asserts every
+  comparable seed equals the live kernel registry, permanently preventing
+  this class of drift. Deliberate exclusions documented inline.
+- `defaults.ts` — corrected the discount-rate description, which falsely
+  claimed commercial/retail overrides that do not exist.
+- No kernel values changed; existing saved models untouched.
+
+### Plain-English recap
+- A handful of numbers the financial form auto-fills were quietly out of step with REDIP's own benchmark library — now aligned.
+- This makes the Model Confidence and Evidence readouts honest: a field left on its default is correctly shown as a benchmark default, not as something the analyst chose.
+- A permanent automated check now guarantees these can never silently drift apart again.
+
+### PRs opened / merged
+- PR #475 - `fix(financials): reconcile form default seeds with the kernel benchmark registry (PR-NX119)` - opened, CI green, merged.
+- PR #476 - `docs: session log for the input-default drift fix (PR-NX120)` - this entry.
+
+### Validation
+- Backend: 135 suites / 2212 tests green. Frontend: 76 files / 683 tests green; run exits 0. Kernel + frontend builds clean.
+- All CI checks passed on #475.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` if not yet done.
+- Workstream A — Provenance Spine substantially complete and now accuracy-hardened. Optional polish: a deal-wide "show provenance" toggle; threading the confidence range into the KPI tiles; extracting shared trust-panel primitives (A4).
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker once enough reliance data accrues.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
