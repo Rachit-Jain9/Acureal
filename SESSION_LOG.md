@@ -5003,3 +5003,50 @@ PR #466 (PR-NX110):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream C1 — comp-reliance capture (the data-network seed)
+
+### What was worked on
+
+Opened Workstream C — the Data Network — with its explicit "start now" item:
+capture which verified comparables an analyst actually relies on when
+underwriting a deal. This ships the capture, not a learned ranker (C5 stays
+deferred — it needs exactly this data first).
+
+PR #468 (PR-NX112):
+- New migration `20260610` — a `deal_comp_reliance` table (durable state,
+  one row per relied-on comp, deal-scoped RLS, the dd_items/risk_flags
+  pattern), and the `improvement_signals` signal_type CHECK widened to also
+  accept `comp_reliance`.
+- New `compReliance.service.js` — list the relied-on comps for a deal; toggle
+  one comp (org-scoped, deal + comp visibility checked). Migration-tolerant.
+- `learningSignals.service.js` gains `recordCompRelianceSignal` — every
+  toggle appends a values-free Layer-5 signal carrying the deterministic
+  scorer's verdict (similarity score, rank, rate delta) at the moment of
+  reliance. Consent-gated, fire-and-forget.
+- `GET /comps/:dealId/reliance` + `PUT /comps/:dealId/reliance/:compId`.
+- A per-comp "Relied on" star in the deal Comps tab's ranked table.
+- 12 new tests (8 backend, 4 frontend).
+
+### Plain-English recap
+- On a deal's Market / Comps tab, the ranked-comparables table now has a "Relied on" star — the analyst clicks it on the comps they actually used to justify the deal's pricing, and the stars persist.
+- It is a useful record in its own right (which comps a deal's underwriting rests on), and quietly every star teaches REDIP.
+- Why it matters: this is the first turn of the network-learning flywheel — the ground truth that, over time, lets REDIP rank comparables the way the firm's own analysts do.
+
+### PRs opened / merged
+- PR #468 - `feat(comps): capture which comps an analyst relies on per deal (PR-NX112)` - opened, CI green, merged.
+- PR #469 - `docs: session log for the comp-reliance session (PR-NX113)` - this entry.
+
+### Validation
+- Backend: 134 suites / 2203 tests green. Frontend: 74 files / 676 tests green. Production build clean.
+- All CI checks passed on #468.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` in the Supabase SQL editor (the code is migration-tolerant — the "Relied on" star is inert until the table exists).
+- Workstream A continued — the claim graph / IC memo as a fully traceable audited view; optionally thread the confidence range into the KPI tiles themselves.
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker once enough reliance data accrues.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+- Minor: a pre-existing flaky jsdom `scrollIntoView` warning in BengaluruStreetLookupPanel's test (non-blocking — all tests pass, run exits 0).
+
