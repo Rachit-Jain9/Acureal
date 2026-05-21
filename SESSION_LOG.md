@@ -5050,3 +5050,50 @@ PR #468 (PR-NX112):
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 - Minor: a pre-existing flaky jsdom `scrollIntoView` warning in BengaluruStreetLookupPanel's test (non-blocking — all tests pass, run exits 0).
 
+
+## 2026-05-21 - IC memo trust enrichment + CI de-flake
+
+### What was worked on
+
+Two pieces in one session: the IC memo became aware of the trust layer, and a
+flaky frontend CI failure was fixed at the root.
+
+PR #470 (PR-NX114) — IC memo trust enrichment:
+- The IC memo is REDIP's decision artifact, yet it was generated with no
+  awareness of the trust layer built across Workstreams A, B and C.
+- New `buildVerificationContext(dealId)` composes a deterministic trust block
+  — model confidence, the confidence range, the Risk Radar posture (flagged /
+  unverified failure modes), the promoter posture, the count of analyst-relied
+  comps. Carried into the memo payload as `verification`; each signal wrapped
+  so a hiccup never breaks generation.
+- The system prompt now makes the memo state the verification posture in the
+  Executive Summary and withhold a clean "Recommend approval" when the model
+  is assumption-led or a Risk Radar category is flagged / unverified.
+- 3 new backend tests.
+
+PR #472 (PR-NX116) — CI de-flake + this log entry:
+- jsdom does not implement `Element.prototype.scrollIntoView`; a component
+  calling it inside a requestAnimationFrame threw an uncaught error that
+  landed non-deterministically and intermittently failed the whole frontend
+  CI run even though every test passed. Added a no-op shim to the vitest
+  setup — the standard fix. The full suite now runs clean.
+
+### Plain-English recap
+- The generated IC memo is now honest about what has and hasn't been verified — it states the verification posture up front and cannot gloss over flagged or unverified risk in its recommendation.
+- A flaky test failure that could randomly block any change has been fixed at the root, so the build pipeline is reliable again.
+
+### PRs opened / merged
+- PR #470 - `feat(ic-memo): feed the deterministic trust posture into the IC memo (PR-NX114)` - opened, CI green, merged.
+- PR #472 - `fix(test): shim scrollIntoView to de-flake the frontend CI run (PR-NX116)` - this entry.
+
+### Validation
+- Backend: 134 suites / 2206 tests green. Frontend: 74 files / 676 tests green; full vitest run now exits clean with no unhandled errors. Production build clean.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` if not yet done (the "Relied on" star is inert until then).
+- Workstream A continued — the IC memo as a fully click-through-to-source audited view (the larger A3 rearchitecture); optionally thread the confidence range into the KPI tiles.
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker once enough reliance data accrues.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
