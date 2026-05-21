@@ -173,8 +173,8 @@ export const GLOBAL_DEFAULTS_META: DefaultsBlock = Object.freeze({
   ),
   discountRatePct: M(
     14, 'pct',
-    'DCF discount rate (annual). Asset classes override: hospitality 15, '
-      + 'commercial 12, retail 13.',
+    'DCF discount rate (annual). Hospitality overrides to 15; all other '
+      + 'asset classes use this 14% global default.',
     'REDIP WACC model — unlevered 12-16% band for India RE.',
     { range: [8, 22] },
   ),

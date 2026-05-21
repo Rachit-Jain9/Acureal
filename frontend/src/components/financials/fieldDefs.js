@@ -199,9 +199,17 @@ export const FIELD_DEFS = {
   ],
 };
 
+// Every default here that has a counterpart in the kernel's cited benchmark
+// registry (packages/financial-kernel/src/config/defaults.ts) MUST equal the
+// kernel's effective value for that class. A drift means the form pre-fills a
+// number the kernel does not endorse — and the Provenance Spine (Model
+// Confidence, Confidence Range, the IC-memo Evidence Ledger) then mistakes an
+// unconsidered default for a deliberate analyst choice. The contract test
+// `__tests__/fieldDefsDefaults.contract.test.js` locks this in sync; do not
+// edit a value below without checking that test (and the registry).
 export const DEFAULT_VALUES = {
   residential_apartments: {
-    loadingFactor: '0.15', marketingCostPct: '5', financeCostPct: '12',
+    loadingFactor: '0.15', marketingCostPct: '4', financeCostPct: '12',
     developerMarginPct: '20', pricingEscalationPct: '0',
     contingencyPct: '5', architectFeePct: '2', pmcFeePct: '1.5',
     debtLTV: '0', debtRatePct: '14',
@@ -212,7 +220,7 @@ export const DEFAULT_VALUES = {
   plotted_development: {
     saleableLandPct: '55', avgPlotSizeSqft: '1200', devCostPerSqft: '250',
     marketingCostPct: '4', financeCostPct: '12',
-    projectDurationYears: '2', discountRatePct: '14',
+    projectDurationYears: '1.5', discountRatePct: '14',
     gstPct: '12',
   },
   commercial_office: {
@@ -225,23 +233,23 @@ export const DEFAULT_VALUES = {
   },
   retail: {
     anchorPct: '40', anchorRentDiscount: '20',
-    rentEscalationPct: '5', vacancyPct: '12', opexPct: '22',
+    rentEscalationPct: '5', vacancyPct: '12', opexPct: '20',
     tiPerSqft: '800', lcMonths: '2',
     exitCapRate: '8', exitStrategy: 'cap_rate_sale', lrdLTV: '0.60', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
     terminalValueMethod: 'exit_cap_rate', exitMultiple: '12', perpetuityGrowthPct: '3',
-    projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '15',
+    projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '14',
     gstPct: '18',
   },
   industrial_warehousing: {
-    rentEscalationPct: '4', vacancyPct: '7', opexPct: '15',
+    rentEscalationPct: '5', vacancyPct: '8', opexPct: '15',
     exitCapRate: '8.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
     terminalValueMethod: 'exit_cap_rate', exitMultiple: '11', perpetuityGrowthPct: '2.5',
-    projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '13',
+    projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
     gstPct: '18',
   },
   hospitality: {
-    stabilizedOccPct: '65', adrGrowthPct: '5', fbRevPct: '25', otherRevPct: '10',
-    gopMarginPct: '35', ebitdaMarginPct: '28', exitCapRate: '9', exitStrategy: 'cap_rate_sale', lrdLTV: '0.55', lrdInterestRatePct: '9.5', lrdRefinanceYear: '3',
+    stabilizedOccPct: '65', adrGrowthPct: '5', fbRevPct: '30', otherRevPct: '9',
+    gopMarginPct: '30', ebitdaMarginPct: '22', exitCapRate: '9', exitStrategy: 'cap_rate_sale', lrdLTV: '0.55', lrdInterestRatePct: '9.5', lrdRefinanceYear: '3',
     terminalValueMethod: 'exit_cap_rate', exitMultiple: '9', perpetuityGrowthPct: '3',
     holdPeriodYears: '8', projectDurationYears: '2.5',
     debtCoverage: '0.55', interestRatePct: '10.5', contingencyPct: '5', discountRatePct: '15',
