@@ -17,9 +17,32 @@ jest.mock('../src/services/numericalVerifier.service', () => ({
   snapshotFromDealAnalysisInput: jest.fn(() => ({})),
   verifyDealAnalysis: jest.fn(() => ({ drifts: [], verifiedAt: '2026-05-09T00:00:00Z' })),
 }));
+// Deterministic trust-signal services — mocked so the IC-memo test stays
+// isolated to icMemo.service. Each has a safe default; individual tests
+// override with mockResolvedValueOnce.
+jest.mock('../src/services/riskRadar.service', () => ({
+  getRiskRadar: jest.fn().mockResolvedValue(null),
+}));
+jest.mock('../src/services/modelConfidence.service', () => ({
+  getModelConfidence: jest.fn().mockResolvedValue({ available: false }),
+}));
+jest.mock('../src/services/confidenceRange.service', () => ({
+  getConfidenceRange: jest.fn().mockResolvedValue({ available: false }),
+}));
+jest.mock('../src/services/promoterProfile.service', () => ({
+  getProfileWithAssessment: jest.fn().mockResolvedValue(null),
+}));
+jest.mock('../src/services/compReliance.service', () => ({
+  listReliedCompIds: jest.fn().mockResolvedValue([]),
+}));
 
 const { query } = require('../src/config/database');
 const { getProviderAvailability } = require('../src/services/ai/providerRegistry');
+const riskRadarService = require('../src/services/riskRadar.service');
+const modelConfidenceService = require('../src/services/modelConfidence.service');
+const confidenceRangeService = require('../src/services/confidenceRange.service');
+const promoterProfileService = require('../src/services/promoterProfile.service');
+const compRelianceService = require('../src/services/compReliance.service');
 const icMemo = require('../src/services/icMemo.service');
 
 beforeEach(() => {
@@ -120,6 +143,9 @@ describe('buildIcMemoInput', () => {
     expect(p.dd_items[0].item).toBe('EC verification');
     expect(p.approval_items).toHaveLength(1);
     expect(p.approval_items[0].name).toBe('RERA registration');
+    // The deterministic trust posture is always part of the payload.
+    expect(p.verification).toBeDefined();
+    expect(p.verification.reliedCompCount).toBe(0);
   });
 
   test('keeps payload skeleton when supplementary tables empty', async () => {
@@ -141,6 +167,70 @@ describe('buildIcMemoInput', () => {
     expect(r.payload.dd_items).toEqual([]);
     expect(r.payload.approval_items).toEqual([]);
     expect(r.payload.scenarios).toEqual([]);
+  });
+});
+
+describe('buildVerificationContext', () => {
+  test('composes the deterministic trust posture from the signal services', async () => {
+    modelConfidenceService.getModelConfidence.mockResolvedValueOnce({
+      available: true,
+      confidencePct: 60,
+      band: 'mixed',
+      dealSetCount: 6,
+      total: 10,
+    });
+    confidenceRangeService.getConfidenceRange.mockResolvedValueOnce({
+      available: true,
+      primaryKpi: 'irr',
+      unverifiedCount: 4,
+      kpis: [{ key: 'irr', label: 'IRR', base: 18.5, low: 14.2, high: 21.9, swing: 7.7 }],
+    });
+    riskRadarService.getRiskRadar.mockResolvedValueOnce({
+      overall_posture: 'flagged',
+      categories: [
+        { label: 'Title & Ownership', posture: 'flagged' },
+        { label: 'Market & Demand', posture: 'unverified' },
+        { label: 'Financial', posture: 'cleared' },
+      ],
+    });
+    promoterProfileService.getProfileWithAssessment.mockResolvedValueOnce({
+      profile: { promoter_name: 'Prestige' },
+      assessment: { posture: 'unverified', summary: { recorded: true } },
+    });
+    compRelianceService.listReliedCompIds.mockResolvedValueOnce(['c1', 'c2', 'c3']);
+
+    const v = await icMemo.buildVerificationContext('d1');
+
+    expect(v.modelConfidence).toEqual({
+      confidencePct: 60,
+      band: 'mixed',
+      dealSetCount: 6,
+      total: 10,
+    });
+    expect(v.confidenceRange).toEqual({
+      kpi: 'IRR',
+      base: 18.5,
+      low: 14.2,
+      high: 21.9,
+      unverifiedInputs: 4,
+    });
+    expect(v.riskRadar.overallPosture).toBe('flagged');
+    expect(v.riskRadar.flagged).toEqual(['Title & Ownership']);
+    expect(v.riskRadar.unverified).toEqual(['Market & Demand']);
+    expect(v.promoter).toEqual({ posture: 'unverified', recorded: true });
+    expect(v.reliedCompCount).toBe(3);
+  });
+
+  test('degrades a failing signal to null without breaking the others', async () => {
+    modelConfidenceService.getModelConfidence.mockRejectedValueOnce(new Error('boom'));
+    riskRadarService.getRiskRadar.mockRejectedValueOnce(new Error('boom'));
+    compRelianceService.listReliedCompIds.mockResolvedValueOnce(['c1']);
+
+    const v = await icMemo.buildVerificationContext('d1');
+
+    expect(v.modelConfidence).toBeNull();
+    expect(v.riskRadar).toBeNull();
+    expect(v.reliedCompCount).toBe(1);
   });
 });
 
@@ -181,5 +271,11 @@ describe('SYSTEM_PROMPT', () => {
     const p = icMemo.SYSTEM_PROMPT;
     expect(p).toMatch(/do not invent/i);
     expect(p).toMatch(/from the supplied data/i);
+  });
+
+  test('instructs the author to honour the deterministic verification block', () => {
+    const p = icMemo.SYSTEM_PROMPT;
+    expect(p).toMatch(/verification/i);
+    expect(p).toMatch(/Risk Radar/i);
   });
 });
