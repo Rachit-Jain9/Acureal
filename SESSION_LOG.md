@@ -5050,3 +5050,50 @@ PR #468 (PR-NX112):
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 - Minor: a pre-existing flaky jsdom `scrollIntoView` warning in BengaluruStreetLookupPanel's test (non-blocking — all tests pass, run exits 0).
 
+
+## 2026-05-21 - IC memo trust enrichment — the decision artifact gets honest
+
+### What was worked on
+
+Closed a real integration gap. The IC memo is REDIP's decision artifact, yet
+it was generated with no awareness of the trust layer built across Workstreams
+A, B and C — it could recommend "approval" with no Risk Radar posture and no
+model-confidence verdict anywhere in its context.
+
+PR #470 (PR-NX114):
+- New `buildVerificationContext(dealId)` in `icMemo.service.js` — composes a
+  compact, deterministic trust block: model confidence (% + band), the
+  confidence range on the headline KPI, the Risk Radar posture (which failure
+  modes are flagged / unverified), the promoter posture, and the count of
+  analyst-relied comps. Every signal is wrapped — a trust-service hiccup
+  degrades one field to null, never breaks memo generation.
+- The block rides into the memo payload as `verification`.
+- The system prompt now instructs the memo author to state the verification
+  posture in the Executive Summary, treat the block as ground truth, and —
+  in the Recommendation — withhold a clean "Recommend approval" when the
+  model is assumption-led or a Risk Radar category is flagged / unverified,
+  naming those as explicit conditions.
+- No AI computes anything — the trust signals are all deterministic engines;
+  the model only narrates. No new memo section, no format restructure.
+- 3 new backend tests.
+
+### Plain-English recap
+- The generated IC memo is now honest about what has and hasn't been verified — it states the verification posture up front, and its recommendation can no longer gloss over flagged or unverified risk.
+- Why it matters: the IC memo is the document a committee actually decides on. REDIP's honesty about uncertainty now reaches the moment of decision, not just the analyst's working screens.
+
+### PRs opened / merged
+- PR #470 - `feat(ic-memo): feed the deterministic trust posture into the IC memo (PR-NX114)` - opened, CI green, merged.
+- PR #471 - `docs: session log for the IC memo trust-enrichment session (PR-NX115)` - this entry.
+
+### Validation
+- Backend: 134 suites / 2206 tests green. Frontend production build clean; IcMemoPanel test green.
+- All CI checks passed on #470. No migration — service + prompt change only.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` if not yet done (the "Relied on" star is inert until then).
+- Workstream A continued — the IC memo as a fully click-through-to-source audited view (the larger A3 rearchitecture); optionally thread the confidence range into the KPI tiles.
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker once enough reliance data accrues.
+- Workstream F — schema baseline squash, theme-token unification, ontology adoption.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
