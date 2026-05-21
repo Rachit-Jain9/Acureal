@@ -663,6 +663,11 @@ export const evidenceLinksAPI = {
 export const compSimilarityAPI = {
   ranked: (dealId, params) => api.get(`/comps/ranked/${dealId}`, { params }),
   score:  (dealId, compId) => api.get(`/comps/score/${dealId}/${compId}`),
+  // Workstream C1 — which comps the analyst relies on for this deal.
+  // `reliance` returns { comp_ids: [...] }; `setReliance` toggles one comp
+  // and appends a values-free learning signal.
+  reliance:    (dealId)               => api.get(`/comps/${dealId}/reliance`),
+  setReliance: (dealId, compId, body) => api.put(`/comps/${dealId}/reliance/${compId}`, body),
 };
 
 // Comps Review Queue (Tier-0 ingestion flywheel)

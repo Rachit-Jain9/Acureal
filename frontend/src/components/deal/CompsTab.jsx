@@ -11,6 +11,9 @@ import {
 import { compsAPI, compSimilarityAPI } from '../../services/api';
 import { SectionHeader, ErrorState, SkeletonList } from '../../design-system';
 import { useDealRecord } from '../../hooks/useDealContext';
+// Workstream C1 — the per-comp "relied on" toggle + its data hooks.
+import CompRelianceToggle from './CompRelianceToggle';
+import { useCompReliance, useToggleCompReliance } from '../../hooks/useCompReliance';
 
 // ─── Formatting ────────────────────────────────────────────────────────────
 
@@ -183,7 +186,15 @@ function SimilarityPopover({ similarity, comp, onClose }) {
 // surfaces in the UX, not just on the wire. Falls back to a sensible empty
 // state when subject coords are missing or candidate set is empty. ─────────
 
-function RankedCompsTable({ ranked, onPin, pinnedCompId, similarity }) {
+function RankedCompsTable({
+  ranked,
+  onPin,
+  pinnedCompId,
+  similarity,
+  reliedSet,
+  onToggleReliance,
+  pendingCompId,
+}) {
   if (!ranked || ranked.length === 0) {
     return (
       <div className="text-center py-8 text-content-muted text-sm">
@@ -204,10 +215,11 @@ function RankedCompsTable({ ranked, onPin, pinnedCompId, similarity }) {
             <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-content-secondary px-3 py-2.5">Similarity</th>
             <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-content-secondary px-3 py-2.5">Source · Freshness</th>
             <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-content-secondary px-3 py-2.5">Why</th>
+            <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-content-secondary px-3 py-2.5">Relied on</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline">
-          {ranked.map((comp) => {
+          {ranked.map((comp, index) => {
             const sim = comp.similarity || {};
             const score = sim.overall_score;
             const tone = toneForScore(score);
@@ -294,6 +306,13 @@ function RankedCompsTable({ ranked, onPin, pinnedCompId, similarity }) {
                       onClose={() => onPin(null)}
                     />
                   )}
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <CompRelianceToggle
+                    relied={Boolean(reliedSet?.has(comp.id))}
+                    onToggle={() => onToggleReliance?.(comp, index + 1)}
+                    isPending={pendingCompId === comp.id}
+                  />
                 </td>
               </tr>
             );
@@ -431,6 +450,23 @@ export default function CompsTab() {
     enabled: hasLatLng,
   });
 
+  // Workstream C1 — which comps the analyst relies on for this deal. The
+  // toggle drives durable state + a values-free learning signal carrying the
+  // deterministic scorer's verdict at the moment of reliance.
+  const { data: reliedIds } = useCompReliance(dealId);
+  const toggleReliance = useToggleCompReliance(dealId);
+  const reliedSet = useMemo(() => new Set(reliedIds || []), [reliedIds]);
+  const handleToggleReliance = (comp, rank) => {
+    const sim = comp.similarity || {};
+    toggleReliance.mutate({
+      compId: comp.id,
+      relied: !reliedSet.has(comp.id),
+      similarityScore: sim.overall_score,
+      similarityRank: rank,
+      rateDeltaPct: sim.rate_delta_pct,
+    });
+  };
+
   return (
     <div className="space-y-6">
       {!hasLatLng && (
@@ -497,6 +533,9 @@ export default function CompsTab() {
               onPin={setPinnedCompId}
               pinnedCompId={pinnedCompId}
               similarity={pinnedSimilarity}
+              reliedSet={reliedSet}
+              onToggleReliance={handleToggleReliance}
+              pendingCompId={toggleReliance.isPending ? toggleReliance.variables?.compId : null}
             />
           )}
         </div>

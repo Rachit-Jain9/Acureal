@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query: qv } = require('express-validator');
 const compsService = require('../services/comps.service');
+const compRelianceService = require('../services/compReliance.service');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 
@@ -157,6 +158,57 @@ router.get(
   async (req, res, next) => {
     try {
       const result = await compsService.scoreSubjectAgainstComp(req.params.dealId, req.params.compId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /comps/:dealId/reliance — Workstream C1. The comp_ids the deal has been
+// marked as relying on. Org-scoped; migration-tolerant (empty list pre-migration).
+router.get(
+  '/:dealId/reliance',
+  authenticate,
+  [param('dealId').isUUID()],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const compIds = await compRelianceService.listReliedCompIds(req.params.dealId);
+      res.json({ success: true, data: { comp_ids: compIds } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PUT /comps/:dealId/reliance/:compId — Workstream C1. Mark / unmark a comp as
+// relied-on for a deal. Updates durable state AND appends a values-free
+// comp_reliance learning signal carrying the scorer's verdict at toggle time.
+router.put(
+  '/:dealId/reliance/:compId',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [
+    param('dealId').isUUID(),
+    param('compId').isUUID(),
+    body('relied').isBoolean().withMessage('relied must be a boolean'),
+    body('similarityScore').optional().isFloat(),
+    body('similarityRank').optional().isInt({ min: 1 }),
+    body('rateDeltaPct').optional().isFloat(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await compRelianceService.setReliance({
+        dealId: req.params.dealId,
+        compId: req.params.compId,
+        relied: req.body.relied,
+        actorId: req.user.id,
+        similarityScore: req.body.similarityScore,
+        similarityRank: req.body.similarityRank,
+        rateDeltaPct: req.body.rateDeltaPct,
+      });
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);
