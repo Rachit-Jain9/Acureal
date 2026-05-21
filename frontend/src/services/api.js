@@ -512,6 +512,10 @@ export const intelligenceAPI = {
   getCachedIcMemo:          (dealId) => api.get(`/intelligence/ic-memo/${dealId}/cached`),
   streamIcMemo: (dealId, { onText, onDone } = {}) =>
     streamPost(`/intelligence/ic-memo/${dealId}/stream`, { onText, onDone }),
+  // Workstream A (Provenance Spine) — the deterministic evidence ledger
+  // beneath the IC memo: every material number with its typed, traceable
+  // source. Returns { available, groups[], summary }.
+  getIcMemoEvidence:        (dealId) => api.get(`/intelligence/ic-memo/${dealId}/evidence`),
 };
 
 // Exports
