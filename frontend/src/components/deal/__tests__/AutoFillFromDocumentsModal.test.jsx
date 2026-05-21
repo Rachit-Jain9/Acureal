@@ -170,6 +170,49 @@ describe('AutoFillFromDocumentsModal', () => {
     expect(surveyItem.confidence).toBe(0.95);
   });
 
+  it('renders an editable proposed-value input per row, pre-filled with the AI value', () => {
+    renderModal();
+    expect(screen.getAllByRole('textbox')).toHaveLength(3);
+    expect(screen.getByLabelText('Proposed value for Survey Number')).toHaveValue('45/2A');
+  });
+
+  it('sends the operator-corrected value on apply and flags the row as edited', async () => {
+    mockApply.mockResolvedValueOnce({ applied: [], skipped: [] });
+    renderModal();
+
+    const surveyInput = screen.getByLabelText('Proposed value for Survey Number');
+    fireEvent.change(surveyInput, { target: { value: '78/9C' } });
+    expect(screen.getByText(/·\s*edited/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply 2 fields/i }));
+    await waitFor(() => expect(mockApply).toHaveBeenCalledTimes(1));
+
+    const [approved] = mockApply.mock.calls[0];
+    expect(approved.find((a) => a.canonical_field === 'survey_number').value).toBe('78/9C');
+  });
+
+  it('auto-selects an unchecked row once its value is edited', () => {
+    renderModal();
+    // land_area_sqft is medium-confidence → unchecked by default (2 of 3).
+    fireEvent.change(screen.getByLabelText('Proposed value for Land Area (sqft)'), {
+      target: { value: '13000' },
+    });
+    expect(screen.getByText(/3 of 3 selected/i)).toBeInTheDocument();
+  });
+
+  it('resets an edited value back to the AI-extracted value', () => {
+    renderModal();
+    const surveyInput = screen.getByLabelText('Proposed value for Survey Number');
+    fireEvent.change(surveyInput, { target: { value: '78/9C' } });
+    expect(surveyInput).toHaveValue('78/9C');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reset Survey Number to the AI-extracted value' }),
+    );
+    expect(surveyInput).toHaveValue('45/2A');
+    expect(screen.queryByText(/·\s*edited/i)).not.toBeInTheDocument();
+  });
+
   it('disables Apply when nothing is selected', () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: /^Clear$/i }));

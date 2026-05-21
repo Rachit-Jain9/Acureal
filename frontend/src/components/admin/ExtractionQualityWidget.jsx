@@ -3,12 +3,14 @@ import { Card, SectionHeader, ErrorState, SkeletonList } from '../../design-syst
 import { adminAPI } from '../../services/api';
 
 /**
- * Extraction-accuracy widget — Phase 5.2 seed of the learning loop.
+ * Extraction-accuracy widget — the standing extraction-quality system
+ * (Workstream C).
  *
  * Reads /api/admin/extraction-quality, which aggregates the
- * `extraction_field_review` learning signals (Phase 5.1) into a per-field
- * correction rate. It answers "which document fields does the AI get wrong",
- * measured from real human corrections — the seed of the prompt-tuning loop.
+ * `extraction_field_verdicts` ledger into a per-(doc_type, canonical field)
+ * acceptance rate. It answers "which document fields does the AI get wrong",
+ * measured from the real accept/override verdicts operators make when they
+ * apply AI-extracted fields to a deal — the prompt-tuning shortlist.
  *
  * Operator-only (rendered on the admin AI-usage page). Own fetch, so it
  * renders independently of the cost dashboard it sits beneath.
@@ -57,7 +59,7 @@ export default function ExtractionQualityWidget({ days = 90 }) {
         size="sm"
         eyebrow="Learning loop"
         title="Extraction accuracy"
-        sub="How often a reviewer kept the AI's extracted value unchanged, by document field — measured from real human corrections. The lowest-accuracy fields are the prompt-tuning targets."
+        sub="How often operators keep the AI's extracted value unchanged when they apply it, by document field — measured from real accept/override decisions. The lowest-accuracy fields are the prompt-tuning targets."
       />
       <Card className="p-0 mt-3 overflow-hidden">
         {loading && (
@@ -88,15 +90,16 @@ export default function ExtractionQualityWidget({ days = 90 }) {
 
         {!loading && !error && data && !data.available && (
           <p className="text-sm text-content-muted p-6 text-center">
-            Extraction-accuracy tracking is being set up. As reviewers correct AI
-            extractions, accuracy will appear here.
+            Extraction-accuracy tracking is being set up. As operators review and
+            apply AI-extracted fields, accuracy will appear here.
           </p>
         )}
 
         {!loading && !error && data && data.available && !hasData && (
           <p className="text-sm text-content-muted p-6 text-center">
-            No extraction reviews recorded in the last {data.window_days} days yet.
-            Accuracy is measured each time a reviewer corrects an AI extraction.
+            No AI-extracted fields applied in the last {data.window_days} days yet.
+            Accuracy is measured each time an operator applies a field — recording
+            whether the AI's value was kept or corrected.
           </p>
         )}
 
@@ -122,8 +125,8 @@ export default function ExtractionQualityWidget({ days = 90 }) {
                   <tr>
                     <th className="text-left py-2 px-3 font-medium">Document type</th>
                     <th className="text-left py-2 px-3 font-medium">Field</th>
-                    <th className="text-right py-2 px-3 font-medium">Reviewed</th>
-                    <th className="text-right py-2 px-3 font-medium">Corrected</th>
+                    <th className="text-right py-2 px-3 font-medium">Applied</th>
+                    <th className="text-right py-2 px-3 font-medium">Overridden</th>
                     <th className="text-right py-2 px-3 font-medium">Accuracy</th>
                   </tr>
                 </thead>

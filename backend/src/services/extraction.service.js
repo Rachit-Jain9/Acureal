@@ -28,7 +28,6 @@ const { tryParseAndValidate } = require('./ai/aiRouter');
 const { detectLanguage } = require('./ai/languageDetect');
 const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
-const learningSignalsService = require('./learningSignals.service');
 const log = require('../lib/logger').child({ module: 'extraction' });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -913,16 +912,6 @@ async function applyCorrections(extractionId, corrections, userId) {
       message: ingestionError.message,
     };
   }
-
-  // Phase 5.1 — capture extraction-review learning signals: which fields the
-  // human corrected vs. accepted. Values-free, consent-gated, one batched
-  // insert. recordExtractionReviewSignals never throws, so awaiting it cannot
-  // break the correction flow — it just makes the signal reliable on serverless.
-  await learningSignalsService.recordExtractionReviewSignals({
-    extraction: updated,
-    corrections,
-    userId,
-  });
 
   return updated;
 }
