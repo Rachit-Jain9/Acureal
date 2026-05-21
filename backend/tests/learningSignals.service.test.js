@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * Unit tests for learningSignals.service.js — Phase 5.1 of the learning loop.
- * Pins the values-free, consent-gated, fire-and-forget contract.
+ * Unit tests for learningSignals.service.js — the Layer-5 signal writer.
+ * Pins the values-free, consent-gated, fire-and-forget contract for both
+ * signal types: extraction_field_verdict and comp_reliance.
  */
 
 jest.mock('../src/config/database', () => ({ query: jest.fn() }));
@@ -14,16 +15,30 @@ const learningSignals = require('../src/services/learningSignals.service');
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ORG_ID = '22222222-2222-2222-2222-222222222222';
+const DEAL_ID = '33333333-3333-3333-3333-333333333333';
+const COMP_ID = '44444444-4444-4444-4444-444444444444';
+const EXT_ID = '55555555-5555-5555-5555-555555555555';
 
-const sampleExtraction = (overrides = {}) => ({
-  id: 'ext-1',
-  organization_id: ORG_ID,
-  doc_type: 'sale_deed',
-  provider: 'gemini',
-  structured_fields: { survey_number: '12/3', owner_name: 'A B', consideration_inr: 5000000 },
-  confidence_scores: { survey_number: 1, owner_name: 1, consideration_inr: 0, _overall: 0.67 },
-  ...overrides,
-});
+const sampleVerdicts = () => [
+  {
+    extraction_id: EXT_ID,
+    canonical_field: 'survey_number',
+    source_field: 'survey_number',
+    doc_type: 'sale_deed',
+    ai_provider: 'gemini',
+    ai_confidence: 1,
+    verdict: 'accepted',
+  },
+  {
+    extraction_id: EXT_ID,
+    canonical_field: 'consideration_inr',
+    source_field: 'consideration_inr',
+    doc_type: 'sale_deed',
+    ai_provider: 'gemini',
+    ai_confidence: 1,
+    verdict: 'overridden',
+  },
+];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -31,36 +46,49 @@ beforeEach(() => {
   consentService.hasConsent.mockResolvedValue(true);
 });
 
-describe('recordExtractionReviewSignals', () => {
-  test('writes one values-free signal per field with the corrected flag', async () => {
-    const count = await learningSignals.recordExtractionReviewSignals({
-      extraction: sampleExtraction(),
-      corrections: { owner_name: 'Corrected Name' },
+describe('recordExtractionVerdictSignals', () => {
+  test('writes one values-free signal per verdict', async () => {
+    const count = await learningSignals.recordExtractionVerdictSignals({
+      organizationId: ORG_ID,
+      dealId: DEAL_ID,
+      verdicts: sampleVerdicts(),
       userId: USER_ID,
     });
-    expect(count).toBe(3);
+    expect(count).toBe(2);
     expect(query).toHaveBeenCalledTimes(1);
+
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO public\.improvement_signals/i);
+    expect(sql).toMatch(/extraction_field_verdict/);
     expect(params[0]).toBe(ORG_ID);
 
     const details = JSON.parse(params[2]);
-    expect(details).toHaveLength(3);
-    expect(details.find((d) => d.field_key === 'owner_name').was_corrected).toBe(true);
-    expect(details.find((d) => d.field_key === 'survey_number').was_corrected).toBe(false);
+    expect(details).toHaveLength(2);
+    expect(details.find((d) => d.canonical_field === 'consideration_inr').verdict).toBe(
+      'overridden',
+    );
+    expect(details[0].deal_id).toBe(DEAL_ID);
 
-    // Values-free: no field VALUE may appear anywhere in the captured detail.
-    const serialized = JSON.stringify(details);
-    expect(serialized).not.toMatch(/Corrected Name/);
-    expect(serialized).not.toMatch(/12\/3/);
-    expect(serialized).not.toMatch(/5000000/);
+    // Values-free: the detail carries field KEYS + metadata only — never a
+    // field value. Pin the exact key set.
+    expect(Object.keys(details[0]).sort()).toEqual(
+      [
+        'ai_confidence',
+        'ai_provider',
+        'canonical_field',
+        'deal_id',
+        'doc_type',
+        'extraction_id',
+        'source_field',
+        'verdict',
+      ].sort(),
+    );
   });
 
   test('attaches the user id only when product_improvement consent is granted', async () => {
     consentService.hasConsent.mockResolvedValueOnce(true);
-    await learningSignals.recordExtractionReviewSignals({
-      extraction: sampleExtraction(),
-      corrections: {},
+    await learningSignals.recordExtractionVerdictSignals({
+      verdicts: sampleVerdicts(),
       userId: USER_ID,
     });
     expect(query.mock.calls[0][1][1]).toBe(USER_ID);
@@ -69,71 +97,87 @@ describe('recordExtractionReviewSignals', () => {
 
   test('records an anonymous (null user) row when consent is withheld', async () => {
     consentService.hasConsent.mockResolvedValueOnce(false);
-    await learningSignals.recordExtractionReviewSignals({
-      extraction: sampleExtraction(),
-      corrections: {},
+    await learningSignals.recordExtractionVerdictSignals({
+      verdicts: sampleVerdicts(),
       userId: USER_ID,
     });
     expect(query.mock.calls[0][1][1]).toBeNull();
   });
 
-  test('counts a human-added field the AI missed as corrected', async () => {
-    await learningSignals.recordExtractionReviewSignals({
-      extraction: sampleExtraction({ structured_fields: { survey_number: '1' } }),
-      corrections: { khata_number: '42' },
-      userId: USER_ID,
-    });
-    const details = JSON.parse(query.mock.calls[0][1][2]);
-    expect(details.find((d) => d.field_key === 'khata_number').was_corrected).toBe(true);
-  });
-
-  test('returns 0 and writes nothing for an extraction with no fields', async () => {
-    const count = await learningSignals.recordExtractionReviewSignals({
-      extraction: sampleExtraction({ structured_fields: {} }),
-      corrections: {},
-      userId: USER_ID,
-    });
+  test('returns 0 and writes nothing for an empty verdict list', async () => {
+    const count = await learningSignals.recordExtractionVerdictSignals({ verdicts: [] });
     expect(count).toBe(0);
     expect(query).not.toHaveBeenCalled();
   });
 
   test('never throws — a DB failure is swallowed and returns 0', async () => {
     query.mockRejectedValueOnce(
-      Object.assign(new Error('relation does not exist'), { code: '42P01' })
+      Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
-    const count = await learningSignals.recordExtractionReviewSignals({
-      extraction: sampleExtraction(),
-      corrections: { owner_name: 'x' },
+    const count = await learningSignals.recordExtractionVerdictSignals({
+      verdicts: sampleVerdicts(),
       userId: USER_ID,
     });
     expect(count).toBe(0);
   });
 });
 
-describe('getExtractionAccuracy', () => {
-  test('aggregates signals into per-field rates and an overall accuracy', async () => {
-    query.mockResolvedValueOnce({
-      rows: [
-        { doc_type: 'sale_deed', field_key: 'consideration_inr', reviewed: 10, corrected: 4 },
-        { doc_type: 'sale_deed', field_key: 'survey_number', reviewed: 10, corrected: 1 },
-      ],
+describe('recordCompRelianceSignal', () => {
+  test('writes one comp_reliance signal carrying the scorer verdict', async () => {
+    const count = await learningSignals.recordCompRelianceSignal({
+      organizationId: ORG_ID,
+      dealId: DEAL_ID,
+      compId: COMP_ID,
+      relied: true,
+      similarityScore: 0.82,
+      similarityRank: 3,
+      rateDeltaPct: -4.1,
+      userId: USER_ID,
     });
-    const result = await learningSignals.getExtractionAccuracy({ days: 30 });
-    expect(result.available).toBe(true);
-    expect(result.window_days).toBe(30);
-    expect(result.by_field).toHaveLength(2);
-    expect(result.overall.reviewed).toBe(20);
-    expect(result.overall.corrected).toBe(5);
-    // 15 of 20 fields accepted → 75% accuracy.
-    expect(result.overall.accuracy_pct).toBe(75);
-    expect(result.by_field.find((f) => f.field_key === 'consideration_inr').accuracy_pct).toBe(60);
+    expect(count).toBe(1);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO public\.improvement_signals/i);
+    expect(sql).toMatch(/comp_reliance/);
+
+    const detail = JSON.parse(params[2]);
+    expect(detail).toMatchObject({
+      deal_id: DEAL_ID,
+      comp_id: COMP_ID,
+      relied_on: true,
+      similarity_score: 0.82,
+      similarity_rank: 3,
+      rate_delta_pct: -4.1,
+    });
   });
 
-  test('soft-fails to an empty shape when the table is not yet migrated', async () => {
-    query.mockRejectedValueOnce(Object.assign(new Error('no table'), { code: '42P01' }));
-    const result = await learningSignals.getExtractionAccuracy({ days: 90 });
-    expect(result.available).toBe(false);
-    expect(result.by_field).toEqual([]);
-    expect(result.overall.accuracy_pct).toBeNull();
+  test('returns 0 without a deal id or comp id', async () => {
+    const count = await learningSignals.recordCompRelianceSignal({ relied: true });
+    expect(count).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('records an anonymous row when consent is withheld', async () => {
+    consentService.hasConsent.mockResolvedValueOnce(false);
+    await learningSignals.recordCompRelianceSignal({
+      dealId: DEAL_ID,
+      compId: COMP_ID,
+      relied: false,
+      userId: USER_ID,
+    });
+    expect(query.mock.calls[0][1][1]).toBeNull();
+  });
+
+  test('never throws — a DB failure is swallowed and returns 0', async () => {
+    query.mockRejectedValueOnce(
+      Object.assign(new Error('relation does not exist'), { code: '42P01' }),
+    );
+    const count = await learningSignals.recordCompRelianceSignal({
+      dealId: DEAL_ID,
+      compId: COMP_ID,
+      relied: true,
+      userId: USER_ID,
+    });
+    expect(count).toBe(0);
   });
 });

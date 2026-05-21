@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, Sparkles, FileText, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { X, Sparkles, FileText, CheckCircle2, AlertTriangle, Info, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useApplyExtractions } from '../../hooks/useApplyExtractions';
@@ -98,9 +98,15 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
   // Default: every HIGH-confidence row is checked on first render.
   const [approvedKeys, setApprovedKeys] = useState(() => new Set());
 
-  // Reset / re-seed approvals whenever the candidate list changes (e.g.,
-  // after the modal re-opens with fresh extractions).
+  // Inline corrections — canonical key → operator-typed value. A key present
+  // here means the operator edited that row's proposed value; a key absent
+  // means they are taking the AI's extracted value as-is.
+  const [editedValues, setEditedValues] = useState({});
+
+  // Reset / re-seed approvals + edits whenever the candidate list changes
+  // (e.g., after the modal re-opens with fresh extractions).
   useEffect(() => {
+    setEditedValues({});
     if (!candidates.length) {
       setApprovedKeys(new Set());
       return;
@@ -135,12 +141,39 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
 
   const clearAll = () => setApprovedKeys(new Set());
 
+  // The value that will actually be applied for a row: the operator's
+  // correction if they made one, otherwise the AI's extracted value.
+  const effectiveValueOf = (c) =>
+    Object.prototype.hasOwnProperty.call(editedValues, c.canonicalKey)
+      ? editedValues[c.canonicalKey]
+      : c.source.value;
+
+  // True only when the operator's typed value genuinely differs from the AI's
+  // — typing the AI value back, character for character, is not an edit.
+  const isEditedRow = (c) =>
+    Object.prototype.hasOwnProperty.call(editedValues, c.canonicalKey) &&
+    String(editedValues[c.canonicalKey] ?? '') !== String(c.source.value ?? '');
+
+  const setEditedValue = (key, value) => {
+    setEditedValues((prev) => ({ ...prev, [key]: value }));
+    // Correcting a value signals intent to apply it — auto-select the row.
+    setApprovedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  };
+
+  const resetEditedValue = (key) =>
+    setEditedValues((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, key)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
   const handleApply = async () => {
     const approved = candidates
       .filter((c) => approvedKeys.has(c.canonicalKey))
       .map((c) => ({
         canonical_field: c.canonicalKey,
-        value: c.source.value,
+        value: effectiveValueOf(c),
         source_extraction_id: c.source.extraction_id || null,
         source_document_id: c.source.document_id || null,
         source_field: c.source.raw_key || null,
@@ -183,7 +216,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                 Auto-fill deal from extracted documents
               </h2>
               <p className="text-xs text-content-secondary mt-0.5">
-                Review each proposed value, then apply to the deal. Ontology v{ontologyV1.ontology_version}.
+                Review each proposed value, correct it if the AI got it wrong, then apply. Ontology v{ontologyV1.ontology_version}.
               </p>
             </div>
           </div>
@@ -203,7 +236,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
           <AlertTriangle size={14} className="text-amber-700 mt-0.5 flex-shrink-0" />
           <p className="text-amber-900">
             <span className="font-semibold">AI-assisted — requires human review.</span>{' '}
-            Each row was extracted from a document by Gemini 3.1 Flash-Lite. Verify each value before applying. The system records who approved what.
+            Each value was extracted from a document by AI. Check each one — edit it inline if it is wrong — before applying. The system records who applied what, and whether each value was kept or corrected.
           </p>
         </div>
 
@@ -268,7 +301,11 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
               <ul className="divide-y divide-hairline">
                 {candidates.map((c) => {
                   const isApproved = approvedKeys.has(c.canonicalKey);
-                  const willOverwrite = c.currentValue != null && c.currentValue !== '' && String(c.currentValue) !== String(c.source.value);
+                  const edited = isEditedRow(c);
+                  const proposedDisplay = Object.prototype.hasOwnProperty.call(editedValues, c.canonicalKey)
+                    ? editedValues[c.canonicalKey]
+                    : (c.source.value == null ? '' : String(c.source.value));
+                  const willOverwrite = c.currentValue != null && c.currentValue !== '' && String(c.currentValue) !== String(effectiveValueOf(c));
                   return (
                     <li
                       key={c.canonicalKey}
@@ -319,12 +356,41 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                       </div>
 
                       <div className="col-span-3 text-xs">
-                        <div className="text-[10px] uppercase tracking-wider text-content-tertiary mb-0.5 flex items-center gap-1">
+                        <div className="text-[10px] uppercase tracking-wider text-content-tertiary mb-0.5 flex items-center gap-1.5">
                           Proposed
+                          {edited && <span className="text-accent font-semibold">· edited</span>}
                           {willOverwrite && <span className="text-amber-700 font-semibold">· overwrites</span>}
                         </div>
-                        <div className="text-sm font-medium text-content-primary tabular-nums break-words">
-                          {formatValue(c.source.value, c.spec.value_type)}
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            inputMode={c.spec.value_type === 'number' ? 'decimal' : 'text'}
+                            value={proposedDisplay}
+                            onChange={(e) => setEditedValue(c.canonicalKey, e.target.value)}
+                            disabled={isSubmitting}
+                            aria-label={`Proposed value for ${c.spec.label}`}
+                            className={clsx(
+                              'w-full text-sm font-medium tabular-nums rounded px-2 py-1',
+                              'bg-transparent border transition-colors',
+                              'focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent',
+                              'disabled:opacity-50',
+                              edited
+                                ? 'text-accent border-accent/40 bg-accent-50/40'
+                                : 'text-content-primary border-transparent hover:border-hairline',
+                            )}
+                          />
+                          {edited && (
+                            <button
+                              type="button"
+                              onClick={() => resetEditedValue(c.canonicalKey)}
+                              disabled={isSubmitting}
+                              title="Reset to the AI-extracted value"
+                              aria-label={`Reset ${c.spec.label} to the AI-extracted value`}
+                              className="p-0.5 text-content-tertiary hover:text-content-primary rounded transition-colors disabled:opacity-50 flex-shrink-0"
+                            >
+                              <RotateCcw size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
 

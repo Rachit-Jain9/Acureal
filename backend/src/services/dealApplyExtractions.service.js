@@ -45,6 +45,7 @@
 const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const dealAuditLog = require('./dealAuditLog.service');
+const extractionVerdicts = require('./extractionVerdicts.service');
 const ontology = require('../../../packages/real-estate-ontology/src');
 
 /**
@@ -328,6 +329,19 @@ const applyExtractionsToDeal = async (dealId, approvedExtractions, userId = null
     });
     auditLogIdProperty = row?.id || null;
   }
+
+  // ── Phase 4: capture per-field extraction verdicts (Workstream C) ───
+  // Record — per applied field — whether the operator kept the AI's value or
+  // overrode it: durable operational state + a values-free Layer-5 learning
+  // signal. recordVerdictsForApply never throws and is migration-tolerant, so
+  // awaiting it cannot break the apply — it just makes the signal reliable on
+  // serverless (un-awaited work after the response can be killed).
+  await extractionVerdicts.recordVerdictsForApply({
+    dealId,
+    organizationId: txResult.dealAfter?.organization_id || null,
+    applied,
+    userId,
+  });
 
   return {
     applied,

@@ -26,8 +26,16 @@ jest.mock('../src/services/dealAuditLog.service', () => ({
   recordAudit: jest.fn().mockResolvedValue({ id: 'audit-mock-row' }),
 }));
 
+// Verdict capture is fire-and-forget telemetry — mock it out so the apply
+// tests stay isolated; its own behaviour is covered in
+// extractionVerdicts.service.test.js.
+jest.mock('../src/services/extractionVerdicts.service', () => ({
+  recordVerdictsForApply: jest.fn().mockResolvedValue(0),
+}));
+
 const { query, transaction } = require('../src/config/database');
 const dealAuditLog = require('../src/services/dealAuditLog.service');
+const extractionVerdicts = require('../src/services/extractionVerdicts.service');
 const service = require('../src/services/dealApplyExtractions.service');
 
 beforeEach(() => {
@@ -146,6 +154,37 @@ describe('dealApplyExtractions.applyExtractionsToDeal', () => {
     expect(dealAuditCall[0].metadata.ontology_version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
+  test('captures per-field extraction verdicts after a successful apply', async () => {
+    const clientQuery = jest.fn()
+      .mockResolvedValueOnce({ rows: [mockDealRow()] })
+      .mockResolvedValueOnce({ rows: [mockPropertyRow()] })
+      .mockResolvedValueOnce({ rows: [mockPropertyRow({ survey_number: '45/2A' })] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    stubTransactionWithClient(clientQuery);
+
+    await service.applyExtractionsToDeal(
+      DEAL_ID,
+      [{
+        canonical_field: 'survey_number',
+        value: '45/2A',
+        source_extraction_id: EXTRACTION_ID_A,
+        source_document_id: 'doc-1',
+        source_field: 'survey_number',
+      }],
+      USER_ID,
+    );
+
+    expect(extractionVerdicts.recordVerdictsForApply).toHaveBeenCalledTimes(1);
+    const arg = extractionVerdicts.recordVerdictsForApply.mock.calls[0][0];
+    expect(arg.dealId).toBe(DEAL_ID);
+    expect(arg.userId).toBe(USER_ID);
+    expect(arg.organizationId).toBe('org-1'); // from mockDealRow
+    expect(arg.applied).toHaveLength(1);
+    expect(arg.applied[0].canonical_field).toBe('survey_number');
+    expect(arg.applied[0].source_field).toBe('survey_number');
+  });
+
   test('acres transformation — land_area_acres input becomes sqft in DB', async () => {
     const clientQuery = jest.fn()
       .mockResolvedValueOnce({ rows: [mockDealRow()] })
@@ -229,6 +268,8 @@ describe('dealApplyExtractions.applyExtractionsToDeal', () => {
     // Critical: NO transaction opened when nothing valid to apply
     expect(transaction).not.toHaveBeenCalled();
     expect(dealAuditLog.recordAudit).not.toHaveBeenCalled();
+    // Nothing applied → no verdicts to capture.
+    expect(extractionVerdicts.recordVerdictsForApply).not.toHaveBeenCalled();
   });
 
   test('rejects when dealId is missing', async () => {

@@ -53,7 +53,7 @@ describe('ExtractionQualityWidget', () => {
     expect(await screen.findByText(/being set up/i)).toBeInTheDocument();
   });
 
-  it('shows an empty state when no reviews are recorded yet', async () => {
+  it('shows an empty state when no fields have been applied yet', async () => {
     getExtractionQualityMock.mockResolvedValue({
       data: {
         data: {
@@ -65,7 +65,7 @@ describe('ExtractionQualityWidget', () => {
       },
     });
     render(<ExtractionQualityWidget days={30} />);
-    expect(await screen.findByText(/No extraction reviews recorded/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No AI-extracted fields applied/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the request fails', async () => {

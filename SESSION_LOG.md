@@ -5289,3 +5289,59 @@ PR #479 (PR-NX123):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream C — the standing extraction-quality system
+
+### What was worked on
+
+Workstream C of the product plan (the data network) — the document-extraction
+counterpart to the comp-reliance capture (PR-NX112). A deep review found the
+Phase-5.1 extraction-review seed (PR-NX96) had wired its signal capture into
+`applyCorrections` — an endpoint no frontend surface calls — so in practice it
+captured nothing. The live extraction-review surface is the apply-extractions
+auto-fill modal; this session moved capture there and built the full standing
+system.
+
+PR #481 (PR-NX125):
+- New migration `20260611_extraction_field_verdicts.sql` — a durable,
+  values-free ledger holding one current verdict (accepted / overridden) per
+  (extraction, canonical field), org-scoped with RLS FORCE. Widens the
+  `improvement_signals` signal-type CHECK to add `extraction_field_verdict`.
+- `extractionVerdicts.service.js` — `recordVerdictsForApply()` classifies each
+  applied field by coerce-comparing the AI's raw value against the applied
+  value through the ontology (so a unit reformat is not mistaken for an
+  override); upserts the ledger and appends a Layer-5 learning signal.
+  Fire-and-forget, migration-tolerant, never throws. `getExtractionAccuracy()`
+  is the read-model.
+- `learningSignals.service.js` — added `recordExtractionVerdictSignals()`
+  (batched, values-free, consent-gated); removed the superseded
+  `recordExtractionReviewSignals` / `getExtractionAccuracy` seed and its dead
+  `applyCorrections` wiring.
+- The apply-extractions service fires verdict capture as a post-commit Phase 4;
+  `/api/admin/extraction-quality` now serves the verdict ledger.
+- The auto-fill modal's proposed-value cell became an inline-editable input —
+  operators can correct a wrong extraction in place and apply in one step.
+  Editing a row auto-selects it; a reset returns it to the AI value. That edit
+  path is what makes the "overridden" verdict capturable.
+
+### Plain-English recap
+- When you auto-fill a deal from a document, every AI-suggested value is now an editable box — if the AI misread something, you fix it right there and apply in one step, instead of being stuck ticking or unticking a wrong value.
+- REDIP now keeps an honest score of how accurate its document-reading is — which fields it gets right and which it gets wrong — on the operator-only AI screen. It records only field names and a kept-or-corrected flag, never the actual document values.
+- It matters because this is the document half of "REDIP gets sharper every time it's used" — everyday review work becomes a real signal for improving extraction.
+
+### PRs opened / merged
+- PR #481 - `feat(learning): standing extraction-quality system — per-field accept/override verdicts (PR-NX125)` - opened, awaiting CI + operator merge. This session-log entry ships in the same PR.
+
+### Validation
+- Backend: 137 suites / 2243 tests green. Frontend: 77 files / 691 tests green; run exits 0; production build clean.
+- `node scripts/lint-migrations.js` — 84 migrations clean (39 org-scoped, 33 RLS-protected).
+- The editable modal is auth-gated (needs a logged-in user on a deal with extracted, ontology-mapped documents) — covered by 18 component tests, not browser-verified.
+
+### What's left to do
+- Operator: apply migrations `database/migrations/20260610_deal_comp_reliance.sql` and `database/migrations/20260611_extraction_field_verdicts.sql` if not yet done.
+- Operator: merge PR #481 (production deploy) once CI is green.
+- Workstream C continued — the standing A/B eval / golden-set quality harness (C3 full); the org-level "do not benchmark" switch (C2); the learned comp-ranker stays deferred until reliance + verdict data accrue.
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) genuinely need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
