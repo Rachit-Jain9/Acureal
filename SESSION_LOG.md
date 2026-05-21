@@ -5241,3 +5241,51 @@ PR #477 (PR-NX121):
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-21 - Workstream F (foundations) — asset-class taxonomy contract
+
+### What was worked on
+
+Continued the foundations pass with F4 — the asset-class taxonomy. A review
+found it is declared independently in THREE places: `backend/.../assetClasses.js`,
+`frontend/.../assetClasses.js` (byte-identical to the backend file), and the
+canonical `real-estate-ontology` v1.json. All three agree on the 10-key set
+today — but nothing prevented them drifting.
+
+PR #479 (PR-NX123):
+- Considered making the deal forms import the ontology directly (true
+  single-source-of-truth) — rejected: the ontology's labels are descriptive
+  ("Hospitality (hotel)", "Raw Land (entitlement pipeline)") and
+  family-ordered; adopting them would clutter and reorder the dropdown — a
+  UX downgrade.
+- Instead locked the existing good state with a contract test, the same
+  proven pattern as the kernel-defaults drift fix (PR-NX119). New
+  `assetClasses.contract.test.js` asserts: backend ≡ frontend
+  ASSET_CLASS_CONFIG byte-for-byte; the key set matches the ontology; every
+  financialModelClass resolves to a kernel-supported class.
+- No source change needed — the three were already in sync; the test makes
+  it impossible for them not to be.
+- Noted but not fixed: the kernel calls raw land `land_parcel` while the app
+  (and ontology) call it `raw_land` — a naming inconsistency whose fix is a
+  data migration on `deals.asset_class`, an operator-decision out of scope.
+
+### Plain-English recap
+- The list of property types REDIP handles is written in three separate files for technical reasons; today they match, but a future edit to one could quietly desync deal forms, the server, and the master taxonomy.
+- Added an automated check that fails the build the instant the three diverge — so they can't.
+
+### PRs opened / merged
+- PR #479 - `test(foundations): lock the asset-class taxonomy across its three sources (PR-NX123)` - opened, CI green, merged.
+- PR #480 - `docs: session log for the asset-class taxonomy contract (PR-NX124)` - this entry.
+
+### Validation
+- Frontend: 77 files / 687 tests green; run exits 0; build clean.
+- All CI checks passed on #479.
+
+### What's left to do
+- Operator: apply migration `database/migrations/20260610_deal_comp_reliance.sql` if not yet done.
+- Workstream F — F3, F4, F5 done. F1 (schema squash) needs an operator-run DB-rebuild verification; F2 (dark-mode-hack removal) needs visual QA across light + dark mode — both genuinely need operator involvement.
+- Workstream A — Provenance Spine complete and accuracy-hardened; optional polish remains.
+- Workstream C continued — a standing extraction-quality system; later, the learned comp-ranker.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
