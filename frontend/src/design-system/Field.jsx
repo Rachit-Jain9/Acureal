@@ -22,14 +22,27 @@ const CONTROL_BASE =
 
 const borderClass = (invalid) => (invalid ? 'border-data-negative' : 'border-hairline');
 
-export const Input = forwardRef(function Input({ invalid = false, className, ...rest }, ref) {
-  return (
+export const Input = forwardRef(function Input(
+  { invalid = false, trailing, className, ...rest },
+  ref,
+) {
+  const control = (
     <input
       ref={ref}
       aria-invalid={invalid || undefined}
-      className={clsx(CONTROL_BASE, borderClass(invalid), 'px-3 py-2', className)}
+      className={clsx(CONTROL_BASE, borderClass(invalid), 'px-3 py-2', trailing && 'pr-9', className)}
       {...rest}
     />
+  );
+  if (!trailing) return control;
+  // `trailing` hosts an in-field affordance (password show/hide, clear, etc.).
+  return (
+    <div className="relative">
+      {control}
+      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center">
+        {trailing}
+      </span>
+    </div>
   );
 });
 
