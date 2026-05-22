@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, UserPlus, Mail, Lock, User, Phone, Eye, EyeOff } from 'lucide-react';
+import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import { useLegalActive } from '../hooks/useLegalActive';
 import usePublicLightTheme from '../hooks/usePublicLightTheme';
-import Checkbox from '../design-system/Checkbox';
+import { Button, Field, Input, Checkbox, ErrorState } from '../design-system';
 import PublicFooter from '../components/common/PublicFooter';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 
@@ -168,332 +168,261 @@ export default function LoginPage() {
   const submitDisabled =
     loading || (isRegister && (!acceptTerms || legalLoading || !!legalError));
 
+  const linkClass =
+    'text-accent underline underline-offset-2 transition-opacity hover:opacity-80 rounded ' +
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50">
+    <div className="min-h-screen flex flex-col bg-bg-secondary">
       <div className="flex-1 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Branding */}
-        <div className="text-center mb-8">
-          <h1 className="font-serif text-4xl font-semibold text-stone-900 tracking-tight">
-            REDIP<span className="text-[#c2410c]">.</span>
-          </h1>
-          <p className="text-stone-500 mt-2 text-[11px] uppercase tracking-[0.18em]">Real Estate Deal Intelligence · India</p>
-        </div>
+        <div className="w-full max-w-md">
+          {/* Branding */}
+          <div className="text-center mb-8">
+            <h1 className="font-serif text-4xl font-semibold text-content-primary tracking-tight">
+              REDIP<span className="text-premium">.</span>
+            </h1>
+            <p className="text-content-muted mt-2 text-[11px] uppercase tracking-[0.18em]">
+              Real Estate Deal Intelligence · India
+            </p>
+          </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-sm border border-stone-200 shadow-sm p-8">
-          <h2 className="font-serif text-2xl font-semibold text-stone-900 leading-tight mb-1">
-            {isRegister ? 'Create an account' : 'Welcome back'}
-          </h2>
-          <p className="text-sm text-stone-600 mb-6">
-            {isRegister
-              ? 'Create a deal workspace account for sourcing, diligence, and underwriting'
-              : 'Sign in to your REDIP deal intelligence workspace'}
-          </p>
+          {/* Card */}
+          <div className="bg-bg-elevated rounded-editorial border border-hairline shadow-editorial p-8">
+            <h2 className="font-serif text-2xl font-semibold text-content-primary leading-tight mb-1">
+              {isRegister ? 'Create an account' : 'Welcome back'}
+            </h2>
+            <p className="text-sm text-content-secondary mb-6">
+              {isRegister
+                ? 'Create a deal workspace account for sourcing, diligence, and underwriting.'
+                : 'Sign in to your REDIP deal intelligence workspace.'}
+            </p>
 
-          {/* Server error */}
-          {error && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-sm text-sm text-rose-800">
-              {error}
-            </div>
-          )}
+            {/* Server error — hidden during the MFA step (that form shows its own) */}
+            {error && !mfa && (
+              <ErrorState tone="danger" className="mb-4">{error}</ErrorState>
+            )}
 
-          {/* Google sign-in. Hidden during MFA challenge step — user is
-              committed to a specific account at that point. */}
-          {!mfa && (
-            <div className="mb-4">
-              <GoogleSignInButton
-                onCredential={handleGoogleCredential}
-                text={isRegister ? 'signup_with' : 'signin_with'}
-                disabled={isRegister && !acceptTerms}
-                disabledReason={
-                  isRegister && !acceptTerms
-                    ? 'Accept the Terms & Privacy first.'
-                    : ''
-                }
-                showDivider
-              />
-            </div>
-          )}
-
-          {mfa ? (
-            <form onSubmit={handleMfaSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm text-stone-700 mb-2 font-medium">
-                  Two-factor code
-                </label>
-                <p className="text-xs text-stone-500 mb-3">
-                  Enter the 6-digit code from your authenticator app, or a recovery code if you've lost your device.
-                </p>
-                <input
-                  type="text"
-                  inputMode="text"
-                  autoFocus
-                  autoComplete="one-time-code"
-                  maxLength={20}
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value)}
-                  placeholder="123456"
-                  className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-base font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-[#c2410c]/30"
+            {/* Google sign-in. Hidden during MFA challenge — the user is
+                already committed to a specific account at that point. */}
+            {!mfa && (
+              <div className="mb-4">
+                <GoogleSignInButton
+                  onCredential={handleGoogleCredential}
+                  text={isRegister ? 'signup_with' : 'signin_with'}
+                  disabled={isRegister && !acceptTerms}
+                  disabledReason={
+                    isRegister && !acceptTerms
+                      ? 'Accept the Terms & Privacy first.'
+                      : ''
+                  }
+                  showDivider
                 />
               </div>
-              {error && (
-                <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">{error}</p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleMfaCancel}
-                  className="btn btn-secondary flex-1"
-                  disabled={loading}
+            )}
+
+            {mfa ? (
+              <form onSubmit={handleMfaSubmit} className="space-y-4">
+                <Field
+                  label="Two-factor code"
+                  helper="Enter the 6-digit code from your authenticator app, or a recovery code if you've lost your device."
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading || mfaCode.length < 6}
-                  className="btn btn-primary flex-1"
-                >
-                  {loading ? 'Verifying…' : 'Verify'}
-                </button>
-              </div>
-            </form>
-          ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name (register only) */}
-            {isRegister && (
-              <div>
-                <label htmlFor="name" className="block text-[11px] uppercase tracking-[0.14em] text-stone-600 mb-1">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
-                  <input
-                    id="name"
-                    name="name"
+                  <Input
                     type="text"
-                    value={form.name}
-                    onChange={handleChange}
-                    placeholder="John Doe"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-sm text-sm bg-white focus:outline-none focus:border-[#c2410c] focus:ring-0 ${validationErrors.name ? 'border-rose-400' : 'border-stone-300'}`}
+                    inputMode="text"
+                    autoFocus
+                    autoComplete="one-time-code"
+                    maxLength={20}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    placeholder="123456"
+                    className="text-center font-mono tracking-[0.3em]"
                   />
+                </Field>
+                {error && <ErrorState tone="danger">{error}</ErrorState>}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    fullWidth
+                    onClick={handleMfaCancel}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    fullWidth
+                    loading={loading}
+                    disabled={mfaCode.length < 6}
+                  >
+                    Verify
+                  </Button>
                 </div>
-                {validationErrors.name && (
-                  <p className="text-xs text-rose-700 mt-1">{validationErrors.name}</p>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {isRegister && (
+                  <Field label="Full name" error={validationErrors.name}>
+                    <Input
+                      name="name"
+                      type="text"
+                      value={form.name}
+                      onChange={handleChange}
+                      placeholder="John Doe"
+                      autoComplete="name"
+                    />
+                  </Field>
                 )}
-              </div>
-            )}
 
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-[11px] uppercase tracking-[0.14em] text-stone-600 mb-1">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="you@company.com"
-                  className={`w-full pl-10 pr-3 py-2 border rounded-sm text-sm bg-white focus:outline-none focus:border-[#c2410c] focus:ring-0 ${validationErrors.email ? 'border-rose-400' : 'border-stone-300'}`}
-                />
-              </div>
-              {validationErrors.email && (
-                <p className="text-xs text-rose-700 mt-1">{validationErrors.email}</p>
-              )}
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-[11px] uppercase tracking-[0.14em] text-stone-600 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="Enter your password"
-                  className={`w-full pl-10 pr-10 py-2 border rounded-sm text-sm bg-white focus:outline-none focus:border-[#c2410c] focus:ring-0 ${validationErrors.password ? 'border-rose-400' : 'border-stone-300'}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              {validationErrors.password && (
-                <p className="text-xs text-rose-700 mt-1">{validationErrors.password}</p>
-              )}
-            </div>
-
-            {/* Phone (register only) */}
-            {isRegister && (
-              <div>
-                <label htmlFor="phone" className="block text-[11px] uppercase tracking-[0.14em] text-stone-600 mb-1">
-                  Phone <span className="text-content-muted font-normal">(optional)</span>
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
-                  <input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    value={form.phone}
+                <Field label="Email" error={validationErrors.email}>
+                  <Input
+                    name="email"
+                    type="email"
+                    value={form.email}
                     onChange={handleChange}
-                    placeholder="9876543210"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-sm text-sm bg-white focus:outline-none focus:border-[#c2410c] focus:ring-0 ${validationErrors.phone ? 'border-rose-400' : 'border-stone-300'}`}
+                    placeholder="you@company.com"
+                    autoComplete="email"
                   />
+                </Field>
+
+                <Field label="Password" error={validationErrors.password}>
+                  <Input
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="Enter your password"
+                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                    trailing={(
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="p-1 rounded text-content-muted transition-colors hover:text-content-primary
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                      >
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    )}
+                  />
+                </Field>
+
+                {isRegister && (
+                  <Field label="Phone" helper="Optional" error={validationErrors.phone}>
+                    <Input
+                      name="phone"
+                      type="tel"
+                      value={form.phone}
+                      onChange={handleChange}
+                      placeholder="9876543210"
+                      autoComplete="tel"
+                    />
+                  </Field>
+                )}
+
+                <div className="rounded-md border border-hairline bg-bg-secondary px-3 py-3">
+                  <Checkbox
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    label="Remember me across browser restarts"
+                  />
+                  <p className="mt-2 text-xs text-content-muted">
+                    Default session behaviour is privacy-first: if this stays unchecked, REDIP
+                    signs you out when the browser closes.
+                  </p>
                 </div>
-                {validationErrors.phone && (
-                  <p className="text-xs text-rose-700 mt-1">{validationErrors.phone}</p>
+
+                {/* Required acceptance — register only */}
+                {isRegister && (
+                  <div
+                    className={`rounded-md border px-3 py-3 ${
+                      validationErrors.acceptTerms
+                        ? 'border-data-negative bg-bg-secondary'
+                        : 'border-hairline bg-bg-secondary'
+                    }`}
+                  >
+                    <Checkbox
+                      id="acceptTerms"
+                      checked={acceptTerms}
+                      onChange={(e) => {
+                        setAcceptTerms(e.target.checked);
+                        if (validationErrors.acceptTerms) {
+                          setValidationErrors((prev) => ({ ...prev, acceptTerms: null }));
+                        }
+                      }}
+                      tone={validationErrors.acceptTerms ? 'error' : 'default'}
+                      required
+                    >
+                      <span className="text-sm text-content-secondary leading-snug">
+                        I have read and agree to the{' '}
+                        <Link to="/terms" target="_blank" rel="noopener noreferrer" className={linkClass}>
+                          Terms &amp; Conditions
+                        </Link>{' '}
+                        and{' '}
+                        <Link to="/privacy" target="_blank" rel="noopener noreferrer" className={linkClass}>
+                          Privacy Policy
+                        </Link>
+                        .
+                      </span>
+                    </Checkbox>
+                    {validationErrors.acceptTerms && (
+                      <p className="text-xs text-data-negative mt-2">{validationErrors.acceptTerms}</p>
+                    )}
+                    {validationErrors.legal && (
+                      <p className="text-xs text-data-negative mt-2">{validationErrors.legal}</p>
+                    )}
+                    {legalError && (
+                      <p className="text-xs text-data-negative mt-2">
+                        Could not load the current Terms and Privacy versions. Please refresh the
+                        page or contact{' '}
+                        <a href="mailto:grievance@redip.in" className={linkClass}>
+                          grievance@redip.in
+                        </a>
+                        .
+                      </p>
+                    )}
+                    {legalLoading && !legalError && (
+                      <p className="mt-2 text-xs text-content-muted">Loading current versions…</p>
+                    )}
+                    {!legalLoading && !legalError && legalDocs?.terms_of_service && (
+                      <p className="mt-2 text-xs text-content-muted">
+                        Acceptance is recorded with timestamp, IP, and browser for audit (DPDP Act
+                        2023 §6). Current versions:{' '}
+                        <span className="font-mono">Terms {legalDocs.terms_of_service.version}</span>
+                        ,{' '}
+                        <span className="font-mono">
+                          Privacy {legalDocs.privacy_policy?.version || '—'}
+                        </span>
+                        .
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
 
-            <div className="rounded-lg border border-hairline-strong bg-bg-secondary px-3 py-3">
-              <div className="flex items-center gap-2">
-                <input
-                  id="rememberMe"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded-sm border-stone-300 text-[#c2410c] focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                />
-                <label htmlFor="rememberMe" className="text-sm text-stone-700 cursor-pointer select-none">
-                  Remember me across browser restarts
-                </label>
-              </div>
-              <p className="mt-2 text-xs text-stone-500">
-                Default session behavior is privacy-first: if this stays unchecked, REDIP signs you
-                out when the browser closes.
-              </p>
-            </div>
-
-            {/* Required acceptance — register only */}
-            {isRegister && (
-              <div
-                className={`rounded-lg border px-3 py-3 ${
-                  validationErrors.acceptTerms
-                    ? 'border-rose-300 bg-rose-50'
-                    : 'border-hairline-strong bg-bg-secondary'
-                }`}
-              >
-                <Checkbox
-                  id="acceptTerms"
-                  checked={acceptTerms}
-                  onChange={(e) => {
-                    setAcceptTerms(e.target.checked);
-                    if (validationErrors.acceptTerms) {
-                      setValidationErrors((prev) => ({ ...prev, acceptTerms: null }));
-                    }
-                  }}
-                  tone={validationErrors.acceptTerms ? 'error' : 'default'}
-                  required
+                <Button
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  loading={loading}
+                  disabled={submitDisabled}
+                  leftIcon={isRegister ? <UserPlus size={15} /> : <LogIn size={15} />}
                 >
-                  <span className="text-sm text-stone-700 leading-snug">
-                    I have read and agree to the{' '}
-                    <Link
-                      to="/terms"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#c2410c] hover:text-[#9a3412] underline underline-offset-2"
-                    >
-                      Terms &amp; Conditions
-                    </Link>{' '}
-                    and{' '}
-                    <Link
-                      to="/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#c2410c] hover:text-[#9a3412] underline underline-offset-2"
-                    >
-                      Privacy Policy
-                    </Link>
-                    .
-                  </span>
-                </Checkbox>
-                {validationErrors.acceptTerms && (
-                  <p className="text-xs text-rose-700 mt-2">{validationErrors.acceptTerms}</p>
-                )}
-                {validationErrors.legal && (
-                  <p className="text-xs text-rose-700 mt-2">{validationErrors.legal}</p>
-                )}
-                {legalError && (
-                  <p className="text-xs text-rose-700 mt-2">
-                    Could not load the current Terms and Privacy versions. Please refresh the page
-                    or contact{' '}
-                    <a href="mailto:grievance@redip.in" className="underline">
-                      grievance@redip.in
-                    </a>
-                    .
-                  </p>
-                )}
-                {legalLoading && !legalError && (
-                  <p className="mt-2 text-xs text-stone-500">Loading current versions…</p>
-                )}
-                {!legalLoading && !legalError && legalDocs?.terms_of_service && (
-                  <p className="mt-2 text-xs text-stone-500">
-                    Acceptance is recorded with timestamp, IP, and browser for audit (DPDP Act
-                    2023 §6). Current versions:{' '}
-                    <span className="font-mono">
-                      Terms {legalDocs.terms_of_service.version}
-                    </span>
-                    ,{' '}
-                    <span className="font-mono">
-                      Privacy {legalDocs.privacy_policy?.version || '—'}
-                    </span>
-                    .
-                  </p>
-                )}
-              </div>
+                  {isRegister ? 'Create Account' : 'Sign In'}
+                </Button>
+              </form>
             )}
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={submitDisabled}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#c2410c] hover:brightness-95 text-white rounded-sm text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : isRegister ? (
-                <UserPlus size={16} />
-              ) : (
-                <LogIn size={16} />
-              )}
-              {loading
-                ? isRegister
-                  ? 'Creating account...'
-                  : 'Signing in...'
-                : isRegister
-                  ? 'Create Account'
-                  : 'Sign In'}
-            </button>
-          </form>
-          )}
-
-          {/* Toggle */}
-          <p className="text-center text-sm text-stone-600 mt-6">
-            {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button
-              type="button"
-              onClick={toggleMode}
-              className="text-[#c2410c] hover:text-[#9a3412] font-medium underline underline-offset-2"
-            >
-              {isRegister ? 'Sign In' : 'Register'}
-            </button>
-          </p>
+            {/* Toggle between sign-in and register */}
+            <p className="text-center text-sm text-content-secondary mt-6">
+              {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <button type="button" onClick={toggleMode} className={`font-medium ${linkClass}`}>
+                {isRegister ? 'Sign In' : 'Register'}
+              </button>
+            </p>
+          </div>
         </div>
-      </div>
       </div>
       <PublicFooter />
     </div>

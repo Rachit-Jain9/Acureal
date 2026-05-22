@@ -68,4 +68,10 @@ describe('Input / Select / Textarea', () => {
     render(<Input ref={ref} aria-label="x" />);
     expect(ref.current).toBeInstanceOf(HTMLInputElement);
   });
+
+  it('Input renders a trailing element when provided', () => {
+    render(<Input aria-label="pw" trailing={<button type="button">toggle</button>} />);
+    expect(screen.getByRole('button', { name: 'toggle' })).toBeInTheDocument();
+    expect(screen.getByLabelText('pw')).toBeInstanceOf(HTMLInputElement);
+  });
 });
