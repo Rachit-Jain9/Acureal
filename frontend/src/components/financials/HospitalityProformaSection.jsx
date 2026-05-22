@@ -77,17 +77,17 @@ function UnitEconomicsStrip({ summary, kpis, inputs }) {
   ];
 
   return (
-    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
-        <div className="font-serif text-sm font-semibold text-stone-900">Unit economics <span className="text-stone-400">·</span> Indian hospitality benchmarks</div>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-stone-400">USALI 11e · $/POR methodology</span>
+    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-hairline flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-content-primary">Unit economics <span className="text-content-muted">·</span> Indian hospitality benchmarks</div>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-content-muted">USALI 11e · $/POR methodology</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-stone-100">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-surface">
         {cells.map((c, i) => (
-          <div key={i} className="bg-white px-3 py-2.5">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-stone-500">{c.label}</div>
-            <div className="mt-1 font-serif text-base font-semibold text-stone-900 tabular-nums">{c.value}</div>
-            <div className="text-[10px] text-stone-400 mt-0.5">{c.sub}</div>
+          <div key={i} className="bg-bg-elevated px-3 py-2.5">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-content-secondary">{c.label}</div>
+            <div className="mt-1 font-serif text-base font-semibold text-content-primary tabular-nums">{c.value}</div>
+            <div className="text-[10px] text-content-muted mt-0.5">{c.sub}</div>
           </div>
         ))}
       </div>
@@ -116,25 +116,25 @@ function HospitalityHeader({ inputs, kpis }) {
     { label: 'Dev / Key',       value: fmtInrLakh(kpis.devCostPerKey),                      unit: '' },
   ];
   return (
-    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-stone-200">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-hairline">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-content-secondary">
           USALI-compliant hotel proforma
         </div>
-        <div className="font-serif text-xl font-semibold text-stone-900 leading-tight mt-0.5">
-          Hospitality financial engine <span className="text-stone-400">·</span> India / Bengaluru
+        <div className="font-serif text-xl font-semibold text-content-primary leading-tight mt-0.5">
+          Hospitality financial engine <span className="text-content-muted">·</span> India / Bengaluru
         </div>
-        <div className="text-xs text-stone-500 mt-1">
+        <div className="text-xs text-content-secondary mt-1">
           10-year annual P&amp;L • Sources &amp; Uses • Construction → Permanent refi • LP/GP waterfall
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-stone-100">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-surface">
         {stats.map((s, i) => (
-          <div key={i} className="bg-white px-3 py-2.5">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-stone-500">{s.label}</div>
+          <div key={i} className="bg-bg-elevated px-3 py-2.5">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-content-secondary">{s.label}</div>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="font-serif text-base font-semibold text-stone-900 tabular-nums">{s.value}</span>
-              {s.unit && <span className="text-[10px] text-stone-400">{s.unit}</span>}
+              <span className="font-serif text-base font-semibold text-content-primary tabular-nums">{s.value}</span>
+              {s.unit && <span className="text-[10px] text-content-muted">{s.unit}</span>}
             </div>
           </div>
         ))}
@@ -157,10 +157,10 @@ function RevenueMixCard({ pnl }) {
   const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
-    <div className="bg-white border border-stone-200 rounded-sm p-5">
+    <div className="bg-bg-elevated border border-hairline rounded-sm p-5">
       <div className="mb-3">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Revenue mix (stabilized)</div>
-        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Year {stab.year} <span className="text-stone-400">·</span> ₹{total.toFixed(1)} Cr total revenue</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-content-secondary">Revenue mix (stabilized)</div>
+        <div className="font-serif text-base font-semibold text-content-primary mt-0.5">Year {stab.year} <span className="text-content-muted">·</span> ₹{total.toFixed(1)} Cr total revenue</div>
       </div>
       <div className="flex items-center gap-4">
         <ResponsiveContainer width="55%" height={220}>
@@ -199,14 +199,14 @@ function NOIEvolutionCard({ pnl }) {
   return (
     <div className="card-editorial p-5">
       <div className="mb-3">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Operating evolution</div>
-        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Revenue → GOP → EBITDA → NOI <span className="text-stone-400">·</span> 10 years</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-content-secondary">Operating evolution</div>
+        <div className="font-serif text-base font-semibold text-content-primary mt-0.5">Revenue → GOP → EBITDA → NOI <span className="text-content-muted">·</span> 10 years</div>
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#f3f4f6" strokeDasharray="3 3" />
-          <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#6b7280' }} />
-          <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `₹${v}`} />
+          <CartesianGrid stroke="var(--color-border-primary)" strokeDasharray="3 3" />
+          <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickFormatter={(v) => `₹${v}`} />
           <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Area type="monotone" dataKey="Revenue" fill="#c7d2fe" stroke="#6366f1" fillOpacity={0.25} />
@@ -270,10 +270,10 @@ function USALIProfitLossTable({ pnl }) {
   ];
 
   return (
-    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
-        <div className="font-serif text-sm font-semibold text-stone-900">USALI 10-year profit &amp; loss <span className="text-stone-400">(₹ Cr)</span></div>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-stone-400">Uniform System of Accounts, 11e</span>
+    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-hairline flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-content-primary">USALI 10-year profit &amp; loss <span className="text-content-muted">(₹ Cr)</span></div>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-content-muted">Uniform System of Accounts, 11e</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -288,12 +288,11 @@ function USALIProfitLossTable({ pnl }) {
           <tbody>
             {rows.map((r, idx) => {
               if (r === null) return <tr key={`sep-${idx}`}><td colSpan={years.length + 1} className="border-b border-hairline h-1" /></tr>;
-              const highlight = r.highlight === 'emerald' ? 'bg-emerald-50/60' : r.highlight === 'indigo' ? 'bg-indigo-50/60' : '';
+              const highlight = r.highlight === 'emerald' ? 'bg-pos-soft' : r.highlight === 'indigo' ? 'bg-accent-soft' : '';
               return (
                 <tr key={r.key} className={clsx('border-b border-hairline', highlight)}>
                   <td className={clsx(
-                    'px-4 py-1.5 sticky left-0 z-10',
-                    highlight || 'bg-white',
+                    'px-4 py-1.5 sticky left-0 z-10 bg-bg-elevated',
                     r.bold ? 'font-bold text-content-primary' : 'text-content-secondary',
                   )} style={r.indent ? { paddingLeft: 24 + r.indent * 12 } : {}}>
                     {r.key}
@@ -322,10 +321,10 @@ function SourcesUsesCard({ sourcesUses }) {
   const usesCategories = uses.map((u) => u.category);
 
   return (
-    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
-        <div className="font-serif text-sm font-semibold text-stone-900">Sources &amp; Uses</div>
-        <span className="ml-auto text-[11px] text-stone-500 tabular-nums">Total ₹{usesTotalCr?.toFixed(1)} Cr</span>
+    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-hairline flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-content-primary">Sources &amp; Uses</div>
+        <span className="ml-auto text-[11px] text-content-secondary tabular-nums">Total ₹{usesTotalCr?.toFixed(1)} Cr</span>
       </div>
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Uses breakdown */}
@@ -364,11 +363,11 @@ function SourcesUsesCard({ sourcesUses }) {
             {sources.map((s, i) => (
               <div key={i} className={clsx(
                 'rounded-lg border p-3',
-                s.category === 'debt'   ? 'bg-rose-50/60 border-rose-100' : 'bg-emerald-50/60 border-emerald-100',
+                s.category === 'debt'   ? 'bg-neg-soft border-hairline' : 'bg-pos-soft border-hairline',
               )}>
                 <div className="text-[11px] text-content-secondary">{s.label}</div>
                 <div className="mt-0.5 flex items-baseline justify-between">
-                  <span className={clsx('text-lg font-bold', s.category === 'debt' ? 'text-rose-900' : 'text-emerald-900')}>
+                  <span className={clsx('text-lg font-bold', s.category === 'debt' ? 'text-data-negative' : 'text-data-positive')}>
                     ₹{s.valueCr?.toFixed(2)} Cr
                   </span>
                   <span className="text-[10px] text-content-secondary">
@@ -380,8 +379,8 @@ function SourcesUsesCard({ sourcesUses }) {
           </div>
 
           {refinance && (
-            <div className="mt-3 rounded-lg border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-white p-3">
-              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-indigo-700 mb-1 flex items-center gap-1.5">
+            <div className="mt-3 rounded-lg border border-hairline bg-accent-soft p-3">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-accent mb-1 flex items-center gap-1.5">
                 <Sparkles size={10} /> Permanent refinance (at stabilization)
               </div>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -414,10 +413,10 @@ function RefiRow({ label, value }) {
 // ─── Capital stack timeline (construction → refi → exit) ────────────────────
 function CapitalStackTimelineCard({ construction, permanent, kpis }) {
   return (
-    <div className="bg-white border border-stone-200 rounded-sm p-5">
+    <div className="bg-bg-elevated border border-hairline rounded-sm p-5">
       <div className="mb-3">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Capital structure timeline</div>
-        <div className="font-serif text-base font-semibold text-stone-900 mt-0.5">Construction loan → Permanent refi</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-content-secondary">Capital structure timeline</div>
+        <div className="font-serif text-base font-semibold text-content-primary mt-0.5">Construction loan → Permanent refi</div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {construction && (
@@ -457,8 +456,8 @@ function CapitalStackTimelineCard({ construction, permanent, kpis }) {
 
 function StackColumn({ title, subtitle, tone, rows }) {
   const tones = {
-    rose:   'bg-gradient-to-br from-rose-50 to-white border-rose-100',
-    indigo: 'bg-gradient-to-br from-indigo-50 to-white border-indigo-100',
+    rose:   'bg-neg-soft border-hairline',
+    indigo: 'bg-accent-soft border-hairline',
   };
   return (
     <div className={clsx('rounded-xl border p-4', tones[tone] || tones.rose)}>
@@ -482,20 +481,20 @@ function WaterfallCard({ waterfall }) {
   const chartData = tiers.map((t) => ({ name: t.name.split('—')[0].trim(), LP: t.lpCr, GP: t.gpCr }));
 
   return (
-    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-stone-200 flex items-baseline gap-3">
-        <div className="font-serif text-sm font-semibold text-stone-900">LP / GP Waterfall</div>
-        <span className="ml-auto text-[11px] text-stone-500 tabular-nums">
-          Total distributions ₹{totalDistributionsCr?.toFixed(1)} Cr <span className="text-stone-400">·</span> Equity ₹{totalEquityCr?.toFixed(1)} Cr
+    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-hairline flex items-baseline gap-3">
+        <div className="font-serif text-sm font-semibold text-content-primary">LP / GP Waterfall</div>
+        <span className="ml-auto text-[11px] text-content-secondary tabular-nums">
+          Total distributions ₹{totalDistributionsCr?.toFixed(1)} Cr <span className="text-content-muted">·</span> Equity ₹{totalEquityCr?.toFixed(1)} Cr
         </span>
       </div>
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 0, left: 90 }}>
-              <CartesianGrid stroke="#f3f4f6" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `₹${v}`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#374151' }} width={90} />
+              <CartesianGrid stroke="var(--color-border-primary)" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickFormatter={(v) => `₹${v}`} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} width={90} />
               <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="LP" fill="#6366f1" stackId="a" />
@@ -521,8 +520,8 @@ function WaterfallCard({ waterfall }) {
                   <td className="px-3 py-1.5 text-right text-content-secondary">{t.hurdlePct ? `${t.hurdlePct}% IRR` : '—'}</td>
                   <td className="px-3 py-1.5 text-right text-content-secondary">{t.lpSharePct}%</td>
                   <td className="px-3 py-1.5 text-right text-content-secondary">{t.gpSharePct}%</td>
-                  <td className="px-3 py-1.5 text-right font-semibold text-indigo-700 tabular-nums">₹{t.lpCr?.toFixed(2)}</td>
-                  <td className="px-3 py-1.5 text-right font-semibold text-rose-700 tabular-nums">₹{t.gpCr?.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold text-accent tabular-nums">₹{t.lpCr?.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold text-data-negative tabular-nums">₹{t.gpCr?.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>

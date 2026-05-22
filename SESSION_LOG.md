@@ -5931,3 +5931,54 @@ reference taxonomies.
 - Theme-token unification — `HospitalityProformaSection` + the remaining financials files.
 - Operator follow-ups tracked in `TODO_OPERATOR.md`.
 
+
+## 2026-05-22 - Theme-token migration — the Hospitality proforma
+
+### What was worked on
+
+Theme-token unification, continuing PR-NX134 (the Quarterly Proforma). The
+sibling `HospitalityProformaSection` — the USALI hotel proforma (10-year
+P&L, sources & uses, capital stack, LP/GP waterfall) — was the last large
+financials surface still on a hardcoded `stone` / `white` editorial
+palette, so on the default dark FinancialsPage it rendered as white cards
+with light-grey borders.
+
+PR-NX137 — `HospitalityProformaSection.jsx` migrated to the semantic token
+system, the same proven mapping as NX134:
+- Neutrals → tokens: `bg-white` → `bg-bg-elevated`; `stone-*` →
+  `bg-surface` / `border-hairline` / `text-content-*`.
+- Recharts chrome → CSS vars: the NOI-evolution and waterfall charts' grid
+  and axis colours (`#f3f4f6`, `#6b7280`, `#374151`) now use
+  `var(--color-border-primary)` / `var(--color-text-muted)` so they flip
+  with the theme (the PR-NX71 pattern). Chart *series* colours stay fixed —
+  a deliberate, theme-agnostic palette.
+- Light-tint gradient cards: the capital-stack columns and the refinance
+  card used `from-X-50 to-white` — a light patch on a dark page — now the
+  soft theme tokens (`bg-neg-soft`, `bg-accent-soft`). The two saturated
+  LP/GP summary cards keep their gradients: white text on a saturated fill
+  reads correctly in both themes.
+- Data-signal text → flipping tokens: source amounts and the LP/GP
+  waterfall figures used dark `rose-900` / `indigo-700` shades that would
+  be near-invisible dark-on-dark; now `text-data-positive` /
+  `text-data-negative` / `text-accent`.
+- The USALI P&L table's highlighted EBITDA / NOI rows now carry the soft
+  tint on the row and an opaque `bg-bg-elevated` on the frozen first
+  column — a translucent tint would have let the scrolling figures bleed
+  through the sticky cell.
+
+### Plain-English recap
+- The hotel financial proforma — the USALI P&L, sources & uses, capital stack and LP/GP waterfall — used to render as bright white cards on REDIP's dark workspace. It now matches the rest of the app in both dark and light mode.
+- The red/green money figures and the chart gridlines stay correctly legible in dark mode, where the old colours had washed out.
+
+### PRs opened / merged
+- PR-NX137 - `fix(financials): theme-token migration for the Hospitality proforma` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 86 files / 741 tests green; production build clean. Frontend-only — no migration, no backend change.
+- Build- and test-verified. Not browser-verified — the FinancialsPage is auth-gated and the hospitality proforma needs a hospitality-class deal with financial data; a live visual pass is recommended.
+
+### What's left to do
+- Theme-token unification — both financials proforma tables are now done; the remaining hardcoded-neutral files are smaller (`ReferenceMenu`, `MethodologyExplorer`, `DefaultsInspector`); the public/legal pages stay intentionally light.
+- Ontology adoption — Phase 4 (single-source the extraction field map) remains, deferred.
+- Operator follow-ups tracked in `TODO_OPERATOR.md`.
+
