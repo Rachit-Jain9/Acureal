@@ -1,6 +1,7 @@
 import { AlertTriangle, Building2, CheckCircle2, FileText, Layers, Ruler } from 'lucide-react';
 import clsx from 'clsx';
 import { useParcelIntelligence } from '../../hooks/useProperties';
+import BuildabilityMassing from './BuildabilityMassing';
 
 const fmtNum = (value, digits = 0) => {
   if (value === null || value === undefined || value === '') return '-';
@@ -129,6 +130,18 @@ export default function BuildabilitySummary({ property, title = 'Buildable envel
                 unit="m"
               />
             </div>
+
+            {/* Workstream E — the spatial canvas. An axonometric massing of
+                the buildable envelope, drawn deterministically from the
+                values above. Self-hides when land area / coverage is
+                missing, and on the compact embed. */}
+            {!compact && (
+              <BuildabilityMassing
+                values={values}
+                landAreaSqft={property?.land_area_sqft}
+                className="mt-4 pt-4 border-t border-hairline"
+              />
+            )}
 
             {data?.buildability?.message && (
               <div className="mt-3 text-[11px] leading-relaxed text-content-secondary">
