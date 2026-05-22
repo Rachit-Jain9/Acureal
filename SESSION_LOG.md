@@ -5550,3 +5550,62 @@ PR-NX129:
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-22 - Workstream E2 — the buildability massing diagram
+
+### What was worked on
+
+Workstream E of the product plan — the spatial canvas. This ships E2: an
+axonometric massing diagram of the legal buildable envelope, rendered on
+the Parcel Intelligence card beside the buildability numbers. It answers
+"what can I legally build here" *spatially* — the plot, the ground-coverage
+footprint inset within it, and that footprint extruded to the floor count
+the FAR forces.
+
+**Approach decision.** The prior session log pencilled E2 in as "from-
+scratch 3D — a heavyweight." A real 3D engine (three.js, ~600 kB) was
+weighed and rejected: it would dwarf the largest current bundle, fight the
+deterministic-kernel rule (camera state, lighting and lazy GPU init are all
+non-deterministic), and resist DOCX/PPTX export. A pure-SVG axonometric
+projection delivers the same spatial read with zero new dependency, exact
+proportions, instant render, and an exportable vector. That is the better
+build, not the quicker one.
+
+PR-NX130:
+- `frontend/src/utils/buildabilityMassing.js` — `buildMassingModel({values,
+  landAreaSqft})`, a pure deterministic module. Turns the verified
+  buildability numbers (ground coverage, FAR, max buildable area) into the
+  spatial quantities a massing needs: the footprint, the floor count the
+  FAR spreads over it, the setback ratio. Returns null when there is no
+  honest footprint to draw (no plot area or no coverage rule). Coverage is
+  capped at 100%, the floor count floors at 1. No AI.
+- `frontend/src/components/deal/BuildabilityMassing.jsx` — the SVG canvas.
+  A 30° isometric projection of the 8 envelope corners, bbox-fitted to the
+  viewBox so any G+N tower stays legible. Three shaded faces give the
+  axonometric read; floor-delineation lines mark the storeys; a floor-count
+  label and a legend sit alongside. An honest caption states the plot is a
+  representative square (REDIP holds the parcel's area, not its surveyed
+  shape) so the schematic is never mistaken for a site plan. `role="img"`
+  with a descriptive aria-label.
+- `BuildabilitySummary.jsx` — renders `<BuildabilityMassing>` below the
+  buildability tiles, on the full card only (self-hidden on the compact
+  embed and whenever the model has nothing honest to draw).
+
+### Plain-English recap
+- The parcel page now draws a small 3D-style picture of what can legally be built on the plot — the building's footprint and how many floors the rules allow — right next to the buildability numbers.
+- It's generated straight from the verified zoning figures, so the shape is exact; a plain caption notes the plot is drawn as a representative square because REDIP knows the land's area, not its surveyed outline.
+- It turns a column of numbers into something you can see at a glance.
+
+### PRs opened / merged
+- PR-NX130 - `feat(deal): E — buildability massing diagram` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 82 files / 721 tests green; production build clean (8.2s). Frontend-only — no migration, no backend change.
+- New: 4 `buildMassingModel` unit cases + 2 `BuildabilityMassing` render checks.
+
+### What's left to do
+- Workstream E1 — a layered cadastral map as a co-equal canvas (extends the existing `MapCanvas`).
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
