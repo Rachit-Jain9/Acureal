@@ -6144,3 +6144,74 @@ Google, MFA, legal gate) unchanged.
 - The api.js god-file was assessed and deliberately left as-is: long
   but cleanly sectioned and genuinely maintainable, so decomposing it
   is low-value churn.
+
+## 2026-05-23 - Smart empty states + role-aware onboarding
+
+### What was worked on
+
+Roadmap phase 8 from the systemic-audit roadmap — onboarding and smart
+empty states — shipped as three PRs.
+
+Smart empty states (PR #500). The shared EmptyState component was a bare
+12-line placeholder; it is now a proper primitive — a soft icon chip,
+sm/md size variants (sm for cards and widgets, md for full-width list
+pages), an optional secondary action, and a gentle reduced-motion-safe
+entrance. The six ad-hoc empty states across the dashboard widgets
+(pipeline, cities, recent activity, top deals by IRR, AI cost, audit
+trail) — each previously a different hand-rolled layout — now route
+through it, so every "no data yet" surface is consistent, explains what
+will populate it, and carries a one-click path to get started.
+
+Role-aware first-run onboarding (PR #501). A workspace with zero deals
+now opens to a calm Getting Started panel instead of a grid of empty
+widgets. It greets the user by first name and lays out role-aware first
+moves — editors and above are pointed at creating a deal, viewers get a
+read-first framing, admins/owners also get a workspace-setup step. Every
+step links to a real, shipped page. The panel is dismissible (the choice
+persists in localStorage) and disappears on its own once the first deal
+exists. Detection uses the dashboard's stats.total_deals, which counts
+archived deals too, so it only fires for a genuinely fresh workspace.
+
+Deal-workspace empty states (PR #502). The eight ad-hoc empty states
+across the deal tabs — Audit, Activity, Financial, Documents, DD
+checklist, Approvals, Risk and ranked Comps — were each a different
+inline layout; all now route through the shared EmptyState primitive.
+Copy preserved verbatim; the Financial tab keeps its "Build Financial
+Model" call to action.
+
+### Plain-English recap
+- Every "nothing here yet" box across the app — on the dashboard and
+  inside every deal tab — now looks the same: a calm icon, a clear
+  title, a sentence saying what fills it, and (where it helps) a button
+  to the next step.
+- A brand-new account opens with a short welcome that greets the user
+  and lays out the right first steps for their role, instead of a
+  screen of blank cards.
+
+### PRs opened / merged
+- PR #500 - feat(frontend): unify empty states on a shared EmptyState
+  primitive - merged, deployed.
+- PR #501 - feat(dashboard): add a role-aware first-run onboarding
+  panel - merged, deployed.
+- PR #502 - feat(deal): unify the deal-workspace empty states on the
+  EmptyState primitive - merged, deployed.
+
+### Validation
+- Frontend build clean on every PR. Frontend test suite green
+  throughout (781 -> 795 tests as 14 new tests landed: 8 for the
+  upgraded EmptyState, 6 for GettingStarted). The dashboard and deal
+  workspace are auth-gated; verified by build + the full test suite +
+  the separately-tested primitives. Browser verification of the
+  auth-gated surfaces was not possible this session — the Chrome
+  extension was not connected.
+
+### What's left to do
+- Retire the dark-mode CSS override hack — an incremental theme-token
+  migration; ~120 legacy Tailwind class uses across ~37 files still
+  feed the index.css override block. Best done as small per-area PRs
+  with eyes-on dark/light checks, the way the financials theme cleanup
+  was done.
+- Decompose the remaining React-page god-files (IntelligencePage,
+  MasterPlanAdminPage, DealsPage, MethodologyExplorer).
+- Deepen cross-module reactivity; finish the Provenance Spine + Risk
+  Radar moat; database / infra hygiene.
