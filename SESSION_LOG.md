@@ -5817,3 +5817,53 @@ financials files follow the identical proven mapping and are the next slice.
 - Ontology adoption Phases 1–4 — gated on the operator's deal-structure decision (Phase 2).
 - Operator follow-ups tracked in `TODO_OPERATOR.md`.
 
+
+## 2026-05-22 - Ontology Phase 2 — deal-structure reconciliation
+
+### What was worked on
+
+Workstream F, ontology adoption Phase 2 — executed on the operator's
+2026-05-22 decision to keep the live **8-key** deal-structure taxonomy as
+canonical (over the ontology's tidier 4-key one).
+
+`deal_structure` was the one taxonomy that genuinely diverged:
+`@redip/real-estate-ontology` v1.json carried 4 keys (`outright_purchase`,
+`jda_revenue_share`, `jda_area_share`, `development_management`) while the
+production system — the `deals.deal_structure` column, the
+`domain.js DEAL_STRUCTURES` validator enum, and the frontend deal form —
+all use 8 (`outright`, `jv`, `jda`, `revenue_share`, `area_share`,
+`profit_share`, `ground_lease`, `hybrid`). A review confirmed the
+ontology's `deal_structure` accessor is consumed by nothing in production
+(only the ontology's own test), so the section was corrected in place — no
+`v2.json` ceremony needed.
+
+PR-NX135:
+- `packages/real-estate-ontology/src/v1.json` — `deal_structure` rewritten
+  to the canonical 8 keys, each with a label and an India-context note;
+  `ontology_version` bumped 1.0.0 → 1.1.0; `last_reviewed` refreshed.
+- `packages/real-estate-ontology/tests/ontology.test.js` — the
+  deal-structure assertion updated to the 8 keys (+ a per-entry shape
+  check); the version assertion updated to 1.1.0.
+- `frontend/src/utils/__tests__/dealStructures.contract.test.js` — NEW.
+  Mirrors `assetClasses.contract.test.js`: locks the frontend
+  `DEAL_STRUCTURE_CONFIG` ↔ backend `domain.js DEAL_STRUCTURES` ↔ ontology
+  `deal_structure` key sets. The three sources can no longer silently
+  drift — a divergence fails CI with a precise diff.
+- `frontend/src/utils/dealStructures.js` — the stale "Future PR will
+  reconcile this" comment replaced with the contract-test reference.
+
+### Plain-English recap
+- REDIP's shared "dictionary" now agrees with the live product on the eight ways a deal can be structured — the one place the dictionary was out of date is fixed.
+- A new automatic check makes it impossible for those eight categories to drift apart again across the three places they're written down.
+
+### PRs opened / merged
+- PR-NX135 - `fix(ontology): reconcile the deal-structure taxonomy to the 8-key list` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 85 files / 738 tests green (+3 — the new contract test). Backend: 139 suites / 2272 tests green. Ontology package: 52 tests green. Production build clean. No migration.
+
+### What's left to do
+- Ontology adoption Phases 3–4 — route zoning / ownership / exit-strategy through the ontology + per-taxonomy contract tests (zoning Phase 3 also fixes the `ParcelTab` create-form missing 6 valid zones).
+- Theme-token unification — `HospitalityProformaSection` + the remaining financials files.
+- Operator follow-ups tracked in `TODO_OPERATOR.md`.
+
