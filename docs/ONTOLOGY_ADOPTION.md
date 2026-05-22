@@ -1,7 +1,8 @@
 # Ontology Adoption Plan — Workstream F
 
-_Status: PLAN — 2026-05-22. Operationalises Strategic Review §VI ("reconcile the
-taxonomies") into a sequenced, low-risk adoption path._
+_Status: Phase 1 confirmed; Phases 2–3 SHIPPED (2026-05-22 — PRs NX135, NX136);
+Phase 4 deferred. Operationalises Strategic Review §VI ("reconcile the
+taxonomies")._
 
 ## TL;DR
 
@@ -40,8 +41,8 @@ ontology package at runtime:
 | Taxonomy | Frontend source | Ontology source | Drift guard |
 |---|---|---|---|
 | Asset class | `frontend/src/utils/assetClasses.js` (10 keys) | `asset_class.values` (10 keys) | ✅ `assetClasses.contract.test.js` — locks FE ↔ BE ↔ ontology |
-| Deal structure | `frontend/src/utils/dealStructures.js` (**8 keys**) | `deal_structure.values` (**4 keys**) | ❌ none — **and the key sets genuinely disagree** |
-| Zoning | `ParcelTab.jsx` inline `<select>` (**5 options**) | `zoning.values` (**11 values**) | ❌ none — the create-property form is missing 6 valid zones |
+| Deal structure | `frontend/src/utils/dealStructures.js` (8 keys) | `deal_structure.values` (8 keys) | ✅ `dealStructures.contract.test.js` — locks FE ↔ BE ↔ ontology (Phase 2) |
+| Zoning | `frontend/src/utils/zoning.js` (5 keys) | `zoning.values` (5 keys) | ✅ `zoning.contract.test.js` — locks FE ↔ BE ↔ ontology (Phase 3) |
 | Ownership type | no frontend `<select>` found (free-text / backend-only) | `ownership_type.values` (6 keys) | n/a |
 | Exit strategy | not surfaced as a frontend constant | `exit_strategy.by_family` (family-conditional) | n/a |
 
@@ -71,15 +72,18 @@ uses. The ontology's 4-key list is a tidier analytical grouping.
 
 **This is a product decision and cannot be made unilaterally** — see below.
 
-### 2. Zoning — a small, fixable gap
+### 2. Zoning — the ontology was the inaccurate source (RESOLVED in Phase 3)
 
-`ParcelTab.jsx`'s create-property form offers 5 zoning options
-(`residential`, `commercial`, `mixed_use`, `industrial`, `agricultural`). The
-ontology — mirroring the Postgres `zoning_type` enum — defines 11
-(`institutional`, `public_semi_public`, `open_space`, `transportation`,
-`utilities`, `unknown` are the missing 6). A user creating a parcel today
-cannot pick those zones from that form. Low-risk to fix once the frontend can
-read the ontology.
+An earlier draft of this plan claimed the create-parcel form was "missing 6
+valid zones". Verification against `database/schema.sql` showed the opposite:
+the Postgres `zoning_type` enum has exactly **5** values (`residential`,
+`commercial`, `mixed_use`, `industrial`, `agricultural`); `domain.js`
+`ZONING_TYPES` and the form already matched it; and the **ontology** was the
+outlier — it carried 11 RMP master-plan zone codes that the `properties.zoning`
+/ `deals.zoning` enum does not accept (a write of `institutional` etc. would
+fail). Phase 3 corrected the ontology down to the real 5 and contract-tested
+all three sources. The detailed RMP 2031 zones live separately in
+`master_plan_zones`.
 
 ## The product decision required
 
@@ -110,7 +114,7 @@ Each phase is independently shippable and ordered by risk (lowest first).
   or a workspace dependency entry.
 - No behaviour change yet — this phase only proves the wiring.
 
-### Phase 2 — reconcile + adopt deal structures _(needs the decision above)_
+### Phase 2 — reconcile + adopt deal structures — ✅ SHIPPED (PR-NX135)
 
 - Per the decision: bump the ontology to `v2.json` with the 8-key
   `deal_structure`, add a `getDealStructuresV2()` loader (the package versioning
@@ -119,13 +123,16 @@ Each phase is independently shippable and ordered by risk (lowest first).
 - Add `dealStructures.contract.test.js` — the `assetClasses` pattern — locking
   FE ↔ `domain.js` ↔ ontology so the taxonomy can never silently drift again.
 
-### Phase 3 — route the remaining taxonomies through the ontology _(low risk)_
+### Phase 3 — route the remaining taxonomies through the ontology — ✅ SHIPPED (PR-NX136)
 
-- Zoning: replace the `ParcelTab` inline `<select>` with options derived from
-  `ontology.getZoningValues()` (this also fixes the missing-6-zones gap).
-- Ownership type, exit strategy: audit where they are surfaced; route through
-  the ontology where a frontend list exists.
-- Add a contract test per taxonomy — drift becomes impossible by construction.
+- Zoning: corrected the ontology's `zoning` list (11 → the real 5-value
+  `zoning_type` enum); the `ParcelTab` create-form `<select>` now renders from
+  a shared `frontend/src/utils/zoning.js` config; `zoning.contract.test.js`
+  locks FE ↔ BE ↔ ontology.
+- Ownership type, exit strategy: audited — neither is surfaced as a frontend
+  picker (ownership is a free-text column; exit strategy has no frontend
+  list), so there is nothing to route. The ontology keeps them as reference
+  taxonomies.
 
 ### Phase 4 — single-source the extraction field map _(deferred)_
 

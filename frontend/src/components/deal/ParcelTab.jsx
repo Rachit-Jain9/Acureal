@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { ExternalLink, MapPin, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
 import { formatArea, formatDate } from '../../utils/format';
+import { ZONING_CONFIG } from '../../utils/zoning';
 import { SQFT_PER_ACRE } from '../../config/india';
 import {
   useProperties,
@@ -281,11 +282,9 @@ function PropertyPickerModal({ dealId, onClose }) {
                   onChange={(e) => setCreateForm((f) => ({ ...f, zoning: e.target.value }))}
                   className="input text-sm"
                 >
-                  <option value="residential">Residential</option>
-                  <option value="commercial">Commercial</option>
-                  <option value="mixed_use">Mixed Use</option>
-                  <option value="industrial">Industrial</option>
-                  <option value="agricultural">Agricultural</option>
+                  {ZONING_CONFIG.map((zone) => (
+                    <option key={zone.value} value={zone.value}>{zone.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
