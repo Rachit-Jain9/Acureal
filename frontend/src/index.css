@@ -499,6 +499,10 @@ html[data-theme='dark'] {
   }
   .metric-value-fade { animation: value-cross-fade 180ms ease-out; }
 
+  /* Empty-state entrance — a gentle 4px rise + fade so a "no data yet"
+     panel resolves softly instead of popping in. Used by <EmptyState/>. */
+  .redip-empty-in { animation: fadeInUp 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
   /* Skeleton shimmer — gentle 1.6s left-to-right wash across a muted base.
      Used by the design-system <Skeleton/> primitives. The base color carries
      the resting tint; the gradient layer drifts on top with low opacity so
@@ -543,6 +547,7 @@ html[data-theme='dark'] {
     .redip-hero-drift, .redip-hero-skyline, .redip-hero-orbit,
     .redip-hero-pulse, .redip-ticker { animation: none; }
     .metric-value-fade { animation: none; }
+    .redip-empty-in { animation: none; }
     .redip-skeleton::after { animation: none; }
   }
 

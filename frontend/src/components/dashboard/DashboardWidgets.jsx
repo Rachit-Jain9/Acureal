@@ -5,11 +5,12 @@ import {
 } from 'recharts';
 import {
   Briefcase, TrendingUp, ArrowRight, Clock, Inbox, Hourglass, ShieldCheck,
-  Zap, AlertTriangle,
+  Zap, AlertTriangle, MapPin, Activity,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import Badge from '../common/Badge';
-import { Card, SectionHeader, MetricTile } from '../../design-system';
+import EmptyState from '../common/EmptyState';
+import { Card, SectionHeader, MetricTile, Button } from '../../design-system';
 import { adminAPI } from '../../services/api';
 import {
   formatCrores, formatPct, formatRelativeTime, STAGE_CONFIG,
@@ -162,13 +163,17 @@ export function PipelineChartWidget({ stage_distribution = [], chartPalette, too
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <div className="py-16 text-center">
-          <Briefcase size={28} className="mx-auto mb-2 text-content-muted opacity-50" />
-          <p className="text-sm text-content-muted">No pipeline data yet</p>
-          <Link to="/dashboard/deals" className="text-xs mt-1 inline-block hover:underline text-accent">
-            Create your first deal
-          </Link>
-        </div>
+        <EmptyState
+          size="md"
+          icon={Briefcase}
+          title="No deals in your pipeline"
+          description="Create your first deal to see how the pipeline splits across sourcing, diligence, and IC."
+          action={(
+            <Button as={Link} to="/dashboard/deals" variant="secondary" size="sm" rightIcon={<ArrowRight size={13} />}>
+              Create a deal
+            </Button>
+          )}
+        />
       )}
     </SectionCard>
   );
@@ -229,9 +234,17 @@ export function CitiesChartWidget({ cities_distribution = [], chartPalette, tool
           </div>
         </div>
       ) : (
-        <div className="py-16 text-center">
-          <p className="text-sm text-content-muted">Cities will appear once deals have location data</p>
-        </div>
+        <EmptyState
+          size="md"
+          icon={MapPin}
+          title="No location data yet"
+          description="City distribution appears once your deals have a location set on the Parcel tab."
+          action={(
+            <Button as={Link} to="/dashboard/deals" variant="secondary" size="sm" rightIcon={<ArrowRight size={13} />}>
+              Go to deals
+            </Button>
+          )}
+        />
       )}
     </SectionCard>
   );
@@ -268,10 +281,12 @@ export function RecentActivitiesWidget({ recent_activities = [] }) {
           ))}
         </ul>
       ) : (
-        <div className="py-10 text-center">
-          <p className="text-sm text-content-muted">No activities yet</p>
-          <p className="text-xs mt-1 text-content-muted opacity-70">Activities logged on deals will appear here</p>
-        </div>
+        <EmptyState
+          size="sm"
+          icon={Activity}
+          title="No activity yet"
+          description="Stage changes, document uploads, and notes logged on your deals show up here."
+        />
       )}
     </SectionCard>
   );
@@ -323,10 +338,17 @@ export function TopDealsIrrWidget({ top_deals_by_irr = [] }) {
           </table>
         </div>
       ) : (
-        <div className="py-10 text-center">
-          <TrendingUp size={28} className="mx-auto mb-2 text-content-muted opacity-50" />
-          <p className="text-sm text-content-muted">Run a financial model on a deal to see IRR rankings</p>
-        </div>
+        <EmptyState
+          size="sm"
+          icon={TrendingUp}
+          title="No modelled deals yet"
+          description="Run the financial model on a deal to rank your pipeline by projected IRR."
+          action={(
+            <Button as={Link} to="/dashboard/deals" variant="secondary" size="sm" rightIcon={<ArrowRight size={13} />}>
+              Go to deals
+            </Button>
+          )}
+        />
       )}
     </SectionCard>
   );
@@ -360,7 +382,12 @@ export function AiCostSummaryWidget() {
         // get role="status" + aria-busy so screen readers announce them.
         <div className="h-24 bg-bg-secondary rounded animate-pulse" role="status" aria-busy="true" aria-label="Loading AI cost summary" />
       ) : !summary ? (
-        <p className="text-sm text-content-muted">No AI usage data yet.</p>
+        <EmptyState
+          size="sm"
+          icon={Zap}
+          title="No AI usage today"
+          description="Model calls and their cost appear here as the team extracts documents and drafts memos."
+        />
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-3">
@@ -446,11 +473,12 @@ export function AuditTrailTailWidget() {
           ))}
         </div>
       ) : events.length === 0 ? (
-        <div className="py-6 text-center">
-          <ShieldCheck size={24} className="mx-auto text-content-muted mb-2 opacity-50" />
-          <p className="text-sm text-content-muted">No audit events yet.</p>
-          <p className="text-xs text-content-muted mt-1">Run the financial model on a deal to start the trail.</p>
-        </div>
+        <EmptyState
+          size="sm"
+          icon={ShieldCheck}
+          title="No audit events yet"
+          description="The tamper-evident, HMAC-signed trail begins the first time you run the financial model."
+        />
       ) : (
         <ul className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
           {events.map((ev) => (
