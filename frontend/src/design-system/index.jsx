@@ -1,7 +1,7 @@
 // REDIP design-system primitives — editorial, IC-grade.
 // All colors route through CSS variables (see `frontend/src/index.css`), so
 // both themes work with a single `data-theme` flip.
-// Import as: import { Card, SectionHeader, MetricTile, StatTile, ErrorState, Skeleton, SkeletonKpi, ... } from '@/design-system'
+// Import as: import { Button, Modal, Tabs, Field, Card, SectionHeader, MetricTile, Skeleton, ... } from '../design-system'
 // Pill/status labels: use `components/common/Badge` (CSS-class-based, themed).
 
 // Skeleton loading primitives — re-exported from a dedicated file so the
@@ -21,6 +21,16 @@ export { default as VirtualizedList } from './VirtualizedList';
 
 // Collapsible section card — editorial chrome + persistent expand/collapse.
 export { CollapsibleCard } from './CollapsibleCard';
+
+// Checkbox — accessible checkbox control.
+export { default as Checkbox } from './Checkbox';
+
+// Interactive primitives — see each file for the full prop contract.
+export { default as Button } from './Button';
+export { Modal } from './Modal';
+export { Tabs } from './Tabs';
+export { Field, Input, Select, Textarea } from './Field';
+export { Tooltip } from './Tooltip';
 
 import clsx from 'clsx';
 import { AlertTriangle, Info } from 'lucide-react';
