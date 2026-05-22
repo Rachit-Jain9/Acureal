@@ -6078,3 +6078,69 @@ tokens. Illustrative sample figures only, no fabricated facts.
   integration, provenance + risk moat, onboarding, database/infra hygiene.
 - Next up: Phase 2 - expand the design system (Button, Modal, Tabs,
   Field, Tooltip primitives).
+
+## 2026-05-23 - Design system, deal-workspace polish, login page
+
+### What was worked on
+
+Three execution phases on top of the 2026-05-22 audit roadmap, each
+shipped as its own reviewed, CI-verified PR and merged to master.
+
+Design system (PR #496). Five accessible primitives added to
+frontend/src/design-system/: Button (variants / sizes / loading / icon
+slots / `as` polymorphism), Modal (portalled dialog - focus trap,
+Escape + overlay close, scroll-lock, animated, reduced-motion aware),
+Tabs (roving-tabindex keyboard nav), Field + Input/Select/Textarea
+(label + helper/error layout that auto-wires accessibility), Tooltip
+(CSS-only hover/focus). Checkbox added to the barrel. The .btn / .input
+CSS classes stay for back-compat. 35 new tests.
+
+Deal-workspace polish (PR #497). DealDetailPage rebuilt on the new
+primitives: the three export buttons collapse into one ExportMenu
+dropdown (a new self-contained component that owns the export calls,
+busy state and toasts); the hand-rolled tab bar becomes <Tabs>; the
+Edit and Delete pop-ups route through <Modal>; the Edit form uses
+<Field>/<Input>/<Select>/<Textarea>; header / Share / Edit / Delete and
+the stage-transition buttons use <Button>. The dead "Notifications"
+bell was removed from the app Header (no notifications system exists).
+
+Login & sign-up page (PR #498). LoginPage brought onto the design
+system: the old copper #c2410c accent + raw stone palette replaced with
+semantic tokens (blue accent + amber premium dot, matching the landing
+page); the form uses Field / Input / Checkbox / Button; the password
+field gets a show/hide toggle via a new `trailing` slot on the Input
+primitive. PublicFooter tokenised too. All auth logic (login, register,
+Google, MFA, legal gate) unchanged.
+
+### Plain-English recap
+- REDIP now has a proper shared kit of UI building blocks - buttons,
+  pop-ups, tabs, form fields - so screens look and behave consistently.
+- The deal page is cleaner: one tidy Export menu instead of six header
+  buttons, smoother pop-ups, and a dead bell icon removed.
+- The sign-in / sign-up page now matches the landing page's look - same
+  blue accent, same polish - instead of an off-brand orange.
+
+### PRs opened / merged
+- PR #496 - feat(design-system): add Button, Modal, Tabs, Field and
+  Tooltip primitives - merged, deployed.
+- PR #497 - feat(deal): polish the deal workspace with the design-system
+  primitives - merged, deployed.
+- PR #498 - feat(auth): bring the login & sign-up page onto the design
+  system - merged, deployed.
+
+### Validation
+- Full frontend suite green throughout (741 -> 781 tests as new tests
+  landed). Production build clean on every PR. Landing and login pages
+  browser-verified (desktop + mobile, no console errors); the deal
+  workspace is auth-gated, verified by build + tests + the separately-
+  tested primitives.
+
+### What's left to do
+- Roadmap phases not yet started: retire the dark-mode CSS override
+  hack; decompose the remaining React-page god-files (IntelligencePage,
+  MasterPlanAdminPage, DealsPage, MethodologyExplorer); deepen
+  cross-module integration; the Provenance Spine + Risk Radar moat;
+  role-aware onboarding; database / infra hygiene.
+- The api.js god-file was assessed and deliberately left as-is: long
+  but cleanly sectioned and genuinely maintainable, so decomposing it
+  is low-value churn.
