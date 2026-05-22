@@ -5507,3 +5507,46 @@ baseline so scheduled and manual runs stay comparable on the trend.
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-22 - Workstream D1 — the live stage playbook
+
+### What was worked on
+
+Workstream D1 of the product plan — the adaptive face. A review found the
+deal workspace was already ~60% adaptive (the Deal Pulse ribbon, the Risk
+Radar strip, and a per-stage hint list all key off `deal.stage`). The
+genuine gap: the stage playbook was a static, hardcoded list of advice
+strings (`STAGE_NEXT_STEPS`) that never reflected what was actually done on
+the deal. This closes that gap surgically.
+
+PR-NX129:
+- `frontend/src/utils/dealPlaybook.js` — a pure, deterministic module.
+  `STAGE_PLAYBOOK` defines the priority steps for each of the 11 deal
+  stages; `buildPlaybook(deal)` evaluates every step done/pending purely
+  from the deal's own state — plain deal fields plus the `readiness_summary`
+  rollup that already powers the Pulse ribbon. No AI — the playbook is a
+  stage-aware presentation over already-synthesised data.
+- `OverviewTab.jsx` — the static `STAGE_NEXT_STEPS` is removed; the "Stage
+  Playbook" card now renders the live checklist: a progress bar, a
+  done/pending icon per step, and a contextual detail ("60% complete",
+  "2 unresolved"). Backend-provided custom next-step groups still render
+  beneath, unchanged.
+
+### Plain-English recap
+- The deal page used to show the same generic to-do list for every deal at a given stage. Now it's a live checklist — REDIP checks what the deal actually has (a linked parcel, uploaded documents, a financial model, resolved risks) and ticks each step off, with a progress bar.
+- At a glance you see exactly what's done and what's left for this deal's stage — the workspace genuinely guides the work instead of listing generic advice.
+
+### PRs opened / merged
+- PR-NX129 - `feat(deal): D1 — the live stage playbook` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 80 files / 715 tests green; run exits 0; production build clean. Frontend-only — no migration, no backend change.
+- New: 8 `buildPlaybook` unit cases + an `OverviewTab` render check.
+- The deal workspace is auth-gated — covered by the component tests, not browser-verified.
+
+### What's left to do
+- Workstream E — the spatial canvas: E1 a layered cadastral map (extends the existing `MapCanvas`), E2 3D buildability massing (from-scratch 3D — a heavyweight that warrants its own dedicated build).
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
