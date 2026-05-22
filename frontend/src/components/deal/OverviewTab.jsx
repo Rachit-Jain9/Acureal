@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Clock,
   CheckCircle2,
+  Circle,
   TrendingUp,
   IndianRupee,
   Layers,
@@ -45,73 +46,7 @@ import {
   ACTIVITY_PRIORITY_CONFIG,
   DEAL_TYPE_LABELS,
 } from '../../utils/format';
-
-const STAGE_NEXT_STEPS = {
-  sourced: [
-    'Conduct initial site screening and desktop review',
-    'Verify survey numbers with revenue records',
-    'Check basic ownership records (RTC / Pahani)',
-    'Confirm land classification (agricultural vs. conversion)',
-  ],
-  screening: [
-    'Schedule site visit with core team',
-    'Request title documents from seller / broker',
-    'Verify zoning and permissible land use',
-    'Obtain preliminary FSI / buildability estimate',
-  ],
-  site_visit: [
-    'Prepare site visit notes and photograph evidence',
-    'Assess road access, utilities, and ground conditions',
-    'Obtain seller\'s asking price and payment terms',
-    'Draft preliminary LOI for internal review',
-  ],
-  loi: [
-    'Execute signed LOI with exclusivity period',
-    'Initiate title search (EC for 30 years)',
-    'Commission survey and boundary demarcation',
-    'Identify land conversion / khata requirements',
-  ],
-  due_diligence: [
-    'Commission title search — EC for 30 years minimum',
-    'Verify zoning / conversion order with BDA / BBMP',
-    'Obtain legal opinion on encumbrances and liabilities',
-    'Confirm seller entity validity (company / individual KYC)',
-  ],
-  underwriting: [
-    'Build or update financial model with revised assumptions',
-    'Run IRR and NPV sensitivity analyses',
-    'Obtain construction cost estimate from quantity surveyor',
-    'Prepare Investor-Grade deck first draft',
-  ],
-  ic_review: [
-    'Circulate the Investor-Grade memo for internal review',
-    'Address review queries and revise projections',
-    'Obtain investor approval or conditional approval',
-    'Define final negotiation mandate and walk-away terms',
-  ],
-  negotiation: [
-    'Finalise purchase price and payment schedule',
-    'Draft and redline sale agreement / development agreement',
-    'Coordinate with legal counsel on SPA / DA structure',
-    'Agree on registration timelines and stamp duty',
-  ],
-  active: [
-    'Execute sale deed / development agreement',
-    'File RERA registration (if applicable)',
-    'Commence project planning and architect brief',
-    'Track payment milestones per agreement',
-  ],
-  closed: [
-    'Archive all closing documents',
-    'Update portfolio tracker and financials',
-    'Schedule post-close review for lessons learned',
-  ],
-  dead: [
-    'Document reason for deal termination',
-    'Archive all due diligence materials',
-    'Consider flagging for re-evaluation in 6–12 months',
-  ],
-};
+import { buildPlaybook } from '../../utils/dealPlaybook';
 
 /**
  * Pilot consumer of `useDealContext` (TODO_ARCHITECTURE Phase A pilot).
@@ -138,12 +73,12 @@ export default function OverviewTab() {
   const stageHistory = deal.stage_history || [];
   const recentActivities = deal.recent_activities || [];
   const readiness = deal.readiness_summary || null;
+  // Backend-provided custom next-step groups, if any — preserved as-is.
   const nextStepGroups =
-    Array.isArray(deal.next_steps) && deal.next_steps.length > 0
-      ? deal.next_steps
-      : (STAGE_NEXT_STEPS[deal.stage] || []).length > 0
-        ? [{ group: 'Stage Playbook', items: STAGE_NEXT_STEPS[deal.stage] }]
-        : [];
+    Array.isArray(deal.next_steps) && deal.next_steps.length > 0 ? deal.next_steps : [];
+  // The live, stage-aware playbook — every step done/pending from the deal's
+  // own state. The deterministic core of the adaptive deal workspace (D1).
+  const playbook = buildPlaybook(deal);
   const keyRisks = Array.isArray(deal.key_risks) ? deal.key_risks : [];
 
   const propertyForBuildability = deal?.property_id
@@ -419,21 +354,71 @@ export default function OverviewTab() {
         </CollapsibleCard>
       )}
 
-      {/* Next Steps */}
-      {nextStepGroups.length > 0 && (
+      {/* Stage Playbook — Workstream D1, the adaptive face. A live,
+          stage-aware checklist: every step's done/pending status is computed
+          deterministically from the deal's own state, so the workspace
+          genuinely guides the operator through the current stage instead of
+          listing generic advice. Backend-provided custom next-step groups,
+          if any, render beneath. */}
+      {(playbook || nextStepGroups.length > 0) && (
         <CollapsibleCard
           id="overview-next-steps"
           icon={ListChecks}
-          title="Next Steps"
-          sub="Stage-aware playbook. Refreshed when the workspace recomputes the deal snapshot."
+          title="Stage Playbook"
+          sub="What matters now for this deal's stage — live status from its own data."
           defaultExpanded
           meta={
-            <span className="text-xs text-content-muted tabular-nums">
-              {nextStepGroups.reduce((s, g) => s + (g.items?.length || 0), 0)} actions
-            </span>
+            playbook ? (
+              <span className="text-xs text-content-muted tabular-nums">
+                {playbook.done} of {playbook.total} done
+              </span>
+            ) : null
           }
         >
           <div className="space-y-4 pt-3">
+            {playbook && (
+              <div className="space-y-2.5">
+                {!playbook.terminal && (
+                  <div
+                    className="h-1.5 rounded-full bg-bg-secondary overflow-hidden"
+                    role="progressbar"
+                    aria-valuenow={playbook.pct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Stage playbook progress"
+                  >
+                    <div
+                      className="h-full bg-accent rounded-full transition-[width] duration-500 ease-out"
+                      style={{ width: `${playbook.pct}%` }}
+                    />
+                  </div>
+                )}
+                <ul className="space-y-1.5">
+                  {playbook.steps.map((step) => (
+                    <li key={step.id} className="flex items-start gap-2.5 text-sm">
+                      {step.status === 'done' ? (
+                        <CheckCircle2 size={16} className="text-data-positive mt-px shrink-0" />
+                      ) : (
+                        <Circle size={16} className="text-content-muted mt-px shrink-0" />
+                      )}
+                      <span
+                        className={clsx(
+                          'flex-1 leading-snug',
+                          step.status === 'done'
+                            ? 'text-content-muted'
+                            : 'text-content-primary',
+                        )}
+                      >
+                        {step.label}
+                        {step.detail && (
+                          <span className="text-xs text-content-muted ml-1.5">· {step.detail}</span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {nextStepGroups.map((group) => (
               <div key={group.group}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary mb-2">

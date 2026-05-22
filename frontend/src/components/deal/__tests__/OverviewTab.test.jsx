@@ -83,4 +83,14 @@ describe('OverviewTab', () => {
       '/dashboard/financials/deal-123',
     );
   });
+
+  it('renders the live Stage Playbook for the deal stage', () => {
+    renderWithProviders(<OverviewTab />);
+
+    // Workstream D1 — the deal is in `screening`, so the stage playbook
+    // shows the screening checklist; a bare mock deal leaves it pending.
+    expect(screen.getByText('Stage Playbook')).toBeInTheDocument();
+    expect(screen.getByText('Link the parcel')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: /playbook progress/i })).toBeInTheDocument();
+  });
 });
