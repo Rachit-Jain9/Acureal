@@ -5668,3 +5668,48 @@ PR-NX131:
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-22 - Workstream F2 — repair the dark-mode-hack residue on the portfolio map
+
+### What was worked on
+
+Workstream F (foundations), the concrete slice of F2 (theme-token
+unification): the portfolio map (`MapCanvas`) carried four malformed
+Tailwind classes left behind by an earlier dark-mode find-replace. They
+were not merely untidy — they were silently broken:
+
+- `bg-white/70/80` on the map loading overlay — a double opacity modifier
+  matches no Tailwind rule, so the overlay rendered with **no backdrop at
+  all**: the spinner and "Loading map intelligence…" text floated over a
+  fully-visible, still-interactive map.
+- `ring-black/5/95` on three floating panels — likewise malformed, so the
+  subtle panel ring never drew.
+
+PR-NX132:
+- `MapCanvas.jsx` — the loading overlay is now `bg-bg-primary/70
+  backdrop-blur-sm`: a real theme-token scrim that dims and blurs the map
+  behind the spinner and adapts to light/dark like the rest of the app.
+  The three floating panels move to `bg-bg-elevated/95` with a valid
+  `ring-black/5 dark:ring-white/10` — the dark-mode-aware ring the code
+  always intended.
+
+A repo-wide scan confirmed these four were the only malformed-class
+residue of the dark-mode hack; the broader theme-token unification
+(hardcoded-hex sweep) remains a deliberate, separate effort.
+
+### Plain-English recap
+- The map's "loading…" screen was broken — the dimming layer behind the spinner never showed, so the map stayed fully visible and clickable while it loaded. It now dims and softly blurs correctly.
+- A few floating info panels on the map were missing their thin outline; that is fixed too.
+- Both light and dark mode now render the map's overlays correctly.
+
+### PRs opened / merged
+- PR-NX132 - `fix(map): repair the dark-mode-hack residue on the portfolio map` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 84 files / 735 tests green; production build clean (6.8s). Frontend-only — no migration, no backend change. A repo-wide scan confirms no malformed Tailwind opacity classes remain.
+
+### What's left to do
+- Workstream F — F1 (the migration schema-baseline squash) needs the operator: it is a database operation only Rachit can apply. The broader theme-token unification (hardcoded-hex sweep) and ontology adoption remain.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+
