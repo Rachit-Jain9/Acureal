@@ -492,7 +492,7 @@ export default function DealsPage() {
           icon={Briefcase}
           action={
             !hasFilters && (
-              <button onClick={handleOpenModal} className="btn btn-primary mt-2">
+              <button onClick={handleOpenModal} className="btn btn-primary">
                 <Plus size={16} className="mr-1 inline" /> New Deal
               </button>
             )
