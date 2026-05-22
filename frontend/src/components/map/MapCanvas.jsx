@@ -318,7 +318,7 @@ export default function MapCanvas({
   return (
     <div className="relative h-[calc(100vh-180px)] min-h-[720px]">
       {mapIsLoading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70/80">
+        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-bg-primary/70 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3">
             <LoadingSpinner />
             <span className="text-sm text-content-secondary">Loading map intelligence...</span>
@@ -472,7 +472,7 @@ export default function MapCanvas({
         />
       </MapContainer>
 
-      <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5/95 dark:ring-white/10">
+      <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-bg-elevated/95 p-4 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
             <Layers3 size={18} />
@@ -514,7 +514,7 @@ export default function MapCanvas({
         </span>
       </div>
 
-      <div className="absolute bottom-16 right-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5/95 dark:ring-white/10">
+      <div className="absolute bottom-16 right-4 z-[1000] max-w-sm rounded-2xl bg-bg-elevated/95 p-4 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
         <p className="text-xs font-medium uppercase tracking-wide text-content-muted">Heat Layer Legend</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {Object.entries(STAGE_HEAT_META)
@@ -532,7 +532,7 @@ export default function MapCanvas({
       </div>
 
       {selectedProperty && showNearbyComps && (
-        <div className="absolute right-4 top-4 z-[1000] max-w-sm rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-black/5/95 dark:ring-white/10">
+        <div className="absolute right-4 top-4 z-[1000] max-w-sm rounded-2xl bg-bg-elevated/95 p-4 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
           <p className="text-xs font-medium uppercase tracking-wide text-content-muted">Nearby Comp Snapshot</p>
           {nearbyCompsLoading ? (
             <p className="mt-2 text-sm text-content-secondary">Loading nearby comps...</p>
