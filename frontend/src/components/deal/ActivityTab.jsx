@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import EmptyState from '../common/EmptyState';
 import {
   Phone,
   MapPin,
@@ -256,12 +257,13 @@ export default function ActivityTab() {
 
       {/* Activity List */}
       {sorted.length === 0 ? (
-        <div className="card-editorial text-center py-16">
-          <StickyNote size={32} className="text-content-muted mx-auto mb-3" />
-          <p className="text-sm font-medium text-content-secondary mb-1">No activities logged yet</p>
-          <p className="text-xs text-content-muted">
-            Track calls, site visits, meetings, and notes for this deal.
-          </p>
+        <div className="card-editorial">
+          <EmptyState
+            size="md"
+            icon={StickyNote}
+            title="No activities logged yet"
+            description="Track calls, site visits, meetings, and notes for this deal."
+          />
         </div>
       ) : (
         <div className="card-editorial p-0 overflow-hidden">

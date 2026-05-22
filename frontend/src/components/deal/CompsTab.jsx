@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import EmptyState from '../common/EmptyState';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp,
@@ -197,9 +198,12 @@ function RankedCompsTable({
 }) {
   if (!ranked || ranked.length === 0) {
     return (
-      <div className="text-center py-8 text-content-muted text-sm">
-        No comparable transactions ranked within the radius.
-      </div>
+      <EmptyState
+        size="sm"
+        icon={Crosshair}
+        title="No comparables in range"
+        description="No verified transactions ranked within the search radius for this site."
+      />
     );
   }
 

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import EmptyState from '../common/EmptyState';
 import {
   ShieldCheck,
   Clock,
@@ -774,14 +775,13 @@ export default function AuditTab() {
 
   if (!events.length) {
     return (
-      <Card className="p-8 text-center">
-        <ShieldCheck size={28} className="mx-auto text-content-muted mb-3" />
-        <p className="text-sm font-medium text-content-primary">No audit events yet</p>
-        <p className="text-xs text-content-muted mt-1 max-w-md mx-auto leading-relaxed">
-          Every material change to this deal lands here — financial computations,
-          stage transitions, archive / restore, reassignments. Run the financial model
-          or move the deal across stages to start the trail.
-        </p>
+      <Card className="p-6">
+        <EmptyState
+          size="md"
+          icon={ShieldCheck}
+          title="No audit events yet"
+          description="Every material change to this deal lands here — financial computations, stage transitions, archive / restore, reassignments. Run the financial model or move the deal across stages to start the trail."
+        />
       </Card>
     );
   }

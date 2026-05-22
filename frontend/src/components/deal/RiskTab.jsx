@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import EmptyState from '../common/EmptyState';
 import { ShieldAlert, Plus, Trash2, AlertCircle, Loader2, Edit2, X, Check, Sparkles, Brain, Copy, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -549,12 +550,13 @@ export default function RiskTab() {
 
       {/* Flags List */}
       {flags.length === 0 ? (
-        <div className="card-editorial text-center py-16">
-          <ShieldAlert size={32} className="text-content-muted mx-auto mb-3" />
-          <p className="text-sm font-medium text-content-secondary mb-1">No risk flags registered</p>
-          <p className="text-xs text-content-muted">
-            Flag title risks, zoning issues, financial exposures, and mitigation plans.
-          </p>
+        <div className="card-editorial">
+          <EmptyState
+            size="md"
+            icon={ShieldAlert}
+            title="No risk flags registered"
+            description="Flag title risks, zoning issues, financial exposures, and mitigation plans."
+          />
         </div>
       ) : (
         <div className="space-y-6">
