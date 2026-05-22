@@ -1,8 +1,7 @@
 # Ontology Adoption Plan — Workstream F
 
-_Status: Phase 1 confirmed; Phases 2–3 SHIPPED (2026-05-22 — PRs NX135, NX136);
-Phase 4 deferred. Operationalises Strategic Review §VI ("reconcile the
-taxonomies")._
+_Status: COMPLETE — Phases 1–4 done (2026-05-22 — PRs NX135, NX136, NX138).
+Operationalises Strategic Review §VI ("reconcile the taxonomies")._
 
 ## TL;DR
 
@@ -134,11 +133,17 @@ Each phase is independently shippable and ordered by risk (lowest first).
   list), so there is nothing to route. The ontology keeps them as reference
   taxonomies.
 
-### Phase 4 — single-source the extraction field map _(deferred)_
+### Phase 4 — single-source the extraction field map — ✅ VERIFIED DONE (PR-NX138)
 
-- The frontend `ProvenanceChip` / auto-fill UI references extraction-field
-  metadata. Once Phase 1 lands, these can read `ontology.getExtractionField()`
-  directly instead of any local mirror.
+- Audited: the auto-fill UI (`AutoFillFromDocumentsModal`) already reads the
+  extraction field map straight from the ontology —
+  `const FIELD_SPECS = ontologyV1.extraction_field_map.fields`. The backend
+  reads the same `v1.json`. There is exactly one source, no mirror, and no
+  possible drift, so no code change was needed.
+- The other frontend `FIELD_LABELS` constants (`AuditTab`,
+  `CompsQueueDetailPage`, `MasterPlanAdminPage`) label unrelated field sets —
+  deal-audit fields, comp-queue fields, master-plan source-history fields —
+  not the ontology's extraction map. Nothing to consolidate.
 
 ## Risks & sequencing rationale
 

@@ -294,7 +294,7 @@ export default function KPIStatCard({
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
         open
           ? 'bg-amber-50 text-amber-800'
-          : 'text-stone-400 hover:bg-amber-50 hover:text-amber-800',
+          : 'text-content-muted hover:bg-amber-50 hover:text-amber-800',
       )}
       title="See formula, drivers, and source"
       aria-label="Show KPI provenance"

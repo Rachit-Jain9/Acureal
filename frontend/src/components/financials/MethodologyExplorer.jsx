@@ -180,7 +180,7 @@ export default function MethodologyExplorer({
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={close}
           />
-          <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
+          <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-bg-elevated shadow-2xl">
             <header className="relative overflow-hidden border-b border-hairline-strong bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 px-6 py-5 text-white">
               <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-400/30 to-indigo-400/10 blur-2xl" />
               <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl" />
@@ -263,7 +263,7 @@ function SectionTitle({ icon: Icon, gradient, title, subtitle }) {
 
 function Formula({ label, expr, note }) {
   return (
-    <div className="rounded-lg border border-hairline-strong bg-white p-3">
+    <div className="rounded-lg border border-hairline-strong bg-bg-elevated p-3">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-content-secondary">{label}</div>
       <code className="mt-1 block rounded bg-bg-secondary px-2 py-1.5 text-[13px] font-mono text-content-primary">{expr}</code>
       {note && <p className="mt-1.5 text-xs text-content-secondary">{note}</p>}
@@ -453,7 +453,7 @@ function CashflowSection() {
         note="Exit NOI is forward-looking by one period — buyer underwrites the next year's NOI, not the trailing one."
       />
 
-      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Quarterly Cash Flow Waterfall</div>
         <div className="space-y-1.5 text-xs">
           <div className="flex justify-between rounded bg-emerald-50 px-2 py-1"><span>+ Revenue / NOI</span><span className="font-mono">inflows</span></div>
@@ -512,7 +512,7 @@ function CostsSection() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
         <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-content-secondary">Capital Stack Seniority</div>
         <div className="flex items-center gap-1.5 text-xs">
           <div className="flex-1 rounded-l-md bg-bg-primary px-3 py-2 font-semibold text-white">Senior Debt (1st lien)</div>
@@ -613,7 +613,7 @@ function DebtSection() {
         note="At stabilization (typically year 2–3), the construction loan is refinanced with a lower-cost LRD. Proceeds in excess of construction debt distribute to equity — cash-on-cash lift for LPs."
       />
 
-      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Debt Cost Hierarchy (typical, India, 2026)</div>
         <div className="space-y-1.5">
           {[
@@ -661,7 +661,7 @@ function ClassDeepDive({ data, assetClass }) {
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Unit Economics Chain</div>
         <div className="space-y-2">
           {data.unitEconomics.map((u, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-lg border border-hairline-strong bg-white p-2.5">
+            <div key={i} className="flex items-center gap-3 rounded-lg border border-hairline-strong bg-bg-elevated p-2.5">
               <ChevronRight size={14} className="shrink-0 text-fuchsia-500" />
               <div className="min-w-[130px] text-xs font-semibold text-content-secondary">{u.label}</div>
               <code className="flex-1 rounded bg-bg-secondary px-2 py-1 text-[12px] font-mono text-content-primary">{u.formula}</code>
@@ -828,7 +828,7 @@ function DCFFlowSection({ assetClass }) {
                 className={`flex-1 flex flex-col items-center gap-1 rounded-xl border p-2.5 transition ${
                   isActive
                     ? `bg-gradient-to-br ${s.surface} ${s.border} shadow-md scale-[1.02]`
-                    : 'bg-white border-hairline-strong hover:border-hairline-strong hover:shadow-sm'
+                    : 'bg-bg-elevated border-hairline-strong hover:border-hairline-strong hover:shadow-sm'
                 }`}
               >
                 <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${s.gradient} text-white shadow`}>
@@ -863,7 +863,7 @@ function DCFFlowSection({ assetClass }) {
                 type="button"
                 onClick={() => setExpanded(isOpen ? null : s.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
-                  isOpen ? `bg-gradient-to-r ${s.surface}` : 'bg-white hover:bg-bg-secondary'
+                  isOpen ? `bg-gradient-to-r ${s.surface}` : 'bg-bg-elevated hover:bg-bg-secondary'
                 }`}
               >
                 <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow`}>
@@ -891,14 +891,14 @@ function DCFFlowSection({ assetClass }) {
                   <div className="space-y-2">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary">Formulas</div>
                     {s.formulas.map((row, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg border border-hairline-strong bg-white p-2">
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-hairline-strong bg-bg-elevated p-2">
                         <span className={`text-[11px] font-semibold min-w-[90px] ${s.text}`}>{row.k}</span>
                         <code className="flex-1 rounded bg-bg-secondary px-2 py-1 text-[12px] font-mono text-content-primary">{row.f}</code>
                       </div>
                     ))}
                   </div>
 
-                  <div className="rounded-lg border border-hairline-strong bg-white p-3">
+                  <div className="rounded-lg border border-hairline-strong bg-bg-elevated p-3">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary mb-1.5">Driving Inputs</div>
                     <div className="flex flex-wrap gap-1.5">
                       {s.inputs.map((inp, i) => (
@@ -1028,7 +1028,7 @@ function TerminalValueSection() {
               className={`relative rounded-xl border p-3 text-left transition ${
                 isActive
                   ? `bg-gradient-to-br ${m.surface} ${m.border} shadow-md`
-                  : 'bg-white border-hairline-strong hover:border-hairline-strong hover:shadow-sm'
+                  : 'bg-bg-elevated border-hairline-strong hover:border-hairline-strong hover:shadow-sm'
               }`}
             >
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${m.gradient} text-white shadow-sm`}>
@@ -1053,7 +1053,7 @@ function TerminalValueSection() {
           </div>
         </div>
 
-        <div className="mt-4 rounded-lg bg-white border border-white shadow-sm p-3">
+        <div className="mt-4 rounded-lg bg-bg-elevated border border-hairline shadow-sm p-3">
           <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary mb-1">Formula</div>
           <code className="block rounded bg-bg-secondary px-3 py-2 text-sm font-mono text-content-primary">{active.formula}</code>
           <div className="mt-2 flex items-start gap-2 text-xs">
@@ -1077,7 +1077,7 @@ function TerminalValueSection() {
           </div>
         </div>
 
-        <div className="mt-3 rounded-lg border border-hairline-strong bg-white p-3">
+        <div className="mt-3 rounded-lg border border-hairline-strong bg-bg-elevated p-3">
           <div className="text-[10px] font-bold uppercase tracking-widest text-content-secondary mb-1">When to use</div>
           <p className="text-xs text-content-secondary">{active.when}</p>
         </div>
