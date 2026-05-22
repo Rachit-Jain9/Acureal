@@ -209,7 +209,7 @@ export default function InputForm({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+    <form onSubmit={handleSubmit} className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
       <h2 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
         <Calculator size={18} className="text-primary-600" />
         Model Inputs

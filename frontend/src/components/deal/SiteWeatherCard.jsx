@@ -23,7 +23,7 @@ function fetchWeather({ lat, lng }) {
 
 function Stat({ icon: Icon, label, value, hint, accent = 'text-content-secondary' }) {
   return (
-    <div className="rounded-lg bg-white border border-hairline p-3">
+    <div className="rounded-lg bg-bg-elevated border border-hairline p-3">
       <div className="flex items-center gap-1.5 mb-1">
         <Icon size={13} className="text-content-muted" />
         <span className="text-xs text-content-secondary">{label}</span>

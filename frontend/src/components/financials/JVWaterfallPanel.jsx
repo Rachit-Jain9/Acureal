@@ -59,7 +59,7 @@ export default function JVWaterfallPanel({ financials, deal }) {
   const fmtCr = (v) => (v != null ? `₹${v.toFixed(2)} Cr` : '—');
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

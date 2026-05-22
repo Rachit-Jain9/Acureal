@@ -66,7 +66,7 @@ export default function JDAWaterfallPanel({ financials, deal }) {
   const fmtPct = (v) => (v != null ? `${v.toFixed(1)}%` : '—');
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
