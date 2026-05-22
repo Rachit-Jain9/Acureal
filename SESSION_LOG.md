@@ -5713,3 +5713,53 @@ residue of the dark-mode hack; the broader theme-token unification
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-22 - Operator checklist + ontology adoption plan
+
+### What was worked on
+
+Two documentation deliverables that turn loose pending items into concrete,
+actionable artifacts.
+
+**`TODO_OPERATOR.md`** — a plain-English checklist of the manual actions only
+the operator can do. `TODO_MANUAL.md` is an engineering-detail file (psql
+commands, migration paths); the operator is a non-technical reader and needs a
+jargon-free, step-by-step list. The two files now cross-reference each other.
+The checklist covers, in priority order: (1) turn on Supabase database backups
+— the org may be on the Free plan with no automatic backups, the highest-risk
+gap; (2) engage Indian legal counsel for the DPA + Acceptable Use Policy; (3)
+supply the Incident Lead / Legal Liaison names for the breach runbook; (4) set
+up the `security@redip.in` mailbox; (5) the eventual migration schema-baseline
+squash. Each item carries why it matters, numbered steps, the exact dashboard
+link, and what to reply when done.
+
+**`docs/ONTOLOGY_ADOPTION.md`** — a sequenced plan for finishing
+`@redip/real-estate-ontology` adoption. A review found the backend already
+adopts the ontology (the extraction → deal write path) but the frontend keeps
+parallel hand-maintained taxonomy copies. Asset classes are safe — a contract
+test locks all three sources. Deal structures genuinely **diverge**: the
+frontend + the Postgres enum carry an 8-key list, the ontology a tidier 4-key
+one. Closing that gap is a *product decision* (which taxonomy is canonical),
+not a code change — the plan documents the decision, recommends keeping the
+live 8-key list and versioning the ontology to `v2.json` to match, and
+sequences the rest (frontend becomes a true ontology consumer; per-taxonomy
+contract tests; the `ParcelTab` zoning `<select>` is missing 6 valid zones).
+
+### Plain-English recap
+- There is now one file, `TODO_OPERATOR.md`, listing every task that needs you personally — plain English, exact links, click-by-click steps. Most urgent: turning on database backups.
+- A second file plans how to finish unifying REDIP's real-estate "dictionary" (asset classes, deal structures, zoning). One decision is needed from you — see below.
+
+### Operator decision required
+- **Deal-structure taxonomy:** REDIP's live 8-category list vs. a tidier 4-category one in the shared dictionary. Recommendation in `docs/ONTOLOGY_ADOPTION.md`: keep the 8-category list (it's what every existing deal uses). Confirm and the rest can proceed.
+
+### PRs opened / merged
+- PR-NX133 - `docs: operator checklist + ontology adoption plan` - opened, CI-verified, merged.
+
+### Validation
+- Docs-only — no code, no migration, no test or build impact.
+
+### What's left to do
+- Theme-token unification — the financials proforma tables render light in the default dark theme; migration in progress this block.
+- Ontology adoption Phases 1–4 — gated on the operator's deal-structure decision (Phase 2) but Phases 1/3 can ship anytime.
+- Operator follow-ups now tracked in `TODO_OPERATOR.md`.
+
