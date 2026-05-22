@@ -5763,3 +5763,57 @@ contract tests; the `ParcelTab` zoning `<select>` is missing 6 valid zones).
 - Ontology adoption Phases 1–4 — gated on the operator's deal-structure decision (Phase 2) but Phases 1/3 can ship anytime.
 - Operator follow-ups now tracked in `TODO_OPERATOR.md`.
 
+
+## 2026-05-22 - Theme-token migration — the Quarterly Proforma panel
+
+### What was worked on
+
+Theme-token unification (the F2 follow-on). REDIP's default theme is dark
+("8-hour underwriting sessions"); light is "report mode". The financial
+charts were themed earlier (PR-NX71), but the **proforma tables were never
+migrated** — `QuarterlyProformaPanel` was built entirely on a hardcoded
+`stone`/`amber`/`emerald`/`rose` editorial palette, so on the default dark
+FinancialsPage it rendered as a **white card with dark text** beside its
+already-dark sibling charts.
+
+PR-NX134 — `QuarterlyProformaPanel.jsx` migrated to the semantic token
+system:
+- Neutrals → tokens: `bg-white` → `bg-bg-elevated`, `stone-50/100` →
+  `bg-bg-secondary` / `bg-surface`, `border-stone-*` → `border-hairline*`,
+  `text-stone-*` → `text-content-*`. Safe by construction — the light-theme
+  token values mirror the slate scale, so light mode is near-identical and
+  dark mode becomes correct.
+- Data-signal text → the purpose-built flipping tokens: sources →
+  `text-data-positive`, uses → `text-data-negative`, equity-at-risk →
+  `text-premium`. These read correctly in both themes (dark-mode
+  emerald-800/rose-800 text would have been near-invisible).
+- Tint fills → the pre-built soft tokens (`bg-pos-soft`, `bg-neg-soft`,
+  `bg-premium-soft`) which carry their own alpha and theme-flip.
+- The subtotal rows' sticky label cell moved to an **opaque** token
+  (`bg-bg-secondary`) — a translucent soft tint would have let the
+  scrolling figures bleed through the frozen first column.
+
+**Approach note.** A blind re-theme of a core financial surface is risky,
+so the migration was kept mechanical and token-faithful — every choice
+maps to an existing, purpose-built token, no invented colours. The
+FinancialsPage is auth-gated and needs a deal with financial data, so this
+was build- + test-verified, not browser-verified; a live visual pass is
+recommended. The sibling `HospitalityProformaSection` and the remaining
+financials files follow the identical proven mapping and are the next slice.
+
+### Plain-English recap
+- A key financial table — the quarter-by-quarter "sources and uses" proforma — used to show up as a bright white box on REDIP's dark screens. It now matches the rest of the app in both dark and light mode.
+- The red/green money figures stay clearly readable in dark mode, where the old dark-on-dark colours had washed out.
+
+### PRs opened / merged
+- PR-NX134 - `fix(financials): theme-token migration for the Quarterly Proforma panel` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 84 files / 735 tests green; production build clean. Frontend-only — no migration, no backend change.
+- Build-verified (every token class compiles) and test-verified. Not browser-verified — the FinancialsPage is auth-gated and needs deal data; a live visual pass is recommended.
+
+### What's left to do
+- Theme-token unification — `HospitalityProformaSection` + the remaining financials files, same proven mapping.
+- Ontology adoption Phases 1–4 — gated on the operator's deal-structure decision (Phase 2).
+- Operator follow-ups tracked in `TODO_OPERATOR.md`.
+
