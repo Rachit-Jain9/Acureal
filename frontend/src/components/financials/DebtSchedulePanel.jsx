@@ -61,7 +61,7 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
   const hasAmortizing = !!(amortizingSchedule?.termLoan || amortizingSchedule?.lrd);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

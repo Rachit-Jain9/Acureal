@@ -208,7 +208,7 @@ export default function ProvenanceGraphView({
             full upstream provenance chain; hover to see its value.
           </p>
 
-          <div className="relative overflow-x-auto border rounded-lg bg-white">
+          <div className="relative overflow-x-auto border rounded-lg bg-bg-elevated">
             <svg
               width={laid.width}
               height={laid.height}

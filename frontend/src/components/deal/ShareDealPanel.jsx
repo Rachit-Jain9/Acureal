@@ -70,7 +70,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
+      <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline">
           <div className="flex items-center gap-2.5">
@@ -109,7 +109,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
               <select
                 value={permission}
                 onChange={(e) => setPermission(e.target.value)}
-                className="px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                className="px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-bg-elevated"
               >
                 {PERMISSION_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>

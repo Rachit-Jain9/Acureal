@@ -96,7 +96,7 @@ function PropertyPickerModal({ dealId, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
+      <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
           <h3 className="text-base font-bold text-content-primary flex items-center gap-2">

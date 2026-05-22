@@ -69,7 +69,7 @@ export default function DealAutoDerivedWarningsStrip({ deal }) {
               key={`${w.fact_type}-${w.fact_key}-${i}`}
               type="button"
               title={w.message || w.kind}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 active:scale-[0.98]"
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-bg-elevated border border-amber-200 text-amber-900 hover:bg-amber-100 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 active:scale-[0.98]"
             >
               <AlertTriangle size={11} aria-hidden="true" />
               <span className="font-medium">{w.kind}</span>
