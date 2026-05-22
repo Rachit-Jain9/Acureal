@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import EmptyState from '../common/EmptyState';
 import { ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatCrores, formatPct, formatArea } from '../../utils/format';
@@ -69,16 +70,21 @@ export default function FinancialTab() {
 
   if (!financials) {
     return (
-      <div className="card-editorial text-center py-20">
-        <BarChart3 size={40} className="text-content-muted mx-auto mb-4" />
-        <p className="text-base font-semibold text-content-secondary mb-1">No financial model yet</p>
-        <p className="text-sm text-content-muted mb-6">
-          Build a full financial model to track IRR, NPV, equity multiple, costs, and revenue
-          projections for this deal.
-        </p>
-        <Link to={`/dashboard/financials/${dealId}`} className="btn btn-primary inline-flex items-center gap-2">
-          Build Financial Model <ArrowRight size={15} />
-        </Link>
+      <div className="card-editorial">
+        <EmptyState
+          size="md"
+          icon={BarChart3}
+          title="No financial model yet"
+          description="Build a full financial model to track IRR, NPV, equity multiple, costs, and revenue projections for this deal."
+          action={(
+            <Link
+              to={`/dashboard/financials/${dealId}`}
+              className="btn btn-primary inline-flex items-center gap-2"
+            >
+              Build Financial Model <ArrowRight size={15} />
+            </Link>
+          )}
+        />
       </div>
     );
   }

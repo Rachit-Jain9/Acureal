@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import EmptyState from '../common/EmptyState';
 // PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
 // workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
@@ -312,9 +313,12 @@ function DDSection({ dealId }) {
 
       {/* Grouped Items */}
       {items.length === 0 ? (
-        <div className="text-center py-10 text-content-muted text-sm">
-          No DD items yet. Seed the standard checklist or add items manually.
-        </div>
+        <EmptyState
+          size="sm"
+          icon={ClipboardList}
+          title="No DD items yet"
+          description="Seed the standard checklist or add items manually."
+        />
       ) : (
         <div className="space-y-3">
           {Object.entries(grouped).map(([catKey, catItems]) => {
@@ -625,9 +629,12 @@ function ApprovalsSection({ dealId }) {
 
       {/* Approvals List */}
       {approvals.length === 0 ? (
-        <div className="text-center py-10 text-content-muted text-sm">
-          No approval items yet. Seed the standard checklist or add items manually.
-        </div>
+        <EmptyState
+          size="sm"
+          icon={Stamp}
+          title="No approval items yet"
+          description="Seed the standard checklist or add items manually."
+        />
       ) : (
         <div className="card-editorial p-0 overflow-hidden">
           <div className="overflow-x-auto">

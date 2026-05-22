@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef } from 'react';
+import EmptyState from '../common/EmptyState';
 import {
   Upload,
   Download,
@@ -346,13 +347,13 @@ export default function DocumentsTab() {
 
       {/* Documents List */}
       {docs.length === 0 ? (
-        <div className="card-editorial text-center py-16">
-          <FileText size={32} className="text-content-muted mx-auto mb-3" />
-          <p className="text-sm font-medium text-content-secondary mb-1">No documents uploaded yet</p>
-          <p className="text-xs text-content-muted">
-            Upload title documents, financial models, site photos, and legal documents for this
-            deal.
-          </p>
+        <div className="card-editorial">
+          <EmptyState
+            size="md"
+            icon={FileText}
+            title="No documents uploaded yet"
+            description="Upload title documents, financial models, site photos, and legal documents for this deal."
+          />
         </div>
       ) : (
         <div className="space-y-4">
