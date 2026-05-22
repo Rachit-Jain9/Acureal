@@ -20,6 +20,11 @@ import {
   AuditTrailTailWidget,
 } from '../components/dashboard/DashboardWidgets';
 import CustomizePopover from '../components/dashboard/CustomizePopover';
+import GettingStarted from '../components/dashboard/GettingStarted';
+
+// First-run panel: once the operator dismisses it we keep it hidden, even
+// while the workspace still has zero deals.
+const ONBOARDING_DISMISSED_KEY = 'redip.gettingStarted.dismissed';
 
 // Precision Analysis chart palette — colorblind-safe, layered:
 //   neutral blue (trust)  → primary / default
@@ -70,10 +75,18 @@ export default function DashboardPage() {
   const chartPalette = useChartPalette();
   const tooltipStyle = useTooltipStyle();
   const userRole = useAuthStore((s) => s.user?.role);
+  const userName = useAuthStore((s) => s.user?.name);
   const canCurate = roleSatisfies(userRole, ['editor']);
 
   const { layout, toggleVisible, moveUp, moveDown, reset } = useDashboardLayout();
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => localStorage.getItem(ONBOARDING_DISMISSED_KEY) === '1',
+  );
+  const dismissOnboarding = () => {
+    localStorage.setItem(ONBOARDING_DISMISSED_KEY, '1');
+    setOnboardingDismissed(true);
+  };
 
   // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
   // so the layout doesn't reflow when data lands. Per FRONTEND_GUIDELINES §2:
@@ -110,6 +123,24 @@ export default function DashboardPage() {
         <button onClick={() => refetch()} className="btn btn-secondary mt-4">
           Retry
         </button>
+      </div>
+    );
+  }
+
+  // First-run: a workspace with zero deals gets the role-aware Getting
+  // Started panel in place of a grid of empty widgets. `total_deals`
+  // counts archived deals too, so this only fires for a truly fresh
+  // workspace — and never again once the operator dismisses it.
+  const isFirstRun = (data?.stats?.total_deals ?? 0) === 0;
+  if (isFirstRun && !onboardingDismissed) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="REDIP — Deal Intelligence"
+          title="Dashboard"
+          description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
+        />
+        <GettingStarted userName={userName} role={userRole} onDismiss={dismissOnboarding} />
       </div>
     );
   }
