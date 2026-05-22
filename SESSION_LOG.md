@@ -6215,3 +6215,46 @@ Model" call to action.
   MasterPlanAdminPage, DealsPage, MethodologyExplorer).
 - Deepen cross-module reactivity; finish the Provenance Spine + Risk
   Radar moat; database / infra hygiene.
+
+## 2026-05-23 - Browser verification + dark-mode cleanup batch 1
+
+### What was worked on
+
+Claude-in-Chrome browser control was reconnected (after several failed
+attempts across sessions) and used to verify the auth-gated app on the
+live deployment: the dashboard, deals list and deal workspace all render
+correctly in dark mode, and the deal-tab empty states resolve through
+the shared EmptyState primitive as intended.
+
+Dark-mode override-hack retirement — batch 1 (PR #504). Nine
+deal-workspace and financials-panel components were migrated off the
+hardcoded `bg-white` class to the semantic `bg-bg-elevated` token.
+`bg-white` resolves — via the index.css override block — to
+`--color-bg-elevated` in dark mode and to white in light mode;
+`bg-bg-elevated` resolves to exactly those, so the change is
+pixel-identical in both themes. Verified eyes-on on the live deal
+workspace after deploy.
+
+### Plain-English recap
+- The live app was checked in a real browser — dashboard, deals and
+  deal pages all look right in dark mode after this session's changes.
+- Nine deal and financials panels were moved onto the proper colour
+  system. Invisible to users; a first step in removing an old styling
+  shortcut so the app's theming gets simpler and less fragile.
+
+### PRs opened / merged
+- PR #504 - refactor(theme): migrate deal & financials panels off the
+  bg-white class - merged, deployed.
+
+### Validation
+- Build clean; 795/795 frontend tests pass. Deal workspace eyes-on
+  verified in dark mode on production after the deploy.
+
+### What's left to do
+- Dark-mode override-hack retirement is in progress: 9 files done;
+  ~20+ more `bg-white` call sites remain before the `.bg-white`
+  override rule can be deleted, then ~9 further override rules
+  (bg-gray-*, text-gray-*, borders, gradient washes) follow. A
+  multi-PR effort, batch by batch — the verified flow is now proven.
+- Decompose the React-page god-files; deepen cross-module reactivity;
+  Provenance Spine + Risk Radar moat; database / infra hygiene.
