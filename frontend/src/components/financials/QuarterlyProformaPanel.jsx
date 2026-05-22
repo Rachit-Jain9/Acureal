@@ -21,12 +21,14 @@
  *   - Year subtotal rows (sum of 4 consecutive quarters) collapse visual
  *     noise on projects longer than 8 quarters. Not a separate data pass —
  *     derived in-component.
- *   - `peakDeploymentQuarter` column gets a stone-amber ring so the
- *     single most-important number on the table is findable at a glance.
+ *   - `peakDeploymentQuarter` column gets an amber ring so the single
+ *     most-important number on the table is findable at a glance.
  *
- * Editorial palette: stone neutrals + amber for equity risk + slate for
- * row groups. No emoji in defaults; no pie charts. The reader already
- * knows what "uses" means.
+ * Palette: semantic theme tokens throughout — neutral surfaces, the
+ * premium-amber token for equity risk, the data-positive / data-negative
+ * tokens for sources / uses — so the panel renders correctly in both the
+ * default dark "work mode" and the light "report mode". No emoji in
+ * defaults; no pie charts. The reader already knows what "uses" means.
  */
 
 import { useMemo, useState } from 'react';
@@ -145,14 +147,14 @@ export default function QuarterlyProformaPanel({ proforma }) {
   const netOverLife = totalInflow + totalOutflow;
 
   return (
-    <div className="bg-white border border-stone-200 rounded-sm overflow-hidden">
+    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
       {/* ── Header strip ───────────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-b border-stone-200 flex flex-wrap items-center gap-3">
+      <div className="px-5 py-3 border-b border-hairline flex flex-wrap items-center gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-content-secondary">
             Quarterly proforma
           </div>
-          <div className="font-serif text-base font-semibold text-stone-900 leading-tight">
+          <div className="font-serif text-base font-semibold text-content-primary leading-tight">
             Sources &amp; uses · quarter by quarter
           </div>
         </div>
@@ -163,8 +165,8 @@ export default function QuarterlyProformaPanel({ proforma }) {
             className={clsx(
               'px-3 py-1 uppercase tracking-[0.14em] border transition-colors',
               view === 'quarterly'
-                ? 'border-stone-900 text-stone-900 bg-stone-100'
-                : 'border-stone-200 text-stone-500 hover:text-stone-900',
+                ? 'border-content-primary text-content-primary bg-surface'
+                : 'border-hairline text-content-secondary hover:text-content-primary',
             )}
           >
             Quarterly
@@ -175,8 +177,8 @@ export default function QuarterlyProformaPanel({ proforma }) {
             className={clsx(
               'px-3 py-1 uppercase tracking-[0.14em] border transition-colors',
               view === 'yearly'
-                ? 'border-stone-900 text-stone-900 bg-stone-100'
-                : 'border-stone-200 text-stone-500 hover:text-stone-900',
+                ? 'border-content-primary text-content-primary bg-surface'
+                : 'border-hairline text-content-secondary hover:text-content-primary',
             )}
           >
             Yearly
@@ -185,15 +187,15 @@ export default function QuarterlyProformaPanel({ proforma }) {
       </div>
 
       {/* ── Summary strip ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-stone-100 border-b border-stone-200">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-surface border-b border-hairline">
         <SummaryCell
-          icon={<TrendingUp className="w-3.5 h-3.5 text-emerald-700" />}
+          icon={<TrendingUp className="w-3.5 h-3.5 text-data-positive" />}
           label="Sources"
           value={`₹${fmtCr(totalInflow)} Cr`}
           sub={`${proforma.inflows.rows.length} row${proforma.inflows.rows.length === 1 ? '' : 's'}`}
         />
         <SummaryCell
-          icon={<TrendingDown className="w-3.5 h-3.5 text-rose-700" />}
+          icon={<TrendingDown className="w-3.5 h-3.5 text-data-negative" />}
           label="Uses"
           value={`₹${fmtCr(Math.abs(totalOutflow))} Cr`}
           sub={`${proforma.outflows.rows.length} row${proforma.outflows.rows.length === 1 ? '' : 's'}`}
@@ -202,14 +204,14 @@ export default function QuarterlyProformaPanel({ proforma }) {
           label="Net over life"
           value={`${netOverLife >= 0 ? '+' : ''}₹${fmtCr(netOverLife)} Cr`}
           sub="Sources − Uses"
-          valueClass={netOverLife >= 0 ? 'text-emerald-800' : 'text-rose-800'}
+          valueClass={netOverLife >= 0 ? 'text-data-positive' : 'text-data-negative'}
         />
         <SummaryCell
-          icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-700" />}
+          icon={<AlertTriangle className="w-3.5 h-3.5 text-premium" />}
           label="Peak equity"
           value={`₹${fmtCr(Math.abs(proforma.peakDeployment || 0))} Cr`}
           sub={`at ${peakColLabel}`}
-          valueClass="text-amber-900"
+          valueClass="text-premium"
         />
       </div>
 
@@ -217,23 +219,23 @@ export default function QuarterlyProformaPanel({ proforma }) {
       <div className="overflow-x-auto">
         <table className="w-full text-[12px] tabular-nums">
           <thead>
-            <tr className="bg-stone-50 text-stone-500">
-              <th className="sticky left-0 z-10 bg-stone-50 text-left px-4 py-2 border-b border-r border-stone-200 uppercase tracking-[0.12em] text-[10px] font-semibold min-w-[220px]">
+            <tr className="bg-bg-secondary text-content-secondary">
+              <th className="sticky left-0 z-10 bg-bg-secondary text-left px-4 py-2 border-b border-r border-hairline uppercase tracking-[0.12em] text-[10px] font-semibold min-w-[220px]">
                 Line item
               </th>
               {headers.map((h, i) => (
                 <th
                   key={h.key}
                   className={clsx(
-                    'px-3 py-2 border-b border-stone-200 text-right uppercase tracking-[0.1em] text-[10px] font-semibold whitespace-nowrap',
-                    i === peakIndex && 'ring-1 ring-amber-400 bg-amber-50/60',
+                    'px-3 py-2 border-b border-hairline text-right uppercase tracking-[0.1em] text-[10px] font-semibold whitespace-nowrap',
+                    i === peakIndex && 'ring-1 ring-amber-400 bg-premium-soft',
                   )}
                 >
-                  <div className="text-stone-900 text-[11px] font-semibold">{h.label}</div>
-                  {h.sub && <div className="text-stone-400 text-[9px] font-normal">{h.sub}</div>}
+                  <div className="text-content-primary text-[11px] font-semibold">{h.label}</div>
+                  {h.sub && <div className="text-content-muted text-[9px] font-normal">{h.sub}</div>}
                 </th>
               ))}
-              <th className="px-3 py-2 border-b border-l border-stone-200 text-right uppercase tracking-[0.1em] text-[10px] font-semibold text-stone-700 bg-stone-100 min-w-[90px]">
+              <th className="px-3 py-2 border-b border-l border-hairline text-right uppercase tracking-[0.1em] text-[10px] font-semibold text-content-secondary bg-surface min-w-[90px]">
                 Total
               </th>
             </tr>
@@ -294,8 +296,8 @@ export default function QuarterlyProformaPanel({ proforma }) {
             />
 
             {/* ── Net + cumulative ─────────────────────────────────── */}
-            <tr className="border-t-2 border-stone-900/70">
-              <td className="sticky left-0 z-10 bg-white px-4 py-2 border-r border-stone-200 font-semibold text-stone-900 uppercase tracking-[0.1em] text-[10px]">
+            <tr className="border-t-2 border-hairline-strong">
+              <td className="sticky left-0 z-10 bg-bg-elevated px-4 py-2 border-r border-hairline font-semibold text-content-primary uppercase tracking-[0.1em] text-[10px]">
                 Net cash flow
               </td>
               {netSeries.map((n, i) => (
@@ -303,8 +305,8 @@ export default function QuarterlyProformaPanel({ proforma }) {
                   key={i}
                   className={clsx(
                     'px-3 py-2 text-right font-semibold',
-                    i === peakIndex && 'bg-amber-50/60 ring-1 ring-amber-400',
-                    n >= 0 ? 'text-emerald-800' : 'text-rose-800',
+                    i === peakIndex && 'bg-premium-soft ring-1 ring-amber-400',
+                    n >= 0 ? 'text-data-positive' : 'text-data-negative',
                   )}
                 >
                   {n >= 0 ? '' : '('}{fmtCell(Math.abs(n))}{n >= 0 ? '' : ')'}
@@ -312,15 +314,15 @@ export default function QuarterlyProformaPanel({ proforma }) {
               ))}
               <td
                 className={clsx(
-                  'px-3 py-2 text-right font-bold border-l border-stone-200 bg-stone-50',
-                  netOverLife >= 0 ? 'text-emerald-900' : 'text-rose-900',
+                  'px-3 py-2 text-right font-bold border-l border-hairline bg-bg-secondary',
+                  netOverLife >= 0 ? 'text-data-positive' : 'text-data-negative',
                 )}
               >
                 {netOverLife >= 0 ? '' : '('}{fmtCell(Math.abs(netOverLife))}{netOverLife >= 0 ? '' : ')'}
               </td>
             </tr>
             <tr>
-              <td className="sticky left-0 z-10 bg-white px-4 py-2 border-r border-stone-200 text-stone-600 uppercase tracking-[0.1em] text-[10px]">
+              <td className="sticky left-0 z-10 bg-bg-elevated px-4 py-2 border-r border-hairline text-content-secondary uppercase tracking-[0.1em] text-[10px]">
                 Cumulative (equity-at-risk)
               </td>
               {cumulativeSeries.map((n, i) => {
@@ -330,23 +332,23 @@ export default function QuarterlyProformaPanel({ proforma }) {
                     key={i}
                     className={clsx(
                       'px-3 py-2 text-right',
-                      i === peakIndex && 'bg-amber-100 ring-1 ring-amber-500 font-semibold text-amber-950',
-                      val < 0 ? 'text-amber-900' : 'text-stone-700',
+                      i === peakIndex && 'bg-premium-soft ring-1 ring-amber-500 font-semibold text-premium',
+                      val < 0 ? 'text-premium' : 'text-content-secondary',
                     )}
                   >
                     {val >= 0 ? '' : '('}{fmtCell(Math.abs(val))}{val >= 0 ? '' : ')'}
                   </td>
                 );
               })}
-              <td className="px-3 py-2 text-right border-l border-stone-200 text-stone-400">—</td>
+              <td className="px-3 py-2 text-right border-l border-hairline text-content-muted">—</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       {/* ── Footer note ───────────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-t border-stone-200 bg-stone-50/60 flex items-start gap-2 text-[11px] text-stone-600">
-        <Info className="w-3.5 h-3.5 text-stone-400 mt-0.5 flex-shrink-0" />
+      <div className="px-5 py-3 border-t border-hairline bg-bg-secondary/60 flex items-start gap-2 text-[11px] text-content-secondary">
+        <Info className="w-3.5 h-3.5 text-content-muted mt-0.5 flex-shrink-0" />
         <div>
           Values in ₹ Crore. Parentheses indicate outflows or negative balances.
           Cells reconcile to <span className="font-semibold">costs</span> and{' '}
@@ -363,24 +365,24 @@ export default function QuarterlyProformaPanel({ proforma }) {
 
 function SummaryCell({ icon, label, value, sub, valueClass }) {
   return (
-    <div className="bg-white px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-stone-500">
+    <div className="bg-bg-elevated px-4 py-3">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-content-secondary">
         {icon}
         <span>{label}</span>
       </div>
-      <div className={clsx('font-serif text-base font-semibold mt-1 tabular-nums', valueClass || 'text-stone-900')}>
+      <div className={clsx('font-serif text-base font-semibold mt-1 tabular-nums', valueClass || 'text-content-primary')}>
         {value}
       </div>
-      {sub && <div className="text-[10px] text-stone-400 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-content-muted mt-0.5">{sub}</div>}
     </div>
   );
 }
 
 function SectionHeader({ label, colSpan, tone }) {
   const toneClass =
-    tone === 'rose' ? 'text-rose-900 bg-rose-50/50 border-rose-100'
-    : tone === 'emerald' ? 'text-emerald-900 bg-emerald-50/50 border-emerald-100'
-    : 'text-stone-900 bg-stone-50';
+    tone === 'rose' ? 'text-data-negative bg-neg-soft border-hairline'
+    : tone === 'emerald' ? 'text-data-positive bg-pos-soft border-hairline'
+    : 'text-content-primary bg-bg-secondary';
   return (
     <tr>
       <td
@@ -398,17 +400,17 @@ function SectionHeader({ label, colSpan, tone }) {
 
 function DataRow({ label, subLabel, cells, total, peakIndex, tone, signed }) {
   const toneClass = tone === 'rose'
-    ? 'text-rose-800'
+    ? 'text-data-negative'
     : tone === 'emerald'
-      ? 'text-emerald-800'
-      : 'text-stone-800';
+      ? 'text-data-positive'
+      : 'text-content-primary';
 
   return (
-    <tr className="border-b border-stone-100 hover:bg-stone-50/60">
-      <td className="sticky left-0 z-10 bg-white px-4 py-1.5 border-r border-stone-200">
-        <div className="text-stone-900 font-medium">{label}</div>
+    <tr className="border-b border-hairline-soft hover:bg-bg-secondary/60">
+      <td className="sticky left-0 z-10 bg-bg-elevated px-4 py-1.5 border-r border-hairline">
+        <div className="text-content-primary font-medium">{label}</div>
         {subLabel && subLabel !== label && (
-          <div className="text-[10px] text-stone-400 uppercase tracking-[0.1em]">{subLabel}</div>
+          <div className="text-[10px] text-content-muted uppercase tracking-[0.1em]">{subLabel}</div>
         )}
       </td>
       {cells.map((c, i) => {
@@ -419,8 +421,8 @@ function DataRow({ label, subLabel, cells, total, peakIndex, tone, signed }) {
             key={i}
             className={clsx(
               'px-3 py-1.5 text-right',
-              i === peakIndex && 'bg-amber-50/60',
-              show ? toneClass : 'text-stone-300',
+              i === peakIndex && 'bg-premium-soft',
+              show ? toneClass : 'text-content-muted',
             )}
           >
             {show
@@ -431,7 +433,7 @@ function DataRow({ label, subLabel, cells, total, peakIndex, tone, signed }) {
           </td>
         );
       })}
-      <td className={clsx('px-3 py-1.5 text-right font-semibold border-l border-stone-200 bg-stone-50/60', toneClass)}>
+      <td className={clsx('px-3 py-1.5 text-right font-semibold border-l border-hairline bg-bg-secondary/60', toneClass)}>
         {signed && total < 0 ? `(${fmtCell(Math.abs(total))})` : fmtCell(total)}
       </td>
     </tr>
@@ -440,22 +442,21 @@ function DataRow({ label, subLabel, cells, total, peakIndex, tone, signed }) {
 
 function SubtotalRow({ label, cells, total, peakIndex, tone, signed }) {
   const textClass = tone === 'rose'
-    ? 'text-rose-900'
+    ? 'text-data-negative'
     : tone === 'emerald'
-      ? 'text-emerald-900'
-      : 'text-stone-900';
+      ? 'text-data-positive'
+      : 'text-content-primary';
 
-  // Solid backgrounds — the sticky label cell must fully occlude scrolling
-  // numeric cells behind it. Using /40 alpha lets numbers bleed through.
-  const solidBg = tone === 'rose'
-    ? 'bg-rose-50'
-    : tone === 'emerald'
-      ? 'bg-emerald-50'
-      : 'bg-stone-50';
+  // The sticky label cell must fully occlude the scrolling numeric cells
+  // behind it, so its background has to be an opaque token — a translucent
+  // tint would let figures bleed through. `bg-bg-secondary` reads as a
+  // distinct band against the elevated data rows; the rose/emerald signal
+  // is carried by the bold tinted text instead.
+  const solidBg = 'bg-bg-secondary';
 
   return (
-    <tr className={clsx('border-b border-stone-200 font-semibold', textClass, solidBg)}>
-      <td className={clsx('sticky left-0 z-20 px-4 py-1.5 border-r border-stone-200 uppercase tracking-[0.1em] text-[10px]', solidBg)}>
+    <tr className={clsx('border-b border-hairline font-semibold', textClass, solidBg)}>
+      <td className={clsx('sticky left-0 z-20 px-4 py-1.5 border-r border-hairline uppercase tracking-[0.1em] text-[10px]', solidBg)}>
         {label}
       </td>
       {cells.map((c, i) => {
@@ -472,7 +473,7 @@ function SubtotalRow({ label, cells, total, peakIndex, tone, signed }) {
           </td>
         );
       })}
-      <td className={clsx('px-3 py-1.5 text-right border-l border-stone-200', solidBg)}>
+      <td className={clsx('px-3 py-1.5 text-right border-l border-hairline', solidBg)}>
         {signed && total < 0 ? `(${fmtCell(Math.abs(total))})` : fmtCell(total)}
       </td>
     </tr>
