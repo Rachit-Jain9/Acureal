@@ -1,14 +1,35 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useThemeStore from '../store/themeStore';
-import { Moon, Sun } from 'lucide-react';
+import {
+  Moon, Sun, ArrowRight, ShieldCheck, AlertTriangle, FileText, TrendingUp,
+} from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REDIP Landing — Precision Analysis system.
 // Bloomberg DNA: near-black surface, crisp typography, blue trust accent,
 // amber premium signal, tabular numerals everywhere.
 // Fully themed: flips on html[data-theme] from dark → light.
+//
+// The page leads with the product itself — a faithful, on-brand illustration of
+// the deal workspace — rather than describing it in prose. The figures inside
+// the preview are an illustrative sample deal, not live data.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Shared CTA chrome — full interaction states per docs/FRONTEND_GUIDELINES.md §3.
+const PRIMARY_CTA =
+  'inline-flex items-center gap-1.5 text-sm font-medium text-white px-5 py-2.5 rounded-md ' +
+  'bg-accent transition duration-150 ease-out hover:brightness-110 active:scale-[0.98] ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60';
+
+const SECONDARY_CTA =
+  'inline-flex items-center gap-1.5 text-sm font-medium px-5 py-2.5 rounded-md ' +
+  'text-content-primary border border-hairline-strong bg-transparent ' +
+  'transition duration-150 ease-out hover:bg-bg-secondary hover:border-content-muted ' +
+  'active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+
+const toneTextClass = (t) =>
+  t === 'pos' ? 'text-data-positive' : t === 'pre' ? 'text-premium' : 'text-accent';
 
 // Intersection-observer driven fade/slide-in. One-shot.
 function Reveal({ children, delay = 0, className = '' }) {
@@ -44,10 +65,9 @@ function Nav() {
   const toggleTheme = useThemeStore((s) => s.toggle);
   return (
     <nav
-      className="sticky top-0 z-50 backdrop-blur"
+      className="sticky top-0 z-50 backdrop-blur border-b border-hairline"
       style={{
         backgroundColor: mode === 'dark' ? 'rgba(5,5,7,0.82)' : 'rgba(255,255,255,0.85)',
-        borderBottom: '1px solid var(--color-border-primary)',
       }}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
@@ -64,20 +84,25 @@ function Nav() {
           <button
             onClick={toggleTheme}
             aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="p-2 rounded-md transition-colors text-content-secondary"
+            className="p-2 rounded-md text-content-secondary transition-colors duration-150 ease-out
+              hover:text-content-primary hover:bg-bg-secondary
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             {mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap text-content-secondary"
+            className="text-sm px-2 sm:px-3 py-1.5 rounded-md whitespace-nowrap text-content-secondary
+              transition-colors duration-150 ease-out hover:text-content-primary hover:bg-bg-secondary
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             Sign in
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-sm font-medium text-white px-3 sm:px-3.5 py-1.5 rounded-md hover:brightness-110 whitespace-nowrap"
-            style={{ backgroundColor: 'var(--color-brand-accent)' }}
+            className="text-sm font-medium text-white px-3 sm:px-3.5 py-1.5 rounded-md whitespace-nowrap
+              bg-accent transition duration-150 ease-out hover:brightness-110 active:scale-[0.98]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <span className="hidden sm:inline">Request access </span>
             <span className="sm:hidden">Request </span>
@@ -160,7 +185,7 @@ function HeroBackdrop() {
   );
 }
 
-// Live-style ticker — real asset-class labels, not fake symbols.
+// Live-style ticker — real asset-class labels, illustrative metrics.
 function LiveTicker() {
   const items = [
     ['BLR · Residential', '14.0% IRR', 'pos'],
@@ -174,14 +199,7 @@ function LiveTicker() {
   ];
   const row = [...items, ...items];
   return (
-    <div
-      className="relative overflow-hidden"
-      style={{
-        borderTop: '1px solid var(--color-border-primary)',
-        borderBottom: '1px solid var(--color-border-primary)',
-        backgroundColor: 'var(--color-bg-secondary)',
-      }}
-    >
+    <div className="relative overflow-hidden border-y border-hairline bg-bg-secondary">
       <div className="py-2 flex redip-ticker whitespace-nowrap">
         {row.map(([label, metric, tone], i) => (
           <div
@@ -192,13 +210,11 @@ function LiveTicker() {
               {label}
             </span>
             <span
-              style={{
-                color:
-                  tone === 'pos' ? 'var(--color-data-positive)' :
-                  tone === 'pre' ? 'var(--color-brand-premium)' :
-                                   'var(--color-data-neutral)',
-                fontWeight: 600,
-              }}
+              className={
+                tone === 'pos' ? 'text-data-positive font-semibold' :
+                tone === 'pre' ? 'text-premium font-semibold' :
+                                 'text-data-neutral font-semibold'
+              }
             >
               {metric}
             </span>
@@ -210,83 +226,222 @@ function LiveTicker() {
   );
 }
 
+// ── Product-preview building blocks ─────────────────────────────────────────
+
+function PreviewKpi({ label, value, delta, tone = 'neutral' }) {
+  const toneClass =
+    tone === 'up' ? 'text-data-positive' :
+    tone === 'down' ? 'text-data-negative' :
+    'text-content-muted';
+  return (
+    <div className="rounded-md border border-hairline bg-bg-secondary px-3 py-2.5">
+      <div className="text-[10px] uppercase tracking-[0.12em] text-content-muted font-medium truncate">
+        {label}
+      </div>
+      <div className="mt-1 font-display text-xl sm:text-2xl font-semibold text-content-primary tabular-nums tracking-tight">
+        {value}
+      </div>
+      <div className={`mt-0.5 text-[11px] tabular-nums ${toneClass}`}>{delta}</div>
+    </div>
+  );
+}
+
+function PreviewRiskRow({ label, posture, tone }) {
+  const ok = tone === 'ok';
+  const Icon = ok ? ShieldCheck : AlertTriangle;
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-[12px] text-content-secondary">{label}</span>
+      <span
+        className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+          ok ? 'text-data-positive' : 'text-premium'
+        }`}
+      >
+        <Icon size={12} />
+        {posture}
+      </span>
+    </div>
+  );
+}
+
+// Illustrative development cash-flow shape: investment phase, then returns.
+function MiniCashflowChart() {
+  const bars = [-7, -13, -16, -11, -5, 3, 9, 17, 22, 15, 8, 5];
+  const max = Math.max(...bars.map((b) => Math.abs(b)));
+  return (
+    <div className="relative h-28 flex items-stretch gap-1.5" aria-hidden="true">
+      <div className="absolute left-0 right-0 top-1/2 h-px bg-hairline" />
+      {bars.map((v, i) => {
+        const h = (Math.abs(v) / max) * 46;
+        const positive = v >= 0;
+        return (
+          <div key={i} className="flex-1 relative">
+            {/* Per-data-point geometry + colour — inline is required here. */}
+            <div
+              className="absolute left-0 right-0 rounded-[2px]"
+              style={{
+                height: `${h}%`,
+                [positive ? 'bottom' : 'top']: '50%',
+                backgroundColor: positive
+                  ? 'var(--color-data-positive)'
+                  : 'var(--color-border-strong)',
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// A faithful, on-brand illustration of the REDIP deal workspace. Figures are an
+// illustrative sample deal — they are not live data.
+function ProductPreview() {
+  return (
+    <Reveal delay={120} className="mt-14">
+      <div
+        role="img"
+        aria-label="Preview of the REDIP deal workspace — underwriting KPIs, a quarterly cash-flow projection, the deal risk radar, and the evidence trail."
+        className="relative mx-auto max-w-5xl"
+      >
+        <div className="rounded-editorial border border-hairline bg-bg-elevated shadow-editorial-lg overflow-hidden">
+          {/* Window chrome */}
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-hairline bg-bg-secondary">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-serif text-sm font-semibold text-content-primary">
+                REDIP<span className="text-premium">.</span>
+              </span>
+              <span className="text-content-muted text-xs hidden sm:inline">/</span>
+              <span className="text-xs text-content-secondary truncate hidden sm:inline">
+                Indiranagar Redevelopment
+              </span>
+            </div>
+            <span className="inline-flex items-center text-[10px] uppercase tracking-[0.1em] font-semibold px-2 py-0.5 rounded-full bg-accent-soft text-accent">
+              Underwriting
+            </span>
+          </div>
+
+          {/* Cockpit body */}
+          <div className="p-4 sm:p-5">
+            <div className="flex items-center gap-2 flex-wrap text-[11px] text-content-muted mb-3.5">
+              <span>Redevelopment</span><span>·</span>
+              <span>Indiranagar, Bengaluru</span><span>·</span>
+              <span className="tabular-nums">2.4 acres</span><span>·</span>
+              <span>JDA — area share</span>
+            </div>
+
+            {/* KPI row */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <PreviewKpi label="Project IRR"      value="22.4%"   delta="+310 bps vs base" tone="up" />
+              <PreviewKpi label="Equity multiple"  value="1.94×"   delta="+0.21× vs base"   tone="up" />
+              <PreviewKpi label="Peak equity"      value="₹46.2 Cr" delta="Quarter 4 of 21"  tone="neutral" />
+              <PreviewKpi label="DSCR — minimum"   value="1.38×"   delta="Above 1.20 floor" tone="up" />
+            </div>
+
+            {/* Chart + risk radar */}
+            <div className="grid lg:grid-cols-[1.5fr_1fr] gap-3 mt-3">
+              <div className="rounded-md border border-hairline bg-bg-secondary p-3.5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-content-muted font-medium">
+                    Quarterly net cash flow · ₹ Cr
+                  </span>
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-content-muted">
+                    <TrendingUp size={11} /> 15-yr horizon
+                  </span>
+                </div>
+                <MiniCashflowChart />
+              </div>
+              <div className="rounded-md border border-hairline bg-bg-secondary p-3.5">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-content-muted font-medium">
+                    Deal risk radar
+                  </span>
+                  <span className="text-[10px] text-premium font-medium">2 unverified</span>
+                </div>
+                <div className="divide-y divide-hairline-soft">
+                  <PreviewRiskRow label="Title chain"       posture="Cleared"        tone="ok" />
+                  <PreviewRiskRow label="Encumbrance"       posture="Cleared"        tone="ok" />
+                  <PreviewRiskRow label="RERA deviation"    posture="Unverified"     tone="warn" />
+                  <PreviewRiskRow label="Promoter delivery" posture="4 of 5 on time" tone="ok" />
+                  <PreviewRiskRow label="Approval gap"      posture="1 open item"    tone="warn" />
+                </div>
+              </div>
+            </div>
+
+            {/* Evidence trail */}
+            <div className="mt-3 flex items-center gap-2.5 flex-wrap rounded-md border border-hairline bg-bg-secondary px-3.5 py-2.5">
+              <ShieldCheck size={13} className="text-accent shrink-0" />
+              <span className="text-[11.5px] text-content-secondary">
+                Evidence trail — <span className="text-content-primary font-medium tabular-nums">83%</span> of inputs sourced
+                · <span className="tabular-nums">14</span> documents · verified 2 days ago
+              </span>
+              <span className="flex items-center gap-1.5 ml-auto">
+                {['Sale deed', 'Encumbrance cert.', 'RERA filing'].map((c) => (
+                  <span
+                    key={c}
+                    className="hidden md:inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-hairline-soft text-content-muted"
+                  >
+                    <FileText size={9} /> {c}
+                  </span>
+                ))}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
 function Hero() {
   const navigate = useNavigate();
+  const capabilities = [
+    '10 asset classes',
+    '15-year quarterly horizons',
+    '7 diligence layers',
+    '8 deal structures',
+    'one deterministic kernel',
+  ];
   return (
-    <section className="relative overflow-hidden" style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+    <section className="relative overflow-hidden border-b border-hairline">
       <HeroBackdrop />
-      <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-24">
-        <div
-          className="text-[11px] uppercase tracking-[0.22em] mb-6 flex items-center gap-2 text-content-muted"
-        >
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: 'var(--color-data-positive)', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }}
-          />
-          Institutional · Private beta
-        </div>
-        <h1
-          className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight max-w-4xl text-content-primary"
-        >
-          The deal intelligence platform <em className="italic text-accent">private capital</em> runs on.
-        </h1>
-        <p
-          className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl text-content-secondary"
-        >
-          REDIP unifies sourcing, diligence, underwriting, and investor-grade
-          reporting into one institutional workspace. AI accelerates the work.
-          A deterministic financial kernel makes the math unassailable. Every
-          number traced, every assumption stressed — so the memo your Investment
-          Committee receives is the memo they approve.
-        </p>
-        <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
-          <button
-            onClick={() => navigate('/login')}
-            className="text-sm font-medium text-white px-5 py-2.5 rounded-md hover:brightness-110"
-            style={{ backgroundColor: 'var(--color-brand-accent)' }}
-          >
-            Start a deal →
-          </button>
-          <button
-            onClick={() => navigate('/login')}
-            className="text-sm font-medium px-5 py-2.5 rounded-md text-content-primary"
-            style={{
-              border: '1px solid var(--color-border-strong)',
-              backgroundColor: 'transparent',
-            }}
-          >
-            Request access
-          </button>
+      <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-20 md:pt-28 md:pb-24">
+        <div className="max-w-3xl">
+          <div className="text-[11px] uppercase tracking-[0.22em] mb-6 flex items-center gap-2 text-content-muted">
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-data-positive)', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }}
+            />
+            Institutional · Private beta
+          </div>
+          <h1 className="font-serif text-5xl md:text-[64px] leading-[1.05] tracking-tight text-content-primary">
+            The deal intelligence platform <em className="italic text-accent">private capital</em> runs on.
+          </h1>
+          <p className="mt-7 text-lg md:text-xl leading-relaxed max-w-2xl text-content-secondary">
+            REDIP unifies sourcing, diligence, underwriting, and investor-grade
+            reporting into one workspace. AI accelerates the read. A deterministic
+            financial kernel keeps the math unassailable. Every number traced to its
+            source, every assumption stressed — so the memo your Investment
+            Committee receives is the memo they approve.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <button onClick={() => navigate('/login')} className={PRIMARY_CTA}>
+              Request access <ArrowRight size={15} />
+            </button>
+            <button onClick={() => navigate('/login')} className={SECONDARY_CTA}>
+              Sign in
+            </button>
+          </div>
         </div>
 
-        {/* Editorial KPI strip with colored data signals */}
-        <div
-          className="mt-20 pt-8 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8"
-          style={{ borderTop: '1px solid var(--color-border-primary)' }}
-        >
-          {[
-            ['10',  'Asset classes',    'residential → hospitality', 'neu'],
-            ['15y', 'Quarterly horizon','per cash-flow line',         'neu'],
-            ['7',   'DD layers',        'title → physical',           'pos'],
-            ['8',   'Deal structures',  'outright · JV · JDA · …',    'pre'],
-          ].map(([stat, label, note, tone]) => (
-            <div key={label}>
-              <div
-                className="font-serif text-3xl md:text-4xl font-medium leading-none tabular-nums"
-                style={{
-                  color:
-                    tone === 'pos' ? 'var(--color-data-positive)' :
-                    tone === 'pre' ? 'var(--color-brand-premium)' :
-                                     'var(--color-text-primary)',
-                }}
-              >
-                {stat}
-              </div>
-              <div className="mt-2 text-xs uppercase tracking-[0.16em] text-content-secondary">
-                {label}
-              </div>
-              <div className="mt-1 text-[11px] text-content-muted">{note}</div>
-            </div>
+        <ProductPreview />
+
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[12px] text-content-muted">
+          {capabilities.map((t, i) => (
+            <span key={t} className="flex items-center gap-3">
+              {i > 0 && <span aria-hidden className="text-content-muted/50">·</span>}
+              <span>{t}</span>
+            </span>
           ))}
         </div>
       </div>
@@ -318,18 +473,14 @@ function Columns() {
       tone: 'pre',
     },
   ];
-  const toneColor = (t) =>
-    t === 'pos' ? 'var(--color-data-positive)' :
-    t === 'pre' ? 'var(--color-brand-premium)' :
-                  'var(--color-brand-accent)';
 
   return (
-    <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+    <section className="border-b border-hairline">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-3 gap-10 md:gap-8">
           {columns.map((c, i) => (
             <Reveal key={c.tag} delay={i * 90}>
-              <div className="text-[11px] uppercase tracking-[0.22em] mb-4" style={{ color: toneColor(c.tone) }}>
+              <div className={`text-[11px] uppercase tracking-[0.22em] mb-4 ${toneTextClass(c.tone)}`}>
                 {c.tag}
               </div>
               <h3 className="font-serif text-2xl leading-snug tracking-tight text-content-primary">
@@ -338,13 +489,10 @@ function Columns() {
               <p className="mt-4 text-sm leading-relaxed text-content-secondary">
                 {c.body}
               </p>
-              <ul
-                className="mt-5 space-y-2 text-[13px] pt-4"
-                style={{ borderTop: '1px solid var(--color-border-primary)' }}
-              >
+              <ul className="mt-5 space-y-2 text-[13px] pt-4 border-t border-hairline">
                 {c.bullets.map((b) => (
                   <li key={b} className="flex items-baseline gap-2 text-content-primary">
-                    <span className="font-mono text-[11px]" style={{ color: toneColor(c.tone) }}>→</span>
+                    <span className={`font-mono text-[11px] ${toneTextClass(c.tone)}`}>→</span>
                     <span>{b}</span>
                   </li>
                 ))}
@@ -371,12 +519,7 @@ function AssetClasses() {
     ['Raw land', 'appreciation-play, zone transitions'],
   ];
   return (
-    <section
-      style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-        borderBottom: '1px solid var(--color-border-primary)',
-      }}
-    >
+    <section className="bg-bg-secondary border-b border-hairline">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="grid md:grid-cols-12 gap-8">
           <Reveal className="md:col-span-4">
@@ -393,13 +536,10 @@ function AssetClasses() {
             </p>
           </Reveal>
           <div className="md:col-span-8">
-            <div style={{ borderTop: '1px solid var(--color-border-strong)' }}>
+            <div className="border-t border-hairline-strong">
               {rows.map(([name, note], i) => (
                 <Reveal key={name} delay={i * 30}>
-                  <div
-                    className="flex items-baseline justify-between py-3.5"
-                    style={{ borderBottom: '1px solid var(--color-border-primary)' }}
-                  >
+                  <div className="flex items-baseline justify-between py-3.5 border-b border-hairline">
                     <div className="flex items-baseline gap-4">
                       <span className="font-mono text-[11px] tabular-nums text-content-muted">
                         {String(i + 1).padStart(2, '0')}
@@ -424,7 +564,7 @@ function AssetClasses() {
 
 function Conviction() {
   return (
-    <section style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+    <section className="border-b border-hairline">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24 grid md:grid-cols-12 gap-10">
         <Reveal className="md:col-span-5">
           <div className="text-[11px] uppercase tracking-[0.22em] mb-4 text-premium">
@@ -460,11 +600,7 @@ function Conviction() {
 function Close() {
   const navigate = useNavigate();
   return (
-    <section
-      style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-      }}
-    >
+    <section className="bg-bg-secondary">
       <div className="max-w-6xl mx-auto px-6 py-20 md:py-24">
         <div className="max-w-3xl">
           <div className="text-[11px] uppercase tracking-[0.22em] mb-5 text-premium">
@@ -479,21 +615,10 @@ function Close() {
             spreadsheet tabs.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
-            <button
-              onClick={() => navigate('/login')}
-              className="text-sm font-medium text-white px-5 py-2.5 rounded-md hover:brightness-110"
-              style={{ backgroundColor: 'var(--color-brand-accent)' }}
-            >
-              Request access →
+            <button onClick={() => navigate('/login')} className={PRIMARY_CTA}>
+              Request access <ArrowRight size={15} />
             </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="text-sm font-medium px-5 py-2.5 rounded-md text-content-primary"
-              style={{
-                border: '1px solid var(--color-border-strong)',
-                backgroundColor: 'transparent',
-              }}
-            >
+            <button onClick={() => navigate('/login')} className={SECONDARY_CTA}>
               Sign in
             </button>
           </div>
@@ -505,12 +630,7 @@ function Close() {
 
 function Footer() {
   return (
-    <footer
-      style={{
-        backgroundColor: 'var(--color-bg-primary)',
-        borderTop: '1px solid var(--color-border-primary)',
-      }}
-    >
+    <footer className="bg-bg-primary border-t border-hairline">
       <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px]">
         <div>
           <span className="font-serif text-base text-content-primary">
@@ -534,10 +654,7 @@ function Footer() {
 
 export default function LandingPage() {
   return (
-    <div
-      className="min-h-screen antialiased text-content-primary"
-      style={{ backgroundColor: 'var(--color-bg-primary)' }}
-    >
+    <div className="min-h-screen antialiased text-content-primary bg-bg-primary">
       <Nav />
       <Hero />
       <LiveTicker />

@@ -6029,3 +6029,52 @@ to mark Phase 4 — and the whole adoption plan — complete.
 - Ontology adoption — all four phases complete.
 - Operator follow-ups tracked in `TODO_OPERATOR.md`.
 
+
+## 2026-05-22 - Systemic audit + landing page rebuild (Phase 1)
+
+### What was worked on
+
+A full first-principles audit of the REDIP ecosystem (product intent,
+frontend, backend, database, infrastructure, UX), followed by the first
+execution phase from the resulting roadmap.
+
+Audit: three parallel deep-dives (backend, frontend, database) plus a
+first-hand read of the frontend core. Verdict - REDIP is a mature product
+with strong bones (deterministic kernel, deal-centric model, RLS, audit
+trail, AI routing, design-token system); the work ahead is consolidation,
+polish, and a few high-leverage additions, not a rewrite. A ten-phase
+roadmap was produced, sequenced by leverage: (1) landing page,
+(2) design system, (3) retire the dark-mode CSS override hack,
+(4) deal-workspace polish, (5) decompose frontend god-files,
+(6) module integration, (7) provenance + risk moat, (8) onboarding,
+plus database/infra hygiene.
+
+Phase 1 - landing page rebuild (PR #495): LandingPage.jsx rebuilt around
+a faithful, on-brand product preview - a deal cockpit (underwriting KPIs,
+quarterly cash-flow chart, deal risk radar, evidence trail) rendered in
+REDIP's own design language. The page previously described REDIP in prose
+with no product visible. Also: full hover/focus-visible/active states on
+every CTA; static inline colour/border styles replaced with semantic
+tokens. Illustrative sample figures only, no fabricated facts.
+
+### Plain-English recap
+- The home page now shows the actual product (a realistic picture of a
+  deal screen) instead of only describing it in words.
+- Every button on the page reacts properly to mouse and keyboard.
+- Works in dark mode, light mode, and on a phone.
+
+### PRs opened / merged
+- PR #495 - feat(landing): rebuild the landing page around a product
+  preview - opened; CI frontend check + Vercel deploy green. Not merged
+  (operator authorises production deploys).
+
+### Validation
+- Frontend build clean (11s). Frontend tests: 741/741 pass.
+- Verified in browser: dark + light themes, desktop + mobile, no console errors.
+
+### What's left to do
+- Roadmap Phases 2-10 (tracked): design-system primitives, retire the
+  dark-mode CSS hack, deal-workspace polish, decompose god-files, module
+  integration, provenance + risk moat, onboarding, database/infra hygiene.
+- Next up: Phase 2 - expand the design system (Button, Modal, Tabs,
+  Field, Tooltip primitives).
