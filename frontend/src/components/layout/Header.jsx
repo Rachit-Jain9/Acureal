@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Search, Moon, Sun, Menu } from 'lucide-react';
+import { Search, Moon, Sun, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import useThemeStore from '../../store/themeStore';
@@ -52,13 +52,6 @@ export default function Header({ onMobileMenuOpen }) {
           className="p-2 rounded-md hover:bg-surface text-content-secondary"
         >
           {mode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
-
-        <button
-          className="p-2 rounded-md hover:bg-surface text-content-secondary"
-          aria-label="Notifications"
-        >
-          <Bell size={17} />
         </button>
 
         <div className="flex items-center gap-2 pl-2">

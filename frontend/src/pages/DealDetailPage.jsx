@@ -1,20 +1,6 @@
 import { useState } from 'react';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Edit2,
-  Trash2,
-  ArrowRight,
-  ChevronDown,
-  ChevronUp,
-  X,
-  Loader2,
-  Presentation,
-  FileDown,
-  Share2,
-  BookText,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Edit2, Trash2, ArrowRight, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import {
   useDealWorkspace,
   useTransitionStage,
@@ -24,23 +10,22 @@ import {
 import { DealContextProvider } from '../hooks/useDealContext';
 import useAuthStore from '../store/authStore';
 import Badge from '../components/common/Badge';
-import { Skeleton, SkeletonKpi, SkeletonCard } from '../design-system';
-import { toast } from '../components/common/Toast';
-import { exportsAPI } from '../services/api';
-import { downloadAxiosResponse } from '../utils/download';
+import {
+  Skeleton, SkeletonKpi, SkeletonCard,
+  Button, Modal, Tabs, Field, Input, Select, Textarea,
+} from '../design-system';
+import ExportMenu from '../components/deal/ExportMenu';
 import {
   STAGE_CONFIG,
   STAGE_TRANSITIONS,
   PRIORITY_CONFIG,
   DEAL_TYPE_LABELS,
 } from '../utils/format';
-// PR-NX59 (2026-05-19) — shared taxonomy source. Replaces the local
-// DEAL_STRUCTURE_LABELS + ASSET_CLASS_LABELS constants that used to
-// live below; values now match exactly what the create form in
-// DealsPage renders, so a deal edited here can never have a structure
-// label that mismatches what was offered at creation time.
-import { ASSET_CLASS_LABELS as SHARED_ASSET_CLASS_LABELS } from '../utils/assetClasses';
-import { DEAL_STRUCTURE_LABELS as SHARED_DEAL_STRUCTURE_LABELS } from '../utils/dealStructures';
+// Shared taxonomy source — values match exactly what the create form in
+// DealsPage renders, so a deal edited here can never carry a structure or
+// asset-class label that mismatches what was offered at creation.
+import { ASSET_CLASS_LABELS } from '../utils/assetClasses';
+import { DEAL_STRUCTURE_LABELS } from '../utils/dealStructures';
 
 // Tab components
 import OverviewTab from '../components/deal/OverviewTab';
@@ -67,11 +52,6 @@ const TABS = [
   { id: 'comps',      label: 'Market / Comps' },
   { id: 'audit',      label: 'Audit' },
 ];
-
-// PR-NX59 — local aliases preserve readability at the existing call sites;
-// values come from the shared utility files (single source of truth).
-const DEAL_STRUCTURE_LABELS = SHARED_DEAL_STRUCTURE_LABELS;
-const ASSET_CLASS_LABELS = SHARED_ASSET_CLASS_LABELS;
 
 const buildEditForm = (deal) => ({
   name:               deal.name || '',
@@ -107,10 +87,9 @@ export default function DealDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
 
-  // Unified workspace read — one round-trip feeds the entire deal page
-  // (overview, parcel, zoning, financial, DD, risk, documents, activity).
-  // Tabs that want pre-fetched slices can still call the workspace hook
-  // directly; the shared query key de-dupes.
+  // One unified workspace read feeds the whole deal page; tabs that want
+  // pre-fetched slices call the workspace hook directly and the shared
+  // query key de-dupes.
   const { data: workspace, isLoading, isError } = useDealWorkspace(id);
   const deal = workspace?.deal;
   const transitionStage = useTransitionStage();
@@ -124,19 +103,13 @@ export default function DealDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
-  const [exportingPptx, setExportingPptx] = useState(false);
-  const [exportingTearSheet, setExportingTearSheet] = useState(false);
-  // PR-NX39 (2026-05-17): per-format busy state for the new DOCX
-  // underwriting-report download button.
-  const [exportingDocx, setExportingDocx] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const canEdit = ['owner', 'admin', 'editor'].includes(user?.role);
 
-  const setTab = (tabId) => {
-    setSearchParams({ tab: tabId });
-  };
+  const setTab = (tabId) => setSearchParams({ tab: tabId });
+  const updateField = (key, value) => setEditForm((f) => ({ ...f, [key]: value }));
 
   const handleStageTransition = async (newStage) => {
     try {
@@ -147,7 +120,7 @@ export default function DealDetailPage() {
         navigate('/dashboard/deals');
       }
     } catch {
-      // Mutation hook handles toast
+      // Mutation hook handles the toast
     }
   };
 
@@ -156,7 +129,7 @@ export default function DealDetailPage() {
       await deleteDeal.mutateAsync(id);
       navigate('/dashboard/deals');
     } catch {
-      // Mutation hook handles toast
+      // Mutation hook handles the toast
     }
   };
 
@@ -173,68 +146,12 @@ export default function DealDetailPage() {
       await updateDeal.mutateAsync({ id, data: buildEditPayload(editForm) });
       setShowEditModal(false);
     } catch {
-      // Mutation hook handles toast
-    }
-  };
-
-  const handleExportPptx = async () => {
-    setExportingPptx(true);
-    try {
-      const response = await exportsAPI.dealPptx(id);
-      const safeName = (deal?.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadAxiosResponse(response, `redip-${safeName}.pptx`);
-      toast.success('PPTX deck downloaded');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'PPTX export failed');
-    } finally {
-      setExportingPptx(false);
-    }
-  };
-
-  // PR-NX39 (2026-05-17): institutional-grade DOCX underwriting report.
-  // 22 sections (Cover → ToC → AI-Assisted Briefing → Executive Summary
-  // → ... → Risk Register → DD Status → Approvals Tracker → Provenance →
-  // Pros & Cons → Score → Methodology & Assumptions → Disclaimer). Built
-  // by buildDealReportDocx (PR-NX18 / PR-NX35 / PR-NX36 / PR-NX37).
-  const handleExportDocx = async () => {
-    setExportingDocx(true);
-    try {
-      const response = await exportsAPI.dealDocx(id);
-      const safeName = (deal?.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      const today = new Date().toISOString().slice(0, 10);
-      downloadAxiosResponse(response, `redip-${safeName}-underwriting-${today}.docx`);
-      toast.success('Underwriting report downloaded');
-    } catch (error) {
-      // 403 here means DOCX_REPORT_ENABLED isn't flipped on prod for
-      // non-admin users — keep the server message verbatim so the
-      // operator knows what to do.
-      toast.error(error.response?.data?.message || 'Underwriting report download failed');
-    } finally {
-      setExportingDocx(false);
-    }
-  };
-
-  // Investor tear-sheet — 2-page landscape PDF combining KPIs, property,
-  // economics, AI synthesis, risks, and comps. Lighter-weight than the
-  // full PPTX deck; designed to be the one-page-printable IC handoff.
-  const handleExportTearSheet = async () => {
-    setExportingTearSheet(true);
-    try {
-      const response = await exportsAPI.dealPdf(id);
-      const safeName = (deal?.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      const today = new Date().toISOString().slice(0, 10);
-      downloadAxiosResponse(response, `redip-${safeName}-tear-sheet-${today}.pdf`);
-      toast.success('Tear-sheet PDF downloaded');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Tear-sheet export failed');
-    } finally {
-      setExportingTearSheet(false);
+      // Mutation hook handles the toast
     }
   };
 
   // ── Loading / error states ────────────────────────────────────────────────
-  // Mirrors the deal workspace shape — back-nav, hero header, stage strip,
-  // KPI row, and tab body — so when data lands the layout doesn't reflow.
+  // Mirrors the deal workspace shape so the layout doesn't reflow when data lands.
   if (isLoading) {
     return (
       <div aria-busy="true">
@@ -267,480 +184,334 @@ export default function DealDetailPage() {
   if (isError || !deal) {
     return (
       <div className="text-center py-24">
-        <p className="text-red-600 mb-4 text-sm">Failed to load deal details.</p>
-        <button onClick={() => navigate('/dashboard/deals')} className="btn btn-secondary">
+        <p className="text-data-negative mb-4 text-sm">Failed to load deal details.</p>
+        <Button variant="secondary" onClick={() => navigate('/dashboard/deals')}>
           Back to Deals
-        </button>
+        </Button>
       </div>
     );
   }
 
-  const stageCfg    = STAGE_CONFIG[deal.stage]    || STAGE_CONFIG.screening;
+  const stageCfg    = STAGE_CONFIG[deal.stage]       || STAGE_CONFIG.screening;
   const priorityCfg = PRIORITY_CONFIG[deal.priority] || PRIORITY_CONFIG.medium;
-  const nextStages  = STAGE_TRANSITIONS[deal.stage] || [];
+  const nextStages  = STAGE_TRANSITIONS[deal.stage]  || [];
 
-  // ── Page ─────────────────────────────────────────────────────────────────
-  // Wrap in DealContextProvider so descendants can opt into useDealContext()
-  // instead of receiving deal data via props. Tabs migrate to the context one
-  // at a time in follow-up PRs; the existing prop interfaces stay unchanged
-  // here. The provider internally calls useDealWorkspace(id) which de-dupes
-  // against the same query key already in flight, so this is one render +
-  // zero extra network calls.
+  // DealContextProvider lets descendant tabs read deal data via useDealContext()
+  // instead of prop-drilling; it internally re-uses the same workspace query
+  // key, so this adds one render and zero extra network calls.
   return (
     <DealContextProvider dealId={id}>
-    <div>
-      {/* Back nav */}
-      <button
-        onClick={() => navigate('/dashboard/deals')}
-        className="flex items-center gap-1 text-sm text-content-secondary hover:text-content-secondary mb-4"
-      >
-        <ArrowLeft size={15} /> Back to Deals
-      </button>
-
-      {/* Deal header */}
-      <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-content-primary truncate">{deal.name}</h1>
-          <p className="text-sm text-content-secondary mt-0.5">
-            {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || ''}
-            {deal.asset_class && (
-              <> · {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}</>
-            )}
-            {deal.deal_structure && (
-              <> · {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}</>
-            )}
-            {(deal.city || deal.state) && (
-              <> · {[deal.city, deal.state].filter(Boolean).join(', ')}</>
-            )}
-          </p>
-        </div>
-
-        {/* Header action buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-          {canEdit && (
-            <button
-              onClick={handleExportTearSheet}
-              disabled={exportingTearSheet}
-              className="btn btn-secondary flex items-center gap-1 text-sm"
-              title="2-page investor tear-sheet PDF"
-            >
-              {exportingTearSheet ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-              Tear-Sheet
-            </button>
-          )}
-          {canEdit && (
-            <button
-              onClick={handleExportPptx}
-              disabled={exportingPptx}
-              className="btn btn-secondary flex items-center gap-1 text-sm"
-              title="Full investor PPTX deck"
-            >
-              {exportingPptx ? <Loader2 size={13} className="animate-spin" /> : <Presentation size={13} />}
-              Export Deck
-            </button>
-          )}
-          {canEdit && (
-            <button
-              onClick={handleExportDocx}
-              disabled={exportingDocx}
-              className="btn btn-secondary flex items-center gap-1 text-sm"
-              title="22-section institutional underwriting report (DOCX) — Cover, AI-Assisted Briefing, Executive Summary, Site, Overview, Demographics, Why-this-area, Job Growth, Social Infra, Supply & Demand, Comparables, Better Alternatives, Financials, Risk Register, DD Status, Approvals Tracker, Provenance, Pros & Cons, Score, Methodology, Disclaimer"
-            >
-              {exportingDocx ? <Loader2 size={13} className="animate-spin" /> : <BookText size={13} />}
-              Underwriting Report
-            </button>
-          )}
-          <button
-            onClick={() => setShowSharePanel(true)}
-            className="btn btn-secondary flex items-center gap-1 text-sm"
-          >
-            <Share2 size={13} /> Share
-          </button>
-          {canEdit && (
-            <button
-              onClick={handleEditOpen}
-              className="btn btn-secondary flex items-center gap-1 text-sm"
-            >
-              <Edit2 size={13} /> Edit
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="btn btn-secondary text-red-600 hover:bg-red-50 flex items-center gap-1 text-sm"
-            >
-              <Trash2 size={13} /> Delete
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Badge row */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
-        <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
-        <Badge tone={priorityCfg.tone}>{priorityCfg.label} Priority</Badge>
-        {deal.assigned_to_name && (
-          <span className="text-sm text-content-muted">Assigned to {deal.assigned_to_name}</span>
-        )}
-      </div>
-
-      {/* Stage Transition Panel (collapsible, always visible above tabs) */}
-      {nextStages.length > 0 && canEdit && (
-        <div className="card-editorial mb-5 p-0 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setStageExpanded((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-bg-secondary transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <ArrowRight size={15} className="text-content-muted" />
-              <span className="text-sm font-medium text-content-secondary">Stage Transition</span>
-              <span className="text-xs text-content-muted">
-                Currently: <strong className="font-semibold text-content-primary">{stageCfg.label}</strong>
-              </span>
-            </div>
-            {stageExpanded ? (
-              <ChevronUp size={15} className="text-content-muted" />
-            ) : (
-              <ChevronDown size={15} className="text-content-muted" />
-            )}
-          </button>
-          {stageExpanded && (
-            <div className="border-t border-hairline px-4 py-4 space-y-3">
-              <textarea
-                value={stageNotes}
-                onChange={(e) => setStageNotes(e.target.value)}
-                placeholder="Transition notes (optional)..."
-                rows={2}
-                className="input text-sm"
-              />
-              <div className="flex flex-wrap gap-2">
-                {nextStages.map((stage) => {
-                  const config = STAGE_CONFIG[stage] || STAGE_CONFIG.screening;
-                  return (
-                    <button
-                      key={stage}
-                      onClick={() => handleStageTransition(stage)}
-                      disabled={transitionStage.isPending}
-                      className={clsx(
-                        'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                        stage === 'dead'
-                          ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                          : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
-                      )}
-                    >
-                      Move to {config.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab navigation */}
-      <div
-        className="mb-6 overflow-x-auto"
-        style={{ borderBottom: '1px solid var(--color-border-primary)' }}
-      >
-        <nav className="flex gap-0 min-w-max">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setTab(tab.id)}
-              className="px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap"
-              style={{
-                borderBottom: `2px solid ${
-                  activeTab === tab.id ? 'var(--color-brand-accent)' : 'transparent'
-                }`,
-                color:
-                  activeTab === tab.id
-                    ? 'var(--color-brand-accent)'
-                    : 'var(--color-text-muted)',
-                marginBottom: '-1px',
-              }}
-              onMouseEnter={(e) => {
-                if (activeTab !== tab.id) {
-                  e.currentTarget.style.color = 'var(--color-text-primary)';
-                  e.currentTarget.style.borderBottomColor = 'var(--color-border-strong)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== tab.id) {
-                  e.currentTarget.style.color = 'var(--color-text-muted)';
-                  e.currentTarget.style.borderBottomColor = 'transparent';
-                }
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Active tab content */}
       <div>
-        {/* OverviewTab reads dealId + deal record from <DealContextProvider> via
-            useDealContext + useDealRecord — no props. Pilot consumer for the
-            TODO_ARCHITECTURE Phase A reactive seam (see hooks/useDealContext.jsx). */}
-        {activeTab === 'overview' && <OverviewTab />}
-        {/* All deal tabs read deal/dealId from useDealContext (TODO_ARCHITECTURE
-            Phase A complete). Only auxiliary parent-supplied props remain:
-            ParcelTab.canEdit (auth-derived), ZoningTab.setTab (router callback). */}
-        {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
-        {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
-        {activeTab === 'documents' && <DocumentsTab />}
-        {activeTab === 'activity' && <ActivityTab />}
-        {activeTab === 'financial' && <FinancialTab />}
-        {activeTab === 'dd' && <DDTab />}
-        {activeTab === 'risk' && <RiskTab />}
-        {activeTab === 'comps' && <CompsTab />}
-        {activeTab === 'audit' && <AuditTab />}
-      </div>
+        <button
+          onClick={() => navigate('/dashboard/deals')}
+          className="inline-flex items-center gap-1 text-sm text-content-secondary mb-4 rounded
+            transition-colors duration-150 ease-out hover:text-content-primary
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <ArrowLeft size={15} /> Back to Deals
+        </button>
 
-      {/* ── Edit Modal ───────────────────────────────────────────────────── */}
-      {showEditModal && editForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 p-6 my-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-content-primary">Edit Deal</h3>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-content-muted hover:text-content-secondary p-1"
+        {/* Deal header */}
+        <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-content-primary truncate">{deal.name}</h1>
+            <p className="text-sm text-content-secondary mt-0.5">
+              {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || ''}
+              {deal.asset_class && (
+                <> · {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}</>
+              )}
+              {deal.deal_structure && (
+                <> · {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}</>
+              )}
+              {(deal.city || deal.state) && (
+                <> · {[deal.city, deal.state].filter(Boolean).join(', ')}</>
+              )}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+            {canEdit && <ExportMenu dealId={id} dealName={deal.name} />}
+            <Button
+              variant="secondary"
+              leftIcon={<Share2 size={14} />}
+              onClick={() => setShowSharePanel(true)}
+            >
+              Share
+            </Button>
+            {canEdit && (
+              <Button variant="secondary" leftIcon={<Edit2 size={14} />} onClick={handleEditOpen}>
+                Edit
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                leftIcon={<Trash2 size={14} />}
+                onClick={() => setShowDeleteConfirm(true)}
               >
-                <X size={18} />
-              </button>
-            </div>
+                Delete
+              </Button>
+            )}
+          </div>
+        </div>
 
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              {/* Deal Name */}
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Deal Name
-                </label>
-                <input
-                  type="text"
+        {/* Badge row */}
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
+          <Badge tone={priorityCfg.tone}>{priorityCfg.label} Priority</Badge>
+          {deal.assigned_to_name && (
+            <span className="text-sm text-content-muted">Assigned to {deal.assigned_to_name}</span>
+          )}
+        </div>
+
+        {/* Stage transition panel (collapsible, above the tabs) */}
+        {nextStages.length > 0 && canEdit && (
+          <div className="card-editorial mb-5 p-0 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setStageExpanded((v) => !v)}
+              aria-expanded={stageExpanded}
+              className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors
+                hover:bg-bg-secondary focus-visible:outline-none focus-visible:bg-bg-secondary"
+            >
+              <div className="flex items-center gap-2">
+                <ArrowRight size={15} className="text-content-muted" />
+                <span className="text-sm font-medium text-content-secondary">Stage Transition</span>
+                <span className="text-xs text-content-muted">
+                  Currently: <strong className="font-semibold text-content-primary">{stageCfg.label}</strong>
+                </span>
+              </div>
+              {stageExpanded
+                ? <ChevronUp size={15} className="text-content-muted" />
+                : <ChevronDown size={15} className="text-content-muted" />}
+            </button>
+            {stageExpanded && (
+              <div className="border-t border-hairline px-4 py-4 space-y-3">
+                <Textarea
+                  value={stageNotes}
+                  onChange={(e) => setStageNotes(e.target.value)}
+                  placeholder="Transition notes (optional)…"
+                  rows={2}
+                  aria-label="Stage transition notes"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {nextStages.map((stage) => {
+                    const config = STAGE_CONFIG[stage] || STAGE_CONFIG.screening;
+                    return (
+                      <Button
+                        key={stage}
+                        variant={stage === 'dead' ? 'danger' : 'secondary'}
+                        onClick={() => handleStageTransition(stage)}
+                        disabled={transitionStage.isPending}
+                        loading={transitionStage.isPending && transitionStage.variables?.stage === stage}
+                      >
+                        Move to {config.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab navigation */}
+        <Tabs
+          items={TABS}
+          value={activeTab}
+          onChange={setTab}
+          ariaLabel="Deal sections"
+          className="mb-6"
+        />
+
+        {/* Active tab content. All deal tabs read deal/dealId from useDealContext;
+            only auxiliary parent-supplied props remain (ParcelTab.canEdit,
+            ZoningTab.setTab). */}
+        <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+          {activeTab === 'overview' && <OverviewTab />}
+          {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
+          {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
+          {activeTab === 'documents' && <DocumentsTab />}
+          {activeTab === 'activity' && <ActivityTab />}
+          {activeTab === 'financial' && <FinancialTab />}
+          {activeTab === 'dd' && <DDTab />}
+          {activeTab === 'risk' && <RiskTab />}
+          {activeTab === 'comps' && <CompsTab />}
+          {activeTab === 'audit' && <AuditTab />}
+        </div>
+
+        {/* ── Edit deal modal ──────────────────────────────────────────────── */}
+        <Modal
+          open={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          title="Edit deal"
+          size="lg"
+          footer={(
+            <>
+              <Button variant="secondary" onClick={() => setShowEditModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                form="edit-deal-form"
+                loading={updateDeal.isPending}
+              >
+                Save changes
+              </Button>
+            </>
+          )}
+        >
+          {editForm && (
+            <form id="edit-deal-form" onSubmit={handleEditSubmit} className="space-y-4">
+              <Field label="Deal name" required>
+                <Input
                   value={editForm.name}
-                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                  className="input"
+                  onChange={(e) => updateField('name', e.target.value)}
                   required
                 />
-              </div>
+              </Field>
 
-              {/* Type, Structure, Asset Class */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Deal Type
-                  </label>
-                  <select
+                <Field label="Deal type">
+                  <Select
                     value={editForm.dealType}
-                    onChange={(e) => setEditForm((f) => ({ ...f, dealType: e.target.value }))}
-                    className="input"
+                    onChange={(e) => updateField('dealType', e.target.value)}
                   >
                     {Object.entries(DEAL_TYPE_LABELS).map(([v, label]) => (
                       <option key={v} value={v}>{label}</option>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Deal Structure
-                  </label>
-                  <select
+                  </Select>
+                </Field>
+                <Field label="Deal structure">
+                  <Select
                     value={editForm.dealStructure}
-                    onChange={(e) => setEditForm((f) => ({ ...f, dealStructure: e.target.value }))}
-                    className="input"
+                    onChange={(e) => updateField('dealStructure', e.target.value)}
                   >
                     <option value="">— Select —</option>
                     {Object.entries(DEAL_STRUCTURE_LABELS).map(([v, label]) => (
                       <option key={v} value={v}>{label}</option>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Asset Class
-                  </label>
-                  <select
+                  </Select>
+                </Field>
+                <Field label="Asset class">
+                  <Select
                     value={editForm.assetClass}
-                    onChange={(e) => setEditForm((f) => ({ ...f, assetClass: e.target.value }))}
-                    className="input"
+                    onChange={(e) => updateField('assetClass', e.target.value)}
                   >
                     <option value="">— Select —</option>
                     {Object.entries(ASSET_CLASS_LABELS).map(([v, label]) => (
                       <option key={v} value={v}>{label}</option>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
 
-              {/* Priority */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Priority</label>
-                  <select
+                <Field label="Priority">
+                  <Select
                     value={editForm.priority}
-                    onChange={(e) => setEditForm((f) => ({ ...f, priority: e.target.value }))}
-                    className="input"
+                    onChange={(e) => updateField('priority', e.target.value)}
                   >
                     {Object.entries(PRIORITY_CONFIG).map(([v, cfg]) => (
                       <option key={v} value={v}>{cfg.label}</option>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    RERA Number
-                  </label>
-                  <input
-                    type="text"
+                  </Select>
+                </Field>
+                <Field label="RERA number">
+                  <Input
                     value={editForm.reraNumber}
-                    onChange={(e) => setEditForm((f) => ({ ...f, reraNumber: e.target.value }))}
-                    className="input"
+                    onChange={(e) => updateField('reraNumber', e.target.value)}
                     placeholder="Optional"
                   />
-                </div>
+                </Field>
               </div>
 
-              {/* Pricing */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Land Ask Price (₹ Cr)
-                  </label>
-                  <input
+                <Field label="Land ask price (₹ Cr)">
+                  <Input
                     type="number"
                     step="0.01"
                     min="0"
                     value={editForm.landAskPriceCr}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, landAskPriceCr: e.target.value }))
-                    }
-                    className="input"
+                    onChange={(e) => updateField('landAskPriceCr', e.target.value)}
                     placeholder="Optional"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Negotiated Price (₹ Cr)
-                  </label>
-                  <input
+                </Field>
+                <Field label="Negotiated price (₹ Cr)">
+                  <Input
                     type="number"
                     step="0.01"
                     min="0"
                     value={editForm.negotiatedPriceCr}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, negotiatedPriceCr: e.target.value }))
-                    }
-                    className="input"
+                    onChange={(e) => updateField('negotiatedPriceCr', e.target.value)}
                     placeholder="Optional"
                   />
-                </div>
+                </Field>
               </div>
 
-              {/* Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Target Launch Date
-                  </label>
-                  <input
+                <Field label="Target launch date">
+                  <Input
                     type="date"
                     value={editForm.targetLaunchDate}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, targetLaunchDate: e.target.value }))
-                    }
-                    className="input"
+                    onChange={(e) => updateField('targetLaunchDate', e.target.value)}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Expected Close Date
-                  </label>
-                  <input
+                </Field>
+                <Field label="Expected close date">
+                  <Input
                     type="date"
                     value={editForm.expectedCloseDate}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, expectedCloseDate: e.target.value }))
-                    }
-                    className="input"
+                    onChange={(e) => updateField('expectedCloseDate', e.target.value)}
                   />
-                </div>
+                </Field>
               </div>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">Notes</label>
-                <textarea
+              <Field label="Notes">
+                <Textarea
                   rows={4}
                   value={editForm.notes}
-                  onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                  className="input"
-                  placeholder="Internal notes, context, or instructions..."
+                  onChange={(e) => updateField('notes', e.target.value)}
+                  placeholder="Internal notes, context, or instructions…"
                 />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updateDeal.isPending}
-                  className="btn btn-primary"
-                >
-                  {updateDeal.isPending ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
+              </Field>
             </form>
-          </div>
-        </div>
-      )}
+          )}
+        </Modal>
 
-      {/* ── Delete Confirm Modal ─────────────────────────────────────────── */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-bold text-content-primary mb-2">Delete Deal</h3>
-            <p className="text-sm text-content-secondary mb-5">
-              This action will permanently delete this deal and its associated data. This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="btn btn-secondary"
-              >
+        {/* ── Delete confirmation modal ────────────────────────────────────── */}
+        <Modal
+          open={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          title="Delete deal"
+          size="sm"
+          footer={(
+            <>
+              <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
                 Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteDeal.isPending}
-                className="btn btn-danger"
-              >
-                {deleteDeal.isPending ? 'Deleting...' : 'Delete Permanently'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </Button>
+              <Button variant="danger" onClick={handleDelete} loading={deleteDeal.isPending}>
+                Delete permanently
+              </Button>
+            </>
+          )}
+        >
+          <p className="text-sm text-content-secondary">
+            This permanently deletes the deal and all of its associated data — documents,
+            diligence items, risks, financials and activity. This cannot be undone.
+          </p>
+        </Modal>
 
-      {/* ── Share Panel ───────────────────────────────────────────────── */}
-      {showSharePanel && (
-        <ShareDealPanel
-          dealId={id}
-          dealName={deal.name}
-          isOwner={deal.created_by === user?.id}
-          onClose={() => setShowSharePanel(false)}
-        />
-      )}
-
-    </div>
+        {/* ── Share panel ──────────────────────────────────────────────────── */}
+        {showSharePanel && (
+          <ShareDealPanel
+            dealId={id}
+            dealName={deal.name}
+            isOwner={deal.created_by === user?.id}
+            onClose={() => setShowSharePanel(false)}
+          />
+        )}
+      </div>
     </DealContextProvider>
   );
 }
