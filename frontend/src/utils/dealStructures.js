@@ -10,10 +10,11 @@
  * constant in `DealsPage.jsx` (create form) AND `DealDetailPage.jsx`
  * (edit form). Centralizing here removes the drift risk.
  *
- * Future PR (Strategic Review §VI top-1) will reconcile these with
- * `@redip/real-estate-ontology`'s `deal_structure.values` (currently a
- * different 4-entry taxonomy) and migrate this file to read from the
- * ontology package directly.
+ * The key set is contracted against `backend/src/constants/domain.js`
+ * `DEAL_STRUCTURES` and `@redip/real-estate-ontology`'s `deal_structure`
+ * by `__tests__/dealStructures.contract.test.js` — the three sources
+ * cannot silently drift. The ontology was reconciled to this 8-key list
+ * per the operator decision of 2026-05-22 (ontology v1.1.0).
  */
 export const DEAL_STRUCTURE_CONFIG = [
   { value: 'outright',      label: 'Outright Purchase' },

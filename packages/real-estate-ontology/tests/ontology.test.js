@@ -39,13 +39,25 @@ describe('@redip/real-estate-ontology', () => {
   });
 
   describe('deal structure taxonomy', () => {
-    test('exposes the 4 canonical deal structures', () => {
+    test('exposes the 8 canonical deal structures (mirrors domain.js DEAL_STRUCTURES)', () => {
       expect(ontology.getDealStructureKeys().sort()).toEqual([
-        'development_management',
-        'jda_area_share',
-        'jda_revenue_share',
-        'outright_purchase',
+        'area_share',
+        'ground_lease',
+        'hybrid',
+        'jda',
+        'jv',
+        'outright',
+        'profit_share',
+        'revenue_share',
       ]);
+    });
+
+    test('every deal structure carries key, label, india_notes', () => {
+      for (const ds of ontology.getDealStructures()) {
+        expect(ds).toHaveProperty('key');
+        expect(ds).toHaveProperty('label');
+        expect(ds).toHaveProperty('india_notes');
+      }
     });
   });
 
@@ -352,7 +364,7 @@ describe('@redip/real-estate-ontology', () => {
 
     test('raw ontology is the full v1.json object', () => {
       const raw = ontology.getRawOntology();
-      expect(raw.ontology_version).toBe('1.0.0');
+      expect(raw.ontology_version).toBe('1.1.0');
       expect(raw.asset_class).toBeDefined();
       expect(raw.extraction_field_map).toBeDefined();
     });

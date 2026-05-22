@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "ontology_version": "1.0.0",
-  "last_reviewed": "2026-05-17",
+  "ontology_version": "1.1.0",
+  "last_reviewed": "2026-05-22",
   "review_owner": "REDIP core",
   "description": "Canonical real-estate ontology for REDIP. Single source of truth for area / pricing / deal-structure / exit-strategy taxonomies + extraction field mappings. Bengaluru-priority, India-context. Used by document ingestion (extraction.service), apply-extractions endpoint, deal export builders, frontend form validation.",
 
@@ -22,12 +22,16 @@
   },
 
   "deal_structure": {
-    "description": "How the deal is structured between developer and landowner. Drives capital-stack accounting + exit-economics.",
+    "description": "How the deal is structured between developer and landowner. Drives capital-stack accounting + exit-economics. Mirrors the deals.deal_structure values enforced by the API (backend/src/constants/domain.js DEAL_STRUCTURES); contract-tested against the backend + frontend on every CI run. Reconciled to the live 8-key taxonomy per the operator decision of 2026-05-22.",
     "values": [
-      { "key": "outright_purchase",       "label": "Outright Purchase",         "india_notes": "Developer pays full land cost upfront; equity + debt on total cost." },
-      { "key": "jda_revenue_share",       "label": "JDA — Revenue Share",       "india_notes": "Landowner gets % of project revenue; developer covers all construction cost; no upfront land payment." },
-      { "key": "jda_area_share",          "label": "JDA — Area Share",          "india_notes": "Landowner gets % of built-up area (units / sqft); developer covers construction; landowner monetizes own share independently." },
-      { "key": "development_management",  "label": "Development Management",     "india_notes": "Fee-only — developer earns a % management fee; no developer equity at risk; landowner / fund owns the project." }
+      { "key": "outright",      "label": "Outright Purchase",          "india_notes": "Developer pays the full land cost upfront; equity + debt sit on the total project cost." },
+      { "key": "jv",            "label": "JV (Joint Venture)",          "india_notes": "Jointly-owned SPV — landowner and developer co-invest and share returns by equity stake; the JV holds title." },
+      { "key": "jda",           "label": "JDA (Development Agreement)",  "india_notes": "Joint Development Agreement — landowner contributes the land, developer builds, no upfront land payment; share terms set per deal." },
+      { "key": "revenue_share", "label": "Revenue Share",               "india_notes": "Landowner takes an agreed share of project revenue; developer funds all construction. No upfront land payment." },
+      { "key": "area_share",    "label": "Area Share",                  "india_notes": "Landowner takes a share of built-up area (units / sqft) to monetise independently; developer funds construction." },
+      { "key": "profit_share",  "label": "Profit Share",                "india_notes": "Landowner and developer split net project profit after costs, rather than gross revenue or built-up area." },
+      { "key": "ground_lease",  "label": "Ground Lease",                "india_notes": "Land is leased for a long tenure rather than sold; developer builds and operates, and the asset reverts on lease expiry." },
+      { "key": "hybrid",        "label": "Hybrid",                      "india_notes": "A blended structure combining elements of the above (e.g. part upfront payment, part area share); terms are deal-specific." }
     ]
   },
 
