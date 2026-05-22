@@ -95,13 +95,14 @@ describe('@redip/real-estate-ontology', () => {
   });
 
   describe('zoning + ownership taxonomies match Postgres enums', () => {
-    test('zoning values include the 11 zoning_type entries used by the deals/properties schema', () => {
-      const values = ontology.getZoningValues();
-      expect(values).toContain('residential');
-      expect(values).toContain('commercial');
-      expect(values).toContain('mixed_use');
-      expect(values).toContain('industrial');
-      expect(values).toContain('agricultural');
+    test('zoning values are exactly the 5 zoning_type enum entries (deals/properties schema)', () => {
+      expect(ontology.getZoningValues().slice().sort()).toEqual([
+        'agricultural',
+        'commercial',
+        'industrial',
+        'mixed_use',
+        'residential',
+      ]);
     });
 
     test('ownership_type includes A-khata + B-khata + mixed (Bengaluru-critical taxonomy)', () => {
@@ -364,7 +365,7 @@ describe('@redip/real-estate-ontology', () => {
 
     test('raw ontology is the full v1.json object', () => {
       const raw = ontology.getRawOntology();
-      expect(raw.ontology_version).toBe('1.1.0');
+      expect(raw.ontology_version).toBe('1.2.0');
       expect(raw.asset_class).toBeDefined();
       expect(raw.extraction_field_map).toBeDefined();
     });

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "ontology_version": "1.1.0",
+  "ontology_version": "1.2.0",
   "last_reviewed": "2026-05-22",
   "review_owner": "REDIP core",
   "description": "Canonical real-estate ontology for REDIP. Single source of truth for area / pricing / deal-structure / exit-strategy taxonomies + extraction field mappings. Bengaluru-priority, India-context. Used by document ingestion (extraction.service), apply-extractions endpoint, deal export builders, frontend form validation.",
@@ -57,11 +57,9 @@
   },
 
   "zoning": {
-    "description": "Mirrors the Postgres zoning_type enum. Karnataka Revised Master Plan 2031 zone codes. Used by extraction field mapping for sale-deed zoning columns.",
+    "description": "The coarse property-classification taxonomy — mirrors the 5-value Postgres `zoning_type` enum used by properties.zoning and deals.zoning (see database/schema.sql). Contract-tested against backend/src/constants/domain.js ZONING_TYPES + the frontend on every CI run. The detailed Karnataka RMP 2031 zone codes (R1/R2, Public & Semi-Public, etc.) are a separate, richer dataset held in master_plan_zones — not this enum.",
     "values": [
-      "residential", "commercial", "mixed_use", "industrial",
-      "agricultural", "institutional", "public_semi_public",
-      "open_space", "transportation", "utilities", "unknown"
+      "residential", "commercial", "mixed_use", "industrial", "agricultural"
     ]
   },
 

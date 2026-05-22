@@ -5867,3 +5867,67 @@ PR-NX135:
 - Theme-token unification — `HospitalityProformaSection` + the remaining financials files.
 - Operator follow-ups tracked in `TODO_OPERATOR.md`.
 
+
+## 2026-05-22 - Ontology Phase 3 — zoning reconciliation
+
+### What was worked on
+
+Workstream F, ontology adoption Phase 3. The plan (`docs/ONTOLOGY_ADOPTION.md`)
+flagged zoning as a "small, fixable gap — the create-parcel form is missing 6
+valid zones." Verifying that against the actual schema **reversed the finding**:
+
+- `database/schema.sql` defines `zoning_type` as a **5-value** enum
+  (`residential`, `commercial`, `mixed_use`, `industrial`, `agricultural`).
+- `domain.js ZONING_TYPES` carries the same 5, and `property.routes.js`
+  validates `zoning` against it. The `ParcelTab` create-form `<select>`
+  offered exactly those 5 — it was already correct.
+- The **ontology** was the outlier: its `zoning.values` listed **11** — the
+  five real ones plus six RMP master-plan zone codes (`institutional`,
+  `public_semi_public`, `open_space`, `transportation`, `utilities`,
+  `unknown`) that the `properties.zoning` enum does not accept. Had the form
+  been "fixed" to offer all 11, picking one of the six would have failed the
+  DB write.
+
+So the form was correct and the ontology was wrong. Phase 3 corrects the
+ontology and locks the taxonomy.
+
+PR-NX136:
+- `packages/real-estate-ontology/src/v1.json` — `zoning` corrected to the real
+  5-value enum; its description rewritten to state plainly that the detailed
+  RMP zones live separately in `master_plan_zones`. `ontology_version` bumped
+  1.1.0 → 1.2.0.
+- `packages/real-estate-ontology/tests/ontology.test.js` — the zoning test now
+  asserts the exact 5-value set (was a loose `toContain` check mislabelled
+  "11"); the version assertion updated to 1.2.0.
+- `frontend/src/utils/zoning.js` — NEW. `ZONING_CONFIG` (5 `{value,label}`
+  entries), the shared frontend source, mirroring `assetClasses.js` /
+  `dealStructures.js`.
+- `frontend/src/components/deal/ParcelTab.jsx` — the create-parcel form's
+  zoning `<select>` now renders from `ZONING_CONFIG` instead of 5 hardcoded
+  `<option>`s.
+- `frontend/src/utils/__tests__/zoning.contract.test.js` — NEW. Locks the
+  frontend `ZONING_CONFIG` ↔ backend `domain.js ZONING_TYPES` ↔ ontology
+  `zoning.values`.
+- `docs/ONTOLOGY_ADOPTION.md` — the incorrect "missing 6 zones" claim
+  corrected; Phases 2 and 3 marked shipped.
+
+Ownership type and exit strategy were audited: neither is surfaced as a
+frontend picker (ownership is a free-text column; exit strategy has no
+frontend list), so there is nothing to route — the ontology keeps them as
+reference taxonomies.
+
+### Plain-English recap
+- A check of the actual database showed an earlier note was wrong: the create-parcel form's five zoning choices were already correct — it was REDIP's shared "dictionary" that wrongly listed eleven. The dictionary is now fixed to match the database.
+- All three places zoning is written down are now locked together by an automatic check, so they can no longer drift apart.
+
+### PRs opened / merged
+- PR-NX136 - `fix(ontology): reconcile the zoning taxonomy to the real 5-value enum` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 86 files / 741 tests green (+3 — the new zoning contract test). Backend: 139 suites / 2272 tests green. Ontology package: 52 tests green. Production build clean. No migration.
+
+### What's left to do
+- Ontology adoption — Phase 4 (single-source the extraction field map) remains, deferred.
+- Theme-token unification — `HospitalityProformaSection` + the remaining financials files.
+- Operator follow-ups tracked in `TODO_OPERATOR.md`.
+
