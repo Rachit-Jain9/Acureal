@@ -2,6 +2,11 @@
 
 Manual actions that still require credentials, authority, or infrastructure outside this repo.
 
+> **Operator-facing checklist:** the current plain-English list of tasks for the
+> operator (Rachit) — backups, legal counsel, breach-runbook names, security
+> mailbox, schema squash — lives in [`TODO_OPERATOR.md`](TODO_OPERATOR.md). This
+> file (`TODO_MANUAL.md`) remains the engineering-detail record.
+
 ## Pending now (most recent first)
 
 _(no migrations pending — all Phase A1-A4 + the auto-derived columns migration confirmed applied 2026-05-19 via the operator running the migration-audit query in Supabase SQL editor; see DONE entries below)_
