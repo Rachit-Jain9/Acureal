@@ -9,6 +9,7 @@ import {
   useCreateProperty,
   useUpdateProperty,
   useApplyAutoDerivedContext,
+  useParcelIntelligence,
 } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
 import { toast } from '../common/Toast';
@@ -317,6 +318,10 @@ export default function ParcelTab({ canEdit }) {
   const applyAutoDerived = useApplyAutoDerivedContext();
   const hasProperty = !!deal.property_id;
   const hasLatLng = deal.lat != null && deal.lng != null;
+  // E1 — the K-GIS cadastral parcel polygon for the layered canvas below.
+  // The hook self-gates: it no-ops until a property record is linked.
+  const { data: parcelIntel } = useParcelIntelligence(deal.property_id);
+  const cadastralBoundary = parcelIntel?.kgis?.geometry_geojson || null;
   // PR-NX50 (2026-05-19) — field-provenance map for inline chips on
   // auto-filled site-info fields. Empty when no auto-fill events fire.
   const { data: provenanceData } = useFieldProvenance(dealId);
@@ -475,9 +480,19 @@ export default function ParcelTab({ canEdit }) {
         </dl>
       </div>
 
-      {/* Map Section */}
+      {/* Cadastral canvas — Workstream E1 (the spatial canvas). The map is
+          a co-equal half of the parcel story: a layered cadastral view —
+          basemap, K-GIS parcel boundary, RMP zoning, the geocoded pin —
+          sitting alongside the Site Information grid, not a thumbnail
+          beneath it. The layer panel on the map names every layer's
+          source so a teal outline is never an unexplained shape. */}
       <div className="card-editorial">
-        <SectionHeader size="sm" icon={MapPin} title="Location Map" />
+        <SectionHeader
+          size="sm"
+          icon={MapPin}
+          title="Cadastral canvas"
+          sub="Basemap, K-GIS parcel boundary, RMP zoning and the geocoded pin — switch layers from the panel on the map."
+        />
         {hasLatLng ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-4 text-sm text-content-secondary">
@@ -507,12 +522,16 @@ export default function ParcelTab({ canEdit }) {
             <ReadOnlyPropertyMap
               lat={deal.lat}
               lng={deal.lng}
+              geometryGeojson={cadastralBoundary}
+              geocodeStatus={deal.geocode_status}
               title="Linked property reference point"
               propertyId={deal.property_id || deal.propertyId || null}
               canEdit={canEdit}
             />
             <p className="text-xs text-content-secondary">
-              Pin at exact lat/lng. If the location looks off, re-geocode the property or enter manual coordinates on the Property Record.
+              {cadastralBoundary
+                ? 'The teal outline is the K-GIS cadastral atlas parcel polygon; the pin is the geocoded coordinate. If the two disagree, verify the survey number on Bhoomi before relying on the boundary.'
+                : 'Pin at the geocoded lat/lng. If the location looks off, re-geocode the property or set manual coordinates on the Property Record. A K-GIS parcel boundary draws here automatically once one is available.'}
             </p>
           </div>
         ) : (
@@ -521,7 +540,7 @@ export default function ParcelTab({ canEdit }) {
             <p className="text-sm">Geocode pending</p>
             {hasProperty && (
               <p className="text-xs text-content-muted">
-                Trigger geocoding from the Property record to show the map here.
+                Trigger geocoding from the Property record to show the canvas here.
               </p>
             )}
             {!hasProperty && canEdit && (

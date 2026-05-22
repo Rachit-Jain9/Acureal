@@ -5609,3 +5609,62 @@ PR-NX130:
 - Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
 - Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
 
+
+## 2026-05-22 - Workstream E1 — the layered cadastral canvas
+
+### What was worked on
+
+Workstream E of the product plan — the spatial canvas. This ships E1: the
+deal map promoted from a pin-with-mystery-buttons into a genuine layered
+cadastral canvas with one honest layer legend.
+
+**The gaps it closes.** The shared deal map (`ReadOnlyPropertyMap`) could
+already draw three layers — basemap, the K-GIS cadastral parcel polygon,
+the RMP zoning overlay — but they were scattered, unlabelled corner
+toggles with no legend: a teal outline was an unexplained shape. And the
+deal Parcel tab never even passed the cadastral polygon, so the same
+parcel showed its boundary on the Zoning tab but only a bare pin on the
+Parcel tab.
+
+**Approach decision.** A fourth map component was rejected — the repo
+already has four map surfaces and the hygiene rules favour a progressive
+refactor over more parallel UI. Instead the shared `ReadOnlyPropertyMap`
+was upgraded in place, so every consumer (Parcel tab, Zoning tab's K-GIS
+card, the Property detail page) inherits the canvas.
+
+PR-NX131:
+- `frontend/src/utils/cadastralLayers.js` — `buildCadastralLayers()`, a
+  pure deterministic descriptor of the four layers (basemap, cadastral
+  boundary, RMP zoning, parcel pin): each with a label, a swatch matching
+  exactly what the map paints, a status, and an honest provenance line.
+  The honesty rule lives here — a boundary is "K-GIS atlas" only when a
+  real polygon exists, and plainly "Not available" when it does not.
+- `frontend/src/components/maps/CadastralLayerPanel.jsx` — a collapsible
+  layer-control panel that renders that descriptor as a single legend:
+  swatches, status badges, provenance, the basemap selector and the
+  zoning switch, all in one place.
+- `ReadOnlyPropertyMap.jsx` — the scattered basemap and zoning toggles
+  are replaced by the one panel; a `geocodeStatus` prop now feeds the
+  pin's trust line. Move-pin and fullscreen stay as actions.
+- `ParcelTab.jsx` — pulls the K-GIS polygon via `useParcelIntelligence`
+  and passes it to the map, so the Parcel tab finally draws the cadastral
+  boundary. The section is reframed "Cadastral canvas" — a co-equal half
+  of the parcel story beside the Site Information grid.
+
+### Plain-English recap
+- The map on a deal's Parcel page is now a proper layered map, not just a dot. It draws the actual surveyed parcel outline (when available), the zoning, and the satellite or street view — and a small "Map layers" panel lists every layer and says where each one's data comes from.
+- The parcel outline now shows on the Parcel page too, not only the Zoning page — so the two pages finally agree.
+- Every layer is labelled honestly: the outline is called the official cadastral boundary only when it genuinely is one; otherwise it plainly says none is available.
+
+### PRs opened / merged
+- PR-NX131 - `feat(deal): E1 — the layered cadastral canvas` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 84 files / 735 tests green; production build clean (7.8s). Frontend-only — no migration, no backend change.
+- New: 8 `buildCadastralLayers` unit cases + 6 `CadastralLayerPanel` render checks. `ReadOnlyPropertyMap` had no prior tests; the panel it now hosts is covered.
+
+### What's left to do
+- Workstream F — F1 (schema squash) and F2 (dark-mode-hack removal) need operator involvement.
+- Phase 2.3 — DPA + Acceptable Use docs (blocked on Indian legal counsel).
+- Operator follow-ups still open: Supabase backup tier + restore drill; breach-runbook names; `security@redip.in` mailbox; engage counsel.
+

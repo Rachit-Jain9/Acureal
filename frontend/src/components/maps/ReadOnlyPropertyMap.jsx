@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Maximize2, Minimize2, Map as MapIcon, MapPin, Check, X as XIcon } from 'lucide-react';
+import { Maximize2, Minimize2, MapPin, Check, X as XIcon } from 'lucide-react';
 import clsx from 'clsx';
 import 'leaflet/dist/leaflet.css';
 import api, { propertiesAPI } from '../../services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '../common/Toast';
+import { buildCadastralLayers } from '../../utils/cadastralLayers';
+import CadastralLayerPanel from './CadastralLayerPanel';
 
 const toNumber = (value) => {
   const numeric = Number(value);
@@ -87,6 +89,9 @@ export default function ReadOnlyPropertyMap({
   lng,
   title = 'Parcel reference point',
   geometryGeojson = null,
+  // E1 — the geocode status of the pin (verified / manual / approximate /
+  // pending). Drives the parcel-pin trust line in the layer panel.
+  geocodeStatus = null,
   heightClassName = 'h-[420px]',
   zoom = 17,
   enableScrollZoom = true,
@@ -132,6 +137,24 @@ export default function ReadOnlyPropertyMap({
       return null;
     }
   }, [geometryGeojson]);
+
+  // E1 — the layer descriptor driving the CadastralLayerPanel: one honest
+  // legend over what the map is actually painting and where it comes from.
+  const cadastralLayers = useMemo(
+    () =>
+      buildCadastralLayers({
+        basemap: activeLayer,
+        hasBoundary: !!geometry,
+        zoning: {
+          enabled: zoningEnabled,
+          loading: zoningLoading,
+          error: zoningError,
+          featureCount: zoningGeo?.features?.length ?? null,
+        },
+        geocodeStatus,
+      }),
+    [activeLayer, geometry, zoningEnabled, zoningLoading, zoningError, zoningGeo, geocodeStatus],
+  );
 
   useEffect(() => {
     const handleChange = () => {
@@ -372,41 +395,11 @@ export default function ReadOnlyPropertyMap({
         </div>
       )}
 
-      {/* T3 — Zoning overlay toggle. Empty state when no zones have geom. */}
-      <div className="absolute left-3 top-3 z-[1000] flex flex-col gap-1.5">
-        <button
-          type="button"
-          onClick={() => setZoningEnabled((on) => !on)}
-          aria-pressed={zoningEnabled}
-          className={clsx(
-            'inline-flex items-center gap-1.5 rounded-editorial border bg-bg-elevated/95 px-2.5 py-1.5 text-[11px] font-medium shadow-sm backdrop-blur-sm transition-colors duration-150 ease-out',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
-            zoningEnabled
-              ? 'border-primary-400 text-content-primary'
-              : 'border-hairline text-content-secondary hover:border-primary-300 hover:text-content-primary',
-          )}
-          title={zoningEnabled ? 'Hide zoning overlay' : 'Show RMP zoning overlay'}
-        >
-          <MapIcon size={11} />
-          {zoningEnabled ? 'Zoning on' : 'Zoning'}
-        </button>
-        {zoningEnabled && zoningLoading && (
-          <div className="rounded-editorial border border-hairline bg-bg-elevated/95 px-2.5 py-1 text-[10px] text-content-muted shadow-sm backdrop-blur-sm">
-            Loading zones…
-          </div>
-        )}
-        {zoningEnabled && !zoningLoading && zoningError && (
-          <div className="rounded-editorial border border-amber-300 bg-amber-50/95 px-2.5 py-1 text-[10px] text-amber-900 shadow-sm">
-            {zoningError}
-          </div>
-        )}
-        {zoningEnabled && !zoningLoading && !zoningError && zoningGeo?.features?.length === 0 && (
-          <div className="max-w-[220px] rounded-editorial border border-hairline bg-bg-elevated/95 px-2.5 py-1.5 text-[10px] text-content-muted shadow-sm backdrop-blur-sm leading-relaxed">
-            No zone geometry uploaded yet for this area. Upload RMP zone GeoJSON in the master-plan admin to populate this overlay.
-          </div>
-        )}
-        {/* T6.1 — Move pin button (only when allowed) */}
-        {propertyId && canEdit && !relocateMode && (
+      {/* T6.1 — Move pin. The basemap selector and the zoning overlay now
+          live in the CadastralLayerPanel (top-right); only this relocate
+          action stays in the top-left corner. */}
+      {propertyId && canEdit && !relocateMode && (
+        <div className="absolute left-3 top-3 z-[1000]">
           <button
             type="button"
             onClick={() => {
@@ -419,37 +412,19 @@ export default function ReadOnlyPropertyMap({
             <MapPin size={11} />
             Move pin
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
+      {/* E1 — the cadastral layer panel: one honest legend for every layer
+          (basemap, cadastral boundary, RMP zoning, parcel pin), replacing
+          the scattered basemap + zoning toggles. */}
       {enableLayerToggle && (
-        <div
-          role="tablist"
-          aria-label="Map base layer"
-          className="absolute right-3 top-3 z-[1000] inline-flex rounded-editorial border border-hairline bg-bg-elevated/95 p-1 shadow-sm backdrop-blur-sm"
-        >
-          {Object.entries(TILE_LAYERS).map(([key, def]) => {
-            const isActive = activeLayer === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveLayer(key)}
-                className={clsx(
-                  'inline-flex items-center gap-1 rounded px-2.5 py-1 text-[11px] font-medium transition-colors duration-150 ease-out',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
-                  isActive
-                    ? 'bg-bg-secondary text-content-primary shadow-sm'
-                    : 'text-content-secondary hover:text-content-primary',
-                )}
-              >
-                {key === 'streets' ? <Layers size={11} /> : null}
-                {def.label}
-              </button>
-            );
-          })}
+        <div className="absolute right-3 top-3 z-[1000]">
+          <CadastralLayerPanel
+            layers={cadastralLayers}
+            onBasemapChange={setActiveLayer}
+            onToggleZoning={() => setZoningEnabled((on) => !on)}
+          />
         </div>
       )}
 
