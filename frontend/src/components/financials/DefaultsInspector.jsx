@@ -165,7 +165,7 @@ export default function DefaultsInspector({
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={close}
           />
-          <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
+          <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-bg-elevated shadow-2xl">
             <header className="relative overflow-hidden border-b border-hairline-strong bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-900 px-6 py-5 text-white">
               <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-400/30 to-sky-400/10 blur-2xl" />
               <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-teal-400/20 blur-2xl" />
@@ -255,7 +255,7 @@ export default function DefaultsInspector({
               )}
 
               {!loading && !error && data && totalCount === 0 && (
-                <div className="m-6 rounded-lg border border-hairline-strong bg-white px-4 py-8 text-center text-sm text-content-secondary">
+                <div className="m-6 rounded-lg border border-hairline-strong bg-bg-elevated px-4 py-8 text-center text-sm text-content-secondary">
                   No defaults match <span className="font-mono text-content-secondary">{search}</span>.
                 </div>
               )}
@@ -275,7 +275,7 @@ export default function DefaultsInspector({
               )}
             </div>
 
-            <footer className="border-t border-hairline-strong bg-white px-6 py-3 text-[11px] text-content-secondary">
+            <footer className="border-t border-hairline-strong bg-bg-elevated px-6 py-3 text-[11px] text-content-secondary">
               <div className="flex items-center justify-between gap-3">
                 <span>
                   Bengaluru-shaped baseline · India-first · Values are institutional guidelines, not prescriptions.
@@ -314,7 +314,7 @@ function CategoryChip({ active, onClick, icon: Icon, accent, label }) {
 function CategorySection({ category, items }) {
   const Icon = category.icon;
   return (
-    <section className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+    <section className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-sm overflow-hidden">
       <header className={`flex items-center gap-2 bg-gradient-to-r ${category.accent} px-4 py-2.5 text-white`}>
         <Icon size={14} />
         <h3 className="text-sm font-semibold tracking-wide">{category.label}</h3>

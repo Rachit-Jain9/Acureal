@@ -32,16 +32,16 @@ export default function ReferenceMenu({ assetClass }) {
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:border-stone-900 hover:text-stone-900"
+        className="inline-flex items-center gap-2 rounded-sm border border-hairline-strong bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary hover:border-content-primary hover:text-content-primary"
       >
         <BookOpen size={13} className="text-orange-700" />
         <span className="uppercase tracking-[0.12em]">Reference</span>
-        <ChevronDown size={12} className="text-stone-500" />
+        <ChevronDown size={12} className="text-content-secondary" />
       </button>
 
       {menuOpen && (
-        <div className="absolute right-0 mt-2 w-72 rounded-sm border border-stone-300 bg-white shadow-editorial-lg z-50">
-          <div className="px-3 py-2 border-b border-stone-200 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+        <div className="absolute right-0 mt-2 w-72 rounded-sm border border-hairline-strong bg-bg-elevated shadow-editorial-lg z-50">
+          <div className="px-3 py-2 border-b border-hairline text-[10px] uppercase tracking-[0.18em] text-content-secondary">
             Deal reference · {assetClass.replace(/_/g, ' ')}
           </div>
           <ul className="py-1">
@@ -49,12 +49,12 @@ export default function ReferenceMenu({ assetClass }) {
               <button
                 type="button"
                 onClick={() => pick('methodology')}
-                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-stone-50"
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-bg-secondary"
               >
                 <Sparkles size={14} className="mt-0.5 text-orange-700" />
                 <div>
-                  <div className="text-sm font-medium text-stone-900">Methodology</div>
-                  <div className="text-[11px] text-stone-500 leading-snug">
+                  <div className="text-sm font-medium text-content-primary">Methodology</div>
+                  <div className="text-[11px] text-content-secondary leading-snug">
                     Formulas, KPI definitions, asset-class playbook
                   </div>
                 </div>
@@ -64,12 +64,12 @@ export default function ReferenceMenu({ assetClass }) {
               <button
                 type="button"
                 onClick={() => pick('defaults')}
-                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-stone-50"
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-bg-secondary"
               >
-                <Database size={14} className="mt-0.5 text-stone-700" />
+                <Database size={14} className="mt-0.5 text-content-secondary" />
                 <div>
-                  <div className="text-sm font-medium text-stone-900">Defaults &amp; sources</div>
-                  <div className="text-[11px] text-stone-500 leading-snug">
+                  <div className="text-sm font-medium text-content-primary">Defaults &amp; sources</div>
+                  <div className="text-[11px] text-content-secondary leading-snug">
                     Every kernel default with its source and unit
                   </div>
                 </div>

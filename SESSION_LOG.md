@@ -5982,3 +5982,50 @@ system, the same proven mapping as NX134:
 - Ontology adoption — Phase 4 (single-source the extraction field map) remains, deferred.
 - Operator follow-ups tracked in `TODO_OPERATOR.md`.
 
+
+## 2026-05-22 - Financials theme cleanup finished + ontology Phase 4 closed
+
+### What was worked on
+
+The last of the Workstream-F theme-token cleanup, plus closing ontology
+adoption Phase 4.
+
+**Theme cleanup.** The three remaining financials files with hardcoded
+neutral classes were migrated to the semantic token system:
+- `ReferenceMenu.jsx` — a small all-`stone` file; every neutral → token
+  (`bg-bg-elevated`, `border-hairline*`, `text-content-*`).
+- `DefaultsInspector.jsx` — the `bg-white` panel / card surfaces →
+  `bg-bg-elevated`; the slide-over already used tokens internally.
+- `MethodologyExplorer.jsx` — the ~12 `bg-white` card surfaces →
+  `bg-bg-elevated`. This is a 1,100-line decoration-heavy "methodology
+  playbook" panel; the structural card backgrounds are migrated, while the
+  deliberately colourful saturated-gradient callouts (white text on a
+  saturated fill — correct in both themes) are intentionally left as-is.
+- A stray `text-stone-400` in `KPIStatCard.jsx` was swept up too, so the
+  financials folder now carries no hardcoded neutral Tailwind classes.
+
+**Ontology Phase 4 — verified already done.** Phase 4 of
+`docs/ONTOLOGY_ADOPTION.md` was "single-source the extraction field map".
+An audit found the auto-fill UI (`AutoFillFromDocumentsModal`) already
+reads it straight from the ontology (`ontologyV1.extraction_field_map`),
+the backend reads the same `v1.json`, and no frontend mirror exists — one
+source, zero drift surface. No code change was needed; the doc is updated
+to mark Phase 4 — and the whole adoption plan — complete.
+
+### Plain-English recap
+- The last few financial reference panels (the methodology guide, the defaults sheet, the reference menu) used to show white cards on REDIP's dark workspace. They now match the theme.
+- The financials section of the app is now fully theme-consistent.
+- A check confirmed REDIP's document-extraction "dictionary" was already single-sourced — no fix was needed there.
+
+### PRs opened / merged
+- PR-NX138 - `fix(financials): theme-token cleanup for the last reference panels` - opened, CI-verified, merged.
+
+### Validation
+- Frontend: 86 files / 741 tests green; production build clean. Frontend-only — no migration, no backend change.
+- Build- and test-verified. Not browser-verified — these are auth-gated financials panels; a live visual pass is recommended.
+
+### What's left to do
+- Workstream F theme-token unification is complete for the financials module. The public / legal pages stay intentionally light (they force the light theme).
+- Ontology adoption — all four phases complete.
+- Operator follow-ups tracked in `TODO_OPERATOR.md`.
+
