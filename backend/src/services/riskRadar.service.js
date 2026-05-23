@@ -102,21 +102,38 @@ const emptyCategory = (cat) => ({
   // `total` counts open/flagged flags (these drive posture); `ever` counts
   // flags in any status (this proves the failure mode was engaged with).
   flags: { total: 0, ever: 0, critical: 0, high: 0, medium: 0, low: 0 },
-  diligence: { total: 0, required_total: 0, required_open: 0, completed: 0, flagged: 0 },
+  // `overdue` counts required, still-open DD items whose due_date has
+  // already passed — these auto-escalate the category to "flagged" so the
+  // radar warns about stale diligence without an operator having to
+  // create a risk_flag by hand. The deterministic equivalent of the
+  // "auto-flag from DD" gap the product audit called out.
+  diligence: {
+    total: 0,
+    required_total: 0,
+    required_open: 0,
+    completed: 0,
+    flagged: 0,
+    overdue: 0,
+  },
   approvals: cat.approvals
     ? { total: 0, required_total: 0, required_validated: 0, required_pending: 0, expired_required: 0 }
     : null,
 });
 
 // Deterministic posture + human-readable signals for one category.
-//   flagged    — an active problem (open flag, flagged DD item, expired approval)
+//   flagged    — an active problem (open flag, flagged DD item, overdue
+//                required DD item, or expired approval)
 //   cleared    — the category was assessed and all required work is done
 //   unverified — not yet cleared: required work open, or nothing checked at all
 const assessCategory = (c) => {
   const { flags, diligence: dd, approvals: ap } = c;
   const signals = [];
 
-  const hasProblem = flags.total > 0 || dd.flagged > 0 || (ap ? ap.expired_required > 0 : false);
+  const hasProblem =
+    flags.total > 0
+    || dd.flagged > 0
+    || dd.overdue > 0
+    || (ap ? ap.expired_required > 0 : false);
   const openWork = dd.required_open > 0 || (ap ? ap.required_pending > 0 : false);
   const assessed = dd.total > 0 || flags.ever > 0 || (ap ? ap.total > 0 : false);
 
@@ -138,6 +155,16 @@ const assessCategory = (c) => {
     signals.push({
       tone: 'negative',
       text: `${dd.flagged} diligence item${plural(dd.flagged)} flagged for follow-up`,
+    });
+  }
+  if (dd.overdue > 0) {
+    // Overdue is its own dedicated signal — distinct from "flagged for
+    // follow-up" because the trigger (passed due date, still open) is
+    // automatic and doesn't require an operator to have classified the
+    // item. Same negative tone — same posture impact.
+    signals.push({
+      tone: 'negative',
+      text: `${dd.overdue} required diligence item${plural(dd.overdue)} overdue`,
     });
   }
   if (ap && ap.expired_required > 0) {
@@ -182,7 +209,7 @@ const getRiskRadar = async (dealId) => {
       [dealId]
     ),
     query(
-      `SELECT category, status, is_required
+      `SELECT category, status, is_required, due_date
          FROM dd_items
         WHERE deal_id = $1 AND organization_id = current_organization_id()`,
       [dealId]
@@ -210,6 +237,7 @@ const getRiskRadar = async (dealId) => {
   }
 
   // Due-diligence items.
+  const nowMs = Date.now();
   for (const row of ddRes.rows) {
     const c = byKey[mapDdCategory(row.category)];
     const status = String(row.status || 'pending').toLowerCase();
@@ -218,7 +246,16 @@ const getRiskRadar = async (dealId) => {
     if (required) c.diligence.required_total += 1;
     if (status === 'flagged') c.diligence.flagged += 1;
     else if (status === 'completed') c.diligence.completed += 1;
-    else if (required && OPEN_DD_STATUSES.has(status)) c.diligence.required_open += 1;
+    else if (required && OPEN_DD_STATUSES.has(status)) {
+      c.diligence.required_open += 1;
+      // Auto-escalation: a required, still-open DD item whose due_date
+      // has passed is treated as a flagged signal. The original status
+      // stays untouched in the database — this is a deterministic
+      // computation at radar-query time, no side effects.
+      if (row.due_date && new Date(row.due_date).getTime() < nowMs) {
+        c.diligence.overdue += 1;
+      }
+    }
   }
 
   // Approvals — all fold into Approvals & Regulatory.
