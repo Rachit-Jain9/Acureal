@@ -9,27 +9,31 @@ import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
 import { roleSatisfies } from '../../utils/roles';
 
+// `tourId` is consumed by the product-tour coachmarks (data-tour attribute
+// on the NavLink). Steps for nav items the user can't see (e.g. admin
+// items for a Viewer) are filtered out at tour-start, so adding a tourId
+// here is the only thing needed to make a nav item tour-aware.
 const primaryNavItems = [
-  { to: '/dashboard',              icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/dashboard/deals',        icon: Briefcase,        label: 'Deals' },
-  { to: '/dashboard/intelligence', icon: Brain,            label: 'Market Intelligence' },
-  { to: '/dashboard/comps',        icon: BarChart3,        label: 'Comps' },
-  { to: '/dashboard/reports',      icon: FileBarChart2,    label: 'Reports / Exports' },
+  { to: '/dashboard',              icon: LayoutDashboard, label: 'Dashboard',            tourId: 'nav-dashboard' },
+  { to: '/dashboard/deals',        icon: Briefcase,        label: 'Deals',               tourId: 'nav-deals' },
+  { to: '/dashboard/intelligence', icon: Brain,            label: 'Market Intelligence', tourId: 'nav-intelligence' },
+  { to: '/dashboard/comps',        icon: BarChart3,        label: 'Comps',               tourId: 'nav-comps' },
+  { to: '/dashboard/reports',      icon: FileBarChart2,    label: 'Reports / Exports',   tourId: 'nav-reports' },
 ];
 
 // Admin group: shared data curation surfaces. Visible only to roles that can
 // actually contribute (editor and above). Viewers see nothing here — they
 // don't approve zones or evidence facts.
 const adminNavItems = [
-  { to: '/dashboard/admin/master-plan',          icon: Map,      label: 'Master Plan' },
-  { to: '/dashboard/admin/parcel-intelligence',  icon: Database, label: 'Parcel Intelligence' },
-  { to: '/dashboard/admin/comps-queue',          icon: Inbox,    label: 'Comps Review Queue' },
-  { to: '/dashboard/admin/ai-usage',             icon: Activity, label: 'AI Usage & Cost' },
-  { to: '/dashboard/admin/ab-eval',              icon: Beaker,   label: 'A/B Evaluations' },
+  { to: '/dashboard/admin/master-plan',          icon: Map,      label: 'Master Plan',         tourId: 'nav-master-plan' },
+  { to: '/dashboard/admin/parcel-intelligence',  icon: Database, label: 'Parcel Intelligence', tourId: 'nav-parcel-intel' },
+  { to: '/dashboard/admin/comps-queue',          icon: Inbox,    label: 'Comps Review Queue',  tourId: 'nav-comps-queue' },
+  { to: '/dashboard/admin/ai-usage',             icon: Activity, label: 'AI Usage & Cost',     tourId: 'nav-ai-usage' },
+  { to: '/dashboard/admin/ab-eval',              icon: Beaker,   label: 'A/B Evaluations',     tourId: 'nav-ab-eval' },
 ];
 
 const tailNavItems = [
-  { to: '/dashboard/settings', icon: Settings, label: 'Settings' },
+  { to: '/dashboard/settings', icon: Settings, label: 'Settings', tourId: 'nav-settings' },
 ];
 
 // Two rendering modes share this component:
@@ -44,11 +48,12 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
   const desktopWidth = collapsed ? 'md:w-16' : 'md:w-60';
   const showAdminGroup = roleSatisfies(user?.role, ['editor']);
 
-  const renderItem = ({ to, icon: Icon, label }) => (
+  const renderItem = ({ to, icon: Icon, label, tourId }) => (
     <NavLink
       key={to}
       to={to}
       end={to === '/dashboard'}
+      data-tour={tourId}
       className={({ isActive }) =>
         clsx(
           'group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative',
