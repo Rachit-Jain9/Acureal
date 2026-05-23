@@ -6473,3 +6473,83 @@ Spine + Risk Radar.
 - Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
   IntelligencePage).
 - Database / infra hygiene (consolidate 85+ migrations, schema audit).
+
+## 2026-05-23 (late) — "What needs my attention?" — Today's Attention + deal urgency + Cmd-K discoverability
+
+### What was worked on
+
+Third continuation work block. Goal stated by the operator:
+*"Do multiple tasks…whichever goes well together and is of the highest
+priority and is best for website."* From a first-principles review,
+the biggest remaining UX gap was that the dashboard's aggregate
+counters told users *how many* items needed action — but not
+*which ones*. Three focused PRs answer that, end to end:
+
+11. **Today's Attention panel (PR #525).** New backend
+    `attention.service.js` returns five disjoint signals across the
+    live portfolio (overdue required DD, approvals expiring within
+    30 days, risk flags from the last 7 days, deals with no activity
+    in 14+ days, last 10 audit-log rows). New
+    `GET /api/dashboard/attention` route. New `AttentionPanel.jsx`
+    dashboard widget renders each section as a clickable row — each
+    row links straight to the right deal-tab. "All caught up" empty
+    state when no signal fires. 14 backend tests + 7 frontend tests.
+
+12. **Inline urgency signals on the Deals list (PR #526).** The same
+    signals, now per-deal, on every card in the Deals list. Backend
+    `dealSelect` gains two correlated subqueries — `overdue_dd_count`
+    and `new_risk_flag_count`. Frontend `UrgencyStrip` renders up to
+    three pills per deal (overdue DD red, new risks amber, "Nd quiet"
+    grey when no activity in 14+ days). Clean deals render no strip.
+    8 frontend tests pin the pluralisation, threshold boundary, and
+    fallback-to-`updated_at` semantics.
+
+13. **Cmd-K discoverability + recent deals (PR #527).** The Cmd-K
+    palette has been mounted at the Layout level for months — most
+    users never knew. Three small wires fix that:
+    - Header search input becomes a **button styled like an input**
+      that opens the palette on click. Visible "⌘K" / "Ctrl K" kbd
+      badge on the right makes the keyboard shortcut self-explanatory.
+    - Palette listens for a custom `redip:cmdk-open` event so the
+      header button (and any future caller) can open it without
+      simulating a keystroke.
+    - `DealDetailPage` calls `recordRecentDeal(deal)` on every load,
+      so the palette's "Recent deals" list actually populates instead
+      of staying eternally empty.
+    - New "Create new deal" quick action at the top of the palette;
+      deep-links to `/dashboard/deals?new=1`; `DealsPage` opens its
+      create modal on the param and strips it from the URL.
+
+### PRs opened / merged
+
+- PR #525 — feat(dashboard): Today's Attention panel — merged
+- PR #526 — feat(deals): inline urgency signals on each deal card — merged
+- PR #527 — feat(navigation): make Cmd-K discoverable + track recent deals — merged
+
+### Plain-English recap
+
+- New dashboard panel: **"What needs your attention"** — sits right
+  under the KPI strip. Shows specific items, not aggregates: "Title
+  search on Whitefield Land — 22 days overdue", click → opens that
+  deal's DD tab. If nothing's urgent, it says "All caught up."
+- Each card on the Deals page now carries up to three small pills:
+  red **"3 overdue DD"**, amber **"2 new risks"**, grey **"21d quiet"**.
+  Clean deals stay clean.
+- The search bar at the top of every page is now the quick-jump
+  palette. Click it (or press ⌘K / Ctrl K) → type a deal name to
+  jump. Recent deals show up automatically. New "Create new deal"
+  shortcut at the top of the palette.
+
+### Validation
+
+- Backend: 143 suites / 2316 tests green.
+- Frontend: 102 test files / 852 tests green; clean Vite builds.
+- Vercel preview verified per PR.
+
+### What's left to do
+
+- Dark-mode override-hack retirement (in progress; ~20 `bg-white`
+  call sites remain).
+- Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
+  IntelligencePage).
+- Database / infra hygiene (consolidate 85+ migrations).
