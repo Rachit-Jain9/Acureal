@@ -6678,3 +6678,61 @@ continuation block of polish:
 - Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
   IntelligencePage).
 - Database / infra hygiene (consolidate 85+ migrations).
+
+## 2026-05-24 (morning) — Hover-prefetch + dark-mode batch 4
+
+### What was worked on
+
+Two focused PRs on the "smooth, fast, optimized" axis:
+
+33. **Hover-prefetch deal workspace (PR #534).** The deal-detail page
+    fires one bundled `useDealWorkspace(id)` read on mount — a
+    200–500ms round-trip joining deal + financials + scenarios +
+    provenance + DD/risk/audit/documents/activities/waterfall. A
+    user's mouse cursor sits on a deal-list card hundreds of ms
+    before they click. New imperative hook
+    `usePrefetchDealWorkspace()` wires that hover window into a
+    `prefetchQuery` against the shared cache key, so the click
+    resolves instantly. Surfaces: Deals list cards (`onMouseEnter`
+    + `onFocus`), AttentionPanel signal rows (every overdue / risk /
+    expiring / stale row passes its `deal_id`), Cmd-K palette rows
+    (mouse hover + arrow-key highlight both prefetch). Cache-check
+    guards against thrash on a fast cursor sweep. 4 new unit tests
+    pin the contract (no-op for null, fires once for fresh, skips
+    when cached, populates shared cache key).
+
+34. **Dark-mode hack retirement — batch 4 (PR #535).** Migrated 29
+    more `bg-white` call sites → `bg-bg-elevated` across 5 in-app
+    files: AuditTimelineView, FinancialVisualizationLayer,
+    MasterPlanAdminPage, ParcelIntelligenceAdminPage, ReportsPage.
+    Transparency variants (`bg-white/N`) over gradient headers
+    intentionally left alone — they're not affected by the override.
+    Cumulative progress across batches 1–4: 114 → ~60 occurrences;
+    in-app surface now ~75% migrated.
+
+### PRs opened / merged
+
+- PR #534 — perf(navigation): hover-prefetch deal workspace + AttentionPanel + Cmd-K — merged
+- PR #535 — chore(theme): dark-mode hack retirement — batch 4 — merged
+
+### Plain-English recap
+
+- **Deals open instantly.** Hovering any deal card on the Deals list,
+  any row on Today's Attention, or any deal in the Cmd-K palette
+  starts loading the deal page in the background. By the time you
+  actually click, the page renders without a spinner.
+- **More styling-debt cleanup.** 29 more components moved off an
+  old dark-mode CSS hack. Invisible to users.
+
+### Validation
+
+- Frontend: 103 files / 862 tests pass (4 new on the prefetch hook).
+- Clean Vite build.
+
+### What's left to do
+
+- Dark-mode override-hack retirement (~30 in-app sites left across
+  MapPage + a long tail; ~28 on public/legal pages stay as-is).
+- Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
+  IntelligencePage).
+- Database / infra hygiene (consolidate 85+ migrations).
