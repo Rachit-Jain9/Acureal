@@ -223,7 +223,13 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               </Badge>
               {/* Provenance — every flag should be tied to a document or
                   manual verification before it carries weight in IC. */}
-              <EvidenceBadge ownerKind="risk_flag" ownerId={flag.id} compact />
+              <EvidenceBadge
+                ownerKind="risk_flag"
+                ownerId={flag.id}
+                ownerLabel={flag.title}
+                dealId={dealId}
+                compact
+              />
               {flag.source === 'ai_detector' && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded bg-accent-soft text-accent border border-accent/20"

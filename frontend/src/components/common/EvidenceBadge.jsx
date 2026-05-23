@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useId } from 'react';
-import { Paperclip, FileText, Link as LinkIcon, CheckCircle2, ShieldQuestion, Sparkles, Loader2, ExternalLink } from 'lucide-react';
+import { Paperclip, FileText, Link as LinkIcon, CheckCircle2, ShieldQuestion, Sparkles, Loader2, ExternalLink, Settings2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useEvidenceLinks, deriveEvidenceChip } from '../../hooks/useEvidenceLinks';
+import ManageEvidenceModal from './ManageEvidenceModal';
 
 /**
  * EvidenceBadge — the Provenance Spine surface on workflow rows.
@@ -97,8 +98,21 @@ const BUCKET_ICON = {
   needs_verification: ShieldQuestion,
 };
 
-export default function EvidenceBadge({ ownerKind, ownerId, compact = false }) {
+export default function EvidenceBadge({
+  ownerKind,
+  ownerId,
+  compact = false,
+  // Optional. When passed, the "Manage evidence" modal can offer the
+  // deal's uploaded documents in its attach form. Owners that don't sit
+  // inside a deal (e.g. a guidance_value) can omit it — the modal still
+  // works via manual_verification and external_url.
+  dealId = null,
+  // Human-readable label for the modal header — usually the item title
+  // (DD item name, risk flag title, comp project name).
+  ownerLabel = null,
+}) {
   const [open, setOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const ref = useRef(null);
   const tooltipId = useId();
 
@@ -271,10 +285,40 @@ export default function EvidenceBadge({ ownerKind, ownerId, compact = false }) {
                   )}
                 </ul>
               )}
+
+              {/* Footer: "Manage evidence" opens the attach / detach modal.
+                  Only shown for owners we know how to manage from the UI;
+                  for now that's everything the badge is mounted on. */}
+              <div className="mt-2 pt-2 border-t border-hairline-soft">
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    // Stop the click-outside listener from closing the
+                    // pop-over before the modal mounts and steals focus.
+                    e.stopPropagation();
+                  }}
+                  onClick={() => { setManageOpen(true); setOpen(false); }}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+                >
+                  <Settings2 size={10} />
+                  Manage evidence
+                </button>
+              </div>
             </>
           )}
         </span>
       )}
+
+      {/* Modal renders outside the pop-over via a portal — opening it
+          doesn't depend on the pop-over staying open. */}
+      <ManageEvidenceModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        ownerKind={ownerKind}
+        ownerId={ownerId}
+        ownerLabel={ownerLabel}
+        dealId={dealId}
+      />
     </span>
   );
 }
