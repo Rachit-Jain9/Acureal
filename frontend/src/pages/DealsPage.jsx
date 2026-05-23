@@ -14,6 +14,7 @@ import {
   useBulkReassignDeals,
   useBulkTransitionDeals,
   useBulkDeleteDeals,
+  usePrefetchDealWorkspace,
 } from '../hooks/useDeals';
 import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
@@ -1172,6 +1173,11 @@ function DealCard({ deal, selected = false, onToggleSelect }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const deleteDeal = useDeleteDeal();
+  // Pre-fetch the deal's full workspace payload on hover / focus so the
+  // click into the deal page resolves instantly. Bounded by React Query
+  // 30s staleTime + the cache-check inside the hook (no thrash if
+  // hovered repeatedly).
+  const prefetchWorkspace = usePrefetchDealWorkspace();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [showShare, setShowShare] = useState(false);
@@ -1248,6 +1254,8 @@ function DealCard({ deal, selected = false, onToggleSelect }) {
     <>
       <Link
         to={`/dashboard/deals/${deal.id}`}
+        onMouseEnter={() => prefetchWorkspace(deal.id)}
+        onFocus={() => prefetchWorkspace(deal.id)}
         className={clsx(
           'card-editorial hover:shadow-md transition-all cursor-pointer relative group',
           selected && 'ring-1 ring-accent/50 bg-accent-soft/20',

@@ -12,6 +12,7 @@ import { clsx } from 'clsx';
 import { Card, SectionHeader, ErrorState } from '../../design-system';
 import EmptyState from '../common/EmptyState';
 import { useAttention } from '../../hooks/useDashboard';
+import { usePrefetchDealWorkspace } from '../../hooks/useDeals';
 
 /**
  * AttentionPanel — "what should I do today?" tile on the dashboard.
@@ -86,7 +87,16 @@ function DealContextChip({ name, stage }) {
 
 // One row inside a signal section. `href` opens the right place; `right`
 // is a tiny tabular-nums label (days overdue, expiry date, severity).
-function SignalRow({ href, title, deal_name, deal_stage, right, rightTone = 'neutral', subtitle }) {
+//
+// `dealId` (optional) lets the row prefetch the deal's workspace payload
+// on hover / focus, so clicking from Today's Attention lands on the
+// deal page instantly. Reuses the same `usePrefetchDealWorkspace` hook
+// the Deals list card uses.
+function SignalRow({ href, title, deal_name, deal_stage, right, rightTone = 'neutral', subtitle, dealId }) {
+  const prefetchWorkspace = usePrefetchDealWorkspace();
+  const onIntent = dealId
+    ? () => prefetchWorkspace(dealId)
+    : undefined;
   const RIGHT_TONE = {
     danger: 'text-red-700',
     warn: 'text-amber-700',
@@ -96,6 +106,8 @@ function SignalRow({ href, title, deal_name, deal_stage, right, rightTone = 'neu
   return (
     <Link
       to={href}
+      onMouseEnter={onIntent}
+      onFocus={onIntent}
       className="flex items-start justify-between gap-3 px-3 py-2 -mx-3 hover:bg-bg-secondary transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
     >
       <div className="min-w-0 flex-1">
@@ -230,6 +242,7 @@ export default function AttentionPanel() {
                     subtitle={it.severity ? it.severity : null}
                     right={`${it.days_overdue}d over`}
                     rightTone="danger"
+                    dealId={it.deal_id}
                   />
                 </li>
               ))}
@@ -259,6 +272,7 @@ export default function AttentionPanel() {
                       : null}
                     right={`${it.days_until_expiry}d · ${formatDate(it.expiry_date)}`}
                     rightTone="warn"
+                    dealId={it.deal_id}
                   />
                 </li>
               ))}
@@ -291,6 +305,7 @@ export default function AttentionPanel() {
                     subtitle={it.category}
                     right={formatRelativeTime(it.created_at)}
                     rightTone="muted"
+                    dealId={it.deal_id}
                   />
                 </li>
               ))}
@@ -320,6 +335,7 @@ export default function AttentionPanel() {
                     deal_stage={it.stage}
                     right={`${it.days_stale}d quiet`}
                     rightTone="muted"
+                    dealId={it.id}
                   />
                 </li>
               ))}

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, X, ArrowRight, Clock } from 'lucide-react';
 import { dealsAPI } from '../../services/api';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { usePrefetchDealWorkspace } from '../../hooks/useDeals';
 
 /**
  * Cmd-K command palette.
@@ -95,6 +96,9 @@ export default function CommandPalette() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [recent, setRecent] = useState(() => loadRecent());
   const inputRef = useRef(null);
+  // Pre-fetch a deal's workspace when the user hovers / arrow-highlights
+  // it in the palette so pressing Enter resolves the next route instantly.
+  const prefetchWorkspace = usePrefetchDealWorkspace();
 
   const debouncedQuery = useDebounced(query.trim(), 200);
 
@@ -178,6 +182,18 @@ export default function CommandPalette() {
     setActiveIndex(0);
   }, [trimmedQ, dealSearch.data]);
 
+  // Arrow-key navigation: prefetch the deal under the highlighted row.
+  // Mouse hover prefetches via `onMouseEnter` on the row; this handles
+  // the keyboard-driven case (Up/Down arrows in the input).
+  useEffect(() => {
+    if (!open) return;
+    const item = flatItems[activeIndex];
+    if (!item) return;
+    if (item.kind === 'recent' || item.kind === 'deal') {
+      prefetchWorkspace(item.payload.id);
+    }
+  }, [open, activeIndex, flatItems, prefetchWorkspace]);
+
   const navigateTo = (item) => {
     if (item.kind === 'action') {
       navigate(item.payload.to);
@@ -215,12 +231,23 @@ export default function CommandPalette() {
   const renderRow = (label, hint, item, suffix = null, icon = null) => {
     const idx = runningIndex++;
     const isActive = idx === activeIndex;
+    // Pre-fetch on hover / highlight for any row that ultimately leads
+    // to a deal page. Recent + deal-search rows both point at a deal
+    // id; action rows that navigate to a deal-deep-link (today there
+    // aren't any) would also use this.
+    const dealIdForPrefetch =
+      (item.kind === 'recent' || item.kind === 'deal') ? item.payload.id : null;
+    const onIntent = () => {
+      setActiveIndex(idx);
+      if (dealIdForPrefetch) prefetchWorkspace(dealIdForPrefetch);
+    };
     return (
       <button
         type="button"
         key={`${item.kind}-${item.payload.id || idx}`}
         onClick={() => navigateTo(item)}
-        onMouseEnter={() => setActiveIndex(idx)}
+        onMouseEnter={onIntent}
+        onFocus={onIntent}
         className={`w-full flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors text-content-primary ${
           isActive ? 'bg-surface' : 'hover:bg-surface'
         }`}
