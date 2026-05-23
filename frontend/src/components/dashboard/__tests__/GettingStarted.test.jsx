@@ -22,12 +22,15 @@ describe('GettingStarted', () => {
     expect(screen.getByText('Welcome to REDIP.')).toBeInTheDocument();
   });
 
-  it('offers a create-deal step to editors and above', () => {
+  it('offers a create-deal step to editors and above with a deep-link to the create modal', () => {
     renderPanel({ role: 'editor' });
     expect(screen.getByText('Create your first deal')).toBeInTheDocument();
+    // The CTA deep-links into the create-deal modal directly (via ?new=1
+    // — same trigger Cmd-K uses) so the first click lands on the form,
+    // not the empty deals list.
     expect(screen.getByRole('link', { name: /new deal/i })).toHaveAttribute(
       'href',
-      '/dashboard/deals',
+      '/dashboard/deals?new=1',
     );
   });
 

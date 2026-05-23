@@ -25,7 +25,11 @@ function buildSteps(role) {
           icon: Briefcase,
           title: 'Create your first deal',
           body: 'Start with whatever you have — even a rough label like "Whitefield opportunity". REDIP is built for messy, early-stage sourcing data.',
-          to: '/dashboard/deals',
+          // ?new=1 deep-links into the Deals page and auto-opens the
+          // create-deal modal (the same trigger the Cmd-K palette uses)
+          // so the first click on the welcome panel lands the user on
+          // the form they're about to fill out, not the empty deals list.
+          to: '/dashboard/deals?new=1',
           cta: 'New deal',
         }
       : {
