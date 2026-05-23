@@ -39,7 +39,10 @@ const Checkbox = forwardRef(function Checkbox(
         <span
           aria-hidden="true"
           className={clsx(
-            'flex items-center justify-center w-4 h-4 rounded-sm border bg-bg-elevated',
+            // pointer-events-none lets clicks fall through to the absolutely-
+            // positioned native input beneath — without it, the visual square
+            // (and its child SVG check) eats the click and the box doesn't toggle.
+            'pointer-events-none flex items-center justify-center w-4 h-4 rounded-sm border bg-bg-elevated',
             'transition-colors duration-150 ease-out',
             'peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-bg-secondary',
             'peer-checked:bg-accent peer-checked:border-accent peer-disabled:opacity-50',
