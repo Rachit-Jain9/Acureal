@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
@@ -37,6 +38,39 @@ export function useDealWorkspace(id) {
     enabled: !!id,
     staleTime: 30_000,
   });
+}
+
+/**
+ * Imperative prefetch for a deal's workspace payload.
+ *
+ * Returns a function `(dealId) => void` that the caller can hook into a
+ * link's `onMouseEnter` / `onFocus`. The first hover starts the network
+ * request; by the time the user actually clicks the link, the workspace
+ * route renders instantly because `useDealWorkspace(id)` finds a fresh
+ * cache entry under the shared queryKey.
+ *
+ * Important guardrails:
+ *   • Only prefetch when the query isn't already in cache (no thrash).
+ *   • Don't await — the caller's event handler stays synchronous.
+ *   • Caller is expected to debounce / gate per-element so a fast cursor
+ *     sweep over a 12-card list doesn't fan out 12 round-trips. The
+ *     simplest pattern is `onMouseEnter` only (one event per card).
+ *
+ * Cache TTL piggybacks on `useDealWorkspace`'s 30s staleTime — a hover
+ * that doesn't lead to a click is wasted bandwidth bounded to 30s.
+ */
+export function usePrefetchDealWorkspace() {
+  const qc = useQueryClient();
+  return useCallback((id) => {
+    if (!id) return;
+    const key = ['deal-workspace', id];
+    if (qc.getQueryData(key)) return; // already cached, skip
+    qc.prefetchQuery({
+      queryKey: key,
+      queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
+      staleTime: 30_000,
+    });
+  }, [qc]);
 }
 
 export function usePipeline() {
