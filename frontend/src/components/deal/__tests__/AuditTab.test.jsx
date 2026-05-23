@@ -27,7 +27,7 @@ vi.mock('../../../services/api', () => ({
   },
 }));
 
-import AuditTab, { attachDeltas } from '../AuditTab';
+import AuditTab, { attachDeltas, groupEventsByDate, dateBucketLabel } from '../AuditTab';
 
 const renderWithClient = (ui) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -563,6 +563,96 @@ describe('AuditTab UX upgrades', () => {
       expect(screen.getByText('Edited')).toBeInTheDocument();
       expect(screen.queryByText('Auto-filled from documents')).not.toBeInTheDocument();
       expect(screen.queryByText(/applied from/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('date-grouped rendering', () => {
+    // Date bucketing — pure function tests.
+    it('labels today / yesterday / earlier-this-week correctly', () => {
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(10, 0, 0, 0);
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const threeDaysAgo = new Date(now);
+      threeDaysAgo.setDate(now.getDate() - 3);
+      expect(dateBucketLabel(today.toISOString())).toBe('Today');
+      expect(dateBucketLabel(yesterday.toISOString())).toBe('Yesterday');
+      expect(dateBucketLabel(threeDaysAgo.toISOString())).toBe('Earlier this week');
+    });
+
+    it('older dates get a localised "DD MMM" label (no year for current year)', () => {
+      const now = new Date();
+      const longAgo = new Date(now);
+      longAgo.setDate(now.getDate() - 20);
+      const label = dateBucketLabel(longAgo.toISOString());
+      // Format includes a month abbreviation; no year when same as now.
+      expect(label).toMatch(/[A-Za-z]{3}/);
+      expect(label).not.toContain(String(now.getFullYear()));
+    });
+
+    it('groupEventsByDate collapses adjacent same-day events into one bucket', () => {
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(15, 0, 0, 0);
+      const earlierToday = new Date(now);
+      earlierToday.setHours(9, 0, 0, 0);
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const groups = groupEventsByDate([
+        { id: 'a', created_at: today.toISOString() },
+        { id: 'b', created_at: earlierToday.toISOString() },
+        { id: 'c', created_at: yesterday.toISOString() },
+      ]);
+      expect(groups).toHaveLength(2);
+      expect(groups[0]).toEqual(expect.objectContaining({
+        label: 'Today',
+        items: [expect.objectContaining({ id: 'a' }), expect.objectContaining({ id: 'b' })],
+      }));
+      expect(groups[1]).toEqual(expect.objectContaining({
+        label: 'Yesterday',
+        items: [expect.objectContaining({ id: 'c' })],
+      }));
+    });
+
+    it('returns [] for an empty input array', () => {
+      expect(groupEventsByDate([])).toEqual([]);
+      expect(groupEventsByDate(null)).toEqual([]);
+      expect(groupEventsByDate(undefined)).toEqual([]);
+    });
+
+    it('renders the date headers in the timeline', () => {
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      eventsState = {
+        data: [
+          {
+            id: 'e1',
+            kind: 'mutation',
+            event_type: 'updated',
+            actor: { id: 'u1', name: 'R' },
+            created_at: now.toISOString(),
+            before: { notes: null },
+            after: { notes: 'today edit' },
+            metadata: {},
+          },
+          {
+            id: 'e2',
+            kind: 'mutation',
+            event_type: 'stage_changed',
+            actor: { id: 'u1', name: 'R' },
+            created_at: yesterday.toISOString(),
+            before: { stage: 'screening' },
+            after: { stage: 'site_visit' },
+            metadata: {},
+          },
+        ],
+        isLoading: false,
+      };
+      renderWithClient(<AuditTab />);
+      expect(screen.getByText('Today')).toBeInTheDocument();
+      expect(screen.getByText('Yesterday')).toBeInTheDocument();
     });
   });
 });
