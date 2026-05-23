@@ -167,6 +167,25 @@ const dealSelect = `
       AND rf.status IN ('open', 'flagged')
       AND rf.severity IN ('critical', 'high')
   ) as open_high_risk_count,
+  -- Urgency signals for the deals-list card. Same logic the dashboard
+  -- Attention panel uses, but rolled up per-deal here so the list can
+  -- render the badges inline without an N+1 lookup.
+  (
+    SELECT COUNT(*)
+    FROM dd_items ddi
+    WHERE ddi.deal_id = d.id
+      AND ddi.is_required = TRUE
+      AND ddi.status IN ('pending', 'in_progress')
+      AND ddi.due_date IS NOT NULL
+      AND ddi.due_date < NOW()
+  ) as overdue_dd_count,
+  (
+    SELECT COUNT(*)
+    FROM risk_flags rf
+    WHERE rf.deal_id = d.id
+      AND rf.status IN ('open', 'flagged')
+      AND rf.created_at > NOW() - INTERVAL '7 days'
+  ) as new_risk_flag_count,
   COALESCE(
     (
       SELECT json_agg(rf.title ORDER BY risk_order, created_at DESC)
@@ -420,6 +439,8 @@ const getDeals = async (filters = {}, pagination = {}) => {
     required_approval_count: parseInt(row.required_approval_count, 10) || 0,
     validated_approval_count: parseInt(row.validated_approval_count, 10) || 0,
     open_high_risk_count: parseInt(row.open_high_risk_count, 10) || 0,
+    overdue_dd_count: parseInt(row.overdue_dd_count, 10) || 0,
+    new_risk_flag_count: parseInt(row.new_risk_flag_count, 10) || 0,
     key_risks: Array.isArray(row.key_risks) ? row.key_risks : [],
   }));
 
