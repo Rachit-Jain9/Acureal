@@ -219,4 +219,154 @@ describe('getPortfolioRiskRadar', () => {
     // Average of [100, 0, 0, 0] = 25.
     expect(radar.open_severity.portfolio_score).toBe(25);
   });
+
+  // ── Overdue DD escalation in the portfolio rollup ───────────────────────
+
+  test('an overdue required DD item flags the deal and rolls up to the mode', async () => {
+    wire({
+      deals: [deal({ id: 'd1', name: 'Whitefield Land' })],
+      dd: [
+        {
+          deal_id: 'd1',
+          category: 'title_ownership',
+          status: 'pending',
+          is_required: true,
+          due_date: '2020-01-01',
+        },
+      ],
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    expect(radar.totals.flagged).toBe(1);
+    expect(radar.open_severity.overdue_dd).toBe(1);
+    expect(radar.open_severity.critical).toBe(0);
+    expect(radar.open_severity.high).toBe(0);
+
+    const titleMode = radar.failure_modes.find((m) => m.key === 'title_ownership');
+    expect(titleMode.flagged_deals).toBe(1);
+    expect(titleMode.overdue_total).toBe(1);
+
+    expect(radar.top_deals_at_risk).toHaveLength(1);
+    const top = radar.top_deals_at_risk[0];
+    expect(top.id).toBe('d1');
+    expect(top.overdue).toBe(1);
+    expect(top.posture).toBe('flagged');
+    expect(top.worst_category).toBe('Title & Ownership');
+    // OVERDUE_DD_WEIGHT (10) is the only score contribution here.
+    expect(top.score).toBe(10);
+  });
+
+  test('a future-due required pending DD item does NOT count as overdue', async () => {
+    wire({
+      deals: [deal()],
+      dd: [
+        {
+          deal_id: 'd1',
+          category: 'title_ownership',
+          status: 'pending',
+          is_required: true,
+          due_date: '2099-12-31',
+        },
+      ],
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    expect(radar.open_severity.overdue_dd).toBe(0);
+    expect(radar.totals.flagged).toBe(0);
+    // Future-due required item still leaves the category unverified.
+    expect(radar.totals.unverified).toBe(1);
+  });
+
+  test('overdue counts roll up across multiple deals and categories', async () => {
+    wire({
+      deals: [
+        deal({ id: 'd1', name: 'Deal One' }),
+        deal({ id: 'd2', name: 'Deal Two' }),
+      ],
+      dd: [
+        {
+          deal_id: 'd1',
+          category: 'title_ownership',
+          status: 'pending',
+          is_required: true,
+          due_date: '2020-01-01',
+        },
+        {
+          deal_id: 'd1',
+          category: 'financial_commercial',
+          status: 'in_progress',
+          is_required: true,
+          due_date: '2020-06-30',
+        },
+        {
+          deal_id: 'd2',
+          category: 'statutory',
+          status: 'pending',
+          is_required: true,
+          due_date: '2019-12-15',
+        },
+      ],
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    expect(radar.open_severity.overdue_dd).toBe(3);
+    expect(radar.totals.flagged).toBe(2);
+
+    const titleMode = radar.failure_modes.find((m) => m.key === 'title_ownership');
+    const financialMode = radar.failure_modes.find((m) => m.key === 'financial');
+    const approvalsMode = radar.failure_modes.find((m) => m.key === 'approvals_regulatory');
+    expect(titleMode.overdue_total).toBe(1);
+    expect(financialMode.overdue_total).toBe(1);
+    expect(approvalsMode.overdue_total).toBe(1);
+  });
+
+  test('overdue DD does not count when the item is completed or non-required', async () => {
+    wire({
+      deals: [deal()],
+      dd: [
+        // Overdue but completed — finished after the deadline, but done.
+        {
+          deal_id: 'd1',
+          category: 'title_ownership',
+          status: 'completed',
+          is_required: true,
+          due_date: '2020-01-01',
+        },
+        // Overdue but non-required — optional, doesn't escalate.
+        {
+          deal_id: 'd1',
+          category: 'physical_technical',
+          status: 'pending',
+          is_required: false,
+          due_date: '2020-01-01',
+        },
+      ],
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    expect(radar.open_severity.overdue_dd).toBe(0);
+    expect(radar.totals.flagged).toBe(0);
+  });
+
+  test('overdue DD pushes a deal up the top-at-risk ranking via the score', async () => {
+    wire({
+      deals: [
+        deal({ id: 'd1', name: 'Lots of overdue' }),
+        deal({ id: 'd2', name: 'One high flag' }),
+      ],
+      flags: [{ deal_id: 'd2', category: 'financial', severity: 'high', status: 'open' }],
+      dd: [
+        // 3 overdue required items on d1 — score contribution 3 × 10 = 30.
+        ...['title_ownership', 'statutory', 'physical_technical'].map((c) => ({
+          deal_id: 'd1',
+          category: c,
+          status: 'pending',
+          is_required: true,
+          due_date: '2020-01-01',
+        })),
+      ],
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    // d1 score 30 (3 overdue × 10) beats d2 score 15 (one high flag).
+    const order = radar.top_deals_at_risk.map((x) => x.id);
+    expect(order[0]).toBe('d1');
+    expect(radar.top_deals_at_risk[0].overdue).toBe(3);
+    expect(radar.top_deals_at_risk[0].score).toBe(30);
+  });
 });

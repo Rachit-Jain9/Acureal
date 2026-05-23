@@ -28,6 +28,11 @@
  *     about. Promoter risk continues to surface on each deal's Risk tab.
  *   • Closed and dead deals are excluded — they don't move and shouldn't
  *     inflate "open risks" numbers. The control list is LIVE_DEAL_STAGES.
+ *   • Overdue required DD items are auto-escalated to the "flagged" posture,
+ *     same as the per-deal radar (PR #517). Each overdue item also adds
+ *     OVERDUE_DD_WEIGHT to the deal's portfolio score so it ranks up
+ *     toward the top of "deals at risk" — between a high flag and a
+ *     medium flag in severity priority.
  */
 
 const { query } = require('../config/database');
@@ -44,6 +49,10 @@ const { LIVE_DEAL_STAGES } = require('../constants/domain');
 // dominates the ranking — intentional: one open critical risk SHOULD push
 // the deal to the top of the IC chair's queue.
 const SEVERITY_WEIGHTS = { critical: 30, high: 15, medium: 5, low: 1 };
+// Overdue weight sits between high (15) and medium (5) — an overdue
+// required DD item is roughly as alarming as a high-severity open flag
+// when the operator is triaging the portfolio.
+const OVERDUE_DD_WEIGHT = 10;
 const OPEN_FLAG_STATUSES = new Set(['open', 'flagged']);
 const OPEN_DD_STATUSES = new Set(['pending', 'in_progress']);
 
@@ -55,6 +64,12 @@ const emptyMode = (cat) => ({
   cleared_deals: 0,
   open_critical: 0,
   open_high: 0,
+  // Number of required, still-open DD items in this category whose due
+  // date has passed — summed across every deal in the portfolio. This is
+  // the auto-escalation signal from PR #517 surfaced at the portfolio
+  // zoom level, so the dashboard tile shows the same "stale diligence"
+  // warning the per-deal radar already does.
+  overdue_total: 0,
 });
 
 const emptyDealCategory = (cat) => ({
@@ -68,6 +83,7 @@ const emptyDealCategory = (cat) => ({
   dd_required_total: 0,
   dd_required_open: 0,
   dd_flagged: 0,
+  dd_overdue: 0,
   approvals_required_total: 0,
   approvals_required_pending: 0,
   approvals_expired_required: 0,
@@ -80,6 +96,7 @@ const assessCategoryPosture = (c) => {
   const hasProblem =
     c.flags_total > 0
     || c.dd_flagged > 0
+    || c.dd_overdue > 0
     || (c.is_approval_cat && c.approvals_expired_required > 0);
   const openWork =
     c.dd_required_open > 0
@@ -103,6 +120,7 @@ const emptyResponse = () => ({
     medium: 0,
     low: 0,
     total: 0,
+    overdue_dd: 0,
     portfolio_score: 0,
   },
   failure_modes: RADAR_CATEGORIES.map(emptyMode),
@@ -118,9 +136,11 @@ const emptyResponse = () => ({
  *     generated_at,
  *     empty,                      // true when the workspace has no live deals
  *     totals:        { deals, flagged, unverified, cleared },
- *     open_severity: { critical, high, medium, low, total, portfolio_score },
- *     failure_modes: [{ key, label, flagged_deals, unverified_deals, cleared_deals, open_critical, open_high }],
- *     top_deals_at_risk: [{ id, name, stage, posture, open_critical, open_high, score, worst_category }],
+ *     open_severity: { critical, high, medium, low, total, overdue_dd, portfolio_score },
+ *     failure_modes: [{ key, label, flagged_deals, unverified_deals, cleared_deals,
+ *                       open_critical, open_high, overdue_total }],
+ *     top_deals_at_risk: [{ id, name, stage, posture, open_critical, open_high,
+ *                            overdue, score, worst_category }],
  *     recently_flagged:  [{ flag_id, deal_id, deal_name, severity, title, category, created_at }],
  *   }
  *
@@ -149,7 +169,7 @@ const getPortfolioRiskRadar = async () => {
       [LIVE_DEAL_STAGES],
     ),
     query(
-      `SELECT dd.deal_id, dd.category, dd.status, dd.is_required
+      `SELECT dd.deal_id, dd.category, dd.status, dd.is_required, dd.due_date
          FROM dd_items dd
          JOIN deals d ON d.id = dd.deal_id
         WHERE dd.organization_id = current_organization_id()
@@ -198,6 +218,7 @@ const getPortfolioRiskRadar = async () => {
       open_high: 0,
       open_medium: 0,
       open_low: 0,
+      overdue: 0,
       score: 0,
     });
   }
@@ -220,6 +241,7 @@ const getPortfolioRiskRadar = async () => {
   }
 
   // DD items.
+  const nowMs = Date.now();
   for (const row of ddRes.rows) {
     const b = dealBuckets.get(row.deal_id);
     if (!b) continue;
@@ -229,18 +251,27 @@ const getPortfolioRiskRadar = async () => {
     c.dd_total += 1;
     if (required) c.dd_required_total += 1;
     if (status === 'flagged') c.dd_flagged += 1;
-    else if (required && OPEN_DD_STATUSES.has(status)) c.dd_required_open += 1;
+    else if (required && OPEN_DD_STATUSES.has(status)) {
+      c.dd_required_open += 1;
+      // Auto-escalation: a required, still-open DD item whose due_date
+      // has passed is treated as a flagged signal. Mirrors PR #517's
+      // per-deal radar logic exactly so the two views always agree.
+      if (row.due_date && new Date(row.due_date).getTime() < nowMs) {
+        c.dd_overdue += 1;
+        b.overdue += 1;
+        b.score += OVERDUE_DD_WEIGHT;
+      }
+    }
   }
 
   // Approvals — all fold into the Approvals & Regulatory category.
-  const now = Date.now();
   for (const row of approvalsRes.rows) {
     const b = dealBuckets.get(row.deal_id);
     if (!b) continue;
     const c = b.categories.approvals_regulatory;
     if (row.is_required === false) continue;
     c.approvals_required_total += 1;
-    if (row.expiry_date && new Date(row.expiry_date).getTime() < now) {
+    if (row.expiry_date && new Date(row.expiry_date).getTime() < nowMs) {
       c.approvals_expired_required += 1;
     }
     if (row.is_validated !== true) c.approvals_required_pending += 1;
@@ -252,6 +283,7 @@ const getPortfolioRiskRadar = async () => {
 
   const totals = { flagged: 0, unverified: 0, cleared: 0 };
   const totalSeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+  let totalOverdueDD = 0;
   const dealsForRanking = [];
 
   for (const b of dealBuckets.values()) {
@@ -262,6 +294,10 @@ const getPortfolioRiskRadar = async () => {
       const c = b.categories[cat.key];
       const posture = assessCategoryPosture(c);
       const m = modeBuckets[cat.key];
+      // Overdue counts roll up to the mode regardless of the deal's
+      // overall posture (a deal can be "flagged" because of a different
+      // category and still contribute overdue items to this one).
+      m.overdue_total += c.dd_overdue;
       if (posture === 'flagged') {
         m.flagged_deals += 1;
         m.open_critical += c.flags_critical;
@@ -281,6 +317,7 @@ const getPortfolioRiskRadar = async () => {
     totalSeverity.high += b.open_high;
     totalSeverity.medium += b.open_medium;
     totalSeverity.low += b.open_low;
+    totalOverdueDD += b.overdue;
 
     dealsForRanking.push({
       id: b.deal.id,
@@ -289,21 +326,30 @@ const getPortfolioRiskRadar = async () => {
       posture: dealPosture,
       open_critical: b.open_critical,
       open_high: b.open_high,
+      overdue: b.overdue,
       score: Math.min(b.score, 100),
       worst_category: worstCategoryFlagged,
     });
   }
 
   // Top deals at risk — ranked by (open_critical desc, score desc,
-  // open_high desc). Only include deals that actually have a signal; a
-  // fully-cleared portfolio shows an empty list rather than a list of
-  // green deals.
+  // open_high desc, overdue desc). Score now includes overdue weight,
+  // so a deal with 3 overdue DD items can rank above a deal with 1
+  // medium-severity flag — which is the right call: overdue diligence
+  // is a process problem, not an ambient signal. The trailing overdue
+  // tiebreaker handles two deals with identical scores.
   const topDealsAtRisk = dealsForRanking
-    .filter((d) => d.posture !== 'cleared' && (d.open_critical > 0 || d.open_high > 0 || d.score > 0))
-    .sort((a, b) =>
-      (b.open_critical - a.open_critical)
-      || (b.score - a.score)
-      || (b.open_high - a.open_high),
+    .filter(
+      (d) =>
+        d.posture !== 'cleared'
+        && (d.open_critical > 0 || d.open_high > 0 || d.overdue > 0 || d.score > 0),
+    )
+    .sort(
+      (a, b) =>
+        (b.open_critical - a.open_critical)
+        || (b.score - a.score)
+        || (b.open_high - a.open_high)
+        || (b.overdue - a.overdue),
     )
     .slice(0, 5);
 
@@ -332,6 +378,7 @@ const getPortfolioRiskRadar = async () => {
       medium: totalSeverity.medium,
       low: totalSeverity.low,
       total: totalOpen,
+      overdue_dd: totalOverdueDD,
       portfolio_score: portfolioScore,
     },
     failure_modes: RADAR_CATEGORIES.map((cat) => modeBuckets[cat.key]),
@@ -352,5 +399,6 @@ module.exports = {
   getPortfolioRiskRadar,
   // Exported for tests
   SEVERITY_WEIGHTS,
+  OVERDUE_DD_WEIGHT,
   assessCategoryPosture,
 };
