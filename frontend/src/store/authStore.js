@@ -132,8 +132,8 @@ const useAuthStore = create((set) => ({
 
   // Federated sign-in / sign-up via Google ID token. The backend resolves
   // (login vs bind vs register) based on the (provider, subject) and email
-  // claims; the frontend only forwards the token + (on cold signup) the
-  // accepted T&C / Privacy versions.
+  // claims; the frontend only forwards the token + (on first-time signup)
+  // the accepted T&C / Privacy versions.
   googleSignIn: async ({ idToken, acceptedTermsVersion, acceptedPrivacyVersion, invitationToken }, rememberMe = false) => {
     set({ loading: true, error: null });
     try {

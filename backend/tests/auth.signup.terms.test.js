@@ -45,11 +45,6 @@ const stubExistingUserLookup = () => {
 describe('auth.service.register — terms acceptance gate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.ALLOW_COLD_SIGNUP = 'true';
-  });
-
-  afterAll(() => {
-    delete process.env.ALLOW_COLD_SIGNUP;
   });
 
   test('rejects (400) signup that does not echo current legal versions', async () => {

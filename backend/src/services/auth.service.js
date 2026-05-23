@@ -125,17 +125,10 @@ const resolveLoginAuthContext = async (userId, requestedOrganizationId, defaultO
   }
 };
 
-// Cold signup (no invitation token) creates a brand-new workspace and grants
-// the registrant Owner role on it. Without a gate, anyone who finds the
-// /register URL can stand up their own workspace — fine for solo tenancy but
-// risks brand-spoofed invites and quota abuse if the URL leaks.
-//
-// Default-deny: cold signup is blocked unless ALLOW_COLD_SIGNUP=true. Invite-
-// based registration is always allowed regardless of this flag.
-const isColdSignupAllowed = () => {
-  const value = String(process.env.ALLOW_COLD_SIGNUP || '').trim().toLowerCase();
-  return value === 'true' || value === '1' || value === 'yes';
-};
+// Registration is open. Anyone who reaches /register and accepts the Terms
+// can create an account; without an invitation token they get their own
+// brand-new workspace as Owner. With an invitation token they join the
+// inviting organization at the role the invite encodes.
 
 const register = async (name, email, password, phone = null, options = {}) => {
   const normalizedEmail = email.toLowerCase();
@@ -143,16 +136,6 @@ const register = async (name, email, password, phone = null, options = {}) => {
 
   if (existingUser.rows.length > 0) {
     throw createError('An account with this email already exists.', 409);
-  }
-
-  // Cold-signup gate first — cheap env check, fails fast for anonymous
-  // arrivals at /register. Invitation-token registrations are always allowed
-  // regardless of the env flag.
-  if (!options.invitationToken && !isColdSignupAllowed()) {
-    throw createError(
-      'Sign-up is by invitation only. Please ask your workspace admin to invite you.',
-      403
-    );
   }
 
   // Validate the legal-document acceptance BEFORE hashing the password.
@@ -545,14 +528,8 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
     return { user: authContext.user, token, mode: 'bound' };
   }
 
-  // Path C — cold signup via Google. Cold-signup gate applies; legal
-  // acceptance is required (collected on the frontend before button click).
-  if (!options.invitationToken && !isColdSignupAllowed()) {
-    throw createError(
-      'Sign-up is by invitation only. Please ask your workspace admin to invite you.',
-      403
-    );
-  }
+  // Path C — first-time signup via Google. Legal acceptance is required
+  // (collected on the frontend before the button click).
 
   const legalDocumentIds = await legalService.resolveSignupAcceptance({
     acceptedTermsVersion: options.acceptedTermsVersion,

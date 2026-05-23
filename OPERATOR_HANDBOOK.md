@@ -26,7 +26,7 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | Production app | Live at https://redip.vercel.app | |
 | Database (Supabase project `niamgjbxxgmmffggumvj`) | Free tier, ap-south-1 (Mumbai) ✅ migrated to Mumbai 2026-05-04 (was Tokyo `lsbhrbvuynzqhdtzczco`) | See §3.2 |
 | Vercel hosting | Hobby tier | See §3.1 |
-| Auth — password sign-up | Live, gated by `ALLOW_COLD_SIGNUP` env | Default deny; add invite token to bypass |
+| Auth — password sign-up | Live, open registration | Anyone can register; new accounts get their own isolated workspace as owner. Invitation tokens (if present) join the inviting workspace at the encoded role. |
 | Auth — Google sign-in | Live (PR #139) | Confirmed `enabled: true` on `/api/auth/google/config` |
 | Auth — token storage | httpOnly cookies + 15-min access / 30-day refresh, rotated on each use (PR #142) | Reuse detection kills the family on replay; legacy `Authorization: Bearer` header still accepted for back-compat |
 | Auth — set-first-password (OAuth-only users) | Live (PR #145) | Settings → Security flips to "Set a password" card when `user.password_set === false` |
