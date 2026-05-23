@@ -157,4 +157,105 @@ describe('getRiskRadar', () => {
       'cleared'
     );
   });
+
+  // ── Overdue required DD items ───────────────────────────────────────────
+  // An open required DD item whose due_date has passed is auto-escalated
+  // to a "flagged" posture — without an operator having to file a risk
+  // flag by hand. Deterministic, computed at query time, no DB writes.
+
+  test('overdue required pending DD item flags the category', async () => {
+    wire({
+      dd: [
+        {
+          category: 'title_ownership',
+          status: 'pending',
+          is_required: true,
+          due_date: '2020-01-01',
+        },
+      ],
+    });
+    const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
+    expect(title.posture).toBe('flagged');
+    expect(title.diligence.overdue).toBe(1);
+    expect(title.signals.some((s) => /1 required diligence item overdue/.test(s.text))).toBe(true);
+  });
+
+  test('a future-due required pending DD item stays unverified, not flagged', async () => {
+    wire({
+      dd: [
+        {
+          category: 'title_ownership',
+          status: 'pending',
+          is_required: true,
+          due_date: '2099-12-31',
+        },
+      ],
+    });
+    const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
+    expect(title.posture).toBe('unverified');
+    expect(title.diligence.overdue).toBe(0);
+  });
+
+  test('an overdue but completed DD item does NOT count as overdue', async () => {
+    // status='completed' wins — the operator finished it after the deadline,
+    // but it's done.
+    wire({
+      dd: [
+        {
+          category: 'title_ownership',
+          status: 'completed',
+          is_required: true,
+          due_date: '2020-01-01',
+        },
+      ],
+    });
+    const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
+    expect(title.diligence.overdue).toBe(0);
+    expect(title.posture).toBe('cleared');
+  });
+
+  test('an overdue NON-required DD item does NOT count as overdue', async () => {
+    wire({
+      dd: [
+        {
+          category: 'title_ownership',
+          status: 'pending',
+          is_required: false,
+          due_date: '2020-01-01',
+        },
+      ],
+    });
+    const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
+    expect(title.diligence.overdue).toBe(0);
+  });
+
+  test('DD items without a due_date never count as overdue', async () => {
+    wire({
+      dd: [
+        { category: 'title_ownership', status: 'pending', is_required: true, due_date: null },
+      ],
+    });
+    const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
+    expect(title.diligence.overdue).toBe(0);
+    // Required but no due date → just unverified (still has required_open).
+    expect(title.posture).toBe('unverified');
+  });
+
+  test('overall posture flips to flagged when any category has overdue items', async () => {
+    wire({
+      dd: [
+        {
+          category: 'statutory',
+          status: 'pending',
+          is_required: true,
+          due_date: '2020-01-01',
+        },
+      ],
+    });
+    const radar = await riskRadar.getRiskRadar(DEAL_ID);
+    expect(radar.overall_posture).toBe('flagged');
+    const ap = cat(radar, 'approvals_regulatory');
+    expect(ap.posture).toBe('flagged');
+    expect(ap.diligence.overdue).toBe(1);
+  });
 });
