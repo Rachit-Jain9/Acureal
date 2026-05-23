@@ -73,7 +73,7 @@ const INITIAL_FORM = {
 
 export default function DealsPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Filters
   const [search, setSearch] = useState(searchParams.get('search') || '');
@@ -98,6 +98,20 @@ export default function DealsPage() {
   // Modal
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
+
+  // Deep-link target for the Cmd-K "Create new deal" action: when the
+  // URL carries ?new=1 (or ?action=create) the create modal opens
+  // automatically on mount, and the param is stripped so a back/forward
+  // navigation doesn't reopen the modal.
+  useEffect(() => {
+    if (searchParams.get('new') === '1' || searchParams.get('action') === 'create') {
+      setShowModal(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      next.delete('action');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const params = useMemo(() => {
     const p = { page, limit: 12 };
