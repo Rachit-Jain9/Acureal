@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import EmptyState from '../common/EmptyState';
+import EvidenceBadge from '../common/EvidenceBadge';
 // PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
 // workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
@@ -349,6 +350,10 @@ function DDSection({ dealId }) {
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-sm font-medium text-content-primary">{item.item_name}</span>
                                 <Badge tone={severityCfg.tone}>{severityCfg.label}</Badge>
+                                {/* Provenance Spine: hover the chip to see the
+                                    source documents / manual checks that back
+                                    this item. Lazy-fetches on open. */}
+                                <EvidenceBadge ownerKind="dd_item" ownerId={item.id} compact />
                               </div>
                               {item.description && (
                                 <p className="text-xs text-content-secondary mb-2">{item.description}</p>
@@ -657,7 +662,11 @@ function ApprovalsSection({ dealId }) {
                 {approvals.map((item) => (
                   <tr key={item.id} className="hover:bg-bg-secondary">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-content-primary">{item.name}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-content-primary">{item.name}</p>
+                        {/* Provenance — same chip used on DD items. */}
+                        <EvidenceBadge ownerKind="approval" ownerId={item.id} compact />
+                      </div>
                       {item.reference_number && (
                         <p className="text-xs text-content-muted">{item.reference_number}</p>
                       )}

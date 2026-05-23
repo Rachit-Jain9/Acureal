@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import EmptyState from '../common/EmptyState';
+import EvidenceBadge from '../common/EvidenceBadge';
 import { ShieldAlert, Plus, Trash2, AlertCircle, Loader2, Edit2, X, Check, Sparkles, Brain, Copy, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -220,6 +221,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               <Badge>
                 {RISK_CATEGORIES.find((item) => item.value === flag.category)?.label || flag.category}
               </Badge>
+              {/* Provenance — every flag should be tied to a document or
+                  manual verification before it carries weight in IC. */}
+              <EvidenceBadge ownerKind="risk_flag" ownerId={flag.id} compact />
               {flag.source === 'ai_detector' && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded bg-accent-soft text-accent border border-accent/20"
