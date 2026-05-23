@@ -7,7 +7,7 @@ import {
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
-import { roleSatisfies } from '../../utils/roles';
+import { isPlatformAdmin } from '../../utils/permissions';
 
 // `tourId` is consumed by the product-tour coachmarks (data-tour attribute
 // on the NavLink). Steps for nav items the user can't see (e.g. admin
@@ -46,7 +46,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
   const { logout, user } = useAuthStore();
 
   const desktopWidth = collapsed ? 'md:w-16' : 'md:w-60';
-  const showAdminGroup = roleSatisfies(user?.role, ['editor']);
+  // Cross-org admin surfaces (Master Plan, AI Usage, etc.) are only for the
+  // REDIP platform operator(s) — NOT every workspace owner. See utils/permissions.
+  const showAdminGroup = isPlatformAdmin(user);
 
   const renderItem = ({ to, icon: Icon, label, tourId }) => (
     <NavLink
