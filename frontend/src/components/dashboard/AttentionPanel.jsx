@@ -298,7 +298,10 @@ export default function AttentionPanel() {
           </div>
         )}
 
-        {/* Stale deals */}
+        {/* Stale deals — the row's title IS the deal name (because the
+            "item" here is the deal itself, not a sub-item like a DD or
+            risk row), so we leave deal_name null and render the stage
+            as a proper stage chip in the secondary line. */}
         {stale_deals.length > 0 && (
           <div>
             <SignalHeader
@@ -313,8 +316,8 @@ export default function AttentionPanel() {
                   <SignalRow
                     href={`/dashboard/deals/${it.id}`}
                     title={it.name}
-                    deal_name={STAGE_LABEL[it.stage] || it.stage}
-                    deal_stage={null}
+                    deal_name={null}
+                    deal_stage={it.stage}
                     right={`${it.days_stale}d quiet`}
                     rightTone="muted"
                   />

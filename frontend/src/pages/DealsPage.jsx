@@ -932,7 +932,7 @@ export default function DealsPage() {
       {/* New Deal Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+          <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-hairline flex-shrink-0">
               <h2 className="text-lg font-bold text-content-primary">New Deal</h2>
               <button onClick={handleCloseModal} className="text-content-muted hover:text-content-secondary">
@@ -1118,13 +1118,13 @@ export default function DealsPage() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="rounded-lg bg-white px-3 py-2">
+                  <div className="rounded-lg bg-bg-elevated px-3 py-2">
                     <p className="text-xs text-content-secondary">Normalized area</p>
                     <p className="text-sm font-semibold text-content-primary">
                       {landPricingPreview.areaSqft ? `${landPricingPreview.areaSqft.toLocaleString('en-IN')} sqft` : '-'}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-white px-3 py-2">
+                  <div className="rounded-lg bg-bg-elevated px-3 py-2">
                     <p className="text-xs text-content-secondary">Equivalent acres</p>
                     <p className="text-sm font-semibold text-content-primary">
                       {landPricingPreview.areaAcres ? landPricingPreview.areaAcres.toFixed(4) : '-'}
@@ -1289,7 +1289,7 @@ function DealCard({ deal, selected = false, onToggleSelect }) {
               </button>
               {menuOpen && (
                 <div
-                  className="absolute right-0 top-full mt-1 w-44 rounded-md border border-hairline-strong bg-white shadow-lg z-20"
+                  className="absolute right-0 top-full mt-1 w-44 rounded-md border border-hairline-strong bg-bg-elevated shadow-lg z-20"
                   onClick={stopAll}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
@@ -1423,7 +1423,7 @@ function DealCard({ deal, selected = false, onToggleSelect }) {
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
-            className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
+            className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-sm p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-bold text-content-primary mb-2">Delete Deal</h3>

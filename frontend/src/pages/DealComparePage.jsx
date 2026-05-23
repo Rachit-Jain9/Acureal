@@ -151,7 +151,7 @@ export default function DealComparePage() {
         description="Pick up to four deals and review land, pricing, and underwriting side by side."
       />
 
-      <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[1.2fr_minmax(0,1fr)]">
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wide text-content-secondary">How to use this</h3>
@@ -196,7 +196,7 @@ export default function DealComparePage() {
             </div>
 
             {showDropdown && selectableDeals.length > 0 && (
-              <div className="absolute z-20 mt-2 max-h-72 w-full max-w-2xl overflow-y-auto rounded-2xl border border-hairline-strong bg-white shadow-xl">
+              <div className="absolute z-20 mt-2 max-h-72 w-full max-w-2xl overflow-y-auto rounded-2xl border border-hairline-strong bg-bg-elevated shadow-xl">
                 {selectableDeals.slice(0, 20).map((deal) => (
                   <button
                     key={deal.id}
@@ -237,7 +237,7 @@ export default function DealComparePage() {
       ) : (
         <div className="space-y-6">
           {SECTIONS.map((section) => (
-            <div key={section.title} className="rounded-2xl border border-hairline-strong bg-white shadow-sm">
+            <div key={section.title} className="rounded-2xl border border-hairline-strong bg-bg-elevated shadow-sm">
               <div className="border-b border-hairline px-6 py-4">
                 <h3 className="text-base font-semibold text-content-primary">{section.title}</h3>
               </div>

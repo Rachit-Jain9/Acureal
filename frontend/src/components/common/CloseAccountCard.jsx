@@ -39,7 +39,7 @@ export default function CloseAccountCard() {
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-sm border border-rose-200 p-6">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-rose-200 p-6">
         <h3 className="text-base font-semibold text-rose-900 mb-1 flex items-center gap-2">
           <AlertTriangle size={18} />
           Close My Account
