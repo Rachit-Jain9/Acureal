@@ -400,6 +400,9 @@ export const activitiesAPI = {
 // Dashboard
 export const dashboardAPI = {
   getStats: () => api.get('/dashboard'),
+  // Portfolio Risk Radar — workspace-level rollup of every live deal's
+  // per-failure-mode posture. Backed by portfolioRiskRadar.service.js.
+  portfolioRiskRadar: () => api.get('/dashboard/portfolio-risk-radar'),
 };
 
 // SSE reader: opens a POST stream against the API, parses `data: {...}\n\n`

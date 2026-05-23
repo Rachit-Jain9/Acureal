@@ -19,6 +19,7 @@ import {
   AiCostSummaryWidget,
   AuditTrailTailWidget,
 } from '../components/dashboard/DashboardWidgets';
+import PortfolioRiskRadarWidget from '../components/dashboard/PortfolioRiskRadarWidget';
 import CustomizePopover from '../components/dashboard/CustomizePopover';
 import GettingStarted from '../components/dashboard/GettingStarted';
 
@@ -60,14 +61,17 @@ function useTooltipStyle() {
 // in thunks (vs an object of components) keeps the heavy chart deps
 // from rendering when a widget is toggled off.
 const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) => ({
-  kpi_strip:         () => <KpiStripWidget stats={data?.stats} />,
-  comps_queue_alert: () => <CompsQueueAlertWidget stats={data?.stats} canCurate={canCurate} />,
-  pipeline_chart:    () => <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
-  cities_chart:      () => <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
-  recent_activities: () => <RecentActivitiesWidget recent_activities={data?.recent_activities} />,
-  top_deals_irr:     () => <TopDealsIrrWidget top_deals_by_irr={data?.top_deals_by_irr} />,
-  ai_cost_summary:   () => <AiCostSummaryWidget />,
-  audit_trail_tail:  () => <AuditTrailTailWidget />,
+  kpi_strip:             () => <KpiStripWidget stats={data?.stats} />,
+  comps_queue_alert:     () => <CompsQueueAlertWidget stats={data?.stats} canCurate={canCurate} />,
+  // Self-fetches via usePortfolioRiskRadar — independent of the dashboard
+  // stats payload so it can refetch on its own staleTime cadence.
+  portfolio_risk_radar:  () => <PortfolioRiskRadarWidget />,
+  pipeline_chart:        () => <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
+  cities_chart:          () => <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
+  recent_activities:     () => <RecentActivitiesWidget recent_activities={data?.recent_activities} />,
+  top_deals_irr:         () => <TopDealsIrrWidget top_deals_by_irr={data?.top_deals_by_irr} />,
+  ai_cost_summary:       () => <AiCostSummaryWidget />,
+  audit_trail_tail:      () => <AuditTrailTailWidget />,
 });
 
 export default function DashboardPage() {

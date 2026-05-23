@@ -5,14 +5,18 @@ import { useState, useEffect, useCallback } from 'react';
 // popover can toggle / reorder it. Add new widgets at the position you
 // want them to land for new users.
 export const DEFAULT_WIDGETS = [
-  { id: 'kpi_strip',          label: 'KPI strip',           always: true,  defaultVisible: true },
-  { id: 'comps_queue_alert',  label: 'Comps queue alert',   always: false, defaultVisible: true },
-  { id: 'pipeline_chart',     label: 'Pipeline distribution', always: false, defaultVisible: true },
-  { id: 'cities_chart',       label: 'City distribution',   always: false, defaultVisible: true },
-  { id: 'recent_activities',  label: 'Recent activities',   always: false, defaultVisible: true },
-  { id: 'top_deals_irr',      label: 'Top deals by IRR',    always: false, defaultVisible: true },
-  { id: 'ai_cost_summary',    label: 'AI cost today',       always: false, defaultVisible: true },
-  { id: 'audit_trail_tail',   label: 'Recent audit events', always: false, defaultVisible: false },
+  { id: 'kpi_strip',              label: 'KPI strip',                always: true,  defaultVisible: true },
+  { id: 'comps_queue_alert',      label: 'Comps queue alert',        always: false, defaultVisible: true },
+  // Portfolio Risk Radar — workspace-level rollup of every live deal's
+  // posture. Lives near the top of the dashboard because "which deals need
+  // IC attention" is the question an investment lead opens REDIP to answer.
+  { id: 'portfolio_risk_radar',   label: 'Portfolio Risk Radar',     always: false, defaultVisible: true },
+  { id: 'pipeline_chart',         label: 'Pipeline distribution',    always: false, defaultVisible: true },
+  { id: 'cities_chart',           label: 'City distribution',        always: false, defaultVisible: true },
+  { id: 'recent_activities',      label: 'Recent activities',        always: false, defaultVisible: true },
+  { id: 'top_deals_irr',          label: 'Top deals by IRR',         always: false, defaultVisible: true },
+  { id: 'ai_cost_summary',        label: 'AI cost today',            always: false, defaultVisible: true },
+  { id: 'audit_trail_tail',       label: 'Recent audit events',      always: false, defaultVisible: false },
 ];
 
 const STORAGE_KEY = 'redip.dashboard.layout';

@@ -26,6 +26,24 @@ vi.mock('../../hooks/useDashboard', () => ({
     error: null,
     refetch: vi.fn(),
   }),
+  // Portfolio Risk Radar self-fetches via this hook; the dashboard test
+  // doesn't exercise the widget's content (separate suite handles that),
+  // but the dashboard renderer mounts it so the mock has to satisfy the
+  // hook's contract — an empty payload renders the widget's "no live deals"
+  // state, which keeps the rest of the dashboard test isolated.
+  usePortfolioRiskRadar: () => ({
+    data: {
+      empty: true,
+      totals: { deals: 0, flagged: 0, unverified: 0, cleared: 0 },
+      open_severity: { critical: 0, high: 0, medium: 0, low: 0, total: 0, portfolio_score: 0 },
+      failure_modes: [],
+      top_deals_at_risk: [],
+      recently_flagged: [],
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
 }));
 
 // AI cost summary + audit-trail-tail widgets self-fetch via adminAPI;
