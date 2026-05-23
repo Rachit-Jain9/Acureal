@@ -13,6 +13,7 @@ import AIHealthWidget from '../components/admin/AIHealthWidget'; // PR-NX23
 import CloseAccountCard from '../components/common/CloseAccountCard';
 import MfaCard from '../components/common/MfaCard';
 import OrgBenchmarkCard from '../components/common/OrgBenchmarkCard';
+import ProductTourReplayCard from '../components/onboarding/ProductTourReplayCard';
 
 const CURRENCY_OPTIONS = [
   { value: 'crores', label: 'Crores (Cr)' },
@@ -570,6 +571,11 @@ export default function SettingsPage() {
       {/* Org benchmark contribution — Workstream C2. Same owner/admin gate
           as the Market Intelligence Notes card above. */}
       {(user?.role === 'owner' || user?.role === 'admin') && <OrgBenchmarkCard />}
+
+      {/* Replay the welcome / product tour. Lives here because the welcome
+          modal explicitly tells users they can come back to Settings to
+          run it again. */}
+      <ProductTourReplayCard />
 
       {/* Currency Section */}
       <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">

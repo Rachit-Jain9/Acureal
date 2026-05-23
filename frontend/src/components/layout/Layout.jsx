@@ -5,6 +5,7 @@ import Header from './Header';
 import useCurrencyPref from '../../hooks/useCurrencyPref';
 import CommandPalette from '../common/CommandPalette';
 import EmailVerificationBanner from '../common/EmailVerificationBanner';
+import ProductTour from '../onboarding/ProductTour';
 
 export default function Layout() {
   // Subscribe once so a currency change anywhere in the app re-renders the
@@ -41,6 +42,9 @@ export default function Layout() {
       </div>
       {/* Cmd+K palette is mounted once and overlays everything when toggled. */}
       <CommandPalette />
+      {/* Product tour — auto-opens for users who haven't completed it yet,
+          replayable from Settings. Renders nothing once dismissed. */}
+      <ProductTour />
     </div>
   );
 }
