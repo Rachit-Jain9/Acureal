@@ -196,8 +196,8 @@ export default function PortfolioRiskRadarWidget() {
 
       <p className="text-xs text-content-muted mb-4">{cfg.headline}</p>
 
-      {/* Stat strip — totals + open severity + portfolio score */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      {/* Stat strip — totals + open severity + overdue + portfolio score */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Live deals</p>
           <p className="text-xl font-bold text-content-primary tabular-nums">{totals.deals}</p>
@@ -222,6 +222,13 @@ export default function PortfolioRiskRadarWidget() {
             {open_severity.high}
           </p>
           <p className="text-[11px] text-content-muted mt-0.5">Severity-2 flags across portfolio</p>
+        </div>
+        <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
+          <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Overdue DD</p>
+          <p className={clsx('text-xl font-bold tabular-nums', open_severity.overdue_dd > 0 ? 'text-red-600' : 'text-content-secondary')}>
+            {open_severity.overdue_dd ?? 0}
+          </p>
+          <p className="text-[11px] text-content-muted mt-0.5">Required DD past its due date</p>
         </div>
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Portfolio score</p>
@@ -250,6 +257,12 @@ export default function PortfolioRiskRadarWidget() {
               <div className="flex items-center gap-2 text-[11px] text-content-muted shrink-0 tabular-nums">
                 {mode.flagged_deals > 0 && (
                   <span className="text-red-700 font-semibold">{mode.flagged_deals} flagged</span>
+                )}
+                {mode.overdue_total > 0 && (
+                  <span className="text-red-700">
+                    {mode.overdue_total}{' '}
+                    <span className="font-normal text-content-muted">overdue</span>
+                  </span>
                 )}
                 {mode.unverified_deals > 0 && (
                   <span className="text-amber-700">{mode.unverified_deals} unverified</span>
@@ -299,6 +312,11 @@ export default function PortfolioRiskRadarWidget() {
                       {d.open_high > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 tabular-nums">
                           {d.open_high} <span className="font-normal text-content-muted">high</span>
+                        </span>
+                      )}
+                      {d.overdue > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 tabular-nums">
+                          {d.overdue} <span className="font-normal text-content-muted">overdue</span>
                         </span>
                       )}
                       <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-content-primary tabular-nums px-1.5 py-0.5 rounded bg-bg-secondary">
