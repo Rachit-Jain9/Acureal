@@ -344,6 +344,44 @@ describe('getPortfolioRiskRadar', () => {
     expect(radar.totals.flagged).toBe(0);
   });
 
+  // ── Failure-isolation guarantee ─────────────────────────────────────────
+
+  test('a failing deals query returns the empty payload instead of throwing', async () => {
+    // The dashboard tile relies on the service NEVER throwing — the
+    // widget shows its error pill instead of a soft empty state when
+    // the API 500s, which is what the operator just hit in production.
+    query.mockImplementation((sql) => {
+      if (/FROM deals\s+WHERE/.test(sql)) return Promise.reject(new Error('boom'));
+      return Promise.resolve({ rows: [] });
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    expect(radar.empty).toBe(true);
+    expect(radar.totals.deals).toBe(0);
+  });
+
+  test('a failing risk_flags query still produces a usable rollup', async () => {
+    // deals + DD load fine; only the bulk risk_flags read fails. The
+    // tile should still render with deal posture from DD signals.
+    query.mockImplementation((sql) => {
+      if (/FROM deals\s+WHERE/.test(sql)) return Promise.resolve({ rows: [deal({ id: 'd1' })] });
+      if (/FROM risk_flags[\s\S]*INTERVAL/.test(sql)) return Promise.resolve({ rows: [] });
+      if (/FROM risk_flags/.test(sql)) return Promise.reject(new Error('rf-boom'));
+      if (/FROM dd_items/.test(sql)) return Promise.resolve({
+        rows: [{
+          deal_id: 'd1', category: 'title_ownership',
+          status: 'pending', is_required: true, due_date: '2020-01-01',
+        }],
+      });
+      return Promise.resolve({ rows: [] });
+    });
+    const radar = await portfolioRadar.getPortfolioRiskRadar();
+    // Service didn't throw; deal still surfaces as flagged via the
+    // overdue DD signal.
+    expect(radar.empty).toBe(false);
+    expect(radar.totals.deals).toBe(1);
+    expect(radar.totals.flagged).toBe(1);
+  });
+
   test('overdue DD pushes a deal up the top-at-risk ranking via the score', async () => {
     wire({
       deals: [

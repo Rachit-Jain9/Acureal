@@ -146,63 +146,81 @@ const emptyResponse = () => ({
  *
  * All counts respect RLS via current_organization_id().
  */
+// Helper: resolve a query promise to its rows, returning [] on failure
+// instead of throwing. The portfolio radar's five reads are independent —
+// a broken risk_flags index shouldn't blank the deals + DD + approvals
+// rollup. Same defence-in-depth pattern as attention.service.js.
+const safeRows = (p, label) => p.then((r) => r.rows).catch((err) => {
+  // Log a tagged message so the operator can correlate the empty section
+  // to the offending query without losing user context.
+  // eslint-disable-next-line no-console
+  console.warn(`[portfolio-risk-radar] ${label} query failed:`, err.message);
+  return [];
+});
+
 const getPortfolioRiskRadar = async () => {
   // One query per source table. `deals` is joined into each fan-out query so
   // a stale row on an archived or closed deal can't pollute the rollup.
-  const [dealsRes, flagsRes, ddRes, approvalsRes, recentRes] = await Promise.all([
-    query(
+  //
+  // The $1::deal_stage[] cast (not ::text[]) matches every other working
+  // query in the codebase against this column — Postgres' implicit
+  // text→enum cast inside ANY() has historically been fragile on Supabase,
+  // surfacing as a 500 on this endpoint. Casting to the enum directly is
+  // the conservative path.
+  const [dealRows, flagRows, ddRows, approvalRows, recentRows] = await Promise.all([
+    safeRows(query(
       `SELECT id, name, stage, is_archived
          FROM deals
         WHERE organization_id = current_organization_id()
           AND is_archived = FALSE
-          AND stage = ANY($1::text[])
+          AND stage = ANY($1::deal_stage[])
         ORDER BY created_at DESC`,
       [LIVE_DEAL_STAGES],
-    ),
-    query(
+    ), 'deals'),
+    safeRows(query(
       `SELECT rf.deal_id, rf.category, rf.severity, rf.status
          FROM risk_flags rf
          JOIN deals d ON d.id = rf.deal_id
         WHERE rf.organization_id = current_organization_id()
           AND d.is_archived = FALSE
-          AND d.stage = ANY($1::text[])`,
+          AND d.stage = ANY($1::deal_stage[])`,
       [LIVE_DEAL_STAGES],
-    ),
-    query(
+    ), 'risk_flags'),
+    safeRows(query(
       `SELECT dd.deal_id, dd.category, dd.status, dd.is_required, dd.due_date
          FROM dd_items dd
          JOIN deals d ON d.id = dd.deal_id
         WHERE dd.organization_id = current_organization_id()
           AND d.is_archived = FALSE
-          AND d.stage = ANY($1::text[])`,
+          AND d.stage = ANY($1::deal_stage[])`,
       [LIVE_DEAL_STAGES],
-    ),
-    query(
+    ), 'dd_items'),
+    safeRows(query(
       `SELECT ap.deal_id, ap.is_required, ap.is_validated, ap.expiry_date
          FROM approval_items ap
          JOIN deals d ON d.id = ap.deal_id
         WHERE ap.organization_id = current_organization_id()
           AND d.is_archived = FALSE
-          AND d.stage = ANY($1::text[])`,
+          AND d.stage = ANY($1::deal_stage[])`,
       [LIVE_DEAL_STAGES],
-    ),
-    query(
+    ), 'approval_items'),
+    safeRows(query(
       `SELECT rf.id, rf.deal_id, d.name AS deal_name, rf.severity, rf.title,
               rf.category, rf.created_at
          FROM risk_flags rf
          JOIN deals d ON d.id = rf.deal_id
         WHERE rf.organization_id = current_organization_id()
           AND d.is_archived = FALSE
-          AND d.stage = ANY($1::text[])
+          AND d.stage = ANY($1::deal_stage[])
           AND rf.status IN ('open', 'flagged')
           AND rf.created_at >= NOW() - INTERVAL '7 days'
         ORDER BY rf.created_at DESC
         LIMIT 5`,
       [LIVE_DEAL_STAGES],
-    ),
+    ), 'recent_flags'),
   ]);
 
-  const deals = dealsRes.rows;
+  const deals = dealRows;
   if (deals.length === 0) return emptyResponse();
 
   // Build a per-deal bucket of empty category counts. Each category mirrors
@@ -225,7 +243,7 @@ const getPortfolioRiskRadar = async () => {
 
   // Fan out the risk_flags rows. Every flag counts toward "ever" (proves the
   // failure mode was at least looked at); only open/flagged drive posture.
-  for (const row of flagsRes.rows) {
+  for (const row of flagRows) {
     const b = dealBuckets.get(row.deal_id);
     if (!b) continue;
     const c = b.categories[mapRiskCategory(row.category)];
@@ -242,7 +260,7 @@ const getPortfolioRiskRadar = async () => {
 
   // DD items.
   const nowMs = Date.now();
-  for (const row of ddRes.rows) {
+  for (const row of ddRows) {
     const b = dealBuckets.get(row.deal_id);
     if (!b) continue;
     const c = b.categories[mapDdCategory(row.category)];
@@ -265,7 +283,7 @@ const getPortfolioRiskRadar = async () => {
   }
 
   // Approvals — all fold into the Approvals & Regulatory category.
-  for (const row of approvalsRes.rows) {
+  for (const row of approvalRows) {
     const b = dealBuckets.get(row.deal_id);
     if (!b) continue;
     const c = b.categories.approvals_regulatory;
@@ -383,7 +401,7 @@ const getPortfolioRiskRadar = async () => {
     },
     failure_modes: RADAR_CATEGORIES.map((cat) => modeBuckets[cat.key]),
     top_deals_at_risk: topDealsAtRisk,
-    recently_flagged: recentRes.rows.map((r) => ({
+    recently_flagged: recentRows.map((r) => ({
       flag_id: r.id,
       deal_id: r.deal_id,
       deal_name: r.deal_name,
