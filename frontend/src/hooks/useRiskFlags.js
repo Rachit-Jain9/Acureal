@@ -27,6 +27,11 @@ export function useCreateRiskFlag() {
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      // Dashboard widgets that aggregate risk across the portfolio need to
+      // re-tally on every flag change — without this the new Portfolio Risk
+      // Radar tile stays stale until the dashboard's own staleTime elapses.
+      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Risk flag added');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add risk flag'),
@@ -42,6 +47,11 @@ export function useUpdateRiskFlag() {
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      // Dashboard widgets that aggregate risk across the portfolio need to
+      // re-tally on every flag change — without this the new Portfolio Risk
+      // Radar tile stays stale until the dashboard's own staleTime elapses.
+      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Risk flag updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update risk flag'),
@@ -57,6 +67,11 @@ export function useDeleteRiskFlag() {
       qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      // Dashboard widgets that aggregate risk across the portfolio need to
+      // re-tally on every flag change — without this the new Portfolio Risk
+      // Radar tile stays stale until the dashboard's own staleTime elapses.
+      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Risk flag removed');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove risk flag'),
@@ -77,6 +92,10 @@ export function useRunInconsistencyCheck() {
       qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
       qc.invalidateQueries({ queryKey: ['risk-brief', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      // The detector persists new risk_flags — portfolio rollup must
+      // re-tally just like the manual-create / update / delete paths.
+      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       const flagged = data?.persisted_flag_ids?.length ?? 0;
       const dedup = data?.deduplicated_count ?? 0;
       const total = (data?.findings?.length ?? 0);
