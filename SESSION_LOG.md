@@ -6553,3 +6553,128 @@ counters told users *how many* items needed action — but not
 - Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
   IntelligencePage).
 - Database / infra hygiene (consolidate 85+ migrations).
+
+## 2026-05-23 (night) — Portfolio Risk Radar hotfix + Universal Intelligence + audit polish
+
+### What was worked on
+
+Three coordinated PRs after the operator reported the Portfolio Risk
+Radar widget hitting its error state on production, plus a fourth
+continuation block of polish:
+
+29. **Portfolio Risk Radar hotfix (PR #529).** Operator screenshot
+    showed the radar tile rendering "Couldn't load the portfolio risk
+    radar — your data is safe." Root cause candidate: five fan-out
+    queries cast the live-stage filter as `$1::text[]` while every
+    other working query in the codebase against `deals.stage` (a
+    `deal_stage` enum) casts as `$1::deal_stage[]`. Postgres'
+    implicit text→enum cast inside `ANY()` has been historically
+    fragile on Supabase. Aligned all five casts to the enum. Also
+    wrapped each query in a `safeRows()` helper so a single broken
+    read can't blank the whole tile — same defence-in-depth pattern
+    the Attention service uses. 2 new failure-isolation tests pin the
+    contract.
+
+30. **Universal Intelligence (PR #530).** Operator asked for sections
+    5a–5d, 6, 7, the macro indicators, and market signals to be
+    visible to every account out of the box, with AI Brief / Deal of
+    the Day / Key Developments staying per-account. Also asked to
+    retire the generic "8. Demand Slowdown Indicators" and "9.
+    Strategic Takeaways" sections.
+
+    PR #512 had plumbed the platform-org union into the brief's
+    three feeder queries + Comps. The other nine Intelligence-page
+    readers were never updated, so a brand-new account saw empty
+    cards. New `buildOrgScope()` helper threads the union through
+    every benchmark / transaction / macro-KPI reader:
+    `getMacroKpis`, `getMarketTransactions`,
+    `getMicroMarketBenchmarks`, `getOffice/Retail/Industrial/
+    Hospitality/Residential/Niche Benchmarks`. The OR collapses
+    cleanly when the caller IS the platform admin (no double-
+    counting) and falls back to the plain current-org check when
+    the platform admin lookup returns null.
+
+    Slowdown + Strategic sections retired from:
+      • IntelligencePage JSX (the two SectionCards)
+      • Brief payload (no more `demandSlowdownIndicators` /
+        `strategicTakeaways` fields)
+      • Claude system prompt — brief now produces 3 sections (Deal
+        of the Day, Market Signals, Risk Signals)
+      • Admin Notes editor — only Micro-Market Intelligence editable
+      • `saveMarketNotes` rejects 'slowdown' and 'strategic'
+      • `getMarketNotes` ignores legacy rows in those sections
+
+    13 new tests on `intelligence.platformOrgUnion.test.js` pin the
+    union semantics on every reader + the retired-note contract.
+
+31. **AttentionPanel stale-deal fix + dark-mode batch 3 + Getting
+    Started CTA (PR #531).** Three-in-one cleanup:
+      • One-line fix: stale-deal rows in Today's Attention were
+        rendering the stage label as the row title instead of the
+        deal name. Now passes `deal_name={null}` + `deal_stage={
+        it.stage}` so the secondary chip shows the proper stage
+        badge with the deal name as the title.
+      • Dark-mode CSS override hack retirement — batch 3. Migrated
+        24 `bg-white` call sites → `bg-bg-elevated` across 12
+        in-app components (Attention, Settings, Deals list, Deal
+        Compare, Comps modal, Intelligence, Financials, etc.).
+        Total now 114 → 89 occurrences left.
+      • Getting Started "New deal" CTA deep-links to
+        `/dashboard/deals?new=1` (same trigger Cmd-K uses) so the
+        first click on the welcome panel opens the create-deal
+        form instead of an empty deals list.
+
+32. **Audit timeline date grouping (PR #532).** The deal Audit tab
+    rendered a flat newest-first list of every event. On long-lived
+    deals the operator had to mentally bucket "what happened today
+    vs last week" from individual relative timestamps. Two pure
+    helpers (`dateBucketLabel`, `groupEventsByDate`) bucket the
+    list into Today / Yesterday / Earlier this week / DD MMM /
+    DD MMM YYYY sections. Eyebrow headers between groups. Each row
+    still carries its own relative + absolute timestamp; the bucket
+    label is purely cosmetic scaffolding. 5 new tests.
+
+### PRs opened / merged
+
+- PR #529 — fix(risk-radar): portfolio rollup no longer 500s — merged
+- PR #530 — feat(intelligence): universal market data + retire Slowdown/Strategic — merged
+- PR #531 — fix(dashboard): stale-deal naming + dark-mode batch 3 + Getting Started CTA — merged
+- PR #532 — feat(audit): group the deal audit timeline by date — merged
+
+### Plain-English recap
+
+- **Portfolio Risk Radar tile no longer errors.** The dashboard's
+  rollup card was 500-ing for the operator; root cause was a SQL
+  cast inconsistency on Supabase. Aligned to the enum the rest of
+  the codebase uses and added per-query failure isolation so even
+  a future bad query in there can't blank the whole tile.
+- **Every new account now sees the curated Market Intelligence page
+  in full.** Office / Retail / Industrial / Hospitality / Residential
+  / Niche benchmarks, market transactions, macro indicators, and
+  the Demand Heatmap — all share the platform admin's curated rows.
+  AI Brief / Deal of the Day / Key Developments stay per-account.
+- **Two filler sections retired**: "Demand Slowdown Indicators" and
+  "Strategic Takeaways" produced generic copy that didn't earn the
+  page real estate. Removed from the page, the brief, the AI prompt,
+  and the admin Notes editor.
+- **Stale-deal row on Today's Attention now reads correctly**: deal
+  name as the title, stage as a small chip below.
+- **Getting Started CTA** now drops users directly into the
+  create-deal form on first click.
+- **Audit tab** now groups events under Today / Yesterday / Earlier
+  this week / DD MMM headers — much easier to scan a busy deal.
+
+### Validation
+
+- Backend: 144 suites / 2331 tests pass.
+- Frontend: 102 files / 858 tests pass; clean Vite builds.
+- Vercel preview verified per PR.
+
+### What's left to do
+
+- Dark-mode override-hack retirement (~56 in-app `bg-white` call
+  sites left after batch 3, plus a handful of override rules to
+  consolidate; ~28 on public legal pages stay as-is intentionally).
+- Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
+  IntelligencePage).
+- Database / infra hygiene (consolidate 85+ migrations).
