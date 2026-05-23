@@ -39,6 +39,7 @@ import CompsTab from '../components/deal/CompsTab';
 import ZoningTab from '../components/deal/ZoningTab';
 import AuditTab from '../components/deal/AuditTab';
 import ShareDealPanel from '../components/deal/ShareDealPanel';
+import DealWorkspaceTour from '../components/onboarding/DealWorkspaceTour';
 
 const TABS = [
   { id: 'overview',   label: 'Overview' },
@@ -323,6 +324,9 @@ export default function DealDetailPage() {
           ariaLabel="Deal sections"
           className="mb-6"
         />
+        {/* First-time deal-workspace orientation — opens once per browser,
+            replayable from Settings. Anchored to the tab buttons above. */}
+        <DealWorkspaceTour />
 
         {/* Active tab content. All deal tabs read deal/dealId from useDealContext;
             only auxiliary parent-supplied props remain (ParcelTab.canEdit,
