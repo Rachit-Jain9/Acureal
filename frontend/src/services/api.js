@@ -403,6 +403,11 @@ export const dashboardAPI = {
   // Portfolio Risk Radar — workspace-level rollup of every live deal's
   // per-failure-mode posture. Backed by portfolioRiskRadar.service.js.
   portfolioRiskRadar: () => api.get('/dashboard/portfolio-risk-radar'),
+  // Today's Attention — specific item-level signals (overdue DD,
+  // expiring approvals, recent risk flags, stale deals, recent activity).
+  // Pairs with the Portfolio Risk Radar's aggregate counts to answer
+  // "what should I do today?".
+  attention: () => api.get('/dashboard/attention'),
 };
 
 // SSE reader: opens a POST stream against the API, parses `data: {...}\n\n`
