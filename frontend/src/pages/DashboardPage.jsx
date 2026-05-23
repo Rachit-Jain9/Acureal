@@ -21,6 +21,7 @@ import {
   AuditTrailTailWidget,
 } from '../components/dashboard/DashboardWidgets';
 import PortfolioRiskRadarWidget from '../components/dashboard/PortfolioRiskRadarWidget';
+import AttentionPanel from '../components/dashboard/AttentionPanel';
 import CustomizePopover from '../components/dashboard/CustomizePopover';
 import GettingStarted from '../components/dashboard/GettingStarted';
 
@@ -68,6 +69,9 @@ const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) =>
   // Self-fetches via usePortfolioRiskRadar — independent of the dashboard
   // stats payload so it can refetch on its own staleTime cadence.
   portfolio_risk_radar:  () => <PortfolioRiskRadarWidget />,
+  // Today's Attention — specific item-level signals (overdue DD, expiring
+  // approvals, recent risks, stale deals, recent activity). Self-fetches.
+  attention_panel:       () => <AttentionPanel />,
   pipeline_chart:        () => <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
   cities_chart:          () => <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
   recent_activities:     () => <RecentActivitiesWidget recent_activities={data?.recent_activities} />,

@@ -44,6 +44,27 @@ vi.mock('../../hooks/useDashboard', () => ({
     isError: false,
     refetch: vi.fn(),
   }),
+  // Today's Attention panel self-fetches via this hook. The dashboard
+  // test isolates itself by returning an empty/all-caught-up payload —
+  // its own suite verifies the populated states.
+  useAttention: () => ({
+    data: {
+      generated_at: new Date().toISOString(),
+      totals: {
+        overdue_dd: 0, expiring_approvals: 0, new_risk_flags: 0,
+        stale_deals: 0, any: false,
+      },
+      overdue_dd_items: [],
+      expiring_approvals: [],
+      new_risk_flags: [],
+      stale_deals: [],
+      recent_activity: [],
+      thresholds: { stale_deal_days: 14, new_risk_window_days: 7, expiring_window_days: 30 },
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
 }));
 
 // AI cost summary + audit-trail-tail widgets self-fetch via adminAPI;

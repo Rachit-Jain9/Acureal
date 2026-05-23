@@ -7,9 +7,14 @@ import { useState, useEffect, useCallback } from 'react';
 export const DEFAULT_WIDGETS = [
   { id: 'kpi_strip',              label: 'KPI strip',                always: true,  defaultVisible: true },
   { id: 'comps_queue_alert',      label: 'Comps queue alert',        always: false, defaultVisible: true },
+  // Today's Attention — specific item-level signals (overdue DD,
+  // expiring approvals, recent risks, stale deals). Sits right under
+  // the KPI / alert row because "what should I do today?" is the very
+  // first question a deal lead lands on the dashboard to answer.
+  { id: 'attention_panel',        label: "Today's Attention",        always: false, defaultVisible: true },
   // Portfolio Risk Radar — workspace-level rollup of every live deal's
-  // posture. Lives near the top of the dashboard because "which deals need
-  // IC attention" is the question an investment lead opens REDIP to answer.
+  // posture. Sits under the Attention panel: the radar gives the
+  // aggregate view, Attention gives the per-item view.
   { id: 'portfolio_risk_radar',   label: 'Portfolio Risk Radar',     always: false, defaultVisible: true },
   { id: 'pipeline_chart',         label: 'Pipeline distribution',    always: false, defaultVisible: true },
   { id: 'cities_chart',           label: 'City distribution',        always: false, defaultVisible: true },

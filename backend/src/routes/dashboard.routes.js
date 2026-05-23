@@ -1,6 +1,7 @@
 const express = require('express');
 const dashboardService = require('../services/dashboard.service');
 const portfolioRiskRadarService = require('../services/portfolioRiskRadar.service');
+const attentionService = require('../services/attention.service');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -26,6 +27,24 @@ router.get('/portfolio-risk-radar', authenticate, async (req, res, next) => {
   try {
     const radar = await portfolioRiskRadarService.getPortfolioRiskRadar();
     res.json({ success: true, data: radar });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /dashboard/attention
+//
+// Today's Attention — specific item-level signals across the portfolio that
+// need action. Five disjoint lists (overdue required DD, approvals expiring
+// in 30 days, risk flags raised in the last 7 days, deals with no activity
+// in 14+ days, last 10 audit-log entries). Pairs with the Portfolio Risk
+// Radar's aggregate counts: the radar says "3 overdue DD items"; this says
+// "which 3, and on which deals". Each individual list degrades to empty
+// independently on a query failure.
+router.get('/attention', authenticate, async (req, res, next) => {
+  try {
+    const attention = await attentionService.getAttention();
+    res.json({ success: true, data: attention });
   } catch (error) {
     next(error);
   }

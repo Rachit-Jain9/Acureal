@@ -19,3 +19,18 @@ export function usePortfolioRiskRadar() {
     staleTime: 30_000,
   });
 }
+
+// Today's Attention — specific item-level signals across the live portfolio
+// (overdue required DD, expiring approvals, recent risk flags, stale deals,
+// the last 10 audit-log entries). The companion read to usePortfolioRiskRadar:
+// the radar shows aggregates ("3 overdue DD items"); this returns the
+// underlying rows so the dashboard tile can render clickable items.
+//
+// 30s staleTime matches the radar so toggling between them stays warm.
+export function useAttention() {
+  return useQuery({
+    queryKey: ['dashboard-attention'],
+    queryFn: () => dashboardAPI.attention().then((r) => r.data.data),
+    staleTime: 30_000,
+  });
+}
