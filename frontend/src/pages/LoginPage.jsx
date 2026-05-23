@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import { useLegalActive } from '../hooks/useLegalActive';
@@ -11,10 +11,17 @@ import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 export default function LoginPage() {
   usePublicLightTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login, register, googleSignIn, completeMfaLogin, loading, error, clearError } = useAuthStore();
   const { data: legalDocs, loading: legalLoading, error: legalError } = useLegalActive();
 
-  const [isRegister, setIsRegister] = useState(false);
+  // Deep-link: `/login?mode=register` (or `?register=1`) opens the page
+  // directly in the create-account form. The landing-page "Get started"
+  // CTA uses this so first-time visitors don't have to find and click
+  // the "Don't have an account? Register" toggle.
+  const initialRegisterMode =
+    searchParams.get('mode') === 'register' || searchParams.get('register') === '1';
+  const [isRegister, setIsRegister] = useState(initialRegisterMode);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);

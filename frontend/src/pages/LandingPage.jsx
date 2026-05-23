@@ -99,13 +99,13 @@ function Nav() {
             Sign in
           </button>
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/login?mode=register')}
             className="text-sm font-medium text-white px-3 sm:px-3.5 py-1.5 rounded-md whitespace-nowrap
               bg-accent transition duration-150 ease-out hover:brightness-110 active:scale-[0.98]
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            <span className="hidden sm:inline">Request access </span>
-            <span className="sm:hidden">Request </span>
+            <span className="hidden sm:inline">Get started </span>
+            <span className="sm:hidden">Sign up </span>
             →
           </button>
         </div>
@@ -425,8 +425,8 @@ function Hero() {
             Committee receives is the memo they approve.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <button onClick={() => navigate('/login')} className={PRIMARY_CTA}>
-              Request access <ArrowRight size={15} />
+            <button onClick={() => navigate('/login?mode=register')} className={PRIMARY_CTA}>
+              Get started <ArrowRight size={15} />
             </button>
             <button onClick={() => navigate('/login')} className={SECONDARY_CTA}>
               Sign in
@@ -615,8 +615,8 @@ function Close() {
             spreadsheet tabs.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
-            <button onClick={() => navigate('/login')} className={PRIMARY_CTA}>
-              Request access <ArrowRight size={15} />
+            <button onClick={() => navigate('/login?mode=register')} className={PRIMARY_CTA}>
+              Get started <ArrowRight size={15} />
             </button>
             <button onClick={() => navigate('/login')} className={SECONDARY_CTA}>
               Sign in

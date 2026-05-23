@@ -133,7 +133,7 @@ export const STAGE_CONFIG = {
   loi:           { label: 'LOI',                    tone: 'warn' },
   due_diligence: { label: 'Due Diligence',          tone: 'warn' },
   underwriting:  { label: 'Underwriting',           tone: 'info' },
-  ic_review:     { label: 'Investor-Grade Review',  tone: 'premium' },
+  ic_review:     { label: 'IC Review',              tone: 'premium' },
   negotiation:   { label: 'Negotiation',            tone: 'info' },
   active:        { label: 'Active',                 tone: 'success' },
   closed:        { label: 'Closed',                 tone: 'success' },
