@@ -59,7 +59,7 @@ function StatusBadge({ status }) {
 
 function StatCard({ label, value, sub, icon: Icon = Database }) {
   return (
-    <div className="rounded-xl border border-hairline-strong bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.12em] text-content-muted">{label}</div>
@@ -76,7 +76,7 @@ function StatCard({ label, value, sub, icon: Icon = Database }) {
 
 function ProviderCard({ label, provider }) {
   return (
-    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-content-primary">{label}</div>
@@ -95,7 +95,7 @@ function SchemaReadinessCard({ schema }) {
   const missingCount = Number(summary.missing_critical || 0) + Number(summary.missing_warning || 0);
 
   return (
-    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-3">
           <div className="mt-0.5 rounded-lg bg-primary-50 p-2 text-primary-600">
@@ -142,7 +142,7 @@ function RedFlagRulesCard({ rules = [] }) {
   const visible = expanded ? rules : rules.slice(0, 4);
 
   return (
-    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="mb-3 flex items-center gap-3">
         <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
           <AlertTriangle size={18} />
@@ -191,7 +191,7 @@ const PROVIDER_LABELS = {
 function AiUsageCard({ usage }) {
   if (!usage || !usage.providers || usage.providers.length === 0) {
     return (
-      <div className="rounded-xl border border-hairline-strong bg-white p-4">
+      <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
         <div className="mb-3 flex items-center gap-3">
           <div className="rounded-lg bg-bg-secondary p-2 text-content-muted">
             <Activity size={18} />
@@ -211,7 +211,7 @@ function AiUsageCard({ usage }) {
   const failureTone = totals.failure_rate > 0.05 ? 'danger' : totals.failure_rate > 0.01 ? 'warn' : 'success';
 
   return (
-    <div className="rounded-xl border border-hairline-strong bg-white p-4">
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="mb-3 flex items-center gap-3">
         <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
           <Activity size={18} />
@@ -423,7 +423,7 @@ function AuthorityInputPanel({ dealId, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex items-center gap-1 self-start rounded-lg border border-hairline-strong bg-white px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-bg-secondary"
+          className="inline-flex items-center gap-1 self-start rounded-lg border border-hairline-strong bg-bg-elevated px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-bg-secondary"
         >
           <XCircle size={13} />
           Close
@@ -801,7 +801,7 @@ export default function ParcelIntelligenceAdminPage() {
         </>
       )}
 
-      <div className="rounded-xl border border-hairline-strong bg-white shadow-sm">
+      <div className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-sm">
         <div className="flex flex-col gap-3 border-b border-hairline-strong p-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-content-primary">Evidence Review Queue</h2>
@@ -823,7 +823,7 @@ export default function ParcelIntelligenceAdminPage() {
               <button
                 type="button"
                 onClick={() => setDealId('')}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-secondary px-3 py-2 text-sm font-medium text-content-secondary hover:bg-white"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-secondary px-3 py-2 text-sm font-medium text-content-secondary hover:bg-bg-elevated"
                 title="Clear deal scope"
               >
                 Deal scoped

@@ -440,7 +440,7 @@ function SourceReviewModal({ doc, isOpen, onClose, onSubmit, submitting }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-review-title"
-        className="relative mx-4 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+        className="relative mx-4 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-bg-elevated p-6 shadow-xl"
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -565,7 +565,7 @@ function SourceHistoryModal({ doc, isOpen, onClose, versions = [], isLoading, is
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-history-title"
-        className="relative mx-4 max-h-[84vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl motion-safe:animate-[fadeInUp_220ms_cubic-bezier(0.16,1,0.3,1)]"
+        className="relative mx-4 max-h-[84vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-bg-elevated p-6 shadow-xl motion-safe:animate-[fadeInUp_220ms_cubic-bezier(0.16,1,0.3,1)]"
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -744,7 +744,7 @@ function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4 p-6">
+      <div className="relative bg-bg-elevated rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-content-primary">
             {zone ? `Edit Zone — ${zone.zone_code}` : 'Add Zone'}
@@ -1134,7 +1134,7 @@ function SourcePagesModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-pages-title"
-        className="relative mx-4 max-h-[84vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl motion-safe:animate-[fadeInUp_220ms_cubic-bezier(0.16,1,0.3,1)]"
+        className="relative mx-4 max-h-[84vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-bg-elevated p-6 shadow-xl motion-safe:animate-[fadeInUp_220ms_cubic-bezier(0.16,1,0.3,1)]"
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
