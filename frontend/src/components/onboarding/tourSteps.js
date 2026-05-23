@@ -138,19 +138,19 @@ export const DEAL_TOUR_STEPS = [
     id: 'dd',
     target: '#tab-dd',
     title: 'DD & Approvals',
-    body: 'The diligence checklist and the approvals tracker. Severity-scored items, RERA verification, and an open / done score.',
+    body: 'The diligence checklist and the approvals tracker. Severity-scored, with an open / done score. Hover the small "Evidence" pill on any row to see the source document — page and confidence — that backs it.',
   },
   {
     id: 'risk',
     target: '#tab-risk',
     title: 'Risk',
-    body: 'Title, zoning, financial, physical, market and promoter risks — flagged, scored, and tied to the documents that surfaced them.',
+    body: 'Title, zoning, financial, physical, market and promoter risks — flagged, scored, and tied via the Evidence pill to the documents that surfaced them.',
   },
   {
     id: 'comps',
     target: '#tab-comps',
     title: 'Market / Comps',
-    body: "Nearby verified transaction comparables and this deal's relative-value read against the local market.",
+    body: "Nearby verified transaction comparables and this deal's relative-value read against the local market. Each comp's price carries its own Evidence pill so you can trace it back to a listing or registry entry.",
   },
   {
     id: 'audit',
