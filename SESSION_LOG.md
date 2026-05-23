@@ -6736,3 +6736,84 @@ Two focused PRs on the "smooth, fast, optimized" axis:
 - Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
   IntelligencePage).
 - Database / infra hygiene (consolidate 85+ migrations).
+
+## 2026-05-24 (live-browser audit) — landing CTA + stage label fixes
+
+### What was worked on
+
+Operator gave Claude in Chrome access. First real end-to-end audit of
+production by clicking through the site as a user would. Dashboard,
+Deals list, Deal detail, DD tab, Audit tab, Market Intelligence,
+Cmd-K palette, login page, landing page — all walked through with
+real screenshots.
+
+**What was verified working live on production:**
+- Today's Attention panel: stale-deal rows correctly show deal name
+  with stage chip below (PR #531 fix is live).
+- Portfolio Risk Radar: 5 live deals, failure-mode rollup correct,
+  Top Deals At Risk ranks them properly, no 500 errors (PR #529 fix
+  is live).
+- DD tab: Evidence chips on every row, transitions from generic
+  "Evidence" → "Unverified" pill once data loads (PRs #519/#521).
+- Audit tab: date-grouped timeline with "Earlier this week" / "29 Apr"
+  / "27 Apr" eyebrow headers (PR #532 is live).
+- Cmd-K palette: opens via Ctrl+K, lists Create new deal, page
+  jumps, deal search (PR #527).
+- Market Intelligence: full set of 18 macro indicators visible
+  including Office vacancy, retail rents, etc. (PR #530 universal
+  data).
+- Header search-bar with ⌘K hint is visible (PR #527 discoverability).
+- Hover-prefetch fires (Network tab confirmed; PR #534).
+
+**Real bugs found + fixed in PR #537:**
+
+35. **Landing CTA was stale.** "Request access" copy in three places
+    on the landing page implied invite-only sign-up, even though
+    PR #507 removed that gate weeks ago. Confusing for any
+    first-time visitor. Changed copy to "Get started" + made the
+    button deep-link to `/login?mode=register` so the create-account
+    form opens directly instead of the sign-in form with a small
+    "Don't have an account? Register" toggle to find. LoginPage
+    initializes `isRegister` from the new `mode` / `register` query
+    param.
+
+36. **Stage label "Investor-Grade Review" was overflowing badges.**
+    Spotted on the Deals list (card stage chip wrapped awkwardly)
+    and the dashboard pipeline chart (x-axis squeezed). Changed
+    `STAGE_CONFIG.ic_review.label` → "IC Review" (what deal teams
+    actually call it; Investment Committee Review). Propagates
+    cleanly because every consumer reads through the same map.
+    The separate dashboard KPI "Investor-Grade" (count of
+    IC-ready deals) keeps its name — different concept.
+
+**Findings discarded after verification:**
+- "OR" divider with no Google button visible on first load — was a
+  timing artifact; Google button renders ~2s later.
+- `/register` returning 404 — that's a direct-URL hit; the actual
+  flow toggles `isRegister` state on the login page via a button.
+  Fixed downstream by the new `?mode=register` deep-link anyway.
+
+### PRs opened / merged
+
+- PR #537 — fix(landing+stages): "Get started" CTA + IC Review label — merged
+
+### Plain-English recap
+
+- **Landing page now says "Get started"** instead of "Request access".
+  Clicking takes you straight to the sign-up form (not the sign-in
+  form). Anyone can sign up — the invite-only era was over weeks ago
+  but the copy was lying.
+- **The pipeline stage that was awkwardly labelled "Investor-Grade
+  Review"** is now just **"IC Review"** — shorter, fits in badges
+  properly, and that's what deal teams call it anyway.
+
+### Validation
+
+- Frontend: 103 files / 862 tests pass; clean Vite build.
+- Live preview verified the issues exist on master before the fix.
+
+### What's left to do
+
+- Dark-mode override-hack retirement (~30 in-app sites left).
+- Decompose React-page god-files.
+- Database / infra hygiene.
