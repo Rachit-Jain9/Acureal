@@ -220,10 +220,32 @@ const handlers = [
     EVENTS.EVIDENCE_LINKED,
     async ({ dealId, ownerKind, linkKind, userId }) => {
       if (!dealId) return;
+      // Was: "Evidence linked (document → dd_item)" — readable to
+      // engineers, opaque to investors reading the timeline. Translate
+      // into plain English so the audit trail tells a story.
+      const KIND_LABEL = {
+        document: 'a document',
+        manual_verification: 'a manual verification',
+        external_url: 'an external reference',
+        evidence_source: 'a source document',
+        evidence_fact: 'an extracted fact',
+      };
+      const OWNER_LABEL = {
+        dd_item: 'a DD item',
+        approval: 'an approval',
+        risk_flag: 'a risk flag',
+        comp: 'a comparable',
+        financial_scenario: 'a financial scenario',
+        parcel_intelligence: 'the parcel record',
+        deal_note: 'a deal note',
+        guidance_value: 'a guidance value',
+      };
+      const kind = KIND_LABEL[linkKind] || 'evidence';
+      const owner = OWNER_LABEL[ownerKind] || 'an item on this deal';
       await writeActivity({
         dealId,
         type: 'note',
-        description: `Evidence linked (${trim(linkKind)} → ${trim(ownerKind)})`,
+        description: `Linked ${kind} to ${owner}`,
         performedBy: userId,
         priority: 'low',
       });
