@@ -20,6 +20,7 @@ import { adminAPI } from '../services/api';
 import { useProperties } from '../hooks/useProperties';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
+import UrgencyStrip from '../components/deals/UrgencyStrip';
 import useAuthStore from '../store/authStore';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
@@ -1350,6 +1351,12 @@ function DealCard({ deal, selected = false, onToggleSelect }) {
             </span>
           )}
         </div>
+
+        {/* Urgency strip — surfaces the same per-deal signals the dashboard's
+            "Today's Attention" panel rolls up portfolio-wide. Each chip means
+            "this deal needs you to do something specific." Rendered only when
+            at least one signal fires so a clean deal stays clean. */}
+        <UrgencyStrip deal={deal} />
 
         {Array.isArray(deal.key_risks) && deal.key_risks.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
