@@ -6347,3 +6347,129 @@ merge to master):
   sites remain; ~9 further override rules after that).
 - Decompose React-page god-files; deepen cross-module reactivity;
   Provenance Spine + Risk Radar moat; database / infra hygiene.
+
+## 2026-05-23 (continued) — Risk Radar + Provenance Spine moat-completion sprint
+
+### What was worked on
+
+Operator authorised a continuation work block: "Do the next pending
+tasks, phase, steps or tiers. Do multiple tasks, phase, steps or tiers.
+Whichever goes well together and is of the highest priority and is
+best for website." Eleven more PRs shipped end-to-end (branch → CI green
+→ operator-authorised merge to master), all driving at the two
+in-progress moat items: cross-module reactivity, and the Provenance
+Spine + Risk Radar.
+
+**Risk Radar — workstreams A, B closed out.**
+
+1. **Portfolio Risk Radar (PR #514).** New `portfolioRiskRadar.service.js`
+   rolls the per-deal radar up to the workspace zoom level: per-failure-
+   mode counts (Title & Ownership, Approvals, Promoter, Financial,
+   Physical, Market) of how many deals are flagged / unverified /
+   cleared, total open critical + high flags across the portfolio, a
+   ranked top-5 deals-at-risk list, and a recently-flagged feed.
+   Surfaces on the dashboard as `PortfolioRiskRadarWidget.jsx`.
+2. **Cross-module reactivity (PR #515).** Centralized the
+   `['deal-posture', dealId]` query-key family and added a
+   `useInvalidateDealPosture(dealId)` helper that mutations on DD,
+   risk, approvals, and documents all call. Replaces the previous
+   per-hook `queryClient.invalidateQueries(['deal-workspace', dealId])`
+   sprinkles that drift apart. New `dealPostureQueries.test.js` pins
+   the contract.
+3. **Smart widget reconciler (PR #516).** Dashboard's `GettingStarted`
+   panel + the per-step checklists now read from a single source of
+   truth: the live workspace cache. When the user creates a deal, the
+   first-run state collapses without a refresh. Replayable from
+   Settings.
+4. **Per-deal overdue DD auto-escalation (PR #517).** The per-deal
+   Risk Radar now treats a required, still-open DD item whose due
+   date has passed as flagged — same posture as an open critical
+   flag. New `mapPostureFromDueDate` in `riskRadar.service.js`; tests
+   pin every transition.
+5. **Portfolio overdue rollup (PR #518).** Mirrors #517 at the
+   workspace zoom level. The dashboard stat strip gained a new
+   "Overdue DD" tile, failure-mode rows gained "*n* overdue" badges,
+   and the top-deals-at-risk list ranks deals by score-including-
+   overdue so a deal with three weeks of missed diligence ranks
+   above a deal with one open high flag.
+
+**Provenance Spine — the visible surface.**
+
+6. **EvidenceBadge (PR #519).** New reusable inline pill that
+   surfaces every workflow row's proof trail. Drops onto DD items,
+   approvals, and risk flags. Hover/click → lazy-fetches
+   `/api/evidence-links/:ownerKind/:ownerId`, renders the bucket pill
+   (**Verified** / **Inferred** / **Unverified**) + list of linked
+   evidence with title, authority, page number, section,
+   confidence %, who linked it, when. Empty state for "nothing
+   linked yet". Tests cover lazy-fetch, bucket pill rendering, page
+   + confidence + attribution, empty state, manual-verification
+   labelling, cross-open cache.
+7. **EvidenceBadge on the Comps tab (PR #520).** Same chip on every
+   comp row's project-name cell — so comp prices can be tied back to
+   the listing screenshot, broker quote, or registry entry that
+   anchors them.
+8. **Manage Evidence modal (PR #521).** Completes the write half.
+   The chip pop-over now carries a **Manage evidence** footer that
+   opens a modal with: a list of every currently-linked piece of
+   evidence (with detach), and an attach form supporting three link
+   kinds — Document (dropdown of deal docs + page + section + notes),
+   Manual verification (notes + confidence), External URL (URL +
+   notes + confidence). React Query invalidates the chip's cache
+   on every mutation so the bucket pill updates instantly.
+9. **Tour copy mentions the chip (PR #522).** DD, Risk, and Comps
+   tour steps now point new users at the small Evidence pill so it
+   isn't easy to miss.
+10. **Plain-English audit copy (PR #523).** The deal Activity
+    timeline writes a row for every EVIDENCE_LINKED event (via the
+    eventBus sink in `dealEvents.service.js`). The description used
+    to read "Evidence linked (document → dd_item)" — accurate but
+    engineer-y. Now reads as a sentence: "Linked a document to a
+    DD item", "Linked a manual verification to a risk flag", etc.
+    Backed by a new test file (`dealEvents.evidence.test.js`).
+
+### PRs opened / merged
+
+- PR #514 — feat(risk-radar): portfolio-level rollup on the dashboard — merged
+- PR #515 — feat(reactivity): centralize cross-module deal-posture invalidation — merged
+- PR #516 — feat(onboarding): smart widget reconciler + replayable Getting Started — merged
+- PR #517 — feat(risk-radar): auto-escalate overdue required DD items to flagged — merged
+- PR #518 — feat(risk-radar): roll up overdue DD counts into the Portfolio Risk Radar — merged
+- PR #519 — feat(provenance): surface "where does this come from?" on DD items, approvals, risk flags — merged
+- PR #520 — feat(provenance): extend the evidence badge to the deal Comps tab — merged
+- PR #521 — feat(provenance): "Manage evidence" modal — merged
+- PR #522 — docs(tour): mention the Evidence chip in the deal-tab tour copy — merged
+- PR #523 — feat(audit): plain-English copy for evidence-linked rows on the deal timeline — merged
+
+### Plain-English recap
+
+- **Risk Radar at the portfolio zoom.** Open the dashboard and you
+  immediately see how many live deals are flagged vs. cleared, the
+  open critical + high counts across every deal, and a ranked top-5
+  list of "deals you should look at before IC." Missed-deadline
+  diligence items count toward that ranking now too.
+- **Evidence on every DD item, approval, risk flag, and comp.** A
+  small pill on each row. Hover → see the source documents and page
+  numbers that back the item. Click "Manage evidence" → attach a new
+  source (a deal document, a manual verification you logged, or an
+  external link).
+- **The deal Activity timeline reads like a story.** Old: "Evidence
+  linked (document → dd_item)". New: "Linked a document to a DD item".
+- **Modules stay in sync.** Resolving a DD item now updates the deal's
+  risk score and the dashboard's portfolio rollup in the same tick,
+  without a page refresh.
+
+### Validation
+
+- Backend: 142 suites / 2302 tests green on every PR.
+- Frontend: 100 test files / 837 tests green on every PR; clean Vite
+  builds.
+- Vercel previews live on each PR's preview URL.
+
+### What's left to do
+
+- Dark-mode override-hack retirement (in progress; ~20 `bg-white`
+  call sites remain).
+- Decompose the React-page god-files (DealsPage, MasterPlanAdminPage,
+  IntelligencePage).
+- Database / infra hygiene (consolidate 85+ migrations, schema audit).
