@@ -352,8 +352,15 @@ function DDSection({ dealId }) {
                                 <Badge tone={severityCfg.tone}>{severityCfg.label}</Badge>
                                 {/* Provenance Spine: hover the chip to see the
                                     source documents / manual checks that back
-                                    this item. Lazy-fetches on open. */}
-                                <EvidenceBadge ownerKind="dd_item" ownerId={item.id} compact />
+                                    this item. Lazy-fetches on open. Click
+                                    "Manage evidence" to attach / detach. */}
+                                <EvidenceBadge
+                                  ownerKind="dd_item"
+                                  ownerId={item.id}
+                                  ownerLabel={item.item_name}
+                                  dealId={dealId}
+                                  compact
+                                />
                               </div>
                               {item.description && (
                                 <p className="text-xs text-content-secondary mb-2">{item.description}</p>
@@ -665,7 +672,13 @@ function ApprovalsSection({ dealId }) {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-content-primary">{item.name}</p>
                         {/* Provenance — same chip used on DD items. */}
-                        <EvidenceBadge ownerKind="approval" ownerId={item.id} compact />
+                        <EvidenceBadge
+                          ownerKind="approval"
+                          ownerId={item.id}
+                          ownerLabel={item.name}
+                          dealId={dealId}
+                          compact
+                        />
                       </div>
                       {item.reference_number && (
                         <p className="text-xs text-content-muted">{item.reference_number}</p>

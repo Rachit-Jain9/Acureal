@@ -196,6 +196,7 @@ function RankedCompsTable({
   reliedSet,
   onToggleReliance,
   pendingCompId,
+  dealId,
 }) {
   if (!ranked || ranked.length === 0) {
     return (
@@ -251,7 +252,13 @@ function RankedCompsTable({
                     {/* Provenance — every comp price should be tied to a
                         listing screenshot, broker quote, or registry entry
                         before it carries weight in valuation. */}
-                    <EvidenceBadge ownerKind="comp" ownerId={comp.id} compact />
+                    <EvidenceBadge
+                      ownerKind="comp"
+                      ownerId={comp.id}
+                      ownerLabel={comp.project_name}
+                      dealId={dealId}
+                      compact
+                    />
                   </div>
                   {comp.developer && (
                     <span className="text-[10px] text-content-muted block truncate max-w-[180px]" title={comp.developer}>
@@ -545,6 +552,7 @@ export default function CompsTab() {
               reliedSet={reliedSet}
               onToggleReliance={handleToggleReliance}
               pendingCompId={toggleReliance.isPending ? toggleReliance.variables?.compId : null}
+              dealId={dealId}
             />
           )}
         </div>
