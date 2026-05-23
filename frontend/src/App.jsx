@@ -8,6 +8,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import CookieBanner from './components/common/CookieBanner';
 import LegalReAcceptanceModal from './components/common/LegalReAcceptanceModal';
 import useLegalPending from './hooks/useLegalPending';
+import RequirePlatformAdmin from './components/auth/RequirePlatformAdmin';
 
 // Neutralize scroll-wheel on focused number inputs. Browsers increment/decrement
 // <input type="number"> values on wheel when focused, which is a common footgun
@@ -150,12 +151,14 @@ export default function App() {
           {/* Admin / data-curation surfaces — moved out of Settings (which is now
               personal profile only). Old /settings/* paths kept as redirects so
               existing bookmarks don't break. */}
-          <Route path="admin/master-plan" element={withSuspense(<MasterPlanAdminPage />)} />
-          <Route path="admin/parcel-intelligence" element={withSuspense(<ParcelIntelligenceAdminPage />)} />
-          <Route path="admin/comps-queue" element={withSuspense(<CompsQueuePage />)} />
-          <Route path="admin/comps-queue/:id" element={withSuspense(<CompsQueueDetailPage />)} />
-          <Route path="admin/ai-usage" element={withSuspense(<AdminAiUsagePage />)} />
-          <Route path="admin/ab-eval" element={withSuspense(<AdminAbEvalPage />)} />
+          {/* Platform admin only — workspace admins (every account) must NOT
+              reach these. Sidebar hides the group too via isPlatformAdmin. */}
+          <Route path="admin/master-plan" element={<RequirePlatformAdmin>{withSuspense(<MasterPlanAdminPage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/parcel-intelligence" element={<RequirePlatformAdmin>{withSuspense(<ParcelIntelligenceAdminPage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/comps-queue" element={<RequirePlatformAdmin>{withSuspense(<CompsQueuePage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/comps-queue/:id" element={<RequirePlatformAdmin>{withSuspense(<CompsQueueDetailPage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/ai-usage" element={<RequirePlatformAdmin>{withSuspense(<AdminAiUsagePage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/ab-eval" element={<RequirePlatformAdmin>{withSuspense(<AdminAbEvalPage />)}</RequirePlatformAdmin>} />
           <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
           <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}

@@ -5,7 +5,7 @@ import { ArrowRight, AlertTriangle, Settings2 } from 'lucide-react';
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import useAuthStore from '../store/authStore';
-import { roleSatisfies } from '../utils/roles';
+import { isPlatformAdmin } from '../utils/permissions';
 import PageHeader from '../components/common/PageHeader';
 import { SkeletonKpi, SkeletonCard } from '../design-system';
 import useThemeStore from '../store/themeStore';
@@ -74,9 +74,12 @@ export default function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useDashboard();
   const chartPalette = useChartPalette();
   const tooltipStyle = useTooltipStyle();
-  const userRole = useAuthStore((s) => s.user?.role);
-  const userName = useAuthStore((s) => s.user?.name);
-  const canCurate = roleSatisfies(userRole, ['editor']);
+  const user = useAuthStore((s) => s.user);
+  const userRole = user?.role;
+  const userName = user?.name;
+  // The Comps Review Queue widget links to a platform-admin surface, so the
+  // signal that gates it is "is REDIP platform admin", not workspace role.
+  const canCurate = isPlatformAdmin(user);
 
   const { layout, toggleVisible, moveUp, moveDown, reset } = useDashboardLayout();
   const [customizeOpen, setCustomizeOpen] = useState(false);
