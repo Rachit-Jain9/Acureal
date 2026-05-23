@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import EmptyState from '../common/EmptyState';
+import EvidenceBadge from '../common/EvidenceBadge';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp,
@@ -237,7 +238,7 @@ function RankedCompsTable({
                 }
               >
                 <td className="px-4 py-3 font-medium text-content-primary">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="truncate max-w-[180px]" title={comp.project_name}>
                       {comp.project_name || '—'}
                     </span>
@@ -247,6 +248,10 @@ function RankedCompsTable({
                         title="Verified comp"
                       />
                     )}
+                    {/* Provenance — every comp price should be tied to a
+                        listing screenshot, broker quote, or registry entry
+                        before it carries weight in valuation. */}
+                    <EvidenceBadge ownerKind="comp" ownerId={comp.id} compact />
                   </div>
                   {comp.developer && (
                     <span className="text-[10px] text-content-muted block truncate max-w-[180px]" title={comp.developer}>
