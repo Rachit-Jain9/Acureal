@@ -6258,3 +6258,92 @@ workspace after deploy.
   multi-PR effort, batch by batch — the verified flow is now proven.
 - Decompose the React-page god-files; deepen cross-module reactivity;
   Provenance Spine + Risk Radar moat; database / infra hygiene.
+
+## 2026-05-23 — Checkbox click-fix, open sign-up, product tour, admin lockdown, shared market intelligence
+
+### What was worked on
+
+Long working session driven by operator feedback on the live preview.
+Six PRs shipped end-to-end (branch → CI green → operator-authorized
+merge to master):
+
+1. **Checkbox click-fix (PR #506).** The terms-acceptance and remember-me
+   checkboxes on the login/sign-up forms wouldn't toggle when clicked on
+   the visual square. The SVG check icon inside the styled span was
+   eating the click — `document.elementFromPoint` returned the SVG path
+   instead of the underlying input. Fix: `pointer-events-none` on the
+   visual span so the click falls through to the real checkbox.
+2. **Open sign-up (PR #507).** Removed the `ALLOW_COLD_SIGNUP` invite
+   gate from `auth.service.js`. Anyone with a valid email + password
+   (or Google OAuth) can now register a workspace.
+3. **Product tour for new users (PR #508).** Welcome modal (3-pane
+   intro: what REDIP is, who it's for, what you do here) + 9-step
+   coachmark tour over the sidebar (Dashboard, Deals, Map, Market
+   Intelligence, Comps, Reports, Settings, Admin, Help). Dismissal
+   persists in localStorage; replay card on Settings.
+4. **Admin lockdown (PR #509).** AI Provider Health, AI Usage / Cost,
+   Provider Routing Studio, A/B Eval, Master-Plan Admin, Comps Review
+   Queue, Parcel Intelligence Admin — six surfaces that were
+   role-gated (`owner`/`admin`) and therefore visible to every workspace
+   owner — are now gated on `isPlatformAdmin(user)` via a new
+   `RequirePlatformAdmin` route guard + an email-allowlist util
+   (`PLATFORM_ADMIN_EMAILS` env / fallback to founding email). The
+   Admin sidebar group is hidden for non-platform-admins.
+5. **Deal-workspace tour (PR #510).** Extended the coachmark tour into
+   the 10 deal-workspace tabs (Overview, Parcel, Documents, DD,
+   Approvals, Financial, Risk, Activity, Audit, Market). Steps fire
+   when the relevant tab activates so the highlighted card is always
+   on screen.
+6. **Shared market intelligence (PRs #511 + #512).** New accounts were
+   landing on an empty Market Intelligence + Comps page because both
+   datasets are stored per-org. Introduced `backend/src/utils/platformOrg.js`
+   which resolves the platform admin's `default_organization_id` (lazy
+   + cached). Comps service (PR #511) and intelligence service —
+   `getNotesMap`, `buildBrief`, `buildDealAnalysisInput` (PR #512) —
+   now read `(organization_id = current_organization_id() OR
+   organization_id = $platformOrgId)`, so every workspace sees the
+   platform admin's curated verified-Bengaluru rows alongside its own.
+   When the caller IS the platform admin, the OR collapses and rows
+   don't double-count. PR #512 also moved the Market Intelligence Notes
+   editor + AI cost / health widgets on Settings under
+   `isPlatformAdmin(user)` — the role-gate fix #509 missed on Settings.
+
+### PRs opened / merged
+
+- PR #506 — fix(auth): make terms / remember-me checkboxes clickable — merged
+- PR #507 — feat(auth): remove the invite-only sign-up gate — merged
+- PR #508 — feat(onboarding): product tour for new users — merged
+- PR #509 — fix(auth): gate the Admin sidebar group on platform admin — merged
+- PR #510 — feat(onboarding): extend the tour into deal-workspace tabs — merged
+- PR #511 — feat(comps): platform admin's verified comps visible to every workspace — merged
+- PR #512 — fix(intel): gate AI surfaces to platform admin + share market intelligence — merged
+
+### Plain-English recap
+
+- Anyone can now sign up — no invite needed. New accounts get a
+  guided 3-step welcome then a tooltip tour around the sidebar and the
+  deal-workspace tabs explaining what each section is for.
+- The two checkboxes on the login / sign-up forms (terms and
+  remember-me) now actually toggle when clicked.
+- AI cost dashboards, provider health, market-notes editing, and the
+  whole Admin section are now operator-only — no longer visible to
+  every workspace owner.
+- New accounts now land on a Market Intelligence page that already has
+  Bengaluru benchmarks, transactions, and comps populated — the curated
+  verified data is shared from the operator's workspace, not stuck
+  inside it.
+
+### Validation
+
+- Backend: 140 suites / 2276 tests green on every PR.
+- Frontend: clean Vite build on every PR.
+- Vercel previews verified eyes-on by operator before each merge
+  (login form click test; non-admin Settings cannot see AI cards;
+  fresh workspace shows shared Bengaluru benchmarks).
+
+### What's left to do
+
+- Dark-mode override-hack retirement (in progress, ~20 `bg-white` call
+  sites remain; ~9 further override rules after that).
+- Decompose React-page god-files; deepen cross-module reactivity;
+  Provenance Spine + Risk Radar moat; database / infra hygiene.
