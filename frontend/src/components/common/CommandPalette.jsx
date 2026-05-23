@@ -32,6 +32,9 @@ const RECENT_KEY = 'redip:cmdk:recent';
 const MAX_RECENT = 8;
 
 const QUICK_ACTIONS = [
+  // "Create" actions appear first so the most-used action is one keystroke
+  // away. ?new=1 is a deep-link DealsPage opens its create modal on.
+  { id: 'create-deal',  label: 'Create new deal',           hint: 'Start sourcing a new opportunity', to: '/dashboard/deals?new=1', keywords: 'new add sourcing create' },
   { id: 'dashboard',    label: 'Dashboard',                 hint: 'Pipeline overview',     to: '/dashboard',                  keywords: 'home overview' },
   { id: 'deals',        label: 'All deals',                 hint: 'Open the deals table',  to: '/dashboard/deals',            keywords: 'list pipeline' },
   { id: 'map',          label: 'Map',                       hint: 'Geospatial deal view',  to: '/dashboard/map',              keywords: 'gis location' },
@@ -121,6 +124,16 @@ export default function CommandPalette() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [open]);
+
+  // Allow other parts of the app to open the palette without simulating
+  // a keystroke. Header's search affordance dispatches this event so a
+  // mouse click reveals the same Cmd-K experience the keyboard shortcut
+  // gives.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener('redip:cmdk-open', onOpen);
+    return () => window.removeEventListener('redip:cmdk-open', onOpen);
+  }, []);
 
   const trimmedQ = debouncedQuery.toLowerCase();
 

@@ -1,23 +1,29 @@
 import { useState } from 'react';
 import { Search, Moon, Sun, Menu } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import useThemeStore from '../../store/themeStore';
+
+// Detect the platform once at module load so the kbd hint reads "⌘K" on
+// macOS and "Ctrl K" everywhere else.
+const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
+const cmdLabel = isMac ? '⌘' : 'Ctrl';
+
+const openCommandPalette = () => {
+  // Custom event the CommandPalette listens for — keeps the palette's
+  // open state encapsulated while still being mouse-openable.
+  window.dispatchEvent(new CustomEvent('redip:cmdk-open'));
+};
 
 export default function Header({ onMobileMenuOpen }) {
   const { user } = useAuthStore();
   const mode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggle);
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
-    navigate(`/dashboard/deals?search=${encodeURIComponent(q)}`);
-    setQuery('');
-  };
+  // The "search bar" is now a *button styled like* an input. Clicking
+  // opens the Cmd-K palette where live search, deal jumps and recent-
+  // deal navigation all live — strictly more useful than the old
+  // submit-on-Enter behaviour that just navigated to /deals?search=.
+  const [searchHover, setSearchHover] = useState(false);
 
   return (
     <header className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2 bg-bg-elevated border-b border-hairline">
@@ -32,16 +38,25 @@ export default function Header({ onMobileMenuOpen }) {
             <Menu size={18} />
           </button>
         )}
-        <form onSubmit={handleSearch} className="relative max-w-md flex-1 min-w-0">
+        <button
+          type="button"
+          onClick={openCommandPalette}
+          onMouseEnter={() => setSearchHover(true)}
+          onMouseLeave={() => setSearchHover(false)}
+          aria-label="Open quick search (Ctrl K)"
+          className="relative max-w-md flex-1 min-w-0 flex items-center text-left rounded-md text-sm bg-bg-secondary text-content-secondary border border-hairline py-2 pl-9 pr-3 hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 transition-colors"
+        >
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search…"
-            className="w-full pl-9 pr-4 py-2 rounded-md text-sm focus:outline-none bg-bg-secondary text-content-primary border border-hairline"
-          />
-        </form>
+          <span className={searchHover ? 'text-content-secondary' : 'text-content-muted'}>
+            Search deals, jump to a page…
+          </span>
+          <span className="ml-auto flex items-center gap-1 text-[10px] uppercase tracking-wider text-content-tertiary">
+            <kbd className="px-1.5 py-0.5 rounded border border-hairline bg-bg-elevated font-medium">
+              {cmdLabel}
+            </kbd>
+            <kbd className="px-1.5 py-0.5 rounded border border-hairline bg-bg-elevated font-medium">K</kbd>
+          </span>
+        </button>
       </div>
 
       <div className="flex items-center gap-2">
