@@ -191,6 +191,53 @@ const fmtAbsolute = (iso) => {
   }
 };
 
+// Group a chronological event list into date-bucketed sections so the
+// audit timeline reads "Today / Yesterday / This week / 4 Apr 2026"
+// instead of a dense flat list. Events are assumed newest-first (the
+// useDealEvents hook already orders them that way); within each bucket
+// we preserve that order.
+//
+// The bucket label is purely cosmetic — every event still carries its
+// own relative + absolute timestamp on the row.
+const startOfDay = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+};
+
+const dateBucketLabel = (iso) => {
+  if (!iso) return 'Unknown date';
+  const t = startOfDay(iso);
+  if (Number.isNaN(t)) return 'Unknown date';
+  const today = startOfDay(new Date());
+  const day = 86400000;
+  if (t === today) return 'Today';
+  if (t === today - day) return 'Yesterday';
+  if (t > today - 7 * day) return 'Earlier this week';
+  const d = new Date(iso);
+  const now = new Date();
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+  });
+};
+
+function groupEventsByDate(events) {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  const groups = [];
+  let current = null;
+  for (const ev of events) {
+    const label = dateBucketLabel(ev.created_at);
+    if (!current || current.label !== label) {
+      current = { label, items: [] };
+      groups.push(current);
+    }
+    current.items.push(ev);
+  }
+  return groups;
+}
+
 // Pure: walk the events array and attach a `delta` to each financial
 // row that references the prior financial event's outputs_summary.
 // Events are newest-first so "prior" means the next financial row in
@@ -851,17 +898,30 @@ export default function AuditTab() {
         </Card>
       ) : (
         <Card className="p-0 overflow-hidden">
-          {visibleEvents.map((ev) =>
-            ev.kind === 'mutation' ? (
-              <MutationRow
-                key={ev.id}
-                event={ev}
-                onPeekBatch={(id) => setPeekBulkId(id)}
-              />
-            ) : (
-              <EventRow key={ev.id} event={ev} dealId={dealId} />
-            ),
-          )}
+          {/* Date-grouped rendering: each bucket carries a sticky-style
+              eyebrow header ("Today", "Yesterday", "12 May 2026"), then
+              its events in chronological order. The flat list still
+              works visually because each event row keeps its own
+              relative + absolute timestamp; the bucket header just
+              scaffolds the day-to-day rhythm. */}
+          {groupEventsByDate(visibleEvents).map((group) => (
+            <div key={group.label}>
+              <div className="px-4 py-1.5 bg-bg-secondary border-b border-hairline-soft text-[10px] uppercase tracking-wider font-semibold text-content-muted">
+                {group.label}
+              </div>
+              {group.items.map((ev) => (
+                ev.kind === 'mutation' ? (
+                  <MutationRow
+                    key={ev.id}
+                    event={ev}
+                    onPeekBatch={(id) => setPeekBulkId(id)}
+                  />
+                ) : (
+                  <EventRow key={ev.id} event={ev} dealId={dealId} />
+                )
+              ))}
+            </div>
+          ))}
         </Card>
       )}
 
@@ -882,6 +942,6 @@ export default function AuditTab() {
   );
 }
 
-// Export the pure delta builder for tests so we can verify the math
+// Export the pure helpers for tests so we can verify behaviour
 // without mounting the React tree.
-export { attachDeltas };
+export { attachDeltas, groupEventsByDate, dateBucketLabel };
