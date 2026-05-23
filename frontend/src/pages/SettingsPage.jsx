@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { User, Shield, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, KeyRound } from 'lucide-react';
 import useAuthStore from '../store/authStore';
+import { isPlatformAdmin } from '../utils/permissions';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
 import { authAPI } from '../services/api';
@@ -515,18 +516,22 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* PR-NX23 (2026-05-16): Live provider health surface — sits ABOVE
-          the AI usage / cost widget because "is it working?" precedes
-          "how much did it cost?". Same role gate as the cost widget. */}
-      {(user?.role === 'owner' || user?.role === 'admin' || user?.role === 'analyst') && (
-        <AIHealthWidget />
+      {/* AI provider health + usage are cross-org platform operations data
+          (cost across every workspace, provider availability) — not something
+          every workspace owner needs. Gated to the REDIP platform admin via
+          isPlatformAdmin, NOT workspace role (every account is admin of its
+          own workspace, which would expose these to everyone). */}
+      {isPlatformAdmin(user) && (
+        <>
+          <AIHealthWidget />
+          <AIUsageWidget />
+        </>
       )}
 
-      {(user?.role === 'owner' || user?.role === 'admin' || user?.role === 'analyst') && (
-        <AIUsageWidget />
-      )}
-
-      {(user?.role === 'owner' || user?.role === 'admin') && (
+      {/* Market Intelligence Notes are platform-curated — they appear in the
+          shared brief and are labelled "admin-entered" — so only the REDIP
+          platform admin should be editing them. */}
+      {isPlatformAdmin(user) && (
         <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
           <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
             <Brain size={18} />

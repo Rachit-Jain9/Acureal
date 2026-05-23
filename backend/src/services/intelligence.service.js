@@ -8,6 +8,7 @@ const numericalVerifier = require('./numericalVerifier.service');
 const { getRequestContext } = require('../lib/requestContext');
 const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+const { getPlatformOrgId } = require('../utils/platformOrg');
 
 const HEATMAP_MARKETS = [
   'Whitefield',
@@ -82,12 +83,22 @@ const buildHeatmapFromBenchmarks = (benchmarks) => {
 };
 
 const getNotesMap = async () => {
+  // Read the user's own org notes AND the platform admin's notes — the
+  // platform admin maintains the shared verified-market observations every
+  // workspace sees. When the user IS the platform admin, the OR collapses
+  // and we don't double-count.
+  const platformOrgId = await getPlatformOrgId();
   const result = await query(
-    'SELECT section, items FROM market_notes WHERE organization_id = current_organization_id()'
+    `SELECT section, items FROM market_notes
+     WHERE organization_id = current_organization_id() OR organization_id = $1`,
+    [platformOrgId],
   );
   const map = {};
   for (const row of result.rows) {
-    map[row.section] = row.items;
+    if (!map[row.section]) map[row.section] = [];
+    if (Array.isArray(row.items)) {
+      map[row.section].push(...row.items);
+    }
   }
   return map;
 };
@@ -168,6 +179,7 @@ Rules:
 // ─── BUILD BRIEF ─────────────────────────────────────────────────────────────
 
 const buildBrief = async (briefDate) => {
+  const platformOrgId = await getPlatformOrgId();
   const [topDealResult, developmentsResult, marketSignalResult, benchmarksResult, recentTxResult, topCompsResult, notes] = await Promise.all([
     query(
       `SELECT d.id, d.name, d.stage, d.priority, p.city, p.property_type,
@@ -205,20 +217,26 @@ const buildBrief = async (briefDate) => {
       `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
               yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub, data_period
        FROM micro_market_benchmarks
-       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
-       ORDER BY avg_price_max_per_sqft DESC NULLS LAST`
+       WHERE (organization_id = current_organization_id() OR organization_id = $1)
+         AND LOWER(city) = 'bengaluru'
+       ORDER BY avg_price_max_per_sqft DESC NULLS LAST`,
+      [platformOrgId],
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT fiscal_year, quarter, deal_type, buyer, quantum_inr_mn, locality, land_size_acres
        FROM market_transactions
-       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
-       ORDER BY fiscal_year DESC, quarter DESC LIMIT 10`
+       WHERE (organization_id = current_organization_id() OR organization_id = $1)
+         AND LOWER(city) = 'bengaluru'
+       ORDER BY fiscal_year DESC, quarter DESC LIMIT 10`,
+      [platformOrgId],
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units
        FROM comps
-       WHERE organization_id = current_organization_id() AND is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
-       ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 8`
+       WHERE (organization_id = current_organization_id() OR organization_id = $1)
+         AND is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
+       ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 8`,
+      [platformOrgId],
     ).catch(() => ({ rows: [] })),
     getNotesMap(),
   ]);
@@ -332,6 +350,7 @@ const buildBrief = async (briefDate) => {
 // data-assembly without duplicating five Postgres queries — keeps the two
 // paths producing identical analyses.
 const buildDealAnalysisInput = async (dealId) => {
+  const platformOrgId = await getPlatformOrgId();
   const [dealResult, finResult, benchmarksResult, compsResult, txResult] = await Promise.all([
     query(
       `SELECT d.id, d.name, d.stage, d.priority, d.deal_type, d.notes,
@@ -355,20 +374,26 @@ const buildDealAnalysisInput = async (dealId) => {
       `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
               yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub
        FROM micro_market_benchmarks
-       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
-       ORDER BY avg_price_max_per_sqft DESC NULLS LAST LIMIT 6`
+       WHERE (organization_id = current_organization_id() OR organization_id = $1)
+         AND LOWER(city) = 'bengaluru'
+       ORDER BY avg_price_max_per_sqft DESC NULLS LAST LIMIT 6`,
+      [platformOrgId],
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units
        FROM comps
-       WHERE organization_id = current_organization_id() AND is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
-       ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 6`
+       WHERE (organization_id = current_organization_id() OR organization_id = $1)
+         AND is_verified = TRUE AND LOWER(city) ILIKE '%bengaluru%'
+       ORDER BY rate_per_sqft DESC NULLS LAST LIMIT 6`,
+      [platformOrgId],
     ).catch(() => ({ rows: [] })),
     query(
       `SELECT fiscal_year, quarter, deal_type, buyer, quantum_inr_mn, locality, land_size_acres
        FROM market_transactions
-       WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
-       ORDER BY fiscal_year DESC, quarter DESC LIMIT 5`
+       WHERE (organization_id = current_organization_id() OR organization_id = $1)
+         AND LOWER(city) = 'bengaluru'
+       ORDER BY fiscal_year DESC, quarter DESC LIMIT 5`,
+      [platformOrgId],
     ).catch(() => ({ rows: [] })),
   ]);
 
