@@ -95,21 +95,44 @@ describe('useDashboardLayout', () => {
 });
 
 describe('reconcile (pure)', () => {
-  it('appends new catalogue widgets that were not in storage', () => {
+  it('preserves the user’s stored relative order for stored widgets', () => {
+    // The user explicitly moved `top_deals_irr` to position 0. Reconcile
+    // must NOT undo that.
+    const stored = [
+      { id: 'top_deals_irr', visible: true },
+      { id: 'kpi_strip',     visible: true },
+    ];
+    const out = reconcile(stored);
+    const idsByPos = out.map((e) => e.id);
+    expect(idsByPos.indexOf('top_deals_irr')).toBeLessThan(idsByPos.indexOf('kpi_strip'));
+  });
+
+  it('inserts new catalogue widgets at their natural catalogue position', () => {
+    // Stored layout has kpi_strip and pipeline_chart. The catalogue puts
+    // `comps_queue_alert` BETWEEN them. After reconcile, the new widget
+    // should land between them, NOT at the bottom of the layout.
     const stored = [
       { id: 'kpi_strip',      visible: true },
       { id: 'pipeline_chart', visible: false },
     ];
     const out = reconcile(stored);
-    // Stored widgets keep their order; missing ones are appended in
-    // catalogue order.
-    expect(out[0].id).toBe('kpi_strip');
-    expect(out[1].id).toBe('pipeline_chart');
-    // Make sure all default widgets are now present.
     const ids = out.map((e) => e.id);
+    expect(ids.indexOf('kpi_strip')).toBeLessThan(ids.indexOf('comps_queue_alert'));
+    expect(ids.indexOf('comps_queue_alert')).toBeLessThan(ids.indexOf('pipeline_chart'));
+    // Every catalogue widget is present.
     DEFAULT_WIDGETS.forEach((w) => {
       expect(ids).toContain(w.id);
     });
+  });
+
+  it('inserts a brand-new widget at index 0 when no catalogue-prior anchor is present', () => {
+    // Stored has nothing catalogue-before pipeline_chart (kpi_strip and
+    // comps_queue_alert are both missing from storage). A new widget
+    // catalogue-before pipeline_chart should land at index 0.
+    const stored = [{ id: 'pipeline_chart', visible: true }];
+    const out = reconcile(stored);
+    // kpi_strip is the very first catalogue entry; it must land at 0.
+    expect(out[0].id).toBe('kpi_strip');
   });
 
   it('drops unknown ids that were stored from an older catalogue', () => {
@@ -129,5 +152,16 @@ describe('reconcile (pure)', () => {
 
   it('returns defaults when stored is null/empty', () => {
     expect(reconcile(null)).toEqual(defaultLayout());
+  });
+
+  it('uses the catalogue’s defaultVisible for newly-inserted widgets', () => {
+    // audit_trail_tail defaults to hidden in DEFAULT_WIDGETS — when a
+    // pre-existing layout doesn’t mention it, smart insertion should
+    // pick up the catalogue’s default-visibility (false).
+    const stored = [{ id: 'kpi_strip', visible: true }];
+    const out = reconcile(stored);
+    const audit = out.find((e) => e.id === 'audit_trail_tail');
+    expect(audit).toBeDefined();
+    expect(audit.visible).toBe(false);
   });
 });

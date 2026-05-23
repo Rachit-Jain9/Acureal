@@ -5,6 +5,7 @@ import { ArrowRight, AlertTriangle, Settings2 } from 'lucide-react';
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import useAuthStore from '../store/authStore';
+import useTourStore from '../store/tourStore';
 import { isPlatformAdmin } from '../utils/permissions';
 import PageHeader from '../components/common/PageHeader';
 import { SkeletonKpi, SkeletonCard } from '../design-system';
@@ -23,9 +24,10 @@ import PortfolioRiskRadarWidget from '../components/dashboard/PortfolioRiskRadar
 import CustomizePopover from '../components/dashboard/CustomizePopover';
 import GettingStarted from '../components/dashboard/GettingStarted';
 
-// First-run panel: once the operator dismisses it we keep it hidden, even
-// while the workspace still has zero deals.
-const ONBOARDING_DISMISSED_KEY = 'redip.gettingStarted.dismissed';
+// First-run panel: the canonical "dismissed" flag now lives in tourStore
+// (alongside the welcome and deal-workspace tour state) so the Settings
+// "Show Getting Started again" button can re-show the panel reactively
+// — no page reload or storage-event listener needed.
 
 // Precision Analysis chart palette — colorblind-safe, layered:
 //   neutral blue (trust)  → primary / default
@@ -87,13 +89,11 @@ export default function DashboardPage() {
 
   const { layout, toggleVisible, moveUp, moveDown, reset } = useDashboardLayout();
   const [customizeOpen, setCustomizeOpen] = useState(false);
-  const [onboardingDismissed, setOnboardingDismissed] = useState(
-    () => localStorage.getItem(ONBOARDING_DISMISSED_KEY) === '1',
-  );
-  const dismissOnboarding = () => {
-    localStorage.setItem(ONBOARDING_DISMISSED_KEY, '1');
-    setOnboardingDismissed(true);
-  };
+  // Getting Started visibility is owned by the tour store — DashboardPage
+  // is just a consumer. That way the Settings "Show Getting Started
+  // again" button re-renders this page without a reload.
+  const onboardingDismissed = useTourStore((s) => s.gettingStartedDismissed);
+  const dismissOnboarding = useTourStore((s) => s.dismissGettingStarted);
 
   // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
   // so the layout doesn't reflow when data lands. Per FRONTEND_GUIDELINES §2:

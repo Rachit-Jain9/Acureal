@@ -39,31 +39,56 @@ const safeRead = () => {
   }
 };
 
-// Reconcile a stored layout with the catalogue: drop ids that no longer
-// exist, append any new widgets at the end so the user gets them but
-// keeps their existing ordering.
+// Reconcile a stored layout with the catalogue:
+//   1. Drop ids that no longer exist (catalogue shrank between sessions).
+//   2. Preserve the user's stored order and visibility for widgets they
+//      already had — their customization wins.
+//   3. Insert any NEW widget at its natural catalogue position relative
+//      to widgets the user already has, instead of dumping every new
+//      one at the bottom. Concretely: each new widget is placed just
+//      after the most-recent catalogue-prior widget that's also in the
+//      merged list. So a brand-new "Portfolio Risk Radar" defined in
+//      the catalogue between Comps-Queue and Pipeline lands between
+//      them in the user's existing dashboard too — not at the bottom
+//      where they'd have to scroll past every other tile to find it.
 const reconcile = (stored) => {
   if (!stored) return defaultLayout();
   const known = new Set(DEFAULT_WIDGETS.map((w) => w.id));
-  // Drop unknown ids (catalogue may have shrunk between sessions).
+  // Drop unknown ids first.
   const filtered = stored.filter((e) => e && known.has(e.id));
   const seen = new Set(filtered.map((e) => e.id));
-  const reconciled = filtered.map((entry) => {
+
+  // Preserve stored order + visibility. Always-on widgets force visible.
+  const merged = filtered.map((entry) => {
     const widget = DEFAULT_WIDGETS.find((w) => w.id === entry.id);
     return {
       id: entry.id,
-      // Always-on widgets force visible regardless of stored value.
       visible: widget?.always ? true : Boolean(entry.visible),
     };
   });
-  // Append any new widgets the catalogue knows about that the stored
-  // layout doesn't. They land with their default-visibility.
-  for (const widget of DEFAULT_WIDGETS) {
-    if (!seen.has(widget.id)) {
-      reconciled.push({ id: widget.id, visible: widget.defaultVisible });
+
+  // Smart insertion for new widgets: walk the catalogue in order. For
+  // each new (unseen) widget, find the most-recent catalogue-prior
+  // widget that's already in `merged` and insert just after it. If
+  // there's no such anchor (the new widget is catalogue-first among
+  // the merged set), insert at index 0.
+  for (let i = 0; i < DEFAULT_WIDGETS.length; i += 1) {
+    const w = DEFAULT_WIDGETS[i];
+    if (seen.has(w.id)) continue;
+    let anchorIdx = -1;
+    for (let j = i - 1; j >= 0; j -= 1) {
+      const prevId = DEFAULT_WIDGETS[j].id;
+      const idx = merged.findIndex((e) => e.id === prevId);
+      if (idx >= 0) {
+        anchorIdx = idx;
+        break;
+      }
     }
+    merged.splice(anchorIdx + 1, 0, { id: w.id, visible: w.defaultVisible });
+    seen.add(w.id);
   }
-  return reconciled;
+
+  return merged;
 };
 
 /**
