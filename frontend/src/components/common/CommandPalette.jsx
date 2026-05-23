@@ -122,6 +122,16 @@ export default function CommandPalette() {
     return () => window.removeEventListener('keydown', handler);
   }, [open]);
 
+  // Allow other parts of the app to open the palette without simulating
+  // a keystroke. Header's search affordance dispatches this event so a
+  // mouse click reveals the same Cmd-K experience the keyboard shortcut
+  // gives.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener('redip:cmdk-open', onOpen);
+    return () => window.removeEventListener('redip:cmdk-open', onOpen);
+  }, []);
+
   const trimmedQ = debouncedQuery.toLowerCase();
 
   const dealSearch = useQuery({

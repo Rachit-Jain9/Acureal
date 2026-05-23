@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Edit2, Trash2, ArrowRight, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import {
@@ -15,6 +15,7 @@ import {
   Button, Modal, Tabs, Field, Input, Select, Textarea,
 } from '../design-system';
 import ExportMenu from '../components/deal/ExportMenu';
+import { recordRecentDeal } from '../components/common/CommandPalette';
 import {
   STAGE_CONFIG,
   STAGE_TRANSITIONS,
@@ -93,6 +94,13 @@ export default function DealDetailPage() {
   // query key de-dupes.
   const { data: workspace, isLoading, isError } = useDealWorkspace(id);
   const deal = workspace?.deal;
+
+  // Drop the freshly-visited deal into the Cmd-K palette's "Recent deals"
+  // list so the next press of ⌘K offers it on top. The palette persists
+  // the list in localStorage; deduping is handled inside recordRecentDeal.
+  useEffect(() => {
+    if (deal?.id) recordRecentDeal(deal);
+  }, [deal?.id, deal?.name, deal?.city, deal?.stage]);
   const transitionStage = useTransitionStage();
   const deleteDeal = useDeleteDeal();
   const updateDeal = useUpdateDeal();
