@@ -36,38 +36,12 @@ const makeAccessDeniedError = () => {
   return error;
 };
 
-describe('auth.service register cold-signup gate', () => {
-  const originalFlag = process.env.ALLOW_COLD_SIGNUP;
-
+describe('auth.service register', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    delete process.env.ALLOW_COLD_SIGNUP;
   });
 
-  afterAll(() => {
-    if (originalFlag === undefined) {
-      delete process.env.ALLOW_COLD_SIGNUP;
-    } else {
-      process.env.ALLOW_COLD_SIGNUP = originalFlag;
-    }
-  });
-
-  test('rejects cold signup with 403 when ALLOW_COLD_SIGNUP is not enabled', async () => {
-    query.mockResolvedValueOnce({ rows: [] }); // no existing user
-
-    await expect(
-      authService.register('Stranger', 'stranger@example.com', 'Password123', null, {})
-    ).rejects.toMatchObject({
-      statusCode: 403,
-      message: expect.stringMatching(/by invitation only/i),
-    });
-
-    // Gate must short-circuit before any password hashing or DB writes
-    expect(bcrypt.hash).not.toHaveBeenCalled();
-  });
-
-  test('allows cold signup when ALLOW_COLD_SIGNUP=true', async () => {
-    process.env.ALLOW_COLD_SIGNUP = 'true';
+  test('creates a fresh workspace for a brand-new account', async () => {
     query.mockResolvedValueOnce({ rows: [] }); // no existing user
     bcrypt.hash.mockResolvedValue('hashed');
 
@@ -97,8 +71,7 @@ describe('auth.service register cold-signup gate', () => {
     expect(result.token).toBe('signed-token');
   });
 
-  test('always allows invitation-based signup regardless of flag', async () => {
-    delete process.env.ALLOW_COLD_SIGNUP;
+  test('honours an invitation token and joins the inviting workspace', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     bcrypt.hash.mockResolvedValue('hashed');
 

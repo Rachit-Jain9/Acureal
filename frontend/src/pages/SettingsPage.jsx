@@ -49,7 +49,7 @@ export default function SettingsPage() {
   // OAuth-only users (signed up via Google, never picked a password) get a
   // distinct Settings card: "Set a password" instead of "Change password".
   // The flag defaults to true on the backend column for every legacy user,
-  // so this branch only fires for accounts created via Google cold-signup.
+  // so this branch only fires for accounts created through Google sign-in.
   const passwordIsUnset = user?.password_set === false;
 
   // Profile form

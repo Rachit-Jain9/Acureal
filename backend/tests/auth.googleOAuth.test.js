@@ -49,7 +49,6 @@ const validClaims = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  delete process.env.ALLOW_COLD_SIGNUP;
 });
 
 describe('auth.service.loginOrRegisterWithGoogle — token validation', () => {
@@ -109,7 +108,7 @@ describe('auth.service.loginOrRegisterWithGoogle — Path A (returning user by i
       mode: 'login',
     });
 
-    // Should not have entered the cold-signup transaction.
+    // Should not have entered the new-workspace creation transaction.
     expect(transaction).not.toHaveBeenCalled();
     expect(createWorkspaceForUser).not.toHaveBeenCalled();
   });
@@ -211,26 +210,8 @@ describe('auth.service.loginOrRegisterWithGoogle — Path B (account linking)', 
   });
 });
 
-describe('auth.service.loginOrRegisterWithGoogle — Path C (cold signup)', () => {
-  test('rejects cold signup when ALLOW_COLD_SIGNUP is unset and no invitation', async () => {
-    googleOAuth.verifyIdToken.mockResolvedValueOnce(validClaims);
-    query
-      .mockResolvedValueOnce({ rows: [] }) // identity miss
-      .mockResolvedValueOnce({ rows: [] }); // email miss
-
-    await expect(
-      authService.loginOrRegisterWithGoogle('id-token', {
-        acceptedTermsVersion: 'v1',
-        acceptedPrivacyVersion: 'v1',
-      })
-    ).rejects.toMatchObject({
-      statusCode: 403,
-      message: expect.stringMatching(/by invitation only/i),
-    });
-  });
-
-  test('creates a fresh workspace when ALLOW_COLD_SIGNUP=true', async () => {
-    process.env.ALLOW_COLD_SIGNUP = 'true';
+describe('auth.service.loginOrRegisterWithGoogle — Path C (new workspace)', () => {
+  test('creates a fresh workspace for a brand-new Google identity', async () => {
     googleOAuth.verifyIdToken.mockResolvedValueOnce(validClaims);
     query
       .mockResolvedValueOnce({ rows: [] }) // identity miss
