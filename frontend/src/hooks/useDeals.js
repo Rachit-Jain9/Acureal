@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
+import { invalidatePortfolioRollups } from './dealPostureQueries';
 
 export function useDeals(params = {}) {
   return useQuery({
@@ -52,7 +53,7 @@ export function useCreateDeal() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidatePortfolioRollups(qc);
       toast.success('Deal created');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to create deal'),
@@ -67,7 +68,7 @@ export function useUpdateDeal() {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['deal', id] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidatePortfolioRollups(qc);
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -86,7 +87,7 @@ export function useTransitionStage() {
       qc.invalidateQueries({ queryKey: ['deal', id] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidatePortfolioRollups(qc);
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -105,7 +106,7 @@ export function useArchiveDeal() {
       qc.invalidateQueries({ queryKey: ['deal', id] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidatePortfolioRollups(qc);
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -124,7 +125,7 @@ export function useRestoreDeal() {
       qc.invalidateQueries({ queryKey: ['deal', id] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', id] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidatePortfolioRollups(qc);
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -141,7 +142,7 @@ export function useDeleteDeal() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deals'] });
       qc.invalidateQueries({ queryKey: ['pipeline'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidatePortfolioRollups(qc);
       qc.invalidateQueries({ queryKey: ['properties'] });
       qc.invalidateQueries({ queryKey: ['property'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -159,9 +160,11 @@ export function useDeleteDeal() {
 const invalidateDealsQueries = (qc) => {
   qc.invalidateQueries({ queryKey: ['deals'] });
   qc.invalidateQueries({ queryKey: ['pipeline'] });
-  qc.invalidateQueries({ queryKey: ['dashboard'] });
   qc.invalidateQueries({ queryKey: ['properties'] });
   qc.invalidateQueries({ queryKey: ['activities'] });
+  // Includes ['dashboard'] + ['portfolio-risk-radar'] so the new tile and
+  // the legacy KPI strip both refresh after a bulk operation.
+  invalidatePortfolioRollups(qc);
 };
 
 const bulkToast = (verb, data) => {
