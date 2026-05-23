@@ -298,7 +298,7 @@ export default function SettingsPage() {
       />
 
       {/* Profile Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
         <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
           <User size={18} />
           Profile
@@ -344,7 +344,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Security Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
         <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
           <Lock size={18} />
           Security
@@ -451,7 +451,7 @@ export default function SettingsPage() {
 
       {/* Privacy & data — DPDP rights: see / download data, manage consent.
           Links to the dedicated Privacy Centre (PrivacyCentrePage). */}
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
         <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
           <Shield size={18} />
           Privacy & your data
@@ -471,7 +471,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Preferences Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
         <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
           <Palette size={18} />
           Preferences
@@ -532,7 +532,7 @@ export default function SettingsPage() {
           shared brief and are labelled "admin-entered" — so only the REDIP
           platform admin should be editing them. */}
       {isPlatformAdmin(user) && (
-        <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+        <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
           <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
             <Brain size={18} />
             Market Intelligence Notes
@@ -583,7 +583,7 @@ export default function SettingsPage() {
       <ProductTourReplayCard />
 
       {/* Currency Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
         <div className="flex items-start justify-between mb-1">
           <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
             <DollarSign size={18} />
@@ -675,7 +675,7 @@ export default function SettingsPage() {
                   </thead>
                   <tbody className="divide-y divide-hairline">
                     {liveRates.map((r) => (
-                      <tr key={r.quote_currency} className={r.quote_currency === currencyCode ? 'bg-primary-50' : 'bg-white'}>
+                      <tr key={r.quote_currency} className={r.quote_currency === currencyCode ? 'bg-primary-50' : 'bg-bg-elevated'}>
                         <td className="px-3 py-2 font-medium text-content-primary">{r.quote_currency}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-content-secondary">{Number(r.rate).toFixed(6)}</td>
                         <td className="px-3 py-2 text-right text-content-secondary">{r.effective_date}</td>

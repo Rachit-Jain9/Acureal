@@ -199,7 +199,7 @@ function AdminNotesPanel() {
       </p>
       <div className="space-y-3">
         {Object.entries(SECTION_META).map(([sectionKey, meta]) => (
-          <div key={sectionKey} className="rounded-lg bg-white border border-blue-100">
+          <div key={sectionKey} className="rounded-lg bg-bg-elevated border border-blue-100">
             <button
               type="button"
               onClick={() => setOpenSection(openSection === sectionKey ? null : sectionKey)}
@@ -485,7 +485,7 @@ function MacroKpiTile({ kpi }) {
   const tone = TREND_TONE[kpi.trend] || 'text-content-muted';
   const yoy = formatYoY(kpi.yoy_change_pct);
   return (
-    <div className="rounded-xl border border-hairline-strong bg-white px-4 py-3 hover:shadow-sm transition-shadow">
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated px-4 py-3 hover:shadow-sm transition-shadow">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] uppercase tracking-[0.1em] font-medium text-content-muted">
           {kpi.metric_label}

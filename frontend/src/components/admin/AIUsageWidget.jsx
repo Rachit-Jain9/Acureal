@@ -61,7 +61,7 @@ export default function AIUsageWidget() {
   const byDoctype = data?.by_doctype || [];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
           <Brain size={18} />

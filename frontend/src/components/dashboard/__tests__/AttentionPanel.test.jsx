@@ -140,6 +140,27 @@ describe('AttentionPanel', () => {
     expect(screen.getByText('22d quiet')).toBeInTheDocument();
   });
 
+  it('stale-deal row shows the DEAL NAME as the row title (regression: was rendering stage label as title)', async () => {
+    dashboardAPI.attention.mockResolvedValueOnce(wrap({
+      ...emptyPayload,
+      totals: { ...emptyPayload.totals, stale_deals: 1, any: true },
+      stale_deals: [{
+        id: 'deal-7',
+        name: 'Whitefield JV Phase 2',
+        stage: 'due_diligence',
+        last_activity_at: '2026-05-01T00:00:00Z',
+        days_stale: 22,
+      }],
+    }));
+    renderPanel();
+    // The deal name must appear as the row's primary text — the bug
+    // shipped on master briefly rendered the stage label ("Due
+    // diligence") in its place, so the user couldn't identify the deal.
+    expect(await screen.findByText('Whitefield JV Phase 2')).toBeInTheDocument();
+    // And the stage label STILL renders, but as a secondary stage chip.
+    expect(screen.getByText('Due diligence')).toBeInTheDocument();
+  });
+
   it('renders the recent-activity footer with deal name + actor', async () => {
     dashboardAPI.attention.mockResolvedValueOnce(wrap({
       ...emptyPayload,

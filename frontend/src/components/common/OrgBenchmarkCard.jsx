@@ -64,7 +64,7 @@ export default function OrgBenchmarkCard() {
   const lastChangeDate = fmtDate(lastChange?.created_at);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
       <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
         <BarChart3 size={18} />
         Market benchmark contribution
