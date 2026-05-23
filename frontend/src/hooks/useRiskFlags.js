@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { riskAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
+import { invalidateDealPosture } from './dealPostureQueries';
 
 export function useRiskFlags(dealId) {
   return useQuery({
@@ -23,15 +24,7 @@ export function useCreateRiskFlag() {
   return useMutation({
     mutationFn: ({ dealId, data }) => riskAPI.create(dealId, data).then((r) => r.data),
     onSuccess: (_, { dealId }) => {
-      qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
-      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
-      // Dashboard widgets that aggregate risk across the portfolio need to
-      // re-tally on every flag change — without this the new Portfolio Risk
-      // Radar tile stays stale until the dashboard's own staleTime elapses.
-      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidateDealPosture(qc, dealId);
       toast.success('Risk flag added');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add risk flag'),
@@ -43,15 +36,7 @@ export function useUpdateRiskFlag() {
   return useMutation({
     mutationFn: ({ dealId, id, data }) => riskAPI.update(dealId, id, data).then((r) => r.data),
     onSuccess: (_, { dealId }) => {
-      qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
-      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
-      // Dashboard widgets that aggregate risk across the portfolio need to
-      // re-tally on every flag change — without this the new Portfolio Risk
-      // Radar tile stays stale until the dashboard's own staleTime elapses.
-      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidateDealPosture(qc, dealId);
       toast.success('Risk flag updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update risk flag'),
@@ -63,15 +48,7 @@ export function useDeleteRiskFlag() {
   return useMutation({
     mutationFn: ({ dealId, id }) => riskAPI.delete(dealId, id),
     onSuccess: (_, { dealId }) => {
-      qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
-      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
-      // Dashboard widgets that aggregate risk across the portfolio need to
-      // re-tally on every flag change — without this the new Portfolio Risk
-      // Radar tile stays stale until the dashboard's own staleTime elapses.
-      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidateDealPosture(qc, dealId);
       toast.success('Risk flag removed');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove risk flag'),
@@ -87,15 +64,10 @@ export function useRunInconsistencyCheck() {
   return useMutation({
     mutationFn: (dealId) => riskAPI.runInconsistencyCheck(dealId).then((r) => r.data.data),
     onSuccess: (data, dealId) => {
-      qc.invalidateQueries({ queryKey: ['risk-flags', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-score', dealId] });
-      qc.invalidateQueries({ queryKey: ['risk-radar', dealId] });
+      invalidateDealPosture(qc, dealId);
+      // The detector ALSO persists a risk_brief artifact — invalidate that
+      // narrower key in addition to the canonical posture surface.
       qc.invalidateQueries({ queryKey: ['risk-brief', dealId] });
-      qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
-      // The detector persists new risk_flags — portfolio rollup must
-      // re-tally just like the manual-create / update / delete paths.
-      qc.invalidateQueries({ queryKey: ['portfolio-risk-radar'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
       const flagged = data?.persisted_flag_ids?.length ?? 0;
       const dedup = data?.deduplicated_count ?? 0;
       const total = (data?.findings?.length ?? 0);
