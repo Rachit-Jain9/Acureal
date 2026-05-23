@@ -171,19 +171,19 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
       </div>
 
       <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-violet-100 p-4">
+        <div className="bg-bg-elevated rounded-lg border border-violet-100 p-4">
           <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">Terminal Value</div>
           <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">At end of hold (Y{Math.round(hold)})</div>
         </div>
 
-        <div className="bg-white rounded-lg border border-violet-100 p-4">
+        <div className="bg-bg-elevated rounded-lg border border-violet-100 p-4">
           <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">PV of Terminal Value</div>
           <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tvPv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">Discounted at {discountPct.toFixed(1)}% to t=0</div>
         </div>
 
-        <div className="bg-white rounded-lg border border-violet-100 p-4">
+        <div className="bg-bg-elevated rounded-lg border border-violet-100 p-4">
           <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">% of NPV from TV</div>
           <div className="mt-1 text-2xl font-bold text-content-primary">
             {kpis?.npv && tvPv ? `${((tvPv / (Number(kpis.npv) + tvPv)) * 100).toFixed(1)}%` : '-'}
@@ -256,7 +256,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-3 flex items-center gap-2">
         <Activity className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">NOI Progression</h3>
@@ -336,7 +336,7 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
   const currentValue = noiAtExit / (currentCap / 100);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-3 flex items-center gap-2">
         <Gauge className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Terminal Value Sensitivity</h3>
@@ -422,7 +422,7 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-slate-800 to-gray-900 px-5 py-3 flex items-center gap-2">
         <Layers className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cash Flow Composition</h3>
@@ -471,7 +471,7 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
   const breakEvenIdx = data.findIndex((d) => d.cumulative >= 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cumulative Return Trajectory</h3>
@@ -546,7 +546,7 @@ export function KPIDashboard({ kpis, assetClass, revenue, costs }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 flex items-center gap-2">
         <BarChart3 className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Investor KPI Dashboard</h3>
@@ -592,7 +592,7 @@ export function CostCompositionChart({ costs }) {
   const total = items.reduce((s, x) => s + x.value, 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
       <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-3 flex items-center gap-2">
         <Layers className="w-4 h-4 text-white" />
         <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cost Composition</h3>
@@ -646,7 +646,7 @@ export default function FinancialVisualizationLayer({ financials, inputs }) {
             onClick={() => setTab(t.id)}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               tab === t.id
-                ? 'bg-white text-indigo-700 shadow-sm'
+                ? 'bg-bg-elevated text-indigo-700 shadow-sm'
                 : 'text-content-secondary hover:text-content-primary'
             }`}
           >

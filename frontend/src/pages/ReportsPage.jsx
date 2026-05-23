@@ -371,7 +371,7 @@ export default function ReportsPage() {
       </div>
 
       {activeTab === 'pipeline' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-sm overflow-hidden">
           <TabCsvHeader
             title="Pipeline by stage"
             onDownload={handleDownloadPipelineCsv}
@@ -416,7 +416,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'financial' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-sm overflow-hidden">
           <TabCsvHeader
             title="Financial summary by deal"
             onDownload={handleDownloadFinancialCsv}
@@ -466,7 +466,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'citywise' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-sm overflow-hidden">
           <TabCsvHeader
             title="City-wise exposure"
             onDownload={handleDownloadCitywiseCsv}
@@ -502,7 +502,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === 'performance' && (
-        <div className="rounded-xl border border-hairline-strong bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-sm overflow-hidden">
           <TabCsvHeader
             title="Performance ranking by IRR"
             onDownload={handleDownloadPerformanceCsv}
@@ -606,7 +606,7 @@ export default function ReportsPage() {
 
       {activeTab === 'intelligence' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">
@@ -633,7 +633,7 @@ export default function ReportsPage() {
               </p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {(dailyBrief?.verifiedSourceRequirements || []).map((source) => (
-                  <div key={source.key} className="rounded-xl border border-amber-200 bg-white p-4">
+                  <div key={source.key} className="rounded-xl border border-amber-200 bg-bg-elevated p-4">
                     <p className="text-sm font-semibold text-content-primary">{source.label}</p>
                     <p className="mt-2 text-sm text-content-secondary">{source.purpose}</p>
                   </div>
@@ -643,7 +643,7 @@ export default function ReportsPage() {
           )}
 
           {dailyBrief?.dealOfDay && (
-            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
               <h4 className="text-base font-semibold text-content-primary">1. Deal of the Day</h4>
               <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
                 <div>
@@ -665,7 +665,7 @@ export default function ReportsPage() {
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
               <h4 className="text-base font-semibold text-content-primary">2. Key Developments</h4>
               {(dailyBrief?.keyDevelopments || []).length > 0 ? (
                 <div className="mt-4 space-y-4">
@@ -686,7 +686,7 @@ export default function ReportsPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
               <h4 className="text-base font-semibold text-content-primary">3. Market Signals</h4>
               <div className="mt-4 grid gap-4">
                 <div className="rounded-xl bg-emerald-50 p-4">
@@ -709,7 +709,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
             <h4 className="text-base font-semibold text-content-primary">4. Bengaluru Demand Heatmap</h4>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
@@ -740,7 +740,7 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
               <h4 className="text-base font-semibold text-content-primary">5. Demand Slowdown Indicators</h4>
               <ul className="mt-4 space-y-3 text-sm text-content-secondary">
                 {(dailyBrief?.demandSlowdownIndicators || []).map((item, index) => (
@@ -748,7 +748,7 @@ export default function ReportsPage() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-hairline-strong bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
               <h4 className="text-base font-semibold text-content-primary">6. Strategic Takeaways</h4>
               <ul className="mt-4 space-y-3 text-sm text-content-secondary">
                 {(dailyBrief?.strategicTakeaways || []).map((item, index) => (

@@ -243,7 +243,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
           )}
 
           {status === 'ok' && events.length > 0 && (
-            <div className="border rounded-lg bg-white divide-y divide-hairline">
+            <div className="border rounded-lg bg-bg-elevated divide-y divide-hairline">
               {events.map((event) => {
                 const label = EVENT_LABELS[event.event_type] || event.event_type;
                 const badge = EVENT_COLORS[event.event_type] || EVENT_COLORS.export_snapshot;
@@ -327,7 +327,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                             type="button"
                             onClick={() => runVerify(event)}
                             disabled={busy}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-hairline-strong bg-white text-xs font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-hairline-strong bg-bg-elevated text-xs font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             {busy && !verify ? (
                               <RefreshCw size={12} className="animate-spin" />
@@ -346,7 +346,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
                                 ? 'Re-run the kernel against the stored inputs and compare the output hash.'
                                 : 'Replay requires admin or analyst role.'
                             }
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-hairline-strong bg-white text-xs font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-hairline-strong bg-bg-elevated text-xs font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             {busy && !replay ? (
                               <RefreshCw size={12} className="animate-spin" />
