@@ -2,6 +2,7 @@ const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { rankComps, scoreComp } = require('../utils/compSimilarity');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+const { getPlatformOrgId } = require('../utils/platformOrg');
 
 // Haversine formula to calculate distance between two lat/lng points in km
 const haversineDistance = (lat1, lng1, lat2, lng2) => {
@@ -52,10 +53,21 @@ const addComp = async (data, userId = null) => {
 // `getCompsForExport`. Returns { conditions, values, paramCount } so
 // each caller can append its own pagination clause without duplicating
 // the filter logic.
-const buildCompsWhere = (filters = {}) => {
-  const conditions = ['organization_id = current_organization_id()'];
+const buildCompsWhere = (filters = {}, platformOrgId = null) => {
+  const conditions = [];
   const values = [];
   let paramCount = 1;
+
+  // Visibility: the user's own org plus, optionally, the platform admin's
+  // org — which exposes the platform-curated comps catalog to every
+  // workspace. Writes (addComp / deleteComp) stay strictly per-org.
+  if (platformOrgId) {
+    conditions.push(`(organization_id = current_organization_id() OR organization_id = $${paramCount})`);
+    values.push(platformOrgId);
+    paramCount++;
+  } else {
+    conditions.push('organization_id = current_organization_id()');
+  }
 
   if (filters.city) {
     conditions.push(`LOWER(city) = LOWER($${paramCount})`);
@@ -96,7 +108,8 @@ const buildCompsWhere = (filters = {}) => {
 };
 
 const getComps = async (filters = {}, pagination = {}) => {
-  const { conditions, values, paramCount: nextParam } = buildCompsWhere(filters);
+  const platformOrgId = await getPlatformOrgId();
+  const { conditions, values, paramCount: nextParam } = buildCompsWhere(filters, platformOrgId);
   let paramCount = nextParam;
 
   const page = parseInt(pagination.page, 10) || 1;
@@ -137,21 +150,32 @@ const getCompsNearLocation = async (lat, lng, radiusKm = 5, projectType = null) 
   const latDelta = radiusKm / 111; // ~111km per degree latitude
   const lngDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
 
-  const conditions = [
-    'organization_id = current_organization_id()',
+  const platformOrgId = await getPlatformOrgId();
+  const conditions = [];
+  const values = [];
+  let p = 1;
+
+  if (platformOrgId) {
+    conditions.push(`(organization_id = current_organization_id() OR organization_id = $${p})`);
+    values.push(platformOrgId);
+    p++;
+  } else {
+    conditions.push('organization_id = current_organization_id()');
+  }
+
+  conditions.push(
     'lat IS NOT NULL',
     'lng IS NOT NULL',
-    `lat BETWEEN $1 AND $2`,
-    `lng BETWEEN $3 AND $4`,
-  ];
-  const values = [
-    lat - latDelta, lat + latDelta,
-    lng - lngDelta, lng + lngDelta,
-  ];
+    `lat BETWEEN $${p} AND $${p + 1}`,
+    `lng BETWEEN $${p + 2} AND $${p + 3}`,
+  );
+  values.push(lat - latDelta, lat + latDelta, lng - lngDelta, lng + lngDelta);
+  p += 4;
 
   if (projectType) {
-    conditions.push(`project_type = $5`);
+    conditions.push(`project_type = $${p}`);
     values.push(projectType);
+    p++;
   }
 
   const result = await query(
@@ -338,13 +362,19 @@ const scoreSubjectAgainstComp = async (dealId, compId) => {
   const subjectRow = await loadSubjectForDeal(dealId);
   if (!subjectRow) throw createError('Deal not found.', 404);
 
+  const platformOrgId = await getPlatformOrgId();
+  const orgCondition = platformOrgId
+    ? `(organization_id = current_organization_id() OR organization_id = $2)`
+    : 'organization_id = current_organization_id()';
+  const orgValues = platformOrgId ? [platformOrgId] : [];
+
   const compResult = await query(
     `SELECT *
      FROM comps
      WHERE id = $1
-       AND organization_id = current_organization_id()
+       AND ${orgCondition}
      LIMIT 1`,
-    [compId]
+    [compId, ...orgValues],
   );
   const comp = compResult.rows[0];
   if (!comp) throw createError('Comparable not found.', 404);
@@ -365,7 +395,8 @@ const scoreSubjectAgainstComp = async (dealId, compId) => {
  */
 const getCompsForExport = async (filters = {}, { maxRows = 5000 } = {}) => {
   const cappedMax = Math.min(Math.max(parseInt(maxRows, 10) || 5000, 1), 10000);
-  const { conditions, values, paramCount } = buildCompsWhere(filters);
+  const platformOrgId = await getPlatformOrgId();
+  const { conditions, values, paramCount } = buildCompsWhere(filters, platformOrgId);
   const whereClause = conditions.join(' AND ');
   const result = await query(
     `SELECT * FROM comps WHERE ${whereClause}
