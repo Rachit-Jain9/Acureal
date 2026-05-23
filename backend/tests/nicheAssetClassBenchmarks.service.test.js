@@ -10,6 +10,15 @@ jest.mock('../src/config/database', () => ({
   query: jest.fn(),
 }));
 
+// platformOrg.getPlatformOrgId() now lazily queries the users table on
+// first call, which would consume one of the test's mocked `query`
+// responses. Short-circuit it to null so the existing assertions on
+// SQL + params still pass — the union scope collapses to the plain
+// "organization_id = current_organization_id()" branch when null.
+jest.mock('../src/utils/platformOrg', () => ({
+  getPlatformOrgId: jest.fn(() => Promise.resolve(null)),
+}));
+
 const { query } = require('../src/config/database');
 const intelligenceService = require('../src/services/intelligence.service');
 

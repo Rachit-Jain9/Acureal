@@ -115,14 +115,17 @@ const generateClaudeBrief = async (dealData, pipelineStats, notes, benchmarks, r
   // call is routing-aware (2026-05-11 switch to OpenAI by default).
   if (!getProviderAvailability().gpt_compatible) return null;
 
-  const hasNotes = notes.micro_market?.length || notes.slowdown?.length || notes.strategic?.length;
+  // Only the micro-market admin notes feed the brief now; slowdown +
+  // strategic note types were retired with their on-page sections.
+  const microMarketAdminNotes = Array.isArray(notes?.micro_market) ? notes.micro_market : [];
+  const hasNotes = microMarketAdminNotes.length > 0;
 
   const systemPrompt = `You are a senior buy-side real estate investment analyst at REDIP, a Bengaluru-focused real estate development intelligence platform. You report directly to the investment review team.
 
 Your job is to generate a precise, data-driven ANALYSIS — not a summary. Cross-reference everything provided.
 
 Rules:
-- 220–280 words total, exactly 4 sections: Deal of the Day, Market Signals, Risk Signals, Strategic Takeaways
+- 200–250 words total, exactly 3 sections: Deal of the Day, Market Signals, Risk Signals
 - Every claim must use specific numbers from the provided data — no generic statements
 - Cross-reference internal pipeline deals against micro-market benchmarks: which deal is in the best-positioned micro-market? Which has pricing tailwind?
 - Compare internal deal pricing assumptions against verified comp benchmarks where possible
@@ -130,12 +133,13 @@ Rules:
 - Flag real risks: stale deals, IRR outliers vs. market comps, micro-markets with no internal pipeline coverage, concentration risk
 - Reference actual company names, micro-markets, and specific ₹ figures — never use placeholders
 - Tone: direct, institutional, investor-grade — like a GP briefing a Limited Partner
-- No fluff. No markdown. Plain text paragraphs only. No bullet points.`;
+- No fluff. No markdown. Plain text paragraphs only. No bullet points.
+- Do NOT include a "Strategic Takeaways" section — those were retired as generic filler.`;
 
   const payload = {
     internalPipeline: dealData,
     pipelineStats,
-    adminNotes: hasNotes ? notes : null,
+    adminNotes: hasNotes ? { micro_market: microMarketAdminNotes } : null,
     microMarketBenchmarks: (benchmarks || []).map((b) => ({
       microMarket: b.micro_market,
       priceRangePerSqft: `₹${b.avg_price_min_per_sqft}–${b.avg_price_max_per_sqft}`,
@@ -250,9 +254,12 @@ const buildBrief = async (briefDate) => {
   const totalPipelineCr = signalRow.total_pipeline_cr ? Number(signalRow.total_pipeline_cr) : null;
 
   const microMarketNotes = notes.micro_market || [];
-  const slowdownNotes = notes.slowdown || [];
-  const strategicNotes = notes.strategic || [];
-  const hasManualNotes = microMarketNotes.length > 0 || slowdownNotes.length > 0 || strategicNotes.length > 0;
+  // Demand-slowdown and strategic-takeaway notes were retired from the
+  // Intelligence page (the two sections felt generic and led to
+  // copy-paste fluff). Existing rows in `market_notes` for those
+  // sections are intentionally ignored here so the admin-entered
+  // content for them no longer leaks into any output surface.
+  const hasManualNotes = microMarketNotes.length > 0;
 
   // Attempt Claude brief if we have meaningful data
   let claudeBrief = null;
@@ -323,20 +330,10 @@ const buildBrief = async (briefDate) => {
     },
     bengaluruMicroMarketIntelligence: microMarketNotes,
     bengaluruDemandHeatmap: buildHeatmapFromBenchmarks(benchmarksResult.rows),
-    demandSlowdownIndicators: slowdownNotes.length > 0
-      ? slowdownNotes
-      : [
-          'Awaiting verified external transaction, inventory, and absorption sources before REDIP will publish slowdown signals.',
-          deadDeals > 0
-            ? 'Inactive hidden deals exist in the database — review recurring pricing, title, or diligence failures outside the live pipeline.'
-            : 'No inactive dead-deal trend currently available.',
-        ],
-    strategicTakeaways: strategicNotes.length > 0
-      ? strategicNotes
-      : [
-          'Use REDIP for internal pipeline discipline, underwriting workflow, and deal velocity.',
-          'Connect verified Bengaluru-first data sources before relying on this brief for market-facing investment conclusions.',
-        ],
+    // demandSlowdownIndicators + strategicTakeaways retired (PR-NX*) —
+    // the two sections produced generic, repetitive copy that didn't
+    // earn their place on the page. Removed from both the brief payload
+    // and the rendered IntelligencePage.
     bottomLine: hasManualNotes
       ? 'This brief combines real internal pipeline data with admin-entered market observations. External verified feeds are not yet connected.'
       : 'No verified external market feeds configured — REDIP is correctly withholding market intelligence rather than fabricating it.',
@@ -632,17 +629,25 @@ const getMarketNotes = async () => {
   const result = await query(
     'SELECT section, items, updated_at FROM market_notes WHERE organization_id = current_organization_id()'
   );
+  // Demand-slowdown and strategic-takeaway notes were retired with their
+  // on-page sections. Legacy rows in `market_notes` for those sections
+  // are returned as empty arrays so older saved content never leaks back
+  // into the UI even via the admin editor.
   const notes = { micro_market: [], slowdown: [], strategic: [] };
   for (const row of result.rows) {
-    if (notes[row.section] !== undefined) {
-      notes[row.section] = row.items;
+    if (row.section === 'micro_market') {
+      notes.micro_market = row.items;
     }
   }
   return notes;
 };
 
 const saveMarketNotes = async (section, items, userId) => {
-  const VALID_SECTIONS = ['micro_market', 'slowdown', 'strategic'];
+  // Only `micro_market` is writable now — `slowdown` and `strategic`
+  // were retired with their on-page sections. Attempting to save those
+  // is rejected so the admin tool can't accidentally repopulate the
+  // retired surfaces from another tab.
+  const VALID_SECTIONS = ['micro_market'];
   if (!VALID_SECTIONS.includes(section)) throw new Error(`Invalid section: ${section}`);
   if (!Array.isArray(items)) throw new Error('items must be an array');
   const cleaned = items.map((s) => String(s).trim()).filter(Boolean);
@@ -658,10 +663,40 @@ const saveMarketNotes = async (section, items, userId) => {
   return cleaned;
 };
 
+// ─── Platform-shared verified-market reads ────────────────────────────────
+//
+// Every benchmark / transaction / macro-KPI table is curated centrally by
+// the REDIP platform admin. Every workspace — including brand-new ones —
+// should see those rows alongside any per-org rows they themselves
+// captured. The pattern below is the same one PR #512 introduced for the
+// brief, the Comps service, and the market_notes reader:
+//
+//   WHERE (organization_id = current_organization_id() OR organization_id = $1)
+//
+// When the caller IS the platform admin, the OR collapses and rows aren't
+// double-counted. `getPlatformOrgId` is lazy + process-cached so the lookup
+// only fires on cold start.
+
+const buildOrgScope = (platformOrgId, paramIndex) => {
+  // Always return a parenthesised expression so callers can append further
+  // ANDs without precedence surprises.
+  if (platformOrgId) {
+    return {
+      sql: `(organization_id = current_organization_id() OR organization_id = $${paramIndex})`,
+      values: [platformOrgId],
+    };
+  }
+  return { sql: 'organization_id = current_organization_id()', values: [] };
+};
+
 const getMarketTransactions = async ({ city = 'Bengaluru', fy, quarter, dealType } = {}) => {
-  const conditions = [`organization_id = current_organization_id()`, `LOWER(city) = LOWER($1)`];
-  const values = [city];
-  let p = 2;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const conditions = [scope.sql];
+  const values = [...scope.values];
+  let p = values.length + 1;
+  conditions.push(`LOWER(city) = LOWER($${p++})`);
+  values.push(city);
 
   if (fy) { conditions.push(`fiscal_year = $${p++}`); values.push(fy); }
   if (quarter) { conditions.push(`quarter = $${p++}`); values.push(quarter); }
@@ -677,8 +712,10 @@ const getMarketTransactions = async ({ city = 'Bengaluru', fy, quarter, dealType
 };
 
 const getMicroMarketBenchmarks = async ({ city = 'Bengaluru', dataType } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (dataType) {
     params.push(dataType);
     where += ` AND data_type = $${params.length}`;
@@ -697,8 +734,10 @@ const getMicroMarketBenchmarks = async ({ city = 'Bengaluru', dataType } = {}) =
 // Q1 2026 asset-class benchmark readers ──────────────────────────────────
 
 const getOfficeBenchmarks = async ({ city = 'Bengaluru', levelType } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (levelType) {
     params.push(levelType);
     where += ` AND level_type = $${params.length}`;
@@ -714,8 +753,10 @@ const getOfficeBenchmarks = async ({ city = 'Bengaluru', levelType } = {}) => {
 };
 
 const getRetailBenchmarks = async ({ city = 'Bengaluru', format } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (format) {
     params.push(format);
     where += ` AND format = $${params.length}`;
@@ -731,8 +772,10 @@ const getRetailBenchmarks = async ({ city = 'Bengaluru', format } = {}) => {
 };
 
 const getIndustrialBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (segment) {
     params.push(segment);
     where += ` AND segment = $${params.length}`;
@@ -760,8 +803,10 @@ const getIndustrialBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => 
  * premium markets sit at the top of each group.
  */
 const getResidentialSegmentedBenchmarks = async ({ city = 'Bengaluru', assetClass, dataType } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (assetClass) {
     params.push(assetClass);
     where += ` AND asset_class = $${params.length}`;
@@ -805,8 +850,10 @@ const getNicheAssetClassBenchmarks = async ({ city = 'Bengaluru', assetClass, da
     // its chip group without orchestrating a separate validation call.
     return [];
   }
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (assetClass) {
     params.push(assetClass);
     where += ` AND asset_class = $${params.length}`;
@@ -833,8 +880,10 @@ const getNicheAssetClassBenchmarks = async ({ city = 'Bengaluru', assetClass, da
 };
 
 const getHospitalityBenchmarks = async ({ city = 'Bengaluru', segment } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (segment) {
     params.push(segment);
     where += ` AND segment = $${params.length}`;
@@ -857,8 +906,10 @@ const getHospitalityBenchmarks = async ({ city = 'Bengaluru', segment } = {}) =>
 };
 
 const getMacroKpis = async ({ city = 'Bengaluru', assetClass } = {}) => {
-  const params = [city];
-  let where = `organization_id = current_organization_id() AND LOWER(city) = LOWER($1)`;
+  const platformOrgId = await getPlatformOrgId();
+  const scope = buildOrgScope(platformOrgId, 1);
+  const params = [...scope.values, city];
+  let where = `${scope.sql} AND LOWER(city) = LOWER($${params.length})`;
   if (assetClass) {
     params.push(assetClass);
     where += ` AND asset_class = $${params.length}`;
