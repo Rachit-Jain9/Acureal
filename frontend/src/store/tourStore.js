@@ -1,43 +1,59 @@
-// Product-tour state — a tiny Zustand store. `active` is the on/off
-// switch for the welcome modal + coachmark walk-through. localStorage
-// is the source of truth so the tour replays after a page refresh but
-// never auto-opens again once the user has completed or skipped it.
+// Product-tour state — two tours actually live here:
+//   1. The sidebar welcome tour (`active`) — first-time orientation walk
+//      through the sidebar, opened by the welcome modal.
+//   2. The deal-workspace tour (`dealTourActive`) — opens the first time
+//      the user lands on a deal-detail page, walking through each tab
+//      with a coachmark.
+//
+// localStorage is the source of truth so each tour replays after a refresh
+// but never auto-opens again once the user has completed or skipped it.
 
 import { create } from 'zustand';
 
-const STORAGE_KEY = 'redip.productTour.completed';
+const SIDEBAR_KEY = 'redip.productTour.completed';
+const DEAL_KEY = 'redip.dealWorkspaceTour.completed';
 
-const safeStorage = {
-  read: () => {
-    try {
-      return typeof window !== 'undefined'
-        && window.localStorage.getItem(STORAGE_KEY) === '1';
-    } catch (_) {
-      return false;
-    }
-  },
-  write: (completed) => {
-    try {
-      if (typeof window === 'undefined') return;
-      if (completed) window.localStorage.setItem(STORAGE_KEY, '1');
-      else window.localStorage.removeItem(STORAGE_KEY);
-    } catch (_) {
-      // localStorage may be unavailable in private mode — fall back to in-memory.
-    }
-  },
+const safeRead = (key) => {
+  try {
+    return typeof window !== 'undefined'
+      && window.localStorage.getItem(key) === '1';
+  } catch (_) {
+    return false;
+  }
+};
+
+const safeWrite = (key, completed) => {
+  try {
+    if (typeof window === 'undefined') return;
+    if (completed) window.localStorage.setItem(key, '1');
+    else window.localStorage.removeItem(key);
+  } catch (_) {
+    // localStorage may be unavailable in private mode — fall back to in-memory.
+  }
 };
 
 const useTourStore = create((set) => ({
-  // Auto-opens for any user who hasn't completed/skipped the tour yet.
-  active: !safeStorage.read(),
+  // Sidebar tour ──────────────────────────────────────────────────────────
+  active: !safeRead(SIDEBAR_KEY),
   start: () => set({ active: true }),
   dismiss: () => {
-    safeStorage.write(true);
+    safeWrite(SIDEBAR_KEY, true);
     set({ active: false });
   },
   replay: () => {
-    safeStorage.write(false);
+    safeWrite(SIDEBAR_KEY, false);
     set({ active: true });
+  },
+
+  // Deal-workspace tour ───────────────────────────────────────────────────
+  dealTourActive: !safeRead(DEAL_KEY),
+  dismissDealTour: () => {
+    safeWrite(DEAL_KEY, true);
+    set({ dealTourActive: false });
+  },
+  replayDealTour: () => {
+    safeWrite(DEAL_KEY, false);
+    set({ dealTourActive: true });
   },
 }));
 

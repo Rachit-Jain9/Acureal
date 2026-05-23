@@ -91,3 +91,71 @@ export const TOUR_STEPS = [
     body: 'Your profile, security and workspace preferences — and you can replay this tour any time from here.',
   },
 ];
+
+// Deal-workspace tour — opens the first time the user lands on a
+// deal-detail page. Anchored to each tab button (the Tabs primitive
+// renders each as `id="tab-{tab.id}"`, so #tab-overview etc. are stable
+// selectors). Same auto-skip behaviour as the sidebar tour if a target
+// isn't in the DOM yet.
+export const DEAL_TOUR_STEPS = [
+  {
+    id: 'overview',
+    target: '#tab-overview',
+    title: 'Overview',
+    body: 'The deal at a glance — headline economics, deal pulse, the risk radar, and the AI quick-analysis. The first place to land when you open a deal.',
+  },
+  {
+    id: 'parcel',
+    target: '#tab-parcel',
+    title: 'Parcel / Site',
+    body: 'The physical site — area, location, ownership, and the parcel-level facts every downstream decision hinges on.',
+  },
+  {
+    id: 'zoning',
+    target: '#tab-zoning',
+    title: 'Regulatory / Zoning',
+    body: 'Zoning, FAR, setbacks and the Master Plan overlay for this parcel. The rules that decide what you can actually build here.',
+  },
+  {
+    id: 'documents',
+    target: '#tab-documents',
+    title: 'Documents',
+    body: 'Title docs, RERA filings, financial models, site photos — uploaded once, then read by AI for cross-document analysis.',
+  },
+  {
+    id: 'activity',
+    target: '#tab-activity',
+    title: 'Activity',
+    body: 'Calls, site visits, notes, stage transitions — the auditable timeline of every action taken on this deal.',
+  },
+  {
+    id: 'financial',
+    target: '#tab-financial',
+    title: 'Financial',
+    body: 'The full financial model — IRR, NPV, equity multiple, debt schedule, JV / JDA waterfalls. Open this to underwrite the deal.',
+  },
+  {
+    id: 'dd',
+    target: '#tab-dd',
+    title: 'DD & Approvals',
+    body: 'The diligence checklist and the approvals tracker. Severity-scored items, RERA verification, and an open / done score.',
+  },
+  {
+    id: 'risk',
+    target: '#tab-risk',
+    title: 'Risk',
+    body: 'Title, zoning, financial, physical, market and promoter risks — flagged, scored, and tied to the documents that surfaced them.',
+  },
+  {
+    id: 'comps',
+    target: '#tab-comps',
+    title: 'Market / Comps',
+    body: "Nearby verified transaction comparables and this deal's relative-value read against the local market.",
+  },
+  {
+    id: 'audit',
+    target: '#tab-audit',
+    title: 'Audit',
+    body: 'The tamper-evident, HMAC-signed trail of every material change to this deal — financial computations, stage moves, archive / restore.',
+  },
+];
