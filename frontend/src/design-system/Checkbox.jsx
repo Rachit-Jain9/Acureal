@@ -21,7 +21,7 @@ const Checkbox = forwardRef(function Checkbox(
 ) {
   return (
     <span className={clsx('inline-flex items-start gap-2 group', className)}>
-      <span className="relative shrink-0 mt-0.5">
+      <span className="relative shrink-0 mt-0.5 inline-block h-4 w-4">
         <input
           ref={ref}
           id={id}
@@ -31,7 +31,7 @@ const Checkbox = forwardRef(function Checkbox(
           disabled={disabled}
           aria-invalid={tone === 'error' || undefined}
           className={clsx(
-            'peer absolute inset-0 w-4 h-4 opacity-0 cursor-pointer disabled:cursor-not-allowed',
+            'peer absolute inset-0 h-full w-full m-0 opacity-0 cursor-pointer disabled:cursor-not-allowed',
             'focus-visible:outline-none',
           )}
           {...rest}
