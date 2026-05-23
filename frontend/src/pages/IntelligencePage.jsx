@@ -8,7 +8,6 @@ import {
   Calendar,
   MapPin,
   BarChart2,
-  Lightbulb,
   ChevronDown,
   RefreshCw,
   Save,
@@ -106,10 +105,12 @@ const DEAL_TYPE_BADGE = {
 
 // ─── Admin Market Notes Editor ─────────────────────────────────────────────────
 
+// The Demand Slowdown and Strategic Takeaways note types were retired —
+// the corresponding on-page sections produced generic copy that didn't
+// earn their place. The admin Notes editor now only manages the
+// Micro-Market Intelligence list, which feeds the daily brief.
 const SECTION_META = {
   micro_market: { label: 'Micro-Market Intelligence', placeholder: 'e.g. Whitefield absorption strong; 15,000–16,000/sqft bracket holding up.' },
-  slowdown:     { label: 'Demand Slowdown Indicators', placeholder: 'e.g. Affordable segment (sub-8,000/sqft) showing 18% longer days-on-market vs Q3.' },
-  strategic:    { label: 'Strategic Takeaways', placeholder: 'e.g. Prioritise Sarjapur and Whitefield for residential underwriting; avoid oversupplied ORR mid-market.' },
 };
 
 function NotesEditor({ section, initialItems, onSave, saving }) {
@@ -1937,38 +1938,13 @@ export default function IntelligencePage() {
         </SectionCard>
       )}
 
-      {/* Row 3: Slowdown Indicators + Strategic Takeaways */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <SectionCard icon={TrendingDown} title="8. Demand Slowdown Indicators">
-          {brief?.demandSlowdownIndicators?.length > 0 ? (
-            <ul className="space-y-2">
-              {brief.demandSlowdownIndicators.map((item, i) => (
-                <li key={i} className="text-xs text-content-secondary flex gap-2">
-                  <AlertTriangle size={11} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-content-secondary">No slowdown indicators.</p>
-          )}
-        </SectionCard>
-
-        <SectionCard icon={Lightbulb} title="9. Strategic Takeaways">
-          {brief?.strategicTakeaways?.length > 0 ? (
-            <ul className="space-y-2">
-              {brief.strategicTakeaways.map((item, i) => (
-                <li key={i} className="text-xs text-content-secondary flex gap-2">
-                  <CheckCircle size={11} className="text-primary-500 flex-shrink-0 mt-0.5" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-content-secondary">No strategic takeaways.</p>
-          )}
-        </SectionCard>
-      </div>
+      {/* Sections 8 (Demand Slowdown Indicators) and 9 (Strategic
+          Takeaways) were retired on 2026-05-23. They produced generic
+          copy that didn't earn their place on the page; the same
+          context now reads cleaner inside the AI Brief above (Risk
+          Signals + Market Signals already cover what the operator
+          wants from those surfaces). Leaving an explicit note here
+          rather than re-adding empty cards. */}
 
       {/* Admin: Market Notes Editor */}
       {isAdmin && (
