@@ -6817,3 +6817,107 @@ real screenshots.
 - Dark-mode override-hack retirement (~30 in-app sites left).
 - Decompose React-page god-files.
 - Database / infra hygiene.
+
+## 2026-05-25 — operator-screenshot bugfixes + live-browser audit pass 2
+
+### What was worked on
+
+Operator delivered three concrete bug reports with screenshots:
+
+1. **Display Currency picker removed end-to-end.** The optional
+   USD/EUR/GBP/AED/AUD/CAD/JPY/SGD conversion layer (Settings card +
+   live FX rates table + 8 conversion paths through formatCrores) was
+   never used and cluttered the pricing surface. Removed:
+   - Frontend: `useCurrencyPref` hook deleted, Layout subscriber
+     removed, SettingsPage Display Currency card + state + handlers
+     + rates table (~120 lines), format.js foreign-currency branch
+     (formatCrores now just returns `₹{x} Cr`).
+   - Backend: fx.routes + fx.service + fx.service.test deleted,
+     server.js mounts removed.
+   - Database: new migration `20260613_drop_exchange_rates.sql`
+     drops `exchange_rates` + `exchange_rate_fetch_log` tables
+     (operator ran it on prod immediately after merge — confirmed
+     "Success. No rows returned").
+   - One-shot browser-side cleanup of legacy `pref_currencyCode` /
+     `pref_fx_rate` localStorage keys so existing users don't carry
+     orphan values forever.
+
+2. **"Show Getting Started again" + "Replay deal-workspace tour"
+   buttons fixed.** Both flipped a store flag but gave the operator
+   zero visible feedback.
+   - Getting Started: new `gettingStartedForceShown` flag (in-memory
+     only) lets the dashboard render the panel even when
+     `total_deals > 0`. Replay flips it on; dismiss flips it off.
+   - Deal-workspace tour: the button now navigates to the operator's
+     most recent active deal so the tour actually starts. Empty
+     workspace gets a friendly toast.
+   - Welcome tour: also navigates for visible feedback.
+   - Every handler toasts what's about to happen.
+
+3. **Auto-fill banner stops re-offering already-applied fields.**
+   `extraction.service.buildFieldMap` was rolling up every canonical
+   field regardless of whether it had been pushed to the deal already.
+   Now `getDealExtractions` reads `correction_history`, computes
+   `applied_canonical_fields` per extraction, and `buildFieldMap`
+   skips any field already applied via that extraction. After Apply
+   the "N ready" count drops by N; once everything is applied the
+   `AutoFillReadyCard` returns null and the banner vanishes.
+
+A live-browser audit pass following the merge caught two more polish
+items:
+
+4. **Settings page Notes editor still showed Demand Slowdown +
+   Strategic Takeaways textareas** — PR #530 retired those sections
+   from the Intelligence page but the SETTINGS page has its own
+   separate Notes editor, never updated. Operators could type into
+   voids. Dropped both from the editor; backend already rejected
+   writes to those keys.
+5. **AI Usage cost figures said "$3.03" without saying which $**.
+   After currency removal everything else reads in INR but AI costs
+   stay USD (providers bill in USD; converting introduces FX noise).
+   KPI label is now "Total Spend (USD)" and the two table headers
+   gained "(USD)" so every figure carries its currency.
+
+A second sweep also found:
+6. **Comps page flashed "0 verified comparables" for ~1 second**
+   on first paint before snapping to the real total (81). The
+   description was rendered unconditionally with `${totalCount}`
+   which defaults to 0. Now reads "Loading the comparables database…"
+   until the query resolves.
+
+### PRs opened / merged
+
+- PR #539 — fix(operator-screenshots): currency removal + onboarding replay + auto-fill banner state — merged
+- PR #540 — fix(settings): retire Slowdown + Strategic Notes editor + label AI cost as USD — merged
+- PR #541 — fix(comps): hide "0 verified comparables" flash during initial load — merged
+
+### Plain-English recap
+
+- **Display Currency is gone.** Every price across the app reads
+  in ₹ Crores. One less knob to misread.
+- **The two onboarding buttons that did nothing now actually work**
+  — they take you straight to the page where the replayed UI
+  appears and toast what's about to happen.
+- **Auto-fill stops re-offering fields you already applied.** After
+  Apply N, the banner drops by N or disappears.
+- **Settings → Market Intelligence Notes** now shows just the one
+  Bengaluru observations box. The two empty boxes that did nothing
+  are gone.
+- **AI cost figures clearly say (USD)** so you can't mistake the
+  dollar amounts for INR.
+- **Comparables page** no longer flashes "0 verified" before the
+  data loads — it says "Loading the comparables database…" until
+  the count is real.
+
+### Validation
+
+- Backend: 143 suites / 2329 tests pass.
+- Frontend: 103 files / 862 tests pass; clean Vite build.
+- Each PR CI-green; operator-confirmed Supabase migration ran clean.
+
+### What's left to do
+
+- Dark-mode override-hack retirement (~30 in-app sites left).
+- Decompose React-page god-files (DealsPage, IntelligencePage,
+  MasterPlanAdminPage).
+- Database / infra hygiene (consolidate 85+ migrations).
