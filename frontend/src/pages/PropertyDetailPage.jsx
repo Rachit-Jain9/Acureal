@@ -743,11 +743,20 @@ export default function PropertyDetailPage() {
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-content-secondary">Latitude</label>
+                      {/* step="any" — accept ANY precision (Postgres
+                          stores lat/lng with 15+ decimals). The previous
+                          `step="0.000001"` capped browser validation at
+                          6 decimals, so pasting in Google Maps or
+                          K-GIS-grade coordinates (12.782331572517577)
+                          triggered the "two nearest valid values are
+                          12.782331 and 12.782332" error and forced
+                          the operator to round-trip, shifting the
+                          pin by metres. */}
                       <input
                         type="number"
                         min="-90"
                         max="90"
-                        step="0.000001"
+                        step="any"
                         value={editForm.lat}
                         onChange={(event) => setEditForm((current) => ({ ...current, lat: event.target.value }))}
                         className="input"
@@ -760,7 +769,7 @@ export default function PropertyDetailPage() {
                         type="number"
                         min="-180"
                         max="180"
-                        step="0.000001"
+                        step="any"
                         value={editForm.lng}
                         onChange={(event) => setEditForm((current) => ({ ...current, lng: event.target.value }))}
                         className="input"
