@@ -442,8 +442,15 @@ export default function AdminAiUsagePage() {
               label="Errors"
               value={fmtNum(summary.errors)}
               sub={
-                summary.recovered_via_retry > 0
-                  ? `${fmtNum(summary.recovered_via_retry)} recovered via retry`
+                // When errors > 0 the sub-label MUST report the recovery
+                // ratio (0 of N recovered) rather than the "No retry
+                // recoveries needed" copy — that string was misleading on
+                // an error-rich window because it sounded like the
+                // platform decided no recovery was needed, when in fact
+                // none happened. The cost-capped branch retains its own
+                // copy for the (rare) case where the daily cap fired.
+                summary.errors > 0
+                  ? `${fmtNum(summary.recovered_via_retry)} of ${fmtNum(summary.errors)} recovered via retry`
                   : summary.cost_capped > 0
                   ? `${fmtNum(summary.cost_capped)} cost-capped`
                   : 'No retry recoveries needed'

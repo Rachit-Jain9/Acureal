@@ -188,4 +188,31 @@ describe('AdminAiUsagePage', () => {
     expect(screen.getByText(/No daily cost cap configured/i)).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
+
+  it('Errors tile shows recovery ratio when errors > 0 (regression — was "No retry recoveries needed")', () => {
+    // Sample payload has errors: 11, recovered_via_retry: 4 → the tile
+    // sub-label MUST report "4 of 11 recovered via retry", not the
+    // misleading "No retry recoveries needed" copy that production
+    // shipped for several weeks.
+    renderPage();
+    expect(screen.getByText(/4 of 11 recovered via retry/)).toBeInTheDocument();
+    expect(screen.queryByText(/No retry recoveries needed/)).toBeNull();
+  });
+
+  it('Errors tile keeps the "No retry recoveries needed" copy ONLY when errors === 0', () => {
+    usageState = {
+      data: {
+        ...samplePayload,
+        summary: {
+          ...samplePayload.summary,
+          errors: 0,
+          recovered_via_retry: 0,
+          cost_capped: 0,
+        },
+      },
+      isLoading: false, isError: false, refetch: vi.fn(), isFetching: false,
+    };
+    renderPage();
+    expect(screen.getByText('No retry recoveries needed')).toBeInTheDocument();
+  });
 });
