@@ -43,15 +43,18 @@ export function useDealWorkspace(id) {
 /**
  * Imperative prefetch for a deal's workspace payload.
  *
- * Returns a function `(dealId) => void` that the caller can hook into a
- * link's `onMouseEnter` / `onFocus`. The first hover starts the network
- * request; by the time the user actually clicks the link, the workspace
- * route renders instantly because `useDealWorkspace(id)` finds a fresh
- * cache entry under the shared queryKey.
+ * Returns a function `(dealId) => Promise<void>` that the caller can hook
+ * into a link's `onMouseEnter` / `onFocus`. The first hover starts the
+ * network request; by the time the user actually clicks the link, the
+ * workspace route renders instantly because `useDealWorkspace(id)` finds
+ * a fresh cache entry under the shared queryKey.
+ *
+ * The returned function returns the underlying `prefetchQuery` Promise
+ * so tests can `await` it deterministically. Event-handler callers
+ * (onMouseEnter / onFocus) discard the promise — fire-and-forget.
  *
  * Important guardrails:
  *   • Only prefetch when the query isn't already in cache (no thrash).
- *   • Don't await — the caller's event handler stays synchronous.
  *   • Caller is expected to debounce / gate per-element so a fast cursor
  *     sweep over a 12-card list doesn't fan out 12 round-trips. The
  *     simplest pattern is `onMouseEnter` only (one event per card).
@@ -62,10 +65,10 @@ export function useDealWorkspace(id) {
 export function usePrefetchDealWorkspace() {
   const qc = useQueryClient();
   return useCallback((id) => {
-    if (!id) return;
+    if (!id) return Promise.resolve();
     const key = ['deal-workspace', id];
-    if (qc.getQueryData(key)) return; // already cached, skip
-    qc.prefetchQuery({
+    if (qc.getQueryData(key)) return Promise.resolve(); // already cached, skip
+    return qc.prefetchQuery({
       queryKey: key,
       queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
       staleTime: 30_000,
