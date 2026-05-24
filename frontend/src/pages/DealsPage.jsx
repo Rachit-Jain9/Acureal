@@ -1,40 +1,40 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
-  MoreVertical, Presentation, Share2, Trash2, Loader2, User, Download,
-  Check, Archive, UserPlus, ArrowRight,
+  Trash2, Loader2, User, Download,
+  Archive, UserPlus, ArrowRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   useDeals,
   useCreateDeal,
-  useDeleteDeal,
   useBulkArchiveDeals,
   useBulkReassignDeals,
   useBulkTransitionDeals,
   useBulkDeleteDeals,
-  usePrefetchDealWorkspace,
 } from '../hooks/useDeals';
 import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useProperties } from '../hooks/useProperties';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
-import UrgencyStrip from '../components/deals/UrgencyStrip';
+// DealCard was extracted from this file (2026-05-25) when DealsPage
+// crossed 1,400 lines. Its full state machine (menu / share / delete /
+// hover-prefetch / urgency-strip / per-deal export) lives in the
+// dedicated component file now.
+import DealCard from '../components/deals/DealCard';
 import useAuthStore from '../store/authStore';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import PageHeader from '../components/common/PageHeader';
 import { SkeletonList, SkeletonKpi } from '../design-system';
-import ShareDealPanel from '../components/deal/ShareDealPanel';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
 import { downloadAxiosResponse } from '../utils/download';
 import {
   formatCrores,
   formatPct,
-  formatRelativeTime,
   STAGE_CONFIG,
   PRIORITY_CONFIG,
   DEAL_TYPE_LABELS,
@@ -42,19 +42,11 @@ import {
 } from '../utils/format';
 import { buildLandPricingPreview } from '../utils/landPricing';
 // PR-NX59 (2026-05-19) — single source of truth for taxonomies shared
-// across the create form, the deals list chip column, and the deal
-// detail edit form. Removes 4 duplicate copies (asset_class in DealsPage
-// + DealDetailPage, deal_structure in DealsPage + DealDetailPage) and
-// guarantees the create-form <option> list stays in lock-step with the
-// list-chip labels. Foundation for future @redip/real-estate-ontology
-// adoption (Strategic Review §VI top-1).
-import { ASSET_CLASS_CONFIG, ASSET_CLASS_LABELS as SHARED_ASSET_CLASS_LABELS } from '../utils/assetClasses';
-import { DEAL_STRUCTURE_CONFIG, DEAL_STRUCTURE_LABELS_COMPACT } from '../utils/dealStructures';
-
-// Local aliases preserve readability at the existing call sites; both
-// values come from the shared utility files.
-const ASSET_CLASS_LABELS = SHARED_ASSET_CLASS_LABELS;
-const DEAL_STRUCTURE_LABELS = DEAL_STRUCTURE_LABELS_COMPACT;
+// across the create form and the deal detail edit form. The list-chip
+// labels (formerly aliased here as ASSET_CLASS_LABELS / DEAL_STRUCTURE_LABELS)
+// now live inside DealCard.jsx alongside the card render code.
+import { ASSET_CLASS_CONFIG } from '../utils/assetClasses';
+import { DEAL_STRUCTURE_CONFIG } from '../utils/dealStructures';
 
 const INITIAL_FORM = {
   propertyId: '',
@@ -1166,293 +1158,5 @@ export default function DealsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function DealCard({ deal, selected = false, onToggleSelect }) {
-  const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
-  const deleteDeal = useDeleteDeal();
-  // Pre-fetch the deal's full workspace payload on hover / focus so the
-  // click into the deal page resolves instantly. Bounded by React Query
-  // 30s staleTime + the cache-check inside the hook (no thrash if
-  // hovered repeatedly).
-  const prefetchWorkspace = usePrefetchDealWorkspace();
-
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showShare, setShowShare] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const menuRef = useRef(null);
-
-  const stageCfg = STAGE_CONFIG[deal.stage] || STAGE_CONFIG.screening;
-  const priorityCfg = PRIORITY_CONFIG[deal.priority] || PRIORITY_CONFIG.medium;
-
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onDoc = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
-
-  const stopAll = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleExport = async (e) => {
-    stopAll(e);
-    setMenuOpen(false);
-    setExporting(true);
-    try {
-      const response = await exportsAPI.dealPptx(deal.id);
-      const safe = (deal.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadAxiosResponse(response, `redip-${safe}.pptx`);
-      toast.success('PPTX deck downloaded');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'PPTX export failed');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleShare = (e) => {
-    stopAll(e);
-    setMenuOpen(false);
-    setShowShare(true);
-  };
-
-  const handleDelete = (e) => {
-    stopAll(e);
-    setMenuOpen(false);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      await deleteDeal.mutateAsync(deal.id);
-      setShowDeleteConfirm(false);
-    } catch {
-      // toast handled by hook
-    }
-  };
-
-  const handleCheckboxClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onToggleSelect?.(deal.id);
-  };
-
-  return (
-    <>
-      <Link
-        to={`/dashboard/deals/${deal.id}`}
-        onMouseEnter={() => prefetchWorkspace(deal.id)}
-        onFocus={() => prefetchWorkspace(deal.id)}
-        className={clsx(
-          'card-editorial hover:shadow-md transition-all cursor-pointer relative group',
-          selected && 'ring-1 ring-accent/50 bg-accent-soft/20',
-        )}
-      >
-        {/* Multi-select checkbox — visible on hover or when this card is
-            already part of the active selection. Click stops propagation
-            so it doesn't navigate to the deal detail page. Mirrors the
-            comps queue pattern (PR #208). */}
-        {onToggleSelect && (
-          <button
-            type="button"
-            onClick={handleCheckboxClick}
-            aria-pressed={selected}
-            aria-label={selected ? 'Deselect deal' : 'Select deal'}
-            className={clsx(
-              'absolute top-3 left-3 z-10 w-5 h-5 rounded border flex items-center justify-center',
-              'transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              selected
-                ? 'bg-accent border-accent text-white opacity-100'
-                : 'bg-bg-elevated border-hairline text-transparent opacity-0 group-hover:opacity-100 hover:border-accent',
-            )}
-          >
-            {selected && <Check size={12} strokeWidth={3} />}
-          </button>
-        )}
-        <div className={clsx('flex items-start justify-between mb-3 gap-2', selected && 'pl-7')}>
-          <h3 className="font-semibold text-content-primary truncate pr-2">{deal.name}</h3>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
-            <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                onClick={(e) => { stopAll(e); setMenuOpen((v) => !v); }}
-                aria-label="Deal actions"
-                className="p-1 rounded hover:bg-bg-secondary text-content-secondary hover:text-content-primary focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
-                <MoreVertical size={16} />
-              </button>
-              {menuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 w-44 rounded-md border border-hairline-strong bg-bg-elevated shadow-lg z-20"
-                  onClick={stopAll}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={handleExport}
-                    disabled={exporting}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
-                  >
-                    {exporting ? <Loader2 size={14} className="animate-spin" /> : <Presentation size={14} />}
-                    Export Deck
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleShare}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary"
-                  >
-                    <Share2 size={14} />
-                    Share
-                  </button>
-                  {isAdmin && (
-                    <>
-                      <div className="border-t border-hairline" />
-                      <button
-                        type="button"
-                        onClick={handleDelete}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 size={14} />
-                        Delete
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <p className="text-sm text-content-secondary mb-1">{deal.property_name || 'Unlinked property'}</p>
-        <p className="text-xs text-content-muted mb-3">{deal.city}{deal.state ? `, ${deal.state}` : ''}</p>
-
-        <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
-          <div>
-            <p className="text-xs text-content-muted">Land Area</p>
-            <p className="font-medium text-content-primary">
-              {deal.land_area_acres
-                ? `${Number(deal.land_area_acres).toFixed(2)} acres`
-                : deal.land_area_sqft
-                  ? `${Number(deal.land_area_sqft).toLocaleString('en-IN')} sqft`
-                  : 'Pending'}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-content-muted">Headline Economics</p>
-            <p className="font-medium text-content-primary">
-              {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center flex-wrap gap-2 mb-3">
-          <Badge tone={priorityCfg.tone}>{priorityCfg.label}</Badge>
-          <span className="text-xs text-content-secondary">{DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type}</span>
-          {deal.asset_class && (
-            <span className="text-xs text-content-secondary">
-              {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}
-            </span>
-          )}
-          {deal.deal_structure && (
-            <span className="text-xs text-content-secondary">
-              {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}
-            </span>
-          )}
-        </div>
-
-        {/* Urgency strip — surfaces the same per-deal signals the dashboard's
-            "Today's Attention" panel rolls up portfolio-wide. Each chip means
-            "this deal needs you to do something specific." Rendered only when
-            at least one signal fires so a clean deal stays clean. */}
-        <UrgencyStrip deal={deal} />
-
-        {Array.isArray(deal.key_risks) && deal.key_risks.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {deal.key_risks.slice(0, 2).map((risk) => (
-              <span
-                key={risk}
-                className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
-              >
-                {risk}
-              </span>
-            ))}
-            {deal.open_high_risk_count > 2 && (
-              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                +{deal.open_high_risk_count - 2} more
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between text-sm border-t pt-3">
-          <div>
-            <span className="text-content-muted text-xs">IRR</span>
-            <p className="font-medium">{formatPct(deal.irr_pct)}</p>
-          </div>
-          <div className="text-right">
-            <span className="text-content-muted text-xs">Revenue</span>
-            <p className="font-medium">{formatCrores(deal.total_revenue_cr)}</p>
-          </div>
-        </div>
-
-        {(deal.last_activity_date || deal.updated_at) && (
-          <p className="text-xs text-content-muted mt-2">
-            Updated {formatRelativeTime(deal.last_activity_date || deal.updated_at)}
-          </p>
-        )}
-      </Link>
-
-      {showShare && (
-        <ShareDealPanel
-          dealId={deal.id}
-          dealName={deal.name}
-          isOwner={deal.created_by === user?.id}
-          onClose={() => setShowShare(false)}
-        />
-      )}
-
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-sm p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-content-primary mb-2">Delete Deal</h3>
-            <p className="text-sm text-content-secondary mb-5">
-              Permanently delete <strong>{deal.name}</strong>? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-secondary">
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={deleteDeal.isPending}
-                className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
-              >
-                {deleteDeal.isPending ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
   );
 }
