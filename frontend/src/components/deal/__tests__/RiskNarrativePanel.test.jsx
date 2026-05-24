@@ -60,17 +60,24 @@ describe('RiskNarrativePanel (PR-NX47)', () => {
     expect(screen.getByText(/Confidence: high · Synthesis: claude-sonnet-4-6/i)).toBeInTheDocument();
   });
 
-  it('includes auto-failover note in attribution when secondary rescued the call', () => {
+  it('shows a CLEAN auto-failover line — strips raw provider error JSON', () => {
     mockHookState.data = {
       available: true,
       summary_paragraph: 'Synthesis ok.',
       critical_spotlight_paragraph: 'Critical noted.',
       confidence: 'medium',
       provider: 'gpt-5.4',
-      fallbackReason: 'Claude 429 rate_limited — auto-failover succeeded on openai',
+      // The router sometimes splices upstream JSON into this string.
+      // The panel must extract only the "succeeded on <provider>" tail
+      // so customer-facing UI never shows the raw JSON blob.
+      fallbackReason: 'Claude 404 404 {"type":"error","error":{"type":"not_found_error","message":"model: gemini-3-flash-preview"},"request_id":"req_011Cb"} — auto-failover succeeded on openai',
     };
     renderPanel();
-    expect(screen.getByText(/auto-failover: Claude 429 rate_limited/i)).toBeInTheDocument();
+    expect(screen.getByText(/auto-failover succeeded on openai/i)).toBeInTheDocument();
+    // The raw JSON / 404 noise must NOT leak through.
+    expect(screen.queryByText(/not_found_error/)).toBeNull();
+    expect(screen.queryByText(/request_id/)).toBeNull();
+    expect(screen.queryByText(/Claude 404/i)).toBeNull();
   });
 
   it('renders NOTHING when narrative is unavailable (no risks logged)', () => {
