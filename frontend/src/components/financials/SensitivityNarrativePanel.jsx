@@ -2,6 +2,7 @@ import { Sparkles, AlertTriangle, RefreshCw, Target } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useSensitivityNarrative } from '../../hooks/useSensitivityNarrative';
 import { Skeleton } from '../../design-system';
+import { formatFallbackReason } from '../../utils/formatFallbackReason';
 
 /**
  * SensitivityNarrativePanel (PR-NX48 — 2026-05-19)
@@ -72,7 +73,8 @@ export default function SensitivityNarrativePanel({ dealId }) {
   const attribution = [];
   if (confidence) attribution.push(`Confidence: ${confidence}`);
   if (provider) attribution.push(`Synthesis: ${provider}`);
-  if (fallbackReason) attribution.push(`auto-failover: ${fallbackReason}`);
+  const cleanFallback = formatFallbackReason(fallbackReason);
+  if (cleanFallback) attribution.push(cleanFallback);
 
   return (
     <div className="rounded-xl border border-hairline bg-paper px-5 py-4">

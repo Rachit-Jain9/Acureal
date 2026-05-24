@@ -1636,17 +1636,25 @@ async function listZoneGeoJSON({ lat = null, lng = null, radiusKm = 5 } = {}) {
     geomFilter = `AND ST_DWithin(z.geom::geography, ST_SetSRID(ST_MakePoint($${params.length - 2}, $${params.length - 1}), 4326)::geography, $${params.length})`;
   }
 
+  // NOTE: `master_plan_zones` does NOT have a `planning_zone` column —
+  // the planning context lives in the `planning_districts` table joined
+  // via `planning_district_id`. The previous query selected `z.planning_zone`
+  // directly which raised PG error 42703 (undefined_column), surfacing
+  // to the frontend as "Invalid field name in request." and rendering
+  // the RMP zoning overlay permanently UNAVAILABLE. Fixed by following
+  // the same join pattern the rest of this service uses (`ZONE_SELECT`).
   const result = await query(
     `SELECT
        z.id,
        z.zone_code,
        z.zone_name,
-       z.planning_zone,
+       pd.pd_name AS planning_zone,
        z.permissible_fsi_base,
        z.permissible_fsi_max,
        z.review_status,
        ST_AsGeoJSON(z.geom)::jsonb AS geometry
      FROM regulatory_data.master_plan_zones z
+     LEFT JOIN regulatory_data.planning_districts pd ON pd.id = z.planning_district_id
      WHERE z.geom IS NOT NULL
        AND z.review_status = 'approved'
        ${geomFilter}

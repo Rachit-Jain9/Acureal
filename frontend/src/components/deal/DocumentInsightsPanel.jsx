@@ -2,6 +2,7 @@ import { Sparkles, AlertTriangle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDocumentInsights } from '../../hooks/useDocumentInsights';
 import { Skeleton } from '../../design-system';
+import { formatFallbackReason } from '../../utils/formatFallbackReason';
 
 /**
  * DocumentInsightsPanel (PR-NX49 — 2026-05-19)
@@ -86,7 +87,11 @@ export default function DocumentInsightsPanel({ dealId }) {
   const attribution = [];
   if (confidence) attribution.push(`Confidence: ${confidence}`);
   if (provider) attribution.push(`Synthesis: ${provider}`);
-  if (fallbackReason) attribution.push(`auto-failover: ${fallbackReason}`);
+  // Sanitize the raw fallbackReason — backend sometimes splices upstream
+  // JSON error bodies into this string. formatFallbackReason() strips
+  // those and surfaces only the meaningful "succeeded on <provider>" tail.
+  const cleanFallback = formatFallbackReason(fallbackReason);
+  if (cleanFallback) attribution.push(cleanFallback);
 
   return (
     <div className="rounded-xl border border-hairline bg-paper px-5 py-4">
