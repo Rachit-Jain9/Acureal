@@ -110,7 +110,11 @@ export default function AIUsageWidget() {
           </>
         ) : (
           <>
-            <UsageTile label="Total Spend" value={formatUsd(summary?.total_cost_usd)} foot={`${formatInt(summary?.total_calls)} calls`} />
+            <UsageTile
+              label="Total Spend (USD)"
+              value={formatUsd(summary?.total_cost_usd)}
+              foot={`${formatInt(summary?.total_calls)} calls · billed by providers`}
+            />
             <UsageTile
               label="Cache Hit Rate"
               value={summary ? `${summary.cache_hit_rate_pct.toFixed(1)}%` : '—'}
@@ -147,7 +151,7 @@ export default function AIUsageWidget() {
                 <th className="text-left px-3 py-2 font-medium">Task</th>
                 <th className="text-left px-3 py-2 font-medium">Provider</th>
                 <th className="text-right px-3 py-2 font-medium">Calls</th>
-                <th className="text-right px-3 py-2 font-medium">Cost</th>
+                <th className="text-right px-3 py-2 font-medium">Cost (USD)</th>
                 <th className="text-right px-3 py-2 font-medium">Cache hits</th>
                 <th className="text-right px-3 py-2 font-medium">Avg latency</th>
               </tr>
@@ -189,7 +193,7 @@ export default function AIUsageWidget() {
                 <th className="text-right px-3 py-2 font-medium">Calls</th>
                 <th className="text-right px-3 py-2 font-medium">Success</th>
                 <th className="text-right px-3 py-2 font-medium">Errors</th>
-                <th className="text-right px-3 py-2 font-medium">Cost</th>
+                <th className="text-right px-3 py-2 font-medium">Cost (USD)</th>
               </tr>
             </thead>
             <tbody>
