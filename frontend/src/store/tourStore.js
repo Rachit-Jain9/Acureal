@@ -67,14 +67,26 @@ const useTourStore = create((set) => ({
   // `dismissed` (rather than `active`) because the panel is dismissable
   // but its actual visibility also depends on whether the workspace has
   // any deals — DashboardPage owns that combined check.
+  //
+  // `forceShown` is the override the Settings "Show Getting Started
+  // again" button flips on. Without it, an operator who already has
+  // deals would clear the dismissed flag but still never see the panel
+  // (because the dashboard hides it once `total_deals > 0`). When
+  // `forceShown` is true, DashboardPage renders the panel regardless
+  // of the deals count. Dismissing flips it back off.
+  //
+  // `forceShown` is INTENTIONALLY in-memory only — we don't want the
+  // override to survive a refresh and shadow the normal first-run
+  // gating forever.
   gettingStartedDismissed: safeRead(GETTING_STARTED_KEY),
+  gettingStartedForceShown: false,
   dismissGettingStarted: () => {
     safeWrite(GETTING_STARTED_KEY, true);
-    set({ gettingStartedDismissed: true });
+    set({ gettingStartedDismissed: true, gettingStartedForceShown: false });
   },
   replayGettingStarted: () => {
     safeWrite(GETTING_STARTED_KEY, false);
-    set({ gettingStartedDismissed: false });
+    set({ gettingStartedDismissed: false, gettingStartedForceShown: true });
   },
 }));
 

@@ -97,6 +97,7 @@ export default function DashboardPage() {
   // is just a consumer. That way the Settings "Show Getting Started
   // again" button re-renders this page without a reload.
   const onboardingDismissed = useTourStore((s) => s.gettingStartedDismissed);
+  const onboardingForceShown = useTourStore((s) => s.gettingStartedForceShown);
   const dismissOnboarding = useTourStore((s) => s.dismissGettingStarted);
 
   // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
@@ -142,8 +143,14 @@ export default function DashboardPage() {
   // Started panel in place of a grid of empty widgets. `total_deals`
   // counts archived deals too, so this only fires for a truly fresh
   // workspace — and never again once the operator dismisses it.
+  // Show the Getting Started panel when EITHER:
+  //   • the workspace is genuinely first-run (no deals yet) and the
+  //     panel hasn't been dismissed; OR
+  //   • the operator hit "Show Getting Started again" from Settings,
+  //     which sets `gettingStartedForceShown` — bypasses the
+  //     total_deals === 0 gate so existing workspaces can revisit.
   const isFirstRun = (data?.stats?.total_deals ?? 0) === 0;
-  if (isFirstRun && !onboardingDismissed) {
+  if ((isFirstRun && !onboardingDismissed) || onboardingForceShown) {
     return (
       <div className="space-y-6">
         <PageHeader

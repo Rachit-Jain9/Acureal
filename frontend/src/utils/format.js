@@ -1,35 +1,12 @@
 import { SQFT_PER_ACRE } from '../config/india';
 
-const CURRENCY_SYMBOLS = {
-  INR: '₹',
-  USD: '$',
-  AED: 'AED ',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
-  SGD: 'S$',
-  LKR: 'Rs ',
-  THB: '฿',
-};
-
-const getFxConfig = () => {
-  const code = localStorage.getItem('pref_currencyCode') || 'INR';
-  const rate = parseFloat(localStorage.getItem('pref_fx_rate')) || null;
-  return { code, rate };
-};
-
-const formatForeignCurrency = (valueInr, code, rateInrPerUnit) => {
-  const foreign = valueInr / rateInrPerUnit;
-  const sym = CURRENCY_SYMBOLS[code] || `${code} `;
-  const abs = Math.abs(foreign);
-  if (abs >= 1e9) return `${sym}${(foreign / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sym}${(foreign / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${sym}${(foreign / 1e3).toFixed(2)}K`;
-  return `${sym}${foreign.toFixed(2)}`;
-};
-
 /**
- * Format number as Indian currency (lakhs/crores)
+ * Format number as Indian currency (lakhs/crores).
+ *
+ * REDIP is India-only. Numbers are always stored and shown in INR — the
+ * old multi-currency display layer (2026-04 → 2026-05-24) was retired
+ * because it added confusion without earning its complexity. Stored
+ * values were never converted; only the displayed unit was.
  */
 export const formatINR = (value, decimals = 2) => {
   if (value === null || value === undefined) return '-';
@@ -44,16 +21,12 @@ export const formatINR = (value, decimals = 2) => {
 };
 
 /**
- * Format as crores (respects user currency preference)
+ * Format as INR Crores — the canonical pricing unit for Indian real estate.
  */
 export const formatCrores = (value) => {
   if (value === null || value === undefined) return '-';
   const num = Number(value);
   if (Number.isNaN(num)) return '-';
-  const { code, rate } = getFxConfig();
-  if (code !== 'INR' && rate) {
-    return formatForeignCurrency(num * 1e7, code, rate);
-  }
   return `₹${num.toFixed(2)} Cr`;
 };
 

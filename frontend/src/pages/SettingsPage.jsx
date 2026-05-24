@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Shield, Lock, Palette, Save, Loader2, DollarSign, Brain, RefreshCw, CheckCircle, AlertTriangle, KeyRound } from 'lucide-react';
+import { User, Shield, Lock, Palette, Save, Loader2, Brain, KeyRound } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import { isPlatformAdmin } from '../utils/permissions';
 import PageHeader from '../components/common/PageHeader';
 import { toast } from '../components/common/Toast';
 import { authAPI } from '../services/api';
-import api from '../services/api';
 import { useMarketNotes, useSaveMarketNotes } from '../hooks/useIntelligence';
-import { emitCurrencyChange } from '../hooks/useCurrencyPref';
 import AIUsageWidget from '../components/admin/AIUsageWidget';
 import AIHealthWidget from '../components/admin/AIHealthWidget'; // PR-NX23
 import CloseAccountCard from '../components/common/CloseAccountCard';
@@ -22,15 +20,9 @@ const CURRENCY_OPTIONS = [
   { value: 'millions', label: 'Millions (M)' },
 ];
 
-const CURRENCY_CODE_OPTIONS = [
-  { value: 'INR', label: 'INR — Indian Rupee (₹)', symbol: '₹' },
-  { value: 'USD', label: 'USD — US Dollar ($)', symbol: '$' },
-  { value: 'AED', label: 'AED — UAE Dirham', symbol: 'AED' },
-  { value: 'EUR', label: 'EUR — Euro (€)', symbol: '€' },
-  { value: 'GBP', label: 'GBP — British Pound (£)', symbol: '£' },
-  { value: 'JPY', label: 'JPY — Japanese Yen (¥)', symbol: '¥' },
-  { value: 'SGD', label: 'SGD — Singapore Dollar (S$)', symbol: 'S$' },
-];
+// The multi-currency display feature (USD/AED/EUR/GBP/JPY/SGD conversion
+// at render time) was retired 2026-05-24 — REDIP is India-only and the
+// extra control added friction without earning it.
 
 const AREA_UNIT_OPTIONS = [
   { value: 'sqft', label: 'Square Feet (sqft)' },
@@ -80,45 +72,6 @@ export default function SettingsPage() {
     areaUnit: localStorage.getItem('pref_areaUnit') || 'sqft',
     dateFormat: localStorage.getItem('pref_dateFormat') || 'en-IN',
   });
-
-  // Currency code + live FX rates
-  const [currencyCode, setCurrencyCode] = useState(localStorage.getItem('pref_currencyCode') || 'INR');
-  const [liveRates, setLiveRates] = useState(null);
-  const [ratesLoading, setRatesLoading] = useState(false);
-  const [ratesRefreshing, setRatesRefreshing] = useState(false);
-  const selectedCurrency = CURRENCY_CODE_OPTIONS.find((c) => c.value === currencyCode);
-
-  const fetchLiveRates = useCallback(async () => {
-    setRatesLoading(true);
-    try {
-      const resp = await api.get('/fx/rates');
-      setLiveRates(resp.data.rates || []);
-    } catch {
-      // Rates unavailable — graceful degradation
-    } finally {
-      setRatesLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchLiveRates(); }, [fetchLiveRates]);
-
-  const handleRefreshRates = async () => {
-    setRatesRefreshing(true);
-    try {
-      await api.post('/fx/refresh');
-      await fetchLiveRates();
-      toast.success('Exchange rates refreshed');
-    } catch {
-      toast.error('Rate refresh failed — using most recent stored rates');
-    } finally {
-      setRatesRefreshing(false);
-    }
-  };
-
-  const getActiveRate = () => {
-    if (!liveRates || currencyCode === 'INR') return null;
-    return liveRates.find((r) => r.quote_currency === currencyCode) || null;
-  };
 
   // Market notes (admin only)
   const { data: marketNotes } = useMarketNotes();
@@ -260,35 +213,14 @@ export default function SettingsPage() {
     toast.success('Preference saved');
   };
 
-  const handleCurrencyCodeChange = (code) => {
-    setCurrencyCode(code);
-    localStorage.setItem('pref_currencyCode', code);
-    if (code === 'INR') {
-      localStorage.removeItem('pref_fx_rate');
-    } else {
-      const row = liveRates?.find((r) => r.quote_currency === code);
-      if (row?.rate) {
-        localStorage.setItem('pref_fx_rate', String(row.rate));
-      }
-    }
-    emitCurrencyChange();
-    toast.success('Currency updated');
-  };
-
-  // Keep pref_fx_rate in sync whenever live rates refresh — otherwise a user
-  // who set their currency yesterday would see stale numbers until they
-  // re-picked the same currency today.
+  // One-shot cleanup: clear any localStorage keys left over from the
+  // retired multi-currency feature so we don't carry orphan rows
+  // forever. Idempotent — fires once per browser then no-ops.
   useEffect(() => {
-    if (!liveRates || currencyCode === 'INR') return;
-    const row = liveRates.find((r) => r.quote_currency === currencyCode);
-    if (!row?.rate) return;
-    const prev = localStorage.getItem('pref_fx_rate');
-    const next = String(row.rate);
-    if (prev !== next) {
-      localStorage.setItem('pref_fx_rate', next);
-      emitCurrencyChange();
-    }
-  }, [liveRates, currencyCode]);
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('pref_currencyCode')) localStorage.removeItem('pref_currencyCode');
+    if (localStorage.getItem('pref_fx_rate')) localStorage.removeItem('pref_fx_rate');
+  }, []);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -582,126 +514,13 @@ export default function SettingsPage() {
           run it again. */}
       <ProductTourReplayCard />
 
-      {/* Currency Section */}
-      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
-        <div className="flex items-start justify-between mb-1">
-          <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
-            <DollarSign size={18} />
-            Display Currency
-          </h3>
-          <button
-            onClick={handleRefreshRates}
-            disabled={ratesRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 transition disabled:opacity-50"
-          >
-            {ratesRefreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            Refresh Rates
-          </button>
-        </div>
-        <p className="text-xs text-content-secondary mb-4">
-          All deal values are stored in INR Crores. Rates are auto-updated daily. Select a display currency and the app will use the latest available rate.
-        </p>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-content-secondary mb-1">Display Currency</label>
-            <select
-              value={currencyCode}
-              onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {CURRENCY_CODE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
+      {/* Two-factor authentication (TOTP via authenticator app). */}
+      <MfaCard />
 
-          {/* Live rate display */}
-          {currencyCode !== 'INR' && (
-            <div className="rounded-lg border border-hairline bg-bg-secondary p-4">
-              {ratesLoading ? (
-                <div className="flex items-center gap-2 text-sm text-content-secondary">
-                  <Loader2 size={14} className="animate-spin" />
-                  Loading rates…
-                </div>
-              ) : (() => {
-                const activeRate = getActiveRate();
-                if (!activeRate) {
-                  return (
-                    <div className="flex items-start gap-2 text-sm text-amber-700">
-                      <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
-                      <div>
-                        No rate available for INR → {currencyCode}. Click <strong>Refresh Rates</strong> to fetch the latest rates.
-                      </div>
-                    </div>
-                  );
-                }
-                const isStale = activeRate.freshness_status !== 'fresh';
-                return (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      {isStale
-                        ? <AlertTriangle size={14} className="text-amber-500 flex-shrink-0" />
-                        : <CheckCircle size={14} className="text-emerald-500 flex-shrink-0" />
-                      }
-                      <span className="text-sm font-semibold text-content-primary">
-                        1 INR = {currencyCode} {Number(activeRate.rate).toFixed(6)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-content-secondary space-y-0.5">
-                      <p>Effective date: {activeRate.effective_date}</p>
-                      <p>Source: {activeRate.source}</p>
-                      <p>Status: <span className={isStale ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'}>{activeRate.freshness_status}</span></p>
-                      {isStale && <p className="text-amber-600">Using most recent available rate — click Refresh Rates to update.</p>}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* All rates table */}
-          {liveRates && liveRates.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-content-secondary uppercase tracking-wider mb-2">All Available Rates (1 INR =)</p>
-              <div className="rounded-lg border border-hairline overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-bg-secondary">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium text-content-secondary">Currency</th>
-                      <th className="px-3 py-2 text-right font-medium text-content-secondary">Rate</th>
-                      <th className="px-3 py-2 text-right font-medium text-content-secondary">Date</th>
-                      <th className="px-3 py-2 text-right font-medium text-content-secondary">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-hairline">
-                    {liveRates.map((r) => (
-                      <tr key={r.quote_currency} className={r.quote_currency === currencyCode ? 'bg-primary-50' : 'bg-bg-elevated'}>
-                        <td className="px-3 py-2 font-medium text-content-primary">{r.quote_currency}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-content-secondary">{Number(r.rate).toFixed(6)}</td>
-                        <td className="px-3 py-2 text-right text-content-secondary">{r.effective_date}</td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${r.freshness_status === 'fresh' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {r.freshness_status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-1.5 text-xs text-content-muted">Rates are stored in INR base. Display only — stored deal values are never modified.</p>
-            </div>
-          )}
-
-          {/* Two-factor authentication (TOTP via authenticator app). */}
-          <MfaCard />
-
-          {/* Account closure (DPDP §8(7)) — every authenticated user can
-              self-serve. Erasure scheduled +90 days, runs via the daily
-              retention sweep cron. */}
-          <CloseAccountCard />
-        </div>
-      </div>
+      {/* Account closure (DPDP §8(7)) — every authenticated user can
+          self-serve. Erasure scheduled +90 days, runs via the daily
+          retention sweep cron. */}
+      <CloseAccountCard />
     </div>
   );
 }

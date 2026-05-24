@@ -31,7 +31,7 @@ const ddRoutes = require('./routes/dd.routes');
 const approvalsRoutes = require('./routes/approvals.routes');
 const riskRoutes = require('./routes/risk.routes');
 const extractionRoutes = require('./routes/extraction.routes');
-const fxRoutes = require('./routes/fx.routes');
+// fx.routes retired 2026-05-24 — multi-currency display feature removed
 const parcelCronRoutes = require('./routes/parcelCron.routes');
 const adminRoutes = require('./routes/admin.routes');
 const searchRoutes = require('./routes/search.routes');
@@ -144,7 +144,6 @@ app.use('/api/auth', authLimiter);
 app.use('/api/intelligence', heavyLimiter);
 app.use('/api/exports', heavyLimiter);
 app.use('/api/extraction', heavyLimiter);
-app.use('/api/fx/refresh', heavyLimiter);
 app.use('/api/privacy', heavyLimiter);
 app.use('/api', generalLimiter);
 
@@ -181,7 +180,6 @@ app.use('/api', approvalsRoutes);
 app.use('/api', riskRoutes);
 app.use('/api', promoterRoutes);
 app.use('/api', extractionRoutes);
-app.use('/api/fx', fxRoutes);
 app.use('/api/cron', parcelCronRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/search', searchRoutes);
