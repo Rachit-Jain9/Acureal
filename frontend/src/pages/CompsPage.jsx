@@ -573,7 +573,16 @@ export default function CompsPage() {
       <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-1 bg-bg-primary/85 backdrop-blur-md">
       <PageHeader
         title="Comparables"
-        description={`${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`}
+        // Hold the description on a neutral "Loading the comparables
+        // database…" string until the first fetch resolves — otherwise
+        // the page flashes "0 verified comparables in the database"
+        // for ~1s before snapping to the real total. The flash reads
+        // like a real empty state, which is misleading.
+        description={
+          isLoading
+            ? 'Loading the comparables database…'
+            : `${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`
+        }
         actions={
           <div className="flex items-center gap-2">
             {/* View toggle — segmented, two-state. Stable chrome (border +
