@@ -4,6 +4,56 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-25 (late evening, 10-hour focused block continuation) — MasterPlanAdminPage decomposition (PR #553, #557, #558) + standing auto-merge authorization granted
+
+Continuation of the Task #6 god-file decomposition. `pages/MasterPlanAdminPage.jsx` was the last big single-file page in the frontend (1,850 lines, owned the Zone Library tab, Source Documents tab, Planning Intelligence tab, four operator modals, half a dozen static option lists, and 18 pure helpers). Broken up into three stacked PRs so each can be reviewed independently and merged in order.
+
+**Operator policy change this session:** Rachit granted standing authorization for Claude to merge PRs once CI is green ("Merge+push+commit+deploy all that is pending. DO these for all the future PRs"). Memory file `feedback_pr_merge_boundary.md` updated to reflect the new rule. Going forward Claude merges instead of handing off.
+
+PR-number note: the Tier B + Tier C work was first opened as stacked PRs #554 and #555. When #553 (Tier A) merged, GitHub auto-closed those stacked PRs because their base branches were deleted. The branches were rebased onto master and reopened as **#557** (Tier B) and **#558** (Tier C), which is what actually carried the merges.
+
+### PRs opened + merged
+
+- **#553 — refactor(masterplan): Tier A — pure helpers + option lists.** Lifts the 6 static option lists and 18 pure functions (`formatBytes`, `formatDocType`, `formatOption`, `legalStatusTone`, `formatPercent`, `pageStatusTone`, `normalizeSourceReadiness`, `getSourceReadiness`, `parseList`, `joinList`, `toNum`, `ratioToPct`, `pctToRatio`, `formatHistoryDate`, `formatHistoryField`, `formatHistoryValue`, `normalizePreviousValues`) into `utils/masterPlanHelpers.js` so all the upcoming modal + tab-panel extractions can share them without circular imports. Adds 28 unit tests pinning the existing behaviour (including two `Number()` coercion quirks — `formatPercent(null) === '0%'` and `ratioToPct(null) === '0'` — that callers depend on). Page shrinks 1,850 → 1,583 lines (-14.4%). **Merged.**
+
+- **#557 — refactor(masterplan): Tier B — extract the four modals.** (Originally opened as #554 stacked on #553; auto-closed when #553's base branch was deleted; rebased onto master and reopened as #557.) Each modal moves into its own file in `components/masterplan/`:
+  - `SourceReviewModal.jsx` (205 lines) — operator metadata editor
+  - `SourceHistoryModal.jsx` (143 lines) — read-only audit-trail viewer
+  - `ZoneModal.jsx` (281 lines, inc. private `EMPTY_ZONE` seed) — zone create/edit
+  - `SourcePagesModal.jsx` (166 lines) — page-level OCR/review ledger
+
+  Page shrinks 1,583 → 896 lines (-43.4%). **Merged.**
+
+- **#558 — refactor(masterplan): Tier C — extract the three tab panels (decomposition complete).** (Originally opened as #555 stacked on #554; auto-closed; rebased and reopened as #558.) The three top-level tab panels move into their own files:
+  - `PlanningIntelligencePanel.jsx` (59 lines) — composition of nine analytic / lookup panels
+  - `ZoneLibrary.jsx` (216 lines, inc. private `StatusBadge` + `ZoneTableSkeleton`) — searchable / filterable RMP zones list
+  - `DocumentsPanel.jsx` (627 lines, inc. private `DOC_STATUS_META`, `SourceStatusBadge`, `SourceDocumentsSkeleton`) — source-document intake, readiness filters, document list, three operator modals
+
+  Page becomes a thin 80-line tab router that owns only the active-tab state and the editor-role permission check. **Merged.**
+
+### Earlier-session PRs also merged this block
+
+- **#550** — IntelligencePage decomposition (1,964 → 940 lines, Task #6 progress).
+- **#551** — Admin / AI Usage retry-recovery copy fix.
+- **#552** — earlier session log entry.
+
+### Cumulative impact (MasterPlanAdminPage portion)
+
+- `pages/MasterPlanAdminPage.jsx`: **1,850 → 80 lines (-95.7%)**
+- 8 new component files under `components/masterplan/`
+- 1 new helper module + 1 new test suite (28 tests, all passing)
+- All 10 existing `MasterPlanAdminPage.test.jsx` integration tests still pass against the fully-decomposed file (they exercise tab switching, the documents intake form, modal open/close, the readiness pills, and the extract action — so the end-to-end wiring is verified).
+- `npm run build` succeeds; MasterPlanAdminPage chunk size unchanged at 171.27 kB (modals + panels chunk-split with the same page lazy boundary as before).
+
+Behaviour-preserving throughout — no logic changes, no prop renames, no UI churn. Operator-facing experience identical to pre-refactor.
+
+### What's left
+
+- Task #6 (decompose frontend god-files): MasterPlanAdminPage portion fully complete. IntelligencePage decomposition merged. Other very-large frontend files (DealsPage 1,162, CompsQueuePage 1,046) are reasonable candidates for further decomposition; operator framed MasterPlanAdminPage as "the last big god-file" so deferred unless explicitly requested.
+- Task #10 (Database & infra hygiene) — still in progress from earlier sessions.
+
+---
+
 ## 2026-05-19 (evening, operator-reported) — ActivityTab hotfix + strip AI branding from exports (PR #431)
 
 Operator opened the downloaded Jigani DOCX + reviewed live deal pages. Three issues reported:
