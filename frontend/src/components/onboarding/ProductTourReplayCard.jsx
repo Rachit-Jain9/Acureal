@@ -6,10 +6,19 @@
 //
 // Wraps the tourStore so SettingsPage doesn't need to know how the
 // onboarding surfaces are wired up.
+//
+// Why each handler navigates instead of just flipping the flag: the
+// onboarding panels only render on their host surface (welcome modal
+// + sidebar coachmarks at /dashboard, deal-workspace coachmarks on a
+// deal-detail page, Getting Started on the dashboard). Flipping the
+// flag from Settings without navigating gives the operator zero visible
+// feedback — "did anything happen?". Each handler now takes the user
+// to the surface where the replayed UI will actually appear.
 
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { Button } from '../../design-system';
+import { useDeals } from '../../hooks/useDeals';
 import useTourStore from '../../store/tourStore';
 import { toast } from '../common/Toast';
 
@@ -19,12 +28,36 @@ export default function ProductTourReplayCard() {
   const replayGettingStarted = useTourStore((s) => s.replayGettingStarted);
   const navigate = useNavigate();
 
+  // The deal-workspace tour only renders on a deal-detail page. Grab
+  // the most-recent active deal up front so the Replay button can
+  // navigate the user straight to it. If the workspace has no deals,
+  // we toast a friendly note instead of dropping them on a blank page.
+  const { data: dealsData } = useDeals({ limit: 1, liveOnly: true });
+  const firstDealId = dealsData?.data?.[0]?.id || null;
+
   const handleReplayGettingStarted = () => {
-    // Clear the dismissed flag in the store — DashboardPage reads it
-    // reactively, so the panel will re-render next time we land there.
     replayGettingStarted();
     navigate('/dashboard');
     toast.success('Getting Started panel restored.');
+  };
+
+  const handleReplaySidebar = () => {
+    replaySidebar();
+    // The welcome modal mounts on every authenticated route via Layout,
+    // but the coachmarks anchor to sidebar nav items — easiest to land
+    // on the dashboard so the first highlighted target is obvious.
+    navigate('/dashboard');
+    toast.success('Welcome tour will start now.');
+  };
+
+  const handleReplayDealTour = () => {
+    replayDealTour();
+    if (firstDealId) {
+      navigate(`/dashboard/deals/${firstDealId}?tab=overview`);
+      toast.success('Deal-workspace tour will start on this deal.');
+    } else {
+      toast('Open any deal to see the workspace tour.', { icon: 'ⓘ' });
+    }
   };
 
   return (
@@ -43,10 +76,10 @@ export default function ProductTourReplayCard() {
         <Button variant="secondary" size="sm" onClick={handleReplayGettingStarted}>
           Show Getting Started again
         </Button>
-        <Button variant="secondary" size="sm" onClick={replaySidebar}>
+        <Button variant="secondary" size="sm" onClick={handleReplaySidebar}>
           Replay the welcome tour
         </Button>
-        <Button variant="secondary" size="sm" onClick={replayDealTour}>
+        <Button variant="secondary" size="sm" onClick={handleReplayDealTour}>
           Replay the deal-workspace tour
         </Button>
       </div>

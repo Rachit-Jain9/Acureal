@@ -711,6 +711,7 @@ async function getDealExtractions(dealId) {
             de.structured_fields,
             de.confidence_scores,
             de.human_corrections,
+            de.correction_history,
             de.language_detected,
             de.extracted_at,
             de.reviewed_at,
@@ -727,6 +728,22 @@ async function getDealExtractions(dealId) {
   const extractions = result.rows.map((row) => {
     const corrections = toPlainObject(row.human_corrections || {});
     const fields = mergeStructuredFields(row.structured_fields || {}, corrections);
+    // Read the correction-history entries the apply pipeline writes
+    // (`type: 'applied_to_deal'`) and pull out the canonical_field
+    // names already pushed to the deal/property. The frontend's
+    // "N fields ready to auto-fill" banner subtracts these so the
+    // count drops every time the operator presses Apply — instead of
+    // keeping the same proposals on offer indefinitely.
+    const history = Array.isArray(row.correction_history) ? row.correction_history : [];
+    const appliedCanonicalFields = new Set();
+    for (const entry of history) {
+      if (!entry || entry.type !== 'applied_to_deal') continue;
+      if (entry.deal_id && entry.deal_id !== dealId) continue;
+      const fieldsList = Array.isArray(entry.applied_fields) ? entry.applied_fields : [];
+      for (const f of fieldsList) {
+        if (f?.canonical_field) appliedCanonicalFields.add(f.canonical_field);
+      }
+    }
     return {
       id: row.id,
       document_id: row.document_id,
@@ -740,12 +757,15 @@ async function getDealExtractions(dealId) {
       fields,
       confidence: row.confidence_scores || {},
       has_corrections: Object.keys(corrections).length > 0,
+      applied_canonical_fields: Array.from(appliedCanonicalFields),
     };
   });
 
   // Also roll up a "field map" keyed by canonical buildability/underwriting
   // keys → best source, so the frontend can hang a provenance badge next to
   // the matching input without re-scanning structured_fields client-side.
+  // Already-applied fields are excluded — buildFieldMap respects each
+  // extraction's `applied_canonical_fields` list.
   const fieldMap = buildFieldMap(extractions);
 
   return {
@@ -835,7 +855,12 @@ const FIELD_MAP_RULES = {
 function buildFieldMap(extractions) {
   const map = {};
   for (const ext of extractions) {
+    // Per-extraction set of canonical fields already pushed to the deal.
+    // If a canonical field has been applied via THIS extraction, it
+    // should no longer appear in the "ready to auto-fill" surface.
+    const appliedHere = new Set(ext.applied_canonical_fields || []);
     for (const [canonical, candidates] of Object.entries(FIELD_MAP_RULES)) {
+      if (appliedHere.has(canonical)) continue;
       for (const [sourceKey, boost] of candidates) {
         const value = ext.fields?.[sourceKey];
         if (value == null || value === '') continue;
