@@ -73,21 +73,21 @@ export default function SettingsPage() {
     dateFormat: localStorage.getItem('pref_dateFormat') || 'en-IN',
   });
 
-  // Market notes (admin only)
+  // Market notes (admin only). Only `micro_market` is editable now —
+  // PR #530 retired the Slowdown + Strategic note types along with their
+  // on-page sections; the backend still ignores reads/writes for those
+  // sections, so leaving them in the Settings editor would just let the
+  // operator type into a void.
   const { data: marketNotes } = useMarketNotes();
   const saveMarketNotes = useSaveMarketNotes();
   const [notesDraft, setNotesDraft] = useState({
     micro_market: '',
-    slowdown: '',
-    strategic: '',
   });
 
   useEffect(() => {
     if (marketNotes) {
       setNotesDraft({
         micro_market: (marketNotes.micro_market || []).join('\n'),
-        slowdown: (marketNotes.slowdown || []).join('\n'),
-        strategic: (marketNotes.strategic || []).join('\n'),
       });
     }
   }, [marketNotes]);
@@ -477,8 +477,12 @@ export default function SettingsPage() {
 
           {[
             { key: 'micro_market', label: 'Bengaluru Micro-Market Intelligence', placeholder: 'e.g. Whitefield absorption tightening due to new IT campus demand\ne.g. ORR rental yields compressing on oversupply' },
-            { key: 'slowdown', label: 'Demand Slowdown Indicators', placeholder: 'e.g. Sarjapur new launch absorption fell 15% last quarter per broker feedback\ne.g. Peripheral markets seeing extended unsold inventory' },
-            { key: 'strategic', label: 'Strategic Takeaways', placeholder: 'e.g. Focus underwriting on micro-markets with sub-18 month absorption cycles\ne.g. Avoid land deals in oversupplied peripheral zones until Q3 correction clears' },
+            // Demand Slowdown Indicators + Strategic Takeaways retired
+            // 2026-05-23 (PR #530) — the corresponding on-page sections
+            // produced generic copy that didn't earn their place. The
+            // backend `saveMarketNotes` now rejects those section keys
+            // outright, so leaving them in this editor would just be a
+            // void to type into.
           ].map(({ key, label, placeholder }) => (
             <div key={key} className="mb-5 last:mb-0">
               <label className="block text-sm font-medium text-content-secondary mb-1">{label}</label>
