@@ -139,7 +139,7 @@ function ZoningRow({ layer, onToggleZoning }) {
           >
             <span
               className={clsx(
-                'absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out',
+                'absolute top-0.5 h-3 w-3 rounded-full bg-bg-elevated shadow-sm transition-transform duration-150 ease-out',
                 layer.enabled ? 'translate-x-3.5' : 'translate-x-0.5',
               )}
             />

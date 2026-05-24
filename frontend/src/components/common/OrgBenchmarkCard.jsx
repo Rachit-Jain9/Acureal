@@ -42,7 +42,7 @@ function Switch({ checked, busy, onChange, labelledById }) {
     >
       <span
         className={clsx(
-          'inline-flex h-4 w-4 items-center justify-center transform rounded-full bg-white shadow-sm',
+          'inline-flex h-4 w-4 items-center justify-center transform rounded-full bg-bg-elevated shadow-sm',
           'transition-transform duration-150 ease-out',
           checked ? 'translate-x-6' : 'translate-x-1',
         )}
