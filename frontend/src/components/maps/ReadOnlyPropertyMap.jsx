@@ -177,31 +177,66 @@ export default function ReadOnlyPropertyMap({
     }
   };
 
-  // Fetch zoning overlay only when toggled on. Cached in component state for
-  // the session; closing/reopening the panel re-fetches. No tile-level caching
-  // — keep it simple until we see real zone uploads.
+  // Fetch zoning overlay only when toggled on. Cached in component state
+  // for the session; closing/reopening the panel re-fetches.
+  //
+  // Why a ref instead of `zoningLoading` in deps:
+  //   The previous version put `zoningLoading` in the deps array as a
+  //   guard against double-fetching. But that made the effect re-run the
+  //   moment loading flipped true, the cleanup ran and set
+  //   `cancelled = true`, and when the promise finally resolved every
+  //   state setter bailed (including `setZoningLoading(false)`).
+  //   Net effect: the "Fetching Revised Master Plan zone geometry…"
+  //   spinner could spin forever on a slow connection or a hung
+  //   backend. A ref lets us track in-flight without re-running the
+  //   effect.
+  //
+  // We also enforce a 15-second client-side timeout so a backend that
+  // hangs (no response at all) eventually surfaces an error instead of
+  // showing "Loading…" indefinitely.
+  const zoningRequestRef = useRef(null);
   useEffect(() => {
-    if (!zoningEnabled || zoningGeo || zoningLoading || !center) return undefined;
+    if (!zoningEnabled || zoningGeo || !center) return undefined;
+    if (zoningRequestRef.current) return undefined; // request already in flight
+    const controller = new AbortController();
+    zoningRequestRef.current = controller;
     let cancelled = false;
     setZoningLoading(true);
     setZoningError(null);
     api
       .get('/master-plan/zones/geojson', {
         params: { lat: center[0], lng: center[1], radius_km: 5 },
+        signal: controller.signal,
+        timeout: 15000,
       })
       .then((response) => {
         if (cancelled) return;
         setZoningGeo(response.data?.data || null);
       })
       .catch((err) => {
-        if (cancelled) return;
-        setZoningError(err?.response?.data?.message || err?.message || 'Failed to load zoning overlay.');
+        if (cancelled || controller.signal.aborted) return;
+        const isTimeout =
+          err?.code === 'ECONNABORTED'
+          || /timeout/i.test(err?.message || '')
+          || err?.name === 'CanceledError';
+        setZoningError(
+          isTimeout
+            ? 'Zoning overlay timed out. Try toggling it again.'
+            : err?.response?.data?.message
+              || err?.message
+              || 'Failed to load zoning overlay.',
+        );
       })
       .finally(() => {
+        zoningRequestRef.current = null;
         if (!cancelled) setZoningLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [zoningEnabled, zoningGeo, zoningLoading, center]);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      zoningRequestRef.current = null;
+    };
+  }, [zoningEnabled, zoningGeo, center]);
 
   // Save the relocated pin. Posts to PUT /properties/:id with new coords,
   // then invalidates the property + parcel-intelligence query caches so the
