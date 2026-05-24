@@ -6921,3 +6921,62 @@ A second sweep also found:
 - Decompose React-page god-files (DealsPage, IntelligencePage,
   MasterPlanAdminPage).
 - Database / infra hygiene (consolidate 85+ migrations).
+
+## 2026-05-25 (afternoon, pass 3) — RMP zoning column + AI footer hygiene
+
+### What was worked on
+
+Yesterday's PR #543 fixed the **infinite-spinner state-machine bug** on
+the RMP zoning toggle (the loading flag could never clear because of a
+deps-array race). That fix actually exposed a deeper bug: the
+toggle now resolves quickly, but to an **UNAVAILABLE** state with the
+backend returning "Invalid field name in request." — a Postgres
+42703 (undefined_column) error. Root cause: the SQL was selecting
+`z.planning_zone` directly, but `master_plan_zones` has no such
+column — planning context lives in `planning_districts` joined via
+`planning_district_id`. Fixed by following the same join pattern the
+rest of `masterplan.service.js` uses (ZONE_SELECT).
+
+A second click-through finding: the Documents tab Cross-Document
+Analysis card was leaking raw upstream provider error JSON into its
+attribution footer:
+
+    auto-failover: Claude 404 404 {"type":"error","error":{...},"request_id":"..."}
+    — auto-failover succeeded on openai
+
+That violates the AI-disclosure policy in CLAUDE.md (operator-facing
+surfaces stay clean of provider noise). New util
+`formatFallbackReason(raw)` extracts only the meaningful tail —
+"auto-failover succeeded on <provider>" — and collapses long
+JSON-laden strings to a generic "auto-failover engaged". Provider
+names are restricted to a known safe set so future router changes
+can't surface unsanctioned vendors. Applied to all three call sites:
+DocumentInsightsPanel, RiskNarrativePanel, SensitivityNarrativePanel.
+
+### PRs opened / merged
+
+- PR #544 — fix: RMP zoning column rename + strip provider-error JSON from AI footers — merged
+
+### Plain-English recap
+
+- **The RMP zoning toggle now actually works.** Yesterday I fixed the
+  infinite spinner — that revealed the real bug (a missing column in
+  the SQL). Today the zones either load and draw on the map, or fail
+  gracefully — no more "Invalid field name in request" error.
+- **AI footers no longer leak raw error JSON.** What used to read
+  like "auto-failover: Claude 404 404 {...JSON blob...} — succeeded
+  on openai" now just says "auto-failover succeeded on openai".
+  Clean, no provider error noise.
+
+### Validation
+
+- Backend: 143 suites / 2329 tests pass
+- Frontend: 104 files / 868 tests pass (6 new on formatFallbackReason)
+- Clean Vite build
+
+### What's left to do
+
+- Dark-mode override-hack retirement (~30 in-app sites left).
+- Decompose React-page god-files (DealsPage, IntelligencePage,
+  MasterPlanAdminPage).
+- Database / infra hygiene (consolidate 85+ migrations).
