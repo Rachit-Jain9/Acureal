@@ -342,66 +342,24 @@ html[data-theme='light'] {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Dark-mode legacy safety net.
+   Dark-mode semantic-wash overrides.
 
-   Many in-flight components still use hardcoded `bg-white`,
-   `bg-gray-*`, `border-gray-*`, `text-gray-*` from the pre-theme era.
-   These rules make those components look correct in dark mode without
-   needing to touch every file. Scoped inside `html[data-theme='dark']`
-   so light mode stays untouched and Tailwind's own `dark:` variants
-   still win when authors opt in explicitly.
+   The bulk of the pre-theme "safety net" was retired in 2026-05 → 2026-05-25.
+   Every legacy `bg-white`, `bg-gray-*`, `bg-slate-*`, `bg-paper-*`,
+   `border-gray-*`, `border-slate-*`, `border-line`, `divide-gray-*`,
+   `text-gray-*`, `text-slate-*`, `text-ink-*` call site was migrated
+   to the semantic tokens (`bg-bg-elevated`, `bg-bg-secondary`,
+   `text-content-primary`, `border-hairline`, etc.), and the
+   corresponding override rules were deleted along with them.
+
+   What REMAINS below is intentional: the semantic tinted-info utilities
+   (red / amber / sky / indigo / violet 50 + 200) and the gradient washes
+   that several editorial / hero panels use. Those Tailwind tones are
+   tuned for light mode and need to soften in dark mode to keep
+   readable contrast; rewriting every call site to use bespoke tokens
+   isn't worth it.
    ───────────────────────────────────────────────────────────────────────── */
 html[data-theme='dark'] {
-  /* Panel surfaces */
-  .bg-white { background-color: var(--color-bg-elevated) !important; }
-  .bg-gray-50 { background-color: var(--color-surface) !important; }
-  .bg-gray-100 { background-color: var(--color-surface) !important; }
-  .bg-gray-200 { background-color: var(--color-surface-2) !important; }
-  .bg-slate-50 { background-color: var(--color-surface) !important; }
-  .bg-slate-100 { background-color: var(--color-surface) !important; }
-  .bg-slate-900 { background-color: var(--color-bg-elevated) !important; }
-  .bg-slate-950 { background-color: var(--color-bg-primary) !important; }
-  .bg-paper-100 { background-color: var(--color-bg-elevated) !important; }
-  .bg-paper-50 { background-color: var(--color-bg-primary) !important; }
-
-  /* Borders */
-  .border-gray-100,
-  .border-gray-200,
-  .border-gray-300,
-  .border-slate-100,
-  .border-slate-200,
-  .border-slate-700,
-  .border-line { border-color: var(--color-border-primary) !important; }
-
-  /* Divides */
-  .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
-  .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
-    border-color: var(--color-border-secondary) !important;
-  }
-
-  /* Text */
-  .text-gray-900,
-  .text-ink-900,
-  .text-slate-900 { color: var(--color-text-primary) !important; }
-  .text-gray-800,
-  .text-ink-800,
-  .text-slate-800 { color: var(--color-text-primary) !important; }
-  .text-gray-700,
-  .text-ink-700,
-  .text-slate-700 { color: var(--color-text-secondary) !important; }
-  .text-gray-600,
-  .text-ink-600,
-  .text-slate-600 { color: var(--color-text-secondary) !important; }
-  .text-gray-500,
-  .text-ink-500,
-  .text-slate-500 { color: var(--color-text-muted) !important; }
-  .text-gray-400,
-  .text-ink-400,
-  .text-slate-400 { color: var(--color-text-muted) !important; }
-  .text-gray-300,
-  .text-ink-300,
-  .text-slate-300 { color: var(--color-text-muted) !important; }
-
   /* Gradient washes lose their tint in dark mode; collapse to subtle surfaces */
   .from-indigo-50,
   .from-sky-50,
@@ -431,9 +389,6 @@ html[data-theme='dark'] {
   .border-sky-200,
   .border-indigo-200,
   .border-violet-200 { border-color: rgba(59,130,246,0.35) !important; }
-
-  /* Keep body bg from being whited-out by generic utility */
-  .bg-gray-50\/50 { background-color: var(--color-bg-primary) !important; }
 }
 
 @layer utilities {

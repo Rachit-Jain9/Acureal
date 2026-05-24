@@ -32,7 +32,7 @@ import { formatArea, formatCrores, formatINR } from '../utils/format';
 
 function ToggleRow({ checked, label, description, onChange }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-hairline-strong bg-white px-3 py-3/80">
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-hairline-strong bg-bg-elevated px-3 py-3/80">
       <div>
         <p className="text-sm font-medium text-content-primary">{label}</p>
         <p className="mt-0.5 text-xs text-content-secondary">{description}</p>
@@ -311,7 +311,7 @@ export default function MapPage() {
                   <Link
                     key={property.id}
                     to={`/dashboard/properties/${property.id}`}
-                    className="flex items-center justify-between rounded-xl border border-amber-200 bg-white px-3 py-3 transition hover:border-amber-300 hover:bg-amber-100/40"
+                    className="flex items-center justify-between rounded-xl border border-amber-200 bg-bg-elevated px-3 py-3 transition hover:border-amber-300 hover:bg-amber-100/40"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-content-primary">{property.name}</p>
@@ -391,21 +391,21 @@ export default function MapPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 text-sm">
-              <div className="rounded-xl bg-white px-3 py-3">
+              <div className="rounded-xl bg-bg-elevated px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-content-muted">Visible Land Bank</p>
                 <p className="mt-1 font-semibold text-content-primary">{formatArea(totalLandArea)}</p>
               </div>
-              <div className="rounded-xl bg-white px-3 py-3">
+              <div className="rounded-xl bg-bg-elevated px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-content-muted">Visible Deal Value</p>
                 <p className="mt-1 font-semibold text-content-primary">{formatCrores(visibleDealValueCr)}</p>
               </div>
-              <div className="rounded-xl bg-white px-3 py-3">
+              <div className="rounded-xl bg-bg-elevated px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-content-muted">Average Circle Rate</p>
                 <p className="mt-1 font-semibold text-content-primary">
                   {averageCircleRate ? `${formatINR(averageCircleRate, 0)}/sqft` : '-'}
                 </p>
               </div>
-              <div className="rounded-xl bg-white px-3 py-3">
+              <div className="rounded-xl bg-bg-elevated px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-content-muted">Dominant City</p>
                 <p className="mt-1 font-semibold text-content-primary">
                   {dominantCity ? `${dominantCity[0]} (${dominantCity[1]})` : '-'}
@@ -446,7 +446,7 @@ export default function MapPage() {
               />
             </div>
 
-            <div className="mt-4 rounded-xl bg-white px-3 py-3">
+            <div className="mt-4 rounded-xl bg-bg-elevated px-3 py-3">
               <p className="text-xs uppercase tracking-wide text-content-muted">Nearby Comp Radius</p>
               <p className="mt-1 text-sm text-content-secondary">
                 {selectedProperty ? 'Adjust the search area for the selected property.' : 'Select a property to activate nearby comps.'}
@@ -470,7 +470,7 @@ export default function MapPage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl bg-white px-3 py-3">
+            <div className="mt-4 rounded-xl bg-bg-elevated px-3 py-3">
               <p className="text-xs uppercase tracking-wide text-content-muted">Stage Heat Filters</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {Object.entries(STAGE_HEAT_META).map(([stage, meta]) => (
@@ -481,7 +481,7 @@ export default function MapPage() {
                     className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
                       visibleStages[stage]
                         ? 'border-transparent bg-bg-primary text-white'
-                        : 'border-hairline-strong bg-white text-content-secondary'
+                        : 'border-hairline-strong bg-bg-elevated text-content-secondary'
                     }`}
                   >
                     <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
@@ -505,7 +505,7 @@ export default function MapPage() {
 
             {selectedProperty ? (
               <div className="mt-4 space-y-3">
-                <div className="rounded-xl bg-white px-3 py-3">
+                <div className="rounded-xl bg-bg-elevated px-3 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-content-primary">{selectedProperty.name}</p>
@@ -537,7 +537,7 @@ export default function MapPage() {
                   </Link>
                 </div>
 
-                <div className="rounded-xl bg-white px-3 py-3">
+                <div className="rounded-xl bg-bg-elevated px-3 py-3">
                   <p className="text-xs uppercase tracking-wide text-content-muted">Nearby Comp Benchmarks</p>
                   {showNearbyComps ? (
                     nearbyBenchmarksLoading ? (
@@ -606,7 +606,7 @@ export default function MapPage() {
                       className={`rounded-2xl border px-4 py-4 transition ${
                         isSelected
                           ? 'border-primary-500 bg-primary-50 shadow-sm'
-                          : 'border-hairline-strong bg-white hover:border-hairline-strong hover:shadow-sm'
+                          : 'border-hairline-strong bg-bg-elevated hover:border-hairline-strong hover:shadow-sm'
                       }`}
                     >
                       <button

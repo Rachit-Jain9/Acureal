@@ -390,7 +390,7 @@ export default function PropertyDetailPage() {
 
             {hasCoordinates ? (
               <div className="mt-4 overflow-hidden rounded-2xl border border-hairline-strong">
-                <div className="flex items-center justify-between border-b border-hairline-strong bg-white px-4 py-3 text-sm">
+                <div className="flex items-center justify-between border-b border-hairline-strong bg-bg-elevated px-4 py-3 text-sm">
                   <div className="text-content-secondary">
                     Lat {Number(property.lat).toFixed(6)} | Lng {Number(property.lng).toFixed(6)}
                   </div>
@@ -463,7 +463,7 @@ export default function PropertyDetailPage() {
 
       {showEditModal && editForm && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 py-8">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-bg-elevated shadow-2xl">
             <div className="flex items-center justify-between border-b border-hairline-strong px-6 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-content-primary">Edit Property</h3>

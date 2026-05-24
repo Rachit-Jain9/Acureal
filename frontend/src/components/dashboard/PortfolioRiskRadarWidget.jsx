@@ -90,7 +90,11 @@ const SEVERITY_TONE = {
   critical: 'bg-red-50 text-red-700 border-red-200',
   high: 'bg-amber-50 text-amber-700 border-amber-200',
   medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  low: 'bg-slate-50 text-slate-700 border-slate-200',
+  // The "low" tone used `bg-slate-50 text-slate-700 border-slate-200` —
+  // a legacy combo from the pre-theme era. Replaced with semantic
+  // tokens so it adapts to dark mode without needing the override block
+  // in index.css.
+  low: 'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 function SeverityPill({ severity }) {
