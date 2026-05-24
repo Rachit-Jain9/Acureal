@@ -7088,3 +7088,76 @@ follow-up PRs.
 - Task #6 continuation: decompose IntelligencePage.jsx (~2k lines)
   and MasterPlanAdminPage.jsx.
 - Operator applies the RLS migration in Supabase + merges #547.
+
+## 2026-05-25 (evening, work block 2) — IntelligencePage decomposition + AI Usage copy fix
+
+### What was worked on
+
+Two pieces in this block:
+
+**Task #6 (continued) — IntelligencePage decomposition. PR #550.**
+
+The Intelligence page was a ~2,000-line god-file. Extracted every big
+logical unit into focused component files:
+
+  components/intelligence/
+    AdminNotesPanel.jsx                (167 lines) — operator notes editor
+    MacroKpiTile.jsx                   (48 lines)  — single macro-strip tile
+    AssetClassBenchmarkTables.jsx      (497 lines) — Office / Retail /
+                                                     Industrial / Hospitality
+    SegmentedBenchmarkTables.jsx       (418 lines) — Residential Segmented
+                                                     + Niche asset class
+  utils/
+    intelligenceTableHelpers.js        (35 lines)  — buildClusterOptions,
+                                                     matchesSearch (shared)
+
+  IntelligencePage.jsx: 1,964 → 940 lines (-52.1%)
+
+Zero behaviour change. Same 868 tests pass after each commit.
+
+**Live-audit pass 4 — Comps, Map, Reports, admin pages. PR #551.**
+
+Clicked through Comps (81 verified entries, filters working), Map
+(7 visible properties, 6 deals, 1 city), Reports/Exports (pipeline
+table working), Master Plan admin (Zone Library with 8+ approved
+zones), Parcel Intelligence Operations (28 items pending review,
+schema 0-missing), Comps Review Queue (empty state working), A/B
+Evaluations (parcel verdict 100/100, export deck 99/100).
+
+**One real bug found:** the AI Usage admin page rendered
+
+    ERRORS 233
+    No retry recoveries needed
+
+The "No retry recoveries needed" copy was misleading — with 233
+errors the platform did NOT decide recovery wasn't needed, it just
+never happened. Fix branches the sub-label on errors>0 first:
+
+    errors > 0       → "{recovered} of {errors} recovered via retry"
+    cost_capped > 0  → "{cost_capped} cost-capped"
+    else             → "No retry recoveries needed"
+
+Two regression tests guard the copy.
+
+### PRs opened / merged
+
+- PR #550 — refactor(intelligence): decompose IntelligencePage 1,964 → 940 lines — awaiting operator merge
+- PR #551 — fix(admin/ai-usage): show recovery ratio when errors > 0 — awaiting operator merge
+
+### Plain-English recap
+
+- The Intelligence page file is now 52% smaller — easier to navigate and
+  modify. The page renders identically; pure structural cleanup.
+- The AI Usage dashboard now shows recovery accurately. "0 of 233
+  recovered via retry" instead of the misleading "No retry recoveries
+  needed" — tells the truth when the recovery rate is low.
+
+### Validation
+
+- 104 frontend test files / 870 tests pass (was 868; +2 new for AI Usage)
+- Clean Vite build (350 kB index gzip — unchanged from master)
+
+### What's left to do
+
+- Decompose MasterPlanAdminPage.jsx (next-largest god-file).
+- Continue Task #10 work if any further DB hygiene surfaces.
