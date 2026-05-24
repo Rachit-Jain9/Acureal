@@ -6980,3 +6980,111 @@ DocumentInsightsPanel, RiskNarrativePanel, SensitivityNarrativePanel.
 - Decompose React-page god-files (DealsPage, IntelligencePage,
   MasterPlanAdminPage).
 - Database / infra hygiene (consolidate 85+ migrations).
+
+## 2026-05-25 (engineering work block) — Tasks #4 + #10 + #6 done together
+
+### What was worked on
+
+Three formally-tracked engineering tasks shipped in one focused block.
+
+**Task #4 — Retire dark-mode CSS override hack (DONE).**
+Migrated the last 17 in-app legacy-Tailwind utilities to semantic
+design tokens, then deleted the entire pre-theme override safety net
+from index.css (~70 lines of `!important` rules). PR #546.
+
+The override block lived under `html[data-theme='dark']` and re-mapped
+`bg-white`, `bg-gray-*`, `bg-slate-*`, `bg-paper-*`,
+`border-gray-*`, `border-slate-*`, `border-line`, `divide-gray-*`,
+and `text-gray-/slate-/ink-{300..900}` to the semantic tokens. The
+final audit found exactly three legacy classes still in JSX files —
+all on a single line of PortfolioRiskRadarWidget.SEVERITY_TONE.low.
+After migrating that one line, the override block was orphaned and
+could be deleted cleanly.
+
+Kept what's still in use: tinted info-panel utilities (bg-rose-50,
+bg-amber-50, bg-sky-50, bg-indigo-50, bg-violet-50 + border-*-200
+partners) and gradient washes (from/to-{indigo,sky,amber,violet,
+emerald,rose}-50). Those still need dark-mode adjustment.
+
+**Task #10 — RLS coverage audit + 6 missing-RLS tables (DONE).**
+PR #547.
+
+Wrote a new static auditor (`scripts/audit_rls.py`) that scans every
+migration file for CREATE TABLE, ENABLE ROW LEVEL SECURITY, and
+CREATE POLICY statements. First run flagged a real security gap:
+**six org-scoped tables were created with an `organization_id` /
+`org_id` column but never had RLS enabled** — meaning the application's
+WHERE clause was the only barrier preventing cross-org row leakage.
+
+Tables affected:
+  - public.market_macro_kpis
+  - public.office_market_benchmarks
+  - public.retail_market_benchmarks
+  - public.industrial_market_benchmarks
+  - public.hospitality_market_benchmarks
+  - regulatory_data.master_plan_documents
+
+Migration `20260613_rls_coverage_market_data_and_master_plan_docs.sql`
+enables RLS + adds the standard policy quad on each (universal SELECT
+matching the platform-admin-union pattern from PR #530; own-org-only
+INSERT/UPDATE/DELETE). Matches the existing pattern on
+micro_market_benchmarks and market_transactions.
+
+The audit script is wired into the `Audit & migration lint` CI job —
+new tables landing without RLS will fail the build. docs/RLS_AUDIT.md
+documents the audit's snapshot, the two RLS policy patterns used
+across the schema, and the checklist for adding a new org-scoped
+table.
+
+Operator action required: apply the migration in Supabase SQL editor
+(deep-link in the PR body).
+
+**Task #6 — DealsPage decomposition (PARTIAL — DealCard extracted).**
+PR #548.
+
+DealsPage.jsx had grown to 1,458 lines. The bottom 287 were a single
+big-state DealCard component (menu / share / delete-confirm state,
+data hooks, action handlers, modal sub-tree) — totally self-contained,
+just lived in the wrong file. Moved to a dedicated
+`components/deals/DealCard.jsx` (~327 lines). DealsPage.jsx drops to
+**1,162 lines** and now reads as a single concern: filters / bulk
+actions / pagination / new-deal modal / the grid that renders the
+extracted DealCard for each row.
+
+Next on Task #6: IntelligencePage (~2,000 lines) and
+MasterPlanAdminPage are the remaining god-files. Will handle in
+follow-up PRs.
+
+### PRs opened / merged
+
+- PR #546 — refactor(theme): retire the dark-mode legacy override block — merged
+- PR #547 — fix(security): close 6 org-scoped tables missing RLS + add static audit to CI — awaiting operator merge + Supabase migration apply
+- PR #548 — refactor(deals): extract DealCard from DealsPage.jsx — awaiting operator merge
+
+### Plain-English recap
+
+- **Theme code is cleaner.** ~70 lines of `!important` legacy CSS
+  hacks deleted. Nothing visible changes — both light and dark mode
+  render identically to before.
+- **Real security gap closed.** Six tables holding your platform-
+  curated market data (Bengaluru macro KPIs, office / retail /
+  industrial / hospitality benchmarks, master plan docs) now have
+  database-level write protection — even if a future app-side filter
+  bug forgets to add the org check, the DB itself refuses cross-org
+  writes. A new automatic check on every PR catches future tables
+  that skip this step.
+- **Deals page is easier to maintain.** The 287-line per-card render
+  logic moved to its own file. Changing card behaviour no longer
+  means scrolling past 1,000 lines of list-level state.
+
+### Validation
+
+- python3 scripts/audit_rls.py → 0 missing-RLS findings (down from 6)
+- backend: 143 suites / 2329 tests pass
+- frontend: 104 files / 868 tests pass; clean Vite build
+
+### What's left to do
+
+- Task #6 continuation: decompose IntelligencePage.jsx (~2k lines)
+  and MasterPlanAdminPage.jsx.
+- Operator applies the RLS migration in Supabase + merges #547.
