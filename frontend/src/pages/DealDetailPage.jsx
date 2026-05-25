@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Edit2, Trash2, ArrowRight, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import {
@@ -29,19 +29,31 @@ import { ASSET_CLASS_LABELS } from '../utils/assetClasses';
 import { DEAL_STRUCTURE_LABELS } from '../utils/dealStructures';
 import { isValidPair as isValidStructurePair } from '../utils/dealStructureMatrix';
 
-// Tab components
+// Tab components — OverviewTab stays eager (landing tab on every page load);
+// the other nine tabs are lazy so the heavy chart / map / waterfall surfaces
+// only download when the operator actually clicks into them.
 import OverviewTab from '../components/deal/OverviewTab';
-import ParcelTab from '../components/deal/ParcelTab';
-import DocumentsTab from '../components/deal/DocumentsTab';
-import ActivityTab from '../components/deal/ActivityTab';
-import FinancialTab from '../components/deal/FinancialTab';
-import DDTab from '../components/deal/DDTab';
-import RiskTab from '../components/deal/RiskTab';
-import CompsTab from '../components/deal/CompsTab';
-import ZoningTab from '../components/deal/ZoningTab';
-import AuditTab from '../components/deal/AuditTab';
+const ParcelTab    = lazy(() => import('../components/deal/ParcelTab'));
+const DocumentsTab = lazy(() => import('../components/deal/DocumentsTab'));
+const ActivityTab  = lazy(() => import('../components/deal/ActivityTab'));
+const FinancialTab = lazy(() => import('../components/deal/FinancialTab'));
+const DDTab        = lazy(() => import('../components/deal/DDTab'));
+const RiskTab      = lazy(() => import('../components/deal/RiskTab'));
+const CompsTab     = lazy(() => import('../components/deal/CompsTab'));
+const ZoningTab    = lazy(() => import('../components/deal/ZoningTab'));
+const AuditTab     = lazy(() => import('../components/deal/AuditTab'));
 import ShareDealPanel from '../components/deal/ShareDealPanel';
 import DealWorkspaceTour from '../components/onboarding/DealWorkspaceTour';
+
+// Suspense fallback for lazy tabs — a quiet two-line skeleton so the layout
+// doesn't jump when the user clicks a tab. Bounded; the next tab download
+// is a single ~50–200KB chunk so the visible loading state is brief.
+const TabSuspenseFallback = () => (
+  <div className="space-y-2 py-6" role="status" aria-live="polite">
+    <div className="redip-skeleton h-3 w-3/4 rounded-sm" />
+    <div className="redip-skeleton h-3 w-1/2 rounded-sm" />
+  </div>
+);
 
 const TABS = [
   { id: 'overview',   label: 'Overview' },
@@ -341,16 +353,20 @@ export default function DealDetailPage() {
             only auxiliary parent-supplied props remain (ParcelTab.canEdit,
             ZoningTab.setTab). */}
         <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+          {/* Overview is eager (landing tab); the other nine tabs lazy-load
+              via React.lazy so their bundles only download on click. */}
           {activeTab === 'overview' && <OverviewTab />}
-          {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
-          {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
-          {activeTab === 'documents' && <DocumentsTab />}
-          {activeTab === 'activity' && <ActivityTab />}
-          {activeTab === 'financial' && <FinancialTab />}
-          {activeTab === 'dd' && <DDTab />}
-          {activeTab === 'risk' && <RiskTab />}
-          {activeTab === 'comps' && <CompsTab />}
-          {activeTab === 'audit' && <AuditTab />}
+          <Suspense fallback={<TabSuspenseFallback />}>
+            {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
+            {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
+            {activeTab === 'documents' && <DocumentsTab />}
+            {activeTab === 'activity' && <ActivityTab />}
+            {activeTab === 'financial' && <FinancialTab />}
+            {activeTab === 'dd' && <DDTab />}
+            {activeTab === 'risk' && <RiskTab />}
+            {activeTab === 'comps' && <CompsTab />}
+            {activeTab === 'audit' && <AuditTab />}
+          </Suspense>
         </div>
 
         {/* ── Edit deal modal ──────────────────────────────────────────────── */}

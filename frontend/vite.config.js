@@ -9,6 +9,29 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // PR-E (2026-05-25) — named vendor chunks for the largest libraries so
+    // they cache as stable artifacts across page navs and so the page-bundle
+    // names in the build output actually reflect what's in them (Vite's
+    // automatic naming previously labelled the recharts chunk after one of
+    // its components, "PieChart-XXX.js", which made bundle-size review
+    // confusing). React + the chart / map vendors split into named chunks.
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('node_modules/recharts/')) return 'vendor-recharts';
+          if (id.includes('node_modules/leaflet/') || id.includes('node_modules/react-leaflet/')) {
+            return 'vendor-leaflet';
+          }
+          if (id.includes('node_modules/react-router')) return 'vendor-react-router';
+          if (id.includes('node_modules/@tanstack/')) return 'vendor-tanstack';
+          if (id.includes('node_modules/lucide-react/')) return 'vendor-icons';
+          return undefined;
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       // Browser-safe slice of the financial kernel — only what the
