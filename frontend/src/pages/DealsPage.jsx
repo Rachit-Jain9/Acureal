@@ -47,6 +47,7 @@ import { buildLandPricingPreview } from '../utils/landPricing';
 // now live inside DealCard.jsx alongside the card render code.
 import { ASSET_CLASS_CONFIG } from '../utils/assetClasses';
 import { DEAL_STRUCTURE_CONFIG } from '../utils/dealStructures';
+import { isValidPair as isValidStructurePair } from '../utils/dealStructureMatrix';
 
 const INITIAL_FORM = {
   propertyId: '',
@@ -326,6 +327,11 @@ export default function DealsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Block the four structurally-incoherent (assetClass, dealStructure) pairs
+    // before they hit the API. The inline warning under the Deal Structure
+    // select tells the user what to pick instead.
+    const pairCheck = isValidStructurePair(form.assetClass, form.dealStructure);
+    if (!pairCheck.valid) return;
     const payload = {
       propertyId: form.propertyId || undefined,
       name: form.name,
@@ -1023,6 +1029,23 @@ export default function DealsPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Structurally-incoherent (assetClass, dealStructure) pairs are
+                  surfaced inline so the user sees WHY a combination is blocked
+                  and what to pick instead. The matrix is the single source of
+                  truth — see frontend/src/utils/dealStructureMatrix.js. */}
+              {(() => {
+                const v = isValidStructurePair(form.assetClass, form.dealStructure);
+                if (v.valid) return null;
+                return (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                  >
+                    <span className="font-medium">Incoherent pair:</span> {v.reason}
+                  </div>
+                );
+              })()}
 
               <div className="rounded-xl border border-hairline-strong bg-bg-secondary p-4">
                 <div className="mb-3 flex items-center justify-between">

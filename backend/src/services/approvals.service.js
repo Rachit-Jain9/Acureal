@@ -2,6 +2,7 @@
 
 const { query } = require('../config/database');
 const { EVENTS, publish } = require('../lib/eventBus');
+const dealStructureMatrix = require('../utils/dealStructureMatrix');
 
 const normalizeApprovalStatus = (value) => {
   const status = String(value || 'pending').trim().toLowerCase();
@@ -322,15 +323,32 @@ async function deleteApprovalItem(id) {
 // Seed
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function seedForDeal(dealId, assetClass = 'residential_apartments') {
+async function seedForDeal(dealId, assetClass = 'residential_apartments', dealStructure = null) {
   let effectiveAssetClass = assetClass;
+  let effectiveDealStructure = dealStructure;
 
-  if (!assetClass) {
-    const dealResult = await query('SELECT asset_class FROM deals WHERE id = $1', [dealId]);
-    effectiveAssetClass = dealResult.rows[0]?.asset_class || 'residential_apartments';
+  // Look up missing dimensions from the deal row in a single query if either
+  // is absent. Backwards-compatible: callers that only pass assetClass keep
+  // working; the structure-specific add-ons just don't fire.
+  if (!assetClass || dealStructure === null) {
+    const dealResult = await query(
+      'SELECT asset_class, deal_structure FROM deals WHERE id = $1',
+      [dealId],
+    );
+    if (!assetClass) {
+      effectiveAssetClass = dealResult.rows[0]?.asset_class || 'residential_apartments';
+    }
+    if (dealStructure === null) {
+      effectiveDealStructure = dealResult.rows[0]?.deal_structure || null;
+    }
   }
 
-  const template = ASSET_CLASS_APPROVALS[effectiveAssetClass] || RESIDENTIAL_APPROVALS;
+  const baseTemplate = ASSET_CLASS_APPROVALS[effectiveAssetClass] || RESIDENTIAL_APPROVALS;
+  const structureAddOns = dealStructureMatrix.getAdditionalApprovals(
+    effectiveAssetClass,
+    effectiveDealStructure,
+  );
+  const template = [...baseTemplate, ...structureAddOns];
 
   // Avoid duplicate seeding
   const existing = await query(
