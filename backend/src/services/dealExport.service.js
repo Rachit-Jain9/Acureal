@@ -16,6 +16,13 @@ const aiAugmentEntitlement = require('./aiAugmentEntitlement.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const masterplanService = require('./masterplan.service');
+// PR-B (2026-05-25) — attach the latest Recommendation Engine run + Deal
+// Doctor view to the export context so the DOCX builder can render both
+// sections. Persistence is migration-tolerant; pre-deploy returns nulls.
+const recommendationPersistence = require('./recommendation/persistence');
+const recommendationEngine = require('./recommendation');
+const dealDoctor = require('./recommendation/dealDoctor');
+const { summariseRecommendations, summariseFindings } = require('./recommendation/summarise');
 
 const OPEN_RISK_STATUSES = new Set(['open', 'flagged']);
 const CLOSED_DD_STATUSES = new Set(['completed', 'not_applicable']);
@@ -928,8 +935,79 @@ const getDealExportContext = async (dealId, options = {}) => {
     }),
   ]);
 
+  // PR-B (2026-05-25) — Recommendation Engine + Deal Doctor slices. Prefer the
+  // persisted run (so the DOCX matches what the operator sees in the workspace);
+  // fall back to a one-shot re-compute when no run is on file. Both are
+  // bounded — the engine itself is cheap deterministic code; the AI narrator
+  // skips for export so the DOCX prose stays the deterministic copy (which is
+  // the audit-ready surface anyway).
+  const recommendationsSlice = await (async () => {
+    try {
+      const latest = await recommendationPersistence.getLatestRun(deal.id);
+      if (latest && Array.isArray(latest.recommendations)) {
+        return {
+          recommendations: latest.recommendations,
+          signals: latest.signals || [],
+          summary: summariseRecommendations(latest.recommendations),
+          snapshot_hash: latest.snapshot_hash,
+          generated_at: latest.created_at,
+          narrator_status: latest.narrator_status,
+        };
+      }
+      // No persisted run yet — compute on the fly for the export. Use a
+      // minimal workspace shape from the export data we already have.
+      const liveWorkspace = {
+        deal,
+        financial: { summary: { kpis: modelParams?.kpis || null } },
+        comps: { entries: nearbyComps || [] },
+        approvals: approvalsResult?.rows || [],
+        dd: { items: ddItemsResult.rows || [] },
+        risk: { flags: riskItemsResult.rows || [] },
+      };
+      const live = await recommendationEngine.generateForWorkspace(liveWorkspace);
+      return {
+        recommendations: live.recommendations,
+        signals: live.signals,
+        summary: summariseRecommendations(live.recommendations),
+        snapshot_hash: live.snapshot_hash,
+        generated_at: live.generated_at,
+        narrator_status: 'skipped',
+      };
+    } catch (err) {
+      console.warn('[dealExport] recommendation slice failed:', err.message);
+      return null;
+    }
+  })();
+
+  const dealDoctorSlice = await (async () => {
+    try {
+      const liveWorkspace = {
+        deal,
+        financial: { summary: { kpis: modelParams?.kpis || null } },
+        comps: { entries: nearbyComps || [] },
+        approvals: approvalsResult?.rows || [],
+        dd: { items: ddItemsResult.rows || [] },
+        risk: { flags: riskItemsResult.rows || [] },
+      };
+      const out = await dealDoctor.generateForWorkspace(liveWorkspace);
+      return {
+        findings: out.findings,
+        groups: out.groups,
+        finding_count: out.finding_count,
+        signal_count: out.signal_count,
+        summary: summariseFindings(out.findings),
+        generated_at: out.generated_at,
+      };
+    } catch (err) {
+      console.warn('[dealExport] deal doctor slice failed:', err.message);
+      return null;
+    }
+  })();
+
   return {
     deal,
+    recommendations: recommendationsSlice,
+    deal_doctor: dealDoctorSlice,
     hasFinancialModel,
     durationYears,
     effectiveDate,

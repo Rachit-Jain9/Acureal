@@ -55,6 +55,7 @@ const {
   Table, TableRow, TableCell, WidthType, BorderStyle,
   ImageRun, Header, Footer, PageNumber,
   ShadingType, LevelFormat,
+  TabStopType, TabStopPosition,
 } = docx;
 
 const FONT = palette.FONTS.body;
@@ -2057,6 +2058,167 @@ const formatExtractedValue = (value) => {
   }
 };
 
+// PR-B (2026-05-25) — Recommendation Engine section. Surfaces the engine's
+// candidate cards as an IC-ready action list: verb, headline, severity tier,
+// evidence-link count. Renders before Pros & Cons because actions sit logically
+// upstream of descriptive synthesis. Empty state degrades cleanly.
+const SEVERITY_LABEL = { 5: 'Critical', 4: 'High', 3: 'Medium', 2: 'Low', 1: 'Informational' };
+const severityHexForCard = (sev) => {
+  const n = Number(sev);
+  if (n >= 5) return HEX('dataNegative');
+  if (n >= 4) return HEX('premium');
+  if (n >= 3) return HEX('dataNeutral');
+  return HEX('mutedHigh');
+};
+
+const buildRecommendations = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Recommendations', { pageBreakBefore: true }));
+  children.push(platformBadge());
+
+  const slice = ctx.exportContext?.recommendations || null;
+  const cards = Array.isArray(slice?.recommendations) ? slice.recommendations : [];
+
+  if (cards.length === 0) {
+    children.push(bodyPara(
+      'No recommendations to report. Either the deal does not yet carry the inputs the engine evaluates (financials, comps, approvals, DD items), or every evaluated band is within acceptable thresholds.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  // Lead paragraph — uses the same summariser the deal-list chip uses.
+  const summary = slice?.summary || {};
+  const headlineParts = [];
+  if (summary.by_severity?.critical) headlineParts.push(`${summary.by_severity.critical} critical`);
+  if (summary.by_severity?.high) headlineParts.push(`${summary.by_severity.high} high`);
+  if (summary.by_severity?.medium) headlineParts.push(`${summary.by_severity.medium} medium`);
+  if (summary.by_severity?.low) headlineParts.push(`${summary.by_severity.low} low`);
+  const headlineLine = headlineParts.length
+    ? `${cards.length} recommendation${cards.length === 1 ? '' : 's'} generated — ${headlineParts.join(', ')}.`
+    : `${cards.length} recommendation${cards.length === 1 ? '' : 's'} generated.`;
+  children.push(bodyPara(headlineLine));
+
+  // Each card as: verb · topic · severity, then headline + detail, then
+  // evidence count. We rank by severity descending so the IC reader leads
+  // with the critical items.
+  const sorted = [...cards].sort(
+    (a, b) => (Number(b.severity) || 0) - (Number(a.severity) || 0),
+  );
+
+  for (const card of sorted) {
+    children.push(blank());
+    // Top line: verb, topic_label, severity tier — all on one row using
+    // tab stops so the severity sits flush right.
+    const sevLabel = SEVERITY_LABEL[Number(card.severity)] || 'Informational';
+    children.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: card.verb || 'Recommend',
+          font: FONT, size: 22, bold: true,
+          color: HEX('ink'),
+        }),
+        new TextRun({
+          text: `   ${card.topic_label || ''}`,
+          font: FONT, size: 20, color: HEX('mutedHigh'), italics: true,
+        }),
+        new TextRun({
+          text: `\t${sevLabel}`,
+          font: FONT, size: 18, bold: true,
+          color: severityHexForCard(card.severity),
+        }),
+      ],
+      tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+      spacing: { before: 80, after: 40 },
+    }));
+
+    // Headline + detail.
+    children.push(bodyPara(card.headline || '', { spacing: { after: 40 } }));
+    if (card.detail) {
+      children.push(bodyPara(card.detail, {
+        italic: true, color: HEX('mutedHigh'), spacing: { after: 40 },
+      }));
+    }
+
+    // Evidence footnote.
+    const evidenceCount = Array.isArray(card.evidence) ? card.evidence.length : 0;
+    const evidenceLabels = Array.isArray(card.evidence)
+      ? card.evidence.map((e) => e.label || e.ref || '').filter(Boolean)
+      : [];
+    if (evidenceCount > 0) {
+      const tail = evidenceLabels.length <= 3
+        ? evidenceLabels.join(' · ')
+        : `${evidenceLabels.slice(0, 3).join(' · ')} · +${evidenceLabels.length - 3} more`;
+      children.push(bodyPara(
+        `Evidence (${evidenceCount}): ${tail}`,
+        { font: FONT, color: HEX('mutedHigh'), size: 16 },
+      ));
+    }
+  }
+
+  return children;
+};
+
+// PR-B (2026-05-25) — AI Deal Doctor section. Diagnostic findings grouped by
+// theme (Underwriting / Market & comps / Execution & data / Legal carve-out).
+// Empty state degrades cleanly.
+const buildDealDoctor = (ctx) => {
+  const children = [];
+  children.push(sectionHeading('Deal Doctor — Diagnostic Findings', { pageBreakBefore: true }));
+  children.push(platformBadge());
+
+  const slice = ctx.exportContext?.deal_doctor || null;
+  const groups = Array.isArray(slice?.groups) ? slice.groups : [];
+  const totalFindings = Number(slice?.finding_count) || 0;
+
+  if (totalFindings === 0 || groups.length === 0) {
+    children.push(bodyPara(
+      'No diagnostic findings. Either the deal looks clean against current benchmarks, or there is not yet enough data on file to evaluate.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+
+  children.push(bodyPara(
+    `${totalFindings} finding${totalFindings === 1 ? '' : 's'} across ${groups.length} diagnostic theme${groups.length === 1 ? '' : 's'}.`,
+  ));
+
+  for (const group of groups) {
+    children.push(blank());
+    children.push(eyebrow(group.label || group.key || 'Findings'));
+
+    const findings = Array.isArray(group.findings) ? group.findings : [];
+    const sorted = [...findings].sort((a, b) => (Number(b.severity) || 0) - (Number(a.severity) || 0));
+
+    for (const f of sorted) {
+      const sevLabel = SEVERITY_LABEL[Number(f.severity)] || 'Informational';
+      children.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: f.verb || 'Diverges',
+            font: FONT, size: 20, bold: true, color: HEX('ink'),
+          }),
+          new TextRun({
+            text: `\t${sevLabel}`,
+            font: FONT, size: 18, bold: true,
+            color: severityHexForCard(f.severity),
+          }),
+        ],
+        tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+        spacing: { before: 60, after: 30 },
+      }));
+      children.push(bodyPara(f.finding || '', { spacing: { after: 30 } }));
+      if (f.why_it_matters) {
+        children.push(bodyPara(`Why it matters — ${f.why_it_matters}`, {
+          italic: true, color: HEX('mutedHigh'), spacing: { after: 40 },
+        }));
+      }
+    }
+  }
+
+  return children;
+};
+
 const buildProsCons = (ctx) => {
   const children = [];
   children.push(sectionHeading('Pros & Cons'));
@@ -2546,6 +2708,13 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     // synthesis section). Auto-hidden when no completed extractions
     // exist — zero clutter for deals without doc-ingest.
     ...buildDocumentInsights(ctx),
+    // PR-B (2026-05-25) — Recommendation Engine + AI Deal Doctor sections.
+    // Sit after Document-Derived Insights and BEFORE Pros & Cons because
+    // actions (Recommendations) + diagnoses (Deal Doctor) are upstream of
+    // descriptive synthesis. Both empty-state cleanly when the engine
+    // has not yet produced cards for this deal.
+    ...buildRecommendations(ctx),
+    ...buildDealDoctor(ctx),
     ...buildProsCons(ctx),
     ...buildOverallScore(ctx),
     // PR-NX37 (2026-05-17): Methodology & Assumptions appendix — the
