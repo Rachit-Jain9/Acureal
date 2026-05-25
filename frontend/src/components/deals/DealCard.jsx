@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MoreVertical, Presentation, Share2, Trash2, Loader2, Download,
-  Check,
+  Check, Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDeleteDeal, usePrefetchDealWorkspace } from '../../hooks/useDeals';
@@ -268,6 +268,35 @@ export default function DealCard({ deal, selected = false, onToggleSelect }) {
                 +{deal.open_high_risk_count - 2} more
               </span>
             )}
+          </div>
+        )}
+
+        {/* Recommendation Engine summary chip — surfaces "N findings" with the
+            top-severity dot so the operator can scan the pipeline by severity.
+            Renders only when at least one recommendation exists on the deal
+            (the workspace-load that produced the snapshot also persisted it). */}
+        {deal.recommendations_summary && deal.recommendations_summary.total > 0 && (
+          <div className="mb-3">
+            <span
+              className={clsx(
+                'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                deal.recommendations_summary.top_severity === 'critical' && 'border-red-200 bg-red-50 text-red-700',
+                deal.recommendations_summary.top_severity === 'high' && 'border-amber-200 bg-amber-50 text-amber-800',
+                deal.recommendations_summary.top_severity === 'medium' && 'border-slate-200 bg-slate-50 text-slate-700',
+                deal.recommendations_summary.top_severity === 'low' && 'border-hairline bg-bg-secondary text-content-secondary',
+              )}
+              title={deal.recommendations_summary.top_card?.headline || ''}
+            >
+              <Sparkles size={11} />
+              {deal.recommendations_summary.total} finding
+              {deal.recommendations_summary.total === 1 ? '' : 's'}
+              {deal.recommendations_summary.by_severity.critical > 0 && (
+                <span className="text-red-700">· {deal.recommendations_summary.by_severity.critical} critical</span>
+              )}
+              {deal.recommendations_summary.by_severity.critical === 0 && deal.recommendations_summary.by_severity.high > 0 && (
+                <span className="text-amber-800">· {deal.recommendations_summary.by_severity.high} high</span>
+              )}
+            </span>
           </div>
         )}
 

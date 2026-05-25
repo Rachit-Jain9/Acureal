@@ -110,7 +110,41 @@ const getLatestRun = async (dealId) => {
   }
 };
 
+/**
+ * Batched: get the latest run for each of the given deal IDs in one round-trip.
+ * Used by `getDeals()` to attach recommendation summaries to the pipeline list
+ * without N+1 lookups.
+ *
+ * Returns a Map<deal_id, run> with only the deals that have at least one run.
+ * Deals without any run are omitted (the caller renders no badge for them).
+ *
+ * Migration-tolerant: pre-deploy (table missing) returns an empty Map.
+ */
+const getLatestRunsForDeals = async (dealIds) => {
+  if (!Array.isArray(dealIds) || dealIds.length === 0) return new Map();
+  try {
+    const result = await query(
+      `SELECT DISTINCT ON (deal_id)
+              deal_id, snapshot_hash, signal_count, recommendations, signals,
+              narrator_status, created_at
+         FROM deal_recommendation_runs
+        WHERE deal_id = ANY($1::uuid[])
+          AND organization_id = current_organization_id()
+        ORDER BY deal_id, created_at DESC`,
+      [dealIds],
+    );
+    const out = new Map();
+    for (const row of result.rows) out.set(row.deal_id, row);
+    return out;
+  } catch (err) {
+    if (err && err.code === PG_UNDEFINED_TABLE) return new Map();
+    log.warn('recommendation_runs_batch_read_failed', { error: err.message });
+    return new Map();
+  }
+};
+
 module.exports = {
   recordRun,
   getLatestRun,
+  getLatestRunsForDeals,
 };

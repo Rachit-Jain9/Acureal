@@ -12,6 +12,8 @@ const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
 const { deleteStorageFile } = require('../config/storage');
 const dealAuditLog = require('./dealAuditLog.service');
+const recommendationPersistence = require('./recommendation/persistence');
+const { summariseRecommendations } = require('./recommendation/summarise');
 const crypto = require('crypto');
 
 // Fields whose changes are worth surfacing on the deal audit timeline.
@@ -443,6 +445,25 @@ const getDeals = async (filters = {}, pagination = {}) => {
     new_risk_flag_count: parseInt(row.new_risk_flag_count, 10) || 0,
     key_risks: Array.isArray(row.key_risks) ? row.key_risks : [],
   }));
+
+  // Attach the persisted recommendation summary to each row in one batched
+  // round-trip. Deals that have never had a workspace load (no run yet) get
+  // a `null` summary — the frontend renders no badge for those. Pre-migration
+  // deploys return an empty Map and the summaries are all null.
+  if (normalizedRows.length > 0) {
+    const dealIds = normalizedRows.map((r) => r.id);
+    const runsByDeal = await recommendationPersistence.getLatestRunsForDeals(dealIds);
+    for (const row of normalizedRows) {
+      const run = runsByDeal.get(row.id);
+      row.recommendations_summary = run
+        ? {
+            ...summariseRecommendations(run.recommendations),
+            snapshot_hash: run.snapshot_hash,
+            generated_at: run.created_at,
+          }
+        : null;
+    }
+  }
 
   return {
     data: normalizedRows,
