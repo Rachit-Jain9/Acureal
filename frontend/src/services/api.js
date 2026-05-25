@@ -196,6 +196,15 @@ export const organizationAPI = {
     api.put('/organization/benchmark-setting', { optedOut }),
 };
 
+// PR-C (2026-05-25) — Recommendation Engine verdicts.
+// Captures the operator's dismiss / snooze / acted action on a card.
+// The deal workspace re-load picks up the updated verdict and hides the
+// card on subsequent renders.
+export const recommendationsAPI = {
+  postVerdict: (dealId, ruleId, payload) =>
+    api.post(`/deals/${dealId}/recommendations/${ruleId}/verdict`, payload),
+};
+
 // Deals
 export const dealsAPI = {
   list: (params) => api.get('/deals', { params }),

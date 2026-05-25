@@ -1,16 +1,23 @@
 import { useState } from 'react';
 import {
   Sparkles, ChevronRight, ChevronDown, AlertTriangle, Info, FileSearch,
+  X, Clock, CheckCircle2, Eye, EyeOff,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useDealContext } from '../../hooks/useDealContext';
+import { useRecommendationVerdict } from '../../hooks/useRecommendationVerdict';
 
 /**
  * RecommendationsPanel — surfaces the deterministic Recommendation Engine
  * candidates on the deal Overview. Each card is built from kernel + comp +
- * approval signals; no AI in this PR (the narrator lands in PR-4 and only
- * rephrases AI-narratable cards). The legal carve-out cards
- * (ai_narratable === false) ship the deterministic template — the AI
- * narrator MUST NOT rephrase them.
+ * approval signals; the AI narrator (PR-4) only rephrases AI-narratable cards.
+ * The legal carve-out cards (ai_narratable === false) ship the deterministic
+ * template — the AI narrator MUST NOT rephrase them.
+ *
+ * PR-C — operator can dismiss / snooze / mark-acted-on a card. Verdict
+ * persists server-side and the card is hidden on subsequent loads. Hidden
+ * cards are surfaced via a "Show dismissed" toggle so the operator can
+ * restore them.
  *
  * Visual rules (CLAUDE.md / feedback_uiux_standards.md):
  *   - Editorial, not tacky. Neutral chrome + colored chip on the verb.
@@ -33,12 +40,89 @@ const SEVERITY_ICON = (severity) => {
   return <Info size={14} className="text-slate-500" />;
 };
 
-function RecommendationCard({ card }) {
-  const [open, setOpen] = useState(false);
-  const verbCls = VERB_TONE[card.verb] || 'bg-slate-50 text-slate-700 border-slate-200';
+function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
+  const verdict = useRecommendationVerdict();
+  const ruleId = card.id;
+  const meta = { topic: card.topic, verb: card.verb, severity: card.severity };
+
+  const submit = (payload) => {
+    verdict.mutate(
+      { dealId, ruleId, snapshotHash, ...meta, ...payload },
+      { onSettled: onClose },
+    );
+  };
 
   return (
-    <div className="border border-hairline rounded-md bg-surface px-3 py-2.5">
+    <div
+      className="absolute right-0 top-7 z-10 w-56 rounded-md border border-hairline-strong bg-bg-elevated shadow-lg"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={() => submit({ verdict: 'acted' })}
+        disabled={verdict.isPending}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
+      >
+        <CheckCircle2 size={14} className="text-green-600" />
+        Mark as acted-on
+      </button>
+      <div className="border-t border-hairline" />
+      <button
+        type="button"
+        onClick={() => submit({ verdict: 'snoozed', snoozeUntilSnapshotChange: true })}
+        disabled={verdict.isPending}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
+      >
+        <Clock size={14} className="text-amber-600" />
+        Snooze until inputs change
+      </button>
+      <button
+        type="button"
+        onClick={() => submit({ verdict: 'snoozed', snoozeDays: 7 })}
+        disabled={verdict.isPending}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
+      >
+        <Clock size={14} className="text-amber-600" />
+        Snooze 7 days
+      </button>
+      <button
+        type="button"
+        onClick={() => submit({ verdict: 'snoozed', snoozeDays: 30 })}
+        disabled={verdict.isPending}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
+      >
+        <Clock size={14} className="text-amber-600" />
+        Snooze 30 days
+      </button>
+      <div className="border-t border-hairline" />
+      <button
+        type="button"
+        onClick={() => submit({ verdict: 'dismissed' })}
+        disabled={verdict.isPending}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50 disabled:opacity-50"
+      >
+        <X size={14} />
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
+function RecommendationCard({ card, dealId, snapshotHash, hidden = false }) {
+  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const verdict = useRecommendationVerdict();
+  const verbCls = VERB_TONE[card.verb] || 'bg-slate-50 text-slate-700 border-slate-200';
+
+  // Hidden (verdict-applied) cards render in a quieter, muted style + show
+  // a Restore button.
+  return (
+    <div
+      className={clsx(
+        'border rounded-md px-3 py-2.5 relative',
+        hidden ? 'border-hairline-soft bg-bg-secondary opacity-70' : 'border-hairline bg-surface',
+      )}
+    >
       <div className="flex items-start gap-2.5">
         <div className="shrink-0 mt-0.5">{SEVERITY_ICON(card.severity)}</div>
         <div className="min-w-0 flex-1">
@@ -59,8 +143,16 @@ function RecommendationCard({ card }) {
                 Deterministic
               </span>
             )}
+            {card.verdict?.kind === 'dismissed' && (
+              <span className="text-[10px] uppercase tracking-wider text-red-700">Dismissed</span>
+            )}
+            {card.verdict?.kind === 'snoozed' && (
+              <span className="text-[10px] uppercase tracking-wider text-amber-700">Snoozed</span>
+            )}
           </div>
-          <div className="text-sm text-content-primary leading-snug">{card.headline}</div>
+          <div className={clsx('text-sm leading-snug', hidden ? 'text-content-secondary' : 'text-content-primary')}>
+            {card.headline}
+          </div>
           {card.detail && (
             <div className="text-xs text-content-secondary mt-1 leading-relaxed">
               {card.detail}
@@ -88,26 +180,83 @@ function RecommendationCard({ card }) {
             </ul>
           )}
         </div>
+        {/* Actions: dismiss / snooze / mark-acted-on. Restore on hidden cards. */}
+        {!hidden ? (
+          <div className="shrink-0 relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Recommendation actions"
+              className="p-1 rounded hover:bg-bg-secondary text-content-muted hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <ChevronDown size={14} />
+            </button>
+            {menuOpen && (
+              <VerdictMenu
+                card={card}
+                dealId={dealId}
+                snapshotHash={snapshotHash}
+                onClose={() => setMenuOpen(false)}
+              />
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => verdict.mutate({
+              dealId,
+              ruleId: card.id,
+              verdict: 'acted', // re-activates the card; the workspace re-render shows it
+              topic: card.topic,
+              verb: card.verb,
+              severity: card.severity,
+            })}
+            disabled={verdict.isPending}
+            className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-content-secondary hover:text-content-primary px-1.5 py-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <Eye size={11} />
+            Restore
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 export default function RecommendationsPanel({ recommendations }) {
+  const { dealId } = useDealContext();
+  const [showHidden, setShowHidden] = useState(false);
   const cards = Array.isArray(recommendations?.recommendations)
     ? recommendations.recommendations
     : [];
+  const hidden = Array.isArray(recommendations?.hidden_by_verdict)
+    ? recommendations.hidden_by_verdict
+    : [];
+  const snapshotHash = recommendations?.snapshot_hash || null;
 
   return (
     <div className="card-editorial">
-      <h3 className="text-base font-semibold text-content-primary flex items-center gap-2 mb-3">
-        <Sparkles size={16} className="text-content-muted" />
-        Recommendations
-        {cards.length > 0 && (
-          <span className="text-xs text-content-muted ml-1">({cards.length})</span>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
+          <Sparkles size={16} className="text-content-muted" />
+          Recommendations
+          {cards.length > 0 && (
+            <span className="text-xs text-content-muted ml-1">({cards.length})</span>
+          )}
+        </h3>
+        {hidden.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowHidden((v) => !v)}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-content-secondary hover:text-content-primary px-1.5 py-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            aria-expanded={showHidden}
+          >
+            {showHidden ? <EyeOff size={12} /> : <Eye size={12} />}
+            {showHidden ? 'Hide dismissed' : `${hidden.length} dismissed`}
+          </button>
         )}
-      </h3>
-      {cards.length === 0 ? (
+      </div>
+      {cards.length === 0 && hidden.length === 0 ? (
         <div className="text-sm text-content-muted py-4 text-center">
           Not enough data yet. Upload documents, run the financial model, and add comps to
           generate recommendations.
@@ -115,11 +264,25 @@ export default function RecommendationsPanel({ recommendations }) {
       ) : (
         <div className="space-y-2">
           {cards.map((c) => (
-            <RecommendationCard key={c.id} card={c} />
+            <RecommendationCard
+              key={c.id}
+              card={c}
+              dealId={dealId}
+              snapshotHash={snapshotHash}
+            />
+          ))}
+          {showHidden && hidden.map((c) => (
+            <RecommendationCard
+              key={c.id}
+              card={c}
+              dealId={dealId}
+              snapshotHash={snapshotHash}
+              hidden
+            />
           ))}
         </div>
       )}
-      {recommendations?.snapshot_hash && cards.length > 0 && (
+      {recommendations?.snapshot_hash && (cards.length > 0 || hidden.length > 0) && (
         <div className="mt-3 pt-2 border-t border-hairline text-[10px] text-content-muted">
           Snapshot {recommendations.snapshot_hash.slice(0, 8)} ·{' '}
           {recommendations.signal_count} signal{recommendations.signal_count === 1 ? '' : 's'}
