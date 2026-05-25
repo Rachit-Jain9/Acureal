@@ -27,6 +27,7 @@ import {
 // asset-class label that mismatches what was offered at creation.
 import { ASSET_CLASS_LABELS } from '../utils/assetClasses';
 import { DEAL_STRUCTURE_LABELS } from '../utils/dealStructures';
+import { isValidPair as isValidStructurePair } from '../utils/dealStructureMatrix';
 
 // Tab components
 import OverviewTab from '../components/deal/OverviewTab';
@@ -418,6 +419,18 @@ export default function DealDetailPage() {
                   </Select>
                 </Field>
               </div>
+              {(() => {
+                const v = isValidStructurePair(editForm.assetClass, editForm.dealStructure);
+                if (v.valid) return null;
+                return (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                  >
+                    <span className="font-medium">Incoherent pair:</span> {v.reason}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Priority">

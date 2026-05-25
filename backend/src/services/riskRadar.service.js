@@ -16,6 +16,7 @@
 
 const { query } = require('../config/database');
 const promoterProfileService = require('./promoterProfile.service');
+const dealStructureMatrix = require('../utils/dealStructureMatrix');
 
 // The failure-mode categories the radar reports. Each is backed by real data:
 // risk_flags categories, dd_items categories, and (for approvals) the
@@ -199,9 +200,16 @@ const assessCategory = (c) => {
  * Build the Risk Radar for a deal. Returns the five failure-mode categories,
  * each with its posture, counts, and explainable signals, plus the worst-case
  * overall posture. Org-scoped via current_organization_id().
+ *
+ * Also reads the deal's (asset_class, deal_structure) and applies the matrix
+ * preset (see `utils/dealStructureMatrix.js`) — adding one info-tone signal
+ * per structurally-elevated failure mode. The preset NEVER escalates an
+ * `unverified` category to `flagged` on its own (only real DD evidence does);
+ * it only surfaces context so the empty-state radar tells the deal team where
+ * to start.
  */
 const getRiskRadar = async (dealId) => {
-  const [riskRes, ddRes, approvalRes] = await Promise.all([
+  const [riskRes, ddRes, approvalRes, dealRes] = await Promise.all([
     query(
       `SELECT category, severity, status
          FROM risk_flags
@@ -218,6 +226,12 @@ const getRiskRadar = async (dealId) => {
       `SELECT is_required, is_validated, status, expiry_date
          FROM approval_items
         WHERE deal_id = $1 AND organization_id = current_organization_id()`,
+      [dealId]
+    ),
+    query(
+      `SELECT asset_class, deal_structure
+         FROM deals
+        WHERE id = $1 AND organization_id = current_organization_id()`,
       [dealId]
     ),
   ]);
@@ -282,6 +296,31 @@ const getRiskRadar = async (dealId) => {
   // pre-migration profile reads as 'unverified'), so the radar never breaks.
   categories.push(await promoterProfileService.getPromoterRadarCategory(dealId));
 
+  // Structure-aware preset overlay. The matrix knows which failure modes are
+  // structurally elevated for a (class, structure) pair — when a category in
+  // that list is still `unverified`, add an info-tone signal so the deal team
+  // sees WHERE to start diligence on day one. The preset never escalates
+  // posture: only real DD evidence does.
+  const dealRow = dealRes.rows[0] || {};
+  const matrixPreset = dealStructureMatrix.getRiskPreset(
+    dealRow.asset_class,
+    dealRow.deal_structure,
+  );
+  if (matrixPreset.elevated.length > 0 && dealRow.deal_structure) {
+    const structureLabel = dealRow.deal_structure.replace(/_/g, ' ').toUpperCase();
+    for (const cat of categories) {
+      if (!matrixPreset.elevated.includes(cat.key)) continue;
+      if (cat.posture !== 'unverified') continue;
+      cat.signals = [
+        ...(cat.signals || []),
+        {
+          tone: 'info',
+          text: `Structurally elevated for ${structureLabel} deals — prioritise diligence here.`,
+        },
+      ];
+    }
+  }
+
   const overall_posture = categories.some((c) => c.posture === 'flagged')
     ? 'flagged'
     : categories.some((c) => c.posture === 'unverified')
@@ -292,6 +331,9 @@ const getRiskRadar = async (dealId) => {
     generated_at: new Date().toISOString(),
     overall_posture,
     categories,
+    structure_preset: matrixPreset.notes
+      ? { notes: matrixPreset.notes, elevated: matrixPreset.elevated }
+      : null,
   };
 };
 
