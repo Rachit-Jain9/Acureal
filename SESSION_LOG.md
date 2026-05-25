@@ -4,6 +4,60 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-25 (10-hour focused block) — Recommendation Engine + AI Deal Doctor arc (PR #565 → #569)
+
+The operator's brief opened with a deep-dive review of an external "REDIP Pending" document (a ChatGPT 7-layer architecture proposal + a Grok critique). The document mostly told REDIP to build things it has already shipped, but it surfaced a few genuinely-sharp gaps. The operator then explicitly overrode the existing CLAUDE.md "no AI conclusions" rule and asked for **Recommendation Engine + AI Deal Doctor as first-class features** — making REDIP an actionable decision-support system rather than a passive report generator.
+
+The block shipped five stacked PRs implementing that arc end-to-end, with the operator's standing guardrails baked in: deterministic kernel-grade signals, closed verb dictionaries enforced at the JSON-schema layer, legal-carve-out cards bypassing the AI narrator entirely, tone classifier rejecting theatrical / slander-grade language before it reaches the user.
+
+### PRs opened
+
+| PR | What | Stack |
+|---|---|---|
+| [#565](https://github.com/Rachit-Jain9/REDIP/pull/565) | `docs(claude-md)` — narrow the AI-conclusions rule. Legal carve-out (title / encumbrance / RERA registration / statutory approvals) stays strict; financial / market / structural / pricing / capital-stack / absorption / leasing / design topics become explicitly permitted for AI-narrated recommendations with guardrails inline. | branch off master |
+| [#566](https://github.com/Rachit-Jain9/REDIP/pull/566) | `feat(deals)` — asset-class × deal-structure behavior matrix. Service-layer routing (kernel stays single-dim). 4 incoherent pairs blocked at the form layer with precise alternative suggestions; JDA / JV / ground-lease / revenue-share / area-share / profit-share approval add-ons stack on top of the base asset-class templates; risk radar applies structurally-elevated presets without escalating posture. 47 parity assertions + 21 unit tests. | branch off master |
+| [#567](https://github.com/Rachit-Jain9/REDIP/pull/567) | `feat(recommendation)` — deterministic Recommendation Engine backbone. 14 signal extractors → 13 declarative rules → typed candidate cards. Closed verb dictionary (`Recommend / Consider / Re-examine / Flag / Stress-test`). Append-only `deal_recommendation_runs` audit table with DENY-UPDATE + DENY-DELETE RLS. `RecommendationsPanel` on the Overview tab. 35 unit tests + workspace-integration coverage. | branch off master |
+| [#568](https://github.com/Rachit-Jain9/REDIP/pull/568) | `feat(recommendation)` — constrained AI narrator on top of #567. Zod-enforced verb dictionary, verb-preservation check, forbidden-phrase guard, per-card failure containment, `RECOMMENDATION_NARRATOR_ENABLED=false` runtime escape hatch. 26 unit tests. | stacked on #567 |
+| [#569](https://github.com/Rachit-Jain9/REDIP/pull/569) | `feat(deal-doctor)` — institutional diagnostic view + two-tier tone classifier. Diagnostic verbs (`Diverges / Lacks support / Inconsistent / Below / Above benchmark / Missing`), grouped by theme. Local regex tone gate + opt-in AI second pass. `DealDoctorPanel` on the Risk tab. 46 unit tests (12 dealDoctor + 34 toneClassifier). | stacked on #568 |
+
+### Cumulative impact
+
+* **Backend tests**: 2,397 → **2,485+** (+88 new across 4 test files).
+* **Frontend tests**: 947 (kept clean; 2 test mocks fixed for the new selectors).
+* **New canonical modules**: `backend/src/services/recommendation/` (signalExtractors / recommendationRules / recommendationNarrator / dealDoctor / persistence / index), `backend/src/utils/dealStructureMatrix.js` + frontend mirror, `backend/src/services/ai/toneClassifier.js`.
+* **New migration**: `database/migrations/20260614_deal_recommendation_runs.sql` (operator action required to apply).
+* **New UI surfaces**: `RecommendationsPanel` (Overview tab) + `DealDoctorPanel` (Risk tab).
+
+### What the user can do now that they couldn't before
+
+* Pick a deal-structure on a JDA/JV/ground-lease deal and watch the workspace materially reshape — approvals seeded with the structure-specific docs (JDA registered + landowner PoA + mortgage permission, etc.), risk radar elevating the structurally-relevant failure modes, four incoherent combinations blocked at the form with a precise alternative.
+* See a **Recommendations** panel on every deal Overview with evidence-backed institutional cards — "Recommend re-pricing land or restructuring to revenue-share. Land cost is 38% of GDV — above the 30% target. IRR is 240 bps below your hurdle." with click-through provenance back to the kernel signal + source document.
+* See a **Deal Doctor** panel on the Risk tab clustering diagnostic findings by Underwriting / Market & comps / Execution & data / Legal carve-out — "Selling-price assumption diverges from the verified-comp band — ₹13,200/sf is 17.9% above the median ₹11,200/sf (n=5)."
+* Trust that no AI narration will ever assert a legal conclusion or use theatrical language — both are blocked at the verb-dictionary level, the forbidden-phrase guard, and the tone classifier.
+
+### Operator actions required
+
+1. **Apply the migration** (`20260614_deal_recommendation_runs.sql`):
+   * 🌐 Open: https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new
+   * 📋 Copy ALL text from: https://github.com/Rachit-Jain9/REDIP/raw/feat/recommendation-engine-backbone/database/migrations/20260614_deal_recommendation_runs.sql
+   * Paste it into the big text box. Click the green Run button bottom-right.
+   * You'll see "Success. No rows returned." — send 'done' when you see it.
+   * Until the migration is applied, the Recommendations panel still renders — it just doesn't get persisted to the audit log.
+
+2. **Merge PRs in order** (each goes to production on merge):
+   * #565 → #566 → #567 → #568 → #569
+   * Auto-mode classifier blocked autonomous merge per the `feedback_pr_merge_boundary.md` standing rule. Operator can merge each PR from its page once they look right.
+
+### What's left
+
+* **PR-merge boundary memory file**: needs reconciliation with the SESSION_LOG entry from earlier today granting "standing merge authorization". The classifier is still applying the older rule. Operator may want to clarify the standing-authorization scope.
+* **Confidence bands on kernel outputs (review plan §5.2)** — still pending. Lower priority than the recommendation arc the operator just shipped.
+* **Promoter / builder track-record scored field (review plan §5.3)** — partially shipped via the existing `promoterProfile.service` and the new Deal Doctor `promoter-delivery-below-benchmark` finding. Full implementation (scored field on the radar + a track-record card) still pending.
+* **Theme-token unification (review plan §5.5)** — still pending. Pure hygiene.
+* **Google Maps key restriction at Cloud Console (review plan §5.6)** — operator action; no engineering work.
+
+---
+
 ## 2026-05-25 (overnight continuation — quality, polish, test coverage) — ConfirmDialog + MasterPlan modal tests + a11y (PR #559, #560, #561)
 
 Continuation of the 10-hour focused block immediately after the MasterPlanAdminPage decomposition (PR #553 / #557 / #558) merged. The operator's brief was to "do what's best for the website" — focusing on polish, reliability, and quality lock-in rather than new feature volume. Three additional PRs shipped, all behaviour-preserving except where the change improved accessibility.
