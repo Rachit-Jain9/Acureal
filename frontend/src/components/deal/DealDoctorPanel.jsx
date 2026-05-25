@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import {
   Stethoscope, ChevronRight, ChevronDown, AlertOctagon, AlertTriangle, Info, FileSearch,
+  RefreshCw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useDealContext } from '../../hooks/useDealContext';
+import { formatRelativeTime } from '../../utils/format';
 
 /**
  * DealDoctorPanel — REDIP Pending §5.8.
@@ -122,20 +125,36 @@ function DiagnosticGroup({ group }) {
 }
 
 export default function DealDoctorPanel({ dealDoctor }) {
+  const { refetch, isLoading } = useDealContext();
   const groups = Array.isArray(dealDoctor?.groups) ? dealDoctor.groups : [];
   const totalFindings = dealDoctor?.finding_count || 0;
+  const generatedAt = dealDoctor?.generated_at || null;
 
   return (
     <div className="card-editorial">
-      <h3 className="text-base font-semibold text-content-primary flex items-center gap-2 mb-4">
-        <Stethoscope size={16} className="text-content-muted" />
-        Deal Doctor
-        {totalFindings > 0 && (
-          <span className="text-xs text-content-muted ml-1">
-            ({totalFindings} finding{totalFindings === 1 ? '' : 's'})
-          </span>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
+          <Stethoscope size={16} className="text-content-muted" />
+          Deal Doctor
+          {totalFindings > 0 && (
+            <span className="text-xs text-content-muted ml-1">
+              ({totalFindings} finding{totalFindings === 1 ? '' : 's'})
+            </span>
+          )}
+        </h3>
+        {generatedAt && (
+          <button
+            type="button"
+            onClick={() => refetch?.()}
+            disabled={isLoading}
+            aria-label="Refresh Deal Doctor"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-content-muted hover:text-content-secondary px-1.5 py-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+          >
+            <RefreshCw size={11} className={clsx(isLoading && 'animate-spin')} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         )}
-      </h3>
+      </div>
       {groups.length === 0 ? (
         <div className="text-sm text-content-muted py-4 text-center">
           No diagnostic findings yet — either the deal looks clean against current
@@ -146,6 +165,11 @@ export default function DealDoctorPanel({ dealDoctor }) {
           {groups.map((g) => (
             <DiagnosticGroup key={g.key} group={g} />
           ))}
+        </div>
+      )}
+      {generatedAt && totalFindings > 0 && (
+        <div className="mt-4 pt-2 border-t border-hairline text-[10px] text-content-muted">
+          computed {formatRelativeTime(generatedAt)}
         </div>
       )}
     </div>

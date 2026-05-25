@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import {
   Sparkles, ChevronRight, ChevronDown, AlertTriangle, Info, FileSearch,
-  X, Clock, CheckCircle2, Eye, EyeOff,
+  X, Clock, CheckCircle2, Eye, EyeOff, RefreshCw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext } from '../../hooks/useDealContext';
 import { useRecommendationVerdict } from '../../hooks/useRecommendationVerdict';
+import { formatRelativeTime } from '../../utils/format';
 
 /**
  * RecommendationsPanel — surfaces the deterministic Recommendation Engine
@@ -224,7 +225,7 @@ function RecommendationCard({ card, dealId, snapshotHash, hidden = false }) {
 }
 
 export default function RecommendationsPanel({ recommendations }) {
-  const { dealId } = useDealContext();
+  const { dealId, refetch, isLoading } = useDealContext();
   const [showHidden, setShowHidden] = useState(false);
   const cards = Array.isArray(recommendations?.recommendations)
     ? recommendations.recommendations
@@ -233,6 +234,7 @@ export default function RecommendationsPanel({ recommendations }) {
     ? recommendations.hidden_by_verdict
     : [];
   const snapshotHash = recommendations?.snapshot_hash || null;
+  const generatedAt = recommendations?.generated_at || null;
 
   return (
     <div className="card-editorial">
@@ -282,10 +284,27 @@ export default function RecommendationsPanel({ recommendations }) {
           ))}
         </div>
       )}
-      {recommendations?.snapshot_hash && (cards.length > 0 || hidden.length > 0) && (
-        <div className="mt-3 pt-2 border-t border-hairline text-[10px] text-content-muted">
-          Snapshot {recommendations.snapshot_hash.slice(0, 8)} ·{' '}
-          {recommendations.signal_count} signal{recommendations.signal_count === 1 ? '' : 's'}
+      {(snapshotHash || generatedAt) && (cards.length > 0 || hidden.length > 0) && (
+        <div className="mt-3 pt-2 border-t border-hairline flex items-center justify-between gap-2 text-[10px] text-content-muted">
+          <span>
+            {snapshotHash && (
+              <>Snapshot {snapshotHash.slice(0, 8)} · </>
+            )}
+            {recommendations.signal_count} signal{recommendations.signal_count === 1 ? '' : 's'}
+            {generatedAt && (
+              <> · computed {formatRelativeTime(generatedAt)}</>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => refetch?.()}
+            disabled={isLoading}
+            aria-label="Refresh recommendations"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+          >
+            <RefreshCw size={11} className={clsx(isLoading && 'animate-spin')} />
+            Refresh
+          </button>
         </div>
       )}
     </div>
