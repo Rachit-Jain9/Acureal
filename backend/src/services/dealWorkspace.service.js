@@ -29,6 +29,8 @@ const waterfallService = require('./waterfall.service');
 const recommendationEngine = require('./recommendation');
 const recommendationPersistence = require('./recommendation/persistence');
 const { narrateCard } = require('./recommendation/recommendationNarrator');
+const dealDoctor = require('./recommendation/dealDoctor');
+const toneClassifier = require('./ai/toneClassifier');
 
 const ACTIVITY_LIMIT = 50;
 const AUDIT_EVENT_LIMIT = 25;
@@ -176,9 +178,49 @@ async function getDealWorkspace(dealId) {
     };
   }, 'recommendations');
 
+  // Deal Doctor slice — diagnostic view over the same signal set as the
+  // recommendation engine. Different verbs, grouped by diagnostic theme.
+  // Legal-carve-out findings bypass the narrator + tone classifier.
+  const dealDoctorSlice = await optional(async () => {
+    const narratorEnabled = process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
+    const result = await dealDoctor.generateForWorkspace(composed, {
+      narrate: narratorEnabled
+        ? async (card) => {
+            // The Deal Doctor narrator reuses the recommendation narrator under
+            // the hood — same defensibility stack — but maps diagnosis verbs
+            // → recommendation verbs ONLY for the constrained model call.
+            // The card's verb is restored before return so the UI never sees
+            // a drift.
+            const proxy = {
+              ...card,
+              verb: 'Re-examine', // safe stand-in inside the narrator schema
+              topic_label: 'Diagnostic finding',
+              headline: card.finding,
+              detail: card.why_it_matters,
+            };
+            const narration = await narrateCard(proxy, { workspace: composed, attach: { dealId } });
+            if (!narration) return null;
+            return {
+              finding: narration.headline,
+              why_it_matters: narration.detail,
+            };
+          }
+        : undefined,
+      toneGate: narratorEnabled ? toneClassifier.isAcceptable : undefined,
+    });
+    return {
+      findings: result.findings,
+      groups: result.groups,
+      finding_count: result.finding_count,
+      signal_count: result.signal_count,
+      generated_at: result.generated_at,
+    };
+  }, 'dealDoctor');
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], snapshot_hash: null, signal_count: 0, generated_at: null },
+    deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
     generatedAt: new Date().toISOString(),
   };
 }

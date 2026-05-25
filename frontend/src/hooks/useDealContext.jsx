@@ -240,3 +240,19 @@ export function useDealRecommendations() {
     [workspace?.recommendations],
   );
 }
+
+/**
+ * Returns the AI Deal Doctor slice: diagnostic findings grouped by theme.
+ * Same signal layer as recommendations but with diagnostic verbs and a
+ * tone-classifier gate on any AI-narrated copy. Legal-carve-out findings
+ * (RERA, approvals, title, encumbrance) ship as deterministic templates.
+ *
+ * Source: workspace.deal_doctor (composed server-side in dealWorkspace.service.js).
+ */
+export function useDealDoctor() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.deal_doctor || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
+    [workspace?.deal_doctor],
+  );
+}
