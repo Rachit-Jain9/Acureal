@@ -69,7 +69,12 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-deal-dialog-title"
+    >
       <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline">
@@ -78,12 +83,13 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
               <Share2 size={16} className="text-primary-600" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-content-primary">Share Deal</h3>
+              <h3 id="share-deal-dialog-title" className="text-base font-semibold text-content-primary">Share Deal</h3>
               <p className="text-xs text-content-secondary truncate max-w-[280px]">{dealName}</p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close share deal dialog"
             className="text-content-muted hover:text-content-secondary p-1 rounded-lg hover:bg-bg-secondary transition"
           >
             <X size={18} />
