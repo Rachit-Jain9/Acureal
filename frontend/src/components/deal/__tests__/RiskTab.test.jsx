@@ -37,6 +37,15 @@ vi.mock('../../../hooks/useDealContext', () => ({
   useDealRecord: () => ({ name: 'Whitefield Plot 22' }),
   useDealRedFlags: () => [],
   useDealRiskScore: () => null,
+  // RiskTab consumes the AI Deal Doctor slice via this selector. The test
+  // surfaces the empty-state to keep these brief-panel tests focused.
+  useDealDoctor: () => ({
+    findings: [],
+    groups: [],
+    finding_count: 0,
+    signal_count: 0,
+    generated_at: null,
+  }),
 }));
 
 // PR-NX47 (2026-05-19) — the new RiskNarrativePanel mounted at the top

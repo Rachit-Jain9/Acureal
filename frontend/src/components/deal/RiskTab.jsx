@@ -16,12 +16,13 @@ import Badge from '../common/Badge';
 import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
 import { SectionHeader, SkeletonList, Card, confirm } from '../../design-system';
-import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore } from '../../hooks/useDealContext';
+import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore, useDealDoctor } from '../../hooks/useDealContext';
 // PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
 // ships in the DOCX Risk Register section) inline at the top of the tab.
 import RiskNarrativePanel from './RiskNarrativePanel';
 // Workstream B — the standing Deal Risk Radar, pinned to the top of the tab.
 import RiskRadarPanel from './RiskRadarPanel';
+import DealDoctorPanel from './DealDoctorPanel';
 // Workstream B (B4) — promoter / builder track record.
 import PromoterProfileCard from './PromoterProfileCard';
 
@@ -280,6 +281,7 @@ export default function RiskTab() {
   const { dealId, isLoading, isError, refetch } = useDealContext();
   const flags = useDealRedFlags();
   const scoreData = useDealRiskScore();
+  const dealDoctor = useDealDoctor();
   const createFlag = useCreateRiskFlag();
   const updateFlag = useUpdateRiskFlag();
   const deleteFlag = useDeleteRiskFlag();
@@ -357,6 +359,11 @@ export default function RiskTab() {
     <div className="space-y-6">
       {/* Risk Radar — standing deterministic pre-mortem across failure modes. */}
       <RiskRadarPanel dealId={dealId} />
+
+      {/* REDIP Pending §5.8 — AI Deal Doctor: diagnostic findings grouped by
+          theme (Underwriting, Market & comps, Execution & data, Legal carve-out).
+          Same signal layer as the Recommendation Engine; different verbs. */}
+      <DealDoctorPanel dealDoctor={dealDoctor} />
 
       {/* Promoter & Execution — the verified builder track record (B4). */}
       <PromoterProfileCard dealId={dealId} />
