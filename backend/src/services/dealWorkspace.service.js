@@ -28,6 +28,7 @@ const riskService = require('./risk.service');
 const waterfallService = require('./waterfall.service');
 const recommendationEngine = require('./recommendation');
 const recommendationPersistence = require('./recommendation/persistence');
+const { narrateCard } = require('./recommendation/recommendationNarrator');
 
 const ACTIVITY_LIMIT = 50;
 const AUDIT_EVENT_LIMIT = 25;
@@ -124,13 +125,37 @@ async function getDealWorkspace(dealId) {
     },
   };
 
-  // Recommendations slice — deterministic engine over the composed payload.
-  // Persistence is fire-and-forget: a failed insert never blocks the read.
-  // The AI narrator hook is intentionally absent here — that lands in PR-4.
+  // Recommendations slice — deterministic engine over the composed payload,
+  // optionally rephrased by the constrained AI narrator. Persistence is
+  // fire-and-forget: a failed insert never blocks the read. The narrator
+  // honours `RECOMMENDATION_NARRATOR_ENABLED=false` so the operator can
+  // turn AI rephrasing off without a code revert.
   const recommendationsSlice = await optional(async () => {
     const startMs = Date.now();
-    const result = await recommendationEngine.generateForWorkspace(composed);
+    const narratorAttempts = { tried: 0, succeeded: 0 };
+    const narratorEnabled = process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
+    const result = await recommendationEngine.generateForWorkspace(composed, {
+      // Narrator is wired here; the orchestrator already bypasses the hook
+      // for `ai_narratable: false` cards (the four legal carve-outs).
+      narrate: narratorEnabled
+        ? async (card) => {
+            narratorAttempts.tried += 1;
+            const narration = await narrateCard(card, { workspace: composed, attach: { dealId } });
+            if (narration) narratorAttempts.succeeded += 1;
+            return narration;
+          }
+        : undefined,
+    });
     const latencyMs = Date.now() - startMs;
+    const narratorStatus = !narratorEnabled
+      ? 'disabled'
+      : narratorAttempts.tried === 0
+        ? 'skipped'
+        : narratorAttempts.succeeded === narratorAttempts.tried
+          ? 'success'
+          : narratorAttempts.succeeded > 0
+            ? 'partial'
+            : 'failed';
     // Fire-and-forget persist. Failures land in logs; user still sees the cards.
     recommendationPersistence.recordRun({
       dealId,
@@ -138,7 +163,8 @@ async function getDealWorkspace(dealId) {
       signalCount: result.signal_count,
       recommendations: result.recommendations,
       signals: result.signals,
-      narratorStatus: 'skipped',
+      narratorStatus,
+      narratorMeta: { tried: narratorAttempts.tried, succeeded: narratorAttempts.succeeded },
       latencyMs,
     }).catch(() => {});
     return {
@@ -146,6 +172,7 @@ async function getDealWorkspace(dealId) {
       snapshot_hash: result.snapshot_hash,
       signal_count: result.signal_count,
       generated_at: result.generated_at,
+      narrator_status: narratorStatus,
     };
   }, 'recommendations');
 
