@@ -42,6 +42,9 @@ const SIGNAL_TYPES = Object.freeze([
   'extraction_field_review', // historical — no longer written
   'comp_reliance',
   'extraction_field_verdict',
+  // PR-C (2026-05-25) — operator verdict on a Recommendation Engine card
+  // (acted / dismissed / snoozed). Feeds the future re-ranker.
+  'recommendation_verdict',
 ]);
 // Consent purpose that gates user-attributed signal capture.
 const LEARNING_CONSENT_PURPOSE = 'product_improvement';
@@ -204,8 +207,69 @@ const recordExtractionVerdictSignals = async ({
   }
 };
 
+/**
+ * Capture a recommendation-verdict signal — PR-C (2026-05-25).
+ *
+ * Appends ONE values-free row recording that an operator acted on, dismissed,
+ * or snoozed a Recommendation Engine card. The durable operational state
+ * lives in `deal_recommendation_verdicts`; this is the Layer-5 telemetry
+ * companion.
+ *
+ * `detail` carries org-internal references (deal_id, rule_id, topic, verb,
+ * severity) and the verdict — no document field values, no PII.
+ *
+ * Never throws — returns 1 on write, 0 on any failure — so the dismiss / snooze
+ * button is never broken by telemetry capture.
+ */
+const recordRecommendationVerdictSignal = async ({
+  organizationId = null,
+  dealId,
+  ruleId,
+  topic = null,
+  verb = null,
+  severity = null,
+  verdict,
+  reason = null,
+  snapshotHash = null,
+  userId = null,
+} = {}) => {
+  try {
+    if (!dealId || !ruleId || !verdict) return 0;
+
+    const resolvedUserId = await resolveConsentedUserId(userId);
+    const detail = {
+      deal_id: String(dealId),
+      rule_id: String(ruleId),
+      topic: topic ? String(topic).slice(0, 60) : null,
+      verb: verb ? String(verb).slice(0, 40) : null,
+      severity: Number.isFinite(Number(severity)) ? Number(severity) : null,
+      verdict: String(verdict),
+      // Reason is operator-typed free text — keep it for product analytics
+      // but cap length so it stays Layer-5-compatible (no long form data).
+      reason_present: Boolean(reason && String(reason).trim().length > 0),
+      reason_length: reason ? String(reason).length : 0,
+      snapshot_hash: snapshotHash ? String(snapshotHash) : null,
+    };
+
+    await query(
+      `INSERT INTO public.improvement_signals (organization_id, user_id, signal_type, detail)
+       VALUES ($1, $2, 'recommendation_verdict', $3::jsonb)`,
+      [organizationId, resolvedUserId, JSON.stringify(detail)],
+    );
+    return 1;
+  } catch (err) {
+    if (isMissingTable(err)) {
+      log.warn('improvement_signals table missing — apply migration 20260615');
+    } else {
+      log.warn('recommendation_verdict_signal_capture_failed', { error: err.message });
+    }
+    return 0;
+  }
+};
+
 module.exports = {
   SIGNAL_TYPES,
   recordCompRelianceSignal,
   recordExtractionVerdictSignals,
+  recordRecommendationVerdictSignal,
 };
