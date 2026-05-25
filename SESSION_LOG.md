@@ -4,6 +4,54 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-25 (overnight continuation — quality, polish, test coverage) — ConfirmDialog + MasterPlan modal tests + a11y (PR #559, #560, #561)
+
+Continuation of the 10-hour focused block immediately after the MasterPlanAdminPage decomposition (PR #553 / #557 / #558) merged. The operator's brief was to "do what's best for the website" — focusing on polish, reliability, and quality lock-in rather than new feature volume. Three additional PRs shipped, all behaviour-preserving except where the change improved accessibility.
+
+### PRs opened + merged
+
+- **#559 — feat(design-system): ConfirmDialog primitive + replace 12 native confirm/alert calls.**
+  Adds a promise-based `ConfirmDialog` primitive to the design system (singleton zustand store + `confirm({...})` async function, mirroring the existing Toast pattern) and sweeps the 12 remaining `window.confirm()` / `window.alert()` calls out of `frontend/src/`. Every destructive / cost-implication action is now guarded by a real Modal in REDIP's editorial chrome — focus-trap, ESC, motion-safe animation, and prefers-reduced-motion all inherited from the Modal primitive. Customer-facing impact: the OS-themed confirm pop-ups are gone, replaced with REDIP's own chrome.
+  
+  Migrated sites: `CompsPage` (delete comp + export-failed alert), `CompsQueuePage` (bulk-approve confirm), `AdminAbEvalPage` (high-cost LLM eval-run confirm), `IntelligencePage` (tear-sheet export-failed alert), `ManageEvidenceModal` (detach evidence link), `MfaCard` (disable 2FA), `ActivityTab` (delete activity), `DDTab` (remove DD item + remove approval), `DocumentsTab` (delete document), `RiskTab` (remove risk flag). Both `window.alert` call sites switched to `toast.error(...)` instead — non-blocking, dismissible, screen-reader-friendly.
+
+  +8 ConfirmDialog unit tests. `CompsQueuePage.bulk.test.jsx` updated to drive the real dialog (replaced `vi.spyOn(window, 'confirm')` with `<ConfirmDialogContainer />` mount + `getByRole('dialog')` + in-dialog click). Full frontend suite: 906 / 906 pass.
+
+- **#560 — test(masterplan): SourceReviewModal + ZoneModal unit coverage + a11y label linkage.**
+  Adds 24 focused unit tests pinning the form-to-payload mapping for the two operator modals extracted in PR #557 (Tier B). Fixes accessibility issues found in `ZoneModal` while writing them: every label/input pair is now programmatically linked via `htmlFor` + matching `id`, and the modal overlay declares `role="dialog"`, `aria-modal="true"`, `aria-labelledby`. The previous hand-rolled labels had no programmatic association, so screen readers couldn't tell which label belonged to which input on a 20-field form.
+
+  Tests cover: hidden states (isOpen=false, doc=null), pre-fill from doc, ratio↔percent round-trip, OCR-required derivation from processing mode, trim semantics, empty→null coercion, parseList / joinList for permissible / prohibited uses, FSI road-width tier filtering (drops rows with missing road_width_m OR fsi), add/remove tier interactions, required-field guard.
+
+- **#561 — test(masterplan): SourceHistoryModal + SourcePagesModal unit coverage (completes Tier B suite).**
+  Adds 17 unit tests for the two read-only operator modals. With this PR all four newly-extracted MasterPlan modals have dedicated unit coverage on top of the integration tests:
+
+  | Modal | Unit tests |
+  |---|---:|
+  | SourceReviewModal | 11 |
+  | ZoneModal | 13 |
+  | SourceHistoryModal | 8 |
+  | SourcePagesModal | 9 |
+  | **Total Tier B unit tests** | **41** |
+
+  Tests cover all four render branches (loading / error / empty / data) for both modals, the `canPrepare` gating in SourcePagesModal, JSON-encoded `previous_values` strings in SourceHistoryModal, formatHistoryField + formatHistoryValue formatting, and Retry / Close button interactions.
+
+### Cumulative impact across this block (#559 + #560 + #561)
+
+- Test suite: **906 → 947 tests (+41 unit tests across 4 modals + ConfirmDialog)**, 108 → 110 test files.
+- 12 `window.confirm()` / `window.alert()` native browser dialogs replaced with design-system chrome.
+- `ZoneModal` accessibility: 20 form inputs now properly label-linked + dialog role attributes added.
+- New primitives: `ConfirmDialog` (design-system) — promise-based, mirrors Toast API.
+
+Behaviour-preserving except for the a11y fixes (which only add `htmlFor` / `id` / `aria-*` attributes — no layout or event-handler changes).
+
+### What's left
+
+- Task #10 (Database & infra hygiene) — still in progress from earlier sessions.
+- Other large frontend chunks (`PieChart-XXX.js` at 400 kB) are bundle-optimisation candidates if pursued in a future block.
+- 16 hand-rolled `fixed inset-0 z-50` overlay components could be migrated to use the design-system `Modal` primitive for consistency — deferred unless explicitly requested.
+
+---
+
 ## 2026-05-25 (late evening, 10-hour focused block continuation) — MasterPlanAdminPage decomposition (PR #553, #557, #558) + standing auto-merge authorization granted
 
 Continuation of the Task #6 god-file decomposition. `pages/MasterPlanAdminPage.jsx` was the last big single-file page in the frontend (1,850 lines, owned the Zone Library tab, Source Documents tab, Planning Intelligence tab, four operator modals, half a dozen static option lists, and 18 pure helpers). Broken up into three stacked PRs so each can be reviewed independently and merged in order.
