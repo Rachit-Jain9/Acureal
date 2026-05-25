@@ -26,6 +26,8 @@ const activityService = require('./activity.service');
 const ddService = require('./dd.service');
 const riskService = require('./risk.service');
 const waterfallService = require('./waterfall.service');
+const recommendationEngine = require('./recommendation');
+const recommendationPersistence = require('./recommendation/persistence');
 
 const ACTIVITY_LIMIT = 50;
 const AUDIT_EVENT_LIMIT = 25;
@@ -90,7 +92,10 @@ async function getDealWorkspace(dealId) {
       }, {})
     : {};
 
-  return {
+  // Compose the payload up-front so the recommendation engine can read from
+  // the same shape the frontend will see — no risk of the two surfaces
+  // diverging on field names.
+  const composed = {
     deal,
     financial: {
       summary: financials,
@@ -117,6 +122,36 @@ async function getDealWorkspace(dealId) {
       summary: deal.readiness_summary || null,
       nextSteps: deal.next_steps || [],
     },
+  };
+
+  // Recommendations slice — deterministic engine over the composed payload.
+  // Persistence is fire-and-forget: a failed insert never blocks the read.
+  // The AI narrator hook is intentionally absent here — that lands in PR-4.
+  const recommendationsSlice = await optional(async () => {
+    const startMs = Date.now();
+    const result = await recommendationEngine.generateForWorkspace(composed);
+    const latencyMs = Date.now() - startMs;
+    // Fire-and-forget persist. Failures land in logs; user still sees the cards.
+    recommendationPersistence.recordRun({
+      dealId,
+      snapshotHash: result.snapshot_hash,
+      signalCount: result.signal_count,
+      recommendations: result.recommendations,
+      signals: result.signals,
+      narratorStatus: 'skipped',
+      latencyMs,
+    }).catch(() => {});
+    return {
+      recommendations: result.recommendations,
+      snapshot_hash: result.snapshot_hash,
+      signal_count: result.signal_count,
+      generated_at: result.generated_at,
+    };
+  }, 'recommendations');
+
+  return {
+    ...composed,
+    recommendations: recommendationsSlice || { recommendations: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     generatedAt: new Date().toISOString(),
   };
 }
