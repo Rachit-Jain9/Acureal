@@ -16,7 +16,7 @@ import {
   Gauge,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
+import { useDealContext, useDealRecord, useDealRecommendations } from '../../hooks/useDealContext';
 import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
 import { SectionHeader, CollapsibleCard } from '../../design-system';
@@ -26,6 +26,8 @@ import DealQaBox from './DealQaBox';
 import AutoFillReadyCard from './AutoFillReadyCard';
 // Workstream B — compact Risk Radar pinned to the deal front page.
 import RiskRadarStrip from './RiskRadarStrip';
+// REDIP Pending §5.7 — Recommendation Engine cards on the Overview.
+import RecommendationsPanel from './RecommendationsPanel';
 // Workstream A — compact model-trust verdict beside the financial numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
@@ -63,6 +65,7 @@ import { buildPlaybook } from '../../utils/dealPlaybook';
 export default function OverviewTab() {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
+  const recommendations = useDealRecommendations();
   // PR-NX53 (2026-05-19) — field-provenance map for inline chip on the
   // Land Area card. Returns empty when no auto-fill events fire — chip
   // simply doesn't render.
@@ -173,6 +176,12 @@ export default function OverviewTab() {
           page so the sentinel is seen before it is asked for; links through
           to the full radar on the Risk tab. */}
       <RiskRadarStrip dealId={dealId} />
+
+      {/* REDIP Pending §5.7 — Recommendation Engine cards. Deterministic
+          signal-extractor + rule-engine output on every workspace load.
+          Cards are evidence-backed; legal-carve-out cards (RERA, approvals,
+          title, encumbrance) bypass any future AI narrator. */}
+      <RecommendationsPanel recommendations={recommendations} />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves

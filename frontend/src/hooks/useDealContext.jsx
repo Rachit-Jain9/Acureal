@@ -219,3 +219,24 @@ export function useDealReadiness() {
     [workspace?.readiness],
   );
 }
+
+/**
+ * Returns the recommendation-engine slice for the deal.
+ * Shape: `{ recommendations, snapshot_hash, signal_count, generated_at }`.
+ *
+ * Source: workspace.recommendations (composed server-side in
+ * dealWorkspace.service.js via the recommendation engine).
+ *
+ * Cards in the array carry `ai_narratable: false` on the four legal-carve-out
+ * topics (legal_title, legal_rera, legal_approvals, legal_encumbrance) and
+ * the AI narrator (when it lands) MUST NOT rephrase those cards. The
+ * frontend renders `verb`, `topic_label`, `headline`, `detail`, and the
+ * `evidence` array as a click-through chain.
+ */
+export function useDealRecommendations() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.recommendations || { recommendations: [], snapshot_hash: null, signal_count: 0, generated_at: null },
+    [workspace?.recommendations],
+  );
+}
