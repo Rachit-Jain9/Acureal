@@ -25,6 +25,15 @@ vi.mock('../../../hooks/useDealContext', () => ({
     next_steps: [],
     key_risks: [],
   }),
+  // OverviewTab consumes the Recommendation Engine slice via this selector;
+  // the test renders the empty-state to keep the test focused on its
+  // legacy assertions.
+  useDealRecommendations: () => ({
+    recommendations: [],
+    snapshot_hash: null,
+    signal_count: 0,
+    generated_at: null,
+  }),
 }));
 
 vi.mock('../../../services/api', () => ({
