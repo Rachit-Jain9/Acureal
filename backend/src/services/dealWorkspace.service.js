@@ -28,6 +28,7 @@ const riskService = require('./risk.service');
 const waterfallService = require('./waterfall.service');
 const recommendationEngine = require('./recommendation');
 const recommendationPersistence = require('./recommendation/persistence');
+const verdictsService = require('./recommendation/verdicts.service');
 const { narrateCard } = require('./recommendation/recommendationNarrator');
 const dealDoctor = require('./recommendation/dealDoctor');
 const toneClassifier = require('./ai/toneClassifier');
@@ -169,8 +170,21 @@ async function getDealWorkspace(dealId) {
       narratorMeta: { tried: narratorAttempts.tried, succeeded: narratorAttempts.succeeded },
       latencyMs,
     }).catch(() => {});
+
+    // PR-C — apply operator verdicts: hide cards the operator has dismissed
+    // or snoozed. The hidden cards still travel in `hidden_by_verdict` so
+    // the UI can render a "show dismissed" toggle.
+    const activeVerdicts = await verdictsService.getActiveByDeal(dealId, {
+      currentSnapshotHash: result.snapshot_hash,
+    });
+    const { visible, hidden } = verdictsService.applyVerdictsToCards(
+      result.recommendations,
+      activeVerdicts,
+    );
+
     return {
-      recommendations: result.recommendations,
+      recommendations: visible,
+      hidden_by_verdict: hidden,
       snapshot_hash: result.snapshot_hash,
       signal_count: result.signal_count,
       generated_at: result.generated_at,
@@ -219,7 +233,7 @@ async function getDealWorkspace(dealId) {
 
   return {
     ...composed,
-    recommendations: recommendationsSlice || { recommendations: [], snapshot_hash: null, signal_count: 0, generated_at: null },
+    recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
     generatedAt: new Date().toISOString(),
   };
