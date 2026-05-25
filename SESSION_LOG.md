@@ -4,6 +4,61 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-25 (second 10-hour block) — closing the recommendation loop + bundle wins (PR #574, #580–#584)
+
+Continuation immediately after the morning's Recommendation Engine + AI Deal Doctor arc merged. The operator's brief was to integrate the new surfaces across the rest of the app (so they aren't deal-page-only) plus bundle-size hygiene. Six PRs shipped.
+
+### PRs opened (final numbers — earlier stacked siblings #575-#579 were auto-closed by the stacked-PR base-branch-deleted cascade and replaced with clean cherry-picks onto master)
+
+| PR | What | Highlights |
+|---|---|---|
+| [#574](https://github.com/Rachit-Jain9/REDIP/pull/574) | `feat(deals)` — Recommendation summary chip on every deal card | New `summariseRecommendations()` aggregator (severity-banded counts, top-card, legal-carve-out flag); batched `getLatestRunsForDeals()` in persistence (no N+1); chip renders "5 findings · 2 critical" on the Deals list. 15 new tests. |
+| [#580](https://github.com/Rachit-Jain9/REDIP/pull/580) | `feat(exports)` — DOCX IC memo integrates Recommendations + Deal Doctor sections | Two new section builders modelled on `buildRiskRegister`. Verb + topic + severity tier + evidence count per card. Prefers persisted run; falls back to deterministic re-compute when none exists. AI narrator stays skipped on the export path. 3 new tests. |
+| [#581](https://github.com/Rachit-Jain9/REDIP/pull/581) | `feat(recommendation)` — Dismiss / Snooze / Mark-acted-on + improvement-signal capture | New migration `20260615_deal_recommendation_verdicts`. Snooze model: absolute-time OR until-snapshot-changes. Workspace filters cards through verdicts; hidden bucket travels in `hidden_by_verdict` with a Restore button. Layer-5 telemetry row per verdict (consent-gated, values-free). |
+| [#582](https://github.com/Rachit-Jain9/REDIP/pull/582) | `feat(recommendation)` — Freshness indicator + manual refresh on both panels | "computed N ago" line using `generated_at`; RefreshCw button calls workspace refetch with spin animation while in flight. No backend changes. |
+| [#583](https://github.com/Rachit-Jain9/REDIP/pull/583) | `feat(perf)` — Bundle optimisation | Lazy-load the 9 non-default deal tabs; named vendor chunks in vite.config (vendor-recharts / vendor-leaflet / vendor-react-router / vendor-tanstack / vendor-icons). |
+| [#584](https://github.com/Rachit-Jain9/REDIP/pull/584) | `docs(session-log)` — this entry | Records the arc + the stacked-PR auto-close lesson learned. |
+
+### Bundle-size impact (npm run build, gzip)
+
+| Page / chunk | Before | After | Delta |
+|---|---:|---:|---:|
+| DealDetailPage | 85.04 kB | **32.71 kB** | **−61%** |
+| FinancialsPage | 74.32 kB | 64.62 kB | −13% |
+| Previously: PieChart-XXX (mystery-named) | 108.81 kB | renamed → **vendor-recharts** 115.06 kB | (named + cacheable) |
+| New: vendor-tanstack | n/a | 15.12 kB | (split) |
+| New: vendor-icons | n/a | 12.15 kB | (split) |
+
+The DealDetailPage 61% gzip reduction is the headline — the operator on a deal page now downloads only the Overview tab + workspace plumbing on initial render; the other nine tabs (Parcel, Financial, DD, Risk, Comps, etc.) only fetch their bundle on click. Roughly 200–300 ms shaved off TTI on a typical 4G connection.
+
+### Operator actions required
+
+1. **Apply the verdicts migration** (after #581 merges):
+   * 🌐 https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new
+   * 📋 paste `database/migrations/20260615_deal_recommendation_verdicts.sql`
+   * Click the green Run button. Expect "Success. No rows returned."
+
+2. **Merges done autonomously** after the operator's standing authorization.
+
+### Stacked-PR lesson learned
+
+For the second time in two blocks, the same trap caught me: when PR-A merges and its base branch is deleted, GitHub auto-closes any open PR that was stacked on it. The recovery is always a clean cherry-pick of the dependent PR's unique commit onto a fresh branch off master + a new PR.
+
+Three options the next contributor should consider:
+1. **Don't stack PRs** — branch everything off master. Loses the dependency-tracking benefit but avoids the cascade.
+2. **Merge top-down WITHOUT --delete-branch** — keeps the base branches alive so stacked PRs can be retargeted.
+3. **Use the "auto-merge" GitHub feature** — chains the merges so the cascade happens at GitHub's speed.
+
+This block ran sequential cherry-picks, which works but is slow. Worth picking one of the above for the next block.
+
+### What's left
+
+* **Provenance click-through** — evidence refs in recommendation cards aren't yet clickable to jump to the source document / kernel input. Reasonable next polish.
+* **Sourcing-stage adaptive workspace** — Workstream D.1 from the active plan. Lower priority now that the recommendations + deal doctor have closed the loop.
+* **Theme-token unification** — 32 sites with `bg-white` / `text-black` / `border-gray-*`. Pure hygiene; deferred.
+
+---
+
 ## 2026-05-25 (10-hour focused block) — Recommendation Engine + AI Deal Doctor arc (PR #565 → #572)
 
 The operator's brief opened with a deep-dive review of an external "REDIP Pending" document (a ChatGPT 7-layer architecture proposal + a Grok critique). The document mostly told REDIP to build things it has already shipped, but it surfaced a few genuinely-sharp gaps. The operator then explicitly overrode the existing CLAUDE.md "no AI conclusions" rule and asked for **Recommendation Engine + AI Deal Doctor as first-class features** — making REDIP an actionable decision-support system rather than a passive report generator.
