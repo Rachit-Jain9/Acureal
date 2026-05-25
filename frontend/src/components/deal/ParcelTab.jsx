@@ -95,14 +95,19 @@ function PropertyPickerModal({ dealId, onClose }) {
     p.name || p.address || [p.city, p.state].filter(Boolean).join(', ') || 'Unnamed property';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 py-8 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="link-property-dialog-title"
+    >
       <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
-          <h3 className="text-base font-bold text-content-primary flex items-center gap-2">
+          <h3 id="link-property-dialog-title" className="text-base font-bold text-content-primary flex items-center gap-2">
             <Link2 size={16} className="text-primary-600" /> Link Property to Deal
           </h3>
-          <button onClick={onClose} className="text-content-muted hover:text-content-secondary p-1">
+          <button onClick={onClose} aria-label="Close link-property dialog" className="text-content-muted hover:text-content-secondary p-1">
             <X size={18} />
           </button>
         </div>

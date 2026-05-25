@@ -286,12 +286,18 @@ function RejectModal({ open, onClose, onConfirm, isSubmitting }) {
   const [reason, setReason] = useState('');
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reject-batch-dialog-title"
+    >
       <div
         className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial p-5 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-display text-base font-semibold text-content-primary mb-2">Reject this batch?</h3>
+        <h3 id="reject-batch-dialog-title" className="font-display text-base font-semibold text-content-primary mb-2">Reject this batch?</h3>
         <p className="text-sm text-content-secondary mb-4">
           The queue row will be marked rejected. Optional: leave a reason for audit.
         </p>

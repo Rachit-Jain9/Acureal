@@ -9,6 +9,7 @@ import { useDeleteDeal, usePrefetchDealWorkspace } from '../../hooks/useDeals';
 import useAuthStore from '../../store/authStore';
 import Badge from '../common/Badge';
 import { toast } from '../common/Toast';
+import { confirm } from '../../design-system';
 import { exportsAPI } from '../../services/api';
 import { downloadAxiosResponse } from '../../utils/download';
 import {
@@ -50,7 +51,8 @@ export default function DealCard({ deal, selected = false, onToggleSelect }) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Delete-confirm flow uses the shared design-system `confirm()`
+  // primitive — no local boolean state needed.
   const [exporting, setExporting] = useState(false);
   const menuRef = useRef(null);
 
@@ -98,16 +100,18 @@ export default function DealCard({ deal, selected = false, onToggleSelect }) {
     setShowShare(true);
   };
 
-  const handleDelete = (e) => {
+  const handleDelete = async (e) => {
     stopAll(e);
     setMenuOpen(false);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
+    const ok = await confirm({
+      title: 'Delete Deal',
+      message: `Permanently delete "${deal.name}"? This cannot be undone.`,
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     try {
       await deleteDeal.mutateAsync(deal.id);
-      setShowDeleteConfirm(false);
     } catch {
       // toast handled by hook
     }
@@ -294,34 +298,6 @@ export default function DealCard({ deal, selected = false, onToggleSelect }) {
         />
       )}
 
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-sm p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-content-primary mb-2">Delete Deal</h3>
-            <p className="text-sm text-content-secondary mb-5">
-              Permanently delete <strong>{deal.name}</strong>? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-secondary">
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={deleteDeal.isPending}
-                className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
-              >
-                {deleteDeal.isPending ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
