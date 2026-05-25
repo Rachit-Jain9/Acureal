@@ -32,6 +32,11 @@ export { Tabs } from './Tabs';
 export { Field, Input, Select, Textarea } from './Field';
 export { Tooltip } from './Tooltip';
 
+// Promise-based confirm dialog (replacement for native `window.confirm`).
+// Mount <ConfirmDialogContainer /> once at the app root, then call
+// `await confirm({ title, tone, message })` from anywhere.
+export { confirm, ConfirmDialogContainer } from './ConfirmDialog';
+
 import clsx from 'clsx';
 import { AlertTriangle, Info } from 'lucide-react';
 import useCountUp from '../hooks/useCountUp';

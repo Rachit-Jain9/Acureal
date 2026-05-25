@@ -35,8 +35,7 @@ import {
   useSeedApprovals,
 } from '../../hooks/useApprovals';
 import Badge from '../common/Badge';
-import { SkeletonList } from '../../design-system';
-import { SectionHeader } from '../../design-system';
+import { SkeletonList, SectionHeader, confirm } from '../../design-system';
 import { formatDate } from '../../utils/format';
 
 // DD Item configs
@@ -165,8 +164,13 @@ function DDSection({ dealId }) {
     updateStatus.mutate({ dealId, id: item.id, status });
   };
 
-  const handleDelete = (itemId) => {
-    if (!window.confirm('Remove this DD item?')) return;
+  const handleDelete = async (itemId) => {
+    const ok = await confirm({
+      title: 'Remove this DD item?',
+      tone: 'danger',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     deleteItem.mutate({ dealId, id: itemId });
   };
 
@@ -454,8 +458,13 @@ function ApprovalsSection({ dealId }) {
     });
   };
 
-  const handleDelete = (approvalId) => {
-    if (!window.confirm('Remove this approval item?')) return;
+  const handleDelete = async (approvalId) => {
+    const ok = await confirm({
+      title: 'Remove this approval item?',
+      tone: 'danger',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     deleteApproval.mutate({ dealId, id: approvalId });
   };
 

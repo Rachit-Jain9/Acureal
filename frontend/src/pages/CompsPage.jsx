@@ -19,7 +19,8 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
-import { SkeletonList } from '../design-system';
+import { SkeletonList, confirm } from '../design-system';
+import { toast } from '../components/common/Toast';
 import { formatINR } from '../utils/format';
 import { exportsAPI } from '../services/api';
 
@@ -411,8 +412,14 @@ export default function CompsPage() {
     });
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Delete this comparable? This cannot be undone.')) return;
+  const handleDelete = async (id) => {
+    const ok = await confirm({
+      title: 'Delete this comparable?',
+      message: 'This cannot be undone.',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     deleteMutation.mutate(id);
   };
 
@@ -444,11 +451,9 @@ export default function CompsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      // Use alert here rather than a toast to avoid wiring a separate UX
-      // surface for a single rare failure path. Users see a clear message,
-      // and the call is idempotent — they can just retry.
-      // eslint-disable-next-line no-alert
-      window.alert('Failed to export comps. Please try again.');
+      // Surface as a toast — non-blocking, design-system-themed, and dismissible.
+      // The export call is idempotent so the user can just retry.
+      toast.error('Failed to export comps. Please try again.');
       // eslint-disable-next-line no-console
       console.error('Comps export failed:', err);
     } finally {

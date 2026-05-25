@@ -3,6 +3,7 @@ import { ShieldCheck, KeyRound, Loader2, AlertTriangle, CheckCircle2, Copy } fro
 import { authAPI } from '../../services/api';
 import useAuthStore from '../../store/authStore';
 import { toast } from './Toast';
+import { confirm } from '../../design-system';
 
 // Two-factor authentication enrollment + management card.
 //
@@ -49,7 +50,13 @@ export default function MfaCard() {
   };
 
   const handleDisable = async () => {
-    if (!window.confirm('Disable two-factor authentication?\nYour account will only require a password to sign in.')) return;
+    const ok = await confirm({
+      title: 'Disable two-factor authentication?',
+      message: 'Your account will only require a password to sign in.',
+      tone: 'danger',
+      confirmLabel: 'Disable',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await authAPI.mfaDisable();

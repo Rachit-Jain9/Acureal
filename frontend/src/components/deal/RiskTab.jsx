@@ -15,7 +15,7 @@ import {
 import Badge from '../common/Badge';
 import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
-import { SectionHeader, SkeletonList, Card } from '../../design-system';
+import { SectionHeader, SkeletonList, Card, confirm } from '../../design-system';
 import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore } from '../../hooks/useDealContext';
 // PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
 // ships in the DOCX Risk Register section) inline at the top of the tab.
@@ -331,8 +331,13 @@ export default function RiskTab() {
     }
   };
 
-  const handleDelete = (flagId) => {
-    if (!window.confirm('Remove this risk flag?')) return;
+  const handleDelete = async (flagId) => {
+    const ok = await confirm({
+      title: 'Remove this risk flag?',
+      tone: 'danger',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     deleteFlag.mutate({ dealId, id: flagId });
   };
 

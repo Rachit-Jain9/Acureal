@@ -17,7 +17,7 @@ import {
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
-import { Card, SectionHeader, SkeletonList, ErrorState } from '../design-system';
+import { Card, SectionHeader, SkeletonList, ErrorState, confirm } from '../design-system';
 import { adminAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 
@@ -267,9 +267,11 @@ function RunTriggerCard({ onRunComplete }) {
     }
     const totalCalls = candidates.length * Number(limit);
     if (totalCalls > 50) {
-      const ok = window.confirm(
-        `This run will fire ${totalCalls} LLM calls (~$${(totalCalls * 0.012).toFixed(2)}). Continue?`,
-      );
+      const ok = await confirm({
+        title: 'High-volume evaluation run',
+        message: `This run will fire ${totalCalls} LLM calls (~$${(totalCalls * 0.012).toFixed(2)}). Continue?`,
+        confirmLabel: 'Run evaluation',
+      });
       if (!ok) return;
     }
     setRunning(true);

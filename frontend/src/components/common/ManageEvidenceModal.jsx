@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Trash2, FileText, ExternalLink, CheckCircle2, Sparkles, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Modal } from '../../design-system';
+import { Modal, confirm } from '../../design-system';
 import {
   useEvidenceLinks,
   useAttachEvidenceLink,
@@ -163,8 +163,14 @@ export default function ManageEvidenceModal({
     }
   };
 
-  const handleDetach = (linkId) => {
-    if (!window.confirm('Remove this evidence link? This cannot be undone.')) return;
+  const handleDetach = async (linkId) => {
+    const ok = await confirm({
+      title: 'Remove this evidence link?',
+      message: 'This cannot be undone.',
+      tone: 'danger',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     detach.mutate(linkId);
   };
 

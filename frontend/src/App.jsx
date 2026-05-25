@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import useAuthStore from './store/authStore';
 import Layout from './components/layout/Layout';
 import ToastContainer from './components/common/Toast';
+import { ConfirmDialogContainer } from './design-system';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import CookieBanner from './components/common/CookieBanner';
@@ -104,6 +105,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastContainer />
+      <ConfirmDialogContainer />
       <CookieBanner />
       <Routes>
         {/* Public landing page — no auth required */}

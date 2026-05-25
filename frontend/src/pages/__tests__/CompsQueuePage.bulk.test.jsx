@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ConfirmDialogContainer, useConfirmStore } from '../../design-system/ConfirmDialog';
 
 // Tests bulk multi-select on the Comps Review Queue page. Mocks the
 // queue list + the bulk-action mutations so we control state without
@@ -51,6 +52,9 @@ const renderPage = () => {
     <QueryClientProvider client={qc}>
       <MemoryRouter>
         <CompsQueuePage />
+        {/* Mount the confirm-dialog container so bulkApprove's confirm() call
+            has a real Modal to render into for the test to drive. */}
+        <ConfirmDialogContainer />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -63,6 +67,8 @@ const sampleRows = [
 ];
 
 beforeEach(() => {
+  // Clear any leftover confirm-dialog state from the previous test.
+  useConfirmStore.setState({ pending: null });
   bulkApproveMutateAsync.mockReset();
   bulkApproveMutateAsync.mockResolvedValue({ succeeded_count: 2, failed_count: 0 });
   bulkRejectMutateAsync.mockReset();
@@ -82,8 +88,10 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   }));
-  // Stub the confirm dialog so the bulk approve flow doesn't pause on it.
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  // Reset the design-system confirm() singleton so a leftover pending dialog
+  // from a previous test does not bleed in. Tests below drive the actual
+  // dialog UI rather than stubbing it — it's a real Modal, not a native
+  // window.confirm() shim.
 });
 
 describe('CompsQueuePage — bulk actions', () => {
@@ -112,10 +120,15 @@ describe('CompsQueuePage — bulk actions', () => {
     expect(screen.getByRole('button', { name: /^Approve 3$/ })).toBeInTheDocument();
   });
 
-  it('Approve button calls bulkApprove with the selected ids', async () => {
+  it('Approve button calls bulkApprove with the selected ids (after confirming the dialog)', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Select all/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Approve 3$/ }));
+    // The bulk-approve handler now opens a confirm dialog. Find it and click
+    // its primary "Approve" button (scoped inside the dialog so the
+    // sticky-bar "Approve 3" doesn't match first).
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Approve$/ }));
     await waitFor(() =>
       expect(bulkApproveMutateAsync).toHaveBeenCalledWith(['r-1', 'r-2', 'r-3']),
     );

@@ -5,7 +5,7 @@ import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle,
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
-import { Card, SectionHeader, SkeletonList, ErrorState } from '../design-system';
+import { Card, SectionHeader, SkeletonList, ErrorState, confirm } from '../design-system';
 import {
   useCompsReviewQueueList,
   useProcessPendingBatch,
@@ -495,7 +495,11 @@ export default function CompsQueuePage() {
   const handleBulkApprove = async () => {
     if (!someSelected) return;
     const ids = [...selectedIds];
-    const ok = window.confirm(`Approve ${ids.length} item${ids.length === 1 ? '' : 's'}? Each will commit its extracted comps to the database.`);
+    const ok = await confirm({
+      title: `Approve ${ids.length} item${ids.length === 1 ? '' : 's'}?`,
+      message: 'Each will commit its extracted comps to the database.',
+      confirmLabel: 'Approve',
+    });
     if (!ok) return;
     try {
       await bulkApprove.mutateAsync(ids);
