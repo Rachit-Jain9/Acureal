@@ -27,7 +27,7 @@ import {
   useDeleteActivity,
 } from '../../hooks/useActivities';
 import Badge from '../common/Badge';
-import { SectionHeader, SkeletonList } from '../../design-system';
+import { SectionHeader, SkeletonList, confirm } from '../../design-system';
 import AuditTimelineView from '../financials/AuditTimelineView';
 import {
   formatDate,
@@ -109,8 +109,13 @@ export default function ActivityTab() {
     updateStatus.mutate({ activityId, status: 'completed' });
   };
 
-  const handleDelete = (activityId) => {
-    if (!window.confirm('Delete this activity entry?')) return;
+  const handleDelete = async (activityId) => {
+    const ok = await confirm({
+      title: 'Delete this activity entry?',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     deleteActivity.mutate(activityId);
   };
 

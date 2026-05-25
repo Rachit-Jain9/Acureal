@@ -25,7 +25,7 @@ import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useDealContext, useDealRecord, useDealDocuments } from '../../hooks/useDealContext';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
-import { SectionHeader, SkeletonList } from '../../design-system';
+import { SectionHeader, SkeletonList, confirm } from '../../design-system';
 import SemanticSearchPanel from '../common/SemanticSearchPanel';
 import AutoFillFromDocumentsModal from './AutoFillFromDocumentsModal';
 // PR-NX49 (2026-05-19) — surface Claude's cross-document analysis +
@@ -186,7 +186,13 @@ export default function DocumentsTab() {
   };
 
   const handleDelete = async (docId) => {
-    if (!window.confirm('Delete this document? This cannot be undone.')) return;
+    const ok = await confirm({
+      title: 'Delete this document?',
+      message: 'This cannot be undone.',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     await deleteDoc.mutateAsync({ dealId, docId });
   };
 

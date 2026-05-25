@@ -46,6 +46,7 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
+import { toast } from '../components/common/Toast';
 import { SkeletonKpi, SkeletonCard, Skeleton } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
 import {
@@ -504,8 +505,7 @@ export default function IntelligencePage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      window.alert('Failed to generate tear-sheet PDF. Please try again.');
+      toast.error('Failed to generate tear-sheet PDF. Please try again.');
       // eslint-disable-next-line no-console
       console.error('Intelligence tear-sheet export failed:', err);
     } finally {
