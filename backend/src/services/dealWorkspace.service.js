@@ -31,6 +31,7 @@ const recommendationPersistence = require('./recommendation/persistence');
 const verdictsService = require('./recommendation/verdicts.service');
 const { narrateCard } = require('./recommendation/recommendationNarrator');
 const dealDoctor = require('./recommendation/dealDoctor');
+const microMarketIntelligence = require('./microMarketIntelligence.service');
 const toneClassifier = require('./ai/toneClassifier');
 
 const ACTIVITY_LIMIT = 50;
@@ -231,10 +232,46 @@ async function getDealWorkspace(dealId) {
     };
   }, 'dealDoctor');
 
+  // PR P1-PR2 — Micro-Market Intelligence slice. Classify the deal's parcel
+  // (via lat/lng if present) into one of the 20 Bengaluru micro-markets, then
+  // fetch the briefing (benchmarks + demand signals) for that locality. The
+  // panel on the Overview tab renders this; the deal-create form pre-fills
+  // defaults from `getDefaultsForDealCreate`. Migration-tolerant — empty
+  // shape when the seed isn't applied yet.
+  const microMarketSlice = await optional(async () => {
+    const lat = Number(deal.property_lat ?? deal.parcel_lat ?? deal.latitude);
+    const lng = Number(deal.property_lng ?? deal.parcel_lng ?? deal.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      // No coordinates yet — return the empty shape with a hint for the UI.
+      return {
+        classification: { locality_code: null, name: null, distance_km: null, tier: null, confidence: null },
+        locality: null,
+        benchmarks: [],
+        demand_signals: [],
+        reason: 'no_parcel_coordinates',
+      };
+    }
+    const classification = await microMarketIntelligence.classifyParcel(lat, lng);
+    if (!classification.locality_code) {
+      return { classification, locality: null, benchmarks: [], demand_signals: [], reason: 'no_match' };
+    }
+    const briefing = await microMarketIntelligence.getBriefing(classification.locality_code, {
+      assetClass: deal.asset_class || null,
+    });
+    return {
+      classification,
+      locality: briefing.locality,
+      benchmarks: briefing.benchmarks,
+      demand_signals: briefing.demand_signals,
+      reason: null,
+    };
+  }, 'microMarket');
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
+    micro_market: microMarketSlice || { classification: { locality_code: null, confidence: null }, locality: null, benchmarks: [], demand_signals: [], reason: 'unavailable' },
     generatedAt: new Date().toISOString(),
   };
 }

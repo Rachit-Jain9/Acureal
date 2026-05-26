@@ -205,6 +205,17 @@ export const recommendationsAPI = {
     api.post(`/deals/${dealId}/recommendations/${ruleId}/verdict`, payload),
 };
 
+// P1-PR2 (2026-05-26) — Micro-Market Intelligence pre-deal-create endpoints.
+// The per-deal briefing lives on the dealWorkspace endpoint as
+// `workspace.micro_market`; these endpoints serve the surfaces that exist
+// BEFORE a deal is created (admin tool, deal-create form pre-fill).
+export const microMarketAPI = {
+  list: () => api.get('/micro-market/list'),
+  classify: ({ lat, lng }) => api.post('/micro-market/classify', { lat, lng }),
+  defaults: (localityCode, assetClass) =>
+    api.get('/micro-market/defaults', { params: { localityCode, assetClass } }),
+};
+
 // Deals
 export const dealsAPI = {
   list: (params) => api.get('/deals', { params }),

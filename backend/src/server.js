@@ -47,6 +47,7 @@ const privacyRoutes = require('./routes/privacy.routes');
 const promoterRoutes = require('./routes/promoter.routes');
 const organizationRoutes = require('./routes/organization.routes');
 const recommendationRoutes = require('./routes/recommendation.routes');
+const microMarketRoutes = require('./routes/microMarket.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -197,6 +198,10 @@ app.use('/api/organization', organizationRoutes);
 // PR-C (2026-05-25) — recommendation verdict capture (dismiss / snooze / acted).
 // Routes are deal-scoped under /api/deals/:dealId/recommendations/*.
 app.use('/api', recommendationRoutes);
+// P1-PR2 (2026-05-26) — Micro-Market Intelligence pre-deal-create endpoints
+// (classify / defaults / list). Briefing for a deal already lives on the
+// /deals/:id/workspace endpoint as `micro_market` slice.
+app.use('/api/micro-market', microMarketRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
