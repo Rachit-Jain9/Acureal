@@ -4,6 +4,57 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-26 (afternoon, 10-hour focused block) — Phase 2 of the property-consultant quarter: Pillars 2 + 3 + Strategic Fit grouping + stale-chunk auto-recovery (PR #593–#597)
+
+Continuation immediately after the Phase 1 wrap (#592). The operator's brief opened with a deep-technical-review ask: identify the highest-impact pending work, group related pieces, compare multiple approaches per major decision, and treat this as 10 hours of focused quality work. Five PRs landed end-to-end.
+
+### PRs opened + merged
+
+| PR | Pillar / Workstream | What landed |
+|---|---|---|
+| [#593](https://github.com/Rachit-Jain9/REDIP/pull/593) | **P2-PR1** — Pillar 2 | **Best Use Simulator** — scores the seven core asset classes (residential apartments / plotted / commercial office / retail / industrial-warehousing / hospitality / mixed-use) on fitness to monetise the parcel. Five deterministic sub-scorers (demand fit, price realisability, growth signal, approval-timeline risk, capital intensity). Verdict from the closed dictionary. New workspace slice + standalone route + Overview panel with expandable factor breakdowns. 26 unit tests, all asset-class baselines documented. |
+| [#594](https://github.com/Rachit-Jain9/REDIP/pull/594) | **P2-PR2** — Pillar 3 (first half) | **Deal-Structure Recommender** — scores the eight deal structures (outright / JV / JDA / revenue-share / area-share / profit-share / ground-lease / hybrid) for the deal's asset class + promoter posture + micro-market context. Hard-floor to Flag on the 4 structurally-incoherent pairs from `dealStructureMatrix`. Reuses the existing matrix + promoter posture; pure compute over the workspace, no extra DB round-trips. 21 unit tests including the flagged-promoter / oversupply edge cases. |
+| [#595](https://github.com/Rachit-Jain9/REDIP/pull/595) | **P2-PR3** — Pillar 3 (second half) | **Capital-Stack Optimizer** — three scenarios (Conservative / Base / Aggressive) scored against per-asset-class Indian-bank covenant bands (LTV / LTC / DSCR). Reads kernel output from `workspace.financial.summary`; overlays alternate capital-stack templates without re-running the kernel. Closes Phase 2 and the property-consultant trio (what to build × how to structure × **how to fund**). 34 unit tests including a coverage smoke that pins every asset class has 3 stack templates summing to exactly 100%. |
+| [#596](https://github.com/Rachit-Jain9/REDIP/pull/596) | **P2-PR4** — Phase 2 closeout polish | **Strategic Fit Section** — visually unifies the three Phase 2 ranking cards under a single section header on the Overview tab. Glanceable summary strip surfaces top-fit verdict per question ("Best Use: Residential / Structure: Revenue Share / Capital Stack: Aggressive"). Collapsible section. Honest empty-state copy when any panel is unavailable. 4 new unit tests covering the all-unavailable bow-out, summary chips, collapse behaviour, and the three verdict surfaces. |
+| [#597](https://github.com/Rachit-Jain9/REDIP/pull/597) | **FIX-PR** — production stability | **Stale-chunk auto-recovery** spotted during browser verification. After several rapid deploys today, the operator's tab hit "Failed to fetch dynamically imported module: …DealsPage-X.js" and required a hard refresh. Extended `ErrorBoundary` + added a global handler in `main.jsx` to detect chunk-load errors (Chrome / Safari / Firefox / Vite / Webpack message patterns) and force a single full reload with a sessionStorage guard preventing reload loops. 13 new tests. Every future REDIP deploy is now non-disruptive for users with tabs open during the deploy window. |
+
+### Cumulative impact (Phase 2 only)
+
+- **Backend tests**: 2,603 → **2,684** (+81 across the three new services).
+- **Frontend tests**: 964 → **996** (+32 across the three new panels + the Strategic Fit wrapper + ErrorBoundary).
+- **New canonical modules**: `backend/src/services/bestUseSimulator.service.js`, `dealStructureRecommender.service.js`, `capitalStackOptimizer.service.js`. New routes: `/api/best-use/simulate`, `/api/deal-structure-recommender/score`, `/api/capital-stack-optimizer/score`. Extended `dealWorkspace.service.js` with three new slices.
+- **New UI surfaces**: `BestUseSimulatorPanel`, `DealStructureRecommenderPanel`, `CapitalStackOptimizerPanel`, `StrategicFitSection` wrapper. All mounted on the Overview tab.
+- **Production stability**: stale-chunk auto-recovery shipped (PR #597).
+
+### What the user can do now that they couldn't before
+
+- **Open any deal with a parcel coordinate** and see a **Best Use Simulator** card on the Overview — seven asset classes ranked 0-100 on fitness to monetise the site, with a verdict (Recommend / Consider / Re-examine / Stress-test / Flag), a three-line "why" rationale, and an expandable factor breakdown showing the exact benchmark or baseline behind each score. Deterministic; no AI.
+- **Open any deal with an asset class set** and see a **Deal-Structure Recommender** card — eight ways to structure the deal (outright / JV / JDA / revenue-share / area-share / profit-share / ground-lease / hybrid) scored against deal economics + promoter posture + market signals. The recommender reacts to the promoter (flagged promoter → revenue-share with escrow rises to the top; cleared promoter → outright captures upside) and to the market (oversupply → share downside; tight market → capture upside). Refuses to recommend physically impossible combinations (hard-floor to Flag).
+- **Open any deal where the kernel has run** and see a **Capital-Stack Optimizer** card — three scenarios (Conservative / Base / Aggressive) with covenant checks (LTV / LTC / DSCR) against typical HDFC / Axis / ICICI lending norms. Each scenario expands to show the stack mix (equity / construction-finance / pref / mezz with rupee amounts), covenant pass/fail per ratio, and the five factor breakdowns.
+- **See all three at a glance** — the Strategic Fit Section header surfaces the top-fit verdict from each card on a single summary strip, so the deal team can scan the consultant answer (what to build × how to structure × how to fund) in one line before deep-diving.
+- **Stop getting stuck on stale-chunk errors after a deploy.** REDIP now auto-recovers — one second reload, no Ctrl+Shift+R required.
+
+### Browser-verified end-to-end
+
+Used the Chrome MCP integration to load production REDIP on the Jigani Apartments deal mid-block. Verified:
+
+- Strategic Fit Section header renders with the "Phase 2 / Pillars 2-3" tag.
+- Summary strip surfaces real verdicts ("Structure: Revenue Share [RECOMMEND]", "Capital Stack: Aggressive [RECOMMEND]") + honest empty state for the parcel without coordinates ("Best Use: coordinates needed").
+- Capital-Stack Optimizer correctly reads the kernel output — for Jigani's DSCR 4.77× the Aggressive scenario scores 91/100 (all covenants pass with cushion, capital efficiency wins).
+- Deal-Structure Recommender correctly reflects promoter posture — with an unverified promoter, every structure surfaces "unverified promoter × X compatibility" in its rationale and Revenue Share rises to top (escrow waterfall protects).
+- Stale-chunk error was hit live during verification → ship #597 to fix it.
+
+### Operator actions required
+
+**Zero this block** — every PR is pure code reading the data already loaded by the three migrations the operator applied earlier today (20260616 / 20260617 / 20260618).
+
+### What's left
+
+- **Phase 3 entry**: Pillar 4 (Karnataka RERA Readiness Pack) + Pillar 5 (DD Pack) + E2 (Claim/provenance graph). All orthogonal to Phase 2; each can ship in its own focused block.
+- **K-RERA fixture activation** still gated on operator paste of a real portal HTML sample (CLAUDE.md "no fake connectivity"). The infrastructure is shipped; the data activation is one paste away.
+
+---
+
 ## 2026-05-26 — Phase 1 of the property-consultant quarter: Pillars 1 + 6 + evidence + heartbeat (PR #585–#592)
 
 The operator's brief opening this block was strategic: REDIP had just shipped the Recommendation Engine + AI Deal Doctor backbone (#565–#584). The next question was *what data and signals should feed those panels?* The operator wanted property-consultant-grade intelligence — micro-market benchmarks, builder track records, K-RERA project pipelines, evidence-traceable claims — but deferred all paid integrations (Landeed, Surepass, Actowiz, Square Yards) "until users land." Build it ourselves, MVP-honest, no fake connectivity.
