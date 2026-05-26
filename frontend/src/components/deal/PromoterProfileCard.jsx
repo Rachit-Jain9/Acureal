@@ -1,7 +1,12 @@
 import { useState } from 'react';
-import { Building2, Edit2, Loader2, Check, X } from 'lucide-react';
+import { Building2, Edit2, Loader2, Check, X, Link2, Unlink, ExternalLink } from 'lucide-react';
 import { clsx } from 'clsx';
-import { usePromoterProfile, useUpsertPromoterProfile } from '../../hooks/usePromoterProfile';
+import {
+  usePromoterProfile,
+  useUpsertPromoterProfile,
+  useLinkReraPromoter,
+  useUnlinkReraPromoter,
+} from '../../hooks/usePromoterProfile';
 
 /**
  * Promoter & Execution card — Workstream B (B4).
@@ -72,6 +77,138 @@ const toPayload = (f) => {
 
 const fmt = (v) => (v === null || v === undefined ? '—' : v);
 
+// Render the trigram-similarity score as a confidence band. Above ~0.8 we
+// treat as a near-certain match; 0.5-0.8 is a clear lead worth confirming;
+// below 0.5 the operator should treat as a weak suggestion only.
+const simBand = (score) => {
+  const n = Number(score);
+  if (!Number.isFinite(n)) return { label: '—', tone: 'text-content-muted' };
+  if (n >= 0.85) return { label: `${Math.round(n * 100)}% match`, tone: 'text-green-700' };
+  if (n >= 0.6) return { label: `${Math.round(n * 100)}% match`, tone: 'text-amber-700' };
+  return { label: `${Math.round(n * 100)}% match`, tone: 'text-content-muted' };
+};
+
+// Format average delivery delay months as a readable lag. Negative = early.
+const fmtDelayMonths = (v) => {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n * 10) / 10;
+  if (rounded === 0) return 'on time on average';
+  if (rounded > 0) return `${rounded} month${rounded === 1 ? '' : 's'} late on average`;
+  return `${Math.abs(rounded)} month${Math.abs(rounded) === 1 ? '' : 's'} early on average`;
+};
+
+/**
+ * K-RERA cross-check section — Phase 1 / Pillar 6.
+ *
+ * The analyst's manual profile is sovereign. This section adds "what the
+ * public K-RERA index shows" alongside it. Three states:
+ *   • Linked → show K-RERA aggregate stats + unlink affordance.
+ *   • Unlinked, candidates exist → show top-3 fuzzy matches + confirm buttons.
+ *   • Unlinked, no candidates → render nothing (K-RERA index is empty for
+ *     this name, or the K-RERA tables aren't populated yet).
+ */
+function ReraCrossCheck({ dealId, rera }) {
+  const link = useLinkReraPromoter();
+  const unlink = useUnlinkReraPromoter();
+
+  if (!rera) return null;
+  const { candidates = [], linked = null, stats = null } = rera;
+  if (!linked && candidates.length === 0) return null;
+
+  if (linked) {
+    return (
+      <div className="mt-3 p-3 rounded-md border border-bg-tertiary bg-bg-secondary/60">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Link2 size={12} className="text-content-muted shrink-0" />
+              <span className="text-[11px] uppercase tracking-wider font-medium text-content-muted">
+                K-RERA match
+              </span>
+            </div>
+            <p className="text-sm font-medium text-content-primary truncate">
+              {linked.promoter_name}
+            </p>
+            {stats ? (
+              <p className="text-xs text-content-secondary mt-1 tabular-nums">
+                {stats.total_projects} project{stats.total_projects === 1 ? '' : 's'} on K-RERA
+                {' · '}
+                {stats.completed_projects} completed
+                {stats.ongoing_projects > 0 && ` · ${stats.ongoing_projects} ongoing`}
+                {stats.lapsed_projects > 0 && ` · ${stats.lapsed_projects} lapsed`}
+                {fmtDelayMonths(stats.avg_delivery_delay_months) &&
+                  ` · ${fmtDelayMonths(stats.avg_delivery_delay_months)}`}
+              </p>
+            ) : (
+              <p className="text-xs text-content-muted mt-1">
+                No K-RERA aggregate stats published yet for this promoter.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => unlink.mutate({ dealId })}
+            disabled={unlink.isPending}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1.5 py-1 shrink-0"
+            title="Clear the K-RERA cross-link"
+          >
+            {unlink.isPending ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
+            Unlink
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Unlinked → surface candidates for confirmation.
+  return (
+    <div className="mt-3 p-3 rounded-md border border-bg-tertiary bg-bg-secondary/60">
+      <div className="flex items-center gap-1.5 mb-2">
+        <ExternalLink size={12} className="text-content-muted" />
+        <span className="text-[11px] uppercase tracking-wider font-medium text-content-muted">
+          K-RERA candidates
+        </span>
+      </div>
+      <p className="text-xs text-content-secondary mb-2">
+        These promoter names from the K-RERA index look similar. Confirm the right one to surface
+        their public track record alongside your findings.
+      </p>
+      <ul className="space-y-1.5">
+        {candidates.slice(0, 5).map((c) => {
+          const band = simBand(c.sim_score);
+          return (
+            <li
+              key={c.promoter_name}
+              className="flex items-center justify-between gap-2 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-content-primary truncate">{c.promoter_name}</p>
+                <p className={clsx('text-[11px] tabular-nums', band.tone)}>{band.label}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  link.mutate({
+                    dealId,
+                    reraPromoterName: c.promoter_name,
+                    matchConfidence: c.sim_score,
+                  })
+                }
+                disabled={link.isPending}
+                className="btn btn-secondary text-xs shrink-0"
+              >
+                {link.isPending ? <Loader2 size={12} className="animate-spin" /> : 'Confirm match'}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function Fact({ label, children }) {
   return (
     <div className="bg-bg-secondary rounded-lg p-2.5">
@@ -105,6 +242,7 @@ export default function PromoterProfileCard({ dealId }) {
 
   const profile = data?.profile || null;
   const assessment = data?.assessment || null;
+  const rera = data?.rera || null;
 
   const startEdit = () => {
     setForm(toForm(profile));
@@ -338,6 +476,11 @@ export default function PromoterProfileCard({ dealId }) {
           so it is verified, not assumed.
         </p>
       )}
+
+      {/* K-RERA cross-check — Phase 1 / Pillar 6. Renders nothing when there
+          are no candidates and no link (e.g. before a promoter name is
+          recorded, or when the K-RERA index is empty for this name). */}
+      {!editing && <ReraCrossCheck dealId={dealId} rera={rera} />}
     </div>
   );
 }

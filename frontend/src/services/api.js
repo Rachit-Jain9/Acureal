@@ -640,11 +640,16 @@ export const riskAPI = {
   narrative:             (dealId) => api.get(`/deals/${dealId}/risk-narrative`),
 };
 
-// Promoter / builder track record (B4). `get` returns { profile, assessment };
-// `upsert` is a full-document save of the promoter profile.
+// Promoter / builder track record (B4). `get` returns { profile, assessment, rera };
+// `upsert` is a full-document save of the promoter profile. `linkRera` and
+// `unlinkRera` (Phase 1 / Pillar 6) confirm or clear the K-RERA cross-link —
+// the analyst-recorded findings stay sovereign; the link only cross-references
+// the public K-RERA index alongside.
 export const promoterAPI = {
-  get:    (dealId)       => api.get(`/deals/${dealId}/promoter`),
-  upsert: (dealId, data) => api.put(`/deals/${dealId}/promoter`, data),
+  get:        (dealId)        => api.get(`/deals/${dealId}/promoter`),
+  upsert:     (dealId, data)  => api.put(`/deals/${dealId}/promoter`, data),
+  linkRera:   (dealId, data)  => api.post(`/deals/${dealId}/promoter/link-rera`, data),
+  unlinkRera: (dealId)        => api.delete(`/deals/${dealId}/promoter/link-rera`),
 };
 
 // Master Plan (regulatory zones)
