@@ -32,6 +32,7 @@ const verdictsService = require('./recommendation/verdicts.service');
 const { narrateCard } = require('./recommendation/recommendationNarrator');
 const dealDoctor = require('./recommendation/dealDoctor');
 const microMarketIntelligence = require('./microMarketIntelligence.service');
+const bestUseSimulator = require('./bestUseSimulator.service');
 const toneClassifier = require('./ai/toneClassifier');
 
 const ACTIVITY_LIMIT = 50;
@@ -267,11 +268,37 @@ async function getDealWorkspace(dealId) {
     };
   }, 'microMarket');
 
+  // Best Use Simulator — Phase 2 / Pillar 2. Pure compute over the
+  // micro-market slice's already-fetched briefing — no extra DB round-trips.
+  // Surfaces ranked asset-class scores on the Overview tab.
+  const bestUseSlice = (() => {
+    if (!microMarketSlice || !microMarketSlice.locality) {
+      return {
+        classification: microMarketSlice?.classification || { locality_code: null, confidence: null },
+        locality: null,
+        scores: [],
+        reason: microMarketSlice?.reason || 'no_briefing_data',
+      };
+    }
+    const { scores, reason } = bestUseSimulator.scoreFromBriefing({
+      locality: microMarketSlice.locality,
+      benchmarks: microMarketSlice.benchmarks,
+      demand_signals: microMarketSlice.demand_signals,
+    });
+    return {
+      classification: microMarketSlice.classification,
+      locality: microMarketSlice.locality,
+      scores,
+      reason,
+    };
+  })();
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
     micro_market: microMarketSlice || { classification: { locality_code: null, confidence: null }, locality: null, benchmarks: [], demand_signals: [], reason: 'unavailable' },
+    best_use: bestUseSlice,
     generatedAt: new Date().toISOString(),
   };
 }

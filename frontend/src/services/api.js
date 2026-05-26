@@ -652,6 +652,14 @@ export const promoterAPI = {
   unlinkRera: (dealId)        => api.delete(`/deals/${dealId}/promoter/link-rera`),
 };
 
+// Best Use Simulator (Phase 2 / Pillar 2). Deal-INDEPENDENT — per-deal scores
+// already ride on the deal workspace payload as `workspace.best_use`. This
+// surface is for parcel-first sourcing where coordinates are known before a
+// deal exists (e.g. "is this site worth pursuing?" pre-flight).
+export const bestUseAPI = {
+  simulate: (lat, lng) => api.post('/best-use/simulate', { lat, lng }),
+};
+
 // Master Plan (regulatory zones)
 export const masterPlanAPI = {
   listZones:    (params)              => api.get('/master-plan/zones', { params }),

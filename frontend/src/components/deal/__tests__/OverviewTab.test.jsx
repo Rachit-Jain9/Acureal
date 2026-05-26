@@ -43,6 +43,14 @@ vi.mock('../../../hooks/useDealContext', () => ({
     demand_signals: [],
     reason: 'no_parcel_coordinates',
   }),
+  // P2-PR1 — Best Use Simulator slice. Test renders the "no coordinates"
+  // empty state in the same shape as the Micro-Market panel.
+  useDealBestUse: () => ({
+    classification: { locality_code: null, confidence: null },
+    locality: null,
+    scores: [],
+    reason: 'no_parcel_coordinates',
+  }),
 }));
 
 vi.mock('../../../services/api', () => ({
