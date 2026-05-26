@@ -186,6 +186,53 @@ describe('signalExtractors — extractReraRegistrationMissing', () => {
   });
 });
 
+describe('signalExtractors — extractCrossDocInconsistencies (P1-PR4)', () => {
+  const { extractCrossDocInconsistencies } = require('../src/services/recommendation/signalExtractors');
+
+  test('returns null when no risk flags exist', () => {
+    const ws = makeWorkspace({ riskFlags: [] });
+    expect(extractCrossDocInconsistencies(ws)).toBeNull();
+  });
+
+  test('returns null when no flags carry source=ai_detector', () => {
+    const ws = makeWorkspace({
+      riskFlags: [
+        { title: 'manual flag', severity: 'high', status: 'open', source: 'manual' },
+      ],
+    });
+    expect(extractCrossDocInconsistencies(ws)).toBeNull();
+  });
+
+  test('returns null when ai_detector flags are all closed/resolved', () => {
+    const ws = makeWorkspace({
+      riskFlags: [
+        { title: 'seller mismatch', severity: 'high', status: 'closed', source: 'ai_detector' },
+      ],
+    });
+    expect(extractCrossDocInconsistencies(ws)).toBeNull();
+  });
+
+  test('aggregates open ai_detector flags by severity', () => {
+    const ws = makeWorkspace({
+      riskFlags: [
+        { title: 'seller mismatch (sale deed ↔ EC)', severity: 'critical', status: 'open', source: 'ai_detector', category: 'title' },
+        { title: 'FSI conflict (plan ↔ approval)', severity: 'high', status: 'open', source: 'ai_detector', category: 'physical' },
+        { title: 'area drift across deeds', severity: 'medium', status: 'flagged', source: 'ai_detector', category: 'physical' },
+        { title: 'RERA filing gap', severity: 'high', status: 'open', source: 'ai_detector', category: 'regulatory' },
+        // Should be ignored — manual source.
+        { title: 'manual flag', severity: 'critical', status: 'open', source: 'manual' },
+      ],
+    });
+    const s = extractCrossDocInconsistencies(ws);
+    expect(s).not.toBeNull();
+    expect(s.kind).toBe('cross_document_inconsistencies');
+    expect(s.value.total).toBe(4);
+    expect(s.value.by_severity).toEqual({ critical: 1, high: 2, medium: 1, low: 0 });
+    expect(s.value.top_findings).toHaveLength(3);
+    expect(s.value.top_findings[0].title).toMatch(/seller mismatch/);
+  });
+});
+
 describe('signalExtractors — extractApprovalGapCount', () => {
   test('counts required-open approvals', () => {
     const ws = makeWorkspace({

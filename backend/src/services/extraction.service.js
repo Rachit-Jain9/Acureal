@@ -28,6 +28,7 @@ const { tryParseAndValidate } = require('./ai/aiRouter');
 const { detectLanguage } = require('./ai/languageDetect');
 const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
+const { EVENTS, publish } = require('../lib/eventBus');
 const log = require('../lib/logger').child({ module: 'extraction' });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -668,6 +669,26 @@ async function extractDocument(
         reason: 'ingestion_failed',
         message: ingestionError.message,
       };
+    }
+
+    // P1-PR4 (2026-05-26) — publish DOCUMENT_EXTRACTED so downstream sinks
+    // can react. The cross-document inconsistency-detector sink subscribes
+    // and auto-runs detectAndPersist on every new extraction; the audit
+    // sink in dealEvents.service captures the activity trail. Both are
+    // fire-and-forget — extractDocument's contract is unchanged.
+    try {
+      publish(EVENTS.DOCUMENT_EXTRACTED, {
+        documentId,
+        documentName: fileName || null,
+        dealId: dealId || null,
+        extractionId,
+        docType,
+        status: parseError ? 'partial' : 'completed',
+        userId: userId || null,
+      });
+    } catch {
+      // Event-bus publish should never throw, but defensive guard means a
+      // subscriber misconfiguration doesn't break the extraction.
     }
 
     return updatedExtraction;
