@@ -256,3 +256,21 @@ export function useDealDoctor() {
     [workspace?.deal_doctor],
   );
 }
+
+/**
+ * Returns the Micro-Market Intelligence slice: classification of the deal's
+ * parcel into one of the 20 Bengaluru micro-markets + per-locality benchmarks
+ * (price/rent/yield/cap rate percentile bands) + demand drivers (transit,
+ * supply pressure, infra triggers, buyer-segment mix). All numbers carry an
+ * explicit `confidence` field — 'low' must never be silently dressed up.
+ *
+ * Source: workspace.micro_market (composed server-side in dealWorkspace.service.js
+ * via `microMarketIntelligence.classifyParcel` + `getBriefing`).
+ */
+export function useDealMicroMarket() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.micro_market || { classification: { locality_code: null, confidence: null }, locality: null, benchmarks: [], demand_signals: [], reason: 'unavailable' },
+    [workspace?.micro_market],
+  );
+}

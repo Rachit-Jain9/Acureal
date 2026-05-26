@@ -34,6 +34,15 @@ vi.mock('../../../hooks/useDealContext', () => ({
     signal_count: 0,
     generated_at: null,
   }),
+  // P1-PR2 — Micro-Market Briefing slice. Test renders the "no coordinates"
+  // empty state by returning the unavailable reason.
+  useDealMicroMarket: () => ({
+    classification: { locality_code: null, confidence: null },
+    locality: null,
+    benchmarks: [],
+    demand_signals: [],
+    reason: 'no_parcel_coordinates',
+  }),
 }));
 
 vi.mock('../../../services/api', () => ({

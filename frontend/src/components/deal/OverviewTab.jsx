@@ -28,6 +28,8 @@ import AutoFillReadyCard from './AutoFillReadyCard';
 import RiskRadarStrip from './RiskRadarStrip';
 // REDIP Pending §5.7 — Recommendation Engine cards on the Overview.
 import RecommendationsPanel from './RecommendationsPanel';
+// Phase 1 / Pillar 1 — Bengaluru micro-market intelligence briefing.
+import MicroMarketBriefingPanel from './MicroMarketBriefingPanel';
 // Workstream A — compact model-trust verdict beside the financial numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
@@ -182,6 +184,13 @@ export default function OverviewTab() {
           Cards are evidence-backed; legal-carve-out cards (RERA, approvals,
           title, encumbrance) bypass any future AI narrator. */}
       <RecommendationsPanel recommendations={recommendations} />
+
+      {/* Phase 1 / Pillar 1 — Bengaluru Micro-Market Briefing. Surfaces the
+          per-locality benchmark bands + demand signals for the deal's parcel
+          (auto-classified by Haversine-nearest-centroid). Renders empty-state
+          honestly when the parcel has no coordinates or sits outside the
+          seeded micro-markets. */}
+      <MicroMarketBriefingPanel />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves
