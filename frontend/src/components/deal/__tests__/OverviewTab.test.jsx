@@ -54,6 +54,9 @@ vi.mock('../../../hooks/useDealContext', () => ({
   // P2-PR2 — Deal-Structure Recommender slice. Test renders the "no asset
   // class" empty state — recommender stays inert until the deal has one.
   useDealStructureRecommender: () => ({ scores: [], reason: 'no_asset_class' }),
+  // P2-PR3 — Capital-Stack Optimizer slice. Test renders the "no financial
+  // model" empty state — optimizer stays inert until the kernel has run.
+  useDealCapitalStack: () => ({ scenarios: [], reason: 'no_financial_model' }),
 }));
 
 vi.mock('../../../services/api', () => ({

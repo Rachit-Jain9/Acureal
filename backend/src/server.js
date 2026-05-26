@@ -50,6 +50,7 @@ const recommendationRoutes = require('./routes/recommendation.routes');
 const microMarketRoutes = require('./routes/microMarket.routes');
 const bestUseSimulatorRoutes = require('./routes/bestUseSimulator.routes');
 const dealStructureRecommenderRoutes = require('./routes/dealStructureRecommender.routes');
+const capitalStackOptimizerRoutes = require('./routes/capitalStackOptimizer.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -220,6 +221,12 @@ app.use('/api/best-use', bestUseSimulatorRoutes);
 // `deal_structure_recommender` slice. This route serves stateless
 // asset-class + promoter-posture exploration before a deal exists.
 app.use('/api/deal-structure-recommender', dealStructureRecommenderRoutes);
+
+// Capital-Stack Optimizer (Phase 2 / Pillar 3, second half) — deal-
+// independent. Per-deal scenarios already live on the workspace endpoint
+// as `capital_stack_optimizer` slice. This route serves stateless
+// scenario-stress / IC sensitivity flows.
+app.use('/api/capital-stack-optimizer', capitalStackOptimizerRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

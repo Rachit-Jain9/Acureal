@@ -34,6 +34,7 @@ const dealDoctor = require('./recommendation/dealDoctor');
 const microMarketIntelligence = require('./microMarketIntelligence.service');
 const bestUseSimulator = require('./bestUseSimulator.service');
 const dealStructureRecommender = require('./dealStructureRecommender.service');
+const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
 
@@ -319,6 +320,18 @@ async function getDealWorkspace(dealId) {
     });
   }, 'dealStructure');
 
+  // Capital-Stack Optimizer — Phase 2 / Pillar 3 (second half). Pure compute
+  // over the deal's asset class + the kernel-computed financial summary that
+  // is already on `composed.financial.summary` (no extra DB round-trips).
+  // Honest empty states surface as `reason` when the kernel hasn't run yet.
+  const capitalStackSlice = (() => {
+    if (!deal.asset_class) return { scenarios: [], reason: 'no_asset_class' };
+    return capitalStackOptimizer.scoreFromFinancials({
+      assetClass: deal.asset_class,
+      financials: financials || null,
+    });
+  })();
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
@@ -326,6 +339,7 @@ async function getDealWorkspace(dealId) {
     micro_market: microMarketSlice || { classification: { locality_code: null, confidence: null }, locality: null, benchmarks: [], demand_signals: [], reason: 'unavailable' },
     best_use: bestUseSlice,
     deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
+    capital_stack_optimizer: capitalStackSlice,
     generatedAt: new Date().toISOString(),
   };
 }
