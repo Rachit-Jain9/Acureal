@@ -31,12 +31,10 @@ import RiskRadarStrip from './RiskRadarStrip';
 import RecommendationsPanel from './RecommendationsPanel';
 // Phase 1 / Pillar 1 — Bengaluru micro-market intelligence briefing.
 import MicroMarketBriefingPanel from './MicroMarketBriefingPanel';
-// Phase 2 / Pillar 2 — Best Use Simulator (asset-class fitness for the parcel).
-import BestUseSimulatorPanel from './BestUseSimulatorPanel';
-// Phase 2 / Pillar 3 — Deal-Structure Recommender (how to structure the deal).
-import DealStructureRecommenderPanel from './DealStructureRecommenderPanel';
-// Phase 2 / Pillar 3 — Capital-Stack Optimizer (how to fund the deal).
-import CapitalStackOptimizerPanel from './CapitalStackOptimizerPanel';
+// Phase 2 closeout — Strategic Fit Section that unifies the three property-
+// consultant ranking cards (Best Use Simulator + Deal-Structure Recommender +
+// Capital-Stack Optimizer) under one section header with a glanceable summary.
+import StrategicFitSection from './StrategicFitSection';
 // Workstream A — compact model-trust verdict beside the financial numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
@@ -200,27 +198,13 @@ export default function OverviewTab() {
           seeded micro-markets. */}
       <MicroMarketBriefingPanel />
 
-      {/* Phase 2 / Pillar 2 — Best Use Simulator. Scores the seven core asset
-          classes (residential / plotted / office / retail / industrial /
-          hospitality / mixed-use) on fitness to monetise the parcel, reading
-          from the micro-market briefing already on the workspace. Deterministic
-          — no AI. Closed verb dictionary for verdicts. */}
-      <BestUseSimulatorPanel />
-
-      {/* Phase 2 / Pillar 3 — Deal-Structure Recommender. Scores the eight deal
-          structures (outright / JV / JDA / revenue_share / area_share /
-          profit_share / ground_lease / hybrid) for the deal's asset class +
-          promoter posture + micro-market context. Pure compute over the
-          dealStructureMatrix + promoter posture + best-use slice. */}
-      <DealStructureRecommenderPanel />
-
-      {/* Phase 2 / Pillar 3 (second half) — Capital-Stack Optimizer. Three
-          scenarios (Conservative / Base / Aggressive) for funding this
-          project, with covenant checks against Indian-bank lending bands
-          (LTV / LTC / DSCR). Reads kernel output from workspace.financial.
-          Closes Pillar 3 — together with BestUse + DealStructure it answers
-          the consultant trio: what to build × how to structure × how to fund. */}
-      <CapitalStackOptimizerPanel />
+      {/* Phase 2 closeout — Strategic Fit Analysis. Visually unifies the three
+          property-consultant ranking cards (Best Use Simulator + Deal-Structure
+          Recommender + Capital-Stack Optimizer) under one section header with
+          a glanceable top-fit summary strip. Each card retains its expandable
+          functionality. Section is collapsible to reduce vertical weight when
+          the operator wants to focus on other Overview content. */}
+      <StrategicFitSection />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves
