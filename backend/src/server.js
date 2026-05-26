@@ -53,6 +53,10 @@ const microMarketRoutes = require('./routes/microMarket.routes');
 // until events fire, but registering at module load keeps test isolation
 // simple (tests can call dealEventsService.unregister()).
 require('./services/dealEvents.service').register();
+// P1-PR4 (2026-05-26) — auto-run the cross-document inconsistency detector
+// every time a new extraction completes. Debounced 90s per deal so a burst
+// of uploads collapses to one detector pass. Fire-and-forget — never blocks.
+require('./services/inconsistencyDetector.sink').register();
 
 const app = express();
 

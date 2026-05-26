@@ -384,6 +384,52 @@ const extractPromoterDeliverySlippage = (ws) => {
 // Open risk-flags signal extractor
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Cross-document inconsistencies from the inconsistencyDetector.service.
+ * The detector persists findings as risk_flags with `source = 'ai_detector'`;
+ * this extractor surfaces them as a single grouped signal the Deal Doctor
+ * can convert into `Inconsistent`-verb findings. P1-PR4 / Workstream B3:
+ * promotes the buried detector to a deal-heartbeat surface.
+ */
+const extractCrossDocInconsistencies = (ws) => {
+  const flags = getRiskFlags(ws);
+  if (!Array.isArray(flags) || flags.length === 0) return null;
+  const detector = flags.filter(
+    (f) => String(f?.source || '').toLowerCase() === 'ai_detector' &&
+      ['open', 'flagged'].includes(String(f?.status || '').toLowerCase()),
+  );
+  if (detector.length === 0) return null;
+  const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const f of detector) {
+    const sev = String(f.severity || 'medium').toLowerCase();
+    if (bySeverity[sev] !== undefined) bySeverity[sev] += 1;
+  }
+  // Top-3 finding titles for the Deal Doctor narration.
+  const topFindings = detector
+    .slice()
+    .sort((a, b) => {
+      const order = { critical: 0, high: 1, medium: 2, low: 3 };
+      return (order[a.severity] ?? 9) - (order[b.severity] ?? 9);
+    })
+    .slice(0, 3)
+    .map((f) => ({ title: f.title, severity: f.severity, category: f.category }));
+  return {
+    kind: 'cross_document_inconsistencies',
+    value: { total: detector.length, by_severity: bySeverity, top_findings: topFindings },
+    evidence: [
+      { ref: 'risk:flags', label: `${detector.length} cross-document inconsistenc${detector.length === 1 ? 'y' : 'ies'} flagged by AI detector` },
+    ],
+    meta: {
+      total: detector.length,
+      critical: bySeverity.critical,
+      high: bySeverity.high,
+      medium: bySeverity.medium,
+      low: bySeverity.low,
+      top_titles: topFindings.map((f) => f.title),
+    },
+  };
+};
+
 const extractOpenRiskFlagsCount = (ws) => {
   const flags = getRiskFlags(ws);
   if (!Array.isArray(flags) || flags.length === 0) return null;
@@ -419,6 +465,7 @@ const EXTRACTORS = [
   extractOverdueDdCount,
   extractDealBreakerDdCount,
   extractPromoterDeliverySlippage,
+  extractCrossDocInconsistencies,
   extractOpenRiskFlagsCount,
 ];
 
@@ -455,6 +502,7 @@ module.exports = {
   extractOverdueDdCount,
   extractDealBreakerDdCount,
   extractPromoterDeliverySlippage,
+  extractCrossDocInconsistencies,
   extractOpenRiskFlagsCount,
   // Orchestrator.
   EXTRACTORS,
