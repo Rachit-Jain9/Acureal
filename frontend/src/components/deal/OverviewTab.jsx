@@ -35,6 +35,8 @@ import MicroMarketBriefingPanel from './MicroMarketBriefingPanel';
 import BestUseSimulatorPanel from './BestUseSimulatorPanel';
 // Phase 2 / Pillar 3 — Deal-Structure Recommender (how to structure the deal).
 import DealStructureRecommenderPanel from './DealStructureRecommenderPanel';
+// Phase 2 / Pillar 3 — Capital-Stack Optimizer (how to fund the deal).
+import CapitalStackOptimizerPanel from './CapitalStackOptimizerPanel';
 // Workstream A — compact model-trust verdict beside the financial numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
@@ -211,6 +213,14 @@ export default function OverviewTab() {
           promoter posture + micro-market context. Pure compute over the
           dealStructureMatrix + promoter posture + best-use slice. */}
       <DealStructureRecommenderPanel />
+
+      {/* Phase 2 / Pillar 3 (second half) — Capital-Stack Optimizer. Three
+          scenarios (Conservative / Base / Aggressive) for funding this
+          project, with covenant checks against Indian-bank lending bands
+          (LTV / LTC / DSCR). Reads kernel output from workspace.financial.
+          Closes Pillar 3 — together with BestUse + DealStructure it answers
+          the consultant trio: what to build × how to structure × how to fund. */}
+      <CapitalStackOptimizerPanel />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves

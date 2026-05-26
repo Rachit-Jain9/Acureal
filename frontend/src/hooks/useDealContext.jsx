@@ -313,3 +313,22 @@ export function useDealStructureRecommender() {
     [workspace?.deal_structure_recommender],
   );
 }
+
+/**
+ * Returns the Capital-Stack Optimizer slice — Phase 2 / Pillar 3 (second
+ * half). For the deal's asset class + kernel-computed financial summary,
+ * proposes three capital-stack scenarios (Conservative / Base / Aggressive)
+ * with covenant-band checks against Indian-bank lending norms.
+ *
+ * Source: workspace.capital_stack_optimizer (composed server-side via
+ * `capitalStackOptimizer.scoreFromFinancials` — pure compute over the
+ * already-loaded financial summary; no extra DB round-trips, no kernel
+ * re-run).
+ */
+export function useDealCapitalStack() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.capital_stack_optimizer || { scenarios: [], reason: 'unavailable' },
+    [workspace?.capital_stack_optimizer],
+  );
+}
