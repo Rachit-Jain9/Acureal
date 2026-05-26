@@ -51,6 +51,9 @@ vi.mock('../../../hooks/useDealContext', () => ({
     scores: [],
     reason: 'no_parcel_coordinates',
   }),
+  // P2-PR2 — Deal-Structure Recommender slice. Test renders the "no asset
+  // class" empty state — recommender stays inert until the deal has one.
+  useDealStructureRecommender: () => ({ scores: [], reason: 'no_asset_class' }),
 }));
 
 vi.mock('../../../services/api', () => ({
