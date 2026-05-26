@@ -332,3 +332,30 @@ export function useDealCapitalStack() {
     [workspace?.capital_stack_optimizer],
   );
 }
+
+/**
+ * Returns the Karnataka RERA Readiness Pack slice — Phase 3 / Pillar 4.
+ * For applicable asset classes (residential / plotted / villas / mixed-use /
+ * redevelopment), surfaces the K-RERA readiness checklist across 7 buckets
+ * with per-item evidence status (verified / uploaded / available / pending
+ * / missing), bucket completeness, overall completeness %, and a gap list
+ * sorted by severity.
+ *
+ * Source: workspace.karnataka_rera_readiness (composed server-side via
+ * `karnatakaReraReadiness.composeReadiness` reading the existing approvals
+ * + documents — no kernel re-run, no extra DB round-trips).
+ */
+export function useDealReraReadiness() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () =>
+      workspace?.karnataka_rera_readiness || {
+        applicable: false,
+        reason_if_not: 'unavailable',
+        overall: null,
+        buckets: [],
+        gaps: [],
+      },
+    [workspace?.karnataka_rera_readiness],
+  );
+}
