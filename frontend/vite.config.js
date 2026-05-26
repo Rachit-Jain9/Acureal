@@ -20,6 +20,24 @@ export default defineConfig({
       output: {
         manualChunks: (id) => {
           if (!id.includes('node_modules')) return undefined;
+          // HOTFIX (2026-05-26) — React + React-DOM + scheduler MUST live
+          // in a dedicated vendor chunk that's guaranteed to load before
+          // any chunk that depends on React. Without this split,
+          // vendor-react-router loads first and crashes the page with
+          //   TypeError: Cannot read properties of undefined
+          //     (reading '__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED')
+          // react-router-dom accesses React's internal symbol at module
+          // load time; that symbol is undefined until React-DOM has
+          // finished initialising. Putting react + react-dom + scheduler
+          // in vendor-react ensures Rollup's chunk graph orders them
+          // before vendor-react-router.
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/scheduler/')
+          ) {
+            return 'vendor-react';
+          }
           if (id.includes('node_modules/recharts/')) return 'vendor-recharts';
           if (id.includes('node_modules/leaflet/') || id.includes('node_modules/react-leaflet/')) {
             return 'vendor-leaflet';
