@@ -4,6 +4,56 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-26 (evening, third 10-hour block) — Phase 3 of the property-consultant quarter: Pillar 4 — Karnataka RERA Readiness Pack (PR #599–#600)
+
+Continuation immediately after the Phase 2 wrap (#598). The operator's brief opened with a comparative-options ask + Chrome QA + "best work ever, not subpar". Two PRs shipped end-to-end (a deep-design PR, not a volume block).
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#599](https://github.com/Rachit-Jain9/REDIP/pull/599) | **P3-PR1 — Karnataka RERA Readiness Pack.** For residential / plotted / villas / mixed-use / redevelopment deals, composes a structured K-RERA filing-readiness inventory across 7 buckets (Application & Declaration, Title & Ownership, Plan & Approvals, Project Specs, Promoter Identity, Escrow & Finance, Professional Certificates) with ~30 items. Each item has a detect spec (approval types + name patterns + doc patterns + extracted field keys), a 1-5 weight, a recommended action, and a five-tier evidence resolution (verified > uploaded > available > pending > missing) with status precedence approval > extracted field > document. Pure compute over workspace-already-loaded data, no extra DB round-trips. CLAUDE.md hard rule respected: never asserts "RERA compliant" — only "X of Y items have verified evidence". Disclaimer surfaced in the UI. Service-layer applicability matrix correctly excludes commercial / hospitality / industrial / raw-land. Panel mounts ABOVE the existing DD + Approvals sections on the DD tab. 40 unit tests + 4 panel tests. |
+| [#600](https://github.com/Rachit-Jain9/REDIP/pull/600) | **P3-PR2 — DOCX export.** One-click download of the readiness pack as a polished Word document the operator hands to their CA / architect / lawyer. Cover with brand + readiness score + amber-bordered disclaimer banner. Executive summary with headline counts + per-bucket completeness table. Per-bucket sections with item tables (label, status, evidence, recommended next step). Top Gaps section. Closing Scope & Disclaimer page. Footer on every page: "Organisation aid · NOT a RERA compliance verdict". Not-applicable asset classes get a short single-page document explaining why no pack is generated. 8 unit tests on the DOCX builder; route at `GET /exports/deals/:dealId/rera-readiness/docx`. |
+
+### Cumulative impact (Phase 3 only — Pillar 4)
+
+- **Backend tests**: 2,684 → ~2,732 (+~48 across readiness service + DOCX exporter)
+- **Frontend tests**: 1,000 (+4 on the panel — kept clean)
+- **New canonical modules**:
+  - `backend/src/services/karnatakaReraReadiness.service.js` — pure composer
+  - `backend/src/services/exports/docx/buildReraReadiness.js` — DOCX builder
+  - `frontend/src/components/deal/KarnatakaReraReadinessPanel.jsx`
+- **New route**: `GET /exports/deals/:dealId/rera-readiness/docx`
+- **New workspace slice**: `workspace.karnataka_rera_readiness`
+- **New hook**: `useDealReraReadiness()`
+
+### What the user can do now that they couldn't before
+
+- **Open any residential / plotted / villas / mixed-use / redevelopment deal** and see a **K-RERA Readiness Pack** card at the top of the DD & Approvals tab — readiness score 0-100, tier badge (early / partial / mostly / filing-ready), headline counts (Verified / Uploaded / Available / Pending / Missing), 7 expandable buckets with ~30 items showing evidence source + recommended next steps, and a top-gaps strip sorted by severity.
+- **For non-residential deals** the card honestly says "Commercial / hospitality / industrial / raw-land projects are outside K-RERA project-level registration" — no fake checklist.
+- **Click Download DOCX** at the top of the panel and get a polished Word document with the cover-page disclaimer banner, per-bucket tables, top gaps, and a footer disclaimer on every page. The operator hands this to their CA / architect / lawyer; nobody can mistake it for a RERA compliance verdict.
+
+### CLAUDE.md hard rule
+
+Phase 3 ships the most legally-adjacent feature so far. Every layer surfaces the same line:
+
+> "This is an organisation aid for the deal team and their CA / architect / lawyer. It does NOT represent a Karnataka RERA compliance verdict — only an inventory of the documents and fields required for K-RERA project registration. The statutory determination of RERA compliance rests with the human professional."
+
+That line is on the panel, on the cover page of the DOCX, on the closing Scope page of the DOCX, and (shortened) on every footer of the DOCX. The recommended-action text uses operational verbs ("upload the EC document", "open the escrow account at a scheduled bank") not statutory ones ("is compliant", "is RERA-valid"). The verb dictionary that protects the Recommendation Engine + Deal Doctor extends naturally to this surface.
+
+### Operator actions required
+
+**Zero this block.** Every PR reads data that already exists on the deal (approvals + documents). No migrations to apply.
+
+### Phase 3 entry points still pending
+
+- **Pillar 5 — DD Pack**: organize and validate the full DD checklist for IC handoff. Companion to the RERA Readiness Pack (RERA = filing readiness; DD = IC readiness). Reuses the same evidence-tier model + DOCX-export pattern.
+- **E2 — Claim / provenance graph**: queryable "show me every claim that depends on this comp / this document". Foundation for advanced audit + IC-prep workflows.
+
+Both orthogonal to Phase 3's RERA work; each can ship in its own focused block.
+
+---
+
 ## 2026-05-26 (afternoon, 10-hour focused block) — Phase 2 of the property-consultant quarter: Pillars 2 + 3 + Strategic Fit grouping + stale-chunk auto-recovery (PR #593–#597)
 
 Continuation immediately after the Phase 1 wrap (#592). The operator's brief opened with a deep-technical-review ask: identify the highest-impact pending work, group related pieces, compare multiple approaches per major decision, and treat this as 10 hours of focused quality work. Five PRs landed end-to-end.
