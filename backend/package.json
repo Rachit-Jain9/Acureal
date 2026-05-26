@@ -21,6 +21,7 @@
     "@vercel/functions": "^3.5.0",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "docx": "^9.5.1",
