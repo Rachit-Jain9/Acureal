@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext, useDealRecord, useDealRecommendations } from '../../hooks/useDealContext';
+import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import { SQFT_PER_ACRE } from '../../config/india';
 import Badge from '../common/Badge';
 import { SectionHeader, CollapsibleCard } from '../../design-system';
@@ -68,6 +69,7 @@ export default function OverviewTab() {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
   const recommendations = useDealRecommendations();
+  useScrollOnMount();
   // PR-NX53 (2026-05-19) — field-provenance map for inline chip on the
   // Land Area card. Returns empty when no auto-fill events fire — chip
   // simply doesn't render.

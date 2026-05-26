@@ -3,6 +3,8 @@ import EmptyState from '../common/EmptyState';
 import { ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatCrores, formatPct, formatArea } from '../../utils/format';
+// P1-PR3 — scroll-on-mount when an evidence-ref click lands here.
+import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
 import AuditTimelineView from '../financials/AuditTimelineView';
 // Workstream A (Provenance Spine) — the model-trust verdict, carried from
@@ -67,6 +69,7 @@ export default function FinancialTab() {
   const deal = useDealRecord();
   const financials = deal?.financials;
   const dealId = deal?.id;
+  useScrollOnMount();
 
   if (!financials) {
     return (

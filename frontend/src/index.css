@@ -392,6 +392,27 @@ html[data-theme='dark'] {
 }
 
 @layer utilities {
+  /* Evidence-ref flash — fired by useScrollOnMount when an operator
+     clicks an evidence ref. Highlights the destination element briefly
+     so it's obvious WHICH number the click landed on. Respects
+     prefers-reduced-motion (animation collapses to a static tint). */
+  .evidence-highlight-flash {
+    animation: redip-evidence-flash 1.8s ease-out;
+    border-radius: 0.5rem;
+  }
+  @keyframes redip-evidence-flash {
+    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.0); background-color: transparent; }
+    20%  { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.18); background-color: rgba(99, 102, 241, 0.06); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.0); background-color: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .evidence-highlight-flash {
+      animation: none;
+      outline: 2px solid rgba(99, 102, 241, 0.5);
+      outline-offset: 4px;
+    }
+  }
+
   /* Scroll-reveal — landing page sections */
   .redip-reveal {
     opacity: 0;

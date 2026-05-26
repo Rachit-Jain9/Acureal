@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef } from 'react';
 import EmptyState from '../common/EmptyState';
+import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import {
   Upload,
   Download,
@@ -84,6 +85,7 @@ export default function DocumentsTab() {
   const dealRecord = useDealRecord();
   const docs = useDealDocuments();
   const { data: extractionData } = useDealExtractions(dealId);
+  useScrollOnMount();
   const uploadDoc = useUploadDocument();
   const deleteDoc = useDeleteDocument();
   const extractDoc = useExtractDocument();

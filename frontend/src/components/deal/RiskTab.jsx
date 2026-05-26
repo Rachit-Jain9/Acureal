@@ -17,6 +17,7 @@ import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
 import { SectionHeader, SkeletonList, Card, confirm } from '../../design-system';
 import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore, useDealDoctor } from '../../hooks/useDealContext';
+import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 // PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
 // ships in the DOCX Risk Register section) inline at the top of the tab.
 import RiskNarrativePanel from './RiskNarrativePanel';
@@ -282,6 +283,7 @@ export default function RiskTab() {
   const flags = useDealRedFlags();
   const scoreData = useDealRiskScore();
   const dealDoctor = useDealDoctor();
+  useScrollOnMount();
   const createFlag = useCreateRiskFlag();
   const updateFlag = useUpdateRiskFlag();
   const deleteFlag = useDeleteRiskFlag();
