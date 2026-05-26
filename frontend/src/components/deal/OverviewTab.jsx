@@ -31,6 +31,8 @@ import RiskRadarStrip from './RiskRadarStrip';
 import RecommendationsPanel from './RecommendationsPanel';
 // Phase 1 / Pillar 1 — Bengaluru micro-market intelligence briefing.
 import MicroMarketBriefingPanel from './MicroMarketBriefingPanel';
+// Phase 2 / Pillar 2 — Best Use Simulator (asset-class fitness for the parcel).
+import BestUseSimulatorPanel from './BestUseSimulatorPanel';
 // Workstream A — compact model-trust verdict beside the financial numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
@@ -193,6 +195,13 @@ export default function OverviewTab() {
           honestly when the parcel has no coordinates or sits outside the
           seeded micro-markets. */}
       <MicroMarketBriefingPanel />
+
+      {/* Phase 2 / Pillar 2 — Best Use Simulator. Scores the seven core asset
+          classes (residential / plotted / office / retail / industrial /
+          hospitality / mixed-use) on fitness to monetise the parcel, reading
+          from the micro-market briefing already on the workspace. Deterministic
+          — no AI. Closed verb dictionary for verdicts. */}
+      <BestUseSimulatorPanel />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves

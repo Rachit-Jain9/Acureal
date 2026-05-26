@@ -274,3 +274,23 @@ export function useDealMicroMarket() {
     [workspace?.micro_market],
   );
 }
+
+/**
+ * Returns the Best Use Simulator slice — Phase 2 / Pillar 2. For the deal's
+ * micro-market, scores the seven core asset classes (residential apartments,
+ * plotted, commercial office, retail, industrial / warehousing, hospitality,
+ * mixed-use) on fitness to monetise the site. Output is ranked desc with
+ * per-class score, band, verdict (closed dictionary), 3-line rationale, and
+ * five sub-factor scores.
+ *
+ * Source: workspace.best_use (composed server-side in dealWorkspace.service.js
+ * via `bestUseSimulator.scoreFromBriefing` — no extra DB round-trip; pure
+ * compute over the already-fetched micro-market briefing).
+ */
+export function useDealBestUse() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.best_use || { classification: { locality_code: null, confidence: null }, locality: null, scores: [], reason: 'unavailable' },
+    [workspace?.best_use],
+  );
+}
