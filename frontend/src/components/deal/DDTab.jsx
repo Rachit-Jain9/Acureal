@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import EmptyState from '../common/EmptyState';
 import EvidenceBadge from '../common/EvidenceBadge';
+// Phase 3 / Pillar 4 — K-RERA Readiness Pack panel mounts above the
+// existing DD + Approvals sections so the deal team sees the RERA filing
+// posture before diving into individual checklists.
+import KarnatakaReraReadinessPanel from './KarnatakaReraReadinessPanel';
 // PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
 // workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
@@ -771,7 +775,16 @@ export default function DDTab() {
   useScrollOnMount();
   return (
     <div className="space-y-10">
-      <DDSection dealId={dealId} />
+      {/* Phase 3 / Pillar 4 — K-RERA Readiness Pack. Surfaces the
+          completeness of the deal's Karnataka RERA filing inventory across
+          7 buckets (application, title, plan, specs, promoter, escrow,
+          professional certs) with per-item evidence status + recommended
+          next steps. CLAUDE.md disclaimer surfaced — organisation aid only,
+          not a RERA compliance verdict. */}
+      <KarnatakaReraReadinessPanel />
+      <div className="border-t border-hairline-strong pt-8">
+        <DDSection dealId={dealId} />
+      </div>
       <div className="border-t border-hairline-strong pt-8">
         <ApprovalsSection dealId={dealId} />
       </div>

@@ -35,6 +35,8 @@ const microMarketIntelligence = require('./microMarketIntelligence.service');
 const bestUseSimulator = require('./bestUseSimulator.service');
 const dealStructureRecommender = require('./dealStructureRecommender.service');
 const capitalStackOptimizer = require('./capitalStackOptimizer.service');
+const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
+const approvalsService = require('./approvals.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
 
@@ -332,6 +334,41 @@ async function getDealWorkspace(dealId) {
     });
   })();
 
+  // Karnataka RERA Readiness — Phase 3 / Pillar 4. Pure compute over the
+  // deal's asset class + the already-loaded approvals + documents (no extra
+  // DB round-trips beyond a single optional approvals fetch).
+  const reraReadinessSlice = await optional(async () => {
+    if (!deal.asset_class) {
+      return karnatakaReraReadiness.composeReadiness({ assetClass: null, dealName: deal.name });
+    }
+    let approvals = [];
+    try {
+      approvals = await approvalsService.listByDeal(deal.id);
+    } catch {
+      // Migration-tolerant — proceed with empty approvals if the approvals
+      // table is missing. Readiness still renders the checklist; everything
+      // shows missing.
+    }
+    // `composed.documents` is the workspace's documents slice (a {category: [...] }
+    // object; we flatten to a single array for the readiness composer).
+    const docsByCategory = composed?.documents?.data || composed?.documents || {};
+    let documentsFlat = [];
+    if (Array.isArray(docsByCategory)) {
+      documentsFlat = docsByCategory;
+    } else if (typeof docsByCategory === 'object') {
+      for (const k of Object.keys(docsByCategory)) {
+        if (Array.isArray(docsByCategory[k])) documentsFlat = documentsFlat.concat(docsByCategory[k]);
+      }
+    }
+    return karnatakaReraReadiness.composeReadiness({
+      assetClass: deal.asset_class,
+      approvals,
+      documents: documentsFlat,
+      extractedFields: {}, // future hook: structured extracted fields per document
+      dealName: deal.name,
+    });
+  }, 'karnatakaReraReadiness');
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
@@ -340,6 +377,7 @@ async function getDealWorkspace(dealId) {
     best_use: bestUseSlice,
     deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
     capital_stack_optimizer: capitalStackSlice,
+    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [] },
     generatedAt: new Date().toISOString(),
   };
 }
