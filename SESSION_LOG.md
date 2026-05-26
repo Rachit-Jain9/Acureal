@@ -4,6 +4,79 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-26 — Phase 1 of the property-consultant quarter: Pillars 1 + 6 + evidence + heartbeat (PR #585–#592)
+
+The operator's brief opening this block was strategic: REDIP had just shipped the Recommendation Engine + AI Deal Doctor backbone (#565–#584). The next question was *what data and signals should feed those panels?* The operator wanted property-consultant-grade intelligence — micro-market benchmarks, builder track records, K-RERA project pipelines, evidence-traceable claims — but deferred all paid integrations (Landeed, Surepass, Actowiz, Square Yards) "until users land." Build it ourselves, MVP-honest, no fake connectivity.
+
+The active product plan at `~/.claude/plans/c-users-rachi-onedrive-uw-desktop-redip-property-consultant-quarter.md` carved that into a 16-week Q3 2026 arc across 8 pillars. **This block landed Phase 1** — Pillar 1 (Micro-Market Intelligence), Pillar 6 (Live K-RERA Tracker), plus two cross-cutting workstreams (provenance click-through E1 + inconsistency-detector heartbeat E6 / B3).
+
+### PRs opened + merged
+
+| PR | Pillar / Workstream | What landed |
+|---|---|---|
+| [#585](https://github.com/Rachit-Jain9/REDIP/pull/585) | **P1-PR1** — Pillar 1 foundation | Schema + 20 Bengaluru micro-markets + IPC-seeded benchmarks. Three tables under `regulatory_data`: `bengaluru_micro_markets` (centroids + radii for Haversine classification), `micro_market_benchmarks` (~40 cells with absorption / cap-rate / rent / price bands from public IPC reports), `micro_market_demand_signals` (future-extensible). RLS-on, SELECT-for-all-authenticated. Operator action: apply migration. |
+| [#586](https://github.com/Rachit-Jain9/REDIP/pull/586) | **P1-PR2** — Pillar 1 surface | `MicroMarketBriefingPanel` on every deal Overview. Service classifies the deal's parcel into a micro-market by Haversine nearest-centroid with confidence levels (`high` / `medium` / `low` / `none`). Workspace slice composes the briefing server-side. Read API: `getBriefing`, `getDefaultsForDealCreate`, `listMicroMarkets`. Empty-state safe — the panel renders `"micro-market not yet identified"` when the parcel has no coordinates, never a broken state. |
+| [#587](https://github.com/Rachit-Jain9/REDIP/pull/587) | **P1-PR3 / E1** — Evidence click-through | Provenance click-through on every evidence ref. `EXACT_MAP` + `PREFIX_MAP` parser maps refs like `risk_radar.failure_modes.title_clarity_risk` to a `{tab, anchorId}` deep link. Router-agnostic via `window.location` + `history.pushState`. `.evidence-highlight-flash` keyframe pulses the target card on arrival. Used by Recommendation cards + Deal Doctor findings to make every claim traceable to the source signal. |
+| [#588](https://github.com/Rachit-Jain9/REDIP/pull/588) | **hotfix(vite)** | Production blank-page recovery. PR #583's vendor chunking accidentally put `react-router` in a chunk that loaded before `react-dom`, causing `TypeError: Cannot read properties of undefined (reading '__SECRET_INTERNALS_...')` on every deal page. Hotfix splits `react` + `react-dom` + `scheduler` into a dedicated `vendor-react` chunk loaded first. Prod recovered with new bundle hashes within 5 minutes of merge. |
+| [#589](https://github.com/Rachit-Jain9/REDIP/pull/589) | **P1-PR4 / E6 / B3** — Inconsistency heartbeat | Promote cross-document inconsistency detector to a deal heartbeat. New `inconsistencyDetector.sink.js` subscribes to `EVENTS.DOCUMENT_EXTRACTED` with a 90s debounce per deal (prevents N-doc upload burst from triggering N runs). RLS-aware via `SET LOCAL app.current_organization_id`. Findings flow into the Deal Doctor's `cross-document-inconsistencies` rule. Extraction service now publishes `DOCUMENT_EXTRACTED` so the heartbeat ticks automatically. |
+| [#590](https://github.com/Rachit-Jain9/REDIP/pull/590) | **P1-PR5** — Pillar 6 foundation | Live K-RERA Tracker schema + parser + service shell. Three tables under `regulatory_data`: `karnataka_rera_projects` (PRM/KA/RERA/... PK), `karnataka_rera_quarterly_filings` (Form-4/5/6 QU per quarter), `karnataka_rera_promoter_index` VIEW (aggregated per-promoter stats). Read API + idempotent UPSERT writer. `cheerio`-based parser with header-by-name lookup so portal column reorders don't break us. 24 unit tests on synthetic + reorder fixtures. **Tables empty until operator pastes a real K-RERA HTML sample — CLAUDE.md "no fake connectivity" gate.** |
+| [#591](https://github.com/Rachit-Jain9/REDIP/pull/591) | **P1-PR6** — Promoter cross-link | Confirm a K-RERA promoter as the canonical match for a deal's analyst-recorded profile. Four new columns on `deal_promoter_profiles` (`linked_rera_promoter_name`, `linked_rera_match_confidence`, `linked_rera_at`, `linked_rera_by`). New `<ReraCrossCheck />` sub-component in `PromoterProfileCard`: shows top-5 trigram candidates when unlinked, K-RERA aggregate stats when linked, renders nothing when no candidates exist. Analyst's findings stay sovereign — the link only cross-references the public record. |
+| [#592](https://github.com/Rachit-Jain9/REDIP/pull/592) | **P1-PR7** — Phase 1 wrap | This entry + verification run. |
+
+### Cumulative impact (Phase 1 only)
+
+* **Backend tests**: ~2,485 → **2,603** (+~118 across the seven PRs).
+* **Frontend tests**: ~947 → **964** (+17 across the new panels).
+* **New migrations** (three to apply): `20260616_micro_market_intelligence.sql`, `20260617_karnataka_rera_tracker.sql`, `20260618_promoter_rera_link.sql`.
+* **New canonical modules**: `backend/src/services/microMarketIntelligence.service.js`, `karnatakaReraTracker.parser.js`, `karnatakaReraTracker.service.js`, `inconsistencyDetector.sink.js`. Extended: `promoterProfile.service.js` (K-RERA cross-link), `dealWorkspace.service.js` (micro-market slice), `extraction.service.js` (event publishing).
+* **New UI surfaces**: `MicroMarketBriefingPanel` (Overview tab), `ReraCrossCheck` (Promoter card on Risk tab), evidence-ref click-through (Recommendation + Deal Doctor cards).
+* **20 Bengaluru micro-markets seeded** with centroids + radii — Whitefield, Outer Ring Road, Sarjapur Road, Hebbal, Devanahalli, Yeshwantpur, Marathahalli, Indiranagar, Koramangala, JP Nagar, Bannerghatta Road, Mysore Road, Kanakapura Road, Tumkur Road, Hosur Road, Electronic City, North Bangalore, South Bangalore, East Bangalore, West Bangalore.
+* **~40 benchmark cells** populated from public IPC / JLL / Knight Frank reports — covering residential apartments, plotted, commercial office across the major micro-markets.
+
+### What the user can do now that they couldn't before
+
+* **Open a deal** and see a *Micro-Market Briefing* panel on the Overview — "Whitefield (high confidence), 92% match. Median residential price ₹11.2k/sf, absorption 1.6 quarters, cap rate 7.4%." Pulled from a deterministic Haversine classifier + IPC-seeded benchmarks. Empty state when no parcel coordinates yet.
+* **Click any evidence ref** on a Recommendation or Deal Doctor card → jump directly to the source signal (the kernel input, the comp row, the extracted document field) with a brief pulse highlight. No more "click here and search the workspace yourself".
+* **Upload a stack of documents** and watch the Deal Doctor re-run cross-document inconsistency checks automatically — survey-number drift between sale deed and EC, area-mismatch between agreement and sketch, promoter-name discrepancy between RERA filing and JDA. The heartbeat ticks 90 s after the last upload settles.
+* **Record a promoter name** on a deal and (once the K-RERA database is populated) see a quiet "K-RERA candidates" section under the Promoter card with the top-5 trigram-similar names from the public index. One click on "Confirm match" links the deal to that promoter and surfaces their public track record (projects / completed / on-time / avg delay) alongside what was recorded by hand.
+
+### Honest gate — K-RERA data activation
+
+PR #590 / #591 ship the *infrastructure* for K-RERA intelligence (schema + parser + UPSERT writer + UI surface). The *data activation* is operator-gated per CLAUDE.md "no fake connectivity":
+
+> The K-RERA portal at `rera.karnataka.gov.in/viewAllProjects` is JS-rendered. A pure `axios + cheerio` fetcher does not work. Activation needs **one of**:
+>
+> 1. **Operator paste** of a rendered HTML sample into `backend/scripts/k-rera-fixtures/`. The parser is already tested against that shape — drop a real sample in and the cron lights up.
+> 2. **One-time Puppeteer / Playwright pull** — heavyweight, deferred per the operator's "no paid integrations until users land" decision (2026-05-26).
+
+Until either lands, `karnataka_rera_projects` stays empty, the read API returns `[]` / `null` honestly, and the K-RERA cross-check section on the Promoter card renders nothing (no candidates, no broken state).
+
+### Operator actions required (three migrations to apply, plain English)
+
+The recap to the operator in chat has the full step-by-step. Engineering audit summary:
+
+1. **Apply migration 20260616** — micro-market intelligence (3 tables + 20 seeded markets + ~40 benchmarks). After this, every deal sees a real Micro-Market Briefing panel.
+2. **Apply migration 20260617** — K-RERA tracker (3 tables + promoter-index view + pg_trgm GIN). After this, the K-RERA tables exist but stay empty until a fixture lands.
+3. **Apply migration 20260618** — K-RERA cross-link columns on `deal_promoter_profiles`. After this, the Promoter card can render the K-RERA cross-check section once data exists.
+
+All three are idempotent (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`). Safe to re-run.
+
+### What's left (Phase 2 entry)
+
+Phase 1 closes here. **Phase 2 of the property-consultant quarter** is Pillar 2 (Best Use Simulator) + Pillar 3 (Deal-Structure Recommender + Capital-Stack Optimizer). Both orthogonal to K-RERA data, so they can ship while the K-RERA fixture sits pending. Next-block entry points:
+
+* **P2-PR1** — Best Use Simulator scoring rubric (asset class fitness on a parcel: which of residential apartments / plotted / commercial office / retail / industrial / hospitality / mixed-use best monetises the site, given micro-market benchmarks + buildability envelope + comp-derived absorption + verified-comp price bands).
+* **P2-PR2** — Deal-Structure Recommender (outright / JDA / JV / revenue-share / area-share / forward-purchase / hybrid scored against deal economics + promoter posture + market signals).
+* **P2-PR3** — Capital-Stack Optimizer (debt / equity / mezz / construction-finance mix, with covenant-band checks from the kernel).
+
+Operator carve-outs still in force from the 2026-05-19 override: AI never authors legal conclusions on title / encumbrance / RERA registration / statutory approvals; recommendations use only the closed verb dictionary; diagnoses use only the diagnostic verb dictionary; tone classifier blocks theatrical language; deterministic kernel for all math.
+
+### Stacked-PR-cascade discipline (carried forward from prior block)
+
+Phase 1 deliberately branched every PR off **master** (no stacking). Zero auto-close cascades. Continue this discipline through Phase 2.
+
+---
+
 ## 2026-05-25 (second 10-hour block) — closing the recommendation loop + bundle wins (PR #574, #580–#584)
 
 Continuation immediately after the morning's Recommendation Engine + AI Deal Doctor arc merged. The operator's brief was to integrate the new surfaces across the rest of the app (so they aren't deal-page-only) plus bundle-size hygiene. Six PRs shipped.
