@@ -49,6 +49,7 @@ const organizationRoutes = require('./routes/organization.routes');
 const recommendationRoutes = require('./routes/recommendation.routes');
 const microMarketRoutes = require('./routes/microMarket.routes');
 const bestUseSimulatorRoutes = require('./routes/bestUseSimulator.routes');
+const dealStructureRecommenderRoutes = require('./routes/dealStructureRecommender.routes');
 
 // Wire the deal-event sink early — it's pure subscription, no side effects
 // until events fire, but registering at module load keeps test isolation
@@ -213,6 +214,12 @@ app.use('/api/micro-market', microMarketRoutes);
 // slice. This route serves parcel-first sourcing where coordinates are
 // known before a deal exists.
 app.use('/api/best-use', bestUseSimulatorRoutes);
+
+// Deal-Structure Recommender (Phase 2 / Pillar 3, first half) — deal-
+// independent. Per-deal scores already live on the workspace endpoint as
+// `deal_structure_recommender` slice. This route serves stateless
+// asset-class + promoter-posture exploration before a deal exists.
+app.use('/api/deal-structure-recommender', dealStructureRecommenderRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

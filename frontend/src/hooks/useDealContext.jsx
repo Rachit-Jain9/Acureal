@@ -294,3 +294,22 @@ export function useDealBestUse() {
     [workspace?.best_use],
   );
 }
+
+/**
+ * Returns the Deal-Structure Recommender slice — Phase 2 / Pillar 3.
+ * For the deal's asset class + promoter posture + micro-market context,
+ * ranks the eight deal structures (outright, JV, JDA, revenue_share,
+ * area_share, profit_share, ground_lease, hybrid) on strategic fit.
+ *
+ * Source: workspace.deal_structure_recommender (composed server-side via
+ * `dealStructureRecommender.scoreFromContext` — no extra DB round-trip;
+ * pure compute over the deal + already-loaded promoter posture +
+ * micro-market briefing).
+ */
+export function useDealStructureRecommender() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () => workspace?.deal_structure_recommender || { scores: [], reason: 'unavailable' },
+    [workspace?.deal_structure_recommender],
+  );
+}

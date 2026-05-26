@@ -33,6 +33,8 @@ const { narrateCard } = require('./recommendation/recommendationNarrator');
 const dealDoctor = require('./recommendation/dealDoctor');
 const microMarketIntelligence = require('./microMarketIntelligence.service');
 const bestUseSimulator = require('./bestUseSimulator.service');
+const dealStructureRecommender = require('./dealStructureRecommender.service');
+const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
 
 const ACTIVITY_LIMIT = 50;
@@ -293,12 +295,37 @@ async function getDealWorkspace(dealId) {
     };
   })();
 
+  // Deal-Structure Recommender — Phase 2 / Pillar 3. Pure compute over the
+  // deal's asset class + promoter posture + micro-market briefing. No extra
+  // DB round-trips beyond the promoter posture (which is itself migration-
+  // tolerant and degrades to 'unverified' silently).
+  const dealStructureSlice = await optional(async () => {
+    if (!deal.asset_class) return { scores: [], reason: 'no_asset_class' };
+    let promoterPosture = 'unverified';
+    try {
+      const promoterData = await promoterProfileService.getProfileWithAssessment(deal.id);
+      promoterPosture = promoterData?.assessment?.posture || 'unverified';
+    } catch {
+      // Migration-tolerant: degrade silently.
+    }
+    return dealStructureRecommender.scoreFromContext({
+      assetClass: deal.asset_class,
+      promoterPosture,
+      microMarket: microMarketSlice && microMarketSlice.locality ? {
+        locality: microMarketSlice.locality,
+        benchmarks: microMarketSlice.benchmarks,
+        demand_signals: microMarketSlice.demand_signals,
+      } : null,
+    });
+  }, 'dealStructure');
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
     micro_market: microMarketSlice || { classification: { locality_code: null, confidence: null }, locality: null, benchmarks: [], demand_signals: [], reason: 'unavailable' },
     best_use: bestUseSlice,
+    deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
     generatedAt: new Date().toISOString(),
   };
 }

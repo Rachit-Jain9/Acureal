@@ -33,6 +33,8 @@ import RecommendationsPanel from './RecommendationsPanel';
 import MicroMarketBriefingPanel from './MicroMarketBriefingPanel';
 // Phase 2 / Pillar 2 — Best Use Simulator (asset-class fitness for the parcel).
 import BestUseSimulatorPanel from './BestUseSimulatorPanel';
+// Phase 2 / Pillar 3 — Deal-Structure Recommender (how to structure the deal).
+import DealStructureRecommenderPanel from './DealStructureRecommenderPanel';
 // Workstream A — compact model-trust verdict beside the financial numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 // PR-NX53 (2026-05-19) — inline provenance chip on the Land Area
@@ -202,6 +204,13 @@ export default function OverviewTab() {
           from the micro-market briefing already on the workspace. Deterministic
           — no AI. Closed verb dictionary for verdicts. */}
       <BestUseSimulatorPanel />
+
+      {/* Phase 2 / Pillar 3 — Deal-Structure Recommender. Scores the eight deal
+          structures (outright / JV / JDA / revenue_share / area_share /
+          profit_share / ground_lease / hybrid) for the deal's asset class +
+          promoter posture + micro-market context. Pure compute over the
+          dealStructureMatrix + promoter posture + best-use slice. */}
+      <DealStructureRecommenderPanel />
 
       {/* AI Synthesis — combined Quick Analysis + Full IC Memo behind a
           single bordered card with tabs. The tabbed container preserves
