@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import {
   FileCheck, ChevronRight, ChevronDown, CheckCircle2, Circle,
-  AlertCircle, Info, Sparkles,
+  AlertCircle, Info, Sparkles, Download, Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useDealReraReadiness } from '../../hooks/useDealContext';
+import { useDealContext, useDealReraReadiness } from '../../hooks/useDealContext';
+import { exportsAPI } from '../../services/api';
+import { toast } from '../common/Toast';
 
 /**
  * KarnatakaReraReadinessPanel — Phase 3 / Pillar 4.
@@ -195,7 +197,37 @@ function GapStrip({ gap }) {
 
 export default function KarnatakaReraReadinessPanel() {
   const slice = useDealReraReadiness();
+  const { dealId } = useDealContext();
   const [gapsOpen, setGapsOpen] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  // Download the DOCX readiness pack. Server-side disclaimer is on every
+  // page of the document — the user can hand the file to their CA /
+  // architect / lawyer.
+  const handleDownload = async () => {
+    if (downloading || !dealId) return;
+    setDownloading(true);
+    try {
+      const res = await exportsAPI.dealReraReadinessDocx(dealId);
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (slice?.deal_name || 'deal').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      a.download = `redip-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('K-RERA Readiness Pack downloaded');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Could not download the readiness pack');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (!slice) return null;
 
@@ -243,6 +275,20 @@ export default function KarnatakaReraReadinessPanel() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-content-primary disabled:text-content-muted transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded border border-bg-tertiary px-2 py-1"
+            title="Download the readiness pack as a Word document for your CA / architect / lawyer"
+          >
+            {downloading ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Download size={12} />
+            )}
+            <span>{downloading ? 'Preparing…' : 'Download DOCX'}</span>
+          </button>
           <span
             className={clsx(
               'text-[10px] uppercase tracking-wider font-medium px-2 py-0.5 rounded border',

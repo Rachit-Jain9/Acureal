@@ -20,6 +20,10 @@ const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
 const { buildDealWorkbookV2 } = require('../services/exports/xlsx/v2/buildWorkbook');
 const { buildDealReportDocx } = require('../services/exports/docx/buildReport');
+const { buildReraReadinessDocx } = require('../services/exports/docx/buildReraReadiness');
+const { composeReadiness } = require('../services/karnatakaReraReadiness.service');
+const approvalsService = require('../services/approvals.service');
+const documentService = require('../services/document.service');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
 const { buildDealTearSheet } = require('../services/dealTearSheet.service');
 
@@ -1265,6 +1269,73 @@ router.get(
       next(error);
     }
   }
+);
+
+// ─── K-RERA Readiness Pack DOCX (Phase 3 / Pillar 4) ─────────────────────────
+
+// GET /exports/deals/:dealId/rera-readiness/docx — Karnataka RERA Readiness
+// Pack as a Word document. Honors CLAUDE.md hard rule via a prominent cover-
+// page disclaimer + footer on every page: organisation aid only, not a
+// RERA compliance verdict.
+//
+// Available for the same roles as other export routes (admin + analyst).
+// No env-flag gate — this is a deal-team workflow aid, not a paid product.
+router.get(
+  '/deals/:dealId/rera-readiness/docx',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const dealId = req.params.dealId;
+
+      // Pull the deal (asset class + name) — must be visible to caller.
+      const dealRow = await dealService.getDealById(dealId).catch(() => null);
+      if (!dealRow) {
+        return res.status(404).json({ success: false, message: 'Deal not found.' });
+      }
+
+      // Pull approvals + documents the same way the workspace slice does.
+      let approvals = [];
+      try { approvals = await approvalsService.listByDeal(dealId); } catch { /* migration-tolerant */ }
+
+      let documentsFlat = [];
+      try {
+        const docs = await documentService.getDocuments(dealId).catch(() => null);
+        // Flatten the by-category response into a single array.
+        if (Array.isArray(docs)) documentsFlat = docs;
+        else if (docs && typeof docs === 'object') {
+          for (const k of Object.keys(docs)) {
+            if (Array.isArray(docs[k])) documentsFlat = documentsFlat.concat(docs[k]);
+          }
+        }
+      } catch { /* document fetch failure → empty list, pack still works */ }
+
+      const readiness = composeReadiness({
+        assetClass: dealRow.asset_class,
+        approvals,
+        documents: documentsFlat,
+        dealName: dealRow.name,
+      });
+
+      const docxBuffer = await buildReraReadinessDocx(readiness, {
+        brandName: 'REDIP',
+        userName: req.user?.name || null,
+        generatedAt: new Date().toISOString(),
+      });
+
+      const safeName = ((dealRow && dealRow.name) || 'deal')
+        .replace(/[^a-z0-9]/gi, '-')
+        .toLowerCase();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="redip-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
+      );
+      return res.send(docxBuffer);
+    } catch (error) {
+      next(error);
+    }
+  },
 );
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
