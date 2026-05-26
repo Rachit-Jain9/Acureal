@@ -6,6 +6,7 @@ import EvidenceBadge from '../common/EvidenceBadge';
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
 // so the cache refreshes automatically.
 import { useDealContext, useDealDDItems, useDealDDScore } from '../../hooks/useDealContext';
+import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import {
   ClipboardList,
   Plus,
@@ -767,6 +768,7 @@ function ApprovalsSection({ dealId }) {
 
 export default function DDTab() {
   const { dealId } = useDealContext();
+  useScrollOnMount();
   return (
     <div className="space-y-10">
       <DDSection dealId={dealId} />

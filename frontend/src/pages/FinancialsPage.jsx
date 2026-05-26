@@ -43,6 +43,10 @@ import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
 import { SkeletonKpi, SkeletonCard } from '../design-system';
 import { normalizeFinancials, hasLegacyResidentialLoadingFactor } from '../components/financials/normalizeFinancials';
+// P1-PR3 (2026-05-26) — scroll-on-mount when an evidence-ref click lands
+// on this page. The hook reads `?scroll=<id>` from the URL, scrolls the
+// matching element into view, and flashes it briefly.
+import { useScrollOnMount } from '../hooks/useEvidenceNavigate';
 
 
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────────
@@ -52,6 +56,7 @@ export default function FinancialsPage() {
   const { data: financials, isLoading, error } = useFinancials(dealId);
   const { data: deal } = useDeal(dealId);
   const calculateMutation = useCalculateFinancials();
+  useScrollOnMount();
 
   const existingClass = financials?.asset_class || 'residential_apartments';
   const [selectedClass, setSelectedClass] = useState(null); // null = use stored

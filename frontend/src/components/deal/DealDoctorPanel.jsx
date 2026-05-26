@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext } from '../../hooks/useDealContext';
+import { useEvidenceNavigate } from '../../hooks/useEvidenceNavigate';
+import { isNavigableRef } from '../../utils/evidenceRef';
 import { formatRelativeTime } from '../../utils/format';
 
 /**
@@ -47,6 +49,7 @@ const severityIcon = (severity) => {
 
 function FindingCard({ finding }) {
   const [open, setOpen] = useState(false);
+  const navigateToEvidence = useEvidenceNavigate();
   const verbCls = VERB_TONE[finding.verb] || 'bg-slate-50 text-slate-700 border-slate-200';
 
   return (
@@ -88,12 +91,30 @@ function FindingCard({ finding }) {
           )}
           {open && Array.isArray(finding.evidence) && finding.evidence.length > 0 && (
             <ul className="mt-1.5 space-y-1 border-t border-hairline pt-1.5">
-              {finding.evidence.map((e, i) => (
-                <li key={i} className="text-[11px] text-content-muted flex items-start gap-1.5">
-                  <FileSearch size={11} className="mt-0.5 shrink-0" />
-                  <span>{e.label}{e.ref ? ` — ${e.ref}` : ''}</span>
-                </li>
-              ))}
+              {finding.evidence.map((e, i) => {
+                const navigable = isNavigableRef(e.ref);
+                if (navigable) {
+                  return (
+                    <li key={i} className="text-[11px] flex items-start gap-1.5">
+                      <FileSearch size={11} className="mt-0.5 shrink-0 text-content-muted" />
+                      <button
+                        type="button"
+                        onClick={() => navigateToEvidence(e.ref)}
+                        className="text-left text-content-secondary hover:text-accent underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-sm"
+                        title={`Jump to ${e.ref}`}
+                      >
+                        {e.label}{e.ref ? ` — ${e.ref}` : ''}
+                      </button>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={i} className="text-[11px] text-content-muted flex items-start gap-1.5">
+                    <FileSearch size={11} className="mt-0.5 shrink-0" />
+                    <span>{e.label}{e.ref ? ` — ${e.ref}` : ''}</span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

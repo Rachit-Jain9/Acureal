@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import EmptyState from '../common/EmptyState';
 import EvidenceBadge from '../common/EvidenceBadge';
 import { useQuery } from '@tanstack/react-query';
+import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import {
   TrendingUp,
   AlertCircle,
@@ -407,6 +408,7 @@ export default function CompsTab() {
   const hasLatLng = deal?.lat != null && deal?.lng != null;
   const city = deal?.city;
   const [pinnedCompId, setPinnedCompId] = useState(null);
+  useScrollOnMount();
 
   // Ranked comps — the 6-factor similarity scorer ride-share with the
   // existing nearby/benchmark queries. The scorer was built months ago and
