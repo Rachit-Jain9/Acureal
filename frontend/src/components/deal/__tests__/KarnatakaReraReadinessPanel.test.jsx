@@ -2,14 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const useDealReraReadinessMock = vi.fn();
+const useDealContextMock = vi.fn(() => ({ dealId: 'deal-1' }));
 vi.mock('../../../hooks/useDealContext', () => ({
+  useDealContext: (...a) => useDealContextMock(...a),
   useDealReraReadiness: (...a) => useDealReraReadinessMock(...a),
+}));
+
+// Mock the DOCX download surface — the panel calls exportsAPI.dealReraReadinessDocx
+const dealReraReadinessDocxMock = vi.fn();
+vi.mock('../../../services/api', () => ({
+  exportsAPI: { dealReraReadinessDocx: (...a) => dealReraReadinessDocxMock(...a) },
+}));
+
+// Toast mocks
+vi.mock('../../common/Toast', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 import KarnatakaReraReadinessPanel from '../KarnatakaReraReadinessPanel';
 
 beforeEach(() => {
   useDealReraReadinessMock.mockReset();
+  dealReraReadinessDocxMock.mockReset();
 });
 
 describe('KarnatakaReraReadinessPanel', () => {
