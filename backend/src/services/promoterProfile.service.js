@@ -20,10 +20,16 @@
 
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
+const karnatakaRera = require('./karnatakaReraTracker.service');
 const log = require('../lib/logger').child({ module: 'promoterProfile.service' });
 
 const PG_UNDEFINED_TABLE = '42P01';
+const PG_UNDEFINED_COLUMN = '42703';
 const isMissingTable = (err) => Boolean(err) && err.code === PG_UNDEFINED_TABLE;
+const isMissingColumn = (err) => Boolean(err) && err.code === PG_UNDEFINED_COLUMN;
+// Migration-tolerant for both the base table (20260609) and the K-RERA link
+// columns (20260618) — every read degrades cleanly when either is absent.
+const isMissingSchema = (err) => isMissingTable(err) || isMissingColumn(err);
 
 const ENTITY_TYPES = Object.freeze([
   'individual',
@@ -36,6 +42,16 @@ const ENTITY_TYPES = Object.freeze([
 ]);
 
 const SELECT_COLUMNS = `id, deal_id, organization_id, promoter_name, entity_type,
+  years_active, total_projects, delivered_on_time, delivered_delayed,
+  ongoing_projects, rera_registered, rera_complaints, notes,
+  verified_by, verified_at, created_at, updated_at,
+  linked_rera_promoter_name, linked_rera_match_confidence,
+  linked_rera_at, linked_rera_by`;
+
+// Pre-20260618 fallback — drops the K-RERA link columns so the profile read
+// still works on older databases. Promoter card still renders; the K-RERA
+// cross-link section just stays inert.
+const SELECT_COLUMNS_LEGACY = `id, deal_id, organization_id, promoter_name, entity_type,
   years_active, total_projects, delivered_on_time, delivered_delayed,
   ongoing_projects, rera_registered, rera_complaints, notes,
   verified_by, verified_at, created_at, updated_at`;
@@ -147,8 +163,11 @@ const assessPromoter = (profile) => {
   };
 };
 
-/** Fetch the promoter profile for a deal, or null. Migration-tolerant. */
+/** Fetch the promoter profile for a deal, or null. Migration-tolerant on
+ *  both the base table (20260609) AND the K-RERA link columns (20260618). */
 const getProfile = async (dealId) => {
+  // Try the full SELECT first (with K-RERA link columns). If those columns
+  // aren't there yet (20260618 not applied) fall back to the legacy SELECT.
   try {
     const result = await query(
       `SELECT ${SELECT_COLUMNS}
@@ -161,14 +180,189 @@ const getProfile = async (dealId) => {
     return result.rows[0] || null;
   } catch (err) {
     if (isMissingTable(err)) return null;
+    if (isMissingColumn(err)) {
+      // Pre-20260618 schema — read the legacy column set instead.
+      try {
+        const legacy = await query(
+          `SELECT ${SELECT_COLUMNS_LEGACY}
+             FROM public.deal_promoter_profiles
+            WHERE deal_id = $1
+              AND organization_id = current_organization_id()
+            LIMIT 1`,
+          [dealId]
+        );
+        return legacy.rows[0] || null;
+      } catch (legacyErr) {
+        if (isMissingTable(legacyErr)) return null;
+        throw legacyErr;
+      }
+    }
     throw err;
   }
 };
 
-/** Profile + its computed assessment — the read model for the Promoter card. */
+// ─────────────────────────────────────────────────────────────────────────────
+//  K-RERA cross-link — Phase 1 / Pillar 6
+//
+//  The analyst's manual profile is sovereign. The K-RERA cross-link adds
+//  "what the public record shows" alongside it, never overwriting the
+//  analyst's findings. The link is a column on the profile; the K-RERA
+//  aggregates come from regulatory_data.karnataka_rera_promoter_index via
+//  karnatakaReraTracker.service.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Top trigram-similar K-RERA promoters for a free-text promoter name.
+ * Used by the PromoterProfileCard to surface "did you mean ...?" candidates
+ * after the analyst records a name. Empty array when K-RERA tables are
+ * empty (the right empty-state per CLAUDE.md "no fake connectivity").
+ */
+const findReraCandidates = async (promoterName, { limit = 5, minSimilarity = 0.35 } = {}) => {
+  if (!promoterName || promoterName.trim().length < 2) return [];
+  return karnatakaRera.findPromoterCandidates(promoterName, { limit, minSimilarity });
+};
+
+/**
+ * Confirm a K-RERA promoter as the canonical match for this deal's profile.
+ * Records who linked it + when + at what trigram similarity. Idempotent
+ * (UPSERT-style UPDATE: linking the same promoter twice is a no-op).
+ *
+ * Returns the updated profile row. Throws:
+ *   - 404 if no profile exists for the deal (analyst must record first)
+ *   - 503 if the K-RERA link columns aren't migrated yet (20260618)
+ */
+const linkReraPromoter = async (dealId, reraPromoterName, userId = null, matchConfidence = null) => {
+  const cleanName = toText(reraPromoterName);
+  if (!cleanName) throw createError('A K-RERA promoter name is required.', 400);
+
+  const conf =
+    matchConfidence === null || matchConfidence === undefined
+      ? null
+      : (() => {
+          const n = Number(matchConfidence);
+          if (!Number.isFinite(n) || n < 0 || n > 1) return null;
+          return Number(n.toFixed(3));
+        })();
+
+  try {
+    const result = await query(
+      `UPDATE public.deal_promoter_profiles
+          SET linked_rera_promoter_name    = $1,
+              linked_rera_match_confidence = $2,
+              linked_rera_at               = NOW(),
+              linked_rera_by               = $3,
+              updated_at                   = NOW()
+        WHERE deal_id = $4
+          AND organization_id = current_organization_id()
+        RETURNING ${SELECT_COLUMNS}`,
+      [cleanName, conf, userId, dealId]
+    );
+    if (!result.rows[0]) {
+      throw createError(
+        'No promoter profile to link — record the promoter first, then link the K-RERA match.',
+        404
+      );
+    }
+    return result.rows[0];
+  } catch (err) {
+    if (err.statusCode) throw err;
+    if (isMissingTable(err)) {
+      throw createError('Promoter profiles are not yet available. Please try again shortly.', 503);
+    }
+    if (isMissingColumn(err)) {
+      log.error('deal_promoter_profiles.linked_rera_* missing — apply migration 20260618', err);
+      throw createError(
+        'The K-RERA cross-link feature is not yet enabled. Please try again shortly.',
+        503
+      );
+    }
+    throw err;
+  }
+};
+
+/** Clear the K-RERA cross-link. Idempotent — unlinking a non-linked profile
+ *  returns the profile unchanged. */
+const unlinkReraPromoter = async (dealId) => {
+  try {
+    const result = await query(
+      `UPDATE public.deal_promoter_profiles
+          SET linked_rera_promoter_name    = NULL,
+              linked_rera_match_confidence = NULL,
+              linked_rera_at               = NULL,
+              linked_rera_by               = NULL,
+              updated_at                   = NOW()
+        WHERE deal_id = $1
+          AND organization_id = current_organization_id()
+        RETURNING ${SELECT_COLUMNS}`,
+      [dealId]
+    );
+    if (!result.rows[0]) {
+      throw createError('No promoter profile found for this deal.', 404);
+    }
+    return result.rows[0];
+  } catch (err) {
+    if (err.statusCode) throw err;
+    if (isMissingTable(err)) {
+      throw createError('Promoter profiles are not yet available. Please try again shortly.', 503);
+    }
+    if (isMissingColumn(err)) {
+      throw createError(
+        'The K-RERA cross-link feature is not yet enabled. Please try again shortly.',
+        503
+      );
+    }
+    throw err;
+  }
+};
+
+/**
+ * Build the K-RERA cross-check slice for a profile. Returns:
+ *   {
+ *     candidates: [{promoter_name, sim_score}, ...],  // top fuzzy matches
+ *     linked: { promoter_name, match_confidence, linked_at } | null,
+ *     stats:  { total_projects, completed, ongoing, lapsed, ... } | null,
+ *   }
+ *
+ * Empty / null shape when K-RERA tables aren't populated. Pure read —
+ * never throws so the profile card always renders.
+ */
+const getReraCrossCheck = async (profile) => {
+  if (!profile || !profile.promoter_name) {
+    return { candidates: [], linked: null, stats: null };
+  }
+  const linkedName = profile.linked_rera_promoter_name || null;
+
+  // If linked: fetch the K-RERA aggregate stats for that exact name; do not
+  // resurface candidates (the link is settled).
+  if (linkedName) {
+    const stats = await karnatakaRera.getPromoterStats(linkedName);
+    return {
+      candidates: [],
+      linked: {
+        promoter_name: linkedName,
+        match_confidence: profile.linked_rera_match_confidence ?? null,
+        linked_at: profile.linked_rera_at || null,
+      },
+      stats: stats || null,
+    };
+  }
+
+  // Not linked yet: surface up to 5 fuzzy candidates for the operator to
+  // confirm. Empty array when no K-RERA data exists.
+  const candidates = await findReraCandidates(profile.promoter_name);
+  return { candidates, linked: null, stats: null };
+};
+
+/** Profile + its computed assessment + K-RERA cross-check — the read model
+ *  for the Promoter card. */
 const getProfileWithAssessment = async (dealId) => {
   const profile = await getProfile(dealId);
-  return { profile, assessment: assessPromoter(profile) };
+  const rera = await getReraCrossCheck(profile);
+  return {
+    profile,
+    assessment: assessPromoter(profile),
+    rera,
+  };
 };
 
 /**
@@ -275,4 +469,9 @@ module.exports = {
   getProfileWithAssessment,
   getPromoterRadarCategory,
   upsertProfile,
+  // K-RERA cross-link (Phase 1 / Pillar 6)
+  findReraCandidates,
+  linkReraPromoter,
+  unlinkReraPromoter,
+  getReraCrossCheck,
 };
