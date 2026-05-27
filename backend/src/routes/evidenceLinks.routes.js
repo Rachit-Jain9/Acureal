@@ -6,6 +6,12 @@
  *   GET    /api/evidence-links/:ownerKind/:ownerId        list + summary
  *   POST   /api/evidence-links/:ownerKind/:ownerId        attach
  *   DELETE /api/evidence-links/:linkId                    detach
+ *   GET    /api/evidence-links/dependents/:sourceKind/:sourceId
+ *                                                         REVERSE traversal:
+ *                                                         "what depends on
+ *                                                         this evidence
+ *                                                         source / document?"
+ *                                                         (E2-PR1, 2026-05-27)
  *
  * Mounted at `/api` in server.js. Routes share the existing auth + rate
  * limiting middleware.
@@ -79,6 +85,34 @@ router.post(
       next(err);
     }
   }
+);
+
+// REVERSE traversal — "what depends on this evidence source?" (E2-PR1).
+// Mounted BEFORE the generic `:ownerKind/:ownerId` GET handler so the
+// `/dependents/...` path doesn't get captured by the wildcard above. The
+// ownerKindParam there validates against OWNER_KINDS which would reject
+// 'dependents' anyway, but explicit ordering is the safer pattern.
+const dependentKindParam = param('sourceKind').isIn(
+  [...evidenceLinksService.SUPPORTED_DEPENDENT_KINDS],
+);
+
+router.get(
+  '/evidence-links/dependents/:sourceKind/:sourceId',
+  authenticate,
+  dependentKindParam,
+  uuidParam('sourceId'),
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await evidenceLinksService.listDependents(
+        req.params.sourceKind,
+        req.params.sourceId,
+      );
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
 );
 
 router.delete(

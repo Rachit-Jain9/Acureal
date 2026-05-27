@@ -12,8 +12,10 @@ import {
   CheckCircle2,
   Loader2,
   Sparkles,
+  Network,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import DependentsPopover from '../common/DependentsPopover';
 // PR-NX72 (2026-05-19) — Phase A1.1: DocumentsTab read path migrated from
 // its own `useDocuments(dealId)` React-Query call to the shared
 // `useDealDocuments()` selector backed by the workspace endpoint. One
@@ -429,6 +431,32 @@ export default function DocumentsTab() {
                             <Download size={15} />
                           )}
                         </button>
+                        {/* E2-PR1 (2026-05-27) — reverse provenance:
+                            "what depends on this document?" Operator
+                            clicks to see every DD item / approval / risk
+                            flag / scenario across the org that cites this
+                            file. Defensible-retraction surface. */}
+                        <DependentsPopover
+                          sourceKind="document"
+                          sourceId={doc.id}
+                          triggerLabel="Dependents"
+                          renderTrigger={({ onOpen, open: openState }) => (
+                            <button
+                              type="button"
+                              onClick={onOpen}
+                              className={clsx(
+                                'p-1.5 rounded-lg transition-colors',
+                                openState
+                                  ? 'text-accent bg-accent-soft'
+                                  : 'text-content-muted hover:text-accent hover:bg-accent-soft',
+                              )}
+                              title="See what cites this document (DD / approvals / risk / scenarios)"
+                              aria-label="Show dependents"
+                            >
+                              <Network size={15} />
+                            </button>
+                          )}
+                        />
                         <button
                           onClick={() => handleDelete(doc.id)}
                           disabled={deleteDoc.isPending}

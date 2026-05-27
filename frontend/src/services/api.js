@@ -722,6 +722,12 @@ export const evidenceLinksAPI = {
   list:   (ownerKind, ownerId)     => api.get(`/evidence-links/${ownerKind}/${ownerId}`),
   attach: (ownerKind, ownerId, body) => api.post(`/evidence-links/${ownerKind}/${ownerId}`, body),
   detach: (linkId)                 => api.delete(`/evidence-links/${linkId}`),
+  // E2-PR1 (2026-05-27) — reverse traversal: "what depends on this
+  // document / regulatory source / fact?" Returns { owners, grouped,
+  // supported, note }. Used by the DependentsPopover on document /
+  // evidence-source surfaces.
+  dependents: (sourceKind, sourceId) =>
+    api.get(`/evidence-links/dependents/${sourceKind}/${sourceId}`),
 };
 
 // Comp similarity scoring (subject deal vs comp)

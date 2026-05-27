@@ -415,12 +415,134 @@ const attachToMany = async ({ owners, linkPayload, userId }) => {
   return out;
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+//  Reverse traversal — "what depends on this evidence source?" (E2-PR1)
+// ──────────────────────────────────────────────────────────────────────────
+
+const SUPPORTED_DEPENDENT_KINDS = new Set([
+  'document',          // any deal document
+  'evidence_source',   // regulatory_data.evidence_sources row
+  'evidence_fact',     // regulatory_data.evidence_facts row
+  'comp',              // a verified transaction comp
+]);
+
+/**
+ * List every owner row that depends on a given source.
+ *
+ * Answers the impact-of-retraction question: "if I retract this document /
+ * comp / regulatory source, which DD items / approvals / risk flags /
+ * financial scenarios across my org will lose a citation?"
+ *
+ * @param {'document'|'evidence_source'|'evidence_fact'|'comp'} sourceKind
+ * @param {string} sourceId    UUID of the source row
+ * @returns {Promise<{owners:[{owner_kind,owner_id,deal_id|null,deal_name|null,owner_label|null,confidence_score|null,verified_at|null,link_id}], grouped:{[owner_kind]:number}}>}
+ */
+const listDependents = async (sourceKind, sourceId) => {
+  if (!SUPPORTED_DEPENDENT_KINDS.has(sourceKind)) {
+    throw createError(
+      `Unsupported source kind "${sourceKind}". Supported: ${[...SUPPORTED_DEPENDENT_KINDS].join(', ')}.`,
+      400,
+    );
+  }
+  if (!sourceId || typeof sourceId !== 'string') {
+    throw createError('sourceId is required.', 400);
+  }
+
+  // Map source-kind to the matching `evidence_links` column. For `comp`
+  // there's no FK column on evidence_links — comps appear in the system as
+  // DOCUMENT references when a comp PDF is uploaded, or via the comp_reliance
+  // signal layer (Workstream C1) — those aren't evidence_links rows. So
+  // `comp` reverse-lookups would need a separate path; surface it cleanly.
+  const columnMap = {
+    document: 'document_id',
+    evidence_source: 'evidence_source_id',
+    evidence_fact: 'evidence_fact_id',
+  };
+  if (sourceKind === 'comp') {
+    // Phase 1: comps don't have a direct evidence_links column. Return
+    // empty + a note so the UI can show "No direct evidence-link
+    // dependencies recorded" instead of erroring.
+    return { owners: [], grouped: {}, supported: false, note: 'Comp reverse-lookup runs through the comp_reliance signal layer, not evidence_links.' };
+  }
+
+  const filterColumn = columnMap[sourceKind];
+
+  // The query joins each link row up to its owning entity to produce a
+  // human-readable label + the deal it belongs to. owner_kind branches into
+  // distinct join shapes — we use a CASE on the SELECT side rather than
+  // multiple UNION ALL branches because the WHERE filter is selective
+  // (`filterColumn = $1`) and PG's planner will use the partial index.
+  //
+  // SAFETY: every join is LEFT (so a deleted owner doesn't drop its citation
+  // row from the list — the operator still wants to see "this used to be
+  // cited by 3 things, all now deleted").
+  const result = await query(
+    `SELECT
+       el.id                                    AS link_id,
+       el.owner_kind                            AS owner_kind,
+       el.owner_id                              AS owner_id,
+       el.confidence_score                      AS confidence_score,
+       el.verified_at                           AS verified_at,
+       el.created_at                            AS link_created_at,
+       -- Owner-specific labels + parent deal id
+       CASE
+         WHEN el.owner_kind = 'dd_item'           THEN dd.title
+         WHEN el.owner_kind = 'approval'          THEN ap.name
+         WHEN el.owner_kind = 'risk_flag'         THEN rf.title
+         WHEN el.owner_kind = 'comp'              THEN cmp.project_name
+         WHEN el.owner_kind = 'financial_scenario' THEN fs.label
+         WHEN el.owner_kind = 'deal_note'         THEN dl.name
+         ELSE NULL
+       END                                       AS owner_label,
+       COALESCE(dd.deal_id, ap.deal_id, rf.deal_id, fs.deal_id, dl.id) AS deal_id,
+       COALESCE(
+         dl_dd.name, dl_ap.name, dl_rf.name, dl_fs.name, dl.name
+       )                                         AS deal_name
+     FROM evidence_links el
+     LEFT JOIN dd_items dd               ON el.owner_kind = 'dd_item'           AND dd.id = el.owner_id
+     LEFT JOIN approval_items ap         ON el.owner_kind = 'approval'          AND ap.id = el.owner_id
+     LEFT JOIN risk_flags rf             ON el.owner_kind = 'risk_flag'         AND rf.id = el.owner_id
+     LEFT JOIN comps cmp                 ON el.owner_kind = 'comp'              AND cmp.id = el.owner_id
+     LEFT JOIN financial_scenarios fs    ON el.owner_kind = 'financial_scenario' AND fs.id = el.owner_id
+     LEFT JOIN deals dl                  ON el.owner_kind = 'deal_note'         AND dl.id = el.owner_id
+     LEFT JOIN deals dl_dd               ON dl_dd.id = dd.deal_id
+     LEFT JOIN deals dl_ap               ON dl_ap.id = ap.deal_id
+     LEFT JOIN deals dl_rf               ON dl_rf.id = rf.deal_id
+     LEFT JOIN deals dl_fs               ON dl_fs.id = fs.deal_id
+     WHERE el.organization_id = current_organization_id()
+       AND el.${filterColumn} = $1
+     ORDER BY el.created_at DESC`,
+    [sourceId],
+  );
+
+  const owners = (result.rows || []).map((r) => ({
+    link_id: r.link_id,
+    owner_kind: r.owner_kind,
+    owner_id: r.owner_id,
+    owner_label: r.owner_label,
+    deal_id: r.deal_id,
+    deal_name: r.deal_name,
+    confidence_score: r.confidence_score != null ? Number(r.confidence_score) : null,
+    verified_at: r.verified_at,
+    link_created_at: r.link_created_at,
+  }));
+
+  const grouped = owners.reduce((acc, o) => {
+    acc[o.owner_kind] = (acc[o.owner_kind] || 0) + 1;
+    return acc;
+  }, {});
+
+  return { owners, grouped, supported: true, note: null };
+};
+
 module.exports = {
   attachLink,
   detachLink,
   listForOwner,
+  listDependents,
   summariseForOwner,
   attachToMany,
   OWNER_KINDS,
   LINK_KINDS,
+  SUPPORTED_DEPENDENT_KINDS,
 };
