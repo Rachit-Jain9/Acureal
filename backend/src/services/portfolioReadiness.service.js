@@ -479,20 +479,19 @@ const getPortfolioReadiness = async ({
       log.warn('portfolio_readiness_missing_table', { error: err.message });
       return composePortfolio([]);
     }
-    // Use console.error so the log surfaces at error-level in Vercel
-    // runtime logs (pino's child logger has been buried under the
-    // catch-all 'Database query error' entry, hiding the actual code
-    // + message). Emit the same shape both ways so the operator can
-    // grep either.
-    log.warn('portfolio_readiness_query_failed', { error: err.message, code: err.code });
+    // Flat single-line console.error so Vercel's truncated UI shows the
+    // full diagnostic on one row. Earlier object-form was getting cut
+    // off after the first key. Format:
+    //   [portfolio-readiness:err] code=42703 msg=column ... where=... detail=...
+    const flat =
+      `[portfolio-readiness:err] code=${err.code || 'NONE'} ` +
+      `msg=${(err.message || 'no message').replace(/\s+/g, ' ').slice(0, 220)} ` +
+      `where=${(err.where || '-').replace(/\s+/g, ' ').slice(0, 80)} ` +
+      `hint=${(err.hint || '-').slice(0, 80)} ` +
+      `detail=${(err.detail || '-').slice(0, 80)}`;
     // eslint-disable-next-line no-console
-    console.error('[portfolio-readiness] query failed:', {
-      code: err.code,
-      message: err.message,
-      where: err.where || null,
-      hint: err.hint || null,
-      detail: err.detail || null,
-    });
+    console.error(flat);
+    log.warn('portfolio_readiness_query_failed', { error: err.message, code: err.code });
     return composePortfolio([]);
   }
 };
