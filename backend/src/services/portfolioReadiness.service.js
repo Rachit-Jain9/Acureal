@@ -37,6 +37,7 @@
  */
 
 const { query } = require('../config/database');
+const { LIVE_DEAL_STAGES } = require('../constants/domain');
 const log = require('../lib/logger').child({ module: 'portfolioReadiness.service' });
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -326,11 +327,13 @@ const getPortfolioReadiness = async ({
   includeArchived = false,
   includeStages = null,
 } = {}) => {
-  // Stage filter — sensible default if not provided
-  const defaultStages = ['sourcing', 'screening', 'loi', 'due_diligence', 'ic_review'];
+  // Stage filter — sensible default if not provided. Uses the canonical
+  // LIVE_DEAL_STAGES from constants/domain.js (every deal_stage except
+  // 'closed' and 'dead') so the readiness rollup matches the rest of
+  // the dashboard's "live deals" semantics.
   const stages = Array.isArray(includeStages) && includeStages.length > 0
     ? includeStages
-    : defaultStages;
+    : LIVE_DEAL_STAGES;
 
   try {
     const result = await query(
@@ -369,7 +372,7 @@ const getPortfolioReadiness = async ({
       LEFT JOIN public.financials f ON f.deal_id = d.id
       WHERE d.organization_id = current_organization_id()
         AND ($1::boolean OR d.is_archived = FALSE)
-        AND d.stage = ANY($2::text[])
+        AND d.stage = ANY($2::deal_stage[])
       ORDER BY d.created_at DESC NULLS LAST
       `,
       [includeArchived, stages],
