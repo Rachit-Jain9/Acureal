@@ -59,10 +59,18 @@ const RERA_APPLICABLE_CLASSES = new Set([
 // ─────────────────────────────────────────────────────────────────────────────
 
 const scoreFinancialFit = (row) => {
-  // 25 pts: kernel ran (IRR + DSCR present)
-  const hasIrr = row.kpis?.irr != null || Number(row.irr_pct) > 0;
-  const dscr = row.kpis?.extras?.dscr ?? row.kpis?.dscr;
-  const hasDscr = dscr != null;
+  // 25 pts: kernel ran (IRR + DSCR present).
+  //
+  // IRR + DSCR are TOP-LEVEL columns on `financials` (irr_pct, dscr) — not
+  // nested inside a JSON blob. An earlier version read `row.kpis?.irr` and
+  // `row.kpis?.dscr` because the workspace composer exposes a synthesised
+  // `kpis` object, but the portfolio aggregator reads `financials` directly
+  // and there is no `kpis` column on that table (the JSON `kpis` field
+  // lives on `financial_scenarios`, a separate table). PG threw 42703
+  // "column f.kpis does not exist" which silently blanked the whole
+  // payload (caught by the outer try/catch).
+  const hasIrr = Number(row.irr_pct) > 0;
+  const hasDscr = row.dscr != null && Number(row.dscr) > 0;
   if (hasIrr && hasDscr) return { score: 25, signal: 'kernel + IRR + DSCR' };
   if (hasIrr) return { score: 15, signal: 'IRR only, DSCR missing' };
   if (row.total_cost_cr && Number(row.total_cost_cr) > 0) return { score: 8, signal: 'cost set, kernel not run' };
@@ -375,7 +383,7 @@ const getPortfolioReadiness = async ({
         d.asset_class, d.deal_structure,
         p.lat  AS property_lat,
         p.lng  AS property_lng,
-        f.irr_pct, f.kpis, f.total_cost_cr
+        f.irr_pct, f.dscr, f.total_cost_cr
       FROM public.deals d
       LEFT JOIN public.properties p ON p.id = d.property_id
       LEFT JOIN public.financials f ON f.deal_id = d.id

@@ -14,25 +14,22 @@ beforeEach(() => jest.clearAllMocks());
 // ─── Per-deal scorers ───────────────────────────────────────────────────────
 
 describe('scoreFinancialFit', () => {
+  // IRR + DSCR are TOP-LEVEL columns on `financials` (irr_pct, dscr) —
+  // not nested inside a JSONB blob. The test row shape mirrors what the
+  // SQL SELECT emits: `{ irr_pct, dscr, total_cost_cr, ... }`.
   test('full kernel run (IRR + DSCR) → 25 pts', () => {
-    const out = svc.scoreFinancialFit({
-      irr_pct: 18.5,
-      kpis: { irr: 18.5, dscr: 1.7, extras: { dscr: 1.7 } },
-    });
+    const out = svc.scoreFinancialFit({ irr_pct: 18.5, dscr: 1.7 });
     expect(out.score).toBe(25);
     expect(out.signal).toMatch(/kernel \+ IRR \+ DSCR/);
   });
 
   test('IRR only (DSCR missing) → 15 pts', () => {
-    const out = svc.scoreFinancialFit({
-      irr_pct: 18,
-      kpis: { irr: 18 },
-    });
+    const out = svc.scoreFinancialFit({ irr_pct: 18, dscr: null });
     expect(out.score).toBe(15);
   });
 
   test('costs set, kernel not run → 8 pts', () => {
-    const out = svc.scoreFinancialFit({ total_cost_cr: 100, kpis: null });
+    const out = svc.scoreFinancialFit({ total_cost_cr: 100, irr_pct: 0, dscr: null });
     expect(out.score).toBe(8);
   });
 
@@ -136,8 +133,7 @@ describe('composeDealReadiness', () => {
       id: 'd1', name: 'Whitefield Heights', stage: 'ic_review',
       asset_class: 'residential_apartments', deal_structure: 'outright',
       property_lat: 12.97, property_lng: 77.74,
-      irr_pct: 18.5, kpis: { irr: 18.5, dscr: 1.7, extras: { dscr: 1.7 } },
-      total_cost_cr: 100,
+      irr_pct: 18.5, dscr: 1.7, total_cost_cr: 100,
       dd_total: 16, dd_done: 14,
       approvals_total: 8, approvals_available: 8,
       documents_count: 12,
@@ -167,7 +163,7 @@ describe('composeDealReadiness', () => {
   test('top_blocker prioritises deal-breakers over approvals', () => {
     const out = svc.composeDealReadiness({
       id: 'd3', name: 'Stuck Deal',
-      irr_pct: 18, kpis: { irr: 18, dscr: 1.7, extras: { dscr: 1.7 } },
+      irr_pct: 18, dscr: 1.7,
       dd_total: 16, dd_done: 8,
       approvals_total: 0, approvals_available: 0,
       documents_count: 1,
@@ -276,14 +272,13 @@ describe('getPortfolioReadiness', () => {
           id: 'd1', name: 'Whitefield Heights', stage: 'ic_review',
           asset_class: 'residential_apartments', deal_structure: 'outright',
           property_lat: 12.97, property_lng: 77.74,
-          irr_pct: 18.5, kpis: { irr: 18.5, dscr: 1.7, extras: { dscr: 1.7 } },
-          total_cost_cr: 100,
+          irr_pct: 18.5, dscr: 1.7, total_cost_cr: 100,
         },
         {
           id: 'd2', name: 'New Sourcing Deal', stage: 'sourced',
           asset_class: 'plotted_development', deal_structure: 'outright',
           property_lat: null, property_lng: null,
-          irr_pct: null, kpis: null, total_cost_cr: null,
+          irr_pct: null, dscr: null, total_cost_cr: null,
         },
       ],
     });
@@ -333,8 +328,7 @@ describe('getPortfolioReadiness', () => {
         id: 'd1', name: 'X', stage: 'screening',
         asset_class: 'residential_apartments', deal_structure: 'outright',
         property_lat: 12.97, property_lng: 77.74,
-        irr_pct: 18, kpis: { irr: 18, dscr: 1.6, extras: { dscr: 1.6 } },
-        total_cost_cr: 100,
+        irr_pct: 18, dscr: 1.6, total_cost_cr: 100,
       }],
     });
     query.mockRejectedValueOnce(Object.assign(new Error('missing dd_items'), { code: '42P01' }));
