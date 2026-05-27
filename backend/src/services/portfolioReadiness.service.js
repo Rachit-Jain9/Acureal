@@ -336,56 +336,121 @@ const getPortfolioReadiness = async ({
     : LIVE_DEAL_STAGES;
 
   try {
-    const result = await query(
+    // First fetch the live deals (the cheap, RLS-scoped, enum-safe part).
+    // Compare stage as text to dodge any deal_stage[] array-cast quirks
+    // — the outer org-scope + is_archived guards already restrict the
+    // row set; the stage filter is just for "live" semantics.
+    const dealsResult = await query(
       `
       SELECT
-        d.id, d.name, d.stage, d.asset_class, d.deal_structure,
+        d.id, d.name, d.stage::text AS stage,
+        d.asset_class, d.deal_structure,
         d.property_lat, d.property_lng,
-        f.irr_pct, f.kpis, f.total_cost_cr,
-        (SELECT COUNT(*) FILTER (WHERE status IN ('completed', 'not_applicable'))
-           FROM public.dd_items
-          WHERE deal_id = d.id AND is_required = TRUE
-            AND organization_id = current_organization_id())            AS dd_done,
-        (SELECT COUNT(*) FROM public.dd_items
-          WHERE deal_id = d.id AND is_required = TRUE
-            AND organization_id = current_organization_id())            AS dd_total,
-        (SELECT COUNT(*) FILTER (WHERE is_available OR is_uploaded OR is_validated)
-           FROM public.approval_items
-          WHERE deal_id = d.id AND is_required = TRUE
-            AND organization_id = current_organization_id())            AS approvals_available,
-        (SELECT COUNT(*) FROM public.approval_items
-          WHERE deal_id = d.id AND is_required = TRUE
-            AND organization_id = current_organization_id())            AS approvals_total,
-        (SELECT COUNT(*) FROM public.documents
-          WHERE deal_id = d.id
-            AND organization_id = current_organization_id())            AS documents_count,
-        (SELECT COUNT(*) FILTER (WHERE severity = 'deal_breaker'
-                                 AND status NOT IN ('completed', 'not_applicable'))
-           FROM public.dd_items
-          WHERE deal_id = d.id
-            AND organization_id = current_organization_id())            AS deal_breakers_open,
-        EXISTS (SELECT 1 FROM public.deal_promoter_profiles
-                 WHERE deal_id = d.id
-                   AND promoter_name IS NOT NULL
-                   AND organization_id = current_organization_id())     AS has_promoter
+        f.irr_pct, f.kpis, f.total_cost_cr
       FROM public.deals d
       LEFT JOIN public.financials f ON f.deal_id = d.id
       WHERE d.organization_id = current_organization_id()
         AND ($1::boolean OR d.is_archived = FALSE)
-        AND d.stage = ANY($2::deal_stage[])
+        AND d.stage::text = ANY($2::text[])
       ORDER BY d.created_at DESC NULLS LAST
       `,
       [includeArchived, stages],
     );
 
-    const deals = (result.rows || []).map(composeDealReadiness);
-    return composePortfolio(deals);
+    const dealRows = dealsResult.rows || [];
+    if (dealRows.length === 0) return composePortfolio([]);
+
+    const dealIds = dealRows.map((r) => r.id);
+
+    // Bulk-aggregate the dependent signals — DD + approvals + documents +
+    // promoter profile — per deal id. Single round-trip per table; PG
+    // returns rows ONLY for deal_ids that have any matching child rows.
+    // We fold the results into a Map<dealId, row> for O(1) lookup.
+    const safeAggregate = async (sql, params) => {
+      try {
+        const res = await query(sql, params);
+        const m = new Map();
+        for (const row of res.rows || []) m.set(row.deal_id, row);
+        return m;
+      } catch (innerErr) {
+        log.warn('portfolio_readiness_aggregate_failed', { error: innerErr.message, sample_sql: sql.split('\n')[1] });
+        return new Map(); // tolerate missing table — fall back to zeros for this signal
+      }
+    };
+
+    const [ddAgg, approvalsAgg, docsAgg, promoterAgg] = await Promise.all([
+      safeAggregate(
+        `
+        SELECT deal_id,
+               COUNT(*) FILTER (WHERE status IN ('completed', 'not_applicable')) AS dd_done,
+               COUNT(*) AS dd_total,
+               COUNT(*) FILTER (WHERE severity = 'deal_breaker'
+                                  AND status NOT IN ('completed', 'not_applicable'))
+                  AS deal_breakers_open
+          FROM public.dd_items
+         WHERE deal_id = ANY($1::uuid[])
+           AND is_required = TRUE
+        GROUP BY deal_id
+        `,
+        [dealIds],
+      ),
+      safeAggregate(
+        `
+        SELECT deal_id,
+               COUNT(*) FILTER (WHERE is_available OR is_uploaded OR is_validated)
+                  AS approvals_available,
+               COUNT(*) AS approvals_total
+          FROM public.approval_items
+         WHERE deal_id = ANY($1::uuid[])
+           AND is_required = TRUE
+        GROUP BY deal_id
+        `,
+        [dealIds],
+      ),
+      safeAggregate(
+        `
+        SELECT deal_id, COUNT(*) AS documents_count
+          FROM public.documents
+         WHERE deal_id = ANY($1::uuid[])
+        GROUP BY deal_id
+        `,
+        [dealIds],
+      ),
+      safeAggregate(
+        `
+        SELECT deal_id, TRUE AS has_promoter
+          FROM public.deal_promoter_profiles
+         WHERE deal_id = ANY($1::uuid[])
+           AND promoter_name IS NOT NULL
+        `,
+        [dealIds],
+      ),
+    ]);
+
+    // Merge dependent signals onto each deal row, then compose.
+    const merged = dealRows.map((d) => {
+      const dd = ddAgg.get(d.id) || {};
+      const ap = approvalsAgg.get(d.id) || {};
+      const docs = docsAgg.get(d.id) || {};
+      const promoter = promoterAgg.get(d.id) || {};
+      return {
+        ...d,
+        dd_done: dd.dd_done || 0,
+        dd_total: dd.dd_total || 0,
+        deal_breakers_open: dd.deal_breakers_open || 0,
+        approvals_available: ap.approvals_available || 0,
+        approvals_total: ap.approvals_total || 0,
+        documents_count: docs.documents_count || 0,
+        has_promoter: Boolean(promoter.has_promoter),
+      };
+    });
+    return composePortfolio(merged.map(composeDealReadiness));
   } catch (err) {
     if (isMissingTable(err)) {
       log.warn('portfolio_readiness_missing_table', { error: err.message });
       return composePortfolio([]);
     }
-    log.warn('portfolio_readiness_query_failed', { error: err.message });
+    log.warn('portfolio_readiness_query_failed', { error: err.message, code: err.code });
     return composePortfolio([]);
   }
 };
