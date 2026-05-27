@@ -54,6 +54,8 @@ const CompsQueuePage = lazy(() => import('./pages/CompsQueuePage'));
 const CompsQueueDetailPage = lazy(() => import('./pages/CompsQueueDetailPage'));
 const AdminAiUsagePage = lazy(() => import('./pages/AdminAiUsagePage'));
 const AdminAbEvalPage = lazy(() => import('./pages/AdminAbEvalPage'));
+// E7-PR1 (2026-05-27) — operator-only view of the learning-loop telemetry.
+const AdminLearningSignalsPage = lazy(() => import('./pages/AdminLearningSignalsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
@@ -165,6 +167,7 @@ export default function App() {
           <Route path="admin/comps-queue/:id" element={<RequirePlatformAdmin>{withSuspense(<CompsQueueDetailPage />)}</RequirePlatformAdmin>} />
           <Route path="admin/ai-usage" element={<RequirePlatformAdmin>{withSuspense(<AdminAiUsagePage />)}</RequirePlatformAdmin>} />
           <Route path="admin/ab-eval" element={<RequirePlatformAdmin>{withSuspense(<AdminAbEvalPage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/learning-signals" element={<RequirePlatformAdmin>{withSuspense(<AdminLearningSignalsPage />)}</RequirePlatformAdmin>} />
           <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
           <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}

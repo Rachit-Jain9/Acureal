@@ -833,6 +833,13 @@ export const adminAPI = {
   getAbEvalQualityTrend: (days = 90) =>
     api.get('/admin/ab-eval/quality-trend', { params: { days } }),
   runAbEvalBaseline: (body) => api.post('/admin/ab-eval/baseline', body),
+  // E7-PR1 (2026-05-27) — learning-loop telemetry dashboard. Returns
+  // { window_days, summary, top_dismissed[], top_acted[],
+  //   active_adjustments: {window_days, adjustments[], adjusted_rule_count},
+  //   daily_series[], generated_at }. Mirrors what the consumer-side
+  // aggregator (PR #618) uses to re-rank recommendation cards.
+  getLearningSignals: (days = 30) =>
+    api.get('/admin/learning-signals', { params: { days } }),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Brain, BarChart3,
   FileBarChart2, Settings, LogOut, ChevronLeft, ChevronRight, X,
-  Shield, Map, Database, Inbox, Activity, Beaker,
+  Shield, Map, Database, Inbox, Activity, Beaker, Sparkles,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
@@ -30,6 +30,7 @@ const adminNavItems = [
   { to: '/dashboard/admin/comps-queue',          icon: Inbox,    label: 'Comps Review Queue',  tourId: 'nav-comps-queue' },
   { to: '/dashboard/admin/ai-usage',             icon: Activity, label: 'AI Usage & Cost',     tourId: 'nav-ai-usage' },
   { to: '/dashboard/admin/ab-eval',              icon: Beaker,   label: 'A/B Evaluations',     tourId: 'nav-ab-eval' },
+  { to: '/dashboard/admin/learning-signals',     icon: Sparkles, label: 'Learning Signals',    tourId: 'nav-learning-signals' },
 ];
 
 const tailNavItems = [
