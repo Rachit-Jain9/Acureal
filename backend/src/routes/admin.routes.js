@@ -19,6 +19,8 @@ const aiHealthService = require('../services/aiHealth.service'); // PR-NX22
 const extractionVerdictsService = require('../services/extractionVerdicts.service');
 const routingConfigService = require('../services/ai/routingConfig');
 const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
+// E7-PR1 (2026-05-27) — admin view of the learning-loop telemetry.
+const learningSignalsAdminReport = require('../services/learningSignals.adminReport.service');
 const { query } = require('../config/database');
 
 const router = express.Router();
@@ -113,6 +115,29 @@ router.get('/ai-health', authenticate, requireRole('admin', 'analyst'), async (r
   try {
     const snapshot = await aiHealthService.getHealthSnapshot();
     res.json({ success: true, data: snapshot });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/learning-signals?days=30
+//
+// E7-PR1 (2026-05-27) — admin view of the learning-loop telemetry that
+// PR #618's consumer-side aggregator uses to re-rank recommendation cards.
+// Returns one composite payload: summary counts (dismissed / snoozed /
+// acted, attribution rate, distinct rules), top-10 most-dismissed rules,
+// top-10 most-applied rules, the list of currently de-ranked rules
+// (multiplier < 1.0 — mirrors the consumer's policy exactly), and a daily
+// time-series for the trend chart.
+//
+// Org-scoped via RLS on improvement_signals. Read-only. Migration-tolerant
+// (returns zeros if the table is missing). Operator-only — kept off the
+// customer surface per the AI-disclosure policy.
+router.get('/learning-signals', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const days = req.query.days ? parseInt(req.query.days, 10) : 30;
+    const data = await learningSignalsAdminReport.getDashboard({ days });
+    res.json({ success: true, data });
   } catch (error) {
     next(error);
   }
