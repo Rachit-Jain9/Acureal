@@ -5,6 +5,10 @@ import EvidenceBadge from '../common/EvidenceBadge';
 // existing DD + Approvals sections so the deal team sees the RERA filing
 // posture before diving into individual checklists.
 import KarnatakaReraReadinessPanel from './KarnatakaReraReadinessPanel';
+// Phase 3 / Pillar 5 — IC Readiness Pack panel leads the DD tab. It
+// composes signals from every workspace surface (financial, DD, risk,
+// market, promoter, documents) into a single IC-handoff inventory.
+import IcReadinessPanel from './IcReadinessPanel';
 // PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
 // workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
@@ -775,13 +779,22 @@ export default function DDTab() {
   useScrollOnMount();
   return (
     <div className="space-y-10">
+      {/* Phase 3 / Pillar 5 — IC Readiness Pack leads the DD tab.
+          Composes signals from every workspace surface (financial, DD,
+          risk, market, promoter, documents) into a single IC-handoff
+          inventory across 7 buckets. CLAUDE.md disclaimer surfaced —
+          organisation aid only, not an IC approval verdict. */}
+      <IcReadinessPanel />
+
       {/* Phase 3 / Pillar 4 — K-RERA Readiness Pack. Surfaces the
           completeness of the deal's Karnataka RERA filing inventory across
           7 buckets (application, title, plan, specs, promoter, escrow,
           professional certs) with per-item evidence status + recommended
           next steps. CLAUDE.md disclaimer surfaced — organisation aid only,
           not a RERA compliance verdict. */}
-      <KarnatakaReraReadinessPanel />
+      <div className="border-t border-hairline-strong pt-8">
+        <KarnatakaReraReadinessPanel />
+      </div>
       <div className="border-t border-hairline-strong pt-8">
         <DDSection dealId={dealId} />
       </div>

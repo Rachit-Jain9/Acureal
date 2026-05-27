@@ -22,6 +22,8 @@ const { buildDealWorkbookV2 } = require('../services/exports/xlsx/v2/buildWorkbo
 const { buildDealReportDocx } = require('../services/exports/docx/buildReport');
 const { buildReraReadinessDocx } = require('../services/exports/docx/buildReraReadiness');
 const { composeReadiness } = require('../services/karnatakaReraReadiness.service');
+const { buildIcReadinessDocx } = require('../services/exports/docx/buildIcReadiness');
+const { getDealWorkspace } = require('../services/dealWorkspace.service');
 const approvalsService = require('../services/approvals.service');
 const documentService = require('../services/document.service');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
@@ -1330,6 +1332,48 @@ router.get(
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="redip-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
+      );
+      return res.send(docxBuffer);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── IC Readiness Pack DOCX (Phase 3 / Pillar 5) ─────────────────────────────
+
+// GET /exports/deals/:dealId/ic-readiness/docx — IC Readiness Pack as a
+// Word document. The deal team hands this to IC for pre-IC review.
+// Reads the workspace's `ic_readiness` slice (composed server-side from
+// every other workspace slice — no duplicate composition here).
+router.get(
+  '/deals/:dealId/ic-readiness/docx',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const dealId = req.params.dealId;
+      const workspace = await getDealWorkspace(dealId).catch(() => null);
+      if (!workspace) {
+        return res.status(404).json({ success: false, message: 'Deal not found.' });
+      }
+      const readiness = workspace.ic_readiness;
+      if (!readiness) {
+        return res.status(500).json({ success: false, message: 'IC Readiness slice unavailable.' });
+      }
+
+      const docxBuffer = await buildIcReadinessDocx(readiness, {
+        brandName: 'REDIP',
+        userName: req.user?.name || null,
+        generatedAt: new Date().toISOString(),
+      });
+
+      const safeName = (readiness.deal_name || workspace.deal?.name || 'deal')
+        .replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="redip-${safeName}-ic-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
       );
       return res.send(docxBuffer);
     } catch (error) {
