@@ -337,21 +337,35 @@ const getPortfolioReadiness = async ({
 
   try {
     // First fetch the live deals (the cheap, RLS-scoped, enum-safe part).
-    // Compare stage as text to dodge any deal_stage[] array-cast quirks
-    // — the outer org-scope + is_archived guards already restrict the
-    // row set; the stage filter is just for "live" semantics.
+    //
+    // We match the WORKING Portfolio Risk Radar pattern exactly:
+    //   - `stage = ANY($N::deal_stage[])`  (enum cast, NOT text — implicit
+    //     text→enum casts inside ANY() have been flaky on Supabase, see
+    //     PR #607's regression and portfolioRiskRadar.service.js comment).
+    //   - LEFT JOIN properties for parcel coordinates. `lat`/`lng` live on
+    //     `properties`, NOT `deals` — `deals.property_id` is the FK. An
+    //     earlier rewrite read `d.property_lat`/`d.property_lng` directly
+    //     (PR #607) which threw 42703 "column does not exist" — caught by
+    //     the outer try/catch and silently returning an empty payload.
+    //   - LEFT JOIN financials for the kernel-derived IRR + DSCR signals.
+    //
+    // The outer org-scope (current_organization_id() via RLS GUC) + the
+    // is_archived guard restrict the row set; the stage filter is the
+    // "live deals" semantic shared with every other dashboard widget.
     const dealsResult = await query(
       `
       SELECT
-        d.id, d.name, d.stage::text AS stage,
+        d.id, d.name, d.stage,
         d.asset_class, d.deal_structure,
-        d.property_lat, d.property_lng,
+        p.lat  AS property_lat,
+        p.lng  AS property_lng,
         f.irr_pct, f.kpis, f.total_cost_cr
       FROM public.deals d
+      LEFT JOIN public.properties p ON p.id = d.property_id
       LEFT JOIN public.financials f ON f.deal_id = d.id
       WHERE d.organization_id = current_organization_id()
         AND ($1::boolean OR d.is_archived = FALSE)
-        AND d.stage::text = ANY($2::text[])
+        AND d.stage = ANY($2::deal_stage[])
       ORDER BY d.created_at DESC NULLS LAST
       `,
       [includeArchived, stages],
