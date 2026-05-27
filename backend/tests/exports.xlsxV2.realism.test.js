@@ -1,5 +1,13 @@
 'use strict';
 
+// Per-suite Jest timeout — this file generates 8 representative workbooks
+// covering (asset × structure × exit) tuples and runs ExcelJS evaluation
+// + numeric realism assertions on each. Heavy CPU + IO; passes alone but
+// can exceed Jest's default 5s timeout per test under parallel load.
+// Same defensive pattern the sibling exports.xlsxV2.test.js + the existing
+// crossProductReconciliation suite already use.
+jest.setTimeout(60000);
+
 /**
  * Snapshot-driven realism tests for XLSX exports (PR-NX8).
  *

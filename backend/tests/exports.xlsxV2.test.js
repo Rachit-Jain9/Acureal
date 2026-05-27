@@ -1,5 +1,14 @@
 'use strict';
 
+// Per-suite Jest timeout — this file builds full Excel workbooks (heavy
+// CPU + IO) across 233 tests. In isolation the whole file runs in ~73s
+// (avg ~0.3s per test), but under parallel load with the rest of the
+// backend suite (158 suites running on CPU-1 workers), individual tests
+// can exceed Jest's default 5s timeout. Bumping to 60s gives the slow
+// tests room to breathe under load. Same pattern the existing
+// crossProductReconciliation suite already uses.
+jest.setTimeout(60000);
+
 const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const { buildDealWorkbookV2, __internal } = require('../src/services/exports/xlsx/v2/buildWorkbook');
