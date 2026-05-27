@@ -69,8 +69,21 @@ async function optional(thunk, sliceName) {
  * The shape is intentionally flat at the top level — one slice per tab — so
  * the frontend can `useQuery(['deal-workspace', dealId], { select })` and
  * derive tab-specific props without re-shaping.
+ *
+ * Options:
+ *   • `lite` (default `false`) — when true, skip the expensive
+ *     surfaces that don't add Q&A value: recommendation + deal-doctor AI
+ *     narration, recommendation persistence (fire-and-forget),
+ *     activities, audit events. The deterministic recommendation + deal-
+ *     doctor cards still ship (with their evidence + signals) so the
+ *     Q&A model can cite them; only the AI prose is skipped. Useful for
+ *     non-UI callers like Deal Q&A (P7-PR1, 2026-05-27) that want the
+ *     full structural payload without re-firing narration on every
+ *     question. Lite payloads are NOT cached anywhere — callers should
+ *     hold the result themselves if needed.
  */
-async function getDealWorkspace(dealId) {
+async function getDealWorkspace(dealId, options = {}) {
+  const lite = options.lite === true;
   // Core — must succeed. Any failure (not found, not visible) short-circuits.
   const deal = await dealService.getDealById(dealId);
 
@@ -91,9 +104,14 @@ async function getDealWorkspace(dealId) {
     optional(() => financialService.getFinancials(dealId), 'financials'),
     optional(() => financialService.getScenarios(dealId), 'scenarios'),
     optional(() => financialService.getFinancialGraph(dealId), 'financialGraph'),
-    optional(() => financialService.listDealEvents(dealId, { limit: AUDIT_EVENT_LIMIT }), 'auditEvents'),
+    // Audit events + activities don't add Q&A value — skip in lite mode.
+    lite
+      ? Promise.resolve([])
+      : optional(() => financialService.listDealEvents(dealId, { limit: AUDIT_EVENT_LIMIT }), 'auditEvents'),
     optional(() => documentService.getDocuments(dealId), 'documents'),
-    optional(() => activityService.getActivities(dealId, {}, { limit: ACTIVITY_LIMIT }), 'activities'),
+    lite
+      ? Promise.resolve([])
+      : optional(() => activityService.getActivities(dealId, {}, { limit: ACTIVITY_LIMIT }), 'activities'),
     optional(() => ddService.getDDScore(dealId), 'ddScore'),
     optional(() => riskService.getRiskScore(dealId), 'riskScore'),
     optional(() => waterfallService.getWaterfall(dealId), 'waterfalls'),
@@ -146,7 +164,11 @@ async function getDealWorkspace(dealId) {
   const recommendationsSlice = await optional(async () => {
     const startMs = Date.now();
     const narratorAttempts = { tried: 0, succeeded: 0 };
-    const narratorEnabled = process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
+    // Lite-mode callers (e.g. Deal Q&A) want the deterministic cards
+    // without paying the narrator/persistence cost — the AI prose is
+    // expensive to re-generate on every question and the Q&A model
+    // already produces its own narration from the structural signals.
+    const narratorEnabled = !lite && process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
 
     // Phase 5 / P8 — learning loop consumer side. Fetch the per-(org, rule)
     // verdict counts for the trailing window BEFORE generating recommendations
@@ -181,16 +203,21 @@ async function getDealWorkspace(dealId) {
             ? 'partial'
             : 'failed';
     // Fire-and-forget persist. Failures land in logs; user still sees the cards.
-    recommendationPersistence.recordRun({
-      dealId,
-      snapshotHash: result.snapshot_hash,
-      signalCount: result.signal_count,
-      recommendations: result.recommendations,
-      signals: result.signals,
-      narratorStatus,
-      narratorMeta: { tried: narratorAttempts.tried, succeeded: narratorAttempts.succeeded },
-      latencyMs,
-    }).catch(() => {});
+    // Lite mode (e.g. Deal Q&A reading workspace data) skips persistence to
+    // avoid double-logging the same snapshot: the primary workspace fetch
+    // for this deal already persisted the run.
+    if (!lite) {
+      recommendationPersistence.recordRun({
+        dealId,
+        snapshotHash: result.snapshot_hash,
+        signalCount: result.signal_count,
+        recommendations: result.recommendations,
+        signals: result.signals,
+        narratorStatus,
+        narratorMeta: { tried: narratorAttempts.tried, succeeded: narratorAttempts.succeeded },
+        latencyMs,
+      }).catch(() => {});
+    }
 
     // PR-C — apply operator verdicts: hide cards the operator has dismissed
     // or snoozed. The hidden cards still travel in `hidden_by_verdict` so
@@ -216,8 +243,11 @@ async function getDealWorkspace(dealId) {
   // Deal Doctor slice — diagnostic view over the same signal set as the
   // recommendation engine. Different verbs, grouped by diagnostic theme.
   // Legal-carve-out findings bypass the narrator + tone classifier.
+  // Lite mode skips narration here too — the Q&A model produces its own
+  // narration from the deterministic findings, and the UI surfaces never
+  // call workspace in lite mode.
   const dealDoctorSlice = await optional(async () => {
-    const narratorEnabled = process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
+    const narratorEnabled = !lite && process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
     const result = await dealDoctor.generateForWorkspace(composed, {
       narrate: narratorEnabled
         ? async (card) => {

@@ -15,10 +15,22 @@ jest.mock('../src/services/ai/aiRouter', () => ({
   runAIWithSchema: jest.fn(),
   runClaudeReasoning: jest.fn(),
 }));
+// P7-PR1 (Q&A v2) — the dealQa service now fans out a parallel lite-mode
+// `getDealWorkspace(dealId, {lite:true})` call to expand the citation
+// surface. In unit-test isolation we don't want that to touch the DB
+// (which fires N service queries through the composer) — the workspace
+// path is exercised by the dedicated dealWorkspace.service.test. Mock it
+// to a minimal payload that has no slices, so the existing tests assert
+// the V1 behaviour unchanged. Tests that exercise V2 slice citations
+// override this per-test via `dealWorkspaceService.getDealWorkspace.mockResolvedValueOnce`.
+jest.mock('../src/services/dealWorkspace.service', () => ({
+  getDealWorkspace: jest.fn().mockResolvedValue(null),
+}));
 
 const { query } = require('../src/config/database');
 const embeddings = require('../src/services/embeddings.service');
 const aiRouter = require('../src/services/ai/aiRouter');
+const dealWorkspaceService = require('../src/services/dealWorkspace.service');
 const dealQa = require('../src/services/dealQa.service');
 
 // Postgres "undefined_table" SQLSTATE — Q&A hits this when the
@@ -119,6 +131,130 @@ describe('validateCitations', () => {
     );
     expect(result.valid).toBe(false);
     expect(result.invalid_ids).toEqual(['phantom-xyz']);
+  });
+
+  // P7-PR1 — V2 expanded synthetic citation surface. The validator must
+  // accept every workspace slice id so the model can ground a claim in
+  // ic_readiness / micro_market / best_use / etc. without falling back
+  // to the vague "deal_snapshot" tag.
+  test('V2 — accepts every expanded workspace-slice citation id', () => {
+    const expandedIds = [
+      'ic_readiness',
+      'karnataka_rera_readiness',
+      'micro_market',
+      'best_use',
+      'deal_structure_recommender',
+      'capital_stack_optimizer',
+      'promoter_profile',
+      'dd_checklist',
+      'approvals',
+      'recommendations',
+      'deal_doctor',
+      'waterfall',
+    ];
+    const result = dealQa.validateCitations(
+      expandedIds.map((id) => ({ embedding_id: id, excerpt: `from ${id}` })),
+      [], // no retrieved chunks — pure synthetic V2 case
+    );
+    expect(result.valid).toBe(true);
+    expect(result.invalid_ids).toEqual([]);
+  });
+
+  test('V2 — rejects close-but-typoed slice ids (defends against model drift)', () => {
+    const result = dealQa.validateCitations(
+      [
+        { embedding_id: 'ic_readiness', excerpt: 'ok' },
+        { embedding_id: 'ic_readinesss', excerpt: 'typo' },              // double-s
+        { embedding_id: 'micromarket', excerpt: 'missing-underscore' },  // no underscore
+        { embedding_id: 'deal-doctor', excerpt: 'dash' },                // dash not underscore
+      ],
+      [],
+    );
+    expect(result.valid).toBe(false);
+    expect(result.invalid_ids.sort()).toEqual(['deal-doctor', 'ic_readinesss', 'micromarket']);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// V2 — workspace slice composition + citation hydration
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('V2 — workspace slice expansion', () => {
+  test('hydrateCitations gives every V2 slice id a friendly display label', () => {
+    const cases = [
+      ['ic_readiness',               'IC Readiness Pack'],
+      ['karnataka_rera_readiness',   'K-RERA Readiness Pack'],
+      ['micro_market',               'Micro-Market Briefing'],
+      ['best_use',                   'Best Use Simulator'],
+      ['deal_structure_recommender', 'Deal-Structure Recommender'],
+      ['capital_stack_optimizer',    'Capital-Stack Optimizer'],
+      ['promoter_profile',           'Promoter Profile'],
+      ['dd_checklist',               'DD checklist'],
+      ['approvals',                  'Required approvals'],
+      ['recommendations',            'Recommendation Engine'],
+      ['deal_doctor',                'Deal Doctor findings'],
+      ['waterfall',                  'Waterfall (JDA/JV)'],
+    ];
+    for (const [sliceId, expectedLabel] of cases) {
+      const hydrated = dealQa.hydrateCitations(
+        [{ embedding_id: sliceId, excerpt: 'something', why_relevant: 'because' }],
+        [],
+      );
+      expect(hydrated[0].kind).toBe('synthetic');
+      expect(hydrated[0].document_name).toBe(expectedLabel);
+      expect(hydrated[0].embedding_id).toBe(sliceId);
+    }
+  });
+
+  test('hydrateCitations preserves chunk_text + similarity for document citations alongside V2 synthetic ones', () => {
+    const hydrated = dealQa.hydrateCitations(
+      [
+        { embedding_id: 'doc-chunk-1', excerpt: 'd1' },
+        { embedding_id: 'ic_readiness', excerpt: 'IC tier' },
+      ],
+      [makeChunk('doc-chunk-1', 'doc-1', 0.91)],
+    );
+    expect(hydrated).toHaveLength(2);
+    expect(hydrated[0].similarity).toBe(0.91);
+    expect(hydrated[0].document_name).toBe('doc-1.pdf');
+    expect(hydrated[1].kind).toBe('synthetic');
+    expect(hydrated[1].document_name).toBe('IC Readiness Pack');
+  });
+
+  test('buildPromptPayload omits the slices key when no workspace data is available (V1 backwards-compat)', () => {
+    const payload = dealQa.buildPromptPayload({
+      question: 'What is the IRR?',
+      context: {
+        deal: { id: 'd1', irr_pct: 18.5 },
+        risks: [],
+        comps: [],
+        chunks: [],
+        slices: null,
+      },
+    });
+    expect(payload.slices).toBeUndefined();
+    expect(payload.deal_snapshot).toMatchObject({ id: 'd1' });
+  });
+
+  test('buildPromptPayload omits the slices key when slices is an empty object', () => {
+    const payload = dealQa.buildPromptPayload({
+      question: 'Q',
+      context: { deal: { id: 'd1' }, risks: [], comps: [], chunks: [], slices: {} },
+    });
+    expect(payload.slices).toBeUndefined();
+  });
+
+  test('buildPromptPayload includes the slices payload when workspace data is hydrated', () => {
+    const slices = {
+      ic_readiness: { score: 58, tier: 'pre_ic', pillars: [], top_gaps: [{ label: 'Land schedule incomplete', severity: 'high', pillar: 'financial' }] },
+      promoter_profile: { promoter_name: 'Acme Builders', posture: 'unverified', signals: [] },
+    };
+    const payload = dealQa.buildPromptPayload({
+      question: 'Why is this Pre-IC?',
+      context: { deal: { id: 'd1' }, risks: [], comps: [], chunks: [], slices },
+    });
+    expect(payload.slices).toEqual(slices);
+    expect(payload.slices.ic_readiness.top_gaps[0].label).toBe('Land schedule incomplete');
   });
 });
 

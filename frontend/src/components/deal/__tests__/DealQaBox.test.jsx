@@ -48,9 +48,13 @@ describe('DealQaBox', () => {
   it('shows the suggested questions when history is empty', () => {
     renderWithClient(<DealQaBox dealId="d-1" />);
     expect(screen.getByText(/Try one of these/i)).toBeInTheDocument();
-    // 4 suggestion chips
+    // V2 (P7-PR1) suggestion chips — each leads the model into a specific
+    // workspace slice (title risks → risk_flags; Pre-IC → ic_readiness;
+    // Deal Doctor → deal_doctor; best use → best_use; promoter → promoter_profile).
     expect(screen.getByRole('button', { name: /open title risks/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /IC-ready/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pre-IC/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Deal Doctor/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /best use/i })).toBeInTheDocument();
   });
 
   it('does not show suggested questions when history is populated', () => {

@@ -41,6 +41,12 @@ const { runAIWithSchema, runClaudeReasoning, runClaudeReasoningStream, stripJson
 const embeddingsService = require('./embeddings.service');
 const numericalVerifier = require('./numericalVerifier.service');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+// P7-PR1 (Q&A v2) — pull the full structural workspace (lite mode skips AI
+// narration + persistence + activities) so the Q&A model can cite ANY
+// slice (recommendations / deal_doctor / ic_readiness / micro_market /
+// best_use / structure / capital_stack / promoter / k_rera / dd /
+// approvals / waterfall) — not just the 4 V1 synthetic ids.
+const dealWorkspaceService = require('./dealWorkspace.service');
 const log = require('../lib/logger').child({ module: 'dealQa' });
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -173,15 +179,33 @@ async function fetchTopComps(dealId) {
  * the semantic search route. Org-scoped via RLS.
  */
 async function assembleContext({ dealId, question, topK = DEFAULT_TOP_K, deal: dealOverride = null }) {
-  // Two-or-three deterministic queries in parallel + the embedding
-  // search. Each is small; LLM input is the limiter, not DB time.
+  // V1 fired three deterministic queries + the embedding search in
+  // parallel. V2 (P7-PR1) adds the FULL workspace via the composer's
+  // lite mode — IC Readiness, Micro-Market, Best Use, Deal-Structure
+  // Recommender, Capital-Stack Optimizer, K-RERA Readiness, Promoter
+  // Profile, DD checklist, Approvals, Recommendations (deterministic
+  // only — no narration), Deal Doctor findings, Waterfall — all
+  // become citable sources. Lite mode skips the narration AI calls +
+  // persistence + activities + audit events so the wall time stays
+  // within an interactive Q&A budget (~500-800ms).
+  //
   // Callers that have already fetched the deal (e.g. askQuestion's
   // visibility check) can pass it via `deal` to skip the duplicate
   // round-trip.
   const dealPromise = dealOverride
     ? Promise.resolve(dealOverride)
     : fetchDealSnapshot(dealId);
-  const [deal, risks, comps, retrievedChunks] = await Promise.all([
+  // The workspace composer fails-closed on access (not-found / not-visible)
+  // so we wrap it in a catch — Q&A should still answer with the V1 surfaces
+  // even if a single workspace slice errors. The lite-mode composer is
+  // migration-tolerant for every secondary slice.
+  const workspacePromise = dealWorkspaceService
+    .getDealWorkspace(dealId, { lite: true })
+    .catch((err) => {
+      log.warn('qa_workspace_lite_failed_continuing', { dealId, error: err.message });
+      return null;
+    });
+  const [deal, risks, comps, retrievedChunks, workspace] = await Promise.all([
     dealPromise,
     fetchRiskSummary(dealId),
     fetchTopComps(dealId),
@@ -194,6 +218,7 @@ async function assembleContext({ dealId, question, topK = DEFAULT_TOP_K, deal: d
       log.warn('embedding_search_failed_continuing', { dealId, error: err.message });
       return [];
     }),
+    workspacePromise,
   ]);
 
   // Hydrate retrieved chunks with document name + URL for the citations
@@ -221,7 +246,263 @@ async function assembleContext({ dealId, question, topK = DEFAULT_TOP_K, deal: d
     source_kind: c.source_kind,
   }));
 
-  return { deal, risks, comps, chunks: hydratedChunks };
+  // V2 — flatten the workspace into the prompt's structured-slice slots.
+  // Each slot is tightly-bounded so a verbose slice can't blow out the
+  // token budget: ic_readiness ships top_gaps only, recommendations ship
+  // headline + verb + severity + signals only, etc. The model uses the
+  // slice's canonical synthetic citation id when claiming a fact.
+  const slices = workspace ? slimWorkspaceForPrompt(workspace) : null;
+
+  return { deal, risks, comps, chunks: hydratedChunks, slices };
+}
+
+/**
+ * Convert the lite-workspace payload into a flat, prompt-token-efficient
+ * shape. Each slice keeps only the fields the model can actually cite,
+ * and array fields are capped (5-12 entries) so a deal with 200 documents
+ * doesn't push the prompt past the model's input window.
+ *
+ * Returns `null` for slices that don't have data for this deal — the
+ * model is told to mention "data not yet recorded" instead of fabricating.
+ */
+function slimWorkspaceForPrompt(workspace) {
+  const out = {};
+  // ── IC Readiness Pack ─────────────────────────────────────────────────
+  const icr = workspace.ic_readiness;
+  if (icr) {
+    out.ic_readiness = {
+      score: icr.score,
+      tier: icr.tier,
+      pillars: Array.isArray(icr.pillars)
+        ? icr.pillars.slice(0, 7).map((p) => ({
+            key: p.key,
+            label: p.label,
+            score: p.score,
+            weight: p.weight,
+            status: p.status,
+          }))
+        : [],
+      top_gaps: Array.isArray(icr.top_gaps)
+        ? icr.top_gaps.slice(0, 10).map((g) => ({
+            label: g.label,
+            severity: g.severity,
+            pillar: g.pillar,
+            recommended_action: g.recommended_action,
+          }))
+        : [],
+    };
+  }
+  // ── Karnataka RERA Readiness Pack ─────────────────────────────────────
+  const kr = workspace.karnataka_rera_readiness;
+  if (kr) {
+    out.karnataka_rera_readiness = {
+      applicable: kr.applicable,
+      score: kr.score,
+      tier: kr.tier,
+      top_gaps: Array.isArray(kr.top_gaps)
+        ? kr.top_gaps.slice(0, 8).map((g) => ({
+            label: g.label,
+            severity: g.severity,
+            recommended_action: g.recommended_action,
+          }))
+        : [],
+    };
+  }
+  // ── Micro-Market Briefing ─────────────────────────────────────────────
+  const mm = workspace.micro_market;
+  if (mm) {
+    out.micro_market = {
+      classification: mm.classification,
+      locality: mm.locality
+        ? {
+            name: mm.locality.name,
+            tier: mm.locality.tier,
+            asset_class_fit: mm.locality.asset_class_fit,
+            primary_demand_drivers: mm.locality.primary_demand_drivers,
+          }
+        : null,
+      benchmarks: Array.isArray(mm.benchmarks)
+        ? mm.benchmarks.slice(0, 8).map((b) => ({
+            metric: b.metric,
+            value: b.value,
+            unit: b.unit,
+            band_lo: b.band_lo,
+            band_hi: b.band_hi,
+            n_observations: b.n_observations,
+          }))
+        : [],
+      demand_signals: Array.isArray(mm.demand_signals)
+        ? mm.demand_signals.slice(0, 6).map((s) => ({
+            label: s.label,
+            tone: s.tone,
+            value: s.value,
+          }))
+        : [],
+    };
+  }
+  // ── Best Use Simulator ────────────────────────────────────────────────
+  const bu = workspace.best_use;
+  if (bu) {
+    out.best_use = {
+      top: Array.isArray(bu.scenarios)
+        ? bu.scenarios.slice(0, 4).map((s) => ({
+            asset_class: s.asset_class,
+            score: s.score,
+            tier: s.tier,
+            reason: s.reason,
+          }))
+        : [],
+    };
+  }
+  // ── Deal-Structure Recommender ────────────────────────────────────────
+  const ds = workspace.deal_structure_recommender;
+  if (ds) {
+    out.deal_structure_recommender = {
+      top: Array.isArray(ds.scenarios)
+        ? ds.scenarios.slice(0, 4).map((s) => ({
+            structure: s.structure,
+            score: s.score,
+            tier: s.tier,
+            reason: s.reason,
+          }))
+        : [],
+    };
+  }
+  // ── Capital-Stack Optimizer ───────────────────────────────────────────
+  const cs = workspace.capital_stack_optimizer;
+  if (cs) {
+    out.capital_stack_optimizer = {
+      top: Array.isArray(cs.scenarios)
+        ? cs.scenarios.slice(0, 3).map((s) => ({
+            label: s.label,
+            score: s.score,
+            tier: s.tier,
+            debt_pct: s.debt_pct,
+            equity_pct: s.equity_pct,
+            mezz_pct: s.mezz_pct,
+            covenant_issues: s.covenant_issues,
+          }))
+        : [],
+    };
+  }
+  // ── Promoter Profile ──────────────────────────────────────────────────
+  const pp = workspace.promoter_profile;
+  if (pp) {
+    out.promoter_profile = {
+      promoter_name: pp.promoter_name,
+      entity_type: pp.entity_type,
+      posture: pp.posture,
+      total_projects: pp.total_projects,
+      delivered_on_time: pp.delivered_on_time,
+      delivered_delayed: pp.delivered_delayed,
+      rera_registered: pp.rera_registered,
+      rera_complaints: pp.rera_complaints,
+      signals: Array.isArray(pp.signals)
+        ? pp.signals.slice(0, 6).map((s) => ({ label: s.label, tone: s.tone }))
+        : [],
+    };
+  }
+  // ── DD checklist ──────────────────────────────────────────────────────
+  if (workspace.dd) {
+    const ddItems = Array.isArray(workspace.dd.items) ? workspace.dd.items : [];
+    const openDealBreakers = ddItems.filter(
+      (i) => i.severity === 'deal_breaker' && !['completed', 'not_applicable'].includes(i.status),
+    );
+    const recentlyUpdated = ddItems
+      .filter((i) => i.status && i.status !== 'pending')
+      .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
+      .slice(0, 8);
+    out.dd_checklist = {
+      score: workspace.dd.score,
+      open_deal_breakers: openDealBreakers.slice(0, 8).map((d) => ({
+        title: d.title,
+        category: d.category,
+        status: d.status,
+        due_date: d.due_date,
+      })),
+      recent: recentlyUpdated.map((d) => ({
+        title: d.title,
+        category: d.category,
+        status: d.status,
+        severity: d.severity,
+      })),
+    };
+  }
+  // ── Approvals ─────────────────────────────────────────────────────────
+  if (Array.isArray(workspace.approvals)) {
+    const required = workspace.approvals.filter((a) => a.is_required !== false);
+    const available = required.filter((a) => a.is_available || a.is_uploaded || a.is_validated);
+    const missing = required.filter((a) => !(a.is_available || a.is_uploaded || a.is_validated));
+    out.approvals = {
+      required_count: required.length,
+      available_count: available.length,
+      missing: missing.slice(0, 10).map((a) => ({
+        name: a.name,
+        approval_type: a.approval_type,
+        status: a.is_validated ? 'validated' : a.is_uploaded ? 'uploaded' : a.is_available ? 'available' : 'missing',
+        expiry_date: a.expiry_date,
+      })),
+    };
+  }
+  // ── Recommendations (deterministic — no narration) ───────────────────
+  const recs = workspace.recommendations;
+  if (recs) {
+    out.recommendations = {
+      generated_at: recs.generated_at,
+      snapshot_hash: recs.snapshot_hash,
+      cards: Array.isArray(recs.recommendations)
+        ? recs.recommendations.slice(0, 12).map((c) => ({
+            id: c.id,
+            verb: c.verb,
+            topic: c.topic,
+            topic_label: c.topic_label,
+            severity: c.severity,
+            headline: c.headline,
+            detail: c.detail,
+            ai_narratable: c.ai_narratable,
+            team_feedback: c.team_feedback || null,
+          }))
+        : [],
+    };
+  }
+  // ── Deal Doctor findings (deterministic — no narration) ──────────────
+  const dd = workspace.deal_doctor;
+  if (dd) {
+    out.deal_doctor = {
+      finding_count: dd.finding_count,
+      groups: dd.groups,
+      findings: Array.isArray(dd.findings)
+        ? dd.findings.slice(0, 12).map((f) => ({
+            id: f.id,
+            verb: f.verb,
+            topic: f.topic,
+            severity: f.severity,
+            finding: f.finding,
+            why_it_matters: f.why_it_matters,
+          }))
+        : [],
+    };
+  }
+  // ── Waterfall (JDA / JV) ─────────────────────────────────────────────
+  if (workspace.waterfall && (workspace.waterfall.jda || workspace.waterfall.jv)) {
+    out.waterfall = {
+      jda: workspace.waterfall.jda
+        ? {
+            landowner_share_pct: workspace.waterfall.jda.landowner_share_pct,
+            developer_share_pct: workspace.waterfall.jda.developer_share_pct,
+            preferred_return_pct: workspace.waterfall.jda.preferred_return_pct,
+          }
+        : null,
+      jv: workspace.waterfall.jv
+        ? {
+            preferred_return_pct: workspace.waterfall.jv.preferred_return_pct,
+            catch_up_pct: workspace.waterfall.jv.catch_up_pct,
+            promote_tier: workspace.waterfall.jv.promote_tier,
+          }
+        : null,
+    };
+  }
+  return out;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -235,46 +516,95 @@ async function assembleContext({ dealId, question, topK = DEFAULT_TOP_K, deal: d
 // validator rejects answers grounded in deal-level facts whenever the
 // deal has no uploaded documents (a common case).
 const SYNTHETIC_CITATION_IDS = new Set([
-  'deal_snapshot',  // financials + property + ask price + locality
-  'risk_flags',     // open risk_flags rows
-  'comps',          // top-N comparable transactions
-  'financials',     // alias often surfaced by the model
+  // V1 — base slices (always populated)
+  'deal_snapshot',              // financials + property + ask price + locality
+  'risk_flags',                 // open risk_flags rows
+  'comps',                      // top-N comparable transactions
+  'financials',                 // alias often surfaced by the model
+  // V2 (P7-PR1) — every workspace slice that ships structural facts the
+  // model can ground a claim in. Each maps to a `slices.<key>` payload
+  // (see slimWorkspaceForPrompt) and renders in the UI as a "Deal data"
+  // citation chip with a friendly label.
+  'ic_readiness',               // IC Readiness Pack (7 pillars + top gaps)
+  'karnataka_rera_readiness',   // K-RERA Readiness Pack
+  'micro_market',               // Micro-Market Briefing (locality + benchmarks)
+  'best_use',                   // Best Use Simulator scoring
+  'deal_structure_recommender', // Deal Structure scoring
+  'capital_stack_optimizer',    // Capital Stack Optimizer
+  'promoter_profile',           // Promoter posture + factors
+  'dd_checklist',               // DD score + open deal-breakers
+  'approvals',                  // Required vs available approvals
+  'recommendations',            // Recommendation Engine cards
+  'deal_doctor',                // Deal Doctor findings
+  'waterfall',                  // JDA/JV waterfall shape
 ]);
 
 // Display labels for synthetic citations — surfaced in the citation
 // chip so the UI doesn't show a raw token like "deal_snapshot".
 const SYNTHETIC_CITATION_LABELS = {
+  // V1
   deal_snapshot: 'Deal snapshot',
   risk_flags:    'Open risk flags',
   comps:         'Comparable transactions',
   financials:    'Financial model',
+  // V2
+  ic_readiness:               'IC Readiness Pack',
+  karnataka_rera_readiness:   'K-RERA Readiness Pack',
+  micro_market:               'Micro-Market Briefing',
+  best_use:                   'Best Use Simulator',
+  deal_structure_recommender: 'Deal-Structure Recommender',
+  capital_stack_optimizer:    'Capital-Stack Optimizer',
+  promoter_profile:           'Promoter Profile',
+  dd_checklist:               'DD checklist',
+  approvals:                  'Required approvals',
+  recommendations:            'Recommendation Engine',
+  deal_doctor:                'Deal Doctor findings',
+  waterfall:                  'Waterfall (JDA/JV)',
 };
 
 const SYSTEM_PROMPT = `You are a senior Indian real-estate analyst answering a colleague's question about a specific deal at a Bengaluru private-equity fund.
 
 Hard rules:
-1. ONLY use facts that appear in the supplied "deal_snapshot", "risk_flags", "comps", or "retrieved_chunks". Never invent a number, name, date, RERA reference, or zoning code.
+1. ONLY use facts that appear in the supplied context (deal_snapshot, risk_flags, comps, retrieved_chunks, OR any populated entry under "slices"). Never invent a number, name, date, RERA reference, or zoning code.
 2. Every factual claim MUST be backed by a citation. Citations work in TWO modes:
    • **Document-grounded** — when the claim comes from an uploaded document, the embedding_id MUST match an entry in retrieved_chunks exactly.
-   • **Snapshot-grounded** — when the claim comes from the deal_snapshot / risk_flags / comps fields (NOT from a document), use one of these literal embedding_id values: "deal_snapshot", "risk_flags", "comps", "financials". Pick whichever non-document section the claim came from.
+   • **Slice-grounded** — when the claim comes from a structured workspace slice (NOT a document), use the slice's canonical synthetic id as the embedding_id. The full set of allowed slice ids:
+       — "deal_snapshot"              → financials + property + ask price + locality (the base deal row)
+       — "risk_flags"                 → open risk flags
+       — "comps"                      → comparable transactions
+       — "financials"                 → alias for financial fields on deal_snapshot
+       — "ic_readiness"               → IC Readiness Pack (score, tier, 7 pillars, top gaps)
+       — "karnataka_rera_readiness"   → K-RERA Readiness Pack (applicable, score, tier, gaps)
+       — "micro_market"               → Micro-Market Briefing (locality, benchmarks, demand signals)
+       — "best_use"                   → Best Use Simulator scoring (top asset classes for this parcel)
+       — "deal_structure_recommender" → Deal Structure scoring (outright / JDA / JV / etc.)
+       — "capital_stack_optimizer"    → Capital Stack scenarios (debt/equity/mezz mix + covenants)
+       — "promoter_profile"           → Promoter posture + delivery track record + signals
+       — "dd_checklist"               → DD score + open deal-breakers + recent items
+       — "approvals"                  → Required approval count vs available count + the missing list
+       — "recommendations"            → Recommendation Engine cards (each carries verb, topic, headline, severity, team_feedback)
+       — "deal_doctor"                → Deal Doctor diagnostic findings
+       — "waterfall"                  → JDA/JV waterfall split
+     Pick the most-specific slice. E.g. for "Why is this deal Pre-IC?" cite "ic_readiness", not "deal_snapshot".
 3. Do not put document chunk ids in why_relevant; put them in embedding_id. why_relevant is a one-phrase note about why the cited evidence supports the claim.
 4. Output STRICTLY this JSON shape — no markdown fence, no preamble:
    {
      "answer": "<3-6 sentences, plain Indian English, investor-grade>",
      "citations": [
        {
-         "embedding_id": "<retrieved chunk id, OR one of: deal_snapshot, risk_flags, comps, financials>",
-         "excerpt": "<the specific sentence or fragment that supports the answer; for snapshot-grounded citations, paraphrase the relevant deal field>",
+         "embedding_id": "<retrieved chunk id OR one of the slice ids listed above>",
+         "excerpt": "<for slice citations, paraphrase the specific field/value that supports the claim — e.g. 'IC tier: Pre-IC (58/100), top gap: financial model not finalised'>",
          "why_relevant": "<one short phrase>"
        }
      ],
      "confidence": "high|medium|low"
    }
 5. citations array MUST contain at least one entry whenever the answer makes any factual claim.
-6. If retrieved_chunks is empty AND the deal_snapshot is sparse, set confidence="low" and explain in answer what's missing — still cite the closest source (e.g. "deal_snapshot" with a note that documents haven't been uploaded yet).
-7. Do not produce legal opinions on title, RERA compliance, or zoning. Surface what the supplied facts say; flag where independent verification is needed.
+6. If retrieved_chunks is empty AND the relevant slice is also empty, set confidence="low" and explain in answer what's missing — still cite the closest available source.
+7. Do not produce legal opinions on title chain, encumbrance, RERA compliance status, or statutory approvals. Surface what the supplied facts say; for those four topics flag where independent verification is needed (the legal carve-out from CLAUDE.md).
+8. Use the closed verb dictionary when characterising the deal's posture: "Recommend / Consider / Re-examine / Flag / Stress-test" for recommendations; "Diverges / Lacks support / Inconsistent / Below benchmark / Above benchmark / Missing" for diagnoses. Never use absolute verbs ("Buy / Reject / Approve / Decline / Clear / Pass").
 
-The system layer post-validates that every embedding_id you cite is either a real retrieved chunk OR one of the four synthetic ids above. Anything else is rejected and the answer is discarded.`;
+The system layer post-validates that every embedding_id you cite is either a real retrieved chunk OR one of the slice ids listed above. Anything else is rejected and the answer is discarded.`;
 
 /**
  * Compose the user-facing prompt payload. The assembled context is
@@ -282,13 +612,21 @@ The system layer post-validates that every embedding_id you cite is either a rea
  * it predictable for the model and easy to test against.
  */
 function buildPromptPayload({ question, context }) {
-  return {
+  const payload = {
     question: question.trim(),
     deal_snapshot: context.deal,
     risk_flags: context.risks,
     comps: context.comps,
     retrieved_chunks: context.chunks,
   };
+  // P7-PR1 — flat-but-bounded structural slices. The model reads these
+  // to ground a claim in a specific workspace surface (ic_readiness /
+  // micro_market / etc.). Omitted when the workspace lite fetch failed
+  // so the V1 surfaces continue to work even on a degraded read.
+  if (context.slices && Object.keys(context.slices).length > 0) {
+    payload.slices = context.slices;
+  }
+  return payload;
 }
 
 /**
