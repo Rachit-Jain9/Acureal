@@ -40,11 +40,21 @@ import {
  *   • Collapsible history so the deal page doesn't get unwieldy
  */
 
+// V1 surfaced 4 prompts grounded in deal_snapshot + risk_flags + comps. V2
+// (P7-PR1, 2026-05-27) expands the citation surface to all 12+ workspace
+// slices — so the prompts can now lead the model into the IC Readiness
+// Pack, Deal Doctor, Best Use, Micro-Market briefing, promoter profile,
+// etc. New prompts are designed to require those slices: the model can't
+// answer them well using only the V1 sources.
 const SUGGESTED_QUESTIONS = [
   'What are the open title risks?',
-  'Is this deal IC-ready? What\'s missing?',
-  'How does the asking price compare to comps?',
-  'Summarize the regulatory / RERA status.',
+  'Why is this deal Pre-IC? What are the top gaps?',
+  'What does the Deal Doctor flag?',
+  'What is the best use for this parcel?',
+  'How does the promoter\'s delivery track record look?',
+  'What\'s the verdict on the recommended deal structure?',
+  'Summarize the K-RERA readiness and any missing approvals.',
+  'How does the asking price compare to nearby comps?',
 ];
 
 function CitationChip({ citation }) {
