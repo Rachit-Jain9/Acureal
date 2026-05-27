@@ -4,6 +4,79 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-27 (seventh 10-hour block — Pillar 8 consumer side + E2 reverse provenance) — Learning loop now ADAPTS, evidence graph now reverses (PR #618-#619)
+
+Continuation immediately after the sixth block's polish + comparison work landed. Operator brief opened with the same "best work you have ever done" line and gave discretion to pick the next direction. I confirmed that the three plan-file headline gaps (2D routing, confidence bands, promoter score, output provenance) are all already shipped (verified in the sixth block), and pivoted to the two highest-leverage genuinely-pending items: **Pillar 8 consumer side** (make captured verdicts actually re-rank cards) and **E2 reverse provenance** ("what depends on this document?").
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#618](https://github.com/Rachit-Jain9/REDIP/pull/618) | **Pillar 8 v2 — Learning Loop consumer side.** The CAPTURE side was shipped (PR-C) months ago — every `dismiss` / `snooze` / `acted` verdict on a Recommendation Engine card writes a values-free row to `public.improvement_signals`. This PR is the **READ** side that's been missing: a deterministic per-`(org, rule_id)` count aggregator over a 90-day trailing window + a multiplier policy that re-ranks cards within an org. New service `learningSignals.aggregator.service.js`. Recommendation engine accepts a `teamFeedback` Map; each emitted card now gets a `team_feedback` field; sort re-keys on `severity × multiplier`. Original `severity` preserved so the audit log shows the rule's untouched assessment. New "Adapted for your team" chip on `RecommendationsPanel`. 65 new tests (19 aggregator + 7 engine integration + 39 preserved engine regressions). 124 total recommendation + learning-signal tests pass. |
+| [#619](https://github.com/Rachit-Jain9/REDIP/pull/619) | **E2 — reverse provenance ("what depends on this document?").** The polymorphic `evidence_links` table records claim → source links forward (DD item / approval / risk flag / scenario CITES document / regulatory source). This PR ships the reverse traversal: `GET /api/evidence-links/dependents/:sourceKind/:sourceId`. New service function `listDependents()` with LEFT-JOIN-to-every-owning-entity SELECT (uses the existing partial indexes). New `DependentsPopover.jsx` reusable component wired into the DocumentsTab — every document row gets a small "Dependents" (Network icon) button. Click → grouped list of every DD / approval / risk flag / scenario that cites this document, with parent deal links. Comp source kind returns empty + a note (comps route through the future comp_reliance signal layer). 18 new tests (8 backend + 10 frontend). All 92 common-component frontend tests pass. No new schema, no migration. |
+
+### Multiplier policy (Pillar 8 — deterministic ladder)
+
+| Condition | Multiplier |
+|---|---|
+| Legal carve-out topic (`legal_title` / `legal_rera` / `legal_approvals` / `legal_encumbrance`) | **1.0 always** |
+| `acted_count >= dismiss_count` AND `acted_count > 0` | **1.0** |
+| `dismiss_count >= 6` | **0.7** (floor) |
+| `dismiss_count >= 3` | **0.85** |
+| Otherwise | **1.0** |
+
+The floor of 0.7 means a card **never disappears from de-ranking alone** — a strongly-dismissed card still ranks above the same-severity zero-feedback card by at most 30% of the severity span. The decision to actually HIDE a card stays with the operator (Dismiss button), not the platform.
+
+### Architecture choices (Pillar 8)
+
+| Approach | Verdict | Why |
+|---|---|---|
+| Block-list rules after N dismissals | **Rejected** | Loses correctness; team dismissing-out-of-fatigue would silently hide critical findings. |
+| Bayesian rule scoring with priors | **Rejected** | Overkill at current data volume. Counts + thresholds are defensible and explainable. |
+| ML-learned re-ranker | **Out of scope** | Deterministic ranking is part of REDIP's audit-friendliness contract — two runs on the same data must produce the same order. |
+| Deterministic per-`(org, rule)` count aggregation + policy ladder | **Chosen** | Pure, explainable, snapshot-reproducible. |
+
+### Cumulative impact (this block)
+
+- **Backend tests**: 2,809 → **2,851** (+42 across aggregator + engine integration + reverse-provenance service)
+- **Frontend tests**: 1,025 → **1,045** (+20 across team-feedback chip + DependentsPopover)
+- **New canonical modules**:
+  - `backend/src/services/learningSignals.aggregator.service.js` — 215 LOC, per-org rule-feedback aggregator
+  - `backend/src/services/evidenceLinks.service.listDependents()` — new function in the existing module (~100 LOC addition)
+  - `frontend/src/components/common/DependentsPopover.jsx` — 270 LOC, reusable reverse-traversal UI
+- **Modified**:
+  - `backend/src/services/recommendation/index.js` — accepts `teamFeedback`, applies multiplier + re-sort
+  - `backend/src/services/dealWorkspace.service.js` — fetches the aggregator before invoking the engine
+  - `backend/src/routes/evidenceLinks.routes.js` — new `GET .../dependents/...` route
+  - `frontend/src/components/deal/RecommendationsPanel.jsx` — "Adapted for your team" chip on cards
+  - `frontend/src/components/deal/DocumentsTab.jsx` — Dependents button per document row
+  - `frontend/src/services/api.js` — new `evidenceLinksAPI.dependents()` client
+
+### What the user can do now that they couldn't before
+
+- **The Recommendation Engine actually LEARNS.** Dismiss a card 3+ times across your team in the last 90 days and that rule's cards quietly de-rank — a small "Adapted: dismissed N× this month" chip explains why. Apply the rule's recommendations several times and the platform notices ("Applied 5× by your team"). The card never disappears from de-ranking alone — only the order changes; the dismiss button is still the only way to hide a card. Legal carve-out topics (title / RERA / approvals / encumbrance) **never** de-rank, regardless of feedback.
+- **Reverse-impact lookup on every document.** Open the Documents tab, click the new Network icon next to any file → instant grouped list of every DD item / approval / risk flag / scenario across your org that cites this document, each linking back to its parent deal in a new tab. Lets you answer "what breaks if I delete this PDF?" without leaving the page.
+
+### CLAUDE.md respected
+
+- **Pillar 8**: deterministic + snapshot-reproducible (two runs on the same data produce the same order). Values-free aggregation — counts of verdicts, never document values, never PII. Read-side only; never writes to `improvement_signals`. Legal carve-out topics stay strict — no AI rephrasing, no de-ranking.
+- **E2**: read-only — never modifies any state. Pure SQL aggregation, no AI prose. Org-scoped via RLS on `evidence_links` + `current_organization_id()`. No new schema; reuses the existing polymorphic table + its partial indexes.
+
+### Phase 4 main entries status
+
+| Item | Status |
+|---|---|
+| Pillar 8 — Learning Loop v2 consumer side | ✅ Shipped (#618) |
+| E2 — Claim / provenance graph (reverse traversal) | ✅ Shipped (#619) |
+| Pillar 7 — Q&A v2 (natural-language workspace Q&A) | Queued — LLM-heavy, needs citation gating design |
+| E7 — Admin dashboard (operator-only AI cost + audit views) | Queued — admin skeleton exists, needs surfaces |
+
+### What's next
+
+Pillar 7 (Q&A v2) and E7 (Admin dashboard) remain queued. Operator-gated items (G1 DPA + AUP via Indian legal counsel; G2 Supabase PITR drill / Incident Lead names / security@redip.in mailbox; Google Maps key restriction at Cloud Console) all await external action.
+
+---
+
 ## 2026-05-27 (sixth 10-hour block — quality + polish + deal comparison) — Diagnostic cleanup, theme tokens, side-by-side comparison (PR #614–#616)
 
 Continuation immediately after Phase 4 prologue's 7-PR arc landed. The operator's brief opened with the standing "take your time to do quality work" line and gave me discretion to choose the next direction. I did a deep technical review and found that the three headline gaps from the original plan file (`REDIP Pending.docx`) — 2D routing matrix · confidence bands · promoter track-record scoring — are ALL already shipped:
