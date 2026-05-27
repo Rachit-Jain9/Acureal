@@ -31,6 +31,7 @@ const recommendationPersistence = require('./recommendation/persistence');
 const verdictsService = require('./recommendation/verdicts.service');
 const { narrateCard } = require('./recommendation/recommendationNarrator');
 const dealDoctor = require('./recommendation/dealDoctor');
+const learningSignalsAggregator = require('./learningSignals.aggregator.service');
 const microMarketIntelligence = require('./microMarketIntelligence.service');
 const bestUseSimulator = require('./bestUseSimulator.service');
 const dealStructureRecommender = require('./dealStructureRecommender.service');
@@ -146,6 +147,16 @@ async function getDealWorkspace(dealId) {
     const startMs = Date.now();
     const narratorAttempts = { tried: 0, succeeded: 0 };
     const narratorEnabled = process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
+
+    // Phase 5 / P8 — learning loop consumer side. Fetch the per-(org, rule)
+    // verdict counts for the trailing window BEFORE generating recommendations
+    // so the engine can attach a `team_feedback` field to each card and
+    // re-sort by effective severity. Migration-tolerant: the aggregator
+    // returns an empty Map if the table is missing, and the engine then
+    // ranks at full base severity exactly like before this PR. No new I/O
+    // on the critical path when there's no historical feedback.
+    const teamFeedback = await learningSignalsAggregator.getTeamFeedbackByRule();
+
     const result = await recommendationEngine.generateForWorkspace(composed, {
       // Narrator is wired here; the orchestrator already bypasses the hook
       // for `ai_narratable: false` cards (the four legal carve-outs).
@@ -157,6 +168,7 @@ async function getDealWorkspace(dealId) {
             return narration;
           }
         : undefined,
+      teamFeedback,
     });
     const latencyMs = Date.now() - startMs;
     const narratorStatus = !narratorEnabled

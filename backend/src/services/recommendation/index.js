@@ -18,6 +18,7 @@ const crypto = require('crypto');
 
 const { extractAllSignals } = require('./signalExtractors');
 const { generateRecommendations, TOPICS, RECOMMENDATION_VERBS } = require('./recommendationRules');
+const { composeTeamFeedback } = require('../learningSignals.aggregator.service');
 
 /**
  * Produce a stable hash of the workspace inputs that drove the recommendations.
@@ -66,18 +67,58 @@ const computeSnapshotHash = (workspace) => {
  *                    Cards with `ai_narratable: false` (legal carve-out)
  *                    bypass this hook unconditionally — the deterministic
  *                    template is the ONLY copy the user sees for those.
+ * @param {Map<string,object>=} options.teamFeedback
+ *                    optional `Map<rule_id, counts>` from
+ *                    `learningSignals.aggregator.getTeamFeedbackByRule()`.
+ *                    When provided, each emitted card receives a
+ *                    `team_feedback` field describing how often the org has
+ *                    dismissed/snoozed/acted on this rule in the trailing
+ *                    window, and the deterministic sort is re-keyed on
+ *                    `severity × multiplier` so frequently-dismissed rules
+ *                    de-rank within that org. Legal carve-out topics
+ *                    (title / RERA / approvals / encumbrance) always stay
+ *                    at multiplier=1.0 regardless of feedback. The card
+ *                    itself is never hidden — only the order changes.
  * @returns {Promise<{ recommendations, snapshot_hash, signal_count, generated_at }>}
  */
 const generateForWorkspace = async (workspace, options = {}) => {
   const narrate = typeof options.narrate === 'function' ? options.narrate : null;
+  const teamFeedback = options.teamFeedback instanceof Map ? options.teamFeedback : null;
 
   const signals = extractAllSignals(workspace);
   const candidates = generateRecommendations(signals);
 
-  let recommendations = candidates;
+  // Apply learning-loop team feedback BEFORE narration. The narrator
+  // never sees the multiplier — its job is to rephrase the card text,
+  // not to know about sort weights. Cards get a `team_feedback` field
+  // and the candidate list is re-sorted by effective severity.
+  let withFeedback = candidates;
+  if (teamFeedback && teamFeedback.size > 0) {
+    withFeedback = candidates.map((card) => {
+      const counts = teamFeedback.get(card.id);
+      const feedback = composeTeamFeedback(card.topic, counts);
+      if (!feedback) return card;
+      return {
+        ...card,
+        team_feedback: feedback,
+        // The effective severity is what we sort on — `severity` itself
+        // stays untouched so the audit log shows the rule's ORIGINAL
+        // assessment, and the persistence layer doesn't have to track
+        // a sliding window.
+        effective_severity: Number(card.severity) * feedback.multiplier,
+      };
+    }).sort((a, b) => {
+      const eA = Number.isFinite(a.effective_severity) ? a.effective_severity : a.severity;
+      const eB = Number.isFinite(b.effective_severity) ? b.effective_severity : b.severity;
+      if (eB !== eA) return eB - eA;
+      return String(a.topic).localeCompare(String(b.topic));
+    });
+  }
+
+  let recommendations = withFeedback;
   if (narrate) {
     recommendations = await Promise.all(
-      candidates.map(async (card) => {
+      withFeedback.map(async (card) => {
         if (!card.ai_narratable) return card;
         try {
           const narration = await narrate(card, { workspace });
