@@ -79,6 +79,80 @@ router.get('/recent-events', authenticate, requireRole('admin', 'analyst'), asyn
   }
 });
 
+// GET /api/admin/audit-trail?days=7&eventType=X&dealId=Y&limit=100
+//
+// E7-PR2 (2026-05-27) — admin audit-trail tail with filters. The dashboard's
+// `recent-events` widget keeps the old flat-array shape; this endpoint
+// returns a structured payload tuned for the admin page:
+//   { events[], event_type_catalog[], window_days, limit }
+//
+// Org-scoped via RLS on deal_events. Read-only.
+router.get('/audit-trail', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const days = req.query.days ? Math.min(Math.max(parseInt(req.query.days, 10), 1), 365) : 7;
+    const eventType = typeof req.query.eventType === 'string' && req.query.eventType.length > 0
+      ? req.query.eventType
+      : null;
+    const dealId = typeof req.query.dealId === 'string' && req.query.dealId.length > 0
+      ? req.query.dealId
+      : null;
+
+    const where = [`e.created_at >= NOW() - ($1::int * INTERVAL '1 day')`];
+    const params = [days];
+    let paramCount = 2;
+    if (eventType) {
+      where.push(`e.event_type = $${paramCount}`);
+      params.push(eventType);
+      paramCount += 1;
+    }
+    if (dealId) {
+      where.push(`e.deal_id = $${paramCount}::uuid`);
+      params.push(dealId);
+      paramCount += 1;
+    }
+    const whereSql = `WHERE ${where.join(' AND ')}`;
+
+    const [rowsResult, catalogResult] = await Promise.all([
+      query(
+        `SELECT e.id, e.deal_id, e.event_type, e.engine_version, e.asset_class,
+                e.created_at, e.metadata,
+                d.name AS deal_name,
+                u.id   AS actor_id,
+                u.name AS actor_name
+           FROM deal_events e
+           LEFT JOIN deals d ON d.id = e.deal_id
+           LEFT JOIN users u ON u.id = e.actor_id
+           ${whereSql}
+          ORDER BY e.created_at DESC
+          LIMIT $${paramCount}`,
+        [...params, limit],
+      ),
+      query(
+        `SELECT event_type, COUNT(*)::int AS count
+           FROM deal_events
+          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+          GROUP BY event_type
+          ORDER BY count DESC, event_type ASC`,
+        [days],
+      ),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        events: rowsResult.rows,
+        event_type_catalog: catalogResult.rows,
+        window_days: days,
+        limit,
+        filter: { eventType, dealId },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/ai-usage?days=30
 //
 // Returns rollups over `ai_call_logs` for the trailing window:

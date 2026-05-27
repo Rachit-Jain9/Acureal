@@ -840,6 +840,11 @@ export const adminAPI = {
   // aggregator (PR #618) uses to re-rank recommendation cards.
   getLearningSignals: (days = 30) =>
     api.get('/admin/learning-signals', { params: { days } }),
+  // E7-PR2 (2026-05-27) — audit-trail tail with filters. Returns
+  // { events[], event_type_catalog[], window_days, limit, filter }.
+  // Filters: days (1-365), eventType (string), dealId (UUID), limit (1-200).
+  getAuditTrail: (params = {}) =>
+    api.get('/admin/audit-trail', { params }),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`
