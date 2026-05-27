@@ -487,18 +487,13 @@ const getPortfolioReadiness = async ({
       log.warn('portfolio_readiness_missing_table', { error: err.message });
       return composePortfolio([]);
     }
-    // Flat single-line console.error so Vercel's truncated UI shows the
-    // full diagnostic on one row. Earlier object-form was getting cut
-    // off after the first key. Format:
-    //   [portfolio-readiness:err] code=42703 msg=column ... where=... detail=...
-    const flat =
-      `[portfolio-readiness:err] code=${err.code || 'NONE'} ` +
-      `msg=${(err.message || 'no message').replace(/\s+/g, ' ').slice(0, 220)} ` +
-      `where=${(err.where || '-').replace(/\s+/g, ' ').slice(0, 80)} ` +
-      `hint=${(err.hint || '-').slice(0, 80)} ` +
-      `detail=${(err.detail || '-').slice(0, 80)}`;
-    // eslint-disable-next-line no-console
-    console.error(flat);
+    // PR #611's flat console.error diagnostic was load-bearing while we
+    // hunted the f.kpis / f.dscr column bug across PR #606-#612. Now that
+    // the root-cause fix is in (PR #612), the error path doesn't fire and
+    // the extra line would just be log noise. The structured log.warn
+    // stays as the canonical telemetry — if a NEW error ever surfaces
+    // here the pino entry carries the code + message; we can re-add a
+    // flat line if Vercel's UI truncation hides the cause again.
     log.warn('portfolio_readiness_query_failed', { error: err.message, code: err.code });
     return composePortfolio([]);
   }
