@@ -43,6 +43,53 @@ const SEVERITY_ICON = (severity) => {
   return <Info size={14} className="text-slate-500" />;
 };
 
+/**
+ * Tone for the "Adapted for your team" chip — P8-PR2 (Learning Loop v2).
+ * The aggregator emits `team_feedback` on cards with any verdict history in
+ * the trailing 90-day window. The chip:
+ *
+ *   - shows ONLY when there's something meaningful to surface (the
+ *     aggregator already returns null for the empty case, but we belt-and-
+ *     braces it here)
+ *   - reads `reason` when the multiplier de-ranked the card ("Dismissed 8×
+ *     by your team in the last 90 days.")
+ *   - falls back to a positive-feedback variant when the team has APPLIED
+ *     the rule more often than dismissed ("Applied 5× by your team")
+ *   - stays subdued — this is platform-aware metadata, not a primary signal.
+ *
+ * Surfaces visibly that the platform is learning. CLAUDE.md respected:
+ * never zeros out a card; only re-orders + explains the reorder.
+ */
+function TeamFeedbackChip({ feedback }) {
+  if (!feedback) return null;
+  const { multiplier, dismiss_count: dismissed, acted_count: acted, reason } = feedback;
+  // If the aggregator de-ranked, show the reason it provided.
+  if (multiplier < 1.0 && reason) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[10px] font-medium"
+        title="The platform de-ranked this card because your team has dismissed similar ones recently. Click the card to act on it anyway."
+      >
+        <Sparkles size={10} />
+        Adapted: dismissed {dismissed}× this month
+      </span>
+    );
+  }
+  // Positive feedback — team has applied this rule more often than dismissed.
+  if (acted > 0 && acted >= dismissed) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-800 text-[10px] font-medium"
+        title="Your team has applied this kind of recommendation before."
+      >
+        <Sparkles size={10} />
+        Applied {acted}× by your team
+      </span>
+    );
+  }
+  return null;
+}
+
 function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
   const verdict = useRecommendationVerdict();
   const ruleId = card.id;
@@ -153,6 +200,7 @@ function RecommendationCard({ card, dealId, snapshotHash, hidden = false }) {
             {card.verdict?.kind === 'snoozed' && (
               <span className="text-[10px] uppercase tracking-wider text-amber-700">Snoozed</span>
             )}
+            <TeamFeedbackChip feedback={card.team_feedback} />
           </div>
           <div className={clsx('text-sm leading-snug', hidden ? 'text-content-secondary' : 'text-content-primary')}>
             {card.headline}

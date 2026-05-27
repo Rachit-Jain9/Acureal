@@ -506,4 +506,119 @@ describe('recommendation orchestrator', () => {
     });
     expect(result.recommendations.length).toBeGreaterThan(0);
   });
+
+  // ─── Learning-loop team feedback (P8-PR1) ──────────────────────────────
+
+  describe('teamFeedback integration', () => {
+    const buildFixtureWorkspace = () =>
+      makeWorkspace({
+        deal: {
+          asset_class: 'residential_apartments',
+          deal_structure: 'jda',
+          sales_price_per_sqft: 13200,
+          absorption_units_per_quarter: 28,
+        },
+        kpis: { landCr: 40, revenue: 100, irr: 0.12 },
+        comps: [
+          { price_per_sqft: 11000, absorption_units_per_quarter: 12 },
+          { price_per_sqft: 11200, absorption_units_per_quarter: 13 },
+          { price_per_sqft: 11300, absorption_units_per_quarter: 14 },
+          { price_per_sqft: 11400, absorption_units_per_quarter: 13 },
+        ],
+        approvals: [],
+      });
+
+    test('without teamFeedback, no cards carry the team_feedback field', async () => {
+      const ws = buildFixtureWorkspace();
+      const result = await recommendationEngine.generateForWorkspace(ws);
+      for (const card of result.recommendations) {
+        expect(card.team_feedback).toBeUndefined();
+        expect(card.effective_severity).toBeUndefined();
+      }
+    });
+
+    test('with an empty teamFeedback Map, behaviour matches no-feedback path', async () => {
+      const ws = buildFixtureWorkspace();
+      const a = await recommendationEngine.generateForWorkspace(ws);
+      const b = await recommendationEngine.generateForWorkspace(ws, { teamFeedback: new Map() });
+      expect(b.recommendations.map((c) => c.id)).toEqual(a.recommendations.map((c) => c.id));
+      for (const card of b.recommendations) {
+        expect(card.team_feedback).toBeUndefined();
+      }
+    });
+
+    test('a heavily-dismissed non-legal rule de-ranks via effective_severity', async () => {
+      const ws = buildFixtureWorkspace();
+      const baseline = await recommendationEngine.generateForWorkspace(ws);
+      // Identify a non-legal card we can target. The fixture reliably emits
+      // 'land-cost-share-high' (severity 4) and several others.
+      const targetId = 'land-cost-share-high';
+      const baselineCard = baseline.recommendations.find((c) => c.id === targetId);
+      expect(baselineCard).toBeTruthy();
+      // Build feedback that hammers the target rule
+      const feedback = new Map([
+        [targetId, { dismiss_count: 8, snooze_count: 0, acted_count: 0, total_count: 8, last_verdict_at: '2026-05-26' }],
+      ]);
+      const adjusted = await recommendationEngine.generateForWorkspace(ws, { teamFeedback: feedback });
+      const adjustedCard = adjusted.recommendations.find((c) => c.id === targetId);
+      expect(adjustedCard.team_feedback).toMatchObject({
+        multiplier: 0.7,
+        dismiss_count: 8,
+      });
+      expect(adjustedCard.team_feedback.reason).toMatch(/8×/);
+      expect(adjustedCard.effective_severity).toBeCloseTo(adjustedCard.severity * 0.7);
+      // Sort moved the de-ranked card lower than before (or at least not above)
+      const baselineIdx = baseline.recommendations.findIndex((c) => c.id === targetId);
+      const adjustedIdx = adjusted.recommendations.findIndex((c) => c.id === targetId);
+      expect(adjustedIdx).toBeGreaterThanOrEqual(baselineIdx);
+    });
+
+    test('legal carve-out topic is never de-ranked even with extreme dismissals', async () => {
+      const ws = buildFixtureWorkspace();
+      // RERA card emits with severity 5 — heavy feedback would otherwise crush it
+      const feedback = new Map([
+        ['rera-registration-missing', { dismiss_count: 99, snooze_count: 0, acted_count: 0, total_count: 99, last_verdict_at: '2026-05-26' }],
+      ]);
+      const adjusted = await recommendationEngine.generateForWorkspace(ws, { teamFeedback: feedback });
+      const reraCard = adjusted.recommendations.find((c) => c.id === 'rera-registration-missing');
+      expect(reraCard).toBeTruthy();
+      expect(reraCard.team_feedback.multiplier).toBe(1.0);
+      expect(reraCard.team_feedback.reason).toBeNull();
+      // It surfaces counts (so the operator can see what was captured) but is not de-ranked
+      expect(reraCard.team_feedback.dismiss_count).toBe(99);
+      expect(reraCard.effective_severity).toBeCloseTo(reraCard.severity); // multiplier=1.0
+    });
+
+    test('acted_count >= dismiss_count keeps multiplier at 1.0 (positive feedback)', async () => {
+      const ws = buildFixtureWorkspace();
+      const feedback = new Map([
+        ['land-cost-share-high', { dismiss_count: 4, snooze_count: 0, acted_count: 5, total_count: 9, last_verdict_at: '2026-05-26' }],
+      ]);
+      const result = await recommendationEngine.generateForWorkspace(ws, { teamFeedback: feedback });
+      const card = result.recommendations.find((c) => c.id === 'land-cost-share-high');
+      expect(card.team_feedback.multiplier).toBe(1.0);
+      expect(card.team_feedback.acted_count).toBe(5);
+    });
+
+    test('original severity is preserved — only effective_severity reflects the multiplier', async () => {
+      const ws = buildFixtureWorkspace();
+      const feedback = new Map([
+        ['land-cost-share-high', { dismiss_count: 8, snooze_count: 0, acted_count: 0, total_count: 8, last_verdict_at: '2026-05-26' }],
+      ]);
+      const baseline = await recommendationEngine.generateForWorkspace(ws);
+      const adjusted = await recommendationEngine.generateForWorkspace(ws, { teamFeedback: feedback });
+      const baseCard = baseline.recommendations.find((c) => c.id === 'land-cost-share-high');
+      const adjCard = adjusted.recommendations.find((c) => c.id === 'land-cost-share-high');
+      expect(adjCard.severity).toBe(baseCard.severity);
+      expect(adjCard.effective_severity).toBeLessThan(baseCard.severity);
+    });
+
+    test('non-Map teamFeedback values are ignored (defensive)', async () => {
+      const ws = buildFixtureWorkspace();
+      const result = await recommendationEngine.generateForWorkspace(ws, { teamFeedback: { 'foo': { dismiss_count: 9 } } });
+      for (const card of result.recommendations) {
+        expect(card.team_feedback).toBeUndefined();
+      }
+    });
+  });
 });
