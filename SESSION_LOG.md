@@ -4,6 +4,74 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-27 (ninth 10-hour block — E7: Admin Dashboard) — Phase 4 main now COMPLETE (PR #623–#624)
+
+Continuation immediately after the eighth block (Pillar 7 V2). Operator brief asked for the next phase; only E7 (Admin Dashboard) remained on the Phase 4 main list. Audit confirmed the existing admin nav already had AI Usage, A/B Eval, Comps Queue, Parcel Intelligence, and Master Plan — what was missing was operator visibility into the **learning-loop telemetry** (PR #618's consumer would tell the engine to re-rank cards but nobody could see what was captured) and a **filtered audit-trail surface** on `deal_events` (the dashboard widget showed only the last 10 events with no filters). Plus there was no unified `/admin` landing — the operator had to click into each sub-page individually.
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#623](https://github.com/Rachit-Jain9/REDIP/pull/623) | **E7-PR1 — Learning Signal Health admin view.** New `learningSignals.adminReport.service.js` (~310 LOC) with five aggregator methods (`getSummary`, `getTopRules`, `getActiveAdjustments`, `getDailySeries`, `getDashboard` composite). New `GET /api/admin/learning-signals?days=N` route. New `AdminLearningSignalsPage.jsx` with 4 KPI cards (verdicts captured, dismiss/apply rates, attribution rate), stacked daily-trend sparkline (no chart library — keeps admin bundle slim), currently-active adjustments list (mirrors the consumer's `computeMultiplier` policy exactly so the page shows what the engine IS doing right now), and side-by-side top-dismissed / top-applied leaderboards. New `useLearningSignals` hook, new `adminAPI.getLearningSignals()` client, new sidebar entry, new route behind `RequirePlatformAdmin`. **15 new backend tests** covering zero-baseline, missing-table tolerance, percentage math, day-window clamping, leaderboard ordering, full active-adjustments policy alignment (legal carve-outs stay at 1.0, acted ≥ dismissed stays at 1.0, ≥6 dismiss → 0.7 floor, ≥3 → 0.85, strongest-first sort + tiebreak by dismiss_count desc). |
+| [#624](https://github.com/Rachit-Jain9/REDIP/pull/624) | **E7-PR2 + E7-PR3 — Audit Trail + Admin Home landing.** Bundled because they're a cohesive set. **Audit Trail**: new `GET /api/admin/audit-trail?days=N&eventType=X&dealId=Y&limit=L` endpoint (the dashboard's lightweight `/recent-events` widget endpoint stays unchanged — backward-compatible). New `AdminAuditTrailPage.jsx` with filter chips (window 24h/7d/30d/90d/year, event type with counts, row limit 50/100/200), refresh button, compact events table with relative time + tooltip absolute time, event-type tone badges (info/amber/rose), click-through deal links, HMAC-chain footer. New `useAuditTrail` hook, new `adminAPI.getAuditTrail()`. **Admin Home**: new `AdminHomePage.jsx` at `/dashboard/admin` (no subpath — first page the operator hits when clicking Admin). Seven tiles (AI Usage / Learning Signals / Audit Trail / Comps Review / Parcel Intelligence / Master Plan / A/B Evals), each with live KPI snapshots where data is available — tiles share the same hooks the detail pages use so React Query dedupes the fetch when the operator drills in. Two new sidebar entries (Learning Signals · Sparkles icon, Audit Trail · ShieldCheck icon). |
+
+### Production verification (live on `redip.vercel.app`)
+
+- **`/dashboard/admin`** → 7 tiles render: AI Usage & Cost (with "Today" eyebrow), Learning Signals (with "Last 7 days"), Audit Trail (with "Last 24h"), Comps Review Queue, Parcel Intelligence, Master Plan, A/B Evaluations.
+- **`/dashboard/admin/learning-signals`** → 4 KPI cards (Verdicts captured / Dismissed / Applied / Attribution rate), "Verdicts per day · 30-day window" trend, "No rules are currently being de-ranked" (correct empty state for a fresh org), Top dismissed + Top applied leaderboards, window picker chips (7/30/90/Year).
+- **`/dashboard/admin/audit-trail`** → Header "0 events in the last 7 days" (correct empty state for a fresh org), 9 filter chips render: window 24h/7d (active)/30d/90d/Year, event-type "All (0)" (active), limit 50 (active)/100/200.
+
+### Cumulative impact (this block)
+
+- **Backend tests**: 2,858 → **2,873** (+15 across the adminReport aggregator)
+- **New canonical modules**:
+  - `backend/src/services/learningSignals.adminReport.service.js` — 310 LOC, five aggregator methods over `improvement_signals`
+  - `frontend/src/pages/AdminLearningSignalsPage.jsx` — 310 LOC, KPIs + sparkline + adjustments + leaderboards
+  - `frontend/src/pages/AdminAuditTrailPage.jsx` — 230 LOC, filtered events table
+  - `frontend/src/pages/AdminHomePage.jsx` — 165 LOC, 7-tile composition
+  - `frontend/src/hooks/useLearningSignals.js`, `frontend/src/hooks/useAuditTrail.js`
+- **New routes**:
+  - `GET /api/admin/learning-signals` (composite payload)
+  - `GET /api/admin/audit-trail` (filtered events + catalog)
+  - Frontend: `/dashboard/admin` (new home), `/dashboard/admin/learning-signals`, `/dashboard/admin/audit-trail`
+- **Sidebar**: 5 → **7** admin entries (alphabetical within group)
+
+### What the user can see now that they couldn't before
+
+1. **Click "Admin" in the nav** → land on **Operations Home** with 7 tiles showing live snapshots: AI spend last 24h, learning-loop verdicts last 7 days + how many rules are being de-ranked right now, audit events last 24h. Click any tile to drill in.
+2. **Click "Learning Signals"** → see the verdicts captured this month, the dismiss / apply rates, the daily trend (red / amber / green stacked sparkline for dismissed / snoozed / applied), and the **list of rules the engine is currently de-ranking** (each row shows the exact 0.7× or 0.85× multiplier the consumer applies + the policy reason).
+3. **Click "Audit Trail"** → see every HMAC-signed kernel run across the org, filterable by time window / event type / row limit. Click any deal name to open the full workspace in a new tab. The footer explains the HMAC chain.
+
+### CLAUDE.md respected
+
+- **Read-only** — nothing writes to `improvement_signals` or `deal_events` from any of these surfaces.
+- **RLS-scoped** on every read (the table policies filter to `current_organization_id`).
+- **Operator-only** — every page is behind `RequirePlatformAdmin`; the routes use `requireRole('admin','analyst')`.
+- **Mirrors consumer policy exactly** — the Learning Signals page's "active adjustments" list uses the same `computeMultiplier()` the recommendation engine uses, so the two surfaces can never disagree about whether a rule is being de-ranked.
+- **HMAC chain preserved** — the Audit Trail surfaces the existing signatures; no path to re-sign or tamper with them through this page.
+- **No new schema** — both endpoints query existing tables (`improvement_signals` from PR #618's capture path, `deal_events` from the HMAC-signed audit log).
+
+### Phase 4 main — COMPLETE
+
+| Item | Status |
+|---|---|
+| Pillar 7 V1 — Deal Q&A | ✅ Shipped earlier |
+| Pillar 7 V2 — Citation surface expansion | ✅ Eighth block (#621) |
+| Pillar 8 — Learning Loop v2 consumer side | ✅ Seventh block (#618) |
+| E2 — Reverse provenance | ✅ Seventh block (#619) |
+| **E7 — Admin dashboard** | ✅ **Ninth block (#623, #624)** |
+
+**Phase 4 main is now fully shipped.** Eight 10-hour blocks have been worked across Phase 4 (prologue + main entries). Operator-gated items remain: G1 (DPA + AUP via Indian legal counsel), G2 (Supabase PITR drill + Incident Lead names + `security@redip.in` mailbox), Google Maps key referrer-restriction at Cloud Console.
+
+### What's next
+
+With Phase 4 done, the obvious queued surfaces are exhausted in the formal plan. Future blocks would likely focus on:
+- **Polish / depth** — extend the Q&A V2 slice coverage as new workspace slices ship; expand DependentsPopover to more surfaces; surface the team_feedback chip in DOCX exports
+- **Wait-for-users** — Landeed / Surepass / Actowiz / WhatsApp intake (operator's "buy once we have users" gate)
+- **New Phase 5** — operator strategy call; no items currently queued
+
+---
+
 ## 2026-05-27 (eighth 10-hour block — Pillar 7 V2: Q&A citation expansion) — Q&A now cites the full workspace, not just the deal snapshot (PR #621)
 
 Continuation immediately after the seventh block (Pillar 8 + E2). Operator brief named **Pillar 7 V2** specifically: "Natural-language 'ask the deal' Q&A with citation gating. Most complex remaining feature — needs a constrained narrator + retrieval over the workspace payload." Audit showed V1 was ALREADY shipped at considerable depth (~1,376 LOC across `dealQa.service.js` + `DealQaBox.jsx` + `useDealQa.js`) — streaming SSE answers, pgvector doc retrieval, citation chips with excerpts + similarity scores, numerical drift detection, history with per-row delete, Cmd/Ctrl-Enter shortcut. **V2 = expand the citation surface**, not rebuild the panel.
