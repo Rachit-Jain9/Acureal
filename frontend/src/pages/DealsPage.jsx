@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
   Trash2, Loader2, User, Download,
-  Archive, UserPlus, ArrowRight,
+  Archive, UserPlus, ArrowRight, GitCompare,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -28,6 +28,7 @@ import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 // hover-prefetch / urgency-strip / per-deal export) lives in the
 // dedicated component file now.
 import DealCard from '../components/deals/DealCard';
+import CompareDealsModal from '../components/deals/CompareDealsModal';
 import useAuthStore from '../store/authStore';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
@@ -194,6 +195,10 @@ export default function DealsPage() {
   const [stageNotes, setStageNotes] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  // Side-by-side deal comparison (2–4 selected). The modal calls the
+  // workspace endpoint for each selected deal via useQueries — same cache
+  // key as the per-deal route, so cold loads are shared.
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
   const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
 
   useEffect(() => {
@@ -202,6 +207,7 @@ export default function DealsPage() {
     setReassignModalOpen(false);
     setStageModalOpen(false);
     setDeleteModalOpen(false);
+    setCompareModalOpen(false);
     setArchiveReason('');
     setReassignTargetId('');
     setStageTarget('');
@@ -592,6 +598,21 @@ export default function DealsPage() {
             {selectedIds.size} selected
           </span>
           <span className="text-content-muted">·</span>
+          {/* Compare — visible only when 2–4 deals selected. Fewer than 2 isn't a
+              comparison; more than 4 doesn't fit on a laptop without horizontal
+              scroll-loss. */}
+          {selectedIds.size >= 2 && selectedIds.size <= 4 && (
+            <button
+              type="button"
+              onClick={() => setCompareModalOpen(true)}
+              disabled={bulkBusy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-accent bg-accent-soft text-accent hover:bg-accent hover:text-white transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              title="Open side-by-side comparison"
+            >
+              <GitCompare size={13} />
+              Compare
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setReassignModalOpen(true)}
@@ -647,6 +668,14 @@ export default function DealsPage() {
           </button>
         </div>
       )}
+
+      {/* Side-by-side comparison — 2–4 selected deals, side-by-side workspace
+          signals (kernel KPIs, IC + Risk + DD, approvals, top blocker). */}
+      <CompareDealsModal
+        open={compareModalOpen}
+        dealIds={[...selectedIds]}
+        onClose={() => setCompareModalOpen(false)}
+      />
 
       {/* Bulk archive — optional shared reason applied to every row. */}
       {archiveModalOpen && (
