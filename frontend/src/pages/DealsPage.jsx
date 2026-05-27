@@ -14,6 +14,10 @@ import {
   useBulkTransitionDeals,
   useBulkDeleteDeals,
 } from '../hooks/useDeals';
+// Phase 4 prologue — per-deal IC + RERA readiness comes from the portfolio
+// aggregator on the Dashboard backend. Same hook, same staleTime — the
+// dashboard widget + the deals list cards share one cached fetch.
+import { usePortfolioReadiness } from '../hooks/useDashboard';
 import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useProperties } from '../hooks/useProperties';
@@ -151,6 +155,22 @@ export default function DealsPage() {
 
   const deals = data?.data || [];
   const pagination = data?.pagination || { total: 0, page: 1, totalPages: 1 };
+
+  // Phase 4 prologue — index per-deal readiness rows by deal_id so each
+  // DealCard can pluck its own readiness without N+1 lookups. The
+  // portfolio readiness aggregator returns ALL live deals' readiness in
+  // one call; closed / dead / archived deals don't appear in that
+  // response and their chips simply hide.
+  const { data: portfolioReadiness } = usePortfolioReadiness();
+  const readinessByDealId = useMemo(() => {
+    const map = new Map();
+    const all = portfolioReadiness?.deals || [];
+    for (const row of all) {
+      if (row && row.deal_id) map.set(row.deal_id, row);
+    }
+    return map;
+  }, [portfolioReadiness]);
+
   const properties = propertiesData?.data || [];
   const selectedProperty = properties.find((property) => property.id === form.propertyId);
   const landPricingPreview = buildLandPricingPreview({
@@ -519,6 +539,7 @@ export default function DealsPage() {
               <DealCard
                 key={deal.id}
                 deal={deal}
+                readiness={readinessByDealId.get(deal.id) || null}
                 selected={selectedIds.has(deal.id)}
                 onToggleSelect={toggleSelect}
               />

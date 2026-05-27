@@ -423,6 +423,9 @@ export const dashboardAPI = {
   // Portfolio Risk Radar — workspace-level rollup of every live deal's
   // per-failure-mode posture. Backed by portfolioRiskRadar.service.js.
   portfolioRiskRadar: () => api.get('/dashboard/portfolio-risk-radar'),
+  // Phase 4 prologue — Portfolio Readiness rollup of every live deal's
+  // IC + RERA readiness state. Backed by portfolioReadiness.service.js.
+  portfolioReadiness: () => api.get('/dashboard/portfolio-readiness'),
   // Today's Attention — specific item-level signals (overdue DD,
   // expiring approvals, recent risk flags, stale deals, recent activity).
   // Pairs with the Portfolio Risk Radar's aggregate counts to answer

@@ -16,6 +16,12 @@ export const DEFAULT_WIDGETS = [
   // posture. Sits under the Attention panel: the radar gives the
   // aggregate view, Attention gives the per-item view.
   { id: 'portfolio_risk_radar',   label: 'Portfolio Risk Radar',     always: false, defaultVisible: true },
+  // Portfolio Readiness — IC + RERA readiness rolled up across every
+  // live deal. Pairs with the per-deal IC Readiness Pack on the DD tab.
+  // Sits right after the Risk Radar so the two posture surfaces read
+  // side-by-side (risk = catastrophic mode probability; readiness = IC
+  // handoff completeness).
+  { id: 'portfolio_readiness',    label: 'Portfolio Readiness',      always: false, defaultVisible: true },
   { id: 'pipeline_chart',         label: 'Pipeline distribution',    always: false, defaultVisible: true },
   { id: 'cities_chart',           label: 'City distribution',        always: false, defaultVisible: true },
   { id: 'recent_activities',      label: 'Recent activities',        always: false, defaultVisible: true },
