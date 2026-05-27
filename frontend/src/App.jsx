@@ -56,6 +56,10 @@ const AdminAiUsagePage = lazy(() => import('./pages/AdminAiUsagePage'));
 const AdminAbEvalPage = lazy(() => import('./pages/AdminAbEvalPage'));
 // E7-PR1 (2026-05-27) — operator-only view of the learning-loop telemetry.
 const AdminLearningSignalsPage = lazy(() => import('./pages/AdminLearningSignalsPage'));
+// E7-PR2 (2026-05-27) — operator-only audit-trail tail with filters.
+const AdminAuditTrailPage = lazy(() => import('./pages/AdminAuditTrailPage'));
+// E7-PR3 (2026-05-27) — unified admin landing with KPI tiles per surface.
+const AdminHomePage = lazy(() => import('./pages/AdminHomePage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
@@ -161,6 +165,8 @@ export default function App() {
               existing bookmarks don't break. */}
           {/* Platform admin only — workspace admins (every account) must NOT
               reach these. Sidebar hides the group too via isPlatformAdmin. */}
+          {/* E7-PR3 (2026-05-27) — Admin Home landing at /admin */}
+          <Route path="admin" element={<RequirePlatformAdmin>{withSuspense(<AdminHomePage />)}</RequirePlatformAdmin>} />
           <Route path="admin/master-plan" element={<RequirePlatformAdmin>{withSuspense(<MasterPlanAdminPage />)}</RequirePlatformAdmin>} />
           <Route path="admin/parcel-intelligence" element={<RequirePlatformAdmin>{withSuspense(<ParcelIntelligenceAdminPage />)}</RequirePlatformAdmin>} />
           <Route path="admin/comps-queue" element={<RequirePlatformAdmin>{withSuspense(<CompsQueuePage />)}</RequirePlatformAdmin>} />
@@ -168,6 +174,7 @@ export default function App() {
           <Route path="admin/ai-usage" element={<RequirePlatformAdmin>{withSuspense(<AdminAiUsagePage />)}</RequirePlatformAdmin>} />
           <Route path="admin/ab-eval" element={<RequirePlatformAdmin>{withSuspense(<AdminAbEvalPage />)}</RequirePlatformAdmin>} />
           <Route path="admin/learning-signals" element={<RequirePlatformAdmin>{withSuspense(<AdminLearningSignalsPage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/audit-trail" element={<RequirePlatformAdmin>{withSuspense(<AdminAuditTrailPage />)}</RequirePlatformAdmin>} />
           <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
           <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}
