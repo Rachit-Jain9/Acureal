@@ -4,6 +4,68 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-27 (sixth 10-hour block — quality + polish + deal comparison) — Diagnostic cleanup, theme tokens, side-by-side comparison (PR #614–#616)
+
+Continuation immediately after Phase 4 prologue's 7-PR arc landed. The operator's brief opened with the standing "take your time to do quality work" line and gave me discretion to choose the next direction. I did a deep technical review and found that the three headline gaps from the original plan file (`REDIP Pending.docx`) — 2D routing matrix · confidence bands · promoter track-record scoring — are ALL already shipped:
+
+- **2D routing matrix** → `backend/src/utils/dealStructureMatrix.js` exists, wired into approvals.service.js (`getAdditionalApprovals`), riskRadar.service.js (`getRiskPreset`), dealStructureRecommender.service.js (`isValidPair`). Frontend parity test enforces lockstep.
+- **Confidence bands** → `backend/src/services/confidenceRange.service.js` + `frontend/src/components/financials/ConfidenceRangePanel.jsx` ship deterministic perturbation-of-unverified-inputs (not Monte Carlo) — exactly what the plan asked for.
+- **Promoter score** → `backend/src/services/promoterProfile.service.js` has `assessPromoter()` returning cleared/unverified/flagged posture from a 5-factor scorer.
+
+Plus **output provenance** → `frontend/src/components/financials/KPIStatCard.jsx` already implements click-ℹ → popover with formula + drivers + benchmark band + confidence badge.
+
+So the block pivoted from "ship the missing plan-file items" to **"polish + integrate + ship one well-targeted new capability"**.
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#614](https://github.com/Rachit-Jain9/REDIP/pull/614) | **CLEANUP — drop the portfolio-readiness diagnostic console.error from PR #611.** The flat single-line diagnostic was load-bearing while we hunted the f.kpis/f.dscr column bug across PR #606-#612. With the root-cause fix in (#612), the error path no longer fires; the diagnostic was just adding log noise. Kept the structured `log.warn` (pino) as canonical telemetry — if a new error ever surfaces here we can re-add the flat line. |
+| [#615](https://github.com/Rachit-Jain9/REDIP/pull/615) | **FEAT — side-by-side deal comparison modal (2–4 deals).** New `CompareDealsModal.jsx` mounted from a "Compare" button in the existing DealsPage bulk-action bar (visible only when 2–4 deals are selected). Bloomberg-style grid: rows are signal groups (Headline kernel KPIs · Capital posture · IC readiness · Risk · DD · Approvals · Documents · Promoter · Top blocker), columns are deals, sticky leftmost signal column + sticky deal headers. Frontend-only — fires `useDealWorkspace(id)` in parallel via React Query's `useQueries`; cache key matches the per-deal route so cold loads are shared. 16 focused unit tests. Production-verified with 4 deals (Jakkur, KR Puram, Chirping Ridge, Jigani-Apartments) returning real kernel data (IRR 13.6%, NPV ₹-3.89 Cr) and em-dashes for missing values. |
+| [#616](https://github.com/Rachit-Jain9/REDIP/pull/616) | **POLISH — PrivacyCentre Card surfaces from `bg-white` to `bg-bg-elevated`.** Two-line fix for the last residual raw-Tailwind surface on a dashboard page. The card borders already used token classes (`border-hairline-strong`) so the mismatch was just visual inconsistency under the data-theme="dark" repaint. The Legal pages keep their deliberate `stone-*` newspaper palette (line 1-3 comment explicit on each). |
+
+### Smoke test (Chrome MCP walkthrough — task #43)
+
+Verified the full primary nav after the 12-PR Phase 4 prologue arc + this block's three additions. Clean across:
+
+- **Dashboard** → all 9 widgets render (KPIs · Attention · Risk Radar · Portfolio Readiness · Pipeline · Cities · Recent Activities · Top Deals by IRR · AI cost). Portfolio Readiness API returns 6 deals · 1 pre_ic · 5 early · average 23 · 6 top_blockers ranked by severity.
+- **Deals** → 7 deals listed with per-card readiness chips. Multi-select checkboxes work; bulk action bar appears; new **Compare** button is the styled accent-pill (visible only when 2–4 selected).
+- **Compare modal** (production-verified) → 4 deals side-by-side, sticky signal column + sticky deal headers, real kernel data, em-dash fallbacks for missing values, footer disclaimer present.
+- **Market Intelligence** → loads; honestly-unavailable state per CLAUDE.md (no verified feed for the consumer yet).
+- **Comps** → 15-row table renders cleanly.
+- **Reports** → loads cleanly (the sidebar route is `/dashboard/reports`, not `/dashboard/exports`).
+- **Deal Detail** → 8 tabs render (Overview · Parcel/Site · Documents · Activity · Financial · DD & Approvals · Risk · Market/Comps). Overview surfaces Recommendations, Micro-Market Briefing, Strategic Fit (Best Use · Deal Structure · Capital Stack), Quick Analysis, Full IC Memo, Evidence & Sources, Q&A. Financial tab empty-state CTA renders correctly for deals without a kernel run.
+
+No 404s on real routes. No console errors observed. The Phase 4 prologue's Portfolio Readiness payload (verified earlier) is still healthy.
+
+### Cumulative impact (this block)
+
+- **Frontend tests**: 1,009 → **1,025** (+16 across CompareDealsModal)
+- **New canonical modules**:
+  - `frontend/src/components/deals/CompareDealsModal.jsx` — 270 LOC, signal-table primitive
+- **Modified**: `frontend/src/pages/DealsPage.jsx` (Compare button + modal wiring), `frontend/src/pages/PrivacyCentrePage.jsx` (token cleanup), `backend/src/services/portfolioReadiness.service.js` (drop diagnostic)
+
+### What the user can see now that they couldn't before
+
+- **Tick 2–4 deals on `/deals` → click Compare → side-by-side workspace view in seconds.** Decide which candidate to push next with kernel KPIs, IC readiness, Risk posture, DD progress, approvals, promoter, and the top IC gap all on one screen — no tab-flipping, no losing context.
+- Deal-name headers in the modal link to the full deal workspace in a new tab so you can drill in without closing the comparison.
+
+### What stayed clean / honest
+
+- Every number in the comparison modal traces back to a kernel run on the source deal. Nothing invented; nothing averaged across deals.
+- Footer disclaimer: *"Comparison is an organisation aid — never an IC verdict."* Closed verb dictionary throughout.
+- No new schema, no new backend, no AI prose.
+
+### Why the plan-file headline gaps were already done
+
+All three top items from the operator's 2026-05-25 "REDIP Pending" review (Section 5.1 / 5.2 / 5.3) had landed during the multi-block work since that review. Re-auditing what's actually shipped saved this block from accidentally re-doing 1-3 weeks of work that was already complete. The lesson noted in CLAUDE.md still applies: **inspect the codebase before treating a plan-file item as "pending"**.
+
+### What's next
+
+Phase 4 main entries remain queued (Pillar 7 Q&A v2, Pillar 8 Learning Loop v2 consumer side, E7 admin dashboard). E2 (claim/provenance graph) is its own architectural block. Operator-gated items (G1 DPA + AUP, G2 Supabase PITR drill) await external action.
+
+---
+
 ## 2026-05-27 (fifth 10-hour block — Phase 4 prologue) — Portfolio Readiness aggregator (PR #605) + 6 follow-up fixes that finally cracked it (PR #606–#612)
 
 Continuation from the Phase 3 closeout. Operator brief opened with the same standing instruction — "Do what is best for website. Take your time to do quality work" — and pointed me at the per-deal IC Readiness Pack that had just shipped. Per-deal posture was now strong; the missing piece was the **cross-deal portfolio zoom**: "across every live deal in this workspace, where do we stand on IC + RERA prep, and which deals need attention next?"
