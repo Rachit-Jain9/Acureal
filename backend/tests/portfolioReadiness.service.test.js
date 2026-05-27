@@ -263,6 +263,13 @@ describe('getPortfolioReadiness', () => {
   });
 
   test('composes real per-deal rows into the portfolio rollup', async () => {
+    // Service runs FIVE sequential SQL queries:
+    //   1) deals + financials (LEFT JOIN, with stage filter)
+    //   2) dd_items aggregate
+    //   3) approval_items aggregate
+    //   4) documents aggregate
+    //   5) deal_promoter_profiles existence
+    // Test mocks each in order.
     query.mockResolvedValueOnce({
       rows: [
         {
@@ -271,25 +278,32 @@ describe('getPortfolioReadiness', () => {
           property_lat: 12.97, property_lng: 77.74,
           irr_pct: 18.5, kpis: { irr: 18.5, dscr: 1.7, extras: { dscr: 1.7 } },
           total_cost_cr: 100,
-          dd_total: 16, dd_done: 14,
-          approvals_total: 8, approvals_available: 8,
-          documents_count: 12,
-          has_promoter: true,
-          deal_breakers_open: 0,
         },
         {
-          id: 'd2', name: 'New Sourcing Deal', stage: 'sourcing',
+          id: 'd2', name: 'New Sourcing Deal', stage: 'sourced',
           asset_class: 'plotted_development', deal_structure: 'outright',
           property_lat: null, property_lng: null,
           irr_pct: null, kpis: null, total_cost_cr: null,
-          dd_total: 0, dd_done: 0,
-          approvals_total: 0, approvals_available: 0,
-          documents_count: 0,
-          has_promoter: false,
-          deal_breakers_open: 0,
         },
       ],
     });
+    // DD aggregate
+    query.mockResolvedValueOnce({
+      rows: [{ deal_id: 'd1', dd_done: 14, dd_total: 16, deal_breakers_open: 0 }],
+    });
+    // Approvals aggregate
+    query.mockResolvedValueOnce({
+      rows: [{ deal_id: 'd1', approvals_available: 8, approvals_total: 8 }],
+    });
+    // Documents aggregate
+    query.mockResolvedValueOnce({
+      rows: [{ deal_id: 'd1', documents_count: 12 }],
+    });
+    // Promoter aggregate
+    query.mockResolvedValueOnce({
+      rows: [{ deal_id: 'd1', has_promoter: true }],
+    });
+
     const out = await svc.getPortfolioReadiness();
     expect(out.totals.total).toBe(2);
     expect(out.totals.ic_ready).toBe(1);
@@ -299,5 +313,39 @@ describe('getPortfolioReadiness', () => {
     const noFin = out.portfolio_blockers.find((b) => b.id === 'no_financial_model');
     expect(noFin.affected_count).toBe(1);
     expect(noFin.affected_deal_ids).toContain('d2');
+  });
+
+  test('returns empty payload when no deals exist (no dependent queries fire)', async () => {
+    // When the deals query returns empty, we short-circuit before the
+    // aggregate queries — only ONE call to query() should happen.
+    query.mockResolvedValueOnce({ rows: [] });
+    const out = await svc.getPortfolioReadiness();
+    expect(out.totals.total).toBe(0);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('aggregate-query failures degrade gracefully (zeros for that signal)', async () => {
+    // Deal query succeeds, but the DD aggregate fails (missing table on
+    // a half-migrated environment). Service should still return the
+    // deal with dd_done/dd_total = 0 instead of an empty payload.
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'd1', name: 'X', stage: 'screening',
+        asset_class: 'residential_apartments', deal_structure: 'outright',
+        property_lat: 12.97, property_lng: 77.74,
+        irr_pct: 18, kpis: { irr: 18, dscr: 1.6, extras: { dscr: 1.6 } },
+        total_cost_cr: 100,
+      }],
+    });
+    query.mockRejectedValueOnce(Object.assign(new Error('missing dd_items'), { code: '42P01' }));
+    // Subsequent aggregates still need mocks
+    query.mockResolvedValueOnce({ rows: [] }); // approvals
+    query.mockResolvedValueOnce({ rows: [] }); // documents
+    query.mockResolvedValueOnce({ rows: [] }); // promoter
+    const out = await svc.getPortfolioReadiness();
+    expect(out.totals.total).toBe(1);
+    // dd_total = 0 → dd_progress score = 0 → noFinancial blocker won't fire,
+    // but dd_not_started will
+    expect(out.deals[0].factors.dd.score).toBe(0);
   });
 });
