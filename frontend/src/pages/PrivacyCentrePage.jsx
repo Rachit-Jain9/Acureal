@@ -114,7 +114,7 @@ function InfoRow({ label, children }) {
 function Card({ icon: Icon, title, children, tone = 'default' }) {
   const border = tone === 'danger' ? 'border-rose-200' : 'border-hairline-strong';
   return (
-    <div className={`bg-white rounded-xl shadow-sm border ${border} p-6`}>
+    <div className={`bg-bg-elevated rounded-xl shadow-sm border ${border} p-6`}>
       <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
         {Icon && <Icon size={18} />}
         {title}
@@ -126,7 +126,7 @@ function Card({ icon: Icon, title, children, tone = 'default' }) {
 
 function CardSkeleton() {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-hairline-strong p-6">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
       <div className="redip-skeleton h-5 w-40 rounded-md mb-4" />
       <div className="space-y-2.5">
         <div className="redip-skeleton h-3.5 w-full rounded-sm" />
