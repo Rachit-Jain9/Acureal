@@ -4,6 +4,69 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-27 (eighth 10-hour block — Pillar 7 V2: Q&A citation expansion) — Q&A now cites the full workspace, not just the deal snapshot (PR #621)
+
+Continuation immediately after the seventh block (Pillar 8 + E2). Operator brief named **Pillar 7 V2** specifically: "Natural-language 'ask the deal' Q&A with citation gating. Most complex remaining feature — needs a constrained narrator + retrieval over the workspace payload." Audit showed V1 was ALREADY shipped at considerable depth (~1,376 LOC across `dealQa.service.js` + `DealQaBox.jsx` + `useDealQa.js`) — streaming SSE answers, pgvector doc retrieval, citation chips with excerpts + similarity scores, numerical drift detection, history with per-row delete, Cmd/Ctrl-Enter shortcut. **V2 = expand the citation surface**, not rebuild the panel.
+
+### Why V2 mattered
+
+V1's synthetic citations cover **only 4 slices**: `deal_snapshot` / `risk_flags` / `comps` / `financials`. But the deal workspace ships **15+ structural slices** today — IC Readiness Pack, K-RERA Readiness, Micro-Market Briefing, Best Use Simulator, Deal-Structure Recommender, Capital-Stack Optimizer, Promoter Profile, DD checklist, Approvals, Recommendation Engine cards, Deal Doctor findings, JDA/JV waterfall, plus the Pillar 8 team_feedback signal. So asking "Why is this deal Pre-IC?" forced a citation to vague `deal_snapshot` instead of the IC Readiness Pack's specific top-gap labels. Asking "What does the Deal Doctor flag?" had no clean citation surface at all.
+
+### PR opened + merged
+
+| PR | What landed |
+|---|---|
+| [#621](https://github.com/Rachit-Jain9/REDIP/pull/621) | **Pillar 7 V2 — Q&A citation surface expanded from 4 → 16 slices.** Backend: new `getDealWorkspace(dealId, { lite: true })` option that skips AI narration + persistence + activities/audit events (saves the ~500-800ms narrator round-trip on every question) while still producing the deterministic recommendation + deal-doctor cards. `dealQa.assembleContext` fires the lite-workspace fetch in parallel with the V1 reads. New `slimWorkspaceForPrompt(workspace)` helper trims each slice to its prompt-budget shape (≤12 entries per array, only citable fields). `SYNTHETIC_CITATION_IDS` extended from 4 to 16: + `ic_readiness`, `karnataka_rera_readiness`, `micro_market`, `best_use`, `deal_structure_recommender`, `capital_stack_optimizer`, `promoter_profile`, `dd_checklist`, `approvals`, `recommendations`, `deal_doctor`, `waterfall`. `SYNTHETIC_CITATION_LABELS` updated with friendly UI labels. `SYSTEM_PROMPT` rewritten with the full slice catalog + per-slice guidance ("for 'Why is this deal Pre-IC?' cite ic_readiness, not deal_snapshot"), the closed verb-dictionary reminder, and the CLAUDE.md legal carve-out (no AI legal conclusions on title / encumbrance / RERA-status / statutory-approvals — flag for independent verification only). Frontend: `SUGGESTED_QUESTIONS` expanded from 4 V1 prompts to 8 V2 prompts that lead the model into the new slices. 7 new backend tests + DealQaBox component tests updated; all 164 backend + 12 frontend Q&A tests pass; zero regressions across recommendation/learning-signal/dealWorkspace suites. |
+
+### Cumulative impact (this block)
+
+- **Backend tests**: 2,851 → **2,858** (+7 across V2 slice validation + hydrator labels + buildPromptPayload behavior)
+- **Frontend tests**: 1,045 → **1,045** (DealQaBox test updated, count unchanged)
+- **Modified canonical modules**:
+  - `backend/src/services/dealQa.service.js` (+220 LOC of slim-workspace helper, expanded SYNTHETIC ids + labels, rewritten SYSTEM_PROMPT, buildPromptPayload extension)
+  - `backend/src/services/dealWorkspace.service.js` (+15 LOC for `lite` option threading)
+  - `backend/tests/dealQa.service.test.js` (+90 LOC of V2 coverage)
+  - `frontend/src/components/deal/DealQaBox.jsx` (4 → 8 SUGGESTED_QUESTIONS)
+  - `frontend/src/components/deal/__tests__/DealQaBox.test.jsx` (V2 prompt assertions)
+
+### What the user can do now that they couldn't before
+
+Ask any of these questions on a deal's Overview tab → model returns an answer with a citation chip linking to the SPECIFIC slice that grounds the claim, not just "Deal snapshot":
+
+- **"Why is this deal Pre-IC? What are the top gaps?"** → cites IC Readiness Pack with specific top-gap labels (e.g., "Land schedule incomplete", "Financial model not finalised").
+- **"What does the Deal Doctor flag?"** → cites Deal Doctor findings with verb + severity + topic.
+- **"What is the best use for this parcel?"** → cites Best Use Simulator's top-scoring asset classes with reasons.
+- **"How does the promoter's delivery track record look?"** → cites Promoter Profile with delivery + RERA + complaint counts.
+- **"What's the verdict on the recommended deal structure?"** → cites Deal-Structure Recommender with structure score + tier.
+- **"Summarize the K-RERA readiness and any missing approvals."** → cites K-RERA Readiness Pack + Approvals with the missing list.
+- **"How does the asking price compare to nearby comps?"** → still cites Comps (V1 already covered this).
+- **"What are the open title risks?"** → still cites Risk Flags + Deal Doctor (legal carve-out reinforced — model flags for independent verification rather than giving a legal opinion).
+
+All 8 V2 prompts visible as suggestion chips on a fresh deal's Q&A box.
+
+### CLAUDE.md respected
+
+- **Lite-mode workspace** skips AI narration but keeps deterministic recommendation + deal-doctor cards → Q&A model cites the same evidence the UI does, with no double-narration cost.
+- **Legal carve-out reinforced in the prompt**: title / encumbrance / RERA-status / statutory-approvals are flagged for independent verification, never given a legal verdict.
+- **Closed verb dictionary preserved**: Recommend / Consider / Re-examine / Flag / Stress-test for recommendations; Diverges / Lacks support / Inconsistent / Below benchmark / Above benchmark / Missing for diagnoses. Forbidden: Buy / Reject / Approve / Decline / Clear / Pass.
+- **Every citation post-validated** against the expanded slice id set; the model can't fabricate a `made_up_slice_id` and have it survive into the persisted history row.
+
+### Phase 4 main status
+
+| Item | Status |
+|---|---|
+| Pillar 7 — Deal Q&A (V1) | ✅ Already shipped earlier |
+| Pillar 7 V2 — Citation surface expansion | ✅ Shipped (#621) |
+| Pillar 8 — Learning Loop v2 consumer side | ✅ Shipped previous block (#618) |
+| E2 — Reverse provenance | ✅ Shipped previous block (#619) |
+| **E7 — Admin dashboard (operator-only AI cost + audit + learning-signal health)** | ⏳ **Last Phase 4 main entry queued** |
+
+### What's next
+
+Only **E7 (Admin dashboard)** remains on the Phase 4 main list. Operator-gated items (G1 DPA + AUP via Indian legal counsel; G2 Supabase PITR drill / Incident Lead names / `security@redip.in` mailbox; Google Maps key restriction at Cloud Console) continue to await external action.
+
+---
+
 ## 2026-05-27 (seventh 10-hour block — Pillar 8 consumer side + E2 reverse provenance) — Learning loop now ADAPTS, evidence graph now reverses (PR #618-#619)
 
 Continuation immediately after the sixth block's polish + comparison work landed. Operator brief opened with the same "best work you have ever done" line and gave discretion to pick the next direction. I confirmed that the three plan-file headline gaps (2D routing, confidence bands, promoter score, output provenance) are all already shipped (verified in the sixth block), and pivoted to the two highest-leverage genuinely-pending items: **Pillar 8 consumer side** (make captured verdicts actually re-rank cards) and **E2 reverse provenance** ("what depends on this document?").
