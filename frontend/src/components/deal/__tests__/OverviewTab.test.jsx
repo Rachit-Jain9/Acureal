@@ -57,6 +57,14 @@ vi.mock('../../../hooks/useDealContext', () => ({
   // P2-PR3 — Capital-Stack Optimizer slice. Test renders the "no financial
   // model" empty state — optimizer stays inert until the kernel has run.
   useDealCapitalStack: () => ({ scenarios: [], reason: 'no_financial_model' }),
+  // P3-PR4 — IC Readiness slice. Test renders the empty-data state so the
+  // panel bows out cleanly on an unconfigured workspace.
+  useDealIcReadiness: () => ({ overall: null, buckets: [], gaps: [], disclaimer: null }),
+  // P3-PR1 — K-RERA Readiness slice. Tests render empty/unavailable state.
+  useDealReraReadiness: () => ({
+    applicable: false, reason_if_not: 'unavailable',
+    overall: null, buckets: [], gaps: [],
+  }),
 }));
 
 vi.mock('../../../services/api', () => ({

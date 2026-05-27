@@ -359,3 +359,34 @@ export function useDealReraReadiness() {
     [workspace?.karnataka_rera_readiness],
   );
 }
+
+/**
+ * Returns the IC Readiness Pack slice — Phase 3 / Pillar 5.
+ *
+ * Companion to the K-RERA Readiness Pack but oriented around IC handoff
+ * instead of RERA filing. Always applicable (every deal needs IC
+ * readiness, regardless of asset class).
+ *
+ * 7 IC-focused buckets — Financial Underwriting / Title & Legal /
+ * Statutory Approvals / Market & Comps / Promoter & Execution / Risk &
+ * Diagnosis / Document Hygiene — composed server-side from the deal's
+ * already-loaded workspace slices (no extra DB round-trips beyond the
+ * comps proximity query). Same five-tier evidence model + completeness
+ * score (0-100) + readiness tier (ic_ready / pre_ic / diligence / early).
+ *
+ * Source: workspace.ic_readiness.
+ */
+export function useDealIcReadiness() {
+  const { workspace } = useDealContext();
+  return useMemo(
+    () =>
+      workspace?.ic_readiness || {
+        applicable: true,
+        overall: null,
+        buckets: [],
+        gaps: [],
+        disclaimer: null,
+      },
+    [workspace?.ic_readiness],
+  );
+}

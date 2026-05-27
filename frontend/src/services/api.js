@@ -573,6 +573,10 @@ export const exportsAPI = {
   // side disclaimer surfaced on every page.
   dealReraReadinessDocx: (dealId) =>
     api.get(`/exports/deals/${dealId}/rera-readiness/docx`, { responseType: 'blob' }),
+  // Phase 3 / Pillar 5 — IC Readiness Pack DOCX for the deal team's pre-IC
+  // handoff. Same organisation-aid posture; disclaimer on every page.
+  dealIcReadinessDocx: (dealId) =>
+    api.get(`/exports/deals/${dealId}/ic-readiness/docx`, { responseType: 'blob' }),
   dealsXlsx: (params) => api.get('/exports/deals/xlsx', { params, responseType: 'blob' }),
   // CSV export of the deals list. Accepts the same filter query params
   // as `dealsAPI.list` so the export respects the page's current filter

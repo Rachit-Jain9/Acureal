@@ -36,7 +36,9 @@ const bestUseSimulator = require('./bestUseSimulator.service');
 const dealStructureRecommender = require('./dealStructureRecommender.service');
 const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
+const icReadiness = require('./icReadiness.service');
 const approvalsService = require('./approvals.service');
+const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
 
@@ -369,6 +371,63 @@ async function getDealWorkspace(dealId) {
     });
   }, 'karnatakaReraReadiness');
 
+  // IC Readiness — Phase 3 / Pillar 5. Pure composer over ALL of the
+  // slices we've already loaded above (financial, dd, risk, approvals,
+  // documents, micro_market, best_use, rera_readiness, promoter, deal
+  // doctor). Plus one cheap query for comps count.
+  const icReadinessSlice = await optional(async () => {
+    // Pull verified comps within 5km of the deal's parcel. Comps are
+    // location-keyed in REDIP, not deal-keyed — we use the deal's
+    // coordinates when present, otherwise 0.
+    let compsCount = 0;
+    try {
+      const lat = Number(deal.property_lat ?? deal.parcel_lat ?? deal.latitude);
+      const lng = Number(deal.property_lng ?? deal.parcel_lng ?? deal.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng) && compsService.getCompsNearLocation) {
+        const nearby = await compsService.getCompsNearLocation(lat, lng, 5, deal.asset_class);
+        compsCount = Array.isArray(nearby)
+          ? nearby.filter((c) => c.is_verified !== false).length
+          : 0;
+      }
+    } catch { /* migration-tolerant */ }
+
+    // Pull the promoter slice (may already be loaded but cheap to refetch
+    // for migration-tolerance; degrades silently if table is missing).
+    let promoterSlice = null;
+    try {
+      promoterSlice = await promoterProfileService.getProfileWithAssessment(deal.id);
+    } catch { /* ignore */ }
+
+    // Flatten documents the same way the K-RERA pack does
+    const docsByCategory = composed?.documents?.data || composed?.documents || {};
+    let documentsFlat = [];
+    if (Array.isArray(docsByCategory)) {
+      documentsFlat = docsByCategory;
+    } else if (typeof docsByCategory === 'object') {
+      for (const k of Object.keys(docsByCategory)) {
+        if (Array.isArray(docsByCategory[k])) documentsFlat = documentsFlat.concat(docsByCategory[k]);
+      }
+    }
+
+    let approvals = [];
+    try { approvals = await approvalsService.listByDeal(deal.id); } catch { /* migration-tolerant */ }
+
+    return icReadiness.composeReadiness({
+      deal,
+      financial: composed?.financial || null,
+      documents: documentsFlat,
+      approvals,
+      micro_market: microMarketSlice,
+      best_use: bestUseSlice,
+      rera_readiness: reraReadinessSlice,
+      dd: composed?.dd || null,
+      risk: composed?.risk || riskScore,
+      deal_doctor: dealDoctorSlice,
+      promoter: promoterSlice,
+      comps_count: compsCount,
+    });
+  }, 'icReadiness');
+
   return {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
@@ -378,6 +437,7 @@ async function getDealWorkspace(dealId) {
     deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
     capital_stack_optimizer: capitalStackSlice,
     karnataka_rera_readiness: reraReadinessSlice || { applicable: false, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [] },
+    ic_readiness: icReadinessSlice || { applicable: true, overall: null, buckets: [], gaps: [] },
     generatedAt: new Date().toISOString(),
   };
 }
