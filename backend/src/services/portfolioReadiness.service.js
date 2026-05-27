@@ -38,6 +38,7 @@
 
 const { query } = require('../config/database');
 const { LIVE_DEAL_STAGES } = require('../constants/domain');
+const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const log = require('../lib/logger').child({ module: 'portfolioReadiness.service' });
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -314,16 +315,21 @@ const composePortfolio = (deals) => {
  * Build the portfolio readiness payload for the caller's organisation.
  *
  * Args:
- *   - includeArchived (default false)
- *   - includeStages   (default ['sourcing', 'screening', 'loi', 'due_diligence',
- *                                'ic_review']; excludes 'dead' / 'closed' /
- *                                'lost' since those don't need IC prep anymore)
+ *   - includeArchived (default false) — currently a no-op. The visibility
+ *     predicate `buildVisibleDealCondition` enforces is_archived = FALSE
+ *     unconditionally to match `/api/deals` semantics. Kept in the
+ *     signature so a future revision can re-introduce the archived view
+ *     without re-plumbing callers.
+ *   - includeStages   (default LIVE_DEAL_STAGES; excludes 'closed' and
+ *                                'dead' since those don't need IC prep
+ *                                anymore)
  *
  * Returns: { totals, average_score, portfolio_blockers, top_ready,
  *            top_needs_attention, deals: [per-deal readiness rows],
  *            deals_count, disclaimer }
  */
 const getPortfolioReadiness = async ({
+  // eslint-disable-next-line no-unused-vars
   includeArchived = false,
   includeStages = null,
 } = {}) => {
@@ -336,22 +342,32 @@ const getPortfolioReadiness = async ({
     : LIVE_DEAL_STAGES;
 
   try {
-    // First fetch the live deals (the cheap, RLS-scoped, enum-safe part).
+    // First fetch the live deals.
     //
-    // We match the WORKING Portfolio Risk Radar pattern exactly:
-    //   - `stage = ANY($N::deal_stage[])`  (enum cast, NOT text — implicit
-    //     text→enum casts inside ANY() have been flaky on Supabase, see
-    //     PR #607's regression and portfolioRiskRadar.service.js comment).
-    //   - LEFT JOIN properties for parcel coordinates. `lat`/`lng` live on
-    //     `properties`, NOT `deals` — `deals.property_id` is the FK. An
-    //     earlier rewrite read `d.property_lat`/`d.property_lng` directly
-    //     (PR #607) which threw 42703 "column does not exist" — caught by
-    //     the outer try/catch and silently returning an empty payload.
-    //   - LEFT JOIN financials for the kernel-derived IRR + DSCR signals.
+    // We deliberately reuse `buildVisibleDealCondition` — the exact same
+    // visibility predicate `/api/deals` uses (which DOES return rows in
+    // production). It accepts both org-owned deals AND deals shared to the
+    // current user via `deal_shares`. The earlier rewrite (PR #608) used
+    // only `organization_id = current_organization_id()` which returned
+    // ZERO rows in production despite 6 live deals being visible via
+    // `/api/deals` — confirmed via Chrome verification + Vercel runtime
+    // logs. Mirroring the working predicate is the conservative path.
     //
-    // The outer org-scope (current_organization_id() via RLS GUC) + the
-    // is_archived guard restrict the row set; the stage filter is the
-    // "live deals" semantic shared with every other dashboard widget.
+    // The condition already includes:
+    //   - org scope OR deal_shares membership
+    //   - is_archived = FALSE
+    //   - stage <> 'dead'
+    // We add the explicit live-stage filter on top (still useful because
+    // `dead` excludes only one stage; we want to exclude `closed` as well
+    // and any future non-live stages).
+    //
+    // `stage = ANY($N::deal_stage[])` uses the enum cast (NOT text) —
+    // matches the working Portfolio Risk Radar exactly. Implicit
+    // text→enum casts inside ANY() have been flaky on Supabase
+    // historically (see portfolioRiskRadar.service.js comment).
+    //
+    // `lat` / `lng` live on `properties`, NOT `deals` — `deals.property_id`
+    // is the FK. PR #608 fixed this; we keep the LEFT JOIN.
     const dealsResult = await query(
       `
       SELECT
@@ -363,12 +379,11 @@ const getPortfolioReadiness = async ({
       FROM public.deals d
       LEFT JOIN public.properties p ON p.id = d.property_id
       LEFT JOIN public.financials f ON f.deal_id = d.id
-      WHERE d.organization_id = current_organization_id()
-        AND ($1::boolean OR d.is_archived = FALSE)
-        AND d.stage = ANY($2::deal_stage[])
+      WHERE ${buildVisibleDealCondition('d')}
+        AND d.stage = ANY($1::deal_stage[])
       ORDER BY d.created_at DESC NULLS LAST
       `,
-      [includeArchived, stages],
+      [stages],
     );
 
     const dealRows = dealsResult.rows || [];
