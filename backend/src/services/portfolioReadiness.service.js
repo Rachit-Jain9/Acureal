@@ -479,7 +479,20 @@ const getPortfolioReadiness = async ({
       log.warn('portfolio_readiness_missing_table', { error: err.message });
       return composePortfolio([]);
     }
+    // Use console.error so the log surfaces at error-level in Vercel
+    // runtime logs (pino's child logger has been buried under the
+    // catch-all 'Database query error' entry, hiding the actual code
+    // + message). Emit the same shape both ways so the operator can
+    // grep either.
     log.warn('portfolio_readiness_query_failed', { error: err.message, code: err.code });
+    // eslint-disable-next-line no-console
+    console.error('[portfolio-readiness] query failed:', {
+      code: err.code,
+      message: err.message,
+      where: err.where || null,
+      hint: err.hint || null,
+      detail: err.detail || null,
+    });
     return composePortfolio([]);
   }
 };
