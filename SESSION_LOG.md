@@ -4,6 +4,54 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-27 (fourth 10-hour block) — Phase 3 closeout: Pillar 5 IC Readiness Pack + xlsxV2 flake fix (PR #602–#603)
+
+Continuation immediately after Pillar 4's K-RERA Readiness Pack landed. The operator's brief opened with "did you do Pillar 5 and E2 yet?" — clarifying that neither had been built. After a focused comparative-options pass, **Pillar 5** was chosen as the natural next (mirrors the proven Pillar 4 architecture; pairs the readiness-pack pair) with E2 deferred to its own architectural block.
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#602](https://github.com/Rachit-Jain9/REDIP/pull/602) | **FIX — Per-suite Jest timeout for heavy XLSX V2 builders.** Stabilises the 1-of-2,732 timeout flake we caught in the previous block. Added `jest.setTimeout(60000)` at the top of `exports.xlsxV2.test.js` + `exports.xlsxV2.realism.test.js`. Same pattern the existing `crossProductReconciliation.test.js` already uses. Full suite goes back to clean-green: **160 / 160 suites · 2,732 / 2,732 tests** under the same parallel load that previously flaked. |
+| [#603](https://github.com/Rachit-Jain9/REDIP/pull/603) | **P3-PR4 + P3-PR5 — IC Readiness Pack (Pillar 5).** Companion to the K-RERA Readiness Pack. For every deal (regardless of asset class), composes a 7-bucket inventory of what IC expects: Financial Underwriting · Title & Legal · Statutory Approvals · Market & Comps · Promoter & Execution · Risk & Diagnosis · Document Hygiene. 30 items, weights summing to exactly 100. Same five-tier evidence model as Pillar 4. Readiness tiers: IC-ready (≥75%) / Pre-IC (≥55%) / Diligence-stage (≥35%) / Early. Pure composer over already-loaded workspace slices (financial, dd, risk, approvals, documents, micro_market, best_use, rera_readiness, promoter, deal_doctor) + a comps proximity query. Panel + DOCX download in one PR. Mounts FIRST on the DD tab (above K-RERA pack — IC is the broader posture; RERA is one cluster within it). |
+
+### Cumulative impact (this block)
+
+- **Backend tests**: 2,732 → **2,774** (+42 across icReadiness service + DOCX exporter)
+- **Frontend tests**: 1,000 → **1,004** (+4 on the IC panel)
+- **New canonical modules**:
+  - `backend/src/services/icReadiness.service.js` — 7-bucket composer with semantic detect functions
+  - `backend/src/services/exports/docx/buildIcReadiness.js` — DOCX builder
+  - `frontend/src/components/deal/IcReadinessPanel.jsx` — panel + Download DOCX button
+- **New route**: `GET /exports/deals/:dealId/ic-readiness/docx`
+- **New workspace slice**: `workspace.ic_readiness`
+- **New hook**: `useDealIcReadiness()`
+
+### What the user can do now that they couldn't before
+
+- **Open any deal** and see an **IC Readiness Pack** card at the top of the DD & Approvals tab. 0-100 score, IC-readiness tier badge, headline counts (Verified / Uploaded / Available / Pending / Missing), 7 expandable buckets with 30 items showing evidence source + recommended next steps, and a top-gaps strip sorted by severity.
+- **Click Download DOCX** at the top of the panel and get a polished Word document with cover-page disclaimer, executive summary, per-bucket sections, top gaps, closing scope page, and a footer disclaimer on every page. The deal team hands this to the IC committee.
+- **For residential / plotted / villas / mixed-use / redevelopment deals**, both readiness packs surface — IC pack at the top (broader posture), K-RERA pack below (specific to RERA filing).
+- **For commercial / hospitality / industrial / raw-land deals**, only the IC pack surfaces — the K-RERA pack honestly says "not applicable for this asset class".
+
+### CLAUDE.md respected
+
+Same legal-adjacency posture as Pillar 4. Never asserts "IC will approve" or "deal is investment-grade" — only "X of Y IC-readiness items have verified evidence". Disclaimer surfaced on the panel, the DOCX cover banner, the closing scope page, and a footer on every DOCX page: *"IC Readiness Pack · Organisation aid · NOT an IC approval verdict"*.
+
+### Phase 3 status
+
+| Item | Status |
+|---|---|
+| Pillar 4 — Karnataka RERA Readiness Pack | ✅ Shipped (#599 + #600) |
+| Pillar 5 — IC Readiness Pack | ✅ Shipped (#603) |
+| **E2 — Claim / provenance graph** | **Still pending** — its own architectural block; queryable "show me every claim that depends on this comp / document" |
+
+### Operator actions required
+
+**Zero this block.** Every PR is pure code reading data that already exists on the deal. No migrations.
+
+---
+
 ## 2026-05-26 (evening, third 10-hour block) — Phase 3 of the property-consultant quarter: Pillar 4 — Karnataka RERA Readiness Pack (PR #599–#600)
 
 Continuation immediately after the Phase 2 wrap (#598). The operator's brief opened with a comparative-options ask + Chrome QA + "best work ever, not subpar". Two PRs shipped end-to-end (a deep-design PR, not a volume block).
