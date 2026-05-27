@@ -4,6 +4,68 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-27 (fifth 10-hour block — Phase 4 prologue) — Portfolio Readiness aggregator (PR #605) + 6 follow-up fixes that finally cracked it (PR #606–#612)
+
+Continuation from the Phase 3 closeout. Operator brief opened with the same standing instruction — "Do what is best for website. Take your time to do quality work" — and pointed me at the per-deal IC Readiness Pack that had just shipped. Per-deal posture was now strong; the missing piece was the **cross-deal portfolio zoom**: "across every live deal in this workspace, where do we stand on IC + RERA prep, and which deals need attention next?"
+
+That became **Phase 4 prologue — the Portfolio Readiness aggregator**.
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#605](https://github.com/Rachit-Jain9/REDIP/pull/605) | **Phase 4 prologue feature — Portfolio Readiness aggregator + Dashboard widget + per-card chips.** Rolls up IC + RERA readiness signals across every live deal in the workspace into a single dashboard-friendly payload. New service `portfolioReadiness.service.js` with 5 sub-scorers summing to 100 (financial fit · DD progress · approvals progress · documents · context: coords + promoter + open deal-breakers). New tier mapping (IC-ready ≥75 · Pre-IC ≥55 · Diligence ≥35 · Early). New dashboard widget `PortfolioReadinessWidget.jsx` mounted between the Risk Radar and the Pipeline chart. New per-card chip on every deal card on the Deals list page surfacing tier + score + top-blocker. New hook `usePortfolioReadiness()` with 30s staleTime. 35 unit tests + 5 integration tests on the panel. |
+| [#606](https://github.com/Rachit-Jain9/REDIP/pull/606) | **FIX — stage-enum cast + LIVE_DEAL_STAGES.** First production verification showed the widget empty. Initial diagnosis: the SQL used `'sourcing'` as a default stage but the canonical enum value is `'sourced'`, and the stage filter was hardcoded inside the service instead of importing `LIVE_DEAL_STAGES` from `constants/domain.js`. Fixed both. Still empty after deploy. |
+| [#607](https://github.com/Rachit-Jain9/REDIP/pull/607) | **FIX — rewrite SQL as deals-then-aggregates (multi-query) instead of subqueries-in-SELECT.** Second diagnosis: maybe the correlated-subquery shape was the problem. Split into 5 sequential queries (deals + 4 parallel aggregates on dd_items / approval_items / documents / deal_promoter_profiles) with per-aggregate safeAggregate wrappers. Still empty. |
+| [#608](https://github.com/Rachit-Jain9/REDIP/pull/608) | **FIX — LEFT JOIN properties for lat/lng + restore enum stage cast.** Third diagnosis: PR #607 referenced `d.property_lat` / `d.property_lng` but those columns live on `properties`, not `deals` (`deals.property_id` is the FK). Fixed by adding `LEFT JOIN properties p ON p.id = d.property_id` and aliasing `p.lat AS property_lat`. Also restored `stage = ANY($2::deal_stage[])` (enum cast, matches the working Portfolio Risk Radar). **Still empty.** |
+| [#609](https://github.com/Rachit-Jain9/REDIP/pull/609) | **FIX — use buildVisibleDealCondition to match /api/deals semantics.** Fourth diagnosis: `/api/deals` returns the 6 deals fine but my service still returns 0. Difference: `/api/deals` uses `buildVisibleDealCondition` which adds a `deal_shares` OR clause. Mirrored that exact predicate. **Still empty.** |
+| [#610](https://github.com/Rachit-Jain9/REDIP/pull/610) | **FIX — diagnostic console.error with full pg error fields.** At this point we'd shipped 4 fixes with no observable progress. The runtime logs showed "Database query error: {   t..." truncated by Vercel UI before revealing the actual error code/message. Added a parallel `console.error('[portfolio-readiness] query failed:', {code, message, where, hint, detail})` that emits the structured PG error fields so the truncation couldn't hide the cause. |
+| [#611](https://github.com/Rachit-Jain9/REDIP/pull/611) | **FIX — flatten diagnostic to single-line string.** PR #610's object-form `console.error` still got cut after the first key. Replaced with a flat single-line format: `[portfolio-readiness:err] code=42703 msg=... where=... hint=... detail=...` so the full diagnostic survives Vercel's UI truncation. Pulling logs by literal string `"42703"` finally matched — confirming the error was PG code **42703 — undefined_column**. |
+| [#612](https://github.com/Rachit-Jain9/REDIP/pull/612) | **🎯 ROOT-CAUSE FIX — `f.kpis` doesn't exist on `financials`; use `f.dscr`.** Once the error code was visible, the cause was obvious in 60 seconds. The SQL was SELECTing `f.kpis` from `financials`, but **that column lives on `financial_scenarios` (per-scenario Base/Bull/Bear snapshots), not on `financials`**. `financials` exposes the kernel outputs as top-level columns (`irr_pct`, `dscr`, `npv_cr`, …). Three small changes: (1) drop `f.kpis`, add `f.dscr`; (2) simplify `scoreFinancialFit` to read `row.dscr` directly instead of `row.kpis?.dscr`; (3) update unit-test fixtures to the real PG row shape. All 35 tests pass. **Production verification: `deals_count = 6, totals.total = 6, pre_ic = 1, early = 5, average_score = 23, top_ready = [Jigani-Apartments (pre_ic, 58), Gattahalli (early, 19), Commercial Retail (early, 19), Jakkur (early, 14), Chirping Ridge (early, 14)], top_blockers = [open deal-breakers: 6, no financial model: 3, DD not seeded: 5, approvals not seeded: 4]`.** |
+
+### Why this arc took 7 PRs (the lesson)
+
+The unit tests passed because they mocked rows in the shape the **workspace composer** emits (`{ irr_pct, kpis: { dscr } }`) — a synthesised shape downstream of the per-deal SQL. But the portfolio aggregator reads `financials` directly with no composer in between, so production PG saw the raw column shape and threw 42703. **The fixture didn't match the actual table.**
+
+That meant every "fix" PR #606 → #609 was correctly fixing a *real-but-secondary* issue (stage casts, JOIN shape, visibility predicate) without touching the *primary* one — because the failing column was never in any test assertion. The diagnostic-logging detour (PR #610 + #611) was the actual breakthrough: once the PG error code reached the logs in a form Vercel didn't truncate, the targeted fix took 60 seconds.
+
+**What I'd do differently next time**: if a same-shape sibling endpoint works and mine doesn't, the *first* move is logging the raw PG error in a form that survives the production log viewer. The 4 fix PRs that preceded the diagnostic detour were unnecessary delay. Shipping the diagnostic *first* would have collapsed the arc from 7 PRs to 2.
+
+### Cumulative impact (this block)
+
+- **Backend tests**: 2,774 → **2,809** (+35 across portfolio readiness service)
+- **Frontend tests**: 1,004 → **1,009** (+5 on the dashboard widget)
+- **New canonical modules**:
+  - `backend/src/services/portfolioReadiness.service.js` — 5-scorer aggregator + 7 portfolio-blocker rules
+  - `frontend/src/components/dashboard/PortfolioReadinessWidget.jsx` — widget UI
+- **New route**: `GET /api/dashboard/portfolio-readiness`
+- **New hook**: `usePortfolioReadiness()`
+- **Modified**: `frontend/src/hooks/useDashboardLayout.js` (added `portfolio_readiness` widget), `frontend/src/pages/DealsPage.jsx` (per-card readiness chip), `frontend/src/components/deals/DealCard.jsx` (chip rendering)
+
+### What the user can do now that they couldn't before
+
+- **Open the dashboard** and see a **Portfolio Readiness** tile between the Risk Radar and the Pipeline chart. Tier counts (IC-ready · Pre-IC · Diligence · Early), portfolio average score, top 4 portfolio-wide blockers sorted by severity + affected deal count, top-5 IC-ready deals, top-5 needs-attention deals — all clickable through to the per-deal IC Readiness Pack.
+- **Visit the Deals list page** and see a readiness chip on every deal card showing its tier (color-coded), 0-100 score, and one-line top-blocker (e.g. "DD not seeded", "no documents uploaded", "promoter / coords missing").
+- The Portfolio Readiness widget honours per-user dashboard layout — operators can hide it, reorder it, reset to defaults via the existing customize popover.
+
+### CLAUDE.md respected
+
+Closed verb dictionary (`Recommend / Consider / Re-examine / Flag / Stress-test`) preserved in the portfolio blocker recommended-actions. The disclaimer on the widget + the API payload reads: *"Portfolio Readiness is an aggregated organisation aid — composed deterministically from each deal's deal-team-recorded findings. It does NOT represent an Investment Committee verdict on any deal; only an inventory of where the deals stand on IC-prep."* Tone bar: institutional / analytical / sharp / diagnostic. No theatrical language, no slander-grade claims about deals or promoters.
+
+### Phase 4 prologue status
+
+| Item | Status |
+|---|---|
+| Portfolio Readiness service + dashboard widget + per-card chips | ✅ Shipped (#605 + the 6 follow-up fixes) |
+| Production verification — 6 deals, tier counts populated, top blockers ranked | ✅ Confirmed via API |
+| Diagnostic logging cleanup (drop the `[portfolio-readiness:err]` console.error now that the error path no longer fires) | ⏳ Low-priority follow-up |
+
+### What's next
+
+Phase 4 prologue is **shipped + verified**. Main Phase 4 entries (Pillar 7 Q&A v2, Pillar 8 Learning Loop v2, E7 admin dashboard) are queued. E2 (claim / provenance graph) remains its own architectural block.
+
+---
+
 ## 2026-05-27 (fourth 10-hour block) — Phase 3 closeout: Pillar 5 IC Readiness Pack + xlsxV2 flake fix (PR #602–#603)
 
 Continuation immediately after Pillar 4's K-RERA Readiness Pack landed. The operator's brief opened with "did you do Pillar 5 and E2 yet?" — clarifying that neither had been built. After a focused comparative-options pass, **Pillar 5** was chosen as the natural next (mirrors the proven Pillar 4 architecture; pairs the readiness-pack pair) with E2 deferred to its own architectural block.
