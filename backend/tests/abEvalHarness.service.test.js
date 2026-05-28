@@ -6,12 +6,8 @@
 // us simulate "Claude returns this", "GPT returns that", and assert
 // the aggregated metrics.
 
-// Mock the lazy-loaded service prompts so the harness can resolve a
-// default systemPrompt without dragging in the real services.
-jest.mock('../src/services/parcelNarrative.service', () => ({
-  SYSTEM_PROMPT: 'TEST_PARCEL_PROMPT',
-  buildPayload: (x) => x,
-}));
+// Mock the lazy-loaded service prompt so the harness can resolve a
+// default systemPrompt without dragging in the real service.
 jest.mock('../src/services/export.insights.service', () => ({
   SYSTEM_PROMPT: 'TEST_EXPORT_PROMPT',
   buildPayload: (x) => x,
@@ -20,24 +16,33 @@ jest.mock('../src/services/export.insights.service', () => ({
 const { runEval, summarize } = require('../src/services/ai/abEvalHarness.service');
 
 const fixtures = [
-  { id: 'fx-01', parcel_payload: { area: 13068, far: 2.5 } },
-  { id: 'fx-02', parcel_payload: { area: 21780, far: 3.0 } },
-  { id: 'fx-03', parcel_payload: { area: 4356,  far: 1.75 } },
+  { id: 'fx-01', deal_payload: { area: 13068, far: 2.5 } },
+  { id: 'fx-02', deal_payload: { area: 21780, far: 3.0 } },
+  { id: 'fx-03', deal_payload: { area: 4356,  far: 1.75 } },
 ];
 
-const cleanText = (p) =>
-  `The parcel of ${p.area} sqft has a permissible FAR of ${p.far}. Verification of road width and survey alignment is the next step before underwriting.`;
+// The export_insights scorer extracts ic_opinion from a JSON envelope.
+const cleanJson = (p) => JSON.stringify({
+  ic_opinion: `The parcel of ${p.area} sqft has a permissible FAR of ${p.far}. Verification of road width and survey alignment is the next step before underwriting.`,
+  top_risks: [],
+  next_steps: [],
+  confidence: 'medium',
+});
 
-const dirtyText = () =>
-  'This is a groundbreaking opportunity to leverage 99999 sqft of best-in-class land at INR 50000/sqft.';
+const dirtyJson = () => JSON.stringify({
+  ic_opinion: 'This is a groundbreaking opportunity to leverage 99999 sqft of best-in-class land at INR 50000/sqft.',
+  top_risks: [],
+  next_steps: [],
+  confidence: 'high',
+});
 
 describe('runEval', () => {
   test('runs every candidate against every fixture and aggregates scores', async () => {
-    const claudeRunner = jest.fn(({ payload }) => Promise.resolve(cleanText(payload)));
-    const gptRunner = jest.fn(({ payload }) => Promise.resolve(dirtyText()));
+    const claudeRunner = jest.fn(({ payload }) => Promise.resolve(cleanJson(payload)));
+    const gptRunner = jest.fn(() => Promise.resolve(dirtyJson()));
 
     const result = await runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       fixtures,
       candidates: [
         { id: 'claude:test', runner: claudeRunner },
@@ -63,29 +68,29 @@ describe('runEval', () => {
   });
 
   test('forwards the resolved system prompt from the task default', async () => {
-    const runner = jest.fn(({ systemPrompt }) => Promise.resolve('clean text'));
+    const runner = jest.fn(({ payload }) => Promise.resolve(cleanJson(payload)));
     await runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       fixtures: [fixtures[0]],
       candidates: [
         { id: 'a', runner },
-        { id: 'b', runner: jest.fn(() => Promise.resolve('clean text')) },
+        { id: 'b', runner: jest.fn(({ payload }) => Promise.resolve(cleanJson(payload))) },
       ],
     });
     expect(runner).toHaveBeenCalledWith(expect.objectContaining({
-      systemPrompt: 'TEST_PARCEL_PROMPT',
+      systemPrompt: 'TEST_EXPORT_PROMPT',
     }));
   });
 
   test('caller-provided systemPrompt overrides the task default', async () => {
-    const runner = jest.fn(() => Promise.resolve('clean text'));
+    const runner = jest.fn(({ payload }) => Promise.resolve(cleanJson(payload)));
     await runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       systemPrompt: 'CUSTOM_PROMPT',
       fixtures: [fixtures[0]],
       candidates: [
         { id: 'a', runner },
-        { id: 'b', runner: jest.fn(() => Promise.resolve('clean text')) },
+        { id: 'b', runner: jest.fn(({ payload }) => Promise.resolve(cleanJson(payload))) },
       ],
     });
     expect(runner).toHaveBeenCalledWith(expect.objectContaining({
@@ -95,18 +100,18 @@ describe('runEval', () => {
 
   test('captures runner errors per-fixture without aborting the run', async () => {
     let callIdx = 0;
-    const runner = jest.fn(() => {
+    const runner = jest.fn(({ payload }) => {
       callIdx += 1;
       if (callIdx === 2) return Promise.reject(new Error('timeout'));
-      return Promise.resolve('text ' + callIdx);
+      return Promise.resolve(cleanJson(payload));
     });
 
     const result = await runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       fixtures,
       candidates: [
         { id: 'a', runner },
-        { id: 'b', runner: jest.fn(() => Promise.resolve('clean text')) },
+        { id: 'b', runner: jest.fn(({ payload }) => Promise.resolve(cleanJson(payload))) },
       ],
     });
 
@@ -143,18 +148,18 @@ describe('runEval', () => {
 
   test('throws when a required argument is missing', async () => {
     await expect(runEval({})).rejects.toThrow();
-    await expect(runEval({ task: 'parcel_narrative', fixtures: [] })).rejects.toThrow();
+    await expect(runEval({ task: 'export_insights', fixtures: [] })).rejects.toThrow();
     await expect(runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       fixtures: [fixtures[0]],
       candidates: [],
     })).rejects.toThrow(/at least one candidate/i);
   });
 
   test('accepts a single candidate (baseline mode) and produces no deltas', async () => {
-    const runner = jest.fn(({ payload }) => Promise.resolve(cleanText(payload)));
+    const runner = jest.fn(({ payload }) => Promise.resolve(cleanJson(payload)));
     const result = await runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       fixtures,
       candidates: [{ id: 'claude:default', runner }],
     });
@@ -180,12 +185,21 @@ describe('runEval', () => {
   test('produces pairwise deltas for >2 candidates', async () => {
     const runner = (output) => jest.fn(() => Promise.resolve(output));
     const result = await runEval({
-      task: 'parcel_narrative',
+      task: 'export_insights',
       fixtures: [fixtures[0]],
       candidates: [
-        { id: 'a', runner: runner('Excellent verified narrative with FAR 2.5 and 13068 sqft area discussed at length.') },
-        { id: 'b', runner: runner('Mid quality groundbreaking opportunity with FAR 2.5 and 13068 sqft.') },
-        { id: 'c', runner: runner('Bad output with INR 99999/sqft fabricated guidance value and groundbreaking leverage.') },
+        { id: 'a', runner: runner(JSON.stringify({
+          ic_opinion: 'Excellent verified narrative with FAR 2.5 and 13068 sqft area discussed at length.',
+          top_risks: [], next_steps: [], confidence: 'high',
+        })) },
+        { id: 'b', runner: runner(JSON.stringify({
+          ic_opinion: 'Mid quality groundbreaking opportunity with FAR 2.5 and 13068 sqft.',
+          top_risks: [], next_steps: [], confidence: 'medium',
+        })) },
+        { id: 'c', runner: runner(JSON.stringify({
+          ic_opinion: 'Bad output with INR 99999/sqft fabricated guidance value and groundbreaking leverage.',
+          top_risks: [], next_steps: [], confidence: 'low',
+        })) },
       ],
     });
     // 3 choose 2 = 3 pairs

@@ -37,28 +37,14 @@ const { runClaudeReasoning, runOpenAIReasoning } = require('./aiRouter');
 
 // Lazy require so jest.mock() in tests can intercept these without
 // circular-import pain.
-const lazyParcelNarrativePrompt = () =>
-  require('../parcelNarrative.service').SYSTEM_PROMPT;
 const lazyExportInsightsPrompt = () =>
   require('../export.insights.service').SYSTEM_PROMPT;
 
 // Each task has a payload picker that reads the right slice off a
 // fixture row. Fixture shape:
-//   { id, parcel_payload?, deal_payload? }
+//   { id, deal_payload? }
 // The harness skips fixtures where the task's slice is missing.
 const TASKS = {
-  parcel_narrative: {
-    label: 'Parcel verdict narrative',
-    defaultSystemPrompt: lazyParcelNarrativePrompt,
-    buildPayload: (fixture) => fixture.parcel_payload || fixture.payload,
-    buildSnapshot: (fixture) => fixture.parcel_payload || fixture.payload,
-    scoringOpts: {
-      minWords: 60,
-      maxWords: 200,
-      disallowMarkdown: true, // prompt explicitly says "plain prose only"
-      tolerancePct: 1,
-    },
-  },
   export_insights: {
     label: 'Export deck IC opinion',
     defaultSystemPrompt: lazyExportInsightsPrompt,

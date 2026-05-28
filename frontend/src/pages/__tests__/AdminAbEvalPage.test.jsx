@@ -18,22 +18,12 @@ vi.mock('../../components/common/Toast', () => ({
 
 import { QualityTrendPanel } from '../AdminAbEvalPage';
 
-const emptyTask = () => ({
-  available: true,
-  run_count: 0,
-  series: [],
-  latest: null,
-  baseline_avg: null,
-  delta: null,
-  regression: false,
-});
-
-const trendData = () => ({
+const trendDataRegressed = () => ({
   available: true,
   window_days: 90,
   tasks: {
     // A regressed task — latest 80, trailing baseline 88, delta −8.
-    parcel_narrative: {
+    export_insights: {
       available: true,
       run_count: 2,
       series: [],
@@ -42,8 +32,23 @@ const trendData = () => ({
       delta: -8,
       regression: true,
     },
-    // A task with no baselines yet.
-    export_insights: emptyTask(),
+  },
+  generated_at: '2026-05-21T00:00:00Z',
+});
+
+const trendDataEmpty = () => ({
+  available: true,
+  window_days: 90,
+  tasks: {
+    export_insights: {
+      available: true,
+      run_count: 0,
+      series: [],
+      latest: null,
+      baseline_avg: null,
+      delta: null,
+      regression: false,
+    },
   },
   generated_at: '2026-05-21T00:00:00Z',
 });
@@ -51,15 +56,14 @@ const trendData = () => ({
 beforeEach(() => {
   getTrendMock.mockReset();
   runBaselineMock.mockReset();
-  getTrendMock.mockResolvedValue({ data: { data: trendData() } });
+  getTrendMock.mockResolvedValue({ data: { data: trendDataRegressed() } });
   runBaselineMock.mockResolvedValue({ data: { data: { status: 'completed' } } });
 });
 
 describe('QualityTrendPanel', () => {
-  it('renders the section and both task rows once loaded', async () => {
+  it('renders the section and the monitored task row once loaded', async () => {
     render(<QualityTrendPanel />);
     expect(await screen.findByText('AI quality trend')).toBeInTheDocument();
-    expect(screen.getByText('Parcel verdict narrative')).toBeInTheDocument();
     expect(screen.getByText('Export deck IC opinion')).toBeInTheDocument();
   });
 
@@ -70,16 +74,17 @@ describe('QualityTrendPanel', () => {
   });
 
   it('shows an empty state for a task with no baselines', async () => {
+    getTrendMock.mockResolvedValue({ data: { data: trendDataEmpty() } });
     render(<QualityTrendPanel />);
     expect(await screen.findByText(/No baseline recorded yet/i)).toBeInTheDocument();
   });
 
-  it('triggers a baseline run for the chosen task', async () => {
+  it('triggers a baseline run for the export_insights task', async () => {
     render(<QualityTrendPanel />);
     const buttons = await screen.findAllByRole('button', { name: /Run baseline/i });
-    fireEvent.click(buttons[0]); // the parcel_narrative row
+    fireEvent.click(buttons[0]);
     await waitFor(() =>
-      expect(runBaselineMock).toHaveBeenCalledWith({ task: 'parcel_narrative' }),
+      expect(runBaselineMock).toHaveBeenCalledWith({ task: 'export_insights' }),
     );
   });
 

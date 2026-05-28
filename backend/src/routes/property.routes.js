@@ -3,7 +3,6 @@ const { body, query: qv } = require('express-validator');
 const propertyService = require('../services/property.service');
 const parcelIntelligenceService = require('../services/parcelIntelligence.service');
 const parcelVerifyService = require('../services/parcelIntelligenceVerify.service');
-const parcelNarrativeService = require('../services/parcelNarrative.service');
 const parcelContextService = require('../services/parcelContext.service');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
@@ -285,50 +284,6 @@ router.post('/:id/parcel-intelligence/refresh', authenticate, requireAdminOrAnal
     next(error);
   }
 });
-
-// POST /properties/:id/parcel-intelligence/narrative
-// Generates a Claude-summarised executive narrative of the deterministic
-// snapshot. Carries an explicit "AI-assisted — requires human review"
-// disclaimer (CLAUDE.md hard rule). Persists to ai_artifacts.parcel_narrative
-// with snapshot_hash so subsequent /cached requests return instantly.
-router.post(
-  '/:id/parcel-intelligence/narrative',
-  authenticate,
-  requireAdminOrAnalyst,
-  async (req, res, next) => {
-    try {
-      const result = await parcelNarrativeService.generateNarrative({
-        propertyId: req.params.id,
-        userId: req.user.id,
-        dealId: req.body?.deal_id || null,
-      });
-      res.json({ success: true, data: result });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// GET /properties/:id/parcel-intelligence/narrative/cached
-// Returns the most recent persisted parcel_narrative artifact for this
-// (deal, property) pair, or null on miss. Optional ?deal_id query
-// scopes the lookup; without it, returns null (parcel narratives are
-// deal-scoped via ai_artifacts.deal_id).
-router.get(
-  '/:id/parcel-intelligence/narrative/cached',
-  authenticate,
-  async (req, res, next) => {
-    try {
-      const cached = await parcelNarrativeService.getCachedNarrative({
-        dealId: req.query.deal_id || null,
-        propertyId: req.params.id,
-      });
-      res.json({ success: true, data: cached });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 // GET /properties/:id/parcel-intelligence/verifications
 // Lists manual verifications attached to the latest snapshot.
