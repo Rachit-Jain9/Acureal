@@ -314,6 +314,13 @@ export const propertiesAPI = {
   // Returns ok:false when ward isn't derived yet or sample < 3.
   wardSpreadBenchmark: (id) =>
     api.get(`/properties/${id}/ward-spread-benchmark`),
+  // Smart Property Capture — turns any pasted input (Google Maps URL,
+  // Plus Code, lat/lng, survey number, address, or broker narrative) into
+  // a resolved candidate property with BBMP ward, K-GIS hierarchy,
+  // guidance value, and verification links. Read-only (no DB write).
+  // Frontend renders a preview and POSTs suggestedFields to /properties.
+  capture: ({ input, aiAssisted = true } = {}) =>
+    api.post('/properties/capture', { input, aiAssisted }),
 };
 
 // Financials

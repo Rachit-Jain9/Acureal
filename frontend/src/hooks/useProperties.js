@@ -30,6 +30,20 @@ export function useCreateProperty() {
   });
 }
 
+// Smart Property Capture — sends a raw user input (Google Maps URL,
+// Plus Code, lat/lng, survey number, address, or broker text) to the
+// /capture endpoint and returns the resolved candidate (no DB write).
+// The caller renders a preview and, on confirm, hands suggestedFields
+// to useCreateProperty.
+export function useCaptureProperty() {
+  return useMutation({
+    mutationFn: ({ input, aiAssisted = true } = {}) =>
+      propertiesAPI.capture({ input, aiAssisted }).then((r) => r.data.data),
+    onError: (err) =>
+      toast.error(err.response?.data?.message || 'Could not resolve that input. Try a different format.'),
+  });
+}
+
 export function useUpdateProperty() {
   const qc = useQueryClient();
   return useMutation({
