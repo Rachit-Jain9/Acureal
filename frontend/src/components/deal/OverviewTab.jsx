@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
-  Clock,
   CheckCircle2,
   Circle,
   TrendingUp,
@@ -12,7 +11,6 @@ import {
   ShieldAlert,
   ListChecks,
   StickyNote,
-  History,
   Gauge,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -46,13 +44,8 @@ import DealAutoDerivedWarningsStrip from './DealAutoDerivedWarningsStrip';
 import {
   formatCrores,
   formatPct,
-  formatDate,
   formatArea,
-  formatRelativeTime,
-  STAGE_CONFIG,
   PRIORITY_CONFIG,
-  ACTIVITY_STATUS_CONFIG,
-  ACTIVITY_PRIORITY_CONFIG,
   DEAL_TYPE_LABELS,
 } from '../../utils/format';
 import { buildPlaybook } from '../../utils/dealPlaybook';
@@ -81,8 +74,6 @@ export default function OverviewTab({ setTab }) {
   const fieldProvenance = provenanceData?.field_provenance || {};
 
   const financials = deal.financials;
-  const stageHistory = deal.stage_history || [];
-  const recentActivities = deal.recent_activities || [];
   const readiness = deal.readiness_summary || null;
   // Backend-provided custom next-step groups, if any — preserved as-is.
   const nextStepGroups =
@@ -474,105 +465,15 @@ export default function OverviewTab({ setTab }) {
         </CollapsibleCard>
       )}
 
-      {/* Stage History — usually long; default-collapsed. */}
-      {stageHistory.length > 0 && (
-        <CollapsibleCard
-          id="overview-stage-history"
-          icon={History}
-          title="Stage History"
-          sub="Every stage transition with actor + timestamp. Append-only."
-          defaultExpanded={false}
-          meta={
-            <span className="text-xs text-content-muted tabular-nums">
-              {stageHistory.length} {stageHistory.length === 1 ? 'transition' : 'transitions'}
-            </span>
-          }
-        >
-          <div className="relative pt-3">
-            <div className="absolute left-3 top-5 bottom-2 w-px bg-hairline" />
-            <ul className="space-y-4">
-              {stageHistory.map((entry, index) => {
-                const toConfig = STAGE_CONFIG[entry.to_stage] || STAGE_CONFIG.screening;
-                return (
-                  <li key={entry.id || index} className="relative pl-8">
-                    <div
-                      className={clsx(
-                        'absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-bg-elevated',
-                        index === stageHistory.length - 1 ? 'bg-accent' : 'bg-hairline-strong'
-                      )}
-                    />
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {entry.from_stage && (
-                          <>
-                            <Badge
-                              tone={(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).tone}
-                            >
-                              {(STAGE_CONFIG[entry.from_stage] || STAGE_CONFIG.screening).label}
-                            </Badge>
-                            <ArrowRight size={12} className="text-content-muted" />
-                          </>
-                        )}
-                        <Badge tone={toConfig.tone}>{toConfig.label}</Badge>
-                      </div>
-                      <p className="text-xs text-content-secondary mt-1">
-                        {entry.changed_by_name} · {formatDate(entry.changed_at)}
-                      </p>
-                      {entry.notes && (
-                        <p className="text-xs text-content-muted mt-0.5 italic">{entry.notes}</p>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </CollapsibleCard>
-      )}
-
-      {/* Recent Activities — default-collapsed; full Activity tab has the
-          authoritative view. */}
-      {recentActivities.length > 0 && (
-        <CollapsibleCard
-          id="overview-recent-activities"
-          icon={Clock}
-          title="Recent Activities"
-          sub="Last five entries. Open the Activity tab for the full timeline."
-          defaultExpanded={false}
-          meta={
-            <span className="text-xs text-content-muted tabular-nums">
-              {recentActivities.length} on file
-            </span>
-          }
-        >
-          <ul className="divide-y divide-hairline-soft pt-3">
-            {recentActivities.slice(0, 5).map((activity) => {
-              const statusCfg =
-                ACTIVITY_STATUS_CONFIG[activity.status] || ACTIVITY_STATUS_CONFIG.open;
-              const priorityCfg =
-                ACTIVITY_PRIORITY_CONFIG[activity.priority] || ACTIVITY_PRIORITY_CONFIG.medium;
-              return (
-                <li key={activity.id} className="py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <Badge className="capitalize">
-                      {(activity.activity_type || activity.type || '').replace(/_/g, ' ')}
-                    </Badge>
-                    <Badge tone={statusCfg.tone}>{statusCfg.label}</Badge>
-                    <Badge tone={priorityCfg.tone}>{priorityCfg.label}</Badge>
-                    <span className="text-xs text-content-muted ml-auto">
-                      {formatRelativeTime(activity.activity_date)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-content-primary">{activity.description}</p>
-                  {activity.performed_by_name && (
-                    <p className="text-xs text-content-muted mt-0.5">by {activity.performed_by_name}</p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </CollapsibleCard>
-      )}
+      {/* Stage History and Recent Activities used to live here as
+          default-collapsed CollapsibleCards. Both were strict duplicates
+          of authoritative views on the Activity tab — the Activity tab
+          is THE place to see "what changed when" + "the latest 50
+          actions". Operator audit 2026-05-28: cut both from Overview to
+          stop the two-places-to-look-for-history pattern. The Stage
+          Playbook block above is the only stage-related surface that
+          earns Overview real estate, since it lists what STILL NEEDS
+          DOING for the current stage, not the historical record. */}
 
       {/* Deal Notes — surfaced last; default expanded only when present. */}
       {deal.notes && (
