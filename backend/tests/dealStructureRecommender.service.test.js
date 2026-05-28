@@ -173,6 +173,107 @@ describe('scoreStructure', () => {
       })
     ).toBeNull();
   });
+
+  // ─── Rationale composition (PR rationale rewrite) ────────────────────────
+  // Pins the new behaviour: each row's rationale leads with the structure
+  // description, then surfaces a deal-specific score driver, then closes
+  // with the promoter callout. No generic templates.
+
+  test('rationale leads with the structure one-liner', () => {
+    const out = recommender.scoreStructure({
+      structure: 'ground_lease',
+      assetClass: 'commercial_office',
+      promoterPosture: 'cleared',
+      microMarket: null,
+    });
+    expect(out.rationale[0]).toMatch(/lease/i);
+  });
+
+  test('rationale surfaces capital-efficiency standout when market is silent', () => {
+    // ground_lease has capital_efficiency 20/20 (max). With no micro-market,
+    // the score-driver picker should pull the capital-efficiency signal.
+    const out = recommender.scoreStructure({
+      structure: 'ground_lease',
+      assetClass: 'commercial_office',
+      promoterPosture: 'cleared',
+      microMarket: null,
+    });
+    expect(out.rationale[1]).toMatch(/capital-efficient/i);
+  });
+
+  test('rationale surfaces execution standout when market is silent and capital is mid', () => {
+    // hybrid has execution_complexity 2/15 (min). With no micro-market and
+    // hybrid's capital_efficiency at 12/20 (just above midpoint), the
+    // execution-complexity signal should win.
+    const out = recommender.scoreStructure({
+      structure: 'hybrid',
+      assetClass: 'mixed_use',
+      promoterPosture: 'cleared',
+      microMarket: null,
+    });
+    expect(out.rationale[1]).toMatch(/bespoke contracts/i);
+  });
+
+  test('rationale surfaces market posture when informative', () => {
+    const out = recommender.scoreStructure({
+      structure: 'outright',
+      assetClass: 'residential_apartments',
+      promoterPosture: 'cleared',
+      microMarket: WHITEFIELD_OVERSUPPLY,
+    });
+    expect(out.rationale[1]).toMatch(/oversupply/);
+  });
+
+  test('promoter callout differs by posture × score tier', () => {
+    const cleared = recommender.scoreStructure({
+      structure: 'outright',
+      assetClass: 'residential_apartments',
+      promoterPosture: 'cleared',
+      microMarket: null,
+    });
+    const flagged = recommender.scoreStructure({
+      structure: 'outright',
+      assetClass: 'residential_apartments',
+      promoterPosture: 'flagged',
+      microMarket: null,
+    });
+    expect(cleared.rationale[2]).toMatch(/Cleared promoter/i);
+    expect(flagged.rationale[2]).toMatch(/Flagged promoter/i);
+    // Both should NOT use the old generic "× X compatibility" wording.
+    expect(cleared.rationale[2]).not.toMatch(/× outright compatibility/);
+    expect(flagged.rationale[2]).not.toMatch(/× outright compatibility/);
+  });
+
+  test('flagged promoter + revenue_share emphasises contained risk', () => {
+    // revenue_share for flagged promoter scores 18/25 — workable tier;
+    // callout should mention partial protection, not "no protection".
+    const out = recommender.scoreStructure({
+      structure: 'revenue_share',
+      assetClass: 'residential_apartments',
+      promoterPosture: 'flagged',
+      microMarket: WHITEFIELD_OVERSUPPLY,
+    });
+    expect(out.rationale[2]).toMatch(/Flagged promoter/i);
+    expect(out.rationale[2]).toMatch(/protection/i);
+  });
+
+  test('no rationale line ever contains the old generic template', () => {
+    // Belt-and-braces: regress-proof the old "X promoter × Y compatibility"
+    // template — sweep all 8 structures × 3 postures.
+    const postures = ['cleared', 'unverified', 'flagged'];
+    postures.forEach((posture) => {
+      const out = recommender.scoreFromContext({
+        assetClass: 'residential_apartments',
+        promoterPosture: posture,
+        microMarket: null,
+      });
+      out.scores.forEach((row) => {
+        row.rationale.forEach((line) => {
+          expect(line).not.toMatch(/promoter × \w+ compatibility/);
+        });
+      });
+    });
+  });
 });
 
 // ─── Verdict + band dictionary ─────────────────────────────────────────────
