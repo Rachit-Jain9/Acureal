@@ -69,7 +69,7 @@ import { buildPlaybook } from '../../utils/dealPlaybook';
  * props. The hook throws if mounted outside the provider so wiring
  * regressions surface at mount.
  */
-export default function OverviewTab() {
+export default function OverviewTab({ setTab }) {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
   const recommendations = useDealRecommendations();
@@ -319,6 +319,8 @@ export default function OverviewTab() {
             <BuildabilitySummary
               property={propertyForBuildability}
               assetClass={deal.asset_class}
+              dealId={dealId}
+              onUploadClick={setTab ? () => setTab('documents') : undefined}
               title="Buildable envelope"
             />
           </div>

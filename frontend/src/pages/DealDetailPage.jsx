@@ -355,7 +355,7 @@ export default function DealDetailPage() {
         <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
           {/* Overview is eager (landing tab); the other nine tabs lazy-load
               via React.lazy so their bundles only download on click. */}
-          {activeTab === 'overview' && <OverviewTab />}
+          {activeTab === 'overview' && <OverviewTab setTab={setTab} />}
           <Suspense fallback={<TabSuspenseFallback />}>
             {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
             {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
