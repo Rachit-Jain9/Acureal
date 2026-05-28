@@ -9,6 +9,10 @@ jest.mock('../src/services/activity.service');
 jest.mock('../src/services/dd.service');
 jest.mock('../src/services/risk.service');
 jest.mock('../src/services/waterfall.service');
+jest.mock('../src/services/microMarketIntelligence.service', () => ({
+  classifyParcel: jest.fn(),
+  getBriefing: jest.fn(),
+}));
 
 const dealService = require('../src/services/deal.service');
 const financialService = require('../src/services/financial.service');
@@ -17,6 +21,7 @@ const activityService = require('../src/services/activity.service');
 const ddService = require('../src/services/dd.service');
 const riskService = require('../src/services/risk.service');
 const waterfallService = require('../src/services/waterfall.service');
+const microMarketIntelligence = require('../src/services/microMarketIntelligence.service');
 
 const dealWorkspaceService = require('../src/services/dealWorkspace.service');
 
@@ -145,5 +150,54 @@ describe('dealWorkspace.service', () => {
     const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
 
     expect(ws.waterfall).toEqual({ jda: null, jv: null });
+  });
+
+  // Regression: prior to the fix, dealSelect SQL aliased `p.lat`/`p.lng` as
+  // bare `lat`/`lng` only — but dealWorkspace.service reads `property_lat` /
+  // `property_lng`. The names never matched, so every deal — coordinates set
+  // or not — fell into the `no_parcel_coordinates` branch. This pins the
+  // contract: when `property_lat`/`property_lng` are present on the deal
+  // record, the micro-market gate must call through to `classifyParcel`.
+  test('routes property_lat/property_lng through to the micro-market lookup', async () => {
+    dealService.getDealById.mockResolvedValueOnce({
+      ...mockDeal(),
+      property_lat: 12.97,
+      property_lng: 77.75,
+      asset_class: 'residential_apartments',
+    });
+    microMarketIntelligence.classifyParcel.mockResolvedValueOnce({
+      locality_code: 'whitefield-east-orr',
+      name: 'Whitefield',
+      tier: 'prime',
+      distance_km: 1.4,
+      confidence: 'high',
+    });
+    microMarketIntelligence.getBriefing.mockResolvedValueOnce({
+      locality: { locality_code: 'whitefield-east-orr', name: 'Whitefield', tier: 'prime' },
+      benchmarks: [],
+      demand_signals: [],
+    });
+
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    expect(microMarketIntelligence.classifyParcel).toHaveBeenCalledWith(12.97, 77.75);
+    expect(ws.micro_market.reason).toBeNull();
+    expect(ws.micro_market.classification.locality_code).toBe('whitefield-east-orr');
+  });
+
+  test('falls back to no_parcel_coordinates when neither alias is present', async () => {
+    // Belt-and-braces: the gate still fires when the deal record genuinely
+    // has no coordinates. Guards against accidentally treating an unjoined
+    // deal as geocoded.
+    dealService.getDealById.mockResolvedValueOnce({
+      ...mockDeal(),
+      property_lat: null,
+      property_lng: null,
+    });
+
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    expect(microMarketIntelligence.classifyParcel).not.toHaveBeenCalled();
+    expect(ws.micro_market.reason).toBe('no_parcel_coordinates');
   });
 });
