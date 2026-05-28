@@ -21,6 +21,11 @@ import { usePortfolioReadiness } from '../hooks/useDashboard';
 import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useProperties } from '../hooks/useProperties';
+// Smart Property Capture — inline create-new for the New Deal modal so
+// users don't have to save-as-draft, navigate to the deal, and only then
+// link a property. Paste a Maps link / Plus Code / address / coords /
+// survey number / broker narrative and REDIP creates the parcel inline.
+import PropertyCaptureField from '../components/deal/PropertyCaptureField';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 // DealCard was extracted from this file (2026-05-25) when DealsPage
@@ -97,6 +102,9 @@ export default function DealsPage() {
   // Modal
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
+  // 'pick'    — choose from existing properties or skip (default)
+  // 'capture' — paste-to-create a brand-new property inline before saving the deal
+  const [propertyMode, setPropertyMode] = useState('pick');
 
   // Deep-link target for the Cmd-K "Create new deal" action: when the
   // URL carries ?new=1 (or ?action=create) the create modal opens
@@ -345,6 +353,23 @@ export default function DealsPage() {
   const handleCloseModal = () => {
     setShowModal(false);
     setForm(INITIAL_FORM);
+    setPropertyMode('pick');
+  };
+
+  // SmartCapture inside the New Deal modal — when a property is captured
+  // and saved, attach it to the in-flight deal form and flip back to the
+  // picker (which auto-selects the new property because useCaptureProperty
+  // invalidates the properties query cache).
+  const handlePropertyCaptured = (newPropertyId, newPropertyData) => {
+    setForm((prev) => ({
+      ...prev,
+      propertyId: newPropertyId,
+      // Carry the captured name forward as the default deal name when the
+      // user hasn't typed one yet — saves an extra keystroke for the most
+      // common case (Indian sourcers name the deal after the parcel).
+      name: prev.name || (newPropertyData?.name ? newPropertyData.name : prev.name),
+    }));
+    setPropertyMode('pick');
   };
 
   const handleFormChange = (e) => {
@@ -992,28 +1017,60 @@ export default function DealsPage() {
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">Property</label>
-                <select
-                  name="propertyId"
-                  value={form.propertyId}
-                  onChange={handleFormChange}
-                  className="input w-full"
-                >
-                  <option value="">Add later / source first</option>
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {(p.display_name || p.name || 'Untitled property')}
-                      {p.city ? ` - ${p.city}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-content-secondary">
-                  You can create the deal now and link a property later if sourcing data is still incomplete.
-                </p>
-                {selectedProperty && (
-                  <div className="mt-2 rounded-lg bg-bg-secondary px-3 py-2 text-xs text-content-secondary">
-                    {PROPERTY_TYPE_LABELS[selectedProperty.property_type] || selectedProperty.property_type || 'Property'} in {selectedProperty.city || 'unknown city'}
-                    {selectedProperty.land_area_sqft ? ` · ${Number(selectedProperty.land_area_sqft).toLocaleString('en-IN')} sqft` : ''}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-content-secondary">Property</label>
+                  {propertyMode === 'pick' ? (
+                    <button
+                      type="button"
+                      onClick={() => setPropertyMode('capture')}
+                      className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      + Create new (paste link / Plus Code / address)
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPropertyMode('pick')}
+                      className="text-xs text-content-muted hover:text-content-secondary"
+                    >
+                      ← Pick existing instead
+                    </button>
+                  )}
+                </div>
+
+                {propertyMode === 'pick' ? (
+                  <>
+                    <select
+                      name="propertyId"
+                      value={form.propertyId}
+                      onChange={handleFormChange}
+                      className="input w-full"
+                    >
+                      <option value="">Add later / source first</option>
+                      {properties.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {(p.display_name || p.name || 'Untitled property')}
+                          {p.city ? ` - ${p.city}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-content-secondary">
+                      You can create the deal now and link a property later if sourcing data is still incomplete.
+                    </p>
+                    {selectedProperty && (
+                      <div className="mt-2 rounded-lg bg-bg-secondary px-3 py-2 text-xs text-content-secondary">
+                        {PROPERTY_TYPE_LABELS[selectedProperty.property_type] || selectedProperty.property_type || 'Property'} in {selectedProperty.city || 'unknown city'}
+                        {selectedProperty.land_area_sqft ? ` · ${Number(selectedProperty.land_area_sqft).toLocaleString('en-IN')} sqft` : ''}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-primary-200 bg-primary-50/30 p-3">
+                    <PropertyCaptureField
+                      onSaved={handlePropertyCaptured}
+                      onCancel={() => setPropertyMode('pick')}
+                      compact
+                    />
                   </div>
                 )}
               </div>
