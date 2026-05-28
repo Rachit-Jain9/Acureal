@@ -212,6 +212,9 @@ function CandidatePreview({
           type="text"
           value={editedName}
           onChange={(e) => onChangeName(e.target.value)}
+          // Swallow Enter so the field doesn't submit a parent form
+          // (e.g. when this component is nested inside the New Deal modal).
+          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
           className="input text-sm"
           placeholder="e.g. Devanahalli Land Parcel"
         />
