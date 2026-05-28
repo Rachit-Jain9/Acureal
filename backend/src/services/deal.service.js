@@ -94,6 +94,13 @@ const dealSelect = `
   p.state,
   p.lat,
   p.lng,
+  -- property_lat / property_lng are the canonical aliases for downstream
+  -- services (dealWorkspace, dealStructureRecommender, IC readiness comps,
+  -- exports). The bare p.lat / p.lng lines above stay for legacy frontend
+  -- consumers (ParcelTab, MapPage, mapConfig, CompsTab, SiteWeatherCard).
+  -- Same column, two names -- additive, no breaking changes.
+  p.lat  AS property_lat,
+  p.lng  AS property_lng,
   p.land_area_sqft,
   p.land_area_acres,
   p.zoning,

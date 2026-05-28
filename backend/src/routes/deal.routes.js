@@ -378,8 +378,11 @@ router.get('/:id/benchmark-bands', authenticate, async (req, res, next) => {
     const { getCompsNearLocation } = require('../services/comps.service');
     const { inferAssetClass } = require('../utils/assetClass');
 
-    // Coords come from the deal's joined property (property_lat / property_lng
-    // in the dealSelect SQL) OR the deal's own lat/lng fallback.
+    // Coords come from the deal's joined property — exposed by dealSelect as
+    // both `property_lat`/`property_lng` (canonical, used by workspace +
+    // recommender + IC readiness) and legacy `lat`/`lng` (used by ParcelTab +
+    // MapPage + comps frontend). Read the canonical alias first; fall back to
+    // the legacy name only for older callers that bypass dealSelect.
     const lat = deal.property_lat || deal.lat;
     const lng = deal.property_lng || deal.lng;
     if (lat == null || lng == null) {
