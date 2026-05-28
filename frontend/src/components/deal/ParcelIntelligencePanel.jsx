@@ -15,7 +15,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { Card, ErrorState, SectionHeader } from '../../design-system';
+import { Card, CollapsibleCard, ErrorState, SectionHeader } from '../../design-system';
 import Badge from '../common/Badge';
 import {
   useParcelIntelligence,
@@ -594,21 +594,23 @@ function KgisMapCard({ intelligence, propertyId, canEdit }) {
   const hierarchy = kgis?.hierarchy || {};
   const hasCoords = Boolean(lat && lng);
 
+  // PR Lane E (2026-05-28) — the K-GIS map is a heavyweight render
+  // (Leaflet tiles, 440px height). Most operators glance at it only
+  // when they want to verify the parcel reference point geometry;
+  // having it expanded on every page load eats ~500px of vertical
+  // space + delays first interactive paint by the leaflet hydration.
+  // Default-collapsed; localStorage persists the operator's choice
+  // across sessions per CollapsibleCard's built-in behaviour.
   return (
-    <Card className="p-0 overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-hairline-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
-            <MapPin size={15} />
-            K-GIS reference context
-          </div>
-          <p className="mt-1 text-xs text-content-secondary">
-            Cadastral boundary, hierarchy, and reference geometry. Toggle Streets ↔ Satellite or expand to fullscreen.
-          </p>
-        </div>
-        <StatusPill status={kgis?.status} />
-      </div>
-      <div className="space-y-4 p-5">
+    <CollapsibleCard
+      id="parcel-intel-kgis-map"
+      icon={MapPin}
+      title="K-GIS reference context"
+      sub="Cadastral boundary, hierarchy, and reference geometry. Toggle Streets ↔ Satellite or expand to fullscreen."
+      defaultExpanded={false}
+      meta={<StatusPill status={kgis?.status} />}
+    >
+      <div className="space-y-4 pt-3">
         {hasCoords ? (
           <ReadOnlyPropertyMap
             lat={lat}
@@ -632,7 +634,7 @@ function KgisMapCard({ intelligence, propertyId, canEdit }) {
           </div>
         ) : null}
       </div>
-    </Card>
+    </CollapsibleCard>
   );
 }
 
@@ -929,20 +931,17 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
 
           <LocalityIntelligenceCard data={intelligence?.locality_intelligence} />
 
-          <Card className="p-0 overflow-hidden">
-            <div className="flex flex-col gap-3 border-b border-hairline-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
-                  <Layers3 size={15} />
-                  Evidence buckets
-                </div>
-                <p className="mt-1 text-xs text-content-secondary">
-                  Verified source data, inferred calculations, and items pending authority or analyst review.
-                </p>
-              </div>
+          <CollapsibleCard
+            id="parcel-intel-evidence-buckets"
+            icon={Layers3}
+            title="Evidence buckets"
+            sub="Verified source data, inferred calculations, and items pending authority or analyst review."
+            defaultExpanded={false}
+            meta={
               <div
                 role="tablist"
                 className="inline-flex rounded-editorial border border-hairline bg-bg-secondary p-1"
+                onClick={(e) => e.stopPropagation()}
               >
                 {TABS.map((tab) => (
                   <button
@@ -950,7 +949,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
                     type="button"
                     role="tab"
                     aria-selected={activeTab === tab.key}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={(e) => { e.stopPropagation(); setActiveTab(tab.key); }}
                     className={clsx(
                       'rounded px-3 py-1.5 text-xs font-medium transition-colors',
                       activeTab === tab.key
@@ -962,8 +961,9 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="p-5">
+            }
+          >
+            <div className="pt-3">
               <BucketList
                 items={bucket}
                 empty={
@@ -982,7 +982,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
                 unverifyingId={unverifyMutation.isPending ? unverifyMutation.variables?.linkId : null}
               />
             </div>
-          </Card>
+          </CollapsibleCard>
         </div>
 
         <div className="space-y-5">
@@ -993,20 +993,17 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
 
       <KgisMapCard intelligence={intelligence} propertyId={propertyId} canEdit={canEdit} />
 
-      <Card className="p-0 overflow-hidden">
-        <div className="border-b border-hairline-soft px-5 py-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
-            <Landmark size={15} />
-            Authority verification
-          </div>
-          <p className="mt-1 text-xs text-content-secondary">
-            Use these links for manual authority checks. Upload resulting PDFs to promote facts into verified evidence.
-          </p>
-        </div>
-        <div className="p-5">
+      <CollapsibleCard
+        id="parcel-intel-authority-verification"
+        icon={Landmark}
+        title="Authority verification"
+        sub="Use these links for manual authority checks. Upload resulting PDFs to promote facts into verified evidence."
+        defaultExpanded={false}
+      >
+        <div className="pt-3">
           <VerificationLinks links={intelligence?.verification_links} onUploadClick={onUploadClick} />
         </div>
-      </Card>
+      </CollapsibleCard>
 
       <div className="rounded-editorial border border-hairline-soft bg-bg-secondary p-4">
         <div className="flex items-start gap-3">
