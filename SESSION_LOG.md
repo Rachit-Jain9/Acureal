@@ -7977,3 +7977,219 @@ Two regression tests guard the copy.
 
 - Decompose MasterPlanAdminPage.jsx (next-largest god-file).
 - Continue Task #10 work if any further DB hygiene surfaces.
+
+## 2026-05-28 (10h block) — Deal-page audit cleanup + ontology drift guard
+
+### What was worked on
+
+Single-session response to a screenshot audit of the deal page. The
+operator listed five concerns across five images on the Overview +
+Zoning tabs; this block addresses every one and adds the strategic-
+review's remaining ontology-adoption gap.
+
+**Lane A — coordinate alias bug (PR #631).**
+
+`dealWorkspace.service.js:292`, `:426`, and
+`dealStructureRecommender.service.js:389` read `deal.property_lat` /
+`deal.property_lng` off the deal record, but `dealSelect` in
+`deal.service.js` was aliasing `p.lat` / `p.lng` as bare `lat` / `lng`.
+The names never matched, so the gate always returned the
+`no_parcel_coordinates` empty state — even for deals with a fully
+geocoded property. Three panels (Micro-Market Briefing, Best Use
+Simulator, market-posture sub-score of the Deal-Structure Recommender)
+plus IC-readiness comps-proximity were silently broken on every deal
+in production for weeks.
+
+Fix: additive `p.lat AS property_lat, p.lng AS property_lng` aliases.
+Legacy `lat` / `lng` retained for the five frontend consumers
+(ParcelTab, MapPage, CompsTab, mapConfig, SiteWeatherCard) that read
+`deal.lat` directly — same column, two names, no breaking change.
+Two regression tests pin the contract in `dealWorkspace.service.test.js`.
+
+**Lane B — Deal-Structure Recommender rationale rewrite (PR #632).**
+
+The recommender's 8 cards used to share three near-identical rationale
+lines: the structure one-liner, "neutral market posture" (when no
+micro-market data), and a generic "unverified promoter × X
+compatibility" template. That last line was the same on every row of
+every deal where the promoter wasn't seeded — which made the whole
+recommender feel templated even though the underlying scorer was
+real.
+
+Replaced the template with a posture × structure × score-tier
+callout ("Cleared promoter — clean fit with outright", "Flagged
+promoter — outright offers no protection; high exposure", etc.).
+Rewrote the rationale composer to lead with the structure description,
+surface the strongest score driver for THIS row (market posture if
+informative; otherwise the more distinctive of capital efficiency
+vs execution complexity by midpoint distance), then close with the
+promoter callout. Score arithmetic, verdict thresholds, closed verb
+dictionary, and hard floor for invalid pairs are unchanged. 7 new
+tests pin the new composition; a sweep proves the old generic
+template can't reappear on any structure × posture combination.
+
+**Lane C — retire What-if buildability + Executive narrative (PR #633).**
+
+Two surfaces on the Zoning tab that did not earn their complexity:
+
+  - WhatIfBuildability — slider tool that, in practice, rendered "No
+    reviewed residential FAR rule matches this combination" for most
+    deals (the seeded bands cover a narrower envelope than the
+    typical deal's plot/road combo). Genuine sensitivities live in
+    the Financial Model.
+
+  - ParcelNarrativeCard ("Executive narrative") — on-demand Claude
+    rephraser that turned the deterministic verdict snapshot into a
+    2-paragraph prose summary. CLAUDE.md (operator override
+    2026-05-19) is explicit that the customer-facing surface should
+    NOT lean on AI as a marketing concept; the deterministic
+    VerdictBanner above it already says "Proceed With Caution — 70%
+    confidence — 2 medium, 2 low flags" in one glance.
+
+Full removal — frontend cards, frontend hooks
+(`useGenerateParcelNarrative`, `useCachedParcelNarrative`), frontend
+API methods, backend service (`parcelNarrative.service.js`), backend
+routes (POST + GET `/properties/:id/parcel-intelligence/narrative`),
+`parcel_narrative` from `aiArtifacts SUPPORTED_ARTIFACT_TYPES`,
+`parcel_narrative` from the A/B eval harness `TASKS` registry +
+persistence `TREND_TASKS` + validation + admin route defaults + CLI
+defaults, regenerated `ab-eval-deals.json` fixtures without
+`parcel_payload`. Net deletion: ~3,200 lines + one less Claude call
+per deal-page view.
+
+**Lane D — auto-fill CTA inside Buildable envelope (PR #634).**
+
+The "Buildability needs verification" empty state on the Overview
+tab's Buildable envelope was truthful but inert — the operator had
+no way to know what to do next without already understanding the
+extraction workflow. The auto-fill workflow that solves this lived
+buried in the Documents tab.
+
+Two affordances threaded directly into the card's empty state:
+
+  - When pending extractions exist for any of the eight buildability
+    fields (land_area_sqft, land_area_acres, road_width_m,
+    road_width_mtrs, permissible_fsi, existing_fsi, frontage_mtrs,
+    depth_mtrs) — render an "Auto-fill N fields from documents"
+    button that opens the same modal mounted from the Documents-tab
+    header. The number is computed from the field_map roll-up.
+  - When no buildability extractions are pending — render an "Upload
+    a sanctioned plan or RTC" button that hops to the Documents tab
+    via the existing setSearchParams tab switcher. Hidden when the
+    panel is mounted standalone on PropertyDetailPage (no setTab
+    handler).
+
+The amber warning above the CTA also gained a structured 3-bullet
+checklist naming exactly what's needed — master-plan zone, land
+area in sqft, road width in metres — the literal inputs the FAR
+matrix indexes on.
+
+**Lane E — compress Zoning tab layout (PR #635).**
+
+ParcelIntelligencePanel was a wall of fully-expanded cards. The
+information-dense head (verdict banner + 8 metric tiles + red flags)
+was buried beneath ~1,200px of disclosure surface most operators
+rarely need on first paint.
+
+Wrapped three secondary sections in CollapsibleCard (default-
+collapsed, localStorage-persisted per section):
+
+  - parcel-intel-evidence-buckets (Verified / Inferred / Needs review
+    tabs — switcher moved into the meta slot so changing tabs
+    doesn't require expanding the section first)
+  - parcel-intel-kgis-map (440px Leaflet map — only hydrates on
+    operator open, measurable first-paint win)
+  - parcel-intel-authority-verification (6+ deep links)
+
+Plus stabilised a pre-existing flaky test
+(`usePrefetchDealWorkspace`) — wrapped the cache-key assertion in
+`waitFor` so React Query's microtask cache flush has time to land
+before the synchronous read.
+
+**Lane F — derive DEAL_STRUCTURES from the ontology (PR #636).**
+
+Strategic Review §VI Priority 1 flagged drift risk between the four
+places encoding deal-structure / asset-class taxonomies. Workstream
+F (frontend, earlier) had already locked frontend ↔ backend ↔
+ontology via contract tests. The remaining backend gap was
+`domain.js DEAL_STRUCTURES` — a hardcoded 8-string array next to the
+ontology's `deal_structure.values`. Replaced with
+`getDealStructureKeys()` from the ontology package. Strictly stronger
+than a parity test — the constant cannot drift because it IS the
+ontology. Added `tests/ontology.parity.test.js` to lock the remaining
+drift surfaces (assetClasses.js rich config + dealStructureMatrix.js
+backend mirror — 5 assertions).
+
+### PRs opened / merged
+
+All six landed on master in this block. Operator-approved batch merge
+with explicit "Pls merge+push+commit+deploy" authorization.
+
+- PR #631 — fix(workspace): expose property_lat/property_lng on the
+  deal record — merged
+- PR #632 — feat(recommender): rewrite rationale composition to
+  surface deal-specific drivers — merged
+- PR #633 — chore(deal): retire What-if buildability + Executive
+  narrative — merged
+- PR #634 — feat(deal): surface auto-fill CTA inside Buildable
+  envelope card — merged
+- PR #635 — feat(deal): compress Zoning tab — disclose K-GIS map /
+  evidence buckets / authority links — merged
+- PR #636 — refactor(domain): derive DEAL_STRUCTURES from the
+  ontology + add parity guard — merged
+
+### Plain-English recap (operator)
+
+- **The "Add coordinates" empty state is gone on geocoded deals.**
+  Three panels that were silently broken on every deal — Micro-Market
+  Briefing, Best Use Simulator, the market-aware part of the Deal
+  Structure scoring — now light up automatically the moment a deal
+  has a linked geocoded property.
+- **Each Recommender row now reads distinctly.** The "unverified
+  promoter × X compatibility" template is gone; each of the 8
+  structures gets a posture- and score-aware callout that explains
+  why IT scored where it did on THIS deal.
+- **The Zoning tab is roughly half as tall on first paint.** The
+  verdict banner + 8 metric tiles + red flags remain prominent; the
+  K-GIS map, evidence buckets, and authority links collapse by default
+  and remember the operator's choice across sessions.
+- **The Buildable envelope warning is now actionable.** When the
+  card needs FSI / road width / area, it offers either an
+  "Auto-fill N fields from documents" button (when REDIP has already
+  extracted them) or an "Upload a sanctioned plan or RTC" button —
+  no more dead-end "Buildability needs verification" copy.
+- **The What-if slider and Executive narrative cards are gone**, per
+  your audit. ~3,200 lines deleted; one fewer Claude call per
+  page view.
+- **Adding a deal structure now takes one file edit instead of
+  three.** The backend constant is derived from the canonical
+  ontology, with a CI test that catches future drift on the
+  assetClasses + dealStructureMatrix mirrors.
+
+### Validation
+
+- Backend: 168 suites / 2932 tests pass on each PR
+- Frontend: 121 files / 1034 tests pass on each PR
+- Frontend Vite build: clean on each PR (~11s, ~350KB index gzip)
+- CI: 7/7 checks green on every PR
+- Vercel production deploy: success on each merge
+
+Live in-browser verification skipped — `redip.vercel.app` requires
+operator login and per privacy rules the agent cannot authenticate on
+the operator's behalf. Vercel deploy success + green CI is the
+strongest non-manual proof available.
+
+### What's left to do
+
+- Operator-side TODOs unchanged from TODO_OPERATOR.md (backups,
+  lawyer for DPA + AUP, two incident-runbook names, security@
+  mailbox, eventual schema squash).
+- Strategic Review §VI items completed in this block — Priority 1
+  closed (ontology drift guard); Priority 2 (live market-benchmark
+  warnings) was already shipped via PR-NX52 + PR-NX56 (2026-05-19);
+  Priority 3 (One Brain / DealContext Phase A) is partially shipped
+  via the `/api/deals/:id/workspace` endpoint + DealContextProvider —
+  remaining work is migrating individual tabs to the shared context
+  (incremental, lower-leverage than this block's lanes).
+- Decompose MasterPlanAdminPage.jsx (Task #6 continuation) when
+  another maintainability sweep is queued.
