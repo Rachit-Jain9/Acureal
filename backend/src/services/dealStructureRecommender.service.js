@@ -257,6 +257,82 @@ const bandFor = (score) => {
 //  Composer — score one structure for the deal
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Promoter-posture callout — composes f2's `signal` line.
+//
+//  Replaces the previous generic template ("unverified promoter × X compatibility")
+//  with a specific sentence keyed on (posture, structure, score-tier). The
+//  score is the lookup-table value from PROMOTER_COMPATIBILITY (0-25); we
+//  bracket it into three tiers so the prose can reflect whether the structure
+//  contains the promoter risk well, partially, or not at all.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const niceStructure = (s) => s.replace(/_/g, ' ');
+
+const promoterCallout = ({ posture, structure, score }) => {
+  const safePosture = PROMOTER_COMPATIBILITY[posture] ? posture : 'unverified';
+  const tier = score >= 20 ? 'strong' : score >= 14 ? 'workable' : 'weak';
+  const sName = niceStructure(structure);
+
+  if (safePosture === 'cleared') {
+    if (tier === 'strong') return `Cleared promoter — clean fit with ${sName}`;
+    if (tier === 'workable') return `Cleared promoter — ${sName} adds incremental governance overhead`;
+    return `Cleared promoter, but ${sName} adds friction with no upside protection`;
+  }
+  if (safePosture === 'flagged') {
+    if (tier === 'strong') return `Flagged promoter — ${sName} contains the risk (escrow/audit/SPV protections)`;
+    if (tier === 'workable') return `Flagged promoter — ${sName} offers partial protection; bolt-on covenants needed`;
+    return `Flagged promoter — ${sName} offers no protection; high exposure`;
+  }
+  // unverified
+  if (tier === 'strong') return `Unverified promoter — ${sName} is workable until DD lands (escrow/audit clauses do the work)`;
+  if (tier === 'workable') return `Unverified promoter — ${sName} is workable but defer commit until DD completes`;
+  return `Unverified promoter — ${sName} exposes us before DD; defer or hard-tie`;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Rationale composer — picks the most informative 2-3 lines for this row.
+//
+//  The previous composer always emitted the same three lines: profile blurb,
+//  market posture, "unverified promoter × X compatibility". Result: every row
+//  on every deal looked the same. This version leads with the structure
+//  description, then picks the strongest score driver for THIS row, then
+//  closes with the promoter callout.
+//
+//  Score-driver pick:
+//    1. Market posture (if informative — i.e. micro-market data exists AND the
+//       sub-scorer added or subtracted from the 8/15 baseline)
+//    2. Otherwise the more distinctive of capital_efficiency vs execution_
+//       complexity — measured by absolute distance from the per-factor
+//       midpoint. e.g. ground_lease has capital_efficiency 20/20 (max,
+//       distance 0.5) — that's the line to surface; outright has
+//       execution_complexity 14/15 (near-max) — that's its standout.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const isMarketSignalInformative = (signal) =>
+  signal !== 'neutral market posture' &&
+  signal !== 'no micro-market data — neutral market posture';
+
+const pickScoreDriver = (factors) => {
+  if (isMarketSignalInformative(factors.market_posture.signal)) {
+    return factors.market_posture.signal;
+  }
+  const capDistance = Math.abs(factors.capital_efficiency.score / 20 - 0.5);
+  const exeDistance = Math.abs(factors.execution_complexity.score / 15 - 0.5);
+  return capDistance >= exeDistance
+    ? factors.capital_efficiency.signal
+    : factors.execution_complexity.signal;
+};
+
+const buildRationale = ({ validity, profile, factors }) => {
+  if (!validity.valid) return [validity.reason];
+  return [
+    profile.one_liner,
+    pickScoreDriver(factors),
+    factors.promoter_compatibility.signal,
+  ];
+};
+
 const scoreStructure = ({ structure, assetClass, promoterPosture, microMarket }) => {
   const profile = STRUCTURE_PROFILES[structure];
   if (!profile) return null;
@@ -267,13 +343,13 @@ const scoreStructure = ({ structure, assetClass, promoterPosture, microMarket })
     ? { score: 25, of: 25, signal: `Compatible with ${assetClass}` }
     : { score: 0, of: 25, signal: validity.reason || `Invalid pair with ${assetClass}` };
 
-  // Factor 2: Promoter compatibility — lookup table.
+  // Factor 2: Promoter compatibility — lookup table + posture-aware prose.
   const promoterRow = PROMOTER_COMPATIBILITY[promoterPosture] || PROMOTER_COMPATIBILITY.unverified;
   const promoterScore = promoterRow[structure] ?? 12;
   const f2 = {
     score: promoterScore,
     of: 25,
-    signal: `${promoterPosture || 'unverified'} promoter × ${structure} compatibility`,
+    signal: promoterCallout({ posture: promoterPosture, structure, score: promoterScore }),
   };
 
   // Factor 3: Capital efficiency — per-structure baseline.
@@ -282,10 +358,10 @@ const scoreStructure = ({ structure, assetClass, promoterPosture, microMarket })
     of: 20,
     signal:
       profile.capital_efficiency >= 16
-        ? 'low equity tie-up — capital-efficient'
+        ? `Low equity tie-up — ${niceStructure(structure)} is capital-efficient`
         : profile.capital_efficiency >= 10
-          ? 'moderate equity tie-up'
-          : 'high equity tie-up',
+          ? `Moderate equity tie-up for ${niceStructure(structure)}`
+          : `High equity tie-up — ${niceStructure(structure)} ties up developer balance sheet`,
   };
 
   // Factor 4: Market posture — depends on absorption + price YoY.
@@ -298,10 +374,10 @@ const scoreStructure = ({ structure, assetClass, promoterPosture, microMarket })
     of: 15,
     signal:
       profile.execution_complexity >= 12
-        ? 'execution simple'
+        ? `Execution is simple — ${niceStructure(structure)} runs on standard contracts`
         : profile.execution_complexity >= 7
-          ? 'execution moderate'
-          : 'execution complex — bespoke contracts',
+          ? `Execution moderate — ${niceStructure(structure)} needs careful drafting`
+          : `Execution complex — ${niceStructure(structure)} requires bespoke contracts`,
   };
 
   // Hard floor: invalid pair always scores below "Stress-test" so it never
@@ -311,17 +387,17 @@ const scoreStructure = ({ structure, assetClass, promoterPosture, microMarket })
     total = Math.min(total, 12); // forces Flag
   }
 
-  // Compose the rationale — 2-3 lines, lead with the headline reason.
-  const rationale = [];
-  if (!validity.valid) {
-    rationale.push(validity.reason);
-  } else {
-    rationale.push(profile.one_liner);
-    if (f4.signal !== 'neutral market posture' && f4.signal !== 'no micro-market data — neutral market posture') {
-      rationale.push(f4.signal);
-    }
-    if (rationale.length < 3) rationale.push(f2.signal);
-  }
+  const rationale = buildRationale({
+    validity,
+    profile,
+    factors: {
+      structural_validity:    f1,
+      promoter_compatibility: f2,
+      capital_efficiency:     f3,
+      market_posture:         f4,
+      execution_complexity:   f5,
+    },
+  });
 
   return {
     deal_structure: structure,
