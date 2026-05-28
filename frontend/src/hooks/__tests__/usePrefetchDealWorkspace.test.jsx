@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock the API the hook fans out to so we can observe the prefetch
@@ -77,9 +77,15 @@ describe('usePrefetchDealWorkspace', () => {
     await act(async () => {
       await getPrefetch()('deal-3');
     });
-    expect(qc.getQueryData(['deal-workspace', 'deal-3'])).toMatchObject({
-      id: 'deal-3',
-      name: 'Whitefield JV',
+    // React Query writes to the cache after the queryFn promise resolves,
+    // which happens in a microtask the `await` above doesn't always flush
+    // before the next synchronous read on CI. `waitFor` polls until the
+    // microtask drains — local + CI both deterministic.
+    await waitFor(() => {
+      expect(qc.getQueryData(['deal-workspace', 'deal-3'])).toMatchObject({
+        id: 'deal-3',
+        name: 'Whitefield JV',
+      });
     });
   });
 });
