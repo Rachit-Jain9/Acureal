@@ -214,6 +214,48 @@ router.get(
   },
 );
 
+// POST /properties/capture — Smart Property Capture orchestrator.
+//
+// Accepts ANY of: Google Maps URL / shortlink, Plus Code, lat-lng pair,
+// survey-number reference, plain address, or free-text broker narrative.
+// Classifies the input, resolves it to coordinates + address via the most
+// appropriate provider (Google Maps URL fetch / Plus-Code geocoding /
+// reverse-geocode / address-cascade / Gemini free-text extraction), then
+// fans out to deriveParcelContextFromAddress so the candidate carries
+// BBMP ward, K-GIS hierarchy, guidance value, and verification links by
+// the time the response leaves the server.
+//
+// Returns a candidate payload (no DB write). The frontend renders the
+// preview card and POSTs the suggestedFields to /properties on Save.
+//
+// Critical: must stay ABOVE the `GET /:id` catch-all below — Express
+// matches in registration order and `:id` would greedily capture
+// "capture" otherwise (the PR #380 ordering bug pattern).
+router.post(
+  '/capture',
+  authenticate,
+  requireAdminOrAnalyst,
+  [
+    body('input').isString().withMessage('input must be a string').trim().isLength({ min: 1, max: 4000 }),
+    body('aiAssisted').optional().isBoolean(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const captureService = require('../services/propertyCapture.service');
+      const candidate = await captureService.captureProperty(req.body.input, {
+        aiAssisted: req.body.aiAssisted !== false,
+      });
+      // Short browser cache so debounced typeahead doesn't burn extra
+      // Gemini / Google calls for identical inputs within a session.
+      res.set('Cache-Control', 'private, max-age=30');
+      res.json({ success: true, data: candidate });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // GET /properties/:id
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
