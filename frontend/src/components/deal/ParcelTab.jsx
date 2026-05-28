@@ -3,11 +3,9 @@ import { Link } from 'react-router-dom';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { ExternalLink, MapPin, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
 import { formatArea, formatDate } from '../../utils/format';
-import { ZONING_CONFIG } from '../../utils/zoning';
 import { SQFT_PER_ACRE } from '../../config/india';
 import {
   useProperties,
-  useCreateProperty,
   useUpdateProperty,
   useApplyAutoDerivedContext,
   useParcelIntelligence,
@@ -21,6 +19,11 @@ import AutoFillParcelContextCard from './AutoFillParcelContextCard';
 // PR-NX50 (2026-05-19) — inline provenance chips on auto-filled fields.
 import ProvenanceChip from '../common/ProvenanceChip';
 import { useFieldProvenance } from '../../hooks/useFieldProvenance';
+// Smart Property Capture — replaces the legacy 7-field create-new form
+// with a single paste box that accepts Google Maps links, Plus Codes,
+// lat/lng, survey numbers, addresses, or broker narratives, and resolves
+// to an enriched candidate (BBMP ward, K-GIS, guidance value, verify links).
+import PropertyCaptureField from './PropertyCaptureField';
 
 function FieldRow({ label, value, span = false, field, provenance }) {
   if (!value && value !== 0) return null;
@@ -43,13 +46,8 @@ function PropertyPickerModal({ dealId, onClose }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState('search'); // 'search' | 'create'
-  const [createForm, setCreateForm] = useState({
-    name: '', address: '', city: 'Bengaluru', state: 'Karnataka', pincode: '',
-    propertyType: 'land', zoning: 'residential',
-  });
   const searchRef = useRef(null);
   const updateDeal = useUpdateDeal();
-  const createProperty = useCreateProperty();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -77,17 +75,14 @@ function PropertyPickerModal({ dealId, onClose }) {
     }
   };
 
-  const handleCreateAndLink = async (e) => {
-    e.preventDefault();
+  // SmartCapture handles property creation; we just link the new ID to the deal.
+  const handleCaptureSaved = async (newPropertyId) => {
+    if (!newPropertyId) return;
     try {
-      const result = await createProperty.mutateAsync(createForm);
-      const newPropertyId = result.data?.id || result.data;
-      if (newPropertyId) {
-        await updateDeal.mutateAsync({ id: dealId, data: { propertyId: newPropertyId } });
-      }
+      await updateDeal.mutateAsync({ id: dealId, data: { propertyId: newPropertyId } });
       onClose();
     } catch {
-      // handled by mutation hooks
+      // handled by mutation hook
     }
   };
 
@@ -101,7 +96,7 @@ function PropertyPickerModal({ dealId, onClose }) {
       aria-modal="true"
       aria-labelledby="link-property-dialog-title"
     >
-      <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
+      <div className={`bg-bg-elevated rounded-xl shadow-xl w-full mx-4 my-auto ${mode === 'create' ? 'max-w-2xl' : 'max-w-lg'}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
           <h3 id="link-property-dialog-title" className="text-base font-bold text-content-primary flex items-center gap-2">
@@ -222,93 +217,16 @@ function PropertyPickerModal({ dealId, onClose }) {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleCreateAndLink} className="px-5 py-4 space-y-3">
+          <div className="px-5 py-4 space-y-3">
             <p className="text-xs text-content-secondary">
-              Create a new property record and link it to this deal in one step.
+              Paste a Google Maps link, Plus Code, coordinates, survey number, address, or broker message — REDIP will resolve it and fill the parcel record. Create-and-link in one step.
             </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-content-secondary mb-1">
-                  Property Name (optional)
-                </label>
-                <input
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                  className="input text-sm"
-                  placeholder="e.g. Devanahalli Land Parcel"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-content-secondary mb-1">
-                  Street Address (optional)
-                </label>
-                <input
-                  type="text"
-                  value={createForm.address}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, address: e.target.value }))}
-                  className="input text-sm"
-                  placeholder="Sy No., Village, Hobli..."
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">City</label>
-                <input
-                  type="text"
-                  value={createForm.city}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, city: e.target.value }))}
-                  className="input text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">State</label>
-                <input
-                  type="text"
-                  value={createForm.state}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, state: e.target.value }))}
-                  className="input text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Pincode</label>
-                <input
-                  type="text"
-                  value={createForm.pincode}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, pincode: e.target.value }))}
-                  className="input text-sm"
-                  placeholder="560001"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Zoning</label>
-                <select
-                  value={createForm.zoning}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, zoning: e.target.value }))}
-                  className="input text-sm"
-                >
-                  {ZONING_CONFIG.map((zone) => (
-                    <option key={zone.value} value={zone.value}>{zone.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-1">
-              <button type="button" onClick={onClose} className="btn btn-secondary text-sm">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={createProperty.isPending || updateDeal.isPending}
-                className="btn btn-primary text-sm disabled:opacity-50"
-              >
-                {createProperty.isPending || updateDeal.isPending
-                  ? 'Creating...'
-                  : 'Create & Link'}
-              </button>
-            </div>
-          </form>
+            <PropertyCaptureField
+              onSaved={handleCaptureSaved}
+              onCancel={onClose}
+              compact
+            />
+          </div>
         )}
       </div>
     </div>
