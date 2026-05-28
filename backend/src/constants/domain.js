@@ -111,16 +111,14 @@ const canTransitionStage = (fromStage, toStage) => {
   return allowedTransitions.includes(toStage);
 };
 
-const DEAL_STRUCTURES = [
-  'outright',
-  'jv',
-  'jda',
-  'revenue_share',
-  'area_share',
-  'profit_share',
-  'ground_lease',
-  'hybrid',
-];
+// DEAL_STRUCTURES is derived from `@redip/real-estate-ontology` so the
+// list stays in lockstep with the single source of truth that backs
+// extraction, exports, and the UI. Anyone adding a new structure adds
+// it to packages/real-estate-ontology/src/v1.json, and this constant
+// (plus every place that imports it) picks it up automatically. The
+// parity test in tests/ontology.parity.test.js locks the contract.
+const { getDealStructureKeys } = require('../../../packages/real-estate-ontology/src');
+const DEAL_STRUCTURES = getDealStructureKeys();
 
 const DOC_TYPES = [
   'title_deed',

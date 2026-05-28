@@ -34,6 +34,13 @@ jest.mock('../src/services/dealApplyExtractions.service', () => ({}));
 jest.mock('../../packages/real-estate-ontology/src', () => ({
   fields: {},
   getOntologyVersion: () => '1.0.0',
+  // domain.js DEAL_STRUCTURES is derived from the ontology (PR Lane G,
+  // 2026-05-28); the mock must surface the same 8 keys so the express
+  // validator's isIn() check matches the real list at runtime.
+  getDealStructureKeys: () => [
+    'outright', 'jv', 'jda', 'revenue_share',
+    'area_share', 'profit_share', 'ground_lease', 'hybrid',
+  ],
 }), { virtual: true });
 jest.mock('../src/config/database', () => ({ query: jest.fn() }));
 
