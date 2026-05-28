@@ -37,12 +37,10 @@ import { toast } from '../components/common/Toast';
 //     itself does no math.
 
 const TASK_LABELS = {
-  parcel_narrative: 'Parcel verdict narrative',
   export_insights:  'Export deck IC opinion',
 };
 
 const TASK_DESCRIPTIONS = {
-  parcel_narrative: 'The 60–200 word verdict shown on every parcel detail card.',
   export_insights:  'The IC-style opinion paragraph on the deal export deck.',
 };
 
@@ -109,9 +107,8 @@ const pickWinner = (summaryByCandidate) => {
 
 // ── Standing quality trend — Workstream C3 ───────────────────────────────
 
-const TREND_TASKS = ['parcel_narrative', 'export_insights'];
+const TREND_TASKS = ['export_insights'];
 const TREND_TASK_LABELS = {
-  parcel_narrative: 'Parcel verdict narrative',
   export_insights: 'Export deck IC opinion',
 };
 
@@ -251,7 +248,7 @@ export function QualityTrendPanel() {
 }
 
 function RunTriggerCard({ onRunComplete }) {
-  const [task, setTask] = useState('parcel_narrative');
+  const [task, setTask] = useState('export_insights');
   const [limit, setLimit] = useState(10);
   const [candidatesText, setCandidatesText] = useState('claude:claude-sonnet-4-6, openai:gpt-5.4-mini');
   const [running, setRunning] = useState(false);
@@ -308,7 +305,6 @@ function RunTriggerCard({ onRunComplete }) {
             disabled={running}
             className="w-full text-sm border border-hairline rounded-md px-2 py-1.5 bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <option value="parcel_narrative">Parcel verdict narrative</option>
             <option value="export_insights">Export deck IC opinion</option>
           </select>
           <p className="mt-1 text-[10px] text-content-muted">

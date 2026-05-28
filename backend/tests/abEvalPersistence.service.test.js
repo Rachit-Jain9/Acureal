@@ -37,13 +37,12 @@ const USER_ID = 'user-1';
 const buildFixtures = (n) =>
   Array.from({ length: n }, (_, i) => ({
     id: `fx-${String(i + 1).padStart(2, '0')}`,
-    parcel_payload: { parcel: { name: `Project ${i}` } },
-    deal_payload: {},
+    deal_payload: { deal: { name: `Project ${i}` } },
   }));
 
 const sampleEvalResult = {
-  task: 'parcel_narrative',
-  task_label: 'Parcel verdict narrative',
+  task: 'export_insights',
+  task_label: 'Export deck IC opinion',
   candidate_ids: ['claude:c46', 'openai:g54m'],
   results: {
     'claude:c46': {
@@ -115,7 +114,7 @@ describe('createRun', () => {
     });
     const out = await persistence.createRun({
       organizationId: ORG_ID,
-      task: 'parcel_narrative',
+      task: 'export_insights',
       candidateIds: ['a', 'b'],
       fixtureCount: 5,
       totalCalls: 10,
@@ -134,7 +133,7 @@ describe('createRun', () => {
     query.mockRejectedValueOnce(err);
     const out = await persistence.createRun({
       organizationId: ORG_ID,
-      task: 'parcel_narrative',
+      task: 'export_insights',
       candidateIds: ['a', 'b'],
       fixtureCount: 5,
       totalCalls: 10,
@@ -145,7 +144,7 @@ describe('createRun', () => {
 
   test('rejects when organizationId is missing', async () => {
     await expect(
-      persistence.createRun({ task: 'parcel_narrative', candidateIds: ['a', 'b'], fixtureCount: 1, totalCalls: 2, estimatedCostUsd: 0.01 }),
+      persistence.createRun({ task: 'export_insights', candidateIds: ['a', 'b'], fixtureCount: 1, totalCalls: 2, estimatedCostUsd: 0.01 }),
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
@@ -155,7 +154,7 @@ describe('createRun', () => {
     await expect(
       persistence.createRun({
         organizationId: ORG_ID,
-        task: 'parcel_narrative',
+        task: 'export_insights',
         candidateIds: ['a', 'b'],
         fixtureCount: 1, totalCalls: 2, estimatedCostUsd: 0.01,
       }),
@@ -250,7 +249,7 @@ describe('listRuns + getRunDetail', () => {
 
   test('getRunDetail joins run + per-fixture results', async () => {
     query
-      .mockResolvedValueOnce({ rows: [{ id: 'run-1', task: 'parcel_narrative' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'run-1', task: 'export_insights' }] })
       .mockResolvedValueOnce({ rows: [{ candidate_id: 'a', fixture_id: 'fx-01' }] });
     const out = await persistence.getRunDetail('run-1');
     expect(out.id).toBe('run-1');
@@ -359,7 +358,7 @@ describe('runBaselineAndPersist', () => {
     const out = await persistence.runBaselineAndPersist({
       organizationId: ORG_ID,
       triggeredBy: USER_ID,
-      task: 'parcel_narrative',
+      task: 'export_insights',
       limit: 3,
     });
 
@@ -396,26 +395,22 @@ describe('getQualityTrendByTask', () => {
   });
 
   test('aggregates baseline runs into a per-task trend with delta + regression', async () => {
-    // Two parcel_narrative baselines, ascending by date: 88 then 80.
+    // Two export_insights baselines, ascending by date: 88 then 80.
     query.mockResolvedValueOnce({
       rows: [
-        baselineRow('parcel_narrative', 88, 10),
-        baselineRow('parcel_narrative', 80, 1),
+        baselineRow('export_insights', 88, 10),
+        baselineRow('export_insights', 80, 1),
       ],
     });
     const out = await persistence.getQualityTrendByTask({ days: 90 });
     expect(out.available).toBe(true);
 
-    const t = out.tasks.parcel_narrative;
+    const t = out.tasks.export_insights;
     expect(t.run_count).toBe(2);
     expect(t.latest.overall).toBe(80);
     expect(t.baseline_avg).toBe(88);
     expect(t.delta).toBe(-8);
     expect(t.regression).toBe(true); // −8 ≤ −5 threshold
-
-    // export_insights had no baselines → an empty, non-regressed trend.
-    expect(out.tasks.export_insights.run_count).toBe(0);
-    expect(out.tasks.export_insights.regression).toBe(false);
   });
 
   test('a single baseline yields a latest score but no delta', async () => {
@@ -426,6 +421,16 @@ describe('getQualityTrendByTask', () => {
     expect(t.baseline_avg).toBeNull();
     expect(t.delta).toBeNull();
     expect(t.regression).toBe(false);
+  });
+
+  test('an unmonitored task is absent from the trend output', async () => {
+    // Even if a baseline row for an unknown task somehow exists, the
+    // trend output only carries entries for TREND_TASKS — keeps the
+    // reader's mental model aligned with what the standing quality
+    // monitor actually watches.
+    query.mockResolvedValueOnce({ rows: [baselineRow('export_insights', 85, 1)] });
+    const out = await persistence.getQualityTrendByTask({});
+    expect(Object.keys(out.tasks)).toEqual(['export_insights']);
   });
 
   test('the query restricts to single-candidate (baseline) runs', async () => {
@@ -479,18 +484,15 @@ describe('runScheduledBaselines', () => {
     expect(out.ran).toBe(0);
   });
 
-  test('one task failing does not abort the others', async () => {
+  test('marks a task failed when its baseline run throws', async () => {
     query.mockResolvedValue({ rows: [{ id: 'org-1' }] });
-    harness.runEval
-      .mockRejectedValueOnce(new Error('daily cost cap tripped'))
-      .mockResolvedValue(baselineResult);
+    harness.runEval.mockRejectedValue(new Error('daily cost cap tripped'));
 
     const out = await persistence.runScheduledBaselines({ limit: 1 });
 
-    expect(out.tasks).toHaveLength(2);
-    expect(out.ran).toBe(1);
-    expect(out.tasks.some((t) => t.status === 'failed')).toBe(true);
-    expect(out.tasks.some((t) => t.status === 'completed')).toBe(true);
+    expect(out.tasks).toHaveLength(persistence.TREND_TASKS.length);
+    expect(out.ran).toBe(0);
+    expect(out.tasks.every((t) => t.status === 'failed')).toBe(true);
   });
 });
 

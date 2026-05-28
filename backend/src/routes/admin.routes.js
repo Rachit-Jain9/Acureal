@@ -321,7 +321,7 @@ router.get('/ab-eval/runs/:id', authenticate, requireRole('admin'), async (req, 
 // POST /api/admin/ab-eval/runs — trigger a new evaluation
 //
 // Body:
-//   { task: 'parcel_narrative' | 'export_insights',
+//   { task: 'export_insights',
 //     candidates: ['claude:claude-sonnet-4-6', 'openai:gpt-5.4-mini'],
 //     limit: 10 }
 //
@@ -332,7 +332,7 @@ router.get('/ab-eval/runs/:id', authenticate, requireRole('admin'), async (req, 
 router.post('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res, next) => {
   try {
     const {
-      task = 'parcel_narrative',
+      task = 'export_insights',
       candidates = ['claude:claude-sonnet-4-6', 'openai:gpt-5.4-mini'],
       limit = 10,
     } = req.body || {};
@@ -379,7 +379,7 @@ router.get('/ab-eval/quality-trend', authenticate, requireRole('admin'), async (
 // (~30s for the default 10-fixture slice).
 router.post('/ab-eval/baseline', authenticate, requireRole('admin'), async (req, res, next) => {
   try {
-    const { task = 'parcel_narrative', limit = 10 } = req.body || {};
+    const { task = 'export_insights', limit = 10 } = req.body || {};
     const run = await abEvalPersistence.runBaselineAndPersist({
       organizationId: req.user.organization_id,
       triggeredBy: req.user.id,

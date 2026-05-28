@@ -290,9 +290,9 @@ const getRunDetail = async (runId) => {
 
 // ── Quality trend — the standing quality monitor ─────────────────────────
 
-// Tasks the standing quality trend covers — the two prose tasks the
+// Tasks the standing quality trend covers — the prose tasks the
 // deterministic scorer in abEvalScoring.js is calibrated for.
-const TREND_TASKS = Object.freeze(['parcel_narrative', 'export_insights']);
+const TREND_TASKS = Object.freeze(['export_insights']);
 
 // A baseline overall score this many points below the trailing average of
 // prior baselines flags as a quality regression.
@@ -419,14 +419,14 @@ const BASELINE_CANDIDATE_SPEC = 'claude';
 const runAndPersistCore = async ({
   organizationId,
   triggeredBy = null,
-  task = 'parcel_narrative',
+  task = 'export_insights',
   candidateSpecs,
   fixturesPath = DEFAULT_FIXTURES_PATH,
   limit = 10,
 }) => {
-  if (!['parcel_narrative', 'export_insights'].includes(task)) {
+  if (!['export_insights'].includes(task)) {
     throw Object.assign(
-      new Error(`Unknown task '${task}'. Choose: parcel_narrative | export_insights`),
+      new Error(`Unknown task '${task}'. Choose: export_insights`),
       { statusCode: 400 },
     );
   }
@@ -511,7 +511,7 @@ const runAndPersist = async (args = {}) => {
 const runBaselineAndPersist = async ({
   organizationId,
   triggeredBy = null,
-  task = 'parcel_narrative',
+  task = 'export_insights',
   fixturesPath = DEFAULT_FIXTURES_PATH,
   limit = 10,
 } = {}) =>

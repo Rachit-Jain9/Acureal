@@ -7,7 +7,6 @@
  * Produces `backend/tests/fixtures/ab-eval-deals.json` with 30
  * synthetic-but-grounded Bengaluru parcels. Each row carries:
  *   • id
- *   • parcel_payload  — input shape consumed by parcelNarrative.service
  *   • deal_payload    — input shape consumed by export.insights.service
  *
  * The fixtures span:
@@ -100,78 +99,6 @@ const rng = (seed) => () => {
   return seed / 233280;
 };
 
-const buildParcelPayload = (mm, verdict, idx, rand) => {
-  const baseFar    = [1.75, 2.0, 2.25, 2.5, 3.0, 3.25, 3.5][idx % 7];
-  const maxFar     = baseFar + (rand() < 0.5 ? 0.25 : 0.5);
-  const areaSqft   = [4356, 6534, 13068, 21780, 43560, 87120][idx % 6]; // 0.1 to 2.0 acres
-  const roadWidth  = [9, 12, 15, 18, 24, 30][idx % 6];
-
-  const flagCount = verdict.label === 'verified_clean' ? 0
-    : verdict.label === 'partially_verified' ? 1
-    : verdict.label === 'gaps_present' ? 2
-    : verdict.label === 'blocked' ? 4 : 3;
-  const flags = RED_FLAG_TEMPLATES.slice(0, flagCount);
-
-  return {
-    parcel: {
-      name: `${mm.name} Plot ${String(idx + 1).padStart(2, '0')}`,
-      address: `Survey No. ${idx + 12}/${(idx % 8) + 1}, ${mm.name}, Bengaluru, Karnataka`,
-      city: 'Bengaluru',
-      land_area_sqft: areaSqft,
-      road_width_mtrs: roadWidth,
-    },
-    verdict: {
-      label: verdict.label,
-      summary: verdict.summary,
-      confidence_pct: verdict.confidence_pct,
-      counts: {
-        verified: verdict.label === 'verified_clean' ? 8 : verdict.label === 'blocked' ? 1 : 4,
-        inferred: verdict.label === 'verified_clean' ? 1 : 4,
-        needs_verification: flagCount,
-      },
-    },
-    confidence: {
-      overall: verdict.confidence_pct,
-      zoning: Math.min(100, verdict.confidence_pct + 5),
-      buildability: Math.max(0, verdict.confidence_pct - 5),
-      guidance: verdict.confidence_pct,
-      kgis: Math.max(0, verdict.confidence_pct - 10),
-    },
-    zoning: {
-      zone_code: ['R', 'RM', 'COM-1', 'IND-A', 'MU-2'][idx % 5],
-      zone_name: ['Residential (Main)', 'Residential (Mixed)', 'Commercial Axial', 'Industrial Type A', 'Mixed Use'][idx % 5],
-      planning_zone: mm.zone,
-      plan_version: 'RMP 2031',
-      plan_status: idx % 4 === 0 ? 'draft' : 'gazetted',
-    },
-    buildability: {
-      status: verdict.label === 'blocked' ? 'gaps_present' : 'computed',
-      max_far: maxFar,
-      base_far: baseFar,
-      max_buildable_area_sqft: Math.round(areaSqft * maxFar),
-      ground_coverage_pct: 50 + (idx % 4) * 5,
-      setback_input_status: idx % 3 === 0 ? 'inferred_osm' : 'verified',
-    },
-    guidance_value: {
-      locality: `${mm.name} (SRO ${10 + (idx % 9)})`,
-      road_name: `${mm.name} ${(idx % 2) ? 'Main' : 'Cross'} Road`,
-      value_inr_per_sqft: mm.guidance + (idx % 5) * 200,
-    },
-    kgis_hierarchy: `Bengaluru Urban / ${mm.zone} / Ward ${mm.ward || 'NA'}`,
-    osm_inferred_road: idx % 3 === 0 ? {
-      width_m: roadWidth,
-      highway: ['residential', 'tertiary', 'secondary'][idx % 3],
-      derivation_method: 'osm_tag_match',
-    } : null,
-    red_flags: flags,
-    bucket_counts: {
-      verified: verdict.label === 'verified_clean' ? 8 : verdict.label === 'blocked' ? 1 : 4,
-      inferred: verdict.label === 'verified_clean' ? 1 : 4,
-      needs_verification: flagCount,
-    },
-  };
-};
-
 const buildDealPayload = (mm, verdict, idx) => {
   const assetClass = pickIndex(idx, ASSET_CLASSES);
   const stage      = pickIndex(idx, STAGES);
@@ -246,7 +173,6 @@ const buildDealPayload = (mm, verdict, idx) => {
 
 const main = () => {
   const FIXTURE_COUNT = 30;
-  const rand = rng(20260509);
   const fixtures = [];
   for (let i = 0; i < FIXTURE_COUNT; i += 1) {
     const mm = pickIndex(i, MICROMARKETS);
@@ -254,23 +180,18 @@ const main = () => {
     fixtures.push({
       id: `fx-${String(i + 1).padStart(2, '0')}`,
       label: `${mm.name} / ${verdict.label}`,
-      parcel_payload: buildParcelPayload(mm, verdict, i, rand),
-      deal_payload:   buildDealPayload(mm, verdict, i),
+      deal_payload: buildDealPayload(mm, verdict, i),
     });
   }
   const outPath = path.join(__dirname, '..', 'tests', 'fixtures', 'ab-eval-deals.json');
   fs.writeFileSync(outPath, JSON.stringify(fixtures, null, 2) + '\n', 'utf8');
   console.log(`Wrote ${fixtures.length} fixtures to ${outPath}`);
   console.log('Distribution:');
-  const byVerdict = {};
   const byAsset = {};
   for (const f of fixtures) {
-    const v = f.parcel_payload.verdict.label;
     const a = f.deal_payload.deal.asset_class;
-    byVerdict[v] = (byVerdict[v] || 0) + 1;
     byAsset[a] = (byAsset[a] || 0) + 1;
   }
-  console.log('  by verdict:', byVerdict);
   console.log('  by asset_class:', byAsset);
 };
 

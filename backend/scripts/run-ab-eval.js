@@ -17,14 +17,14 @@
  *
  * Usage:
  *   node backend/scripts/run-ab-eval.js \
- *       --task=parcel_narrative \
+ *       --task=export_insights \
  *       --candidates=claude:claude-sonnet-4-6,openai:gpt-5.4-mini \
  *       --fixtures=backend/tests/fixtures/ab-eval-deals.json \
  *       --limit=10 \
  *       --confirm
  *
  * Flags:
- *   --task        parcel_narrative | export_insights        (default: parcel_narrative)
+ *   --task        export_insights                          (default: export_insights)
  *   --candidates  comma-separated provider:model list       (default: claude default vs openai default)
  *   --fixtures    path to fixtures JSON                     (default: backend/tests/fixtures/ab-eval-deals.json)
  *   --limit       cap fixtures processed (handy for smoke)  (default: all)
@@ -116,7 +116,7 @@ const buildMarkdownReport = ({ task, results, deltas, candidate_ids, generated_a
 
 const main = async () => {
   const args = parseArgs();
-  const task = args.task || 'parcel_narrative';
+  const task = args.task || 'export_insights';
   const fixturesPath = args.fixtures || DEFAULT_FIXTURES;
   const candidateSpecs = (args.candidates || 'claude:,openai:').split(',').map((s) => s.trim()).filter(Boolean);
   const limit = args.limit ? Number(args.limit) : null;

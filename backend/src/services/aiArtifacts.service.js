@@ -25,7 +25,6 @@ const SUPPORTED_ARTIFACT_TYPES = new Set([
   'deal_analysis',
   'ic_memo',
   'risk_brief',
-  'parcel_narrative',
 ]);
 
 // Stable canonical-JSON hash for an arbitrary payload. Used as the
