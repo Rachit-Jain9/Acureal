@@ -24,7 +24,7 @@ import PostCalcBenchmarkPanel from '../components/financials/PostCalcBenchmarkPa
 import ModelConfidencePanel from '../components/financials/ModelConfidencePanel';
 import ConfidenceRangePanel from '../components/financials/ConfidenceRangePanel';
 import ScenarioComparison from '../components/financials/ScenarioComparison';
-import AuditTimelineView from '../components/financials/AuditTimelineView';
+import AuditTrailChip from '../components/financials/AuditTrailChip';
 import JDAWaterfallPanel from '../components/financials/JDAWaterfallPanel';
 import JVWaterfallPanel from '../components/financials/JVWaterfallPanel';
 import DebtSchedulePanel from '../components/financials/DebtSchedulePanel';
@@ -256,10 +256,13 @@ export default function FinancialsPage() {
           <JVWaterfallPanel financials={normalizedFinancials} deal={deal} />
           <DebtSchedulePanel financials={financials} />
 
-          {/* Signed audit trail — HMAC-SHA256 log of every kernel run with
-              verify + kernel-replay primitives. Proves reproducibility of
-              the numbers above from first principles. */}
-          <AuditTimelineView dealId={dealId} />
+          {/* Page-footer audit chip — one-line credibility signal that opens
+              the full HMAC timeline + Verify/Replay primitives in a modal.
+              Pre-2026-05-28 this was an inline ~80px collapsed card; now it's
+              a tiny chip at the bottom of the page, click-to-expand. */}
+          <div className="flex justify-end pt-1">
+            <AuditTrailChip dealId={dealId} />
+          </div>
 
           <div className="border-t pt-6" ref={inputsRef}>
             <h3 className="text-sm font-semibold text-content-primary mb-3">Recalculate</h3>
