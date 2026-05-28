@@ -4,6 +4,65 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-28 (Smart Property Capture — collapse the 6-click new-property flow into one paste) (PR #626 + #628 + #629)
+
+Operator brief: linking a property to a deal felt "complex, tedious, confusing, and annoying." The New Deal modal's Property dropdown only showed existing properties, so for every new opportunity (which by definition has a new address) the user had to (1) save the deal with no property, (2) open the deal, (3) navigate to Parcel/Site tab, (4) click Link Property, (5) click "+ Create new", (6) blindly fill a 7-field form with no map / no auto-fill / no confidence — six clicks before the first real action.
+
+First-principles audit confirmed the infrastructure was already in REDIP — Google Places + Geocoding, Plus Codes, K-GIS adapter, BBMP street index + guidance value, the auto-derive-context orchestrator, Gemini extraction — the 7-field form just used none of it. Reframed as **Smart Property Capture**: one paste box that accepts any Bengaluru-sourcer-realistic input, then one preview card with map + BBMP/K-GIS/guidance enrichment + verify-links, then save.
+
+### PRs opened + merged
+
+| PR | What landed |
+|---|---|
+| [#626](https://github.com/Rachit-Jain9/REDIP/pull/626) | **Backend — parser + capture endpoint.** New `backend/src/utils/propertyCaptureParser.js` (pure detection, no I/O): classifies a raw input as `googleMapsUrl` / `latLng` / `plusCode` / `surveyNumber` / `freeText` / `address` via regex + URL allow-list (SSRF-safe). New `backend/src/services/propertyCapture.service.js` (orchestrator): per-classification resolvers — shortlink redirect-follow for `maps.app.goo.gl`, Google Geocoding for Plus Codes (defaults Bengaluru area context for short codes), reverse-geocode for lat/lng, existing geocoder cascade for addresses, Gemini structured-output extraction for broker narratives (area / asking / asset class / deal structure). Fans out to `deriveParcelContextFromAddress` so the candidate already carries BBMP ward + K-GIS hierarchy + guidance value before the response leaves the server. New `POST /api/properties/capture` route placed above the `/:id` catch-all per the PR #380 ordering rule. **57 new tests** (38 parser unit + 19 service tests with mocked axios / geocoder / Gemini). Also includes a `chore(audit): npm audit fix` commit that cleared the pre-existing high-severity `tmp` Path Traversal CVE blocking CI. |
+| [#629](https://github.com/Rachit-Jain9/REDIP/pull/629) | **Frontend — `<PropertyCaptureField>` + replace the 7-field form.** New `frontend/src/components/deal/PropertyCaptureField.jsx` (~340 LOC): two-phase UX — capture (paste + AI-extract checkbox + Capture button) → preview (classification chip, geocode-confidence badge, mini Leaflet map with the resolved pin, fields grid for address/coords/BBMP ward/K-GIS taluk-village/survey/guidance value, AI-extraction panel for free-text narratives, verify-links chips to Bhoomi / K-GIS / Google Sat, warning banner for low-confidence matches, editable name input, Save button that POSTs `suggestedFields` to `/properties`). New `useCaptureProperty` hook + `propertiesAPI.capture()` client. `PropertyPickerModal` inside `ParcelTab.jsx` drops its 7-field create form and renders `<PropertyCaptureField compact />` instead; modal widens to `max-w-2xl` in create mode to fit the preview card. **7 new component tests** (mocked hooks + Leaflet). |
+| [#628](https://github.com/Rachit-Jain9/REDIP/pull/628) | **Inline capture in the New Deal modal — closes the 6-click loop.** Adds `propertyMode` state to `DealsPage.jsx` (`'pick'` ↔ `'capture'`). The Property field now has a "+ Create new (paste link / Plus Code / address)" toggle next to the dropdown label; clicking it expands `<PropertyCaptureField>` inline below. On save, `handlePropertyCaptured` sets `form.propertyId` to the new ID, defaults the Deal Name to the captured property name (when blank — saves a keystroke for the common "name-the-deal-after-the-parcel" case), and flips back to the picker (which auto-selects the new property because `useCaptureProperty` invalidates the properties cache). Also added `onKeyDown={Enter→preventDefault}` to the capture field's name input so it doesn't accidentally submit the parent New Deal form. |
+
+### Production verification (live on `redip.vercel.app`)
+
+- Master CI on post-merge build: all five checks green — Audit & migration lint, Backend, Frontend, Financial kernel, CI passed.
+- Vercel production deployment: Ready (green) on master after PR #628 merged.
+- Pending: operator manual smoke test of the actual paste-flows (a Google Maps shortlink, a Plus Code, a survey number, a broker narrative) on the live site.
+
+### Cumulative impact (this block)
+
+- **Backend tests**: 2,873 → **2,930** (+57: 38 parser + 19 service)
+- **Frontend tests**: 1,035 → **1,042** (+7 component tests)
+- **New canonical modules**:
+  - `backend/src/utils/propertyCaptureParser.js` — ~270 LOC, pure classifier
+  - `backend/src/services/propertyCapture.service.js` — ~430 LOC, orchestrator
+  - `frontend/src/components/deal/PropertyCaptureField.jsx` — ~340 LOC, capture + preview
+- **New route**: `POST /api/properties/capture` (route placed above `/:id` per ordering rule)
+- **Friction removed**: New-deal-with-new-property flow goes from **6 clicks + 7 blank fields** → **2 clicks + 1 paste**.
+
+### What the user can see now that they couldn't before
+
+1. **Open the New Deal modal** → next to the Property dropdown there's a new toggle: **"+ Create new (paste link / Plus Code / address)"**. Click it and a paste box expands inline.
+2. **Paste a Google Maps share link** from a broker's WhatsApp → REDIP follows the shortlink, extracts coordinates, reverse-geocodes the address, runs BBMP / K-GIS / guidance enrichment, and shows a preview card with a mini map and one Save button.
+3. **Paste a Plus Code** like `3JV8+P4W Bengaluru` → same flow, resolved via Google Geocoding with Bengaluru defaulted as the area context for short codes.
+4. **Paste a survey number** like `Survey No. 45/2, Devanahalli` → REDIP geocodes the village context, keeps the survey number on the candidate, surfaces the Bhoomi / K-GIS verify links for manual confirmation (legal four — survey/khata/title/RERA — stays human-verified).
+5. **Paste lat/lng coordinates** → reverse-geocoded to address with provider/confidence shown.
+6. **Paste a broker WhatsApp narrative** like `"5 acres on KIAL road near airport, asking 18 cr, RERA registered"` → Gemini extracts area/asking/asset-class/deal-structure into the suggested fields, then the address is geocoded, then the candidate is built. The "AI-extracted" violet panel makes provenance obvious.
+7. **The same `<PropertyCaptureField>` is also wired into the Link Property modal's "+ Create new" tab** — so the improvement reaches both the new-deal-from-scratch path AND the link-property-to-existing-deal path.
+
+### CLAUDE.md respected
+
+- **AI routing policy honored** — free-text extraction is Gemini (per "document/text extraction" routing); deterministic math (lat/lng parsing, Plus Code detection, address dedup) is pure code. No LLM in any decision path that touches title chain / khata / RERA / approvals (the legal four).
+- **No fabrication** — every resolved field carries the provider + confidence. Low-confidence matches (<0.7 or `status='approximate'`) raise an amber warning banner. Failed resolution returns warnings + suggested-field nulls; UI never paints a fake pin.
+- **SSRF-safe** — the URL parser allow-lists Google-owned hosts only (`maps.app.goo.gl`, `goo.gl`, `maps.google.com`, etc.); anything else is rejected before any HTTP fetch.
+- **Cost-aware** — Gemini is opt-in via the `aiAssisted` request flag (default true, but the frontend exposes a checkbox); pure-format inputs (Plus Code / URL / lat/lng / survey number) never touch Gemini.
+- **Route ordering** — `POST /capture` is above the `GET /:id` catch-all (PR #380 ordering bug pattern explicitly avoided).
+- **Single capture component reused** — `<PropertyCaptureField>` lives in `frontend/src/components/deal/` and is consumed by both `ParcelTab.jsx` (Link Property modal) and `DealsPage.jsx` (New Deal modal). One source of truth for the capture UX.
+- **PR cadence** — three decomposed PRs, chained in order; each PR ships independently if needed (backend without the frontend still adds a usable API; frontend without #628 still improves the Link-Property flow).
+
+### What's left for the operator
+
+1. **Manual smoke test on the live site** — try each input type once and confirm the preview card renders correctly (map pin + BBMP ward + K-GIS + verify links).
+2. **Eventually**: a follow-up PR for the remaining 3 moderate npm audit advisories (`@anthropic-ai/sdk`, `uuid`, `exceljs` — all require `--force` / breaking dep bumps; intentionally deferred to a dedicated PR that can validate the breaking changes).
+3. **Optional follow-up**: drop-a-pin mode (a "I literally only have a pin on a map" entry path that opens the Leaflet map for the user to click directly) — designed but not built this block; the capture flow already covers it because the user can right-click a Google Maps pin → copy coordinates → paste, but a native pin-drop UI would be slicker.
+
+---
+
 ## 2026-05-27 (ninth 10-hour block — E7: Admin Dashboard) — Phase 4 main now COMPLETE (PR #623–#624)
 
 Continuation immediately after the eighth block (Pillar 7 V2). Operator brief asked for the next phase; only E7 (Admin Dashboard) remained on the Phase 4 main list. Audit confirmed the existing admin nav already had AI Usage, A/B Eval, Comps Queue, Parcel Intelligence, and Master Plan — what was missing was operator visibility into the **learning-loop telemetry** (PR #618's consumer would tell the engine to re-rank cards but nobody could see what was captured) and a **filtered audit-trail surface** on `deal_events` (the dashboard widget showed only the last 10 events with no filters). Plus there was no unified `/admin` landing — the operator had to click into each sub-page individually.
