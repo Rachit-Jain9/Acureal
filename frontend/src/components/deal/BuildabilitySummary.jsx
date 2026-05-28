@@ -1,7 +1,26 @@
-import { AlertTriangle, Building2, CheckCircle2, FileText, Layers, Ruler } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertTriangle, Building2, CheckCircle2, FileText, Layers, Ruler, Sparkles, Upload, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import { useParcelIntelligence } from '../../hooks/useProperties';
+import { useDealExtractions } from '../../hooks/useDealExtractions';
 import BuildabilityMassing from './BuildabilityMassing';
+import AutoFillFromDocumentsModal from './AutoFillFromDocumentsModal';
+
+// The eight canonical extraction fields that, once committed, unlock
+// the FAR matrix. Matches the keys the server's extraction.service
+// produces in `field_map`. Kept tight on purpose — surfacing irrelevant
+// extracted fields (owner name, RERA number) inside the buildability
+// CTA would dilute the affordance.
+const BUILDABILITY_EXTRACTION_FIELDS = Object.freeze([
+  'land_area_sqft',
+  'land_area_acres',
+  'road_width_m',
+  'road_width_mtrs',
+  'permissible_fsi',
+  'existing_fsi',
+  'frontage_mtrs',
+  'depth_mtrs',
+]);
 
 const fmtNum = (value, digits = 0) => {
   if (value === null || value === undefined || value === '') return '-';
@@ -23,9 +42,33 @@ function SourceChip({ citation }) {
   );
 }
 
-export default function BuildabilitySummary({ property, title = 'Buildable envelope', compact = false }) {
+export default function BuildabilitySummary({
+  property,
+  dealId = null,
+  onUploadClick = null,
+  title = 'Buildable envelope',
+  compact = false,
+}) {
   const propertyId = property?.id;
   const { data, isLoading, isError } = useParcelIntelligence(propertyId);
+  // Deal-scoped pending extractions — only used to surface the auto-fill
+  // CTA inside the "Buildability needs verification" empty state. Skipped
+  // entirely when the panel is rendered standalone on PropertyDetailPage.
+  const { data: extractionData } = useDealExtractions(dealId);
+  const [autoFillOpen, setAutoFillOpen] = useState(false);
+
+  // Pre-compute the subset of pending extractions that, if applied, would
+  // unblock buildability. Numeric instead of just a boolean so the CTA can
+  // say "Auto-fill 3 fields from documents" — that specificity is what
+  // makes the affordance feel non-trivial vs the generic auto-fill banner
+  // on the Overview top.
+  const buildabilityExtractionCount = useMemo(() => {
+    const map = extractionData?.field_map || {};
+    return BUILDABILITY_EXTRACTION_FIELDS.reduce(
+      (n, key) => (map[key] ? n + 1 : n),
+      0,
+    );
+  }, [extractionData?.field_map]);
 
   if (!propertyId) return null;
 
@@ -67,16 +110,94 @@ export default function BuildabilitySummary({ property, title = 'Buildable envel
             </div>
           </div>
         ) : isError || !hasBuildability ? (
-          <div>
-            <div className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <div className="font-semibold">Buildability needs verification</div>
-                <div className="mt-0.5">
-                  {data?.buildability?.message || 'Assign a reviewed zone, land area, and road width to calculate the backend FAR matrix.'}
+                <div className="mt-0.5 leading-relaxed">
+                  {data?.buildability?.message || 'A reviewed master-plan zone, the plot’s land area in sqft, and the road width in metres must be matched against the backend FAR matrix.'}
                 </div>
+                <ul className="mt-2 space-y-0.5 text-[11px] text-amber-900/90 leading-relaxed">
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-900/60 select-none">·</span>
+                    <span>A reviewed master-plan zone for this parcel</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-900/60 select-none">·</span>
+                    <span>Land area in sqft</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-900/60 select-none">·</span>
+                    <span>Road width in metres (drives the additional/TDR FAR band)</span>
+                  </li>
+                </ul>
               </div>
             </div>
+
+            {/* Action affordance — only renders when the panel is mounted
+                inside a deal context that has a dealId. PropertyDetailPage
+                still gets a clean read-only empty state. */}
+            {dealId && (
+              buildabilityExtractionCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setAutoFillOpen(true)}
+                  className="w-full inline-flex items-center justify-between gap-3 rounded-md border border-hairline-strong bg-bg-elevated hover:bg-bg-secondary transition-colors px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                  aria-label={`Auto-fill ${buildabilityExtractionCount} buildability fields from extracted documents`}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-7 h-7 rounded-md bg-primary-50 flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={13} className="text-primary-700" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-content-primary">
+                        Auto-fill {buildabilityExtractionCount} buildability field{buildabilityExtractionCount === 1 ? '' : 's'} from documents
+                      </span>
+                      <span className="block text-[11px] text-content-secondary leading-snug truncate">
+                        FSI, road width, and area extracted from uploads — review side-by-side, then commit.
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight size={14} className="text-content-muted shrink-0" />
+                </button>
+              ) : onUploadClick ? (
+                <button
+                  type="button"
+                  onClick={onUploadClick}
+                  className="w-full inline-flex items-center justify-between gap-3 rounded-md border border-dashed border-hairline-strong bg-bg-elevated hover:border-primary-300 hover:text-content-primary transition-colors px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                  aria-label="Upload a sanctioned plan or RTC to populate buildability fields"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-7 h-7 rounded-md bg-bg-secondary flex items-center justify-center flex-shrink-0">
+                      <Upload size={13} className="text-content-secondary" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-content-primary">
+                        Upload a sanctioned plan or RTC
+                      </span>
+                      <span className="block text-[11px] text-content-secondary leading-snug truncate">
+                        REDIP extracts FSI, road width, and land area from uploaded documents.
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight size={14} className="text-content-muted shrink-0" />
+                </button>
+              ) : null
+            )}
+
+            {/* Modal — opens with the deal's current values pre-loaded.
+                The modal is the same one mounted from the AutoFillReadyCard
+                on the Overview top + the Documents-tab header. */}
+            {dealId && (
+              <AutoFillFromDocumentsModal
+                dealId={dealId}
+                open={autoFillOpen}
+                onClose={() => setAutoFillOpen(false)}
+                dealCurrentValues={property || {}}
+                propertyCurrentValues={property || {}}
+              />
+            )}
           </div>
         ) : (
           <>
