@@ -100,12 +100,15 @@ function CheckRow({ label, ok, detail }) {
  * route's `requireRole` policy; non-privileged users see the button disabled
  * with a tooltip. Verify is visible to anyone who can see the deal.
  */
-export default function AuditTimelineView({ dealId, defaultOpen = false }) {
+export default function AuditTimelineView({ dealId, defaultOpen = false, embedded = false }) {
   const { user } = useAuthStore();
   const role = String(user?.role || '').toLowerCase();
   const canReplay = REPLAY_ROLES.has(role);
 
-  const [open, setOpen] = useState(defaultOpen);
+  // `embedded` mode skips the wrapping card chrome + collapse toggle and
+  // renders the body content only. Used by AuditTrailChip when surfacing
+  // the timeline inside a Modal (the Modal supplies its own title chrome).
+  const [open, setOpen] = useState(defaultOpen || embedded);
   const [events, setEvents] = useState([]);
   const [status, setStatus] = useState('idle'); // idle | loading | ok | error
   const [errorMsg, setErrorMsg] = useState(null);
@@ -191,60 +194,32 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
 
   if (!dealId) return null;
 
-  return (
-    <div className="card-editorial">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-between w-full text-left group"
-      >
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={16} className="text-content-secondary" />
-          <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider">
-            Signed audit trail
-          </h4>
-          <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            HMAC-SHA256
-          </span>
+  const body = (
+    <>
+      <p className="text-xs text-content-secondary max-w-2xl">
+        Every calculation persisted by the kernel is logged to an append-only table with an
+        HMAC signature over <code className="font-mono text-[11px]">inputs_hash | outputs_hash
+        | engine_version</code>. Verify re-hashes the stored JSON; replay additionally re-runs
+        the deterministic kernel against the stored inputs to prove the numbers are
+        reproducible.
+      </p>
+
+      {status === 'error' && (
+        <div className="flex items-start gap-2 p-2 rounded border border-amber-200 bg-amber-50 text-xs text-amber-800">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <span>{errorMsg || 'Audit log unavailable.'}</span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-content-muted">
-          {status === 'loading' && <RefreshCw size={12} className="animate-spin" />}
-          {status === 'ok' && (
-            <span className="hidden sm:inline">
-              {events.length} event{events.length === 1 ? '' : 's'}
-            </span>
-          )}
-          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      )}
+
+      {status === 'ok' && events.length === 0 && (
+        <div className="text-xs text-content-secondary italic py-3">
+          No signed events yet. Run a calculation to produce the first audit row.
         </div>
-      </button>
+      )}
 
-      {open && (
-        <div className="mt-4 space-y-3">
-          <p className="text-xs text-content-secondary max-w-2xl">
-            Every calculation persisted by the kernel is logged to an append-only table with an
-            HMAC signature over <code className="font-mono text-[11px]">inputs_hash | outputs_hash
-            | engine_version</code>. Verify re-hashes the stored JSON; replay additionally re-runs
-            the deterministic kernel against the stored inputs to prove the numbers are
-            reproducible.
-          </p>
-
-          {status === 'error' && (
-            <div className="flex items-start gap-2 p-2 rounded border border-amber-200 bg-amber-50 text-xs text-amber-800">
-              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-              <span>{errorMsg || 'Audit log unavailable.'}</span>
-            </div>
-          )}
-
-          {status === 'ok' && events.length === 0 && (
-            <div className="text-xs text-content-secondary italic py-3">
-              No signed events yet. Run a calculation to produce the first audit row.
-            </div>
-          )}
-
-          {status === 'ok' && events.length > 0 && (
-            <div className="border rounded-lg bg-bg-elevated divide-y divide-hairline">
-              {events.map((event) => {
+      {status === 'ok' && events.length > 0 && (
+        <div className="border rounded-lg bg-bg-elevated divide-y divide-hairline">
+          {events.map((event) => {
                 const label = EVENT_LABELS[event.event_type] || event.event_type;
                 const badge = EVENT_COLORS[event.event_type] || EVENT_COLORS.export_snapshot;
                 const isExpanded = expandedId === event.id;
@@ -473,8 +448,47 @@ export default function AuditTimelineView({ dealId, defaultOpen = false }) {
               })}
             </div>
           )}
+    </>
+  );
+
+  // Embedded mode: caller wraps us in their own chrome (e.g. AuditTrailChip's
+  // Modal). Skip the card + toggle so we don't render duplicate headers.
+  if (embedded) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  // Standalone mode: card with a clickable header that toggles the body.
+  // Retained for FinancialsPage's existing layout — the chip is the new
+  // recommended surface but we don't force-migrate every caller.
+  return (
+    <div className="card-editorial">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between w-full text-left group"
+      >
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={16} className="text-content-secondary" />
+          <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider">
+            Signed audit trail
+          </h4>
+          <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            HMAC-SHA256
+          </span>
         </div>
-      )}
+        <div className="flex items-center gap-2 text-xs text-content-muted">
+          {status === 'loading' && <RefreshCw size={12} className="animate-spin" />}
+          {status === 'ok' && (
+            <span className="hidden sm:inline">
+              {events.length} event{events.length === 1 ? '' : 's'}
+            </span>
+          )}
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </div>
+      </button>
+
+      {open && <div className="mt-4">{body}</div>}
     </div>
   );
 }

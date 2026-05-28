@@ -28,7 +28,7 @@ import {
 } from '../../hooks/useActivities';
 import Badge from '../common/Badge';
 import { SectionHeader, SkeletonList, confirm } from '../../design-system';
-import AuditTimelineView from '../financials/AuditTimelineView';
+import AuditTrailChip from '../financials/AuditTrailChip';
 import {
   formatDate,
   formatRelativeTime,
@@ -350,8 +350,11 @@ export default function ActivityTab() {
         </div>
       )}
 
-      {/* Kernel audit trail — signed deal_events log, reproducible on replay. */}
-      <AuditTimelineView dealId={dealId} />
+      {/* Footer audit chip — one-line credibility signal that opens the
+          full HMAC timeline + Verify/Replay primitives in a modal on click. */}
+      <div className="flex justify-end pt-1">
+        <AuditTrailChip dealId={dealId} />
+      </div>
     </div>
   );
 }

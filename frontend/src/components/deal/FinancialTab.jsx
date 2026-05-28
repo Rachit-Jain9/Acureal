@@ -6,7 +6,7 @@ import { formatCrores, formatPct, formatArea } from '../../utils/format';
 // P1-PR3 — scroll-on-mount when an evidence-ref click lands here.
 import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
-import AuditTimelineView from '../financials/AuditTimelineView';
+import AuditTrailChip from '../financials/AuditTrailChip';
 // Workstream A (Provenance Spine) — the model-trust verdict, carried from
 // the DCF page to the deal workspace so it travels with the numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
@@ -251,25 +251,25 @@ export default function FinancialTab() {
         hasCovenants={f.dscr != null}
       />
 
-      {/* Signed audit trail — immutable HMAC-SHA256 log of every kernel run.
-          Verify re-hashes stored JSON; replay re-executes the deterministic
-          kernel against the stored inputs. This is the "prove the pitch-deck
-          number came from this engine + these inputs" primitive. */}
-      <AuditTimelineView dealId={dealId} />
-
-      {/* Last updated */}
-      {f.updated_at && (
-        <p className="text-xs text-content-muted text-right">
-          Model last updated:{' '}
-          {new Date(f.updated_at).toLocaleString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </p>
-      )}
+      {/* Footer — last-updated stamp + the signed audit trail chip.
+          The chip is the credibility signal for diligence partners; the
+          full HMAC timeline (Verify + Replay primitives) opens in a modal
+          on click instead of always rendering a ~80px collapsed card. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
+        <AuditTrailChip dealId={dealId} />
+        {f.updated_at && (
+          <p className="text-xs text-content-muted">
+            Model last updated:{' '}
+            {new Date(f.updated_at).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
