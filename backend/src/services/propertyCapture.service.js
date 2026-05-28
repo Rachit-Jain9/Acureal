@@ -359,11 +359,14 @@ const parsePincodeFromAddress = (addr) => {
 
 const parseCityFromContext = (context, fallback = 'Bengaluru') => {
   // BBMP within-city, default Bengaluru. Outside BBMP, prefer K-GIS taluk.
-  if (context?.bbmp?.within_bbmp) return 'Bengaluru';
-  if (context?.kgis?.taluk) {
+  // The parcelContext payload uses camelCase: bbmpJurisdiction.withinBbmp
+  // and kgis.hierarchy.taluk. (See deriveParcelContextFromAddress output.)
+  if (context?.bbmpJurisdiction?.withinBbmp) return 'Bengaluru';
+  const taluk = context?.kgis?.hierarchy?.taluk;
+  if (taluk) {
     // Taluks like "Anekal" / "Devanahalli" are best as city names for
     // properties outside BBMP.
-    return context.kgis.taluk;
+    return taluk;
   }
   return fallback;
 };
@@ -387,7 +390,7 @@ const buildSuggestedFields = ({ classification, resolved, context, ai }) => {
     surveyNumber:
       classification.type === 'surveyNumber'
         ? classification.parsed.surveyNumber
-        : context?.kgis?.survey_number || null,
+        : context?.kgis?.hierarchy?.survey_number || null,
     landAreaSqft: ai?.land_area_sqft || (ai?.land_area_acres ? ai.land_area_acres * 43560 : null),
     landAreaAcres: ai?.land_area_acres || null,
     landAskPriceCr: ai?.asking_price_cr || null,

@@ -19,12 +19,14 @@ const aiRouter = require('../src/services/ai/aiRouter');
 
 const { captureProperty, _internal } = require('../src/services/propertyCapture.service');
 
+// Matches the real shape returned by deriveParcelContextFromAddress:
+// bbmpJurisdiction.withinBbmp, kgis.hierarchy.{taluk,village,survey_number}, etc.
 const stubContext = (overrides = {}) => ({
-  bbmp: { within_bbmp: true, ward: { name: 'Whitefield', no: 84 }, zone_code: 'D' },
-  kgis: { taluk: 'Bangalore East', village: 'Pattandur Agrahara', survey_number: '45/2' },
-  planning_district: null,
-  guidance_value: null,
-  verify_links: [],
+  bbmpJurisdiction: { withinBbmp: true, ward: { name: 'Whitefield', no: 84 } },
+  kgis: { hierarchy: { taluk: 'Bangalore East', village: 'Pattandur Agrahara', survey_number: '45/2' } },
+  bbmpZone: { zone_code: 'D' },
+  planningDistrict: null,
+  verifyLinks: [],
   ...overrides,
 });
 
@@ -102,7 +104,7 @@ describe('propertyCapture.service', () => {
           ],
         },
       });
-      parcelContextService.deriveParcelContextFromAddress.mockResolvedValueOnce(stubContext({ bbmp: { within_bbmp: false } }));
+      parcelContextService.deriveParcelContextFromAddress.mockResolvedValueOnce(stubContext({ bbmpJurisdiction: { withinBbmp: false } }));
 
       await captureProperty('JCRJ+P4W Mysore');
 
@@ -198,7 +200,7 @@ describe('propertyCapture.service', () => {
         status: 'verified',
       });
       parcelContextService.deriveParcelContextFromAddress.mockResolvedValueOnce(
-        stubContext({ bbmp: { within_bbmp: false }, kgis: { taluk: 'Devanahalli' } }),
+        stubContext({ bbmpJurisdiction: { withinBbmp: false }, kgis: { hierarchy: { taluk: 'Devanahalli' } } }),
       );
 
       const r = await captureProperty('Survey No. 45/2, Devanahalli');
@@ -225,7 +227,7 @@ describe('propertyCapture.service', () => {
           ],
         },
       });
-      parcelContextService.deriveParcelContextFromAddress.mockResolvedValueOnce(stubContext({ bbmp: { within_bbmp: false } }));
+      parcelContextService.deriveParcelContextFromAddress.mockResolvedValueOnce(stubContext({ bbmpJurisdiction: { withinBbmp: false } }));
 
       const r = await captureProperty('https://www.google.com/maps/place/X/@13.2,77.71,17z');
 
@@ -286,7 +288,7 @@ describe('propertyCapture.service', () => {
         status: 'verified',
       });
       parcelContextService.deriveParcelContextFromAddress.mockResolvedValueOnce(
-        stubContext({ bbmp: { within_bbmp: false }, kgis: { taluk: 'Devanahalli' } }),
+        stubContext({ bbmpJurisdiction: { withinBbmp: false }, kgis: { hierarchy: { taluk: 'Devanahalli' } } }),
       );
 
       const text = '5 acres of land available near KIAL airport road, Devanahalli, asking 18 Cr negotiable. RERA registered, broker contact attached.';
@@ -351,9 +353,9 @@ describe('propertyCapture.service', () => {
     });
 
     test('parseCityFromContext prefers BBMP=Bengaluru, then K-GIS taluk, then fallback', () => {
-      expect(_internal.parseCityFromContext({ bbmp: { within_bbmp: true } })).toBe('Bengaluru');
-      expect(_internal.parseCityFromContext({ bbmp: { within_bbmp: false }, kgis: { taluk: 'Anekal' } })).toBe('Anekal');
-      expect(_internal.parseCityFromContext({ bbmp: { within_bbmp: false } }, 'Mysore')).toBe('Mysore');
+      expect(_internal.parseCityFromContext({ bbmpJurisdiction: { withinBbmp: true } })).toBe('Bengaluru');
+      expect(_internal.parseCityFromContext({ bbmpJurisdiction: { withinBbmp: false }, kgis: { hierarchy: { taluk: 'Anekal' } } })).toBe('Anekal');
+      expect(_internal.parseCityFromContext({ bbmpJurisdiction: { withinBbmp: false } }, 'Mysore')).toBe('Mysore');
       expect(_internal.parseCityFromContext(null)).toBe('Bengaluru');
     });
 
