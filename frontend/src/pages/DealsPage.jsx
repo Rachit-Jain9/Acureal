@@ -18,6 +18,7 @@ import {
 // aggregator on the Dashboard backend. Same hook, same staleTime — the
 // dashboard widget + the deals list cards share one cached fetch.
 import { usePortfolioReadiness } from '../hooks/useDashboard';
+import useDebouncedValue from '../hooks/useDebouncedValue';
 import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useProperties } from '../hooks/useProperties';
@@ -120,15 +121,21 @@ export default function DealsPage() {
     }
   }, [searchParams, setSearchParams]);
 
+  // Debounce ONLY the value that feeds the /deals query key. The raw `search`
+  // stays bound to the input (instant typing) and to the saved-views detection
+  // below; the debounced value gates the network fetch so we don't fire a
+  // request + full re-render on every keystroke (FRONTEND_GUIDELINES §3, 250ms).
+  const debouncedSearch = useDebouncedValue(search, 250);
+
   const params = useMemo(() => {
     const p = { page, limit: 12 };
-    if (search) p.search = search;
+    if (debouncedSearch) p.search = debouncedSearch;
     if (stageFilter) p.stage = stageFilter;
     if (typeFilter) p.dealType = typeFilter;
     if (priorityFilter) p.priority = priorityFilter;
     if (assignedToMe) p.assignedToMe = true;
     return p;
-  }, [search, stageFilter, typeFilter, priorityFilter, assignedToMe, page]);
+  }, [debouncedSearch, stageFilter, typeFilter, priorityFilter, assignedToMe, page]);
 
   // Snapshot of the user-controlled filter state — this is what
   // saved views capture and recall. Page intentionally NOT included
