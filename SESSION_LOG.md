@@ -8193,3 +8193,111 @@ strongest non-manual proof available.
   (incremental, lower-leverage than this block's lanes).
 - Decompose MasterPlanAdminPage.jsx (Task #6 continuation) when
   another maintainability sweep is queued.
+
+## 2026-05-29 (10h block) — live-audit hardening (PRs #640-#643)
+
+### What was worked on
+
+First block with authenticated in-browser access (operator signed into
+Chrome), so for the first time the work was driven by a LIVE audit of
+the deployed product rather than code reading alone. That immediately
+surfaced bugs every prior session — and the whole test suite — had
+missed.
+
+**Deploy-race diagnosis (process learning, no code change).** The prior
+block's batch-merge of #638 then #639 in quick succession caused an
+out-of-order Vercel deploy: #639's build finished first (14:30), then
+#638's slower build finished at 14:43 and OVERWROTE production with the
+older commit. Net effect: production served #638 (Stage History removal
+live) but NOT #639 (audit chip reverted to the old full card).
+Self-healed once this block's PRs merged production back to the true
+master tip. Mitigation recorded: merge one PR → wait for its deploy →
+merge the next.
+
+**Lane O (CRITICAL) — Zoning tab crash, PR #642.** Opening any
+Bengaluru deal's Regulatory/Zoning tab hard-crashed into the
+ErrorBoundary with React #310 (rendered more hooks than the previous
+render). Root cause: `DealStreetLookupCard` called its `spreadAnalysis`
+useMemo AFTER three early returns, so the loading render ran one fewer
+hook than the loaded render. Reproduced on every Bengaluru deal — the
+Zoning tab had effectively been DOWN in prod. Fix: hoist all hooks
+above the early returns. Pre-existing (NOT from #635). Existing tests
+missed it because each mounts with a FIXED query state; added a
+loading→loaded lifecycle regression test that throws #310 on old code.
+
+**Lane P — "undefined" in planning-context callouts, PR #643.** The
+"Bengaluru planning context" rail printed literal "undefined" ("P
+undefinedm · S undefinedm · T undefinedm", "undefinedm corridor ·
+undefined"). The per-tile gates only checked the callout ROW existed,
+not its sub-fields. Fix: per-callout `*Has` flags + every interpolation
+guarded (→ "—"); hollow rows skip their tile and fall back to the
+honest empty state. 2 regression tests.
+
+**Lane L — deal-breaker count contradiction, PR #641.** Deal Pulse said
+"5 deal-breakers" while the Recommendation card said "6 unresolved
+deal-breaker items" on the same page. The recommendation extractor
+matched severity 'critical' (a RISK severity, never a DD severity),
+skipped `is_required`, and used a non-DD status set. Fixed to mirror
+`dealReadiness.service` exactly. Now both say 5. 5 parity tests.
+
+**Lane M — ask price "₹0.00 Cr", PR #641.** An unset ask price rendered
+"₹0.00 Cr" (implying free land) because the pg driver returns NUMERIC
+as the string "0.00", which is truthy. New `formatCroresOrDash` treats
+null/0/non-positive as "—". Applied to OverviewTab (ask + negotiated)
++ DealCard. 7 tests.
+
+**Lane K — workspace query dedupe, PR #640.** `getDealWorkspace` fetched
+the promoter profile twice and approvals twice, and inlined the
+document-flatten loop twice. Hoisted all three into the top-level
+Promise.all / single-source values — 2 fewer DB round-trips per deal
+page load.
+
+**Lane N — dashboard "Avg IRR 0.5%": verified NOT a bug.** The
+`AVG(f.irr_pct)` SQL is correct; 0.5% honestly reflects a portfolio of
+early-stage deals with low modeled IRR. Left unchanged (changing it
+would be fabrication).
+
+### PRs opened / merged
+
+All four merged to master, sequentially (one deploy at a time, to avoid
+repeating the deploy race), each re-verified live after its deploy.
+
+- PR #640 — perf(workspace): dedupe promoter + approvals fetches — merged
+- PR #641 — fix(deal): consistent deal-breaker count + honest ask-price — merged
+- PR #642 — fix(deal): stop Zoning tab crashing (React #310) — merged
+- PR #643 — fix(deal): stop "undefined" in planning-context callouts — merged
+
+### Plain-English recap (operator)
+
+- **The Regulatory / Zoning tab works again.** It was crashing to a
+  "Something went wrong" page on every Bengaluru deal; it now opens
+  normally.
+- **No more "undefined" on the page.** The Bengaluru planning-context
+  box used to print "undefined" where numbers were missing; it now
+  shows real values, a clean "—", or a tidy "not ingested yet" note.
+- **The deal-breaker count agrees with itself.** The pulse strip and
+  the recommendation card now show the same number (was 5 vs 6).
+- **Unset prices show "—" instead of "₹0.00 Cr"**, so a deal with no
+  price entered no longer looks like free land.
+- **Deal pages load a touch faster** — two redundant database lookups
+  per page were removed.
+
+### Validation
+
+- Backend: 169 suites / 2942 tests pass (+5 deal-breaker parity tests)
+- Frontend: 121 files / 1037 tests pass (+ regressions for the crash,
+  the undefined callouts, and the price formatter)
+- Clean Vite build on every PR; CI 7/7 green on each
+- LIVE re-verified after deploy (operator's authenticated session):
+  Zoning tab renders, no "undefined", deal-breaker counts match (5 = 5),
+  ask price shows "—", audit chip restored in the Financial footer
+
+### What's left to do
+
+- One transient "Failed to load deal details" appeared once during
+  rapid tab-switching and cleared on reload — looks like a serverless
+  cold-start/timeout, not a regression (same endpoint loaded fine
+  before and after). Worth a backend cold-start look if it recurs.
+- Operator-side TODOs unchanged (TODO_OPERATOR.md): DB backups, lawyer
+  for DPA + AUP, two incident-runbook names, security@ mailbox.
+- MasterPlanAdminPage.jsx decomposition still queued (maintainability).
