@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { masterPlanAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 
@@ -6,7 +6,7 @@ export function useZones(params = {}) {
   return useQuery({
     queryKey: ['master-plan-zones', params],
     queryFn: () => masterPlanAPI.listZones(params).then((r) => r.data.data ?? []),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -108,7 +108,7 @@ export function useStreetLookup(params = {}) {
       .streetLookup({ search, zone, limit })
       .then((r) => r.data.data ?? { query: search, zone_filter: zone, rows: [], summary: {}, disclaimer: '' }),
     staleTime: 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -116,7 +116,7 @@ export function useBbmpUavEntries(params = {}) {
   return useQuery({
     queryKey: ['master-plan-bbmp-uav', params],
     queryFn: () => masterPlanAPI.listBbmpUav(params).then((r) => r.data.data ?? { schema_ready: true, rows: [] }),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 }
 
