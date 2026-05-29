@@ -31,6 +31,22 @@ export const formatCrores = (value) => {
 };
 
 /**
+ * Format a PRICE-in-crore field, treating a missing OR non-positive value
+ * as "not set" → "-".
+ *
+ * Use this for ask / negotiated / entry price fields where a stored 0 — or
+ * the Postgres driver's NUMERIC-as-string "0.00", which is truthy and slips
+ * past a plain `value ? ... : '-'` guard — means "not yet populated", never a
+ * genuine ₹0 acquisition price. Plain `formatCrores` stays correct for
+ * cost / revenue / profit fields where 0 is a real, displayable value.
+ */
+export const formatCroresOrDash = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return '-';
+  return `₹${num.toFixed(2)} Cr`;
+};
+
+/**
  * Format percentage
  */
 export const formatPct = (value, decimals = 1) => {

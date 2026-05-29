@@ -346,13 +346,28 @@ const extractOverdueDdCount = (ws) => {
   };
 };
 
+// Statuses that count a DD item as "done" — mirrors READY_STATUSES in
+// dealReadiness.service.js so the Recommendation card and the Deal Pulse
+// ribbon never show two different counts for the same concept.
+const DD_READY_STATUSES = new Set(['completed', 'not_applicable']);
+
 const extractDealBreakerDdCount = (ws) => {
   const items = getDdItems(ws);
   if (!Array.isArray(items) || items.length === 0) return null;
+  // Count EXACTLY what dealReadiness.service.buildReadinessSummary counts as
+  // `pending_deal_breakers`: required + deal_breaker severity + not in a
+  // ready status. Previously this extractor (a) also matched severity
+  // 'critical' — which is a RISK severity, never a DD severity (see
+  // DD_SEVERITIES in constants/domain.js), so it silently over-counted on
+  // any deal whose data carried a stray critical-tagged DD row; (b) skipped
+  // the is_required filter; and (c) used a non-DD status set
+  // {completed,resolved,cleared}. The result was the Deal Pulse showing "5
+  // deal-breakers" while this card said "6 unresolved deal-breaker items" on
+  // the same page. Aligning the predicate makes the two numbers agree.
   const dealBreakers = items.filter((d) => {
-    if (d?.severity !== 'critical' && d?.severity !== 'deal_breaker') return false;
-    const status = String(d?.status || '').toLowerCase();
-    return status !== 'completed' && status !== 'resolved' && status !== 'cleared';
+    if (!d?.is_required) return false;
+    if (d?.severity !== 'deal_breaker') return false;
+    return !DD_READY_STATUSES.has(String(d?.status || '').toLowerCase());
   });
   if (dealBreakers.length === 0) return null;
   return {
