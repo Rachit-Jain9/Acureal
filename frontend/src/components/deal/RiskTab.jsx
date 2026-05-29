@@ -244,15 +244,19 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
+                type="button"
                 onClick={startEdit}
-                className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                aria-label="Edit risk flag"
+                className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 title="Edit"
               >
                 <Edit2 size={13} />
               </button>
               <button
+                type="button"
                 onClick={() => onDelete(flag.id)}
-                className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                aria-label="Delete risk flag"
+                className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 title="Delete"
               >
                 <Trash2 size={13} />

@@ -20,8 +20,15 @@ import { usePrefetchDealWorkspace } from '../useDeals';
 // shared ref. This gives the test a stable function reference that
 // survives `await act(...)` boundaries.
 function setup() {
+  // gcTime: Infinity (not 0). A prefetch creates a cache entry with NO
+  // observer; under gcTime:0 React Query garbage-collects it the instant the
+  // prefetch settles, which RACED the "caches the result" assertion below and
+  // made it flaky on CI (the entry was collected before the read, so
+  // getQueryData returned undefined despite the waitFor). Each test builds its
+  // own QueryClient, so there's no cross-test leakage to guard against —
+  // keeping prefetched entries for the test's lifetime is correct + stable.
   const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
   const ref = { current: null };
   function Probe() {
