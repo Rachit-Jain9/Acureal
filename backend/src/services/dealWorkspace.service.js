@@ -38,7 +38,6 @@ const dealStructureRecommender = require('./dealStructureRecommender.service');
 const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
 const icReadiness = require('./icReadiness.service');
-const approvalsService = require('./approvals.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
@@ -121,7 +120,7 @@ async function getDealWorkspace(dealId, options = {}) {
     riskScore,
     waterfalls,
     promoterData,
-    approvalsList,
+    nearbyComps,
   ] = await Promise.all([
     optional(() => financialService.getFinancials(dealId), 'financials'),
     optional(() => financialService.getScenarios(dealId), 'scenarios'),
@@ -137,22 +136,38 @@ async function getDealWorkspace(dealId, options = {}) {
     optional(() => ddService.getDDScore(dealId), 'ddScore'),
     optional(() => riskService.getRiskScore(dealId), 'riskScore'),
     optional(() => waterfallService.getWaterfall(dealId), 'waterfalls'),
-    // Promoter posture + approvals are each consumed by TWO downstream
-    // slices (promoter: deal-structure + IC readiness; approvals: K-RERA
-    // + IC readiness). Fetch each ONCE here, in the same parallel batch,
-    // instead of the previous 2×-per-load round-trips. `optional` keeps
-    // the migration-tolerant degrade-to-null contract the inline
-    // try/catch blocks had.
+    // Promoter posture is consumed by the deal-structure + IC-readiness
+    // slices — fetch once here in the parallel batch.
     optional(() => promoterProfileService.getProfileWithAssessment(dealId), 'promoterProfile'),
-    optional(() => approvalsService.listByDeal(dealId), 'approvals'),
+    // Nearby verified comps — needed by the recommendation engine + deal
+    // doctor (price / absorption / cap-rate signals) so the LIVE deal page
+    // surfaces the same market cards the DOCX/PPTX export already shows, AND
+    // reused for the IC-readiness comps count. Comps are location-keyed, so
+    // this resolves to [] when the deal has no coordinates.
+    optional(async () => {
+      const lat = Number(deal.property_lat ?? deal.parcel_lat ?? deal.latitude);
+      const lng = Number(deal.property_lng ?? deal.parcel_lng ?? deal.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !compsService.getCompsNearLocation) return [];
+      const nearby = await compsService.getCompsNearLocation(lat, lng, 5, deal.asset_class);
+      return Array.isArray(nearby) ? nearby : [];
+    }, 'nearbyComps'),
   ]);
 
   // Normalised, single-source views the slices below read from. Computing
-  // these once removes the duplicate flatten loops + the double approvals
-  // coercion the K-RERA and IC-readiness slices each used to do inline.
-  const approvals = Array.isArray(approvalsList) ? approvalsList : [];
+  // these once removes the duplicate flatten loops the K-RERA and IC-readiness
+  // slices used to do inline.
+  //
+  // Approvals come from `deal.approval_items` (already loaded by getDealById),
+  // not a second approvalsService.listByDeal round-trip: that not only saved a
+  // query but also fixed a cross-org-shared-deal drift — listByDeal layers an
+  // explicit `org = current_organization_id()` filter that returned [] for a
+  // shared deal, so the K-RERA/IC packs showed zero approvals while the
+  // recommendation cards (reading deal.approval_items) showed them. One source
+  // now feeds every consumer.
+  const approvals = Array.isArray(deal.approval_items) ? deal.approval_items : [];
   const documentsFlat = flattenDocuments(documents);
   const promoterPosture = promoterData?.assessment?.posture || 'unverified';
+  const compsEntries = Array.isArray(nearbyComps) ? nearbyComps : [];
 
   const waterfallByKind = Array.isArray(waterfalls)
     ? waterfalls.reduce((acc, row) => {
@@ -167,7 +182,17 @@ async function getDealWorkspace(dealId, options = {}) {
   const composed = {
     deal,
     financial: {
-      summary: financials,
+      // Surface the kernel KPIs at `summary.kpis` (camelCase: irr,
+      // equityMultiple, totalRevenueCr, …) where the signal extractors read
+      // them. The raw DB row only carries the JSONB `model_params` column +
+      // snake_case scalars; the kpis object lives inside model_params. Without
+      // this, the recommendation engine + deal doctor saw no financial signals
+      // in-app (land-cost-share / IRR-vs-hurdle / equity-multiple never fired),
+      // even though the DOCX/PPTX export — which feeds the SAME engines
+      // `{ kpis: modelParams.kpis }` — showed them. Spread the row so existing
+      // snake_case + `model_params` readers (e.g. the frontend useDealKpis
+      // selector) keep working.
+      summary: financials ? { ...financials, kpis: financials.model_params?.kpis ?? null } : null,
       scenarios,
       graph: financialGraph,
       auditEvents: auditEvents || [],
@@ -180,7 +205,11 @@ async function getDealWorkspace(dealId, options = {}) {
       flags: deal.risk_flags || [],
       score: riskScore,
     },
-    approvals: deal.approval_items || [],
+    approvals,
+    // Nearby verified comps in the shape the market signal extractors read
+    // (`ws.comps.entries`) — parity with the export path so price / absorption
+    // / cap-rate recommendation + deal-doctor cards fire on the live page too.
+    comps: { entries: compsEntries },
     documents: documents || { documents: [], grouped: {} },
     activities: activities || [],
     waterfall: {
@@ -433,20 +462,9 @@ async function getDealWorkspace(dealId, options = {}) {
   // documents, micro_market, best_use, rera_readiness, promoter, deal
   // doctor). Plus one cheap query for comps count.
   const icReadinessSlice = await optional(async () => {
-    // Pull verified comps within 5km of the deal's parcel. Comps are
-    // location-keyed in REDIP, not deal-keyed — we use the deal's
-    // coordinates when present, otherwise 0.
-    let compsCount = 0;
-    try {
-      const lat = Number(deal.property_lat ?? deal.parcel_lat ?? deal.latitude);
-      const lng = Number(deal.property_lng ?? deal.parcel_lng ?? deal.longitude);
-      if (Number.isFinite(lat) && Number.isFinite(lng) && compsService.getCompsNearLocation) {
-        const nearby = await compsService.getCompsNearLocation(lat, lng, 5, deal.asset_class);
-        compsCount = Array.isArray(nearby)
-          ? nearby.filter((c) => c.is_verified !== false).length
-          : 0;
-      }
-    } catch { /* migration-tolerant */ }
+    // Verified comps within 5km — reuse the batch-fetched `compsEntries`
+    // (no second getCompsNearLocation round-trip). Count only verified ones.
+    const compsCount = compsEntries.filter((c) => c.is_verified !== false).length;
 
     // promoterData, approvals, documentsFlat are all batch-fetched +
     // normalised once above — the IC composer reads the same single-source
