@@ -64,6 +64,26 @@ async function optional(thunk, sliceName) {
 }
 
 /**
+ * Flatten the workspace documents slice into a single array. The documents
+ * service returns either a flat array, a `{data: [...]}` envelope, or a
+ * `{category: [...]}` grouping; the readiness composers (K-RERA + IC) want
+ * one flat list. Previously inlined identically in both slices — hoisted
+ * here so the flatten loop runs once per workspace load.
+ */
+function flattenDocuments(documentsSlice) {
+  const byCategory = documentsSlice?.data || documentsSlice || {};
+  if (Array.isArray(byCategory)) return byCategory;
+  if (byCategory && typeof byCategory === 'object') {
+    let flat = [];
+    for (const k of Object.keys(byCategory)) {
+      if (Array.isArray(byCategory[k])) flat = flat.concat(byCategory[k]);
+    }
+    return flat;
+  }
+  return [];
+}
+
+/**
  * Get the full workspace payload for a deal.
  *
  * The shape is intentionally flat at the top level — one slice per tab — so
@@ -100,6 +120,8 @@ async function getDealWorkspace(dealId, options = {}) {
     ddScore,
     riskScore,
     waterfalls,
+    promoterData,
+    approvalsList,
   ] = await Promise.all([
     optional(() => financialService.getFinancials(dealId), 'financials'),
     optional(() => financialService.getScenarios(dealId), 'scenarios'),
@@ -115,7 +137,22 @@ async function getDealWorkspace(dealId, options = {}) {
     optional(() => ddService.getDDScore(dealId), 'ddScore'),
     optional(() => riskService.getRiskScore(dealId), 'riskScore'),
     optional(() => waterfallService.getWaterfall(dealId), 'waterfalls'),
+    // Promoter posture + approvals are each consumed by TWO downstream
+    // slices (promoter: deal-structure + IC readiness; approvals: K-RERA
+    // + IC readiness). Fetch each ONCE here, in the same parallel batch,
+    // instead of the previous 2×-per-load round-trips. `optional` keeps
+    // the migration-tolerant degrade-to-null contract the inline
+    // try/catch blocks had.
+    optional(() => promoterProfileService.getProfileWithAssessment(dealId), 'promoterProfile'),
+    optional(() => approvalsService.listByDeal(dealId), 'approvals'),
   ]);
+
+  // Normalised, single-source views the slices below read from. Computing
+  // these once removes the duplicate flatten loops + the double approvals
+  // coercion the K-RERA and IC-readiness slices each used to do inline.
+  const approvals = Array.isArray(approvalsList) ? approvalsList : [];
+  const documentsFlat = flattenDocuments(documents);
+  const promoterPosture = promoterData?.assessment?.posture || 'unverified';
 
   const waterfallByKind = Array.isArray(waterfalls)
     ? waterfalls.reduce((acc, row) => {
@@ -348,13 +385,8 @@ async function getDealWorkspace(dealId, options = {}) {
   // tolerant and degrades to 'unverified' silently).
   const dealStructureSlice = await optional(async () => {
     if (!deal.asset_class) return { scores: [], reason: 'no_asset_class' };
-    let promoterPosture = 'unverified';
-    try {
-      const promoterData = await promoterProfileService.getProfileWithAssessment(deal.id);
-      promoterPosture = promoterData?.assessment?.posture || 'unverified';
-    } catch {
-      // Migration-tolerant: degrade silently.
-    }
+    // promoterPosture is derived once from the batch-fetched promoterData
+    // above (degrades to 'unverified' when the promoter table is absent).
     return dealStructureRecommender.scoreFromContext({
       assetClass: deal.asset_class,
       promoterPosture,
@@ -385,25 +417,8 @@ async function getDealWorkspace(dealId, options = {}) {
     if (!deal.asset_class) {
       return karnatakaReraReadiness.composeReadiness({ assetClass: null, dealName: deal.name });
     }
-    let approvals = [];
-    try {
-      approvals = await approvalsService.listByDeal(deal.id);
-    } catch {
-      // Migration-tolerant — proceed with empty approvals if the approvals
-      // table is missing. Readiness still renders the checklist; everything
-      // shows missing.
-    }
-    // `composed.documents` is the workspace's documents slice (a {category: [...] }
-    // object; we flatten to a single array for the readiness composer).
-    const docsByCategory = composed?.documents?.data || composed?.documents || {};
-    let documentsFlat = [];
-    if (Array.isArray(docsByCategory)) {
-      documentsFlat = docsByCategory;
-    } else if (typeof docsByCategory === 'object') {
-      for (const k of Object.keys(docsByCategory)) {
-        if (Array.isArray(docsByCategory[k])) documentsFlat = documentsFlat.concat(docsByCategory[k]);
-      }
-    }
+    // `approvals` + `documentsFlat` are the batch-fetched, single-source
+    // views computed once above — no per-slice refetch / reflatten.
     return karnatakaReraReadiness.composeReadiness({
       assetClass: deal.asset_class,
       approvals,
@@ -433,27 +448,9 @@ async function getDealWorkspace(dealId, options = {}) {
       }
     } catch { /* migration-tolerant */ }
 
-    // Pull the promoter slice (may already be loaded but cheap to refetch
-    // for migration-tolerance; degrades silently if table is missing).
-    let promoterSlice = null;
-    try {
-      promoterSlice = await promoterProfileService.getProfileWithAssessment(deal.id);
-    } catch { /* ignore */ }
-
-    // Flatten documents the same way the K-RERA pack does
-    const docsByCategory = composed?.documents?.data || composed?.documents || {};
-    let documentsFlat = [];
-    if (Array.isArray(docsByCategory)) {
-      documentsFlat = docsByCategory;
-    } else if (typeof docsByCategory === 'object') {
-      for (const k of Object.keys(docsByCategory)) {
-        if (Array.isArray(docsByCategory[k])) documentsFlat = documentsFlat.concat(docsByCategory[k]);
-      }
-    }
-
-    let approvals = [];
-    try { approvals = await approvalsService.listByDeal(deal.id); } catch { /* migration-tolerant */ }
-
+    // promoterData, approvals, documentsFlat are all batch-fetched +
+    // normalised once above — the IC composer reads the same single-source
+    // views the deal-structure and K-RERA slices use.
     return icReadiness.composeReadiness({
       deal,
       financial: composed?.financial || null,
@@ -465,7 +462,7 @@ async function getDealWorkspace(dealId, options = {}) {
       dd: composed?.dd || null,
       risk: composed?.risk || riskScore,
       deal_doctor: dealDoctorSlice,
-      promoter: promoterSlice,
+      promoter: promoterData,
       comps_count: compsCount,
     });
   }, 'icReadiness');
