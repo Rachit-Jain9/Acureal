@@ -8301,3 +8301,102 @@ repeating the deploy race), each re-verified live after its deploy.
 - Operator-side TODOs unchanged (TODO_OPERATOR.md): DB backups, lawyer
   for DPA + AUP, two incident-runbook names, security@ mailbox.
 - MasterPlanAdminPage.jsx decomposition still queued (maintainability).
+
+## 2026-05-29 (10h block) — multi-agent audit + fix sweep (PRs #645-#650)
+
+### What was worked on
+
+Operator opted into multi-agent orchestration ("workflow"). Ran a
+Workflow that fanned out 8 audit dimensions across the codebase, then
+adversarially verified every reported finding with a second agent
+(29 subagents total). It returned 18 confirmed issues (3 high, 10
+medium, 5 low) — including a SECOND React #310 crash of the exact
+class fixed last block, an IRR units bug, and an in-app-vs-export
+recommendation parity gap. Triaged into 5 focused PRs, each with
+tests, merged one-at-a-time.
+
+**PR #645 (A) — two more React #310 crashes (HIGH).** The audit's
+hooks dimension found `TerminalValuePanel` (FinancialVisualizationLayer)
+and `QuarterlyProformaPanel` both calling a `useMemo` after an early
+return — same crash class as the Zoning tab last block. For income-like
+deals / deals with an empty-then-populated proforma, the panel
+re-renders with a changed hook count → React #310 crashes the
+Financials surface. Hoisted both useMemos above the guards. Swept all
+of frontend/src for the pattern — these were the last two real ones
+(remaining grep hits are helper-return-then-next-component false
+positives). Loading→loaded regression tests added.
+
+**PR #646 (B) — recommendation engine correctness (HIGH).** Three
+related defects making the LIVE deal page weaker/wronger than the
+export: (1) dealWorkspace fed the engine the raw DB row as
+`financial.summary` (no `.kpis`) and no `comps` slice, so every
+financial + market signal returned null in-app while the DOCX/PPTX
+export showed them — fixed by attaching `summary.kpis` (from
+model_params) + `comps.entries`; (2) extractIrrVsHurdle treated the
+kernel's percent-form IRR (14.0) as a fraction, printing "1400%" /
+"138400 bps" and never firing irr-below-hurdle — fixed by /100; (3)
+approvals dual-source (cross-org-shared deals showed zero approvals in
+K-RERA/IC) — collapsed to the single deal.approval_items source.
+
+**PR #647 (C) — truthful display (MED).** Dashboard "Avg IRR" coerced
+null→0 and rendered a fake red "0.0% · Below bench" on a fresh org —
+now shows "—". Map "Nearby Comp Benchmarks" panel guarded the wrong
+object (`nearbyBenchmarks?.found` vs `nearbyBenchmarksResponse?.found`)
+so it was DEAD for every property — one-line fix restores it.
+
+**PR #648 (D) — UI plumbing (MED).** PageHeader silently dropped `sub`
++ `right`/`action` props, so four admin pages had no subtitle and the
+A/B Eval header Refresh never rendered — added the aliases. Dead
+`keepPreviousData: true` (removed in React Query v5) in 4 hooks →
+`placeholderData: keepPreviousData` (stops list-skeleton flash).
+Light-theme muted text #94A3B8 (~2.5:1, fails WCAG AA) → #5B6B7F.
+
+**PR #649 (E) — frontend quality (MED/LOW).** Stabilised the flaky
+usePrefetchDealWorkspace test (gcTime:0 → Infinity; it was blocking
+CI on unrelated PRs, incl. this block's PR-B). Debounced the deals
+list search (250ms; was firing a request + skeleton flash per
+keystroke). Labelled the risk edit/delete icon buttons (aria-label +
+focus-visible).
+
+### PRs opened / merged
+
+All merged to master, each re-verified green on CI:
+- #645 fix(financials): two more React #310 crashes — merged
+- #646 fix(recommendation): in-app financial+market signals + IRR units — merged
+- #647 fix(display): honest dashboard Avg IRR + Map benchmarks panel — merged
+- #648 fix(ui): PageHeader aliases + keepPreviousData + AA muted text — merged
+- #649 fix(fe): flaky test + deals search debounce + risk button a11y — merged
+
+### Plain-English recap (operator)
+
+- **Two more pages that could crash now don't.** The Financials page had
+  two hidden crashes (same kind as the Zoning one) that hit on certain
+  income deals / after recalculating — both fixed.
+- **The live deal page now shows the same financial + market
+  recommendations the exported report does.** They were silently missing
+  in-app. And no number ever reads "1400%" again.
+- **The dashboard tells the truth on a fresh account** — "Avg IRR · —"
+  instead of a fake red "0.0% · Below bench".
+- **The map's nearby-comps panel works** — it was showing "no comps" for
+  every property due to a one-word bug.
+- **Admin pages show their descriptions again**, the A/B Eval refresh
+  button is back, light-mode grey text is readable, and the deals search
+  no longer flickers as you type.
+
+### Validation
+
+- Backend: 169 suites / 2943 tests pass (full suite; one transient flake
+  on first run passed on re-run + was root-caused & fixed in #649)
+- Frontend: ~1040 tests pass; clean Vite build on every PR
+- New regression tests: 2 crash lifecycle tests, IRR-unit + workspace-shape
+  tests, KpiStripWidget honesty, PageHeader aliases, flaky-test stabilised
+
+### What's left to do (documented, deliberately deferred — not rushed)
+
+- **New-Deal + Add-Comparable modal a11y** — swap onto the Modal
+  design-system primitive (role=dialog / aria-modal / Escape / focus-
+  trap). Larger change on two key flows; deserves its own PR + live check.
+- Comps "All" filter-chip count (LOW); Micro-Market Briefing freshness
+  date (LOW — needs data-plumbing verification).
+- Operator-side TODOs unchanged (backups, DPA/AUP lawyer, runbook names,
+  security@ mailbox).
