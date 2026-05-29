@@ -98,8 +98,15 @@ function Tip({ active, payload, label, valueFormatter = (v) => `₹${Number(v).t
 // ─── TERMINAL VALUE PANEL ─────────────────────────────────────────────────
 
 export function TerminalValuePanel({ kpis, revenue, inputs }) {
+  // NOTE: the `if (!method) return null` guard sits AFTER the useMemo below,
+  // not here. `method` flips falsy→truthy across renders for income-like
+  // deals (it loads async — null in normalizeFinancials until the kernel
+  // computes a terminal value), and the panel mounts purely on asset class.
+  // A useMemo placed before the guard but reached only when method is truthy
+  // grows the hook count 0→1 between renders → React #310 crash. All the
+  // derivations below use safeNumber (default 0), so they're inert when
+  // method is absent.
   const method = kpis?.terminalValueMethod || revenue?.terminalValueMethod;
-  if (!method) return null;
   const tv = safeNumber(kpis?.terminalValue ?? revenue?.terminalValue, 0);
   const tvPv = safeNumber(kpis?.terminalValuePV ?? revenue?.terminalValuePV, 0);
   const noiStab = safeNumber(kpis?.noi ?? revenue?.stabilizedNOI, 0);
@@ -152,6 +159,9 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
     }
     return rows.sort((a, b) => b.value - a.value);
   }, [capPct, noiExit, noiStab, discountPct, gPct, exitMultipleInput, fwdCr, method]);
+
+  // Early return AFTER all hooks — see the note at the top of the component.
+  if (!method) return null;
 
   const formulaMap = {
     exit_cap_rate:     `NOI_exit ÷ Exit Cap = ₹${noiExit.toFixed(2)}Cr ÷ ${capPct.toFixed(2)}%`,

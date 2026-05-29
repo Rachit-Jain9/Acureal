@@ -93,10 +93,16 @@ const sumAt = (cells, indices) =>
 
 export default function QuarterlyProformaPanel({ proforma }) {
   const [view, setView] = useState('quarterly'); // 'quarterly' | 'yearly'
+  // All hooks MUST run before any early return — `aggregateYears` already
+  // null-guards (returns [] for an empty/absent proforma), so it is safe to
+  // call during the empty render. Calling useMemo AFTER the `return null`
+  // below let a recalc that populates the proforma on a still-mounted
+  // instance grow the hook count 1→2 → React #310 crash (same class as the
+  // Zoning-tab DealStreetLookupCard fix).
+  const years = useMemo(() => aggregateYears(proforma), [proforma]);
 
   if (!proforma || !proforma.quarters?.length) return null;
 
-  const years = useMemo(() => aggregateYears(proforma), [proforma]);
   const isYearly = view === 'yearly';
 
   const headers = isYearly
