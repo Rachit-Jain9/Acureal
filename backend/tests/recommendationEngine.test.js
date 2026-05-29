@@ -81,7 +81,7 @@ describe('signalExtractors — extractIrrVsHurdle', () => {
   });
 
   test('uses default 16% hurdle when not specified on the deal', () => {
-    const ws = makeWorkspace({ kpis: { irr: 0.142 } });
+    const ws = makeWorkspace({ kpis: { irr: 14.2 } /* percent-form, as the kernel emits */ });
     const s = extractIrrVsHurdle(ws);
     expect(s.value.hurdle).toBe(0.16);
     expect(s.value.gap_bps).toBe(-180);
@@ -90,7 +90,7 @@ describe('signalExtractors — extractIrrVsHurdle', () => {
   test('honours deal.hurdle_irr_pct when set', () => {
     const ws = makeWorkspace({
       deal: { hurdle_irr_pct: 0.20 },
-      kpis: { irr: 0.142 },
+      kpis: { irr: 14.2 } /* percent-form, as the kernel emits */,
     });
     const s = extractIrrVsHurdle(ws);
     expect(s.value.hurdle).toBe(0.20);

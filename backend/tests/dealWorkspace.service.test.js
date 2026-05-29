@@ -13,6 +13,9 @@ jest.mock('../src/services/microMarketIntelligence.service', () => ({
   classifyParcel: jest.fn(),
   getBriefing: jest.fn(),
 }));
+jest.mock('../src/services/comps.service', () => ({
+  getCompsNearLocation: jest.fn(),
+}));
 
 const dealService = require('../src/services/deal.service');
 const financialService = require('../src/services/financial.service');
@@ -22,6 +25,7 @@ const ddService = require('../src/services/dd.service');
 const riskService = require('../src/services/risk.service');
 const waterfallService = require('../src/services/waterfall.service');
 const microMarketIntelligence = require('../src/services/microMarketIntelligence.service');
+const compsService = require('../src/services/comps.service');
 
 const dealWorkspaceService = require('../src/services/dealWorkspace.service');
 
@@ -199,5 +203,40 @@ describe('dealWorkspace.service', () => {
 
     expect(microMarketIntelligence.classifyParcel).not.toHaveBeenCalled();
     expect(ws.micro_market.reason).toBe('no_parcel_coordinates');
+  });
+
+  // Regression: the in-app workspace must feed the recommendation engine the
+  // SAME shape the DOCX/PPTX export does — kernel kpis at
+  // `financial.summary.kpis` and comps at `comps.entries` — so the live deal
+  // page surfaces the financial + market recommendation/deal-doctor cards
+  // instead of silently omitting them.
+  test('attaches kernel kpis + nearby comps to the composed workspace', async () => {
+    dealService.getDealById.mockResolvedValueOnce({
+      ...mockDeal(),
+      property_lat: 12.97,
+      property_lng: 77.75,
+      asset_class: 'residential_apartments',
+    });
+    financialService.getFinancials.mockResolvedValueOnce({
+      deal_id: DEAL_ID,
+      irr_pct: 14,
+      total_revenue_cr: 100,
+      model_params: { kpis: { irr: 14, equityMultiple: 1.6, revenue: 100, landCr: 30 } },
+    });
+    compsService.getCompsNearLocation.mockResolvedValueOnce([
+      { price_per_sqft: 5000, is_verified: true },
+      { price_per_sqft: 5200, is_verified: true },
+      { price_per_sqft: 5400, is_verified: false },
+    ]);
+
+    const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
+
+    // kpis surfaced where the signal extractors read them
+    expect(ws.financial.summary.kpis).toEqual({ irr: 14, equityMultiple: 1.6, revenue: 100, landCr: 30 });
+    // raw row fields preserved (spread) for the frontend's other readers
+    expect(ws.financial.summary.irr_pct).toBe(14);
+    // comps surfaced in the extractor-expected shape
+    expect(ws.comps.entries).toHaveLength(3);
+    expect(compsService.getCompsNearLocation).toHaveBeenCalledWith(12.97, 77.75, 5, 'residential_apartments');
   });
 });

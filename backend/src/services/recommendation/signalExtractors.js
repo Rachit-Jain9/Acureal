@@ -88,8 +88,18 @@ const extractIrrVsHurdle = (ws) => {
   const kpis = getKpis(ws);
   const deal = getDeal(ws);
   if (!kpis) return null;
-  const irr = numField(kpis, 'irr');
-  if (irr == null) return null;
+  // The kernel emits IRR in PERCENT form (14.0 = 14% p.a.; see
+  // packages/financial-kernel kpis.ts irrAnnualPct, and the frontend
+  // format.js note "Kernel returns IRR already in percent form"). The hurdle
+  // + gap math below is fraction-based (default hurdle 0.16), and the
+  // value/evidence/meta blocks re-multiply by 100 for display — so normalise
+  // the percent IRR to a fraction ONCE here. Reading it as a raw fraction
+  // (the prior bug) made `gap` ~100x off: irr-below-hurdle could never fire
+  // and cards/exports printed nonsense like "Base-case IRR 1400.0%" /
+  // "138400 bps".
+  const irrPct = numField(kpis, 'irr');
+  if (irrPct == null) return null;
+  const irr = irrPct / 100;
   const hurdle = numField(deal, 'hurdle_irr_pct') ?? 0.16;
   const gap = irr - hurdle;
   return {
