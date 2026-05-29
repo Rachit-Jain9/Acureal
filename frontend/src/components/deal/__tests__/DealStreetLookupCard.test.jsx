@@ -153,6 +153,33 @@ describe('DealStreetLookupCard', () => {
     expect(screen.getByText(/Loading Bengaluru street lookup/i)).toBeInTheDocument();
   });
 
+  it('does NOT crash transitioning loading → loaded (React #310 hooks regression)', () => {
+    // Regression for the production crash that took down the whole Zoning
+    // tab: the spreadAnalysis useMemo sat AFTER the loading/error early
+    // returns, so the loading render called one fewer hook than the loaded
+    // render → "rendered more hooks than during the previous render".
+    // Every other test in this file mounts with a FIXED query state, so the
+    // hook count never changes between renders and the bug stayed invisible.
+    // This test exercises the real lifecycle: mount loading, then re-render
+    // the SAME instance with data.
+    lookupQuery = { data: undefined, isLoading: true, isError: false, isFetching: true };
+    const { rerender } = renderWithRouter(
+      <DealStreetLookupCard property={BENGALURU_PROPERTY} deal={{ negotiated_price_cr: 11 }} />,
+    );
+    expect(screen.getByText(/Loading Bengaluru street lookup/i)).toBeInTheDocument();
+
+    // Query resolves — the same component instance re-renders with data.
+    lookupQuery = { data: SAMPLE, isLoading: false, isError: false, isFetching: false };
+    expect(() =>
+      rerender(
+        <MemoryRouter>
+          <DealStreetLookupCard property={BENGALURU_PROPERTY} deal={{ negotiated_price_cr: 11 }} />
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
+    expect(screen.getByText(/Bengaluru street lookup/i)).toBeInTheDocument();
+  });
+
   it('shows an error state when the lookup fails', () => {
     lookupQuery = { data: undefined, isLoading: false, isError: true, isFetching: false };
     renderWithRouter(<DealStreetLookupCard property={BENGALURU_PROPERTY} />);

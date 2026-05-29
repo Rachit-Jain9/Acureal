@@ -111,6 +111,34 @@ export default function DealStreetLookupCard({ property, deal }) {
     setSearchInput(seed);
   }, [seed]);
 
+  // ── Data derivations + the spread hook MUST run before any early return ──
+  // React error #310 fired here: the loading render returned at the
+  // <PanelSkeleton/> guard below BEFORE reaching the spreadAnalysis useMemo,
+  // so the subsequent loaded render called one more hook than the loading
+  // render — a Rules-of-Hooks violation that crashed the entire Zoning tab
+  // through the ErrorBoundary. Every hook now sits above every conditional
+  // return; the derivations read `data` defensively so they're safe to run
+  // while the query is still loading (data === undefined).
+  const rows = data?.rows || [];
+  const summary = data?.summary || {};
+  const topMatch = rows[0] || null;
+  const enrichedCount = summary.enriched ?? 0;
+  const totalCount = summary.total ?? 0;
+  const enrichedPct = totalCount > 0 ? Math.round((enrichedCount / totalCount) * 100) : 0;
+
+  // Spread vs guidance — only computable when the top match has a
+  // bandwidth and the deal has a transaction price. Falls back gracefully
+  // (kernel returns ok:false) when either side is missing — safe to call
+  // with a null topMatch during the loading render.
+  const spreadAnalysis = useMemo(() => analyseGuidanceValueSpread({
+    transactionPriceCr: deal?.negotiated_price_cr ?? deal?.land_ask_price_cr ?? deal?.entry_value_cr,
+    landAreaSqft: property?.land_area_sqft ?? deal?.land_area_sqft,
+    pricePerSqft: property?.selling_rate_per_sqft ?? deal?.selling_rate_per_sqft,
+    guidanceMinInr: topMatch?.guidance_value_band_min_inr,
+    guidanceMaxInr: topMatch?.guidance_value_band_max_inr,
+  }), [deal, property, topMatch]);
+
+  // ── Early returns — AFTER all hooks (rules-of-hooks) ──
   // Skip the panel entirely when the property is outside Bengaluru — the
   // BBMP gazette only covers BBMP-jurisdiction streets.
   const city = String(property?.city || '').toLowerCase();
@@ -126,24 +154,6 @@ export default function DealStreetLookupCard({ property, deal }) {
       </ErrorState>
     );
   }
-
-  const rows = data?.rows || [];
-  const summary = data?.summary || {};
-  const topMatch = rows[0] || null;
-  const enrichedCount = summary.enriched ?? 0;
-  const totalCount = summary.total ?? 0;
-  const enrichedPct = totalCount > 0 ? Math.round((enrichedCount / totalCount) * 100) : 0;
-
-  // Spread vs guidance — only computable when the top match has a
-  // bandwidth and the deal has a transaction price. Falls back gracefully
-  // (kernel returns ok:false) when either side is missing.
-  const spreadAnalysis = useMemo(() => analyseGuidanceValueSpread({
-    transactionPriceCr: deal?.negotiated_price_cr ?? deal?.land_ask_price_cr ?? deal?.entry_value_cr,
-    landAreaSqft: property?.land_area_sqft ?? deal?.land_area_sqft,
-    pricePerSqft: property?.selling_rate_per_sqft ?? deal?.selling_rate_per_sqft,
-    guidanceMinInr: topMatch?.guidance_value_band_min_inr,
-    guidanceMaxInr: topMatch?.guidance_value_band_max_inr,
-  }), [deal, property, topMatch]);
 
   const signalToneClass = {
     success: 'text-data-positive',
