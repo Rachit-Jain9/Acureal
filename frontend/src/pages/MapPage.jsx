@@ -542,7 +542,7 @@ export default function MapPage() {
                   {showNearbyComps ? (
                     nearbyBenchmarksLoading ? (
                       <p className="mt-2 text-sm text-content-secondary">Loading comp benchmarks...</p>
-                    ) : nearbyBenchmarks?.found ? (
+                    ) : nearbyBenchmarksResponse?.found ? (
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-xs uppercase tracking-wide text-content-muted">Median Rate</p>
