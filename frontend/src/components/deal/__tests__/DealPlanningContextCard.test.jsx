@@ -100,6 +100,52 @@ describe('DealPlanningContextCard', () => {
     expect(screen.queryByText('Peripheral Ring Road')).not.toBeInTheDocument();
   });
 
+  it('never renders the literal "undefined" when callout rows are hollow', () => {
+    // Regression for the live bug: callout ROWS exist (keys match) but their
+    // numeric sub-fields are absent, so the old template literals
+    // interpolated "P undefinedm · S undefinedm" etc. straight into the UI.
+    landUseQuery = {
+      data: {
+        callouts: [
+          { key: 'special_development_zones', value: {} },
+          { key: 'ngt_drainage_classification', value: {} },
+          { key: 'heritage_zones', value: {} },
+          { key: 'peripheral_ring_road', value: {} },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const { container } = renderWithRouter(<DealPlanningContextCard />);
+    expect(container.textContent).not.toMatch(/undefined/i);
+    // Every row is hollow → no tiles render → falls back to the empty state.
+    expect(screen.getByText(/Land-use facts have not been ingested yet/i)).toBeInTheDocument();
+  });
+
+  it('renders partial callouts with em-dashes (not "undefined") and skips hollow ones', () => {
+    landUseQuery = {
+      data: {
+        callouts: [
+          // NGT has only the primary buffer; secondary/tertiary missing.
+          { key: 'ngt_drainage_classification', value: { buffer_m_primary: 50 } },
+          // PRR carries a type label but no width.
+          { key: 'peripheral_ring_road', value: { type: 'PRR' } },
+          // Heritage row is entirely hollow → must be skipped.
+          { key: 'heritage_zones', value: {} },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const { container } = renderWithRouter(<DealPlanningContextCard />);
+    expect(container.textContent).not.toMatch(/undefined/i);
+    expect(screen.getByText('NGT drain buffers')).toBeInTheDocument();
+    expect(screen.getByText(/P 50m · S —m · T —m/)).toBeInTheDocument();
+    expect(screen.getByText('Peripheral Ring Road')).toBeInTheDocument();
+    expect(screen.getByText('PRR')).toBeInTheDocument();
+    expect(screen.queryByText('Heritage zones')).not.toBeInTheDocument();
+  });
+
   it('shows a skeleton while loading', () => {
     landUseQuery = { data: undefined, isLoading: true, isError: false };
     renderWithRouter(<DealPlanningContextCard />);

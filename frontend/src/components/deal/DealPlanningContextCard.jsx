@@ -12,6 +12,17 @@ const fmt = (value, fractionDigits = 0) => {
   });
 };
 
+// Returns the number when finite, else null. Used to decide whether a
+// callout tile has any real data worth rendering — a callout ROW can exist
+// in evidence_facts while its numeric sub-fields are absent, in which case
+// we must NOT render a tile full of interpolated "undefined" strings.
+const num = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+const nonEmptyStr = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
 function CalloutTile({ icon: Icon, label, value, hint, tone = 'neutral' }) {
   const toneClass = {
     warn: 'border-amber-200 bg-amber-50/60',
@@ -74,7 +85,19 @@ export default function DealPlanningContextCard() {
   const heritage = find((c) => c.key === 'heritage_zones');
   const prr = find((c) => c.key === 'peripheral_ring_road');
 
-  const hasAny = sdz || ngt || heritage || prr;
+  // A callout ROW can exist while its values are absent. Only treat a
+  // callout as renderable when it carries at least one real field — this
+  // is what stops the tiles from showing "P undefinedm · S undefinedm" or
+  // "undefinedm corridor · undefined" when the row is a hollow placeholder.
+  const sdzHas = !!sdz && (num(sdz.count) != null || num(sdz.max_far) != null ||
+    (Array.isArray(sdz.locations) && sdz.locations.length > 0));
+  const ngtHas = !!ngt && (num(ngt.buffer_m_primary) != null ||
+    num(ngt.buffer_m_secondary) != null || num(ngt.buffer_m_tertiary) != null);
+  const heritageHas = !!heritage && (num(heritage.count) != null ||
+    num(heritage.prohibited_radius_m) != null);
+  const prrHas = !!prr && (num(prr.width_m) != null || nonEmptyStr(prr.type) != null);
+
+  const hasAny = sdzHas || ngtHas || heritageHas || prrHas;
 
   if (!hasAny) {
     return (
@@ -120,39 +143,42 @@ export default function DealPlanningContextCard() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-        {sdz && (
+        {sdzHas && (
           <CalloutTile
             icon={MapPin}
             label="Special Development Zones"
-            value={`${fmt(sdz.count)} corridors · max FAR ${sdz.max_far ?? '—'}`}
-            hint={Array.isArray(sdz.locations) ? sdz.locations.slice(0, 3).join(', ') : null}
+            value={`${fmt(sdz.count)} corridors · max FAR ${num(sdz.max_far) != null ? fmt(sdz.max_far, 2) : '—'}`}
+            hint={Array.isArray(sdz.locations) && sdz.locations.length ? sdz.locations.slice(0, 3).join(', ') : null}
             tone="warn"
           />
         )}
-        {ngt && (
+        {ngtHas && (
           <CalloutTile
             icon={Trees}
             label="NGT drain buffers"
-            value={`P ${ngt.buffer_m_primary}m · S ${ngt.buffer_m_secondary}m · T ${ngt.buffer_m_tertiary}m`}
+            value={`P ${fmt(ngt.buffer_m_primary)}m · S ${fmt(ngt.buffer_m_secondary)}m · T ${fmt(ngt.buffer_m_tertiary)}m`}
             hint="Primary, secondary, tertiary drain setbacks"
             tone="success"
           />
         )}
-        {heritage && (
+        {heritageHas && (
           <CalloutTile
             icon={AlertTriangle}
             label="Heritage zones"
-            value={`${fmt(heritage.count)} zones · ${heritage.prohibited_radius_m}m prohibited`}
-            hint={heritage.regulated_radius_m ? `${heritage.regulated_radius_m}m regulated radius` : null}
+            value={`${fmt(heritage.count)} zones · ${fmt(heritage.prohibited_radius_m)}m prohibited`}
+            hint={num(heritage.regulated_radius_m) != null ? `${fmt(heritage.regulated_radius_m)}m regulated radius` : null}
             tone="warn"
           />
         )}
-        {prr && (
+        {prrHas && (
           <CalloutTile
             icon={Compass}
             label="Peripheral Ring Road"
-            value={`${prr.width_m}m corridor · ${prr.type}`}
-            hint={prr.note}
+            value={[
+              num(prr.width_m) != null ? `${fmt(prr.width_m)}m corridor` : null,
+              nonEmptyStr(prr.type),
+            ].filter(Boolean).join(' · ') || '—'}
+            hint={nonEmptyStr(prr.note)}
             tone="info"
           />
         )}
