@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { parcelIntelligenceAdminAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 
@@ -26,7 +26,11 @@ export function useParcelIntelligenceReviewQueue(params = {}) {
   return useQuery({
     queryKey: ['parcel-intelligence-review-queue', params],
     queryFn: () => parcelIntelligenceAdminAPI.reviewQueue(params).then((response) => response.data.data ?? []),
-    keepPreviousData: true,
+    // React Query v5: the bare `keepPreviousData: true` option was removed;
+    // it's now `placeholderData: keepPreviousData` (the imported helper). The
+    // old form was a silent no-op, so paginated/filtered lists flashed a
+    // skeleton on every page/filter change instead of holding prior rows.
+    placeholderData: keepPreviousData,
   });
 }
 

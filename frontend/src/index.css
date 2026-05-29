@@ -74,7 +74,12 @@ html[data-theme='light'] {
 
   --color-text-primary:   #0F172A;
   --color-text-secondary: #475569;
-  --color-text-muted:     #94A3B8;
+  /* #94A3B8 measured ~2.5:1 on white — below WCAG AA 4.5:1 for the
+     substantive secondary text (labels, metadata, captions) that uses
+     `text-content-muted` app-wide. #5B6B7F clears 4.5:1 on every light
+     surface (white → surface-2 #E2E8F0) while staying a visible step
+     lighter than --color-text-secondary. Dark theme muted is unchanged. */
+  --color-text-muted:     #5B6B7F;
   --color-text-inverse:   #F8FAFC;
 
   --color-border-primary:   #E2E8F0;
