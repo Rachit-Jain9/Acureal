@@ -242,7 +242,7 @@ export default function DealCard({ deal, readiness = null, selected = false, onT
           <div>
             <p className="text-xs text-content-muted">Headline Economics</p>
             <p className="font-medium text-content-primary">
-              {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
+              {Number(deal.land_ask_price_cr) > 0 ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
             </p>
           </div>
         </div>

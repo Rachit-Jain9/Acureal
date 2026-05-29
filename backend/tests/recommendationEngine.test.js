@@ -10,6 +10,7 @@ const {
   extractReraRegistrationMissing,
   extractApprovalGapCount,
   extractOverdueDdCount,
+  extractDealBreakerDdCount,
 } = require('../src/services/recommendation/signalExtractors');
 
 const {
@@ -230,6 +231,63 @@ describe('signalExtractors — extractCrossDocInconsistencies (P1-PR4)', () => {
     expect(s.value.by_severity).toEqual({ critical: 1, high: 2, medium: 1, low: 0 });
     expect(s.value.top_findings).toHaveLength(3);
     expect(s.value.top_findings[0].title).toMatch(/seller mismatch/);
+  });
+});
+
+describe('signalExtractors — extractDealBreakerDdCount (Deal-Pulse parity)', () => {
+  test('counts required deal_breaker items not in a ready status', () => {
+    const ws = makeWorkspace({
+      ddItems: [
+        { is_required: true, severity: 'deal_breaker', status: 'pending' },
+        { is_required: true, severity: 'deal_breaker', status: 'in_progress' },
+        { is_required: true, severity: 'deal_breaker', status: 'flagged' },
+      ],
+    });
+    const s = extractDealBreakerDdCount(ws);
+    expect(s.value.count).toBe(3);
+    expect(s.evidence[0].label).toMatch(/3 unresolved deal-breaker/);
+  });
+
+  test('excludes completed and not_applicable deal-breakers (matches READY_STATUSES)', () => {
+    const ws = makeWorkspace({
+      ddItems: [
+        { is_required: true, severity: 'deal_breaker', status: 'pending' },
+        { is_required: true, severity: 'deal_breaker', status: 'completed' },
+        { is_required: true, severity: 'deal_breaker', status: 'not_applicable' },
+      ],
+    });
+    expect(extractDealBreakerDdCount(ws).value.count).toBe(1);
+  });
+
+  test('excludes non-required deal-breaker items (Deal Pulse counts required only)', () => {
+    const ws = makeWorkspace({
+      ddItems: [
+        { is_required: true, severity: 'deal_breaker', status: 'pending' },
+        { is_required: false, severity: 'deal_breaker', status: 'pending' },
+      ],
+    });
+    expect(extractDealBreakerDdCount(ws).value.count).toBe(1);
+  });
+
+  test("does NOT count 'critical' severity — that is a risk severity, not a DD severity", () => {
+    // Regression for the 5-vs-6 discrepancy: a stray critical-tagged DD row
+    // used to inflate this card above the Deal Pulse count.
+    const ws = makeWorkspace({
+      ddItems: [
+        { is_required: true, severity: 'deal_breaker', status: 'pending' },
+        { is_required: true, severity: 'critical', status: 'pending' },
+      ],
+    });
+    expect(extractDealBreakerDdCount(ws).value.count).toBe(1);
+  });
+
+  test('returns null when no qualifying deal-breakers', () => {
+    expect(extractDealBreakerDdCount(makeWorkspace({ ddItems: [] }))).toBeNull();
+    expect(
+      extractDealBreakerDdCount(makeWorkspace({
+        ddItems: [{ is_required: true, severity: 'secondary', status: 'pending' }],
+      })),
+    ).toBeNull();
   });
 });
 

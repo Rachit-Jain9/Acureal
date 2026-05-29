@@ -43,6 +43,7 @@ import { useFieldProvenance } from '../../hooks/useFieldProvenance';
 import DealAutoDerivedWarningsStrip from './DealAutoDerivedWarningsStrip';
 import {
   formatCrores,
+  formatCroresOrDash,
   formatPct,
   formatArea,
   PRIORITY_CONFIG,
@@ -104,9 +105,9 @@ export default function OverviewTab({ setTab }) {
             <span className="text-xs text-content-secondary uppercase tracking-wide">Ask Price</span>
           </div>
           <p className="text-xl font-bold text-content-primary">
-            {deal.land_ask_price_cr ? formatCrores(deal.land_ask_price_cr) : '-'}
+            {formatCroresOrDash(deal.land_ask_price_cr)}
           </p>
-          {deal.negotiated_price_cr && (
+          {Number(deal.negotiated_price_cr) > 0 && (
             <p className="text-xs text-content-muted mt-1">
               Negotiated: {formatCrores(deal.negotiated_price_cr)}
             </p>
