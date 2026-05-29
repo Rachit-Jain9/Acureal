@@ -48,7 +48,13 @@ const formatIntWithDash = (n) => (Number.isFinite(n) ? n.toLocaleString('en-IN')
 export function KpiStripWidget({ stats = {} }) {
   const activeDeals     = stats.active_deals_count   || 0;
   const pipelineValue   = stats.total_pipeline_value_cr || 0;
-  const avgIrr          = stats.avg_irr_pct          || 0;
+  // Avg IRR is left NULLABLE — the backend honestly returns null when no
+  // deals carry a modelled IRR. Coercing `|| 0` would render a confident
+  // "0.0% · Below bench" red tag on a brand-new org as if it were a real
+  // portfolio result (CLAUDE.md data-honesty rule). `avgIrrFinite` gates the
+  // benchmark tag/tone so a missing value shows a neutral "—" instead.
+  const avgIrr          = stats.avg_irr_pct;
+  const avgIrrFinite    = Number.isFinite(avgIrr);
   const icReadyDeals    = stats.ic_ready_count        || 0;
   const dealsWithRisk   = stats.deals_with_open_risks || 0;
   return (
@@ -69,11 +75,11 @@ export function KpiStripWidget({ stats = {} }) {
       />
       <MetricTile
         label="Avg IRR"
-        value={avgIrr}
+        value={avgIrrFinite ? avgIrr : '—'}
         format={formatPctWithDash}
         footnote="Across modelled deals"
-        delta={avgIrr >= 20 ? 'Above 20% bench' : avgIrr >= 12 ? null : 'Below bench'}
-        tone={avgIrr >= 20 ? 'up' : avgIrr >= 12 ? 'neutral' : 'down'}
+        delta={avgIrrFinite ? (avgIrr >= 20 ? 'Above 20% bench' : avgIrr >= 12 ? null : 'Below bench') : null}
+        tone={avgIrrFinite ? (avgIrr >= 20 ? 'up' : avgIrr >= 12 ? 'neutral' : 'down') : 'neutral'}
       />
       <MetricTile
         label="Investor-Grade"
