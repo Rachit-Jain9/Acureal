@@ -249,3 +249,48 @@ describe('narrateCard', () => {
     expect(out).toBeNull();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Response-cache gating — narration of an unchanged card must be keyed so the
+// router can serve a cache hit (no SDK round-trip) on a deal revisit. This is
+// what keeps AI off the hot deal-workspace read path for the common case.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('narrateCard — response cache descriptor', () => {
+  const okResult = {
+    result: {
+      verb: 'Recommend',
+      headline: 'Recommend re-pricing the land — current quote pushes land share of GDV above 38%, well above target.',
+      detail: 'Alternative deal structures (revenue-share capped, area-share with corpus) preserve developer IRR here.',
+    },
+    callId: 'ai-call-cache',
+  };
+
+  test('passes a content-addressed cache descriptor to the router', async () => {
+    aiRouter.runAIWithSchema.mockResolvedValueOnce(okResult);
+    await narrateCard(makeCard());
+    expect(aiRouter.runAIWithSchema).toHaveBeenCalledTimes(1);
+    const { cache } = aiRouter.runAIWithSchema.mock.calls[0][0];
+    expect(cache).toBeTruthy();
+    expect(typeof cache.inputSha256).toBe('string');
+    expect(cache.inputSha256).toHaveLength(64); // sha256 hex digest
+    expect(typeof cache.promptSha256).toBe('string');
+    expect(cache.promptVersion).toBeTruthy();
+  });
+
+  test('unchanged card → identical key (cache hit); changed content → new key (re-narrate)', async () => {
+    aiRouter.runAIWithSchema.mockResolvedValue(okResult);
+    await narrateCard(makeCard());
+    await narrateCard(makeCard()); // byte-identical card + context
+    await narrateCard(
+      makeCard({ headline: 'Recommend a distinctly different action for this materially different card.' }),
+      { workspace: { deal: { asset_class: 'commercial_office', deal_structure: 'outright', stage: 'sourcing' } } },
+    );
+
+    const keyA = aiRouter.runAIWithSchema.mock.calls[0][0].cache.inputSha256;
+    const keyB = aiRouter.runAIWithSchema.mock.calls[1][0].cache.inputSha256;
+    const keyC = aiRouter.runAIWithSchema.mock.calls[2][0].cache.inputSha256;
+    expect(keyA).toBe(keyB); // same input → same key → router returns the cached narration
+    expect(keyC).not.toBe(keyA); // changed input → different key → fresh narration
+  });
+});

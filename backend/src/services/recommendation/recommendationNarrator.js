@@ -26,10 +26,28 @@
  *   { verb: <one of allowed>, headline: string ≤200, detail: string ≤350 }
  */
 
+const crypto = require('crypto');
 const { z } = require('zod');
 const aiRouter = require('../ai/aiRouter');
 const log = require('../../lib/logger').child({ module: 'recommendation.narrator' });
 const { RECOMMENDATION_VERBS } = require('./recommendationRules');
+
+// The system instruction is identical across providers — hoist it so the
+// response-cache key can hash it and the two provider branches stay in lock-step.
+const SCHEMA_SYSTEM_PROMPT =
+  'You return only strict JSON matching the requested schema. No commentary, no markdown fences.';
+
+// Bump this whenever the narration prompt template OR the output schema changes.
+// It folds into the hashed cache descriptor below, so a bump cleanly invalidates
+// every previously-cached narration (otherwise a schema tweak could leave stale
+// cached responses failing re-validation until they happen to be overwritten).
+const NARRATOR_PROMPT_VERSION = 'rec-narrator-v1';
+
+const sha256 = (value) =>
+  crypto
+    .createHash('sha256')
+    .update(typeof value === 'string' ? value : JSON.stringify(value ?? {}), 'utf8')
+    .digest('hex');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON schema — the model's response is rejected and reprompted (once) if it
@@ -140,11 +158,26 @@ const narrateCard = async (card, ctx = {}) => {
   const prompt = buildPrompt(card, ctx);
   const attach = ctx?.attach || {};
 
+  // Response-cache descriptor. Narration is a pure function of the card content
+  // + deal context — all of it is already encoded in `prompt` — so the same
+  // card on an unchanged deal viewed again is a cache hit: no SDK round-trip,
+  // no token spend, no reprompt, no call-log churn. This is what takes AI off
+  // the hot deal-workspace read path for the common case (revisiting a deal,
+  // hovering the deals list, re-opening Overview). Mirrors the proven pattern
+  // in aiMarketContext.service.js. inputSha256 content-addresses the full input;
+  // the version folds in so prompt/schema bumps invalidate cleanly.
+  const cache = {
+    inputSha256: sha256({ prompt, v: NARRATOR_PROMPT_VERSION }),
+    promptSha256: sha256({ system: SCHEMA_SYSTEM_PROMPT, v: NARRATOR_PROMPT_VERSION }),
+    promptVersion: NARRATOR_PROMPT_VERSION,
+  };
+
   try {
     const { result } = await aiRouter.runAIWithSchema({
       task: 'recommendation_narration',
       schema: narrationSchema,
       attach,
+      cache,
       metadata: {
         rule_id: card.id,
         topic: card.topic,
@@ -156,8 +189,7 @@ const narrateCard = async (card, ctx = {}) => {
       run: async ({ providers, provider, model }) => {
         if (provider === 'openai') {
           return providers.runOpenAIReasoning({
-            systemPrompt:
-              'You return only strict JSON matching the requested schema. No commentary, no markdown fences.',
+            systemPrompt: SCHEMA_SYSTEM_PROMPT,
             payload: prompt,
             model,
             // Narration is cheap and bounded — keep the cap tight so a runaway
@@ -167,8 +199,7 @@ const narrateCard = async (card, ctx = {}) => {
         }
         if (provider === 'claude') {
           return providers.runClaudeReasoning({
-            systemPrompt:
-              'You return only strict JSON matching the requested schema. No commentary, no markdown fences.',
+            systemPrompt: SCHEMA_SYSTEM_PROMPT,
             payload: prompt,
             model,
             maxTokens: 600,
