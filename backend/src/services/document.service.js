@@ -4,6 +4,7 @@ const { uploadFile, createUploadUrl, getDownloadUrl, fetchStoredFile, deleteStor
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { EVENTS, publish } = require('../lib/eventBus');
 const path = require('path');
+const log = require('../lib/logger').child({ module: 'document.service' });
 
 const getDocumentDealOptions = async () => {
   const result = await query(
@@ -145,7 +146,8 @@ const getPresignedUploadUrl = async (dealId, fileName, fileSize, userId, organiz
       token: result.token,
     };
   } catch (error) {
-    throw createError(`Could not create upload URL: ${error.message}`, 500);
+    log.error('presigned_upload_url_failed', error, { dealId });
+    throw createError('Could not create upload URL. Please try again.', 500);
   }
 };
 
@@ -168,6 +170,26 @@ const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, 
 
   if (!storagePath) {
     throw createError('Storage path is required.', 400);
+  }
+
+  // SECURITY: never trust the client-supplied storagePath. Step 1
+  // (getPresignedUploadUrl → createUploadUrl) only ever issues keys under THIS
+  // deal's own org/deal folder, so the confirmed path MUST live there too.
+  // Without this check a caller could confirm a documents row whose file_url
+  // points at ANOTHER org's object key — the download path signs it with the
+  // Supabase service-role key, which bypasses storage RLS → cross-tenant
+  // document exfiltration. A path containing a scheme (`https://…`) or `..`
+  // would likewise turn the later download/extraction fetch into server-side
+  // request forgery. Re-derive the expected prefix and reject anything else.
+  const expectedPrefix = `organizations/${organizationId}/deals/${dealId}/`;
+  if (
+    typeof storagePath !== 'string' ||
+    storagePath.startsWith('/') ||
+    storagePath.includes('://') ||
+    storagePath.includes('..') ||
+    !storagePath.startsWith(expectedPrefix)
+  ) {
+    throw createError('Invalid storage path for this deal.', 400);
   }
 
   const fileExt = path.extname(originalName || '').toLowerCase();
@@ -326,7 +348,10 @@ const getSignedUrl = async (documentId, dealId = null) => {
       document: doc,
     };
   } catch (error) {
-    throw createError(`Could not generate download URL: ${error.message}`, 500);
+    // Log the storage-layer detail server-side; return a generic message so the
+    // provider SDK's internals (bucket/host/paths) never reach the client.
+    log.error('signed_url_failed', error, { documentId });
+    throw createError('Could not generate download URL. Please try again.', 500);
   }
 };
 
@@ -381,7 +406,8 @@ const streamDownload = async (documentId, res, dealId = null) => {
 
     file.stream.pipe(res);
   } catch (error) {
-    throw createError(`Could not download file: ${error.message}`, 500);
+    log.error('document_stream_failed', error, { documentId });
+    throw createError('Could not download file. Please try again.', 500);
   }
 };
 
