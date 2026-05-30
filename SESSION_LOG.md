@@ -4,6 +4,36 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-30 (Security + data-integrity hardening + an app-wide bundle win — adversarially audited) (PRs #658–#660)
+
+Block goal: the biggest un-audited surface for an investor-grade platform with enterprise diligence in the pipeline is **security + data integrity**. Ran a 6-dimension adversarial **Workflow** (access-control/IDOR, injection/SSRF, secrets exposure, file-upload/document security, data-integrity/financial correctness, resilience/cost-DoS) — 29 agents, every finding re-verified against the real code by a skeptic agent and classified auto-fixable vs flag-for-operator. **11 confirmed (1 critical, 2 high, 6 medium, 2 low); 1 rejected.** Implemented all 10 auto-fixable; flagged the 1 credential item. Separately, live bundle analysis surfaced an app-wide perf bug (recharts on nearly every page).
+
+### PRs opened (all CI green)
+
+| PR | What landed |
+|---|---|
+| [#658](https://github.com/Rachit-Jain9/REDIP/pull/658) | **🔴 CRITICAL — cross-tenant document exfiltration + storage SSRF.** `confirmDirectUpload` stored the client-supplied `storagePath` verbatim; downloads sign it with the Supabase **service-role** key (bypasses storage RLS), so an org-A user could confirm a row at org-B's key and download another tenant's title deeds / financials. A `storagePath` of `https://attacker/…` made the download/extraction fetch an SSRF. Fix (pure app-layer, no RLS/migration): re-derive the expected `organizations/<org>/deals/<deal>/` prefix and reject scheme/`..`/absolute/cross-org paths; `getDownloadUrl`/`fetchStoredFile` only pass an https value through when it is a genuine `.blob.vercel-storage.com` object (closes the SSRF even for legacy/poisoned rows); generic client error messages (provider internals logged server-side only). +8 regression tests. |
+| [#659](https://github.com/Rachit-Jain9/REDIP/pull/659) | **Security hardening sweep.** (a) **SSRF** — the Maps-shortlink redirect-follow re-validates every hop against a Google-owned-host check and dropped the generic `goo.gl` shortener. (b) **Cost-DoS** — dedicated `aiLimiter` (20/min, keyed by user→IP) on the genuinely-expensive AI routes (Q&A, qa/stream, sensitivity-/risk-narrative, property capture); **workspace deliberately excluded** because its narration is now response-cached (PR #651), so limiting it would throttle normal navigation; + `AI_DAILY_COST_CAP_USD` surfaced as a boot warning. (c) **Mailer** — fails closed in prod instead of logging verification/reset tokens; recipient emails redacted (`a***@domain`); `RESEND_API_KEY` surfaced as a boot warning. |
+| [#660](https://github.com/Rachit-Jain9/REDIP/pull/660) | **Bundle — recharts (115 KB gz) off every non-chart page.** `clsx` (a 0.5 KB helper used almost everywhere AND by recharts) had no explicit chunk, so Rollup trapped it inside `vendor-recharts` — meaning every component using `clsx` (Badge, CollapsibleCard, DashboardPage, …) statically pulled the whole recharts chunk. Pinned `clsx` to a 0.37 KB `vendor-utils` chunk + lazy-loaded the two dashboard chart widgets. Verified against the built output: recharts is now imported by exactly 2 chunks (lazy DashboardCharts + FinancialsPage), down from ~dozens. |
+
+### Verification
+Full backend suite **2949–2953** across the branches; frontend **1057**; frontend build green; `npm audit --audit-level=high` clean. Every PR's Backend/Frontend/Kernel checks green.
+
+### Flagged for the operator (cannot be done in code)
+1. **🔑 Rotate the Google Maps API key — REQUIRED.** A live billable key (and its "rotated-to" replacement) is committed in `SESSION_LOG.md` **and in git history** (commit 55045e7). Redacting the doc (done this block) does NOT revoke it. Treat **both** committed values as burned: in Google Cloud Console, generate a fresh **third** key, set it as `GOOGLE_MAPS_API_KEY` + `VITE_GOOGLE_MAPS_API_KEY` in Vercel, restrict the browser key to HTTP referrers (`redip.vercel.app/*`, `*.vercel.app/*`, `localhost`) and the server key to the Geocoding/Places APIs, and set a billing budget/quota cap. (Exact click-by-click steps are in the chat recap.)
+2. **Set `AI_DAILY_COST_CAP_USD` and `RESEND_API_KEY` in Vercel** — the boot now warns when either is unset. The cap is the only hard ceiling on AI spend; without `RESEND_API_KEY`, prod email now fails closed (won't send) rather than logging tokens.
+
+### Deferred (tracked follow-ups)
+- **Document-pipeline mediums (#6/#7):** server-side MIME/size validation on the direct-upload path + serving uploads as attachments (kill stored-XSS via inline content-type). App-layer, no migration — own focused PR.
+- **Document-access audit logging (#8):** CLAUDE.md requires logging sensitive-document access; none of the download paths do. Needs a one-table migration + a `DOCUMENT_ACCESSED` event sink (do NOT route into the `activities` table — it validates against a closed activity-type list). Spawned as a task.
+- **In-page form labels:** PropertyDetailPage (~49 controls) — the remaining form after last block's RiskTab/DDTab/modal pass.
+
+### What's left for the operator
+1. **Authorize the merge batch.** Recommended order: **#658 first (CRITICAL)**, then #659, #660. Reply "merge all" and I'll merge in order (rebasing each onto master so CI re-greens) and confirm the production deploy lands on the true tip.
+2. **Do the two env / key actions above** (key rotation is the important one).
+
+---
+
 ## 2026-05-30 (Deal-page performance + accessibility + a security unblock — measured, adversarially audited) (PRs #651–#655)
 
 Block goal: differentiate from prior bug/correctness blocks by going after **performance, accessibility, and integration** — measured where possible, not vibes. Opened with a 6-dimension multi-agent **Workflow** (bundle splitting, backend deal-page latency, React render, network/caching, accessibility, cross-module integration). 30 agents, each finding adversarially verified against the real code by a second skeptic agent. 9 findings confirmed, 1 rejected, 2 dimensions (bundle + integration) lost to a structured-output failure and re-checked by hand instead. The confirmed findings clustered hard on **backend deal-page latency**, with one issue flagged independently by two dimensions.
@@ -3450,7 +3480,7 @@ Net diff: +342 / -160 across 5 files. New CompsMap chunk: 162.87 KB (37.36 KB gz
 
 ### Operator action chain
 
-User rotated the Maps API key after this PR landed (old key `AIzaSyB37FP62rUZr9ah1SmkYFA7ucj2W-o6O6Y` → new key `AIzaSyCu5PmVe0kHoFg4n8JHSTV9OI25bIOnwpk`) and added it to Vercel as `GOOGLE_MAPS_API_KEY`. The frontend Maps JS won't see that until a `VITE_GOOGLE_MAPS_API_KEY` (with the same value) is also added to Vercel — Vite only exposes env vars prefixed with `VITE_` to the browser bundle. Local `frontend/.env` and `backend/.env` updated to the new key value (gitignored, not committed).
+User rotated the Maps API key after this PR landed (old + replacement key values redacted 2026-05-30 — **both are committed in git history and must be treated as burned; see the 2026-05-30 security-hardening note for the required rotation**) and added it to Vercel as `GOOGLE_MAPS_API_KEY`. The frontend Maps JS won't see that until a `VITE_GOOGLE_MAPS_API_KEY` (with the same value) is also added to Vercel — Vite only exposes env vars prefixed with `VITE_` to the browser bundle. Local `frontend/.env` and `backend/.env` updated to the new key value (gitignored, not committed).
 
 ### Lessons logged
 
