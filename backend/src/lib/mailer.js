@@ -43,6 +43,16 @@ const isProviderConfigured = () => Boolean(process.env.RESEND_API_KEY);
 const getDefaultFrom = () =>
   process.env.MAIL_FROM || 'REDIP <noreply@redip.example>';
 
+// Redact recipient email(s) for logs — keep enough to debug delivery without
+// writing raw PII (DPDP data-minimisation; mirrors errorHandler's no-PII-in-logs
+// stance). "alice@example.com" -> "a***@example.com".
+const redactEmail = (addr) => {
+  if (Array.isArray(addr)) return addr.map(redactEmail);
+  if (typeof addr !== 'string' || !addr.includes('@')) return 'redacted';
+  const [user, domain] = addr.split('@');
+  return `${user.slice(0, 1)}***@${domain}`;
+};
+
 /**
  * Send a transactional email.
  *
@@ -64,13 +74,23 @@ const sendMail = async (message) => {
   const sender = from || getDefaultFrom();
 
   if (!isProviderConfigured()) {
+    // SECURITY: fail CLOSED in production. The dev fallback below logs the full
+    // body — which contains the verification / password-reset link and its live
+    // one-time token. In prod (or any Vercel deploy) that would write account-
+    // takeover tokens to logs / a log-drain. Without a provider we cannot
+    // deliver, so throw; the caller surfaces a retry rather than leaking a token.
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+      log.error('mail_provider_not_configured', new Error('Email provider not configured'), { subject });
+      throw new Error('Email provider is not configured.');
+    }
+    // Dev / test ONLY (never reached in production): log the message — incl. the
+    // link — so the flow can be completed by lifting it from the console without
+    // a real provider. Recipient is redacted; the body is intentionally kept.
     log.info('mail_not_sent_dev_mode', {
       reason: 'RESEND_API_KEY not configured',
-      to,
+      to: redactEmail(to),
       from: sender,
       subject,
-      // Body is logged so dev / test flows can lift the verification link
-      // out of the log line without round-tripping a real email provider.
       preview: text || html,
     });
     return { provider: 'console', id: null };
@@ -101,11 +121,12 @@ const sendMail = async (message) => {
   }
 
   const data = await response.json().catch(() => ({}));
-  log.info('mail_sent', { provider: 'resend', id: data?.id || null, to, subject });
+  log.info('mail_sent', { provider: 'resend', id: data?.id || null, to: redactEmail(to), subject });
   return { provider: 'resend', id: data?.id || null };
 };
 
 module.exports = {
   sendMail,
   isProviderConfigured,
+  redactEmail,
 };

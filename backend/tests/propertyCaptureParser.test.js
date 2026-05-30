@@ -112,6 +112,12 @@ describe('propertyCaptureParser', () => {
       expect(extractGoogleMapsUrl('https://maps.someelse.com/place/X')).toBeNull();
     });
 
+    test('rejects the bare goo.gl generic shortener (SSRF — not maps-specific)', () => {
+      // Bare goo.gl is Google's generic (deactivated) shortener and could 302
+      // anywhere; it must no longer be classified as a Maps URL/shortlink.
+      expect(extractGoogleMapsUrl('https://goo.gl/abc123')).toBeNull();
+    });
+
     test('handles ?q= query coords form', () => {
       const r = extractGoogleMapsUrl('https://maps.google.com/?q=12.9716,77.5946');
       expect(r.latLng).toEqual({ lat: 12.9716, lng: 77.5946 });

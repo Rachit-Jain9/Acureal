@@ -5,6 +5,7 @@ const dealWorkspaceService = require('../services/dealWorkspace.service');
 const dealShareService = require('../services/dealShare.service');
 const dealApplyExtractionsService = require('../services/dealApplyExtractions.service');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { aiLimiter } = require('../middleware/aiLimiter');
 const { handleValidation } = require('../middleware/validate');
 const {
   DEAL_STAGES,
@@ -757,7 +758,7 @@ const dealQaService = require('../services/dealQa.service');
 // Synchronous Q&A: retrieves relevant document chunks via pgvector,
 // runs Claude with mandatory-citation contract, persists to
 // deal_qa_history. Returns the new history row.
-router.post('/:id/qa', authenticate, async (req, res, next) => {
+router.post('/:id/qa', authenticate, aiLimiter, async (req, res, next) => {
   try {
     const { question } = req.body || {};
     const row = await dealQaService.askQuestion({
@@ -792,7 +793,7 @@ router.post('/:id/qa', authenticate, async (req, res, next) => {
 //   { type: 'text',  text: '<delta>' }       — incremental tokens
 //   { type: 'done',  row, cacheHit, ... }    — final hydrated row
 //   { type: 'error', message }               — fatal stream error
-router.post('/:id/qa/stream', authenticate, async (req, res, next) => {
+router.post('/:id/qa/stream', authenticate, aiLimiter, async (req, res, next) => {
   try {
     const { question } = req.body || {};
     const handle = await dealQaService.streamQuestion({

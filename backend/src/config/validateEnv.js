@@ -25,6 +25,13 @@ const RECOMMENDED = [
   { key: 'GEMINI_API_KEY', why: 'document extraction and classification' },
   { key: 'OPENAI_API_KEY', why: 'reasoning and embeddings' },
   { key: 'ANTHROPIC_API_KEY', why: 'narrative-synthesis fallback' },
+  // Without a hard daily ceiling the AI cost guard is a no-op — a buggy retry
+  // loop or an authenticated abuser can run AI spend unbounded for a UTC day.
+  { key: 'AI_DAILY_COST_CAP_USD', why: 'a hard daily ceiling on AI spend (calls are NOT cost-capped until this is set)' },
+  // When unset, the mailer falls back to a dev path; in production that path
+  // now fails closed (no token is logged), so verification/reset email simply
+  // won't send until this is configured.
+  { key: 'RESEND_API_KEY', why: 'transactional email (verification + password reset)' },
 ];
 
 // Recognizable key prefixes per AI provider — used for a boot-time sanity

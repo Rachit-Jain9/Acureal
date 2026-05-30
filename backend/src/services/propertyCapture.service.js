@@ -49,6 +49,21 @@ const hasGoogleKey = () => {
   return k && k.startsWith('AIza');
 };
 
+// SSRF guard for shortlink redirect-following. A maps.app.goo.gl Maps share
+// link should only ever 30x to a Google-owned host (google.com/maps,
+// maps.google.com, …). Re-validating EVERY hop — not just the first URL —
+// stops a crafted shortlink from bouncing the server to an internal or
+// cloud-metadata address (169.254.169.254, RFC1918, etc.); an IP literal or
+// any non-Google host can never satisfy this suffix check.
+const isGoogleOwnedHost = (host) => {
+  const h = String(host || '').toLowerCase().replace(/\.$/, '');
+  return (
+    h === 'google.com' || h.endsWith('.google.com')
+    || h === 'google.co.in' || h.endsWith('.google.co.in')
+    || h === 'goo.gl' || h.endsWith('.goo.gl')
+  );
+};
+
 // ─── STEP 1: RESOLVE TO COORDINATES ──────────────────────────────────────────
 
 /**
@@ -80,6 +95,15 @@ const resolveGoogleMapsUrl = async (parsed, stepLog) => {
         maxRedirects: 5,
         timeout: SHORTLINK_FETCH_TIMEOUT,
         validateStatus: (s) => s >= 200 && s < 400,
+        // SSRF guard: re-validate the host of EVERY redirect hop. axios's
+        // allow-list otherwise only gated the first URL, so a crafted
+        // shortlink could 302 the server to an internal / cloud-metadata host.
+        beforeRedirect: (options) => {
+          const nextHost = options.hostname || options.host;
+          if (!isGoogleOwnedHost(nextHost)) {
+            throw new Error(`Refusing shortlink redirect to non-Google host: ${nextHost}`);
+          }
+        },
       });
       const finalUrl = resp.request?.res?.responseUrl || resp.config?.url || parsed.url;
       stepLog.push({ step: 'maps_url', detail: 'shortlink_followed', finalUrl });
