@@ -4,6 +4,25 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-30 (Document-access audit log — closes deferred security item #8) (PR #662)
+
+Closes the one MEDIUM compliance gap left open from the security-hardening block (PRs #658–#660): CLAUDE.md requires logging access to sensitive documents, but none of the three download paths recorded one. Followed the spawned-task spec exactly, including the verifier's constraint to keep document events out of the closed-enum `activities` timeline.
+
+### PR opened (CI green)
+
+| PR | What landed |
+|---|---|
+| [#662](https://github.com/Rachit-Jain9/REDIP/pull/662) | **feat(security): immutable access log for sensitive-document downloads.** New append-only `document_access_log` table — org-scoped RLS (read + insert), **no UPDATE/DELETE policy** → append-only; **polymorphic `document_id`** (deal documents *and* masterplan source PDFs) with **no FK** so the audit row survives document deletion; snapshotted `document_name`. New `DOCUMENT_ACCESSED` event + fail-open `documentAccessLog.sink` (mirrors the `DOCUMENT_UPLOADED` → sink pattern). The three download paths — `document.service.getSignedUrl` (`signed_url`), `streamDownload` (`download`), and `masterplan.service.getSourceDocumentDownload` (`masterplan_source` / `signed_url`) — publish on **successful access only** (never on a 404 / storage error); routes thread `req.user.id` + `req.user.organization_id` + `req.ip` + user-agent. **Deliberately NOT routed into `activities`** — its `activity_type` is a closed enum that excludes document events and would pollute the investor-facing deal timeline (the verifier's explicit constraint). +3 test files. |
+
+### Verification
+Full backend suite green (**2978**). Migration passes `scripts/lint-migrations.js` **and** `scripts/audit_rls.py` (RLS-coverage gate) — `document_access_log` is counted among the 41 org-scoped tables that are RLS-protected with ≥1 policy. CI "Audit & migration lint" job green; backend/frontend/kernel running at time of writing.
+
+### What's left for the operator
+1. **Run the one database update** that creates the table — exact click-by-click Supabase SQL-editor steps are in the PR #662 body. The app fails open until then: downloads keep working, the access rows just aren't saved yet.
+2. **Authorize the merge** of #662 when ready (not merged autonomously, per the merge-boundary rule).
+
+---
+
 ## 2026-05-30 (Security + data-integrity hardening + an app-wide bundle win — adversarially audited) (PRs #658–#660)
 
 Block goal: the biggest un-audited surface for an investor-grade platform with enterprise diligence in the pipeline is **security + data integrity**. Ran a 6-dimension adversarial **Workflow** (access-control/IDOR, injection/SSRF, secrets exposure, file-upload/document security, data-integrity/financial correctness, resilience/cost-DoS) — 29 agents, every finding re-verified against the real code by a skeptic agent and classified auto-fixable vs flag-for-operator. **11 confirmed (1 critical, 2 high, 6 medium, 2 low); 1 rejected.** Implemented all 10 auto-fixable; flagged the 1 credential item. Separately, live bundle analysis surfaced an app-wide perf bug (recharts on nearly every page).
