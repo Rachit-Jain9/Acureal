@@ -4,6 +4,35 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-30 (Document-pipeline hardening — finish the upload/serve security surface, red-teamed) (PR #663)
+
+Block goal: complete the document-security surface that PR #658 (critical cross-tenant fix) opened — the medium upload/serve findings (#6/#7) from the security audit. On orientation, found that **#8 (document-access audit logging) had already shipped + merged** via an earlier spawned task: `DOCUMENT_ACCESSED` event + `documentAccessLog.sink.js` (migration-tolerant) wired into all three download paths, plus the migration file `20260530_document_access_log.sql`. Flagged that migration for the operator to run (TODO_MANUAL.md) — until then access-logging no-ops harmlessly.
+
+### PR opened (CI green)
+
+| PR | What landed |
+|---|---|
+| [#663](https://github.com/Rachit-Jain9/REDIP/pull/663) | **Document upload/serve hardening (#6/#7).** confirmDirectUpload now validates server-side instead of trusting the client: re-checks the extension allow-list, derives `file_type` from a new `EXT_TO_MIME` map (ignores the client's `fileType` — a `.pdf` PUT as `text/html` is stored as `application/pdf`), and verifies the **true** object size via `getObjectSize` (Supabase `.list` metadata) → 413 + logged best-effort cleanup. `storage.getDownloadUrl` signs Supabase URLs with `{ download: true }` so documents are served `Content-Disposition: attachment`, never rendered inline → a file built to execute can't run as a script when opened. `supabase.getSignedUrl` gained a back-compatible `options` arg. +3 tests (11 in document.security suite); full backend suite 2981 green. |
+
+### Adversarial red-team of the diff (15 agents, 4 angles: XSS-bypass, validation-bypass, regression, signature-compat)
+**Rejected 7 of 11 raised** — independently confirmed (against the installed `@supabase/storage-js`) that `download:true` is honoured, the deal-document + master-plan + extraction sinks are all covered, the #658 SSRF + cross-tenant guards are intact, no regressions, no contract breaks, suite green. **4 confirmed, all low/medium, none same-origin XSS:**
+- **Medium (scope gap, NOT defeat):** the **comps review-queue** detail page still renders `raw_doc_url` (a Vercel Blob URL) in an `<iframe>`/`<img>` — a separate, admin-gated sink the deal-document fix doesn't cover. The writer MIME allow-lists exclude `text/html`/`svg` and the blob host is cross-origin (no app session), so the residual is a sandboxed inline-PDF render, not script execution. **Spawned as a follow-up task** (route comps preview through a guarded download/stream path + tighten the https gate).
+- **Low:** the true-size check is fail-**open** if storage metadata is unavailable (cost/quota control only, behind org-auth). Kept fail-open (a fail-closed check could block legit uploads if metadata lags after PUT); flagged to verify `metadata.size` population on a live bucket.
+- **Low nit (fixed in-PR):** the 413 cleanup-delete now logs failures instead of swallowing them.
+- **Low nit (intended):** master-plan "Open source" now downloads the regulatory PDF instead of opening it inline — the same no-inline-serve hardening; noted in the PR.
+
+### Flagged for the operator (recorded in TODO_MANUAL.md)
+1. **Run migration `20260530_document_access_log.sql`** (Supabase SQL editor) — until then sensitive-document access isn't recorded (the code is migration-tolerant + no-ops).
+2. **`RESEND_API_KEY` deferred** until a sending domain exists (operator decision) — prod email fails closed meanwhile (no token leak). Also set `AI_DAILY_COST_CAP_USD`.
+3. **Confirm the old Google Maps key is deleted in Google Cloud Console** (Vercel was updated; the old key is in git history → burned until deleted in GCP).
+
+### What's left for the operator
+1. **Authorize the merge** of #663 (reply "merge").
+2. Do the three items above (the doc-access migration + the Google-key GCP deletion are the substantive ones).
+3. Optional one-click follow-up chips left in the session: comps-preview inline hardening; the earlier document-access-logging is already merged.
+
+---
+
 ## 2026-05-30 (Document-access audit log — closes deferred security item #8) (PR #662)
 
 Closes the one MEDIUM compliance gap left open from the security-hardening block (PRs #658–#660): CLAUDE.md requires logging access to sensitive documents, but none of the three download paths recorded one. Followed the spawned-task spec exactly, including the verifier's constraint to keep document events out of the closed-enum `activities` timeline.
