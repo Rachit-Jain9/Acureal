@@ -259,8 +259,9 @@ function DDSection({ dealId }) {
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
+                <label htmlFor="dd-form-category" className="block text-xs font-medium text-content-secondary mb-1">Category</label>
                 <select
+                  id="dd-form-category"
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                   className="input text-sm"
@@ -271,8 +272,9 @@ function DDSection({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
+                <label htmlFor="dd-form-severity" className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
                 <select
+                  id="dd-form-severity"
                   value={form.severity}
                   onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
                   className="input text-sm"
@@ -284,8 +286,9 @@ function DDSection({ dealId }) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Item Name</label>
+              <label htmlFor="dd-form-item-name" className="block text-xs font-medium text-content-secondary mb-1">Item Name</label>
               <input
+                id="dd-form-item-name"
                 type="text"
                 value={form.item_name}
                 onChange={(e) => setForm((f) => ({ ...f, item_name: e.target.value }))}
@@ -295,8 +298,9 @@ function DDSection({ dealId }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
+              <label htmlFor="dd-form-description" className="block text-xs font-medium text-content-secondary mb-1">Description</label>
               <textarea
+                id="dd-form-description"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={2}
@@ -382,6 +386,7 @@ function DDSection({ dealId }) {
                                 <select
                                   value={item.status}
                                   onChange={(e) => handleStatusChange(item, e.target.value)}
+                                  aria-label={`Status for ${item.item_name}`}
                                   className="text-xs rounded-full px-2 py-0.5 border border-hairline bg-bg-elevated text-content-secondary font-medium cursor-pointer focus:ring-1 focus:ring-accent"
                                 >
                                   {Object.entries(DD_STATUS_CONFIG).map(([v, cfg]) => (
@@ -526,8 +531,9 @@ function ApprovalsSection({ dealId }) {
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Name</label>
+                <label htmlFor="approval-form-name" className="block text-xs font-medium text-content-secondary mb-1">Name</label>
                 <input
+                  id="approval-form-name"
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -537,8 +543,9 @@ function ApprovalsSection({ dealId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Type</label>
+                <label htmlFor="approval-form-type" className="block text-xs font-medium text-content-secondary mb-1">Type</label>
                 <select
+                  id="approval-form-type"
                   value={form.approval_type}
                   onChange={(e) => setForm((f) => ({ ...f, approval_type: e.target.value }))}
                   className="input text-sm"
@@ -549,8 +556,9 @@ function ApprovalsSection({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
+                <label htmlFor="approval-form-status" className="block text-xs font-medium text-content-secondary mb-1">Status</label>
                 <select
+                  id="approval-form-status"
                   value={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
                   className="input text-sm"
@@ -561,8 +569,9 @@ function ApprovalsSection({ dealId }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Reference Number</label>
+                <label htmlFor="approval-form-reference" className="block text-xs font-medium text-content-secondary mb-1">Reference Number</label>
                 <input
+                  id="approval-form-reference"
                   type="text"
                   value={form.referenceNumber}
                   onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))}
@@ -571,8 +580,9 @@ function ApprovalsSection({ dealId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Issued Date</label>
+                <label htmlFor="approval-form-issued" className="block text-xs font-medium text-content-secondary mb-1">Issued Date</label>
                 <input
+                  id="approval-form-issued"
                   type="date"
                   value={form.issuedDate}
                   onChange={(e) => setForm((f) => ({ ...f, issuedDate: e.target.value }))}
@@ -580,8 +590,9 @@ function ApprovalsSection({ dealId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Expiry Date</label>
+                <label htmlFor="approval-form-expiry" className="block text-xs font-medium text-content-secondary mb-1">Expiry Date</label>
                 <input
+                  id="approval-form-expiry"
                   type="date"
                   value={form.expiryDate}
                   onChange={(e) => setForm((f) => ({ ...f, expiryDate: e.target.value }))}

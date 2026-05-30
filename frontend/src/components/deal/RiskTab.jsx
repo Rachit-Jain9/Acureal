@@ -132,8 +132,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
+              <label htmlFor={`risk-edit-category-${editData.id}`} className="block text-xs font-medium text-content-secondary mb-1">Category</label>
               <select
+                id={`risk-edit-category-${editData.id}`}
                 value={editData.category}
                 onChange={(e) => setEditData((d) => ({ ...d, category: e.target.value }))}
                 className="input text-sm"
@@ -144,8 +145,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
+              <label htmlFor={`risk-edit-severity-${editData.id}`} className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
               <select
+                id={`risk-edit-severity-${editData.id}`}
                 value={editData.severity}
                 onChange={(e) => setEditData((d) => ({ ...d, severity: e.target.value }))}
                 className="input text-sm"
@@ -156,8 +158,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
+              <label htmlFor={`risk-edit-status-${editData.id}`} className="block text-xs font-medium text-content-secondary mb-1">Status</label>
               <select
+                id={`risk-edit-status-${editData.id}`}
                 value={editData.status}
                 onChange={(e) => setEditData((d) => ({ ...d, status: e.target.value }))}
                 className="input text-sm"
@@ -169,8 +172,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-content-secondary mb-1">Title</label>
+            <label htmlFor={`risk-edit-title-${editData.id}`} className="block text-xs font-medium text-content-secondary mb-1">Title</label>
             <input
+              id={`risk-edit-title-${editData.id}`}
               type="text"
               value={editData.title}
               onChange={(e) => setEditData((d) => ({ ...d, title: e.target.value }))}
@@ -178,8 +182,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
+            <label htmlFor={`risk-edit-description-${editData.id}`} className="block text-xs font-medium text-content-secondary mb-1">Description</label>
             <textarea
+              id={`risk-edit-description-${editData.id}`}
               value={editData.description}
               onChange={(e) => setEditData((d) => ({ ...d, description: e.target.value }))}
               rows={2}
@@ -187,8 +192,9 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-content-secondary mb-1">Mitigation</label>
+            <label htmlFor={`risk-edit-mitigation-${editData.id}`} className="block text-xs font-medium text-content-secondary mb-1">Mitigation</label>
             <textarea
+              id={`risk-edit-mitigation-${editData.id}`}
               value={editData.mitigation}
               onChange={(e) => setEditData((d) => ({ ...d, mitigation: e.target.value }))}
               rows={2}
@@ -488,8 +494,9 @@ export default function RiskTab() {
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
+                <label htmlFor="risk-form-category" className="block text-xs font-medium text-content-secondary mb-1">Category</label>
                 <select
+                  id="risk-form-category"
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                   className="input text-sm"
@@ -500,8 +507,9 @@ export default function RiskTab() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
+                <label htmlFor="risk-form-severity" className="block text-xs font-medium text-content-secondary mb-1">Severity</label>
                 <select
+                  id="risk-form-severity"
                   value={form.severity}
                   onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
                   className="input text-sm"
@@ -512,8 +520,9 @@ export default function RiskTab() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
+                <label htmlFor="risk-form-status" className="block text-xs font-medium text-content-secondary mb-1">Status</label>
                 <select
+                  id="risk-form-status"
                   value={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
                   className="input text-sm"
@@ -525,8 +534,9 @@ export default function RiskTab() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Title</label>
+              <label htmlFor="risk-form-title" className="block text-xs font-medium text-content-secondary mb-1">Title</label>
               <input
+                id="risk-form-title"
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -536,8 +546,9 @@ export default function RiskTab() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Description</label>
+              <label htmlFor="risk-form-description" className="block text-xs font-medium text-content-secondary mb-1">Description</label>
               <textarea
+                id="risk-form-description"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={2}
@@ -546,8 +557,9 @@ export default function RiskTab() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Mitigation</label>
+              <label htmlFor="risk-form-mitigation" className="block text-xs font-medium text-content-secondary mb-1">Mitigation</label>
               <textarea
+                id="risk-form-mitigation"
                 value={form.mitigation}
                 onChange={(e) => setForm((f) => ({ ...f, mitigation: e.target.value }))}
                 rows={2}
