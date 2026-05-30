@@ -4,6 +4,7 @@ const path = require('path');
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { createUploadUrl, getDownloadUrl } = require('../config/storage');
+const { EVENTS, publish } = require('../lib/eventBus');
 const extractionService = require('./extraction.service');
 const evidenceIngestionService = require('./evidenceIngestion.service');
 const masterplanCorpus = require('./masterplanCorpus');
@@ -1096,14 +1097,32 @@ async function getSourceDocumentVersions(id) {
   return result.rows;
 }
 
-async function getSourceDocumentDownload(id) {
+async function getSourceDocumentDownload(id, accessContext = {}) {
   const doc = await getSourceDocumentById(id);
   if (!doc) throw createError('Masterplan source document not found.', 404);
   const fileRef = doc.file_url || doc.storage_path;
   if (!fileRef) throw createError('Source document has no stored file reference.', 400);
 
+  const url = await getDownloadUrl(fileRef, 3600);
+
+  // Immutable access log for this regulatory source PDF. Fire-and-forget via
+  // the bus (documentAccessLog.sink writes the row); never blocks the download.
+  // org defaults to the accessing user's current org — masterplan source docs
+  // are org-level references whose own org_id may be NULL (shared corpus).
+  publish(EVENTS.DOCUMENT_ACCESSED, {
+    documentId: doc.id,
+    organizationId: accessContext.organizationId || doc.org_id || null,
+    userId: accessContext.userId || null,
+    action: 'signed_url',
+    documentKind: 'masterplan_source',
+    documentName: doc.plan_name || doc.file_name || null,
+    dealId: null,
+    ip: accessContext.ip || null,
+    userAgent: accessContext.userAgent || null,
+  });
+
   return {
-    url: await getDownloadUrl(fileRef, 3600),
+    url,
     expires_in: 3600,
     document: doc,
   };

@@ -316,7 +316,26 @@ const deleteDocument = async (documentId, userId) => {
   return { deleted: true, id: documentId };
 };
 
-const getSignedUrl = async (documentId, dealId = null) => {
+// Publish a sensitive-document access event onto the bus. Fire-and-forget —
+// mirrors the DOCUMENT_UPLOADED publish above. The documentAccessLog sink
+// writes the immutable audit row; a failure there never breaks the download.
+// accessContext carries the request forensics threaded from the route:
+//   { userId, organizationId, ip, userAgent }
+const publishDocumentAccessed = (doc, action, accessContext = {}) => {
+  publish(EVENTS.DOCUMENT_ACCESSED, {
+    documentId: doc.id,
+    organizationId: accessContext.organizationId || doc.organization_id || null,
+    userId: accessContext.userId || null,
+    action,
+    documentKind: 'deal_document',
+    documentName: doc.name || null,
+    dealId: doc.deal_id || null,
+    ip: accessContext.ip || null,
+    userAgent: accessContext.userAgent || null,
+  });
+};
+
+const getSignedUrl = async (documentId, dealId = null, accessContext = {}) => {
   const result = await query(
     `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
      FROM documents doc
@@ -342,6 +361,9 @@ const getSignedUrl = async (documentId, dealId = null) => {
 
   try {
     const downloadUrl = await getDownloadUrl(doc.file_url, 3600);
+    // Log the access only once the URL was actually issued — a failed
+    // signing attempt is not an access.
+    publishDocumentAccessed(doc, 'signed_url', accessContext);
     return {
       url: downloadUrl,
       expires_in: 3600,
@@ -355,7 +377,7 @@ const getSignedUrl = async (documentId, dealId = null) => {
   }
 };
 
-const streamDownload = async (documentId, res, dealId = null) => {
+const streamDownload = async (documentId, res, dealId = null, accessContext = {}) => {
   const result = await query(
     `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
      FROM documents doc
@@ -381,6 +403,9 @@ const streamDownload = async (documentId, res, dealId = null) => {
 
   try {
     const file = await fetchStoredFile(doc.file_url, 3600);
+
+    // The bytes are about to be streamed to the client — record the access.
+    publishDocumentAccessed(doc, 'download', accessContext);
 
     res.setHeader('Content-Type', file.contentType || 'application/octet-stream');
     res.setHeader('X-Content-Type-Options', 'nosniff');

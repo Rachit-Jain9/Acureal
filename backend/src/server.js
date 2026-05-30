@@ -60,6 +60,10 @@ require('./services/dealEvents.service').register();
 // every time a new extraction completes. Debounced 90s per deal so a burst
 // of uploads collapses to one detector pass. Fire-and-forget — never blocks.
 require('./services/inconsistencyDetector.sink').register();
+// Immutable sensitive-document access log (CLAUDE.md "log access to sensitive
+// documents"). Subscribes to DOCUMENT_ACCESSED and writes an append-only row
+// to document_access_log on every signed-URL issuance / byte-stream download.
+require('./services/documentAccessLog.sink').register();
 
 const app = express();
 
