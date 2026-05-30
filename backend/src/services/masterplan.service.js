@@ -29,6 +29,58 @@ const ALLOWED_SOURCE_EXTENSIONS = new Set([
   '.json', '.xml',
 ]);
 const EXTRACTABLE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff']);
+
+// Server-derived content-type, keyed off the (allow-listed) extension — mirrors
+// EXT_TO_MIME in document.service.js (confirmDirectUpload). The direct-upload
+// browser PUTs the object to Supabase with any Content-Type it likes, and the
+// confirm step used to trust the client's `fileType` verbatim, so a `report.pdf`
+// could be recorded as `text/html`. We derive the stored file_type from the
+// extension instead, so the persisted value is always benign and accurate
+// regardless of the client claim. Covers every ALLOWED_SOURCE_EXTENSIONS entry;
+// anything unmapped falls back to a generic binary type. Critically, every
+// EXTRACTABLE_EXTENSIONS entry maps to a pdf/image type, so isExtractableSource
+// still routes via its MIME branch even if the stored file_name lacks an
+// extension.
+const SOURCE_EXT_TO_MIME = {
+  // Documents
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.rtf': 'application/rtf',
+  '.odt': 'application/vnd.oasis.opendocument.text',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  // Spreadsheets
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsm': 'application/vnd.ms-excel.sheet.macroEnabled.12',
+  '.csv': 'text/csv',
+  '.tsv': 'text/tab-separated-values',
+  '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
+  // Presentations
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.odp': 'application/vnd.oasis.opendocument.presentation',
+  // Images
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  // GIS / geospatial
+  '.geojson': 'application/geo+json',
+  '.kml': 'application/vnd.google-earth.kml+xml',
+  '.kmz': 'application/vnd.google-earth.kmz',
+  '.gpx': 'application/gpx+xml',
+  // Structured data
+  '.json': 'application/json',
+  '.xml': 'application/xml',
+};
 const MAX_SOURCE_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
 const MASTERPLAN_DOC_TYPES = new Set([
   'rmp_table',
@@ -147,6 +199,11 @@ const isMissingOptionalSourceTable = (error) => (
 );
 
 const sourceFileExt = (fileName = '') => path.extname(String(fileName)).toLowerCase();
+
+// Map a filename's (allow-listed) extension to a benign, accurate content-type.
+// Used at confirm time so the stored file_type never reflects the client claim.
+const sourceContentType = (fileName = '') =>
+  SOURCE_EXT_TO_MIME[sourceFileExt(fileName)] || 'application/octet-stream';
 
 const assertSourceFileAllowed = (fileName, fileSize = 0) => {
   const ext = sourceFileExt(fileName);
@@ -890,7 +947,12 @@ async function confirmSourceDocumentUpload({
   if (!storagePath) {
     throw createError('Storage path is required.', 400);
   }
-  assertSourceFileAllowed(originalName || planName || storagePath, fileSize);
+  // Capture the filename whose extension drives BOTH the allow-list check and
+  // the server-derived content-type, before the corpus merge below reassigns
+  // planName. originalName is the real uploaded filename; planName/storagePath
+  // are fallbacks that still carry a real extension.
+  const sourceFileName = originalName || planName || storagePath;
+  assertSourceFileAllowed(sourceFileName, fileSize);
 
   try {
     masterplanCorpus.assertCorpusClassification({
@@ -992,7 +1054,13 @@ async function confirmSourceDocumentUpload({
       resolvedPlanName,
       textOrNull(planVersion),
       textOrNull(originalName) || resolvedPlanName,
-      textOrNull(fileType) || sourceFileExt(originalName || '').slice(1) || null,
+      // SECURITY: derive file_type from the (allow-listed) extension and IGNORE
+      // the client-supplied `fileType` (mirrors confirmDirectUpload). The browser
+      // PUTs the object with any Content-Type it likes, so trusting the client
+      // could persist a `.pdf` as `text/html`. assertSourceFileAllowed above
+      // already rejected any extension outside ALLOWED_SOURCE_EXTENSIONS. Stored
+      // for display + extraction routing only; never emitted as an HTTP header.
+      sourceContentType(sourceFileName),
       Number(fileSize) || 0,
       storagePath,
       normalizeDocType(docType),
