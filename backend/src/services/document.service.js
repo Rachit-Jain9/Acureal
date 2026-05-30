@@ -1,6 +1,6 @@
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
-const { uploadFile, createUploadUrl, getDownloadUrl, fetchStoredFile, deleteStorageFile } = require('../config/storage');
+const { uploadFile, createUploadUrl, getDownloadUrl, getStoredObjectSize, fetchStoredFile, deleteStorageFile } = require('../config/storage');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { EVENTS, publish } = require('../lib/eventBus');
 const path = require('path');
@@ -104,6 +104,27 @@ const uploadDocument = async (dealId, file, category, userId, description = '', 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.zip', '.csv']);
 const MAX_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
 
+// Server-derived content-type, keyed off the (allow-listed) file extension.
+// The DIRECT-upload path lets the browser PUT the object with any Content-Type
+// it likes, and the old confirm step trusted the client's `fileType` verbatim —
+// so a `report.pdf` could be recorded (and later served) as `text/html`. We
+// instead derive the stored file_type from the extension here, so the DB value
+// is always a benign, accurate type regardless of what the client claimed.
+const EXT_TO_MIME = {
+  '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.zip': 'application/zip',
+  '.csv': 'text/csv',
+};
+
 /**
  * Step 1 of direct upload: generate a presigned URL so the frontend can PUT
  * the file directly to Supabase Storage (bypasses Vercel 4.5 MB body limit).
@@ -194,6 +215,41 @@ const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, 
 
   const fileExt = path.extname(originalName || '').toLowerCase();
 
+  // SECURITY — server-side validation at confirm (never trust the client here):
+  //   • re-check the extension against the allow-list (confirm is independently
+  //     reachable from the presign step that first checked it);
+  //   • derive the stored content-type from the extension and IGNORE the
+  //     client-supplied `fileType` — the browser PUTs the object with whatever
+  //     Content-Type it likes, so trusting the client could record/serve a file
+  //     as an executable type (stored-XSS) or mislabel it;
+  //   • verify the object's TRUE byte size from storage metadata rather than the
+  //     size the client claimed at presign (a client can claim small, PUT large).
+  if (!ALLOWED_EXTENSIONS.has(fileExt)) {
+    throw createError(`File type ${fileExt || '(none)'} is not allowed.`, 400);
+  }
+  const derivedType = EXT_TO_MIME[fileExt] || 'application/octet-stream';
+
+  let verifiedSize = Number.isFinite(fileSize) ? fileSize : 0;
+  try {
+    const trueSize = await getStoredObjectSize(storagePath);
+    if (Number.isFinite(trueSize)) {
+      if (trueSize > MAX_FILE_SIZE) {
+        // Best-effort cleanup so an oversized object doesn't linger in storage —
+        // log (don't swallow) a failed delete so an orphan is observable/reapable.
+        await deleteStorageFile(storagePath).catch((delErr) => {
+          log.warn('oversize_object_cleanup_failed', { dealId, error: delErr.message });
+        });
+        throw createError(`File too large. Maximum allowed size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`, 413);
+      }
+      verifiedSize = trueSize;
+    }
+  } catch (err) {
+    if (err.statusCode) throw err; // re-throw the 413 above
+    // The metadata lookup itself failed — don't block a legitimate upload on a
+    // flaky storage list call; fall back to the client-claimed size.
+    log.warn('object_size_verify_failed', { dealId, error: err.message });
+  }
+
   const result = await query(
     `INSERT INTO documents (deal_id, name, file_url, file_type, file_size_bytes, doc_category, description, uploaded_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -202,8 +258,8 @@ const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, 
       dealId,
       originalName || 'Untitled',
       storagePath,
-      fileType || fileExt.substring(1),
-      fileSize || 0,
+      derivedType,
+      verifiedSize,
       category || 'other',
       description || null,
       userId,

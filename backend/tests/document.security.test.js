@@ -29,6 +29,7 @@ jest.mock('../src/config/supabase', () => ({
   isSupabaseConfigured: jest.fn(() => true),
   uploadFile: jest.fn(),
   getSignedUrl: jest.fn(async (p) => `https://signed.example/${p}`),
+  getObjectSize: jest.fn(async () => null),
   createSignedUploadUrl: jest.fn(),
   deleteFile: jest.fn(),
 }));
@@ -85,6 +86,37 @@ describe('confirmDirectUpload — storagePath validation (cross-tenant + SSRF gu
     const insertCall = query.mock.calls.find((c) => /INSERT INTO documents/.test(c[0]));
     expect(insertCall).toBeTruthy();
     expect(insertCall[1][2]).toBe(goodPath); // file_url bound verbatim, no mutation
+    expect(insertCall[1][3]).toBe('application/pdf'); // file_type derived from .pdf extension
+  });
+
+  test('derives content-type from the extension, IGNORING the client-claimed fileType', async () => {
+    const goodPath = `organizations/${ORG}/deals/${DEAL}/1700000000000-report.pdf`;
+    query
+      .mockResolvedValueOnce({ rows: [{ id: DEAL }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'doc-2', file_url: goodPath }] })
+      .mockResolvedValueOnce({ rows: [{ name: 'Alice' }] });
+    // Client lies: claims text/html for a .pdf (the stored-XSS setup).
+    await documentService.confirmDirectUpload(
+      DEAL, goodPath, 'report.pdf', 'text/html', 100, 'other', null, 'user-1', ORG,
+    );
+    const insertCall = query.mock.calls.find((c) => /INSERT INTO documents/.test(c[0]));
+    expect(insertCall[1][3]).toBe('application/pdf'); // server-derived, NOT the client's text/html
+  });
+
+  test('rejects a disallowed file extension at confirm', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: DEAL }] });
+    await expect(
+      documentService.confirmDirectUpload(
+        DEAL, `organizations/${ORG}/deals/${DEAL}/x.exe`, 'x.exe', 'application/octet-stream', 100, 'other', null, 'user-1', ORG,
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('rejects an object whose TRUE stored size exceeds the cap (413), not the client claim', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: DEAL }] });
+    // Client claimed 100 bytes at presign, but the real object is 60 MB (> 50 MB cap).
+    supabase.getObjectSize.mockResolvedValueOnce(60 * 1024 * 1024);
+    await expect(callConfirm(`organizations/${ORG}/deals/${DEAL}/big.pdf`)).rejects.toMatchObject({ statusCode: 413 });
   });
 });
 
@@ -104,9 +136,9 @@ describe('storage.getDownloadUrl — SSRF allow-list', () => {
     expect(supabase.getSignedUrl).not.toHaveBeenCalled();
   });
 
-  test('signs a Supabase storage path through the normal path', async () => {
+  test('signs a Supabase storage path with download:true (served as attachment, never inline → no stored-XSS)', async () => {
     const p = `organizations/${ORG}/deals/${DEAL}/x.pdf`;
     await expect(storage.getDownloadUrl(p)).resolves.toBe(`https://signed.example/${p}`);
-    expect(supabase.getSignedUrl).toHaveBeenCalledWith(p, 3600);
+    expect(supabase.getSignedUrl).toHaveBeenCalledWith(p, 3600, { download: true });
   });
 });
