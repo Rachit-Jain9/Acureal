@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-30 (Master-plan upload file_type parity — extend the #663 hardening to the regulatory source path) (PR #666)
+
+Follow-up to **PR #663**, which hardened the *deal-document* direct-upload confirm step to derive `file_type` server-side from the file extension and ignore the client's claim. The parallel *master-plan source-document* confirm step (`confirmSourceDocumentUpload`) had been left trusting and storing the client-supplied `fileType` straight into `regulatory_data.master_plan_documents.file_type`.
+
+Not currently exploitable as inline stored-XSS — the only master-plan serve path (`getSourceDocumentDownload` → `getDownloadUrl`) signs with `{ download: true }`, so Supabase serves the file as `Content-Disposition: attachment`, and the stored `file_type` is only read for extraction routing (`isExtractableSource`), never emitted as an HTTP header. Shipped for **defense-in-depth + parity** with the deal path.
+
+### PR opened (CI green)
+
+| PR | What landed |
+|---|---|
+| [#666](https://github.com/Rachit-Jain9/REDIP/pull/666) | **security(masterplan): server-derive source-document content-type.** New `SOURCE_EXT_TO_MIME` map (covers every `ALLOWED_SOURCE_EXTENSIONS` entry) + `sourceContentType()` helper (fallback `application/octet-stream`). `confirmSourceDocumentUpload` stores `sourceContentType(<validated filename>)` instead of `textOrNull(fileType)`; the filename is captured once before the corpus merge reassigns `planName`. Extraction routing preserved — every `EXTRACTABLE_EXTENSIONS` entry maps to a pdf/image MIME, so `isExtractableSource` still matches via both its extension and mime branches. +3 regression tests (client-claimed `text/html` `.pdf` → stored `application/pdf`; `.png` → `image/png`, stays extractable; `.docx` can't be spoofed extractable). Full backend suite 2926 green (comps-queue suites excluded — separate in-flight WIP). All 7 CI checks green. |
+
+### Environment note
+The OneDrive-synced repo hit the documented git-corruption hazard hard this session — branch labels/refs flipped repeatedly mid-work (another machine's active comps-queue-preview hardening session was replaying refs into the shared checkout). Worked around it: based everything off the verified remote `origin/master`, guarded every commit on HEAD/branch identity, and pushed by explicit commit SHA. Feature commit + PR landed safely on origin despite the local churn.
+
+### What's left for the operator
+1. **Authorize the merge** of #666 (reply "merge"). No migration or manual step required.
+
+---
+
 ## 2026-05-30 (Document-pipeline hardening — finish the upload/serve security surface, red-teamed) (PR #663)
 
 Block goal: complete the document-security surface that PR #658 (critical cross-tenant fix) opened — the medium upload/serve findings (#6/#7) from the security audit. On orientation, found that **#8 (document-access audit logging) had already shipped + merged** via an earlier spawned task: `DOCUMENT_ACCESSED` event + `documentAccessLog.sink.js` (migration-tolerant) wired into all three download paths, plus the migration file `20260530_document_access_log.sql`. Flagged that migration for the operator to run (TODO_MANUAL.md) — until then access-logging no-ops harmlessly.
