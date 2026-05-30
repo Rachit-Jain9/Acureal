@@ -122,13 +122,18 @@ async function getDealWorkspace(dealId, options = {}) {
     promoterData,
     nearbyComps,
   ] = await Promise.all([
-    optional(() => financialService.getFinancials(dealId), 'financials'),
-    optional(() => financialService.getScenarios(dealId), 'scenarios'),
-    optional(() => financialService.getFinancialGraph(dealId), 'financialGraph'),
+    // Reuse the financials row getDealById already loaded + authorized — no
+    // extra `INNER JOIN deals` re-fetch. The scenarios / graph / audit slices
+    // below take the same row so they skip their own redundant re-fetch too,
+    // collapsing ~4 reads of one row per deal-page load down to the one
+    // getDealById already did. (RLS still guards the table at the DB layer.)
+    Promise.resolve(deal.financials || null),
+    optional(() => financialService.getScenarios(dealId, { financialsRow: deal.financials ?? null }), 'scenarios'),
+    optional(() => financialService.getFinancialGraph(dealId, { financialsRow: deal.financials ?? null }), 'financialGraph'),
     // Audit events + activities don't add Q&A value — skip in lite mode.
     lite
       ? Promise.resolve([])
-      : optional(() => financialService.listDealEvents(dealId, { limit: AUDIT_EVENT_LIMIT }), 'auditEvents'),
+      : optional(() => financialService.listDealEvents(dealId, { limit: AUDIT_EVENT_LIMIT, financialsRow: deal.financials ?? null }), 'auditEvents'),
     optional(() => documentService.getDocuments(dealId), 'documents'),
     lite
       ? Promise.resolve([])
