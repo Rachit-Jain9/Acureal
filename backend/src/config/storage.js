@@ -166,7 +166,15 @@ const uploadFile = async (fileBuffer, fileName, mimeType, dealId, organizationId
  */
 const getDownloadUrl = async (fileUrl, expiresInSeconds = 3600) => {
   if (fileUrl && fileUrl.startsWith('https://')) {
-    return fileUrl;
+    // SECURITY: only pass an absolute URL through verbatim when it is a genuine
+    // Vercel Blob object. Any other https value in documents.file_url (a legacy
+    // or attacker-confirmed row) must NOT be returned to the client or fetched
+    // server-side — that would make the download/extraction path a server-side
+    // request forgery (SSRF) primitive. Refuse it.
+    if (isVercelBlobUrl(fileUrl) || isPrivateVercelBlobUrl(fileUrl)) {
+      return fileUrl;
+    }
+    throw new Error('Refusing to generate a download URL for a non-storage URL.');
   }
 
   return supabaseSignedUrl(fileUrl, expiresInSeconds);
@@ -174,6 +182,19 @@ const getDownloadUrl = async (fileUrl, expiresInSeconds = 3600) => {
 
 const fetchStoredFile = async (fileUrl, expiresInSeconds = 3600) => {
   let response;
+
+  // SECURITY: mirror getDownloadUrl. An https file_url is only ever fetched
+  // server-side when it is a genuine Vercel Blob object; refuse any other
+  // absolute URL so a poisoned/attacker-controlled file_url can't drive an
+  // outbound fetch (SSRF) from the streamDownload / extraction paths.
+  if (
+    typeof fileUrl === 'string'
+    && fileUrl.startsWith('https://')
+    && !isVercelBlobUrl(fileUrl)
+    && !isPrivateVercelBlobUrl(fileUrl)
+  ) {
+    throw new Error('Refusing to fetch a non-storage URL.');
+  }
 
   if (isPrivateVercelBlobUrl(fileUrl)) {
     response = await fetch(fileUrl, {
