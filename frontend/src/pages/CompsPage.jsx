@@ -4,7 +4,6 @@ import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 import {
   Plus,
   Trash2,
-  X,
   ChevronLeft,
   ChevronRight,
   Building2,
@@ -19,7 +18,7 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
-import { SkeletonList, confirm } from '../design-system';
+import { SkeletonList, confirm, Modal, Button } from '../design-system';
 import { toast } from '../components/common/Toast';
 import { formatINR } from '../utils/format';
 import { exportsAPI } from '../services/api';
@@ -103,23 +102,25 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
     setForm(EMPTY_COMP);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-bg-elevated rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-content-primary">Add Comparable</h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-bg-secondary text-content-muted hover:text-content-secondary transition"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Add Comparable"
+      size="lg"
+      closeOnOverlayClick={!isLoading}
+      footer={(
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="add-comp-form" variant="primary" loading={isLoading}>
+            {isLoading ? 'Adding…' : 'Add Comparable'}
+          </Button>
+        </>
+      )}
+    >
+      <form id="add-comp-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-content-secondary mb-1">Project Name *</label>
@@ -277,17 +278,8 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" disabled={isLoading} className="btn btn-primary">
-              {isLoading ? 'Adding...' : 'Add Comparable'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
