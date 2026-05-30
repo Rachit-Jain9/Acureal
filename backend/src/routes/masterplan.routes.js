@@ -237,7 +237,14 @@ router.post('/documents/:id/pages/prepare', authenticate, requireAdminOrAnalyst,
 // GET /api/master-plan/documents/:id/download
 router.get('/documents/:id/download', authenticate, async (req, res, next) => {
   try {
-    const data = await masterplanService.getSourceDocumentDownload(req.params.id);
+    // Forensics for the immutable document-access log (document_access_log).
+    // `trust proxy` is set in server.js, so req.ip is the real client IP.
+    const data = await masterplanService.getSourceDocumentDownload(req.params.id, {
+      userId: req.user?.id || null,
+      organizationId: req.user?.organization_id || null,
+      ip: req.ip || null,
+      userAgent: req.get('user-agent') || null,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

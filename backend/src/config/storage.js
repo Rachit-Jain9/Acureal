@@ -18,6 +18,7 @@ const { Readable } = require('stream');
 const {
   uploadFile: supabaseUpload,
   getSignedUrl: supabaseSignedUrl,
+  getObjectSize: supabaseGetObjectSize,
   createSignedUploadUrl: supabaseCreateSignedUploadUrl,
   deleteFile: supabaseDelete,
   getSupabaseConfig,
@@ -177,7 +178,23 @@ const getDownloadUrl = async (fileUrl, expiresInSeconds = 3600) => {
     throw new Error('Refusing to generate a download URL for a non-storage URL.');
   }
 
-  return supabaseSignedUrl(fileUrl, expiresInSeconds);
+  // SECURITY: sign Supabase document URLs with `download: true` so the object is
+  // served as an attachment (Content-Disposition: attachment), never rendered
+  // inline. A file uploaded with an executable content-type (e.g. a .pdf PUT as
+  // text/html) therefore cannot run as a script on the storage origin when a
+  // client opens the URL (stored-XSS). Server-side fetches that read the bytes
+  // (extraction, the streamDownload proxy) are unaffected by the disposition.
+  return supabaseSignedUrl(fileUrl, expiresInSeconds, { download: true });
+};
+
+/**
+ * True stored byte size of a Supabase object (read from metadata, no download).
+ * Returns null for Vercel Blob (the direct-upload-confirm path is Supabase-only)
+ * or when the size can't be determined.
+ */
+const getStoredObjectSize = async (fileUrl) => {
+  if (!fileUrl || (typeof fileUrl === 'string' && fileUrl.startsWith('https://'))) return null;
+  return supabaseGetObjectSize(fileUrl);
 };
 
 const fetchStoredFile = async (fileUrl, expiresInSeconds = 3600) => {
@@ -265,6 +282,7 @@ module.exports = {
   uploadFile,
   createUploadUrl,
   getDownloadUrl,
+  getStoredObjectSize,
   fetchStoredFile,
   deleteStorageFile,
   getStorageStatus,

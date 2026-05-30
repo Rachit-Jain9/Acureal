@@ -9,7 +9,16 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
-_(no migrations pending — all Phase A1-A4 + the auto-derived columns migration confirmed applied 2026-05-19 via the operator running the migration-audit query in Supabase SQL editor; see DONE entries below)_
+### Apply migration: `20260530_document_access_log.sql` — PENDING (2026-05-30)
+Path: `database/migrations/20260530_document_access_log.sql`. Creates the append-only `document_access_log` table (immutable, org-scoped RLS) that records every signed-URL issuance + byte-stream download of a deal/master-plan document — satisfies the CLAUDE.md "log access to sensitive documents" rule + the investor-grade audit trail. The backend code (the `documentAccessLog` sink subscribing to `DOCUMENT_ACCESSED`) already ships and is **migration-tolerant**: until this migration runs it logs a one-time `document_access_log_table_missing` warning and no-ops, so nothing breaks — but **no access is recorded until the table exists**. To apply: open https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new, paste the entire file, click Run, expect "Success. No rows returned."
+
+### `RESEND_API_KEY` — DEFERRED until a sending domain exists (2026-05-30)
+Operator decision: no email-sending domain yet, so transactional email (signup verification + password reset) stays unconfigured for now. Consequence (intended, post the 2026-05-30 mailer-hardening PR): in production the mailer **fails closed** — those emails simply don't send (and crucially, the verification/reset link + token is NOT logged) rather than leaking. The boot logs a `RESEND_API_KEY is not set` warning. When a domain is acquired: verify it in Resend (DNS records) → create an API key (`re_…`) → set `RESEND_API_KEY` + `MAIL_FROM` ("REDIP <noreply@yourdomain>") in Vercel. Also set `AI_DAILY_COST_CAP_USD` while there (the only hard ceiling on AI spend; the cost guard is a no-op until set).
+
+### Confirm the rotated Google Maps key — old key deleted in Google Cloud Console (2026-05-30)
+`GOOGLE_MAPS_API_KEY` + `VITE_GOOGLE_MAPS_API_KEY` were updated in Vercel after the audit found a live key committed in git history (commit 55045e7, since redacted from the doc but still in history → permanently burned). **Updating Vercel does not disable the old key** — confirm the old/leaked key was **deleted or regenerated** in https://console.cloud.google.com/google/maps-apis/credentials and that the new key carries HTTP-referrer (browser) + API (server) restrictions and a billing budget cap. Until the old key is deleted in GCP, the leaked value still works.
+
+_(All Phase A1-A4 + auto-derived columns migrations confirmed applied 2026-05-19; see DONE entries below.)_
 
 ### ~~Apply migration: `20260602_properties_auto_derived_context_columns.sql`~~ — DONE 2026-05-18
 Path: `database/migrations/20260602_properties_auto_derived_context_columns.sql`. Adds 13 `auto_derived_*` columns to `public.properties` + 3 partial indexes (zone / PD / ward). Backs the `PATCH /properties/:id/apply-auto-derived-context` endpoint so AutoFillCard Apply persists all 6 picks. Verified applied via `information_schema.columns` check 2026-05-19.

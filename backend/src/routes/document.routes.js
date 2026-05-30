@@ -7,6 +7,16 @@ const { uploadSingle } = require('../middleware/upload');
 
 const router = express.Router();
 
+// Forensics threaded into the document-access audit log (document_access_log)
+// on every download. `trust proxy` is set in server.js, so req.ip is the real
+// client IP behind Vercel's proxy.
+const accessContextFrom = (req) => ({
+  userId: req.user?.id || null,
+  organizationId: req.user?.organization_id || null,
+  ip: req.ip || null,
+  userAgent: req.get('user-agent') || null,
+});
+
 // GET /documents/deals/options
 router.get('/deals/options', authenticate, async (req, res, next) => {
   try {
@@ -110,7 +120,11 @@ router.post(
 // GET /documents/:dealId/download/:documentId
 router.get('/:dealId/download/:documentId', authenticate, async (req, res, next) => {
   try {
-    const result = await documentService.getSignedUrl(req.params.documentId, req.params.dealId);
+    const result = await documentService.getSignedUrl(
+      req.params.documentId,
+      req.params.dealId,
+      accessContextFrom(req),
+    );
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -120,7 +134,12 @@ router.get('/:dealId/download/:documentId', authenticate, async (req, res, next)
 // GET /documents/:dealId/download/:documentId/file
 router.get('/:dealId/download/:documentId/file', authenticate, async (req, res, next) => {
   try {
-    await documentService.streamDownload(req.params.documentId, res, req.params.dealId);
+    await documentService.streamDownload(
+      req.params.documentId,
+      res,
+      req.params.dealId,
+      accessContextFrom(req),
+    );
   } catch (error) {
     next(error);
   }

@@ -104,6 +104,7 @@ const EVENTS = Object.freeze({
   DEAL_ARCHIVED:             'deal.archived',
   DOCUMENT_UPLOADED:         'document.uploaded',
   DOCUMENT_EXTRACTED:        'document.extracted',
+  DOCUMENT_ACCESSED:         'document.accessed',
   DD_ITEM_STATUS_CHANGED:    'dd_item.status_changed',
   APPROVAL_STATUS_CHANGED:   'approval.status_changed',
   RISK_FLAG_STATUS_CHANGED:  'risk_flag.status_changed',
