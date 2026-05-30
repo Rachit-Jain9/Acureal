@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -39,8 +39,8 @@ jobs:
     timeout-minutes: 10
     needs: kernel
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -58,8 +58,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
       - name: Migration filename + CONCURRENTLY lint
