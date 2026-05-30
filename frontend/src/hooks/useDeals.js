@@ -31,12 +31,21 @@ export function useDeal(id) {
  * legacy `['deal', id]` key so consumers that still use `useDeal` see the
  * update.
  */
+// The deal-workspace payload is server-composed and includes AI-narrated
+// recommendation/deal-doctor prose. A short staleTime made every route
+// remount past the window refire the whole read — re-running server-side
+// narration (and, before caching, paying for it again). 5 min matches the
+// global default; every workspace-mutating hook below invalidates
+// ['deal-workspace', id], so edits still refresh immediately — only passive
+// revisits within a working session now reuse the warm cache.
+const WORKSPACE_STALE_TIME = 5 * 60_000;
+
 export function useDealWorkspace(id) {
   return useQuery({
     queryKey: ['deal-workspace', id],
     queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
     enabled: !!id,
-    staleTime: 30_000,
+    staleTime: WORKSPACE_STALE_TIME,
   });
 }
 
@@ -59,8 +68,10 @@ export function useDealWorkspace(id) {
  *     sweep over a 12-card list doesn't fan out 12 round-trips. The
  *     simplest pattern is `onMouseEnter` only (one event per card).
  *
- * Cache TTL piggybacks on `useDealWorkspace`'s 30s staleTime — a hover
- * that doesn't lead to a click is wasted bandwidth bounded to 30s.
+ * Cache TTL piggybacks on `useDealWorkspace`'s staleTime — a hover that
+ * doesn't lead to a click is wasted bandwidth bounded to that window. Sharing
+ * WORKSPACE_STALE_TIME also stops a hover from re-firing the (AI-bearing)
+ * workspace read for a deal already fetched within the window.
  */
 export function usePrefetchDealWorkspace() {
   const qc = useQueryClient();
@@ -71,7 +82,7 @@ export function usePrefetchDealWorkspace() {
     return qc.prefetchQuery({
       queryKey: key,
       queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
-      staleTime: 30_000,
+      staleTime: WORKSPACE_STALE_TIME,
     });
   }, [qc]);
 }

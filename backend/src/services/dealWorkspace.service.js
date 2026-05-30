@@ -227,7 +227,7 @@ async function getDealWorkspace(dealId, options = {}) {
   // fire-and-forget: a failed insert never blocks the read. The narrator
   // honours `RECOMMENDATION_NARRATOR_ENABLED=false` so the operator can
   // turn AI rephrasing off without a code revert.
-  const recommendationsSlice = await optional(async () => {
+  const recommendationsPromise = optional(async () => {
     const startMs = Date.now();
     const narratorAttempts = { tried: 0, succeeded: 0 };
     // Lite-mode callers (e.g. Deal Q&A) want the deterministic cards
@@ -312,7 +312,7 @@ async function getDealWorkspace(dealId, options = {}) {
   // Lite mode skips narration here too — the Q&A model produces its own
   // narration from the deterministic findings, and the UI surfaces never
   // call workspace in lite mode.
-  const dealDoctorSlice = await optional(async () => {
+  const dealDoctorPromise = optional(async () => {
     const narratorEnabled = !lite && process.env.RECOMMENDATION_NARRATOR_ENABLED !== 'false';
     const result = await dealDoctor.generateForWorkspace(composed, {
       narrate: narratorEnabled
@@ -347,6 +347,17 @@ async function getDealWorkspace(dealId, options = {}) {
       generated_at: result.generated_at,
     };
   }, 'dealDoctor');
+
+  // Run the two narrator-bearing slices concurrently instead of summing their
+  // latencies. They share no data dependency — both derive from the read-only
+  // `composed` payload — and the only consumer of dealDoctorSlice (IC readiness,
+  // below) runs after this await. Per-card narration is now response-cached, so
+  // an unchanged deal resolves both slices with zero SDK round-trips; on a cold
+  // (changed) deal the two narration batches overlap instead of serialising.
+  const [recommendationsSlice, dealDoctorSlice] = await Promise.all([
+    recommendationsPromise,
+    dealDoctorPromise,
+  ]);
 
   // PR P1-PR2 — Micro-Market Intelligence slice. Classify the deal's parcel
   // (via lat/lng if present) into one of the 20 Bengaluru micro-markets, then
