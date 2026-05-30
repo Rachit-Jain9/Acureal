@@ -131,3 +131,22 @@ describe('comps_review_queue validators — null tolerance', () => {
     expect(errors.isEmpty()).toBe(false);
   });
 });
+
+describe('comps_review_queue raw-doc download — id validation', () => {
+  // GET /:id/raw-doc/file streams the source document as a guarded
+  // attachment. It is gated only by `param('id').isUUID()`, so a malformed
+  // id must never reach the service / storage layer.
+  test('accepts a valid UUID id', async () => {
+    const chains = [param('id').isUUID()];
+    const req = { params: { id: 'a2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e' }, body: {} };
+    const errors = await runChainsAgainst(req, chains);
+    expect(errors.isEmpty()).toBe(true);
+  });
+
+  test('rejects a non-UUID id', async () => {
+    const chains = [param('id').isUUID()];
+    const req = { params: { id: 'not-a-uuid' }, body: {} };
+    const errors = await runChainsAgainst(req, chains);
+    expect(errors.isEmpty()).toBe(false);
+  });
+});

@@ -746,6 +746,11 @@ export const compSimilarityAPI = {
 export const compsReviewQueueAPI = {
   list:           (params)                    => api.get('/comps-review-queue', { params }),
   get:            (id)                        => api.get(`/comps-review-queue/${id}`),
+  // Stream the row's source document through the guarded backend proxy
+  // (nosniff + Content-Disposition: attachment, SSRF allow-listed). Returns
+  // a blob the caller saves via downloadAxiosResponse — the raw cross-origin
+  // storage URL is never sent to the browser, never embedded in <iframe>/<img>.
+  downloadRawDoc: (id)                        => api.get(`/comps-review-queue/${id}/raw-doc/file`, { responseType: 'blob' }),
   process:        (id)                        => api.post(`/comps-review-queue/${id}/process`),
   // Manual batch trigger — runs extraction on the entire pending_extraction
   // backlog. Surfaced as the "Process pending now" button on the queue list

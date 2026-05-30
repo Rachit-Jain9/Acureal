@@ -2,12 +2,15 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, XCircle, Save, RefreshCw, FileText, Mail,
-  AlertTriangle, ExternalLink, Plus, Trash2, Info,
+  AlertTriangle, Download, Plus, Trash2, Info,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { Card, SectionHeader, SkeletonLine, ErrorState } from '../design-system';
+import { compsReviewQueueAPI } from '../services/api';
+import { downloadAxiosResponse } from '../utils/download';
+import { toast } from '../components/common/Toast';
 import {
   useCompsReviewQueueRow,
   useProcessQueueRow,
@@ -69,12 +72,40 @@ const formatDate = (iso) => {
 // Source preview pane (left)
 // ──────────────────────────────────────────────────────────────────────────
 
+// Friendly label for the attachment's type, derived from the stored MIME.
+const docKindLabel = (mime) => {
+  const m = (mime || '').toLowerCase();
+  if (m.includes('pdf')) return 'PDF';
+  if (m.startsWith('image/')) return 'Image';
+  if (m.includes('word') || m.includes('msword')) return 'Word document';
+  if (m.includes('sheet') || m.includes('excel') || m.includes('csv')) return 'Spreadsheet';
+  return 'Document';
+};
+
 function SourcePreview({ row }) {
   const meta = row.source_meta || {};
-  const docUrl = row.raw_doc_url;
-  const isPdf = (row.raw_doc_mime || '').toLowerCase().includes('pdf');
-  const isImage = (row.raw_doc_mime || '').toLowerCase().startsWith('image/');
-  const isHttpUrl = typeof docUrl === 'string' && docUrl.startsWith('https://');
+  // SECURITY (red-team 2026-05-30): the raw storage URL is no longer sent to
+  // the browser, and the source document is NEVER embedded in an
+  // <iframe>/<img>. The email-ingest attachment path is attacker-controlled,
+  // so we fetch the bytes through the guarded backend proxy (nosniff +
+  // Content-Disposition: attachment) and save them — matching how deal
+  // documents are served. `has_raw_doc` is the server's existence flag; we
+  // fall back to a raw_doc_url presence check only for pre-deploy payloads.
+  const hasRawDoc = row.has_raw_doc ?? Boolean(row.raw_doc_url);
+  const docKind = docKindLabel(row.raw_doc_mime);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await compsReviewQueueAPI.downloadRawDoc(row.id);
+      downloadAxiosResponse(res, meta.attachment_name || `source-${row.id}`);
+    } catch {
+      toast.error('Could not download the source document');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -113,39 +144,41 @@ function SourcePreview({ row }) {
         </div>
       )}
 
-      {/* Embedded document preview */}
-      {docUrl && (
+      {/* Source document — download-only. Never embedded inline; the bytes
+          are streamed through the guarded backend proxy as an attachment. */}
+      {hasRawDoc && (
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-eyebrow uppercase text-content-muted font-medium">Source document</span>
-            {isHttpUrl && (
-              <a
-                href={docUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent hover:underline inline-flex items-center gap-1 focus-visible:outline-none focus-visible:underline"
-              >
-                Open <ExternalLink size={11} />
-              </a>
-            )}
-          </div>
-          <div className="border border-hairline rounded-md overflow-hidden bg-bg-secondary" style={{ minHeight: 480 }}>
-            {isPdf && isHttpUrl ? (
-              <iframe src={docUrl} title="Source document" className="w-full" style={{ height: 480, border: 0 }} />
-            ) : isImage && isHttpUrl ? (
-              <img src={docUrl} alt="Source" className="w-full h-auto max-h-[480px] object-contain" />
-            ) : (
-              <div className="p-4 text-xs text-content-muted">
-                Preview not available inline. {isHttpUrl
-                  ? <>Open the original via the link above.</>
-                  : <>Document is in private storage — request a signed URL via the API.</>}
+          <div className="text-eyebrow uppercase text-content-muted mb-1.5 font-medium">Source document</div>
+          <div className="border border-hairline rounded-md bg-bg-secondary p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <FileText size={18} className="text-content-muted shrink-0" />
+              <div className="min-w-0">
+                <div className="text-sm text-content-primary truncate">
+                  {meta.attachment_name || `${docKind} attachment`}
+                </div>
+                <div className="text-xs text-content-muted">
+                  {docKind}
+                  {row.raw_doc_size_bytes ? ` · ${Math.round(row.raw_doc_size_bytes / 1024)} KB` : ''}
+                </div>
               </div>
-            )}
+            </div>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-hairline rounded text-content-primary bg-bg-elevated hover:bg-bg-secondary transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 shrink-0"
+            >
+              <Download size={13} className={downloading ? 'animate-pulse' : ''} />
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
           </div>
+          <p className="mt-1.5 text-xs text-content-muted">
+            Opens in your computer's viewer. Served as a download — never rendered in-app — for security.
+          </p>
         </div>
       )}
 
-      {!docUrl && !meta.body_preview && (
+      {!hasRawDoc && !meta.body_preview && (
         <ErrorState tone="info" title="No raw content">
           This queue row has no attachment or body preview to show.
         </ErrorState>

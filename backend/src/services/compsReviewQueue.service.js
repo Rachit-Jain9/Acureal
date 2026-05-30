@@ -28,7 +28,7 @@ const crypto = require('crypto');
 const { query, transaction } = require('../config/database');
 const { runWithRequestContext, getRequestContext } = require('../lib/requestContext');
 const { createError } = require('../middleware/errorHandler');
-const { uploadFile } = require('../config/storage');
+const { uploadFile, fetchStoredFile } = require('../config/storage');
 const extractionService = require('./extraction.service');
 const log = require('../lib/logger').child({ module: 'compsReviewQueue' });
 
@@ -293,6 +293,68 @@ const getQueueRow = async (id) => {
     [id]
   );
   return result.rows[0] || null;
+};
+
+/**
+ * Stream a queue row's raw source document to the client as a guarded
+ * download. Mirrors document.service.streamDownload:
+ *
+ *   • The bytes are fetched server-side through fetchStoredFile, which
+ *     refuses any URL that isn't a genuine storage object (the SSRF
+ *     allow-list — reuses isVercelBlobUrl / isPrivateVercelBlobUrl in
+ *     storage.js). The frontend never holds the raw blob URL.
+ *   • Served with X-Content-Type-Options: nosniff and
+ *     Content-Disposition: attachment so the cross-origin storage host can
+ *     never render an attacker-supplied attachment inline (stored-XSS).
+ *
+ * This matters because the email-ingest attachment path (ingestEmail
+ * .service.persistAttachmentBytes) is attacker-controlled: the old UI
+ * embedded raw_doc_url directly in an <iframe>/<img>, bypassing the
+ * "served as attachment, never inline" guarantee that already covers deal
+ * documents + master-plan. Org-scoped + role-gated at the route; 404 when
+ * the row is missing or has no attachment (body-only ingests).
+ */
+const streamRawDoc = async (id, res) => {
+  const row = await getQueueRow(id);
+  if (!row) {
+    throw createError('Queue row not found.', 404);
+  }
+  if (!row.raw_doc_url) {
+    throw createError('This queue row has no source document.', 404);
+  }
+
+  try {
+    const file = await fetchStoredFile(row.raw_doc_url, 3600);
+
+    // Prefer the MIME captured + allow-listed at ingest over whatever the
+    // storage host echoes back. Either way the nosniff + attachment headers
+    // below neutralize inline rendering, so the content-type is advisory only.
+    res.setHeader('Content-Type', row.raw_doc_mime || file.contentType || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', file.cacheControl || 'private, no-cache');
+
+    if (file.contentLength) {
+      res.setHeader('Content-Length', file.contentLength);
+    }
+    if (file.etag) {
+      res.setHeader('ETag', file.etag);
+    }
+
+    const fallbackName = sanitizeFileName(row.source_meta?.attachment_name || 'source-document');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(fallbackName)}`
+    );
+
+    file.stream.on('error', (error) => {
+      res.destroy(error);
+    });
+
+    file.stream.pipe(res);
+  } catch (error) {
+    log.error('comps_queue_raw_doc_stream_failed', error, { queue_id: id });
+    throw createError('Could not download the source document. Please try again.', 500);
+  }
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1040,6 +1102,7 @@ module.exports = {
   // List / get
   listQueue,
   getQueueRow,
+  streamRawDoc,
   // Process
   processQueueRow,
   processPendingBatch,
