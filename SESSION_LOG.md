@@ -4,6 +4,41 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-30 (Deal-page performance + accessibility + a security unblock — measured, adversarially audited) (PRs #651–#655)
+
+Block goal: differentiate from prior bug/correctness blocks by going after **performance, accessibility, and integration** — measured where possible, not vibes. Opened with a 6-dimension multi-agent **Workflow** (bundle splitting, backend deal-page latency, React render, network/caching, accessibility, cross-module integration). 30 agents, each finding adversarially verified against the real code by a second skeptic agent. 9 findings confirmed, 1 rejected, 2 dimensions (bundle + integration) lost to a structured-output failure and re-checked by hand instead. The confirmed findings clustered hard on **backend deal-page latency**, with one issue flagged independently by two dimensions.
+
+### PRs opened (all CI green except the pre-existing axios audit, which #655 fixes)
+
+| PR | What landed |
+|---|---|
+| [#651](https://github.com/Rachit-Jain9/REDIP/pull/651) | **perf: take AI narration off the hot deal-workspace read path.** `getDealWorkspace` — the single read behind the whole deal page — re-ran the recommendation **and** deal-doctor AI narrators synchronously on every load (one live LLM round-trip per `ai_narratable` card, + reprompt, + call-log writes), with no cache, the two narrator phases serialized, and a 30s client `staleTime` that re-fired the whole read (re-narrating server-side) on revisits. Three low-risk, verified changes: (1) **cache-gate `narrateCard`** with a content-addressed `cache:{inputSha256,promptSha256,promptVersion}` (mirrors `aiMarketContext.service.js`) so an unchanged deal viewed again is a cache hit — no SDK call, no tokens; covers both narrators. (2) **parallelize** the recommendation + deal-doctor slices (`Promise.all` of two `optional()` thunks; IC-readiness consumer still runs after). (3) raise `useDealWorkspace` `staleTime` 30s → 5min (mutations already invalidate `['deal-workspace',id]`). +2 narrator tests assert the cache descriptor is content-addressed. Backend 2945 / frontend 1057 green. |
+| [#652](https://github.com/Rachit-Jain9/REDIP/pull/652) | **a11y: convert six raw-div modals to the `Modal` primitive.** New Deal + bulk Archive/Reassign/Stage/Delete (DealsPage) and Add Comparable (CompsPage) were hand-rolled `fixed inset-0` overlays — no focus-trap, no Escape, no `role="dialog"`/`aria-modal`. All six now use `design-system/Modal` (portal, focus-trap, Escape, scroll-lock, animated, reduced-motion fallback). Behaviour preserved: bulk modals still gate close while busy; Delete keeps its rose treatment + type-DELETE-to-confirm; New Deal / Add Comparable keep `<form>` submit via the HTML `form="…"` attribute on the footer Button. Every dialog control gained `htmlFor`/`id`. ~430 lines of overlay boilerplate removed; DealsPage chunk 55.5 → 50.0 KB. |
+| [#653](https://github.com/Rachit-Jain9/REDIP/pull/653) | **perf: reuse one financials row instead of fetching it ~5×.** `getDealById` already loads `deal.financials` after proving visibility; the composer then re-fetched it 4 more times (its own `getFinancials` + `getScenarios`/`getFinancialGraph`/`listDealEvents` each calling `getFinancials` as a visibility gate — every one an `INNER JOIN deals` re-check). Added an optional `{financialsRow}` to those three (shared `resolveFinancialsRow` preserves `getFinancials`' exact 404 contract for standalone callers) and threaded `deal.financials` through. RLS still guards the table, so the trusted-composer skip opens no hole. 5 reads → 1, full parallelism kept. Workspace test updated to the new contract; backend 2943 green. |
+| [#654](https://github.com/Rachit-Jain9/REDIP/pull/654) | **a11y: associate labels with controls in the Risk + DD/Approval forms.** RiskTab (new-flag + per-card edit form — edit ids suffixed with the flag id) and DDTab (new-DD-item + new-approval forms, + an `aria-label` on the per-row status dropdown) had visual-only labels with no `htmlFor`/`id`; the selects announced nothing to screen readers. Purely additive attributes. Build green, RiskTab tests pass. |
+| [#655](https://github.com/Rachit-Jain9/REDIP/pull/655) | **chore(security): bump axios 1.15.2 → 1.16.1.** Live audit of the open PRs found the **Audit & migration lint** CI gate failing identically on all of them — not from this block's code, but because axios 1.15.2 sits in the affected range of four HIGH advisories (NO_PROXY bypass / prototype-pollution DoS + header-injection + full MITM). 1.16.1 patches all four within the existing `^1.6.2` range; bumped in both backend (the audited workspace) and frontend. `npm audit --audit-level=high` now exits 0; backend 2943 / frontend 1057 green. **Merging this first turns CI green on #651–#654.** |
+
+### Findings confirmed but deferred (tracked, not done this block)
+- **AI narration → lazy on-demand endpoint** (the bigger first-paint win past the cache-gate) — needs its own client hydration UX; #651 captured the low-risk share.
+- **Document / activity / waterfall visibility re-checks** — same "already-authorized read variant" pattern as #653, separate smaller pass.
+- **Kernel graph/scenarios recompute-on-read** — persist `financialGraph` into `model_params` with an `engineVersion` gate (verifier flagged staleness risk without the gate).
+- **Deal-mutation over-invalidation** — `useDeals` mutations invalidate 7+ cache trees; verifier rated it low/optional and flagged archive/restore as possibly-dead UI.
+- **In-page form labels** — PropertyDetailPage (~49 controls) is the remaining form after #654.
+- **Dashboard recharts (115 KB gz) on the landing path** — already a separate vendor chunk; deferring it needs a chart-component extraction + Suspense, marginal once cached.
+
+### Parked for operator review
+- An **uncommitted working-tree change was found on master at session start**: it deleted the entire "Sources & Uses" + permanent-refinance card from `HospitalityProformaSection.jsx` (103 lines). Provenance unknown, outside this block's scope, and removing a standard institutional financial output is a product call I won't make silently. **Stashed** (`git stash` — fully recoverable) so the tree was clean. Operator: tell me "restore it" or "ship the removal" and I'll act.
+
+### Verification
+- Backend suite **2943** (2945 on #651 with its +2 tests); frontend suite **1057**; frontend build green; `npm audit --audit-level=high` exits 0 both workspaces. Each PR's Backend/Frontend/Kernel/Vercel checks are green; the audit gate goes green once #655 lands.
+
+### What's left for the operator
+1. **Authorize the merge batch.** Recommended order: **#655 first** (turns the audit gate green everywhere), then #651, #653 (backend perf), then #652, #654 (frontend a11y). Merging = production deploy, so this needs your go-ahead. Reply "merge all" and I'll merge in that order and confirm the production deploy lands on the true tip.
+2. **Decide on the parked "Sources & Uses" removal** (restore vs ship).
+3. Optional: live smoke-test the deal page after deploy (modals open/close with keyboard, deal page feels snappy on revisit).
+
+---
+
 ## 2026-05-28 (Smart Property Capture — collapse the 6-click new-property flow into one paste) (PR #626 + #628 + #629)
 
 Operator brief: linking a property to a deal felt "complex, tedious, confusing, and annoying." The New Deal modal's Property dropdown only showed existing properties, so for every new opportunity (which by definition has a new address) the user had to (1) save the deal with no property, (2) open the deal, (3) navigate to Parcel/Site tab, (4) click Link Property, (5) click "+ Create new", (6) blindly fill a 7-field form with no map / no auto-fill / no confidence — six clicks before the first real action.
