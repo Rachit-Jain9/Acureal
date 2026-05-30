@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
+const { aiLimiter } = require('../middleware/aiLimiter');
 const riskService = require('../services/risk.service');
 const riskRadarService = require('../services/riskRadar.service');
 const inconsistencyDetector = require('../services/inconsistencyDetector.service');
@@ -72,6 +73,7 @@ router.get('/deals/:dealId/risk/radar', authenticate, async (req, res, next) => 
 router.get(
   '/deals/:dealId/risk-narrative',
   authenticate,
+  aiLimiter,
   requireAdminOrAnalyst,
   async (req, res, next) => {
     try {

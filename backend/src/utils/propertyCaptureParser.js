@@ -43,11 +43,16 @@ const isValidLng = (n) => Number.isFinite(n) && n >= -180 && n <= 180;
 
 // ─── 1. GOOGLE MAPS URL ──────────────────────────────────────────────────────
 
-// Allow-list of host suffixes we recognise as Google Maps share URLs.
+// Allow-list of hosts we recognise as Google Maps share URLs.
 // Anything else is rejected for SSRF safety in the resolver.
+//
+// Bare `goo.gl` was Google's GENERIC (now-deactivated) URL shortener — not
+// maps-specific — so anyone could mint a goo.gl link that 302-redirects
+// anywhere (including cloud-metadata / internal hosts). It is deliberately
+// NOT in this list: only `maps.app.goo.gl` (the modern Maps share shortlink)
+// is followed, and the resolver re-validates every redirect hop.
 const GOOGLE_MAPS_HOSTS = [
   'maps.app.goo.gl',
-  'goo.gl',
   'maps.google.com',
   'maps.google.co.in',
   'www.google.com',
@@ -72,10 +77,9 @@ const extractGoogleMapsUrl = (raw) => {
   const isGoogleHost = GOOGLE_MAPS_HOSTS.includes(host);
   if (!isGoogleHost) return null;
 
-  // For the maps.app.goo.gl / goo.gl shortlinks the resolver must follow
-  // redirects to get the canonical URL with @lat,lng. Mark them so the
-  // orchestrator knows to fetch.
-  const isShortlink = host === 'maps.app.goo.gl' || host === 'goo.gl';
+  // Only the maps.app.goo.gl Maps share shortlink is followed; the resolver
+  // re-validates every redirect hop against the Google allow-list.
+  const isShortlink = host === 'maps.app.goo.gl';
 
   // For canonical /maps URLs the lat/lng is often baked in. Pull it now
   // so the resolver can skip the round-trip when it's there.

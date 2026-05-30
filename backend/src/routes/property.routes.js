@@ -5,6 +5,7 @@ const parcelIntelligenceService = require('../services/parcelIntelligence.servic
 const parcelVerifyService = require('../services/parcelIntelligenceVerify.service');
 const parcelContextService = require('../services/parcelContext.service');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
+const { aiLimiter } = require('../middleware/aiLimiter');
 const { handleValidation } = require('../middleware/validate');
 const {
   PROPERTY_TYPES,
@@ -233,6 +234,7 @@ router.get(
 router.post(
   '/capture',
   authenticate,
+  aiLimiter,
   requireAdminOrAnalyst,
   [
     body('input').isString().withMessage('input must be a string').trim().isLength({ min: 1, max: 4000 }),

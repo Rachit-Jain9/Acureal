@@ -6,6 +6,7 @@ const confidenceRangeService = require('../services/confidenceRange.service');
 const dealService = require('../services/deal.service');
 const { generateSensitivityNarrative } = require('../services/export.insights.service');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { aiLimiter } = require('../middleware/aiLimiter');
 const { handleValidation } = require('../middleware/validate');
 const { FINANCIAL_ASSET_CLASSES } = require('../constants/assetClasses');
 
@@ -350,7 +351,7 @@ router.put(
 //
 // Auth: authenticate only (all deal members can read sensitivity —
 // matches the GET /:dealId scope above).
-router.get('/:dealId/sensitivity-narrative', authenticate, async (req, res, next) => {
+router.get('/:dealId/sensitivity-narrative', authenticate, aiLimiter, async (req, res, next) => {
   try {
     const dealId = req.params.dealId;
     const [deal, financials] = await Promise.all([
