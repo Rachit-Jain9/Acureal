@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, AlertTriangle, Settings2 } from 'lucide-react';
 
@@ -13,13 +13,19 @@ import useThemeStore from '../store/themeStore';
 import {
   KpiStripWidget,
   CompsQueueAlertWidget,
-  PipelineChartWidget,
-  CitiesChartWidget,
   RecentActivitiesWidget,
   TopDealsIrrWidget,
   AiCostSummaryWidget,
   AuditTrailTailWidget,
 } from '../components/dashboard/DashboardWidgets';
+
+// The two recharts-backed widgets are lazy-loaded so the recharts vendor chunk
+// (~115 KB gz) only fetches when the chart blocks mount — not on the dashboard's
+// first paint. Both point at the same module, so Vite emits one shared chunk.
+const PipelineChartWidget = lazy(() =>
+  import('../components/dashboard/DashboardCharts').then((m) => ({ default: m.PipelineChartWidget })));
+const CitiesChartWidget = lazy(() =>
+  import('../components/dashboard/DashboardCharts').then((m) => ({ default: m.CitiesChartWidget })));
 import PortfolioRiskRadarWidget from '../components/dashboard/PortfolioRiskRadarWidget';
 import PortfolioReadinessWidget from '../components/dashboard/PortfolioReadinessWidget';
 import AttentionPanel from '../components/dashboard/AttentionPanel';
@@ -76,8 +82,16 @@ const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) =>
   // Today's Attention — specific item-level signals (overdue DD, expiring
   // approvals, recent risks, stale deals, recent activity). Self-fetches.
   attention_panel:       () => <AttentionPanel />,
-  pipeline_chart:        () => <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
-  cities_chart:          () => <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />,
+  pipeline_chart:        () => (
+    <Suspense fallback={<SkeletonCard height="h-[332px]" />}>
+      <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />
+    </Suspense>
+  ),
+  cities_chart:          () => (
+    <Suspense fallback={<SkeletonCard height="h-[332px]" />}>
+      <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />
+    </Suspense>
+  ),
   recent_activities:     () => <RecentActivitiesWidget recent_activities={data?.recent_activities} />,
   top_deals_irr:         () => <TopDealsIrrWidget top_deals_by_irr={data?.top_deals_by_irr} />,
   ai_cost_summary:       () => <AiCostSummaryWidget />,

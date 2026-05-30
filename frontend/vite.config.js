@@ -38,6 +38,14 @@ export default defineConfig({
           ) {
             return 'vendor-react';
           }
+          // clsx is a ~0.5 KB className helper used by almost every component
+          // AND, internally, by recharts. With no explicit chunk, Rollup
+          // co-located it INSIDE vendor-recharts — so importing clsx anywhere
+          // (Badge, CollapsibleCard, …) statically pulled the whole ~115 KB-gz
+          // recharts chunk onto nearly every page. Pinning it to its own tiny
+          // vendor chunk keeps recharts off the critical path of every
+          // non-chart page (it now loads only where a chart actually renders).
+          if (id.includes('node_modules/clsx/')) return 'vendor-utils';
           if (id.includes('node_modules/recharts/')) return 'vendor-recharts';
           if (id.includes('node_modules/leaflet/') || id.includes('node_modules/react-leaflet/')) {
             return 'vendor-leaflet';
