@@ -265,6 +265,31 @@ const getFinancials = async (dealId) => {
   return result.rows[0];
 };
 
+/**
+ * Resolve the financials row a workspace slice needs, reusing a row the caller
+ * already fetched when possible.
+ *
+ * The deal-workspace composer loads the financials row once (via getDealById,
+ * which already proved deal visibility) and threads it into getScenarios /
+ * getFinancialGraph / listDealEvents so those slices skip a redundant
+ * `INNER JOIN deals` re-check + re-fetch of the very same row — collapsing
+ * ~4 reads of one row per deal-page load down to one. RLS still protects the
+ * financials table at the DB layer, so skipping the app-layer re-check for the
+ * trusted composer opens no visibility hole.
+ *
+ * Semantics, preserving getFinancials' contract exactly:
+ *   • `preloaded === undefined` → standalone caller; fetch + gate as before.
+ *   • `preloaded` is a row       → reuse it (visibility already proven).
+ *   • `preloaded` is null        → caller proved the deal is visible but it has
+ *                                  no financials row → same 404 getFinancials
+ *                                  would raise.
+ */
+const resolveFinancialsRow = async (dealId, preloaded) => {
+  if (preloaded === undefined) return getFinancials(dealId);
+  if (!preloaded) throw createError('Financials not found for this deal.', 404);
+  return preloaded;
+};
+
 const updateFinancials = async (dealId, inputData, options = {}) =>
   calculateAndSave(dealId, inputData, options);
 
@@ -325,8 +350,8 @@ const runSensitivity = async (dealId, params, options = {}) => {
 
 // ─── SCENARIOS ────────────────────────────────────────────────────────────────
 
-const getScenarios = async (dealId) => {
-  const fin = await getFinancials(dealId);
+const getScenarios = async (dealId, { financialsRow } = {}) => {
+  const fin = await resolveFinancialsRow(dealId, financialsRow);
 
   // Check if scenarios already stored in model_params
   if (fin.model_params?.scenarios) return fin.model_params.scenarios;
@@ -367,8 +392,8 @@ const getScenarios = async (dealId) => {
  * guarantees the graph structure tracks the current kernel version rather
  * than whatever shape was saved. Matches `getScenarios` cadence.
  */
-const getFinancialGraph = async (dealId) => {
-  const fin = await getFinancials(dealId);
+const getFinancialGraph = async (dealId, { financialsRow } = {}) => {
+  const fin = await resolveFinancialsRow(dealId, financialsRow);
   const assetClass = fin.asset_class || 'residential_apartments';
   const stored = fin.model_params?.inputs || {};
   const baseParams = {
@@ -406,8 +431,16 @@ const getFinancialGraph = async (dealId) => {
  * without N round-trips. The actor's display name is hydrated via a
  * single bulk users lookup.
  */
-const listDealEvents = async (dealId, { limit = 50, includeOutputsSummary = false } = {}) => {
-  await getFinancials(dealId); // visibility gate
+const listDealEvents = async (dealId, { limit = 50, includeOutputsSummary = false, financialsRow } = {}) => {
+  // Visibility gate. The composer threads the already-fetched (already-
+  // authorized) financials row to skip a redundant deal re-check; standalone
+  // callers omit it and we fetch + gate exactly as before. A null row when one
+  // was supplied means the deal has no financials → same 404 as getFinancials.
+  if (financialsRow === undefined) {
+    await getFinancials(dealId);
+  } else if (!financialsRow) {
+    throw createError('Financials not found for this deal.', 404);
+  }
 
   // Pull both feeds in parallel — financial computations (HMAC-signed)
   // and mutation log (stage transitions / archive / reassign / bulk).

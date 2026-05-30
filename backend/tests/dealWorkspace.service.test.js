@@ -41,6 +41,10 @@ const mockDeal = () => ({
   risk_flags: [{ id: 'r-1', severity: 'high', status: 'open' }],
   readiness_summary: { score: 72 },
   next_steps: [{ id: 'n-1', title: 'Verify RERA' }],
+  // getDealById already loads the financials row; the composer reuses it
+  // (and threads it into the scenarios/graph/audit slices) instead of a
+  // redundant getFinancials re-fetch.
+  financials: { deal_id: DEAL_ID, irr_pct: 18.2 },
 });
 
 const http404 = (message) => {
@@ -95,11 +99,14 @@ describe('dealWorkspace.service', () => {
 
     // Deal read runs first (its result gates the composite).
     expect(dealService.getDealById).toHaveBeenCalledWith(DEAL_ID);
-    // Every optional slice also fires.
-    expect(financialService.getFinancials).toHaveBeenCalledWith(DEAL_ID);
-    expect(financialService.getScenarios).toHaveBeenCalledWith(DEAL_ID);
-    expect(financialService.getFinancialGraph).toHaveBeenCalledWith(DEAL_ID);
-    expect(financialService.listDealEvents).toHaveBeenCalledWith(DEAL_ID, { limit: 25 });
+    // The composer reuses the financials row getDealById already loaded — it
+    // does NOT re-fetch via getFinancials — and threads that row into the
+    // scenarios / graph / audit slices so they skip their own re-fetch too.
+    expect(financialService.getFinancials).not.toHaveBeenCalled();
+    const finRow = { deal_id: DEAL_ID, irr_pct: 18.2 };
+    expect(financialService.getScenarios).toHaveBeenCalledWith(DEAL_ID, { financialsRow: finRow });
+    expect(financialService.getFinancialGraph).toHaveBeenCalledWith(DEAL_ID, { financialsRow: finRow });
+    expect(financialService.listDealEvents).toHaveBeenCalledWith(DEAL_ID, { limit: 25, financialsRow: finRow });
     expect(documentService.getDocuments).toHaveBeenCalledWith(DEAL_ID);
     expect(activityService.getActivities).toHaveBeenCalledWith(DEAL_ID, {}, { limit: 50 });
     expect(ddService.getDDScore).toHaveBeenCalledWith(DEAL_ID);
@@ -108,7 +115,9 @@ describe('dealWorkspace.service', () => {
   });
 
   test('degrades gracefully when optional slice returns 404', async () => {
-    financialService.getFinancials.mockRejectedValue(http404('Financials not found.'));
+    // Deal has no financials row → the financials slice is null and the
+    // scenarios/graph slices 404 (no inputs to compute from).
+    dealService.getDealById.mockResolvedValue({ ...mockDeal(), financials: null });
     financialService.getScenarios.mockRejectedValue(http404('Financials not found.'));
     financialService.getFinancialGraph.mockRejectedValue(http404('Financials not found.'));
     financialService.listDealEvents.mockResolvedValue([]);
@@ -135,14 +144,17 @@ describe('dealWorkspace.service', () => {
   test('logs but does not fail when an optional slice throws a 500', async () => {
     const boom = new Error('boom');
     boom.statusCode = 500;
-    financialService.getFinancials.mockRejectedValue(boom);
+    // The financials slice is now a synchronous reuse of deal.financials (it
+    // can't throw), so exercise the degrade-on-500 + warn contract via a slice
+    // that still calls a service: documents.
+    documentService.getDocuments.mockRejectedValue(boom);
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
 
-    expect(ws.financial.summary).toBeNull();
+    expect(ws.documents).toEqual({ documents: [], grouped: {} });
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[dealWorkspace] financials read failed:'),
+      expect.stringContaining('[dealWorkspace] documents read failed:'),
       'boom',
     );
     warnSpy.mockRestore();
@@ -216,12 +228,14 @@ describe('dealWorkspace.service', () => {
       property_lat: 12.97,
       property_lng: 77.75,
       asset_class: 'residential_apartments',
-    });
-    financialService.getFinancials.mockResolvedValueOnce({
-      deal_id: DEAL_ID,
-      irr_pct: 14,
-      total_revenue_cr: 100,
-      model_params: { kpis: { irr: 14, equityMultiple: 1.6, revenue: 100, landCr: 30 } },
+      // Financials row carried on the deal (as getDealById loads it); the
+      // composer surfaces summary.kpis from it without a getFinancials call.
+      financials: {
+        deal_id: DEAL_ID,
+        irr_pct: 14,
+        total_revenue_cr: 100,
+        model_params: { kpis: { irr: 14, equityMultiple: 1.6, revenue: 100, landCr: 30 } },
+      },
     });
     compsService.getCompsNearLocation.mockResolvedValueOnce([
       { price_per_sqft: 5000, is_verified: true },
