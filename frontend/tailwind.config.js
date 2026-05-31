@@ -35,6 +35,7 @@ export default {
         content: {
           primary:   'var(--color-text-primary)',
           secondary: 'var(--color-text-secondary)',
+          tertiary:  'var(--color-text-muted)', // faintest ink — alias of muted
           muted:     'var(--color-text-muted)',
           inverse:   'var(--color-text-inverse)',
         },
@@ -51,6 +52,8 @@ export default {
         },
         accent: {
           DEFAULT: 'var(--color-brand-accent)',
+          primary: 'var(--color-brand-accent)',
+          hover:   '#2563eb', // accent-600 — one step darker for hover states
           soft:    'var(--color-brand-accent-soft)',
           50:  '#eff6ff',
           100: '#dbeafe',
