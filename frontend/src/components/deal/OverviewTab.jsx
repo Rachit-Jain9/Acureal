@@ -41,6 +41,7 @@ import ModelTrustSummary from '../financials/ModelTrustSummary';
 import ProvenanceChip from '../common/ProvenanceChip';
 import { useFieldProvenance } from '../../hooks/useFieldProvenance';
 import DealAutoDerivedWarningsStrip from './DealAutoDerivedWarningsStrip';
+import DealPlanningSnapshot from './DealPlanningSnapshot';
 import {
   formatCrores,
   formatCroresOrDash,
@@ -216,6 +217,14 @@ export default function OverviewTab({ setTab }) {
           lives buried in the Documents tab and operators landing here
           never discover it. */}
       <AutoFillReadyCard dealId={dealId} />
+
+      {/* Planning context — resolved Bengaluru Planning District + census
+          demographics + BBMP guidance band, auto-derived from the deal's
+          address. The positive counterpart to the warnings strip below;
+          shares the same cached hook and renders nothing off-BBMP or when
+          the geocode is approximate. Surfaces the master-plan context on
+          the front page instead of only the Parcel tab. */}
+      <DealPlanningSnapshot deal={deal} />
 
       {/* City-level callouts that may apply to this parcel. Empty for
           non-Bengaluru deals or before the auto-derive endpoint has
