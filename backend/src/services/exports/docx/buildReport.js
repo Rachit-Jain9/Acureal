@@ -833,7 +833,7 @@ const buildWhyThisArea = (ctx) => {
   }
 
   children.push(bodyPara(
-    'AI-assisted synthesis of why this micro-market matters could not be generated for this deal. ' +
+    'Market context synthesis for this micro-market is not available. ' +
     'Populate locality, infrastructure proximity, and intelligence briefs on the deal record to enable this section.',
     { italic: true, color: HEX('mutedHigh') },
   ));
@@ -2230,7 +2230,7 @@ const buildProsCons = (ctx) => {
 
   if (pros.length === 0 && cons.length === 0) {
     children.push(bodyPara(
-      'AI-assisted Pros & Cons synthesis is not available for this deal. Please refer to the structured KPIs, risk register, and DD log for decision support.',
+      'Pros & Cons synthesis is not available for this deal. Please refer to the structured KPIs, risk register, and DD log for decision support.',
       { italic: true, color: HEX('mutedHigh') },
     ));
     return children;

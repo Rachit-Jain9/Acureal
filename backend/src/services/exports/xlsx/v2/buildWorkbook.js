@@ -3097,7 +3097,7 @@ const appendQaSourcesToSheet = (sheet, ctx, startRow) => {
   const disclosureRow = sourceHeaderRow + sourceRows.length + 2;
   sheet.mergeCells(disclosureRow, 1, disclosureRow, 9);
   sheet.getCell(disclosureRow, 1).value =
-    'AI-assisted narratives and market context require human review. No legal, title, RERA, zoning, approval, comp, or market claim should be quoted externally without source-document verification.';
+    'Narratives and market context require human review. No legal, title, RERA, zoning, approval, comp, or market claim should be quoted externally without source-document verification.';
   sheet.getCell(disclosureRow, 1).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(disclosureRow, 1).alignment = { wrapText: true, vertical: 'top' };
   sheet.getRow(disclosureRow).height = 28;
@@ -3245,7 +3245,7 @@ const buildQaSourcesSheet = (workbook, ctx) => {
 
   sheet.mergeCells(sourceHeaderRow + sourceRows.length + 2, 1, sourceHeaderRow + sourceRows.length + 2, 9);
   sheet.getCell(sourceHeaderRow + sourceRows.length + 2, 1).value =
-    'AI-assisted narratives and market context require human review. No legal, title, RERA, zoning, approval, comp, or market claim should be quoted externally without source-document verification.';
+    'Narratives and market context require human review. No legal, title, RERA, zoning, approval, comp, or market claim should be quoted externally without source-document verification.';
   sheet.getCell(sourceHeaderRow + sourceRows.length + 2, 1).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell(sourceHeaderRow + sourceRows.length + 2, 1).alignment = { wrapText: true, vertical: 'top' };
   sheet.getRow(sourceHeaderRow + sourceRows.length + 2).height = 28;
