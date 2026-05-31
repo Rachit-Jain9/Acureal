@@ -7,6 +7,12 @@ jest.mock('../src/config/storage', () => ({
   deleteStorageFile: jest.fn(),
 }));
 
+// Isolate getDeals' per-deal recommendation rollup — it issues its own query
+// and is irrelevant to the pagination / windowed-count behaviour under test.
+jest.mock('../src/services/recommendation/persistence', () => ({
+  getLatestRunsForDeals: jest.fn(async () => new Map()),
+}));
+
 const { query, transaction } = require('../src/config/database');
 const { deleteStorageFile } = require('../src/config/storage');
 const dealService = require('../src/services/deal.service');
@@ -17,16 +23,54 @@ describe('deal.service inactive deal handling', () => {
     transaction.mockImplementation(async (handler) => handler({ query }));
   });
 
-  test('getDeals hides dead and archived deals by default', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      .mockResolvedValueOnce({ rows: [] });
+  test('getDeals hides dead and archived deals by default, in one windowed query', async () => {
+    // Single round-trip: COUNT(*) OVER() carries the total, so an empty first
+    // page is exactly one query (no separate COUNT, no recommendation lookup
+    // since there are no rows).
+    query.mockResolvedValueOnce({ rows: [] });
 
-    await dealService.getDeals({}, {});
+    const result = await dealService.getDeals({}, {});
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0][0]).toContain('d.is_archived = FALSE');
     expect(query.mock.calls[0][0]).toContain("d.stage <> 'dead'");
+    expect(query.mock.calls[0][0]).toContain('COUNT(*) OVER()');
+    expect(result.pagination.total).toBe(0);
+    expect(result.pagination.totalPages).toBe(0);
+  });
+
+  test('getDeals reads the total from COUNT(*) OVER() and strips the helper column', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        { id: 'deal-1', total_count: '7', key_risks: [] },
+        { id: 'deal-2', total_count: '7', key_risks: [] },
+      ],
+    });
+
+    const result = await dealService.getDeals({}, { page: 1, limit: 20 });
+
+    // Total comes from the window column on the first row — no second query.
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(result.pagination.total).toBe(7);
+    expect(result.pagination.totalPages).toBe(1);
+    expect(result.data).toHaveLength(2);
+    // The window helper must never leak into the API payload.
+    expect(result.data[0]).not.toHaveProperty('total_count');
+  });
+
+  test('getDeals falls back to a COUNT only for an empty page past the end', async () => {
+    // offset > 0 with zero rows → the window function has nothing to read, so
+    // one extra COUNT keeps totalPages honest.
+    query
+      .mockResolvedValueOnce({ rows: [] })                 // data query, empty
+      .mockResolvedValueOnce({ rows: [{ count: '40' }] }); // fallback COUNT
+
+    const result = await dealService.getDeals({}, { page: 5, limit: 20 });
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[1][0]).toContain('SELECT COUNT(*)');
+    expect(result.pagination.total).toBe(40);
+    expect(result.pagination.totalPages).toBe(2);
   });
 
   test('getDealById rejects dead deals from UI access', async () => {

@@ -419,16 +419,15 @@ const getDeals = async (filters = {}, pagination = {}) => {
   const offset = (page - 1) * limit;
   const whereClause = conditions.join(' AND ');
 
-  const countResult = await query(
-    `SELECT COUNT(*)
-     FROM deals d
-     LEFT JOIN properties p ON d.property_id = p.id
-     WHERE ${whereClause}`,
-    values
-  );
-
+  // Single round-trip: COUNT(*) OVER() carries the full filtered total on
+  // every returned row (window functions run after WHERE, before LIMIT/
+  // OFFSET), so the separate COUNT query is gone. The one case it can't
+  // answer is a page past the end (offset > total → zero rows, nothing to
+  // read the count from); we fall back to a COUNT there so totalPages stays
+  // correct. The common path (page 1, or any page with rows) is one query.
   const dataResult = await query(
-    `SELECT ${dealSelect}
+    `SELECT ${dealSelect},
+            COUNT(*) OVER() AS total_count
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id
      LEFT JOIN users u ON d.assigned_to = u.id
@@ -440,7 +439,26 @@ const getDeals = async (filters = {}, pagination = {}) => {
     [...values, limit, offset]
   );
 
-  const normalizedRows = dataResult.rows.map((row) => ({
+  let total;
+  if (dataResult.rows.length > 0) {
+    total = parseInt(dataResult.rows[0].total_count, 10) || 0;
+  } else if (offset === 0) {
+    total = 0; // genuinely empty result set
+  } else {
+    // Past-the-end page (rare). One small COUNT keeps pagination honest.
+    const countResult = await query(
+      `SELECT COUNT(*)
+       FROM deals d
+       LEFT JOIN properties p ON d.property_id = p.id
+       WHERE ${whereClause}`,
+      values
+    );
+    total = parseInt(countResult.rows[0].count, 10) || 0;
+  }
+
+  // Strip the window-function helper column so it never leaks into the API
+  // payload; it exists only to carry the total in one round-trip.
+  const normalizedRows = dataResult.rows.map(({ total_count, ...row }) => ({
     ...row,
     document_count: parseInt(row.document_count, 10) || 0,
     pending_required_dd_count: parseInt(row.pending_required_dd_count, 10) || 0,
@@ -475,10 +493,10 @@ const getDeals = async (filters = {}, pagination = {}) => {
   return {
     data: normalizedRows,
     pagination: {
-      total: parseInt(countResult.rows[0].count, 10),
+      total,
       page,
       limit,
-      totalPages: Math.ceil(parseInt(countResult.rows[0].count, 10) / limit),
+      totalPages: Math.ceil(total / limit),
     },
   };
 };
