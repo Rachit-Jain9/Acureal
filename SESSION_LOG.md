@@ -4,6 +4,30 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-31 (Bengaluru Master Plan deep-dive → planning intelligence reaches every deal) (PRs #674, #675)
+
+Operator dropped 18 official BDA RMP documents (Volumes 1/3/4/6, the provisional brochure, the BBMP UAV gazette mis-named "Guidance Value.pdf", 7 planning-district ELU map sheets, Index Map, Existing/Proposed Land Use, plus a hand-authored assessment-engine prompt) and asked for a full audit + to make the intelligence reach all users.
+
+### Audit findings
+- The harness PDF reader was broken (`pdftoppm` missing) — installed PyMuPDF and extracted all 18 (~1,900 pages). Only RMP-Provisional is pure scanned maps; everything else has a clean text layer.
+- Documents are authentic RMP 2031 (Draft), Nov 2017, internally consistent. REDIP's `master_plan_zones` seed is **verbatim-accurate** to Vol-6 (FAR tables, page numbers, zone codes all match).
+- **Credibility headline:** RMP 2031 was scrapped — never notified. The operative plan remains RMP 2015; RMP 2041 is in preparation (~2026). REDIP had labelled it only "Draft".
+- "Guidance Value.pdf" is the BBMP UAV (property-tax) gazette #384 — NOT IGR stamp-duty guidance. The corpus layer already enforces this distinction.
+- Caught and **rejected** a bad auto-extract that renumbered all 42 PDs (it claimed PD-1 = Yelahanka). Authoritative numbering (PD-01 = CBD) lives in `evidence_facts` and was used instead.
+
+### PRs merged + deployed
+| PR | What landed |
+|---|---|
+| [#674](https://github.com/Rachit-Jain9/REDIP/pull/674) | `DealPlanningContextCard` read a never-seeded `{count,max_far,buffer_m_primary,width_m}` schema → always rendered the empty "not ingested yet" state despite 110 approved facts. Rewired to the real `evidence_facts` shapes (SDZ/heritage are arrays; NGT/PRR objects keyed `*_buffer_m`/`alignment`). New `RmpStatusBanner` (RMP-2031 draft/not-notified framing). `MasterPlanBbmpUavPanel` default filter `pending`→`all` (108 approved rows were hidden). Replaced the card's test — it had asserted the synthetic never-seeded schema, so it was green while prod was broken. 14 FE tests green. |
+| [#675](https://github.com/Rachit-Jain9/REDIP/pull/675) | New `regulatory_data.district_localities` (480 rows, all 42 PDs) seeded **verbatim** from RMP 2031 Vol-4 + Index Map, authoritative numbering. `parcelContext.matchPlanningDistrict` resolves via this locality index first (normalized substring, most-specific wins, ambiguity-flagged), falls back to the prior name-fuzz; a missing table degrades gracefully (safe to deploy pre-migration). Verified koramangala→PD-03, whitefield→PD-11, indiranagar→PD-02, electronic city→PD-28. +6 BE tests (32 green). |
+
+### What's left
+1. **Operator must run migration `20260619_district_localities.sql` in Supabase** to populate the locality table (resolver uses the fallback until then — nothing breaks). Blocked from auto-applying (production-DB guard).
+2. **Stage 3 (not built):** auto-surface the resolved district + per-district land-use trajectory + overlays on the deal **Overview** — today the district resolves in the on-demand auto-derive flow on the Parcel/Zoning tab, not prominently on Overview.
+3. Optional hygiene: dedupe the messy 130-row `planning_districts` registry (3 code formats) and the 4×-duplicated routing-key `evidence_fact`.
+
+---
+
 ## 2026-05-31 (confirmDirectUpload archived/dead-deal guard — close the last parity gap in the direct-upload path) (PR #672)
 
 Final follow-up to the 2026-05-30 document-storage hardening line (PRs #663 / #665 / #666). The direct-to-Supabase upload has two **independently reachable** steps: `getPresignedUploadUrl` (step 1, `POST /documents/:dealId/upload-url`) and `confirmDirectUpload` (step 2, `POST /documents/:dealId/confirm-upload`). Step 1 already refused an **archived** (`is_archived`) or **dead** (`stage = 'dead'`) deal; step 2 only checked that the deal existed for the caller's org (`SELECT id …`) and never re-checked state. Because confirm is reachable on its own — a client can POST it directly without ever calling presign — a `documents` row could be attached straight into an archived or dead deal. It was the one document path that didn't enforce what `uploadDocument`, `getDocuments`, `getSignedUrl`, `streamDownload`, and `deleteDocument` already block.
