@@ -1,27 +1,18 @@
 import { Link } from 'react-router-dom';
-import { Layers, AlertTriangle, ArrowUpRight, MapPin, Trees, Compass } from 'lucide-react';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Layers, AlertTriangle, ArrowUpRight, MapPin, Trees, Compass, Landmark } from 'lucide-react';
+import { Card, ErrorState, SectionHeader } from '../../design-system';
 import { useLandUseIntelligence } from '../../hooks/useMasterPlan';
+import RmpStatusBanner from '../masterplan/RmpStatusBanner';
 
-const fmt = (value, fractionDigits = 0) => {
+const fmt = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
-  return n.toLocaleString('en-IN', {
-    maximumFractionDigits: fractionDigits,
-    minimumFractionDigits: 0,
-  });
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 };
 
-// Returns the number when finite, else null. Used to decide whether a
-// callout tile has any real data worth rendering — a callout ROW can exist
-// in evidence_facts while its numeric sub-fields are absent, in which case
-// we must NOT render a tile full of interpolated "undefined" strings.
-const num = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-
+const asArray = (value) => (Array.isArray(value) ? value : []);
 const nonEmptyStr = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const stripSuffix = (value, pattern) => String(value || '').replace(pattern, '').trim();
 
 function CalloutTile({ icon: Icon, label, value, hint, tone = 'neutral' }) {
   const toneClass = {
@@ -62,9 +53,16 @@ function PanelSkeleton() {
 }
 
 // Surfaces city-level Bengaluru planning context inside any deal's Zoning
-// tab. Pulls from the same evidence_facts the admin Planning Intelligence
-// surfaces use, so deal teams don't have to leave the deal to verify
-// SDZ corridors, NGT drain buffers, heritage radii, or the PRR alignment.
+// tab. Pulls the same approved evidence_facts the admin Planning Intelligence
+// surfaces use, so deal teams don't have to leave the deal to see SDZ
+// corridors, NGT water buffers, heritage zones, or the PRR alignment.
+//
+// IMPORTANT: the callout facts are stored as their raw extracted shapes —
+// `special_development_zones` and `heritage_zones` are ARRAYS of objects;
+// `ngt_drainage_classification` and `peripheral_ring_road` are flat OBJECTS
+// (NGT keys are `*_buffer_m`, PRR carries `alignment`/`status`). This
+// component reads those exact shapes. The accompanying test locks them so the
+// card can never silently regress to an empty "not ingested yet" state again.
 export default function DealPlanningContextCard() {
   const { data, isLoading, isError } = useLandUseIntelligence();
 
@@ -78,51 +76,20 @@ export default function DealPlanningContextCard() {
   }
 
   const callouts = data?.callouts || [];
-  const find = (predicate) => callouts.find(predicate)?.value;
+  const valueOf = (key) => callouts.find((c) => c.key === key)?.value;
 
-  const sdz = find((c) => c.key === 'special_development_zones');
-  const ngt = find((c) => c.key === 'ngt_drainage_classification');
-  const heritage = find((c) => c.key === 'heritage_zones');
-  const prr = find((c) => c.key === 'peripheral_ring_road');
+  const sdzList = asArray(valueOf('special_development_zones'));
+  const heritageList = asArray(valueOf('heritage_zones'));
+  const ngt = valueOf('ngt_drainage_classification') || null;
+  const prr = valueOf('peripheral_ring_road') || null;
 
-  // A callout ROW can exist while its values are absent. Only treat a
-  // callout as renderable when it carries at least one real field — this
-  // is what stops the tiles from showing "P undefinedm · S undefinedm" or
-  // "undefinedm corridor · undefined" when the row is a hollow placeholder.
-  const sdzHas = !!sdz && (num(sdz.count) != null || num(sdz.max_far) != null ||
-    (Array.isArray(sdz.locations) && sdz.locations.length > 0));
-  const ngtHas = !!ngt && (num(ngt.buffer_m_primary) != null ||
-    num(ngt.buffer_m_secondary) != null || num(ngt.buffer_m_tertiary) != null);
-  const heritageHas = !!heritage && (num(heritage.count) != null ||
-    num(heritage.prohibited_radius_m) != null);
-  const prrHas = !!prr && (num(prr.width_m) != null || nonEmptyStr(prr.type) != null);
-
+  const sdzHas = sdzList.length > 0;
+  const heritageHas = heritageList.length > 0;
+  const ngtHas = !!ngt
+    && [ngt.lake_buffer_m, ngt.primary_buffer_m, ngt.secondary_buffer_m, ngt.tertiary_buffer_m]
+      .some((v) => Number.isFinite(Number(v)));
+  const prrHas = !!prr && (nonEmptyStr(prr.alignment) != null || nonEmptyStr(prr.status) != null);
   const hasAny = sdzHas || ngtHas || heritageHas || prrHas;
-
-  if (!hasAny) {
-    return (
-      <Card elevated className="p-5">
-        <SectionHeader
-          size="sm"
-          icon={Layers}
-          title="Bengaluru planning context"
-          sub="Verified facts from RMP 2031 maps that materially affect any deal site."
-          action={(
-            <Link
-              to="/admin/master-plan?tab=intelligence"
-              className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary transition-colors duration-120"
-            >
-              Open intelligence
-              <ArrowUpRight size={11} />
-            </Link>
-          )}
-        />
-        <p className="text-xs text-content-muted italic mt-2">
-          Land-use facts have not been ingested yet. Once the Existing Land Use 2015 and Proposed Land Use 2031 maps land in the source corpus, this rail will surface SDZ corridors, NGT drain buffers, heritage radii, and the Peripheral Ring Road alignment automatically.
-        </p>
-      </Card>
-    );
-  }
 
   return (
     <Card elevated className="p-5">
@@ -130,64 +97,77 @@ export default function DealPlanningContextCard() {
         size="sm"
         icon={Layers}
         title="Bengaluru planning context"
-        sub="Verified callouts from RMP 2031 maps that materially affect any deal site. Cross-reference these against your parcel boundary before underwriting."
+        sub="City-level RMP 2031 facts that materially affect any Bengaluru site. Cross-reference against this parcel's exact location before underwriting."
         action={(
           <Link
             to="/admin/master-plan?tab=intelligence"
-            className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary transition-colors duration-120"
+            className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out"
           >
-            Open Planning Intelligence
+            Open intelligence
             <ArrowUpRight size={11} />
           </Link>
         )}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-        {sdzHas && (
-          <CalloutTile
-            icon={MapPin}
-            label="Special Development Zones"
-            value={`${fmt(sdz.count)} corridors · max FAR ${num(sdz.max_far) != null ? fmt(sdz.max_far, 2) : '—'}`}
-            hint={Array.isArray(sdz.locations) && sdz.locations.length ? sdz.locations.slice(0, 3).join(', ') : null}
-            tone="warn"
-          />
-        )}
-        {ngtHas && (
-          <CalloutTile
-            icon={Trees}
-            label="NGT drain buffers"
-            value={`P ${fmt(ngt.buffer_m_primary)}m · S ${fmt(ngt.buffer_m_secondary)}m · T ${fmt(ngt.buffer_m_tertiary)}m`}
-            hint="Primary, secondary, tertiary drain setbacks"
-            tone="success"
-          />
-        )}
-        {heritageHas && (
-          <CalloutTile
-            icon={AlertTriangle}
-            label="Heritage zones"
-            value={`${fmt(heritage.count)} zones · ${fmt(heritage.prohibited_radius_m)}m prohibited`}
-            hint={num(heritage.regulated_radius_m) != null ? `${fmt(heritage.regulated_radius_m)}m regulated radius` : null}
-            tone="warn"
-          />
-        )}
-        {prrHas && (
-          <CalloutTile
-            icon={Compass}
-            label="Peripheral Ring Road"
-            value={[
-              num(prr.width_m) != null ? `${fmt(prr.width_m)}m corridor` : null,
-              nonEmptyStr(prr.type),
-            ].filter(Boolean).join(' · ') || '—'}
-            hint={nonEmptyStr(prr.note)}
-            tone="info"
-          />
-        )}
-      </div>
+      <RmpStatusBanner className="mt-3" />
+
+      {hasAny ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+          {sdzHas && (
+            <CalloutTile
+              icon={MapPin}
+              label="Special Development Zones"
+              value={`${fmt(sdzList.length)} corridors`}
+              hint={sdzList
+                .map((s) => nonEmptyStr(s.corridor_axis) || stripSuffix(s.name, /^SDZ\s*/i))
+                .filter(Boolean)
+                .slice(0, 5)
+                .join(', ') || null}
+              tone="warn"
+            />
+          )}
+          {ngtHas && (
+            <CalloutTile
+              icon={Trees}
+              label="NGT water buffers"
+              value={`Lake ${fmt(ngt.lake_buffer_m)}m · P ${fmt(ngt.primary_buffer_m)}m · S ${fmt(ngt.secondary_buffer_m)}m · T ${fmt(ngt.tertiary_buffer_m)}m`}
+              hint="No-construction buffers from water bodies & storm drains (NGT 2016)"
+              tone="success"
+            />
+          )}
+          {heritageHas && (
+            <CalloutTile
+              icon={Landmark}
+              label="Heritage zones"
+              value={`${fmt(heritageList.length)} zones`}
+              hint={heritageList
+                .map((h) => stripSuffix(h.name, /\s*Heritage Zone$/i))
+                .filter(Boolean)
+                .slice(0, 3)
+                .join(', ') || null}
+              tone="warn"
+            />
+          )}
+          {prrHas && (
+            <CalloutTile
+              icon={Compass}
+              label="Peripheral Ring Road"
+              value={nonEmptyStr(prr.alignment) ? 'Proposed ring corridor' : 'Proposed'}
+              hint={nonEmptyStr(prr.status)}
+              tone="info"
+            />
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-content-muted italic mt-3">
+          City-level land-use callouts have not been ingested yet. Once the RMP source corpus is processed, SDZ corridors, NGT buffers, heritage zones, and the Peripheral Ring Road alignment will surface here automatically.
+        </p>
+      )}
 
       <div className="text-[11px] text-content-muted mt-3 flex items-start gap-1.5">
         <AlertTriangle size={11} className="mt-0.5 shrink-0" />
         <span>
-          AI-extracted from RMP 2031 land-use maps. Verify each callout against the published RMP and the parcel's exact location before quoting in IC memos.
+          Extracted from RMP 2031 (Draft), Volumes 3 &amp; 4. These are city-wide reference facts — verify each against this parcel&apos;s exact location and the published RMP before quoting in an IC memo.
         </span>
       </div>
     </Card>
