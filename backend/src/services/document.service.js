@@ -182,11 +182,21 @@ const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, 
   }
 
   const dealResult = await query(
-    'SELECT id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    'SELECT id, is_archived, stage FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
     [dealId]
   );
   if (dealResult.rows.length === 0) {
     throw createError('Deal not found.', 404);
+  }
+  // SECURITY: mirror the archived/dead guard from getPresignedUploadUrl. Confirm
+  // is independently reachable from the presign step (a caller can POST
+  // confirm-upload directly), so without this an archived or dead deal — which
+  // presign already refuses — could still receive a documents row here.
+  if (dealResult.rows[0].is_archived) {
+    throw createError('Restore the archived deal before uploading documents to it.', 409);
+  }
+  if (dealResult.rows[0].stage === 'dead') {
+    throw createError('Dead deals are hidden from document workflows.', 409);
   }
 
   if (!storagePath) {
