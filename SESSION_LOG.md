@@ -4,6 +4,24 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-31 (confirmDirectUpload archived/dead-deal guard — close the last parity gap in the direct-upload path) (PR #672)
+
+Final follow-up to the 2026-05-30 document-storage hardening line (PRs #663 / #665 / #666). The direct-to-Supabase upload has two **independently reachable** steps: `getPresignedUploadUrl` (step 1, `POST /documents/:dealId/upload-url`) and `confirmDirectUpload` (step 2, `POST /documents/:dealId/confirm-upload`). Step 1 already refused an **archived** (`is_archived`) or **dead** (`stage = 'dead'`) deal; step 2 only checked that the deal existed for the caller's org (`SELECT id …`) and never re-checked state. Because confirm is reachable on its own — a client can POST it directly without ever calling presign — a `documents` row could be attached straight into an archived or dead deal. It was the one document path that didn't enforce what `uploadDocument`, `getDocuments`, `getSignedUrl`, `streamDownload`, and `deleteDocument` already block.
+
+### PR opened -> merged (CI green)
+
+| PR | What landed |
+|---|---|
+| [#672](https://github.com/Rachit-Jain9/REDIP/pull/672) | **security(documents): refuse confirmDirectUpload into archived or dead deals.** `confirmDirectUpload`'s deal lookup now selects `is_archived, stage` and throws the same two `409`s as `getPresignedUploadUrl`, verbatim — "Restore the archived deal before uploading documents to it." (archived) and "Dead deals are hidden from document workflows." (dead). The guard fires **before** the storagePath cross-tenant/SSRF validation and the INSERT, so a blocked confirm performs only the deal lookup and writes no row. +2 regression tests in `document.security.test.js` (archived → 409 + no INSERT; dead → 409 + no INSERT); the file's header comment goes from "Two guards" to "Three guards". `npx jest document.security` 13/13 green; the pre-existing storagePath guard, content-type derivation, and true-size verification on the function are untouched. All 7 CI checks green (Backend, Frontend, Financial kernel, Audit & migration lint, Vercel). |
+
+### Environment note
+Same OneDrive `.git` corruption hazard as the sibling 2026-05-30 sessions. My own branch + commit + push-by-SHA landed cleanly on origin, but `gh pr merge` failed to update the LOCAL checkout (`unable to write new index file` / `not possible to fast-forward to master`) — a transient OneDrive lock on `.git/index`. The merge itself ran server-side on GitHub and was unaffected: PR #672 is MERGED, squash commit `34c9225` sits on `origin/master`, and the production deploy (`dpl_26VyCVV4…`, `redip.vercel.app`) reached READY. Verified throughout via `git show origin/master:` and the Vercel deployments API, never the local working tree.
+
+### Status
+Merged to `master` + deployed to production (Vercel READY, `redip.vercel.app` serving `34c9225`). Closes the last parity gap in the 2026-05-30 document-storage hardening line — every deal-document path now enforces the archived/dead-deal guard.
+
+---
+
 ## 2026-05-30 (Comps review-queue source docs — guarded attachment serve; closes the #663 red-team scope gap) (PR #665)
 
 Completes the **medium scope-gap** the PR #663 red-team flagged and spawned as a follow-up. The **comps review-queue** detail page (`CompsQueueDetailPage` `SourcePreview`) rendered the uploaded source document **inline** — `<iframe src={raw_doc_url}>` for PDFs, `<img src={raw_doc_url}>` for images — pointing the browser straight at the verbatim Vercel Blob URL, served with the stored content-type and **no `Content-Disposition`**. That bypassed the "served as attachment, never inline" guarantee #663 established for deal documents + master-plan.
