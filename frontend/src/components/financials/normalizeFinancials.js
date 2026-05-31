@@ -105,7 +105,6 @@ export function normalizeFinancials(financials) {
     },
     costsRaw: costs,
     capitalStack: mp.capitalStack || null,
-    sourcesUses: costs.sources_uses || null,
     cashFlows: cashFlowSeries.map((cf, i) => ({ quarter: cf.quarter ?? i, value: toNumber(cf.net) ?? 0 })),
     yearlyCashFlows: (financials.cash_flows?.yearly || []).map((cf) => ({ year: cf.year, label: cf.label, value: toNumber(cf.net) ?? 0 })),
     proforma: mp.proforma || null,
