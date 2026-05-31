@@ -9,11 +9,12 @@ jest.mock('../src/services/extraction.service', () => ({
 }));
 jest.mock('../src/config/storage', () => ({
   uploadFile: jest.fn(),
+  fetchStoredFile: jest.fn(),
 }));
 
 const { query, transaction } = require('../src/config/database');
 const extraction = require('../src/services/extraction.service');
-const { uploadFile } = require('../src/config/storage');
+const { uploadFile, fetchStoredFile } = require('../src/config/storage');
 const queue = require('../src/services/compsReviewQueue.service');
 
 beforeEach(() => {
@@ -683,5 +684,88 @@ describe('bulkReject', () => {
 
     const result = await queue.bulkReject(['r1'], null, 'user-1');
     expect(result.succeeded_count).toBe(1);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// streamRawDoc — guarded source-document proxy (nosniff + attachment, SSRF)
+//
+// Regression for the 2026-05-30 red-team finding: the reviewer UI embedded
+// the raw Vercel Blob URL inline (<iframe>/<img>), bypassing the
+// "served as attachment, never inline" guarantee. The bytes must now flow
+// through fetchStoredFile (the storage-host SSRF allow-list) and be served
+// with X-Content-Type-Options: nosniff + Content-Disposition: attachment.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('streamRawDoc', () => {
+  const makeRes = () => ({ setHeader: jest.fn(), destroy: jest.fn() });
+  const makeStream = () => ({ on: jest.fn(), pipe: jest.fn() });
+
+  test('throws 404 when the queue row is missing', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await expect(queue.streamRawDoc('missing', makeRes())).rejects.toMatchObject({ statusCode: 404 });
+    expect(fetchStoredFile).not.toHaveBeenCalled();
+  });
+
+  test('throws 404 when the row has no attachment (body-only ingest)', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ id: 'r1', organization_id: 'o', raw_doc_url: null }],
+    });
+    await expect(queue.streamRawDoc('r1', makeRes())).rejects.toMatchObject({ statusCode: 404 });
+    expect(fetchStoredFile).not.toHaveBeenCalled();
+  });
+
+  test('streams as a nosniff attachment (never inline) and pipes the body', async () => {
+    const blobUrl = 'https://abc.public.blob.vercel-storage.com/comps-queue/x.pdf';
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'r1',
+        organization_id: 'o',
+        raw_doc_url: blobUrl,
+        raw_doc_mime: 'application/pdf',
+        source_meta: { attachment_name: 'JLL Q1.pdf' },
+      }],
+    });
+    const stream = makeStream();
+    fetchStoredFile.mockResolvedValueOnce({
+      stream,
+      contentType: 'application/pdf',
+      contentLength: '4096',
+      etag: 'W/"abc"',
+    });
+    const res = makeRes();
+
+    await queue.streamRawDoc('r1', res);
+
+    // Bytes fetched only through the SSRF-guarded helper, never the raw URL.
+    expect(fetchStoredFile).toHaveBeenCalledWith(blobUrl, 3600);
+
+    const headers = Object.fromEntries(res.setHeader.mock.calls);
+    expect(headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(headers['Content-Type']).toBe('application/pdf');
+    expect(headers['Content-Disposition']).toMatch(/^attachment;/);
+    // Filename sanitized (spaces → underscore) before it lands in the header.
+    expect(headers['Content-Disposition']).toContain('JLL_Q1.pdf');
+    expect(headers['Content-Length']).toBe('4096');
+    expect(stream.pipe).toHaveBeenCalledWith(res);
+  });
+
+  test('surfaces a 500 (not the storage internals) when fetchStoredFile refuses a non-storage URL', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        id: 'r1',
+        organization_id: 'o',
+        raw_doc_url: 'https://attacker.example/evil.pdf',
+        raw_doc_mime: 'application/pdf',
+        source_meta: {},
+      }],
+    });
+    // The SSRF allow-list in fetchStoredFile throws for non-storage URLs.
+    fetchStoredFile.mockRejectedValueOnce(new Error('Refusing to fetch a non-storage URL.'));
+    const res = makeRes();
+
+    await expect(queue.streamRawDoc('r1', res)).rejects.toMatchObject({ statusCode: 500 });
+    // Failed before any header/stream — nothing leaked to the response.
+    expect(res.setHeader).not.toHaveBeenCalled();
   });
 });

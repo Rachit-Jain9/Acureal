@@ -66,7 +66,14 @@ router.get(
         assignedToMe,
         currentUserId: req.user.id,
       });
-      res.json({ success: true, ...result });
+      // SECURITY: strip the raw storage URL from every row before it reaches
+      // the browser (see GET /:id). The list never embeds it, but no client
+      // payload should carry a dereferenceable cross-origin storage URL.
+      const data = (result.data || []).map(({ raw_doc_url, ...r }) => ({
+        ...r,
+        has_raw_doc: Boolean(raw_doc_url),
+      }));
+      res.json({ success: true, ...result, data });
     } catch (err) {
       next(err);
     }
@@ -247,7 +254,35 @@ router.get(
       if (!row) {
         return res.status(404).json({ success: false, message: 'Queue row not found.' });
       }
-      res.json({ success: true, data: row });
+      // SECURITY: never ship the raw storage URL to the browser. The source
+      // document is fetched only through the guarded /raw-doc/file proxy
+      // (nosniff + Content-Disposition: attachment). Expose a boolean instead
+      // so the UI knows a document exists without ever holding a
+      // dereferenceable cross-origin URL it could embed in an <iframe>/<img>.
+      const { raw_doc_url, ...safeRow } = row;
+      res.json({ success: true, data: { ...safeRow, has_raw_doc: Boolean(raw_doc_url) } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// GET /api/comps-review-queue/:id/raw-doc/file — stream the row's source
+// document as a guarded attachment. The bytes are fetched server-side
+// through fetchStoredFile (SSRF allow-list) and served with
+// X-Content-Type-Options: nosniff + Content-Disposition: attachment, so the
+// cross-origin storage host can never render an attacker-supplied attachment
+// inline (stored-XSS). Replaces the old pattern where the reviewer UI
+// embedded the raw Vercel Blob URL directly in an <iframe>/<img>.
+router.get(
+  '/:id/raw-doc/file',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  [param('id').isUUID()],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      await queueService.streamRawDoc(req.params.id, res);
     } catch (err) {
       next(err);
     }
