@@ -238,7 +238,10 @@ const matchPlanningDistrictByNameFuzz = async (addressTokens) => {
     const result = await query(
       `SELECT id, pd_code, pd_name, city
        FROM regulatory_data.planning_districts
-       WHERE city = 'Bengaluru'`,
+       WHERE city = 'Bengaluru'
+         AND pd_name IS NOT NULL
+         AND pd_code NOT ILIKE 'Planning Zone%'
+         AND pd_code <> 'Multiple'`,
     );
     const candidates = result.rows
       .map((pd) => ({ pd, score: scorePdAgainstAddress(pd, addressTokens) }))
@@ -278,21 +281,32 @@ const matchPlanningDistrict = async (addressTokens, addressText) => {
 const enrichPdWithDemographics = async (matched) => {
   if (!matched) return null;
   try {
+    // Two 42-element planning_districts arrays exist in evidence_facts (the
+    // rich PDR demographics + a code/name routing list). Both share the same
+    // length, so ordering by length alone is a non-deterministic tie that
+    // flipped the DOCX Demographics section between full and blank. Prefer
+    // the array whose first element actually carries population_2011.
     const r = await query(
       `SELECT fact_value
        FROM regulatory_data.evidence_facts
        WHERE fact_type = 'rmp_table'
          AND fact_key  = 'planning_districts'
          AND jsonb_typeof(fact_value) = 'array'
-       ORDER BY jsonb_array_length(fact_value) DESC
+       ORDER BY jsonb_exists(fact_value -> 0, 'population_2011') DESC,
+                jsonb_array_length(fact_value) DESC,
+                id ASC
        LIMIT 1`,
     );
     const arr = Array.isArray(r.rows[0]?.fact_value) ? r.rows[0].fact_value : [];
-    const entry = arr.find((e) => {
-      const a = String(e?.pd_code || '').replace(/[\s-]/g, '').toLowerCase();
-      const b = String(matched.pd_code || '').replace(/[\s-]/g, '').toLowerCase();
-      return a && a === b;
-    });
+    // Compare by the numeric PD index so 'PD-08', 'PD 8', and '8' all match.
+    const pdNum = (code) => {
+      const digits = String(code || '').replace(/\D/g, '');
+      return digits ? parseInt(digits, 10) : null;
+    };
+    const matchedNum = pdNum(matched.pd_code);
+    const entry = matchedNum != null
+      ? arr.find((e) => pdNum(e?.pd_code) === matchedNum)
+      : null;
     if (!entry) return matched;
     return {
       ...matched,
