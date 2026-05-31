@@ -55,7 +55,7 @@ const AXIS_TICK_SMALL = { fontSize: 10, fontVariantNumeric: 'tabular-nums', fill
 // and match the dashboard + Cash Flows chart conventions (PR-NX65).
 const GRID_STROKE = 'var(--color-border-primary)';
 const REFERENCE_LINE_STROKE = 'var(--color-border-strong)';
-const NEUTRAL_BAR_FILL = 'var(--color-text-disabled)'; // used for inactive bar variants
+const NEUTRAL_BAR_FILL = 'var(--color-text-muted)'; // muted neutral for inactive bar variants
 const ACCENT_HIGHLIGHT_STROKE = 'var(--color-brand-accent)';
 
 const tooltipStyle = {
