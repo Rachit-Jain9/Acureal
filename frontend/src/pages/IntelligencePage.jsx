@@ -887,8 +887,14 @@ export default function IntelligencePage() {
                     row.demandSignal === 'Moderate'        ? 'bg-amber-100 text-amber-700' :
                     row.demandSignal === 'Soft'            ? 'bg-red-100 text-red-700' :
                                                              'bg-bg-secondary text-content-secondary';
-                  const trendColor = row.pricingTrend && row.pricingTrend !== 'Not available'
-                    ? 'text-emerald-600 font-medium' : 'text-content-muted';
+                  // pricingTrend is a YoY price-growth string ("+8–10% YoY") —
+                  // a proxy, not a measured demand feed (see caveat below).
+                  // Colour by the real sign so a decline never reads green.
+                  const hasTrend = row.pricingTrend && row.pricingTrend !== 'Not available';
+                  const trendNeg = hasTrend && String(row.pricingTrend).replace(/^\+/, '').trim().startsWith('-');
+                  const trendColor = !hasTrend
+                    ? 'text-content-muted'
+                    : trendNeg ? 'text-red-500 font-medium' : 'text-emerald-600 font-medium';
                   return (
                     <tr key={i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
                       <td className="py-2.5 px-3 font-medium text-content-primary">{row.microMarket}</td>
@@ -914,7 +920,7 @@ export default function IntelligencePage() {
             </table>
           </div>
           <p className="mt-3 text-xs text-content-muted">
-            Pricing data from verified internal benchmarks (2025–2026). Absorption &amp; inventory data awaiting verified external feed.
+            Pricing from verified internal benchmarks (2025–2026). <span className="font-medium text-content-secondary">Demand Signal</span> is derived from YoY price growth — a momentum proxy, not a measured absorption or demand feed. Absorption &amp; inventory data awaiting verified external feed.
           </p>
         </SectionCard>
       )}

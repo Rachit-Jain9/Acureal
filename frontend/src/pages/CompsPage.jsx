@@ -572,13 +572,15 @@ export default function CompsPage() {
         title="Comparables"
         // Hold the description on a neutral "Loading the comparables
         // database…" string until the first fetch resolves — otherwise
-        // the page flashes "0 verified comparables in the database"
+        // the page flashes "0 comparables in the database"
         // for ~1s before snapping to the real total. The flash reads
         // like a real empty state, which is misleading.
         description={
           isLoading
             ? 'Loading the comparables database…'
-            : `${totalCount} verified ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`
+            : rawRows.length >= totalCount && sourceCounts.verified > 0
+              ? `${totalCount} ${totalCount === 1 ? 'comparable' : 'comparables'} · ${sourceCounts.verified} verified`
+              : `${totalCount} ${totalCount === 1 ? 'comparable' : 'comparables'} in the database`
         }
         actions={
           <div className="flex items-center gap-2">
