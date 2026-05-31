@@ -176,9 +176,63 @@ const scorePdAgainstAddress = (pd, addressTokens) => {
   return hits;
 };
 
-// Best-effort PD lookup by address fuzz. Returns null on no-match so the
-// frontend can show "Select planning district" instead of guessing.
-const matchPlanningDistrict = async (addressTokens) => {
+// Normalize a free-text place string to the canonical form stored in
+// district_localities.locality_norm (lowercase, alphanumerics only) so a
+// geocoded address can be substring-matched against the curated index.
+const normalizeLocalityText = (text) =>
+  String(text || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// PRIMARY Planning-District resolver. Substring-matches the geocoded address
+// against regulatory_data.district_localities — the curated locality -> PD
+// index seeded VERBATIM from RMP 2031 Vol-4 PDR + Index Map (authoritative BDA
+// numbering). Most-specific (longest) locality wins. When the same locality
+// name maps to >1 PD (cross-boundary village names) the match is flagged
+// ambiguous and confidence is reduced. Returns null on no-match OR if the
+// table is not present yet — callers fall back to the name-fuzz heuristic, so
+// this is safe to deploy before the seed migration is applied.
+const matchPlanningDistrictByLocality = async (addressText) => {
+  const norm = normalizeLocalityText(addressText);
+  if (norm.length < 4) return null;
+  try {
+    const result = await query(
+      `SELECT pd_code, pd_name, pd_number, locality, confidence, kind,
+              length(locality_norm) AS spec
+         FROM regulatory_data.district_localities
+        WHERE city = 'Bengaluru'
+          AND length(locality_norm) >= 4
+          AND position(locality_norm IN $1) > 0
+        ORDER BY spec DESC, (confidence = 'high') DESC, (kind = 'pd_label') DESC`,
+      [norm],
+    );
+    const rows = result.rows || [];
+    if (!rows.length) return null;
+    const best = rows[0];
+    const sameName = rows.filter(
+      (r) => normalizeLocalityText(r.locality) === normalizeLocalityText(best.locality),
+    );
+    const ambiguous = new Set(sameName.map((r) => r.pd_code)).size > 1;
+    return {
+      pd_code: best.pd_code,
+      pd_name: best.pd_name,
+      matched_locality: best.locality,
+      confidence: ambiguous ? 0.55 : best.confidence === 'high' ? 0.85 : 0.6,
+      ambiguous,
+      alternates: rows
+        .filter((r) => r.pd_code !== best.pd_code)
+        .slice(0, 3)
+        .map((r) => ({ pd_code: r.pd_code, pd_name: r.pd_name, matched_locality: r.locality })),
+      source: 'locality-index',
+    };
+  } catch (err) {
+    return null;
+  }
+};
+
+// FALLBACK PD lookup by address-token fuzz against the planning_districts
+// registry. Lower precision (name-token presence only) — used only when the
+// locality index returns no match. Returns null on no-match so the frontend
+// can show "Select planning district" instead of guessing.
+const matchPlanningDistrictByNameFuzz = async (addressTokens) => {
   if (!addressTokens.length) return null;
   try {
     const result = await query(
@@ -208,6 +262,15 @@ const matchPlanningDistrict = async (addressTokens) => {
     // PD table missing or some other issue — degrade gracefully.
     return null;
   }
+};
+
+// Orchestrator: locality index first (precise, authoritative), name-token
+// fuzz as a backstop. addressText is the geocoded formatted address (or raw
+// input); addressTokens feed the fuzz fallback.
+const matchPlanningDistrict = async (addressTokens, addressText) => {
+  const byLocality = await matchPlanningDistrictByLocality(addressText);
+  if (byLocality) return byLocality;
+  return matchPlanningDistrictByNameFuzz(addressTokens || []);
 };
 
 // Enrich the matched PD with its demographics from the evidence_facts
@@ -381,7 +444,7 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
           .searchBbmpStreets({ search: tokens[0], limit: 5 })
           .catch(() => ({ rows: [], summary: {} }))
       : Promise.resolve({ rows: [], summary: {} }),
-    provisionallyInsideBbmp ? matchPlanningDistrict(tokens) : Promise.resolve(null),
+    provisionallyInsideBbmp ? matchPlanningDistrict(tokens, coords.formatted_address || trimmedAddress) : Promise.resolve(null),
     fetchApplicableCallouts(),
   ]);
 
@@ -567,6 +630,8 @@ module.exports = {
     isCoordinateTrustworthy,
     extractAddressTokens,
     scorePdAgainstAddress,
+    normalizeLocalityText,
+    matchPlanningDistrictByLocality,
     GEOCODE_TRUST_THRESHOLD,
     BBMP_BBOX,
     NON_BBMP_TALUKS,

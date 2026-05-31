@@ -510,3 +510,92 @@ describe('parcelContext.service — planning district enrichment', () => {
     expect(ctx.planningDistrict.source).toBe('address-token-fuzz');
   });
 });
+
+describe('parcelContext.service — locality-index PD resolution (district_localities)', () => {
+  const mockLocalityRouting = (localityRows, demographics) => {
+    query.mockImplementation((sql) => {
+      if (/FROM regulatory_data\.district_localities/i.test(sql)) {
+        return Promise.resolve({ rows: localityRows });
+      }
+      if (/jsonb_typeof\(fact_value\) = 'array'/i.test(sql) && /planning_districts/i.test(sql)) {
+        return Promise.resolve({ rows: [{ fact_value: demographics }] });
+      }
+      if (/FROM regulatory_data\.planning_districts/i.test(sql) && /pd_code/i.test(sql)) {
+        return Promise.resolve(stubPdListRow());
+      }
+      return Promise.resolve({ rows: [] });
+    });
+  };
+
+  test('resolves PD from the locality index (most-specific match) and enriches with demographics', async () => {
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.935, lng: 77.624,
+      displayName: '5th Block, Koramangala, Bengaluru, Karnataka 560095',
+      provider: 'google', confidence: 0.9, status: 'verified',
+    });
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [], summary: {} });
+    mockLocalityRouting(
+      [{ pd_code: 'PD-03', pd_name: 'Austin Town-Koramangala-HSR Layout', pd_number: 3, locality: 'Koramangala', confidence: 'high', kind: 'locality', spec: 11 }],
+      [{ pd_code: 'PD-03', pd_name: 'Austin Town-Koramangala-HSR Layout', population_2011: 380778, area_ha: 3083.02, gross_density_pph: 124, wards_in_pd: 9 }],
+    );
+
+    const ctx = await deriveParcelContextFromAddress({ address: 'Koramangala 5th Block' });
+    expect(ctx.planningDistrict).not.toBeNull();
+    expect(ctx.planningDistrict.pd_code).toBe('PD-03');
+    expect(ctx.planningDistrict.source).toBe('locality-index');
+    expect(ctx.planningDistrict.matched_locality).toBe('Koramangala');
+    expect(ctx.planningDistrict.population_2011).toBe(380778);
+    expect(ctx.planningDistrict.gross_density_pph).toBe(124);
+  });
+
+  test('flags ambiguity when one locality name maps to >1 PD and lowers confidence', async () => {
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.95, lng: 77.6, displayName: 'Hosahalli, Bengaluru, Karnataka',
+      provider: 'google', confidence: 0.9, status: 'verified',
+    });
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [], summary: {} });
+    mockLocalityRouting(
+      [
+        { pd_code: 'PD-05', pd_name: 'Rajaji Nagar', pd_number: 5, locality: 'Hosahalli', confidence: 'low', kind: 'village', spec: 9 },
+        { pd_code: 'PD-27', pd_name: 'Singasandra', pd_number: 27, locality: 'Hosahalli', confidence: 'low', kind: 'village', spec: 9 },
+      ],
+      [],
+    );
+
+    const ctx = await deriveParcelContextFromAddress({ address: 'Hosahalli' });
+    expect(ctx.planningDistrict.source).toBe('locality-index');
+    expect(ctx.planningDistrict.ambiguous).toBe(true);
+    expect(ctx.planningDistrict.confidence).toBe(0.55);
+    expect(ctx.planningDistrict.alternates.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('falls back to name-fuzz when the locality index is empty (or table absent)', async () => {
+    geocodeAddress.mockResolvedValueOnce({
+      found: true, lat: 12.97, lng: 77.74,
+      displayName: '100 Whitefield Main Road, Bengaluru, Karnataka',
+      provider: 'google', confidence: 0.9, status: 'verified',
+    });
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValueOnce({ rows: [], summary: {} });
+    // default beforeEach mock returns [] for the district_localities query and
+    // the stub PD list for planning_districts → name-fuzz path stays exercised.
+    const ctx = await deriveParcelContextFromAddress({ address: '100 Whitefield Main Road' });
+    expect(ctx.planningDistrict.source).toBe('address-token-fuzz');
+    expect(ctx.planningDistrict.pd_code).toBe('PD-11');
+  });
+
+  test('normalizeLocalityText strips punctuation and whitespace', () => {
+    expect(_internal.normalizeLocalityText('HSR Layout')).toBe('hsrlayout');
+    expect(_internal.normalizeLocalityText('K.R. Puram')).toBe('krpuram');
+    expect(_internal.normalizeLocalityText('  Indira Nagar  ')).toBe('indiranagar');
+    expect(_internal.normalizeLocalityText(null)).toBe('');
+  });
+
+  test('matchPlanningDistrictByLocality returns null when the table is missing (query throws)', async () => {
+    query.mockImplementationOnce(() => Promise.reject(new Error('relation "regulatory_data.district_localities" does not exist')));
+    const result = await _internal.matchPlanningDistrictByLocality('Koramangala, Bengaluru');
+    expect(result).toBeNull();
+  });
+});
