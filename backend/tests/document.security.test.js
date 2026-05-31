@@ -3,7 +3,7 @@
 /**
  * Regression tests for the document-storage security hardening (2026-05-30).
  *
- * Two guards, both verified by the security audit:
+ * Three guards, all verified by the security audit:
  *   1. confirmDirectUpload must not trust the client-supplied storagePath —
  *      it must live under the caller's own organizations/<org>/deals/<deal>/
  *      folder. Otherwise a caller can confirm a documents row pointing at
@@ -13,6 +13,10 @@
  *   2. storage.getDownloadUrl must only pass an absolute https URL through
  *      verbatim when it is a genuine Vercel Blob object; any other https value
  *      is refused so a poisoned file_url can't drive a server-side fetch.
+ *   3. confirmDirectUpload must refuse an archived or dead deal, matching the
+ *      presign step (getPresignedUploadUrl). Confirm is independently reachable,
+ *      so without this guard a caller could attach a document straight into a
+ *      deal that the presign step already blocks.
  */
 
 jest.mock('../src/config/database', () => ({ query: jest.fn() }));
@@ -117,6 +121,30 @@ describe('confirmDirectUpload — storagePath validation (cross-tenant + SSRF gu
     // Client claimed 100 bytes at presign, but the real object is 60 MB (> 50 MB cap).
     supabase.getObjectSize.mockResolvedValueOnce(60 * 1024 * 1024);
     await expect(callConfirm(`organizations/${ORG}/deals/${DEAL}/big.pdf`)).rejects.toMatchObject({ statusCode: 413 });
+  });
+});
+
+describe('confirmDirectUpload — archived/dead deal guard (parity with getPresignedUploadUrl)', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  // A well-formed, own-org/deal path so the rejection can ONLY come from the
+  // archived/dead gate, not from the storagePath validation tested above.
+  const goodPath = `organizations/${ORG}/deals/${DEAL}/1700000000000-file.pdf`;
+
+  test('refuses to confirm an upload into an archived deal (409) and never inserts', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: DEAL, is_archived: true, stage: 'due_diligence' }] });
+    await expect(callConfirm(goodPath)).rejects.toMatchObject({ statusCode: 409 });
+    expect(query).toHaveBeenCalledTimes(1); // only the deal lookup; INSERT never ran
+    expect(query.mock.calls.some((c) => /INSERT INTO documents/.test(c[0]))).toBe(false);
+  });
+
+  test('refuses to confirm an upload into a dead deal (409) and never inserts', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: DEAL, is_archived: false, stage: 'dead' }] });
+    await expect(callConfirm(goodPath)).rejects.toMatchObject({ statusCode: 409 });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls.some((c) => /INSERT INTO documents/.test(c[0]))).toBe(false);
   });
 });
 
