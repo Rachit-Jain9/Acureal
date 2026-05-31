@@ -4,6 +4,27 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-01 (10-hour quality block — route hardening · honest market display · planning snapshot on every deal · deals-list + financials perf) (PRs #681–#685)
+
+First-principles pass over the open session backlog, grouped into five focused, non-overlapping PRs. Each branched off master, tested/built, pushed, CI-green. #681 merged; #682–#685 await operator merge (production deploy needs operator authorization per the merge-boundary rule).
+
+### What shipped
+- **#681 (merged) — backend route hardening.** Document-delete now verifies the document belongs to the deal in the URL (closed an IDOR); `/financials/quick-compute` stops leaking error internals in production; archived legal versions require a genuinely-verified JWT (was: any non-empty `Authorization` header passed); bulk `ids` arrays are UUID-validated (clear 400, not an opaque 500). +1 IDOR regression test. 8 suites / 117 tests green.
+- **#682 — honest market display.** Benchmark tables (Office/Retail/Industrial) show declines in red with the real minus sign — a −3% drop used to render "+-3%" in green. Macro indicators surface their as-of date + clickable source. The Comps header no longer calls listings/IPC rows "verified" (shows an exact verified sub-count only when the full set is loaded). The demand heatmap states its signal is a price-growth proxy, not a measured feed. Build green.
+- **#683 — deal Overview planning snapshot.** New `DealPlanningSnapshot` surfaces the resolved Bengaluru Planning District + 2011-census demographics + BBMP guidance band on the deal front page, reusing the cached auto-derive hook (shared query key → no extra fetch). Honest gates (non-BLR / no address / approximate geocode / no PD → renders nothing); no legal-four conclusions. +8 tests.
+- **#684 — Financial Engine perf.** The three recharts result-visuals are lazy-loaded, so opening the page to enter inputs no longer downloads ~115 KB gz of charting; FinancialsPage chunk 257.8 → 216.3 KB. Investigated #25 (lazy `PortfolioRiskRadarWidget`) and intentionally skipped it — the widget uses no recharts, so a lazy boundary there would be a net regression. Build green.
+- **#685 — deals-list perf.** `getDeals` is now one DB round-trip (`COUNT(*) OVER()`) instead of two, with a single COUNT fallback only for an empty page past the end. Three composite rollup indexes (migration `20260620`, operator-applied). +3 tests; 15 green across deal.service + dealsCsvExport.
+
+### Verification
+- Backend: deal.service / document.security / comps-queue / legal / auth suites green; new IDOR + windowed-count + helper-strip + fallback tests added.
+- Frontend: `npm run build` green on every PR; `DealPlanningSnapshot` 8/8.
+- CI green on #681–#684 at hand-off; #685 finishing.
+
+### What's left (operator)
+- **Merge #682, #683, #684, #685** — non-overlapping files, any order (production deploy = operator authorization).
+- **Apply migration** `database/migrations/20260620_deals_list_perf_indexes.sql` in Supabase (deals-list speed-up; #685 code ships safely without it).
+- Still-pending from earlier: `20260530_document_access_log.sql`, `20260619_district_localities.sql` (see TODO_MANUAL).
+
 ## 2026-05-31 (Bengaluru Master Plan deep-dive → planning intelligence reaches every deal) (PRs #674, #675)
 
 Operator dropped 18 official BDA RMP documents (Volumes 1/3/4/6, the provisional brochure, the BBMP UAV gazette mis-named "Guidance Value.pdf", 7 planning-district ELU map sheets, Index Map, Existing/Proposed Land Use, plus a hand-authored assessment-engine prompt) and asked for a full audit + to make the intelligence reach all users.
