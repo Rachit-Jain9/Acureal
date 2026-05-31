@@ -133,7 +133,7 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
   const { data: defaultsData } = useDefaultsMeta(modelClass);
   const defaults = defaultsData?.effective || null;
 
-  const preflight = preflightDealInput(baseInputs, modelClass);
+  const preflight = preflightDealInput(baseInputs, assetClass);
 
   const [kpiKey, setKpiKey] = useState('irr');
   const [isComputing, setIsComputing] = useState(false);
@@ -141,7 +141,7 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
   const [error, setError] = useState(null);
 
   const varList = useMemo(
-    () => TORNADO_VARS[modelClass] || TORNADO_VARS[assetClass] || [],
+    () => TORNADO_VARS[assetClass] || TORNADO_VARS[modelClass] || [],
     [modelClass, assetClass],
   );
 

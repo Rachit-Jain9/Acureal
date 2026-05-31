@@ -27,35 +27,31 @@ const SCENARIO_RECIPES = {
         sellingRatePerSqft:      { mult: 0.90 },
         constructionCostPerSqft: { mult: 1.07 },
         projectDurationMonths:   { add: 3 },
-        absorptionMonths:        { add: 6 },
       },
     },
     upside: {
       label: 'Upside',
-      summary: '+8% rate, -4% cost, faster sales',
+      summary: '+8% rate, -4% cost',
       changes: {
         sellingRatePerSqft:      { mult: 1.08 },
         constructionCostPerSqft: { mult: 0.96 },
-        absorptionMonths:        { mult: 0.85 },
       },
     },
   },
   plotted_development: {
     downside: {
       label: 'Downside',
-      summary: '-10% rate, +5% cost, slower sales',
+      summary: '-10% rate, +5% cost',
       changes: {
         sellingRatePerSqft: { mult: 0.90 },
         devCostPerSqft:     { mult: 1.05 },
-        absorptionMonths:   { add: 6 },
       },
     },
     upside: {
       label: 'Upside',
-      summary: '+8% rate, faster absorption',
+      summary: '+8% rate',
       changes: {
         sellingRatePerSqft: { mult: 1.08 },
-        absorptionMonths:   { mult: 0.85 },
       },
     },
   },
@@ -320,9 +316,11 @@ function ScenarioColumn({ scenario, baseKpis, showDelta }) {
 
 export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, onEditInputs }) {
   const modelClass = resolveFinancialModelClass(assetClass) || assetClass;
-  const recipe = SCENARIO_RECIPES[modelClass] || SCENARIO_RECIPES[assetClass];
+  // Asset-class first so villas / mixed_use / redevelopment use their OWN
+  // recipe + preflight requirements rather than the residential model's.
+  const recipe = SCENARIO_RECIPES[assetClass] || SCENARIO_RECIPES[modelClass];
 
-  const preflight = preflightDealInput(baseInputs, modelClass);
+  const preflight = preflightDealInput(baseInputs, assetClass);
 
   const [downKpis,   setDownKpis]   = useState(null);
   const [upKpis,     setUpKpis]     = useState(null);

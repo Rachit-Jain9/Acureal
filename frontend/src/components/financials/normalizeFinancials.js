@@ -30,6 +30,15 @@ export function normalizeFinancials(financials) {
   const cashFlowSeries = financials.cash_flows?.quarterly || [];
   const sm = financials.sensitivity_matrix || {};
   const inputsRaw = mp.inputs || {};
+  // The deal record stores duration as projectDurationYears, but the kernel
+  // and the what-if / tornado / scenario panels key on projectDurationMonths.
+  // Backfill it so those controls anchor on the real duration instead of the
+  // registry default. (The kernel's readMonths also accepts the years alias,
+  // so this only corrects the front-end view-model.)
+  const durationYears = Number(inputsRaw.projectDurationYears);
+  const inputs = (inputsRaw.projectDurationMonths == null && Number.isFinite(durationYears))
+    ? { ...inputsRaw, projectDurationMonths: durationYears * 12 }
+    : inputsRaw;
 
   return {
     assetClass,
@@ -54,7 +63,7 @@ export function normalizeFinancials(financials) {
       revPAR: toNumber(kpis.revPAR),
       gopMargin: toNumber(kpis.gopMargin),
     },
-    inputs: inputsRaw,
+    inputs,
     areas: {
       grossBuiltUp: toNumber(areas.grossBuiltUp ?? financials.gross_area_sqft),
       saleable: toNumber(areas.saleable ?? financials.saleable_area_sqft),
