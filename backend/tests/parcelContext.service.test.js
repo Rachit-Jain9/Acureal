@@ -599,3 +599,39 @@ describe('parcelContext.service — locality-index PD resolution (district_local
     expect(result).toBeNull();
   });
 });
+
+describe('parcelContext.service — enrichPdWithDemographics (deterministic + cross-format match)', () => {
+  const RICH = [
+    {
+      pd_code: 'PD-08', pd_name: 'Thanisandra-Nagawara-Richards Town',
+      population_2011: 622667, area_ha: 2798.64, gross_density_pph: 222,
+      wards_in_pd: 14, villages_count: 0,
+    },
+  ];
+  beforeEach(() => {
+    query.mockImplementation((sql) => {
+      if (/jsonb_typeof\(fact_value\) = 'array'/i.test(sql) && /planning_districts/i.test(sql)) {
+        return Promise.resolve({ rows: [{ fact_value: RICH }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+  });
+
+  test('matches a numeric pd_code ("8") against a "PD-08" demographics entry', async () => {
+    const out = await parcelContextService.enrichPdWithDemographics({ pd_code: '8', pd_name: 'X', source: 'address-token-fuzz' });
+    expect(out.population_2011).toBe(622667);
+    expect(out.gross_density_pph).toBe(222);
+    expect(out.source).toBe('address-token-fuzz');
+  });
+
+  test('matches a "PD-08" pd_code against the same entry', async () => {
+    const out = await parcelContextService.enrichPdWithDemographics({ pd_code: 'PD-08', pd_name: 'X' });
+    expect(out.population_2011).toBe(622667);
+  });
+
+  test('returns the bare match (no demographics) when the pd_code carries no PD number', async () => {
+    const out = await parcelContextService.enrichPdWithDemographics({ pd_code: 'Multiple', pd_name: 'X' });
+    expect(out.population_2011).toBeUndefined();
+    expect(out.pd_code).toBe('Multiple');
+  });
+});
