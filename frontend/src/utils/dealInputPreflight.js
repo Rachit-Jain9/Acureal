@@ -30,6 +30,7 @@ const REQUIRED_BY_CLASS = {
   ],
   hospitality: ['keys', 'adr', 'landCostCr'],
   land_parcel: ['landCostCr'],
+  raw_land: ['totalLandSqft', 'sellingRatePerSqft', 'landCostCr'],
 };
 
 const LABELS = {

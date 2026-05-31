@@ -248,10 +248,10 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
   const { data: defaultsData } = useDefaultsMeta(modelClass);
   const defaults = defaultsData?.effective || null;
 
-  const preflight = preflightDealInput(baseInputs, modelClass);
+  const preflight = preflightDealInput(baseInputs, assetClass);
 
   const fieldList = useMemo(
-    () => (SLIDER_FIELDS[modelClass] || SLIDER_FIELDS[assetClass] || []),
+    () => (SLIDER_FIELDS[assetClass] || SLIDER_FIELDS[modelClass] || []),
     [modelClass, assetClass],
   );
 
