@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Calculator, Building2, ChevronDown } from 'lucide-react';
 import ReferenceMenu from '../components/financials/ReferenceMenu';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
-import FinancialVisualizationLayer from '../components/financials/FinancialVisualizationLayer';
-import HospitalityProformaSection from '../components/financials/HospitalityProformaSection';
 import QuarterlyProformaPanel from '../components/financials/QuarterlyProformaPanel';
 import { useFinancials, useCalculateFinancials } from '../hooks/useFinancials';
 import InputForm from '../components/financials/InputForm';
@@ -29,7 +27,6 @@ import JDAWaterfallPanel from '../components/financials/JDAWaterfallPanel';
 import JVWaterfallPanel from '../components/financials/JVWaterfallPanel';
 import DebtSchedulePanel from '../components/financials/DebtSchedulePanel';
 import { KPICards, AreaBreakdown, CostBreakdown, RevenuePanel } from '../components/financials/ResultPanels';
-import CashFlowChart from '../components/financials/CashFlowChart';
 import SensitivityTable from '../components/financials/SensitivityTable';
 import {
   ASSET_CLASSES,
@@ -48,6 +45,14 @@ import { normalizeFinancials, hasLegacyResidentialLoadingFactor } from '../compo
 // matching element into view, and flashes it briefly.
 import { useScrollOnMount } from '../hooks/useEvidenceNavigate';
 
+
+// Recharts-backed result visuals — lazy-loaded so the ~115 KB gz recharts
+// vendor chunk only fetches once a model is computed and the result view
+// mounts. The input-first view (form + reference data) never pays the tax.
+// Mirrors the dashboard chart-widget lazy pattern (DashboardPage.jsx).
+const FinancialVisualizationLayer = lazy(() => import('../components/financials/FinancialVisualizationLayer'));
+const HospitalityProformaSection = lazy(() => import('../components/financials/HospitalityProformaSection'));
+const CashFlowChart = lazy(() => import('../components/financials/CashFlowChart'));
 
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────────
 
@@ -232,13 +237,17 @@ export default function FinancialsPage() {
             onEditInputs={scrollToInputs}
           />
 
-          <FinancialVisualizationLayer
-            financials={normalizedFinancials}
-            inputs={normalizedFinancials.inputs}
-          />
+          <Suspense fallback={<SkeletonCard height="h-[420px]" />}>
+            <FinancialVisualizationLayer
+              financials={normalizedFinancials}
+              inputs={normalizedFinancials.inputs}
+            />
+          </Suspense>
 
           {normalizedFinancials.assetClass === 'hospitality' && (
-            <HospitalityProformaSection financials={normalizedFinancials} />
+            <Suspense fallback={<SkeletonCard height="h-[300px]" />}>
+              <HospitalityProformaSection financials={normalizedFinancials} />
+            </Suspense>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -247,7 +256,9 @@ export default function FinancialsPage() {
             <RevenuePanel revenue={normalizedFinancials.revenue} kpis={normalizedFinancials.kpis} assetClass={normalizedFinancials.assetClass} />
           </div>
 
-          <CashFlowChart cashFlows={normalizedFinancials.cashFlows} yearlyCashFlows={normalizedFinancials.yearlyCashFlows} assetClass={normalizedFinancials.assetClass} />
+          <Suspense fallback={<SkeletonCard height="h-[360px]" />}>
+            <CashFlowChart cashFlows={normalizedFinancials.cashFlows} yearlyCashFlows={normalizedFinancials.yearlyCashFlows} assetClass={normalizedFinancials.assetClass} />
+          </Suspense>
           <QuarterlyProformaPanel proforma={normalizedFinancials.proforma} />
           <SensitivityTable sensitivity={normalizedFinancials.sensitivity} assetClass={normalizedFinancials.assetClass} />
 
