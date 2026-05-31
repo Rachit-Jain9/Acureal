@@ -1859,3 +1859,66 @@ describe('masterplan.service district intelligence helpers', () => {
     });
   });
 });
+
+// Defense-in-depth parity with the deal-document path (confirmDirectUpload in
+// document.service.js, document.security.test.js): confirmSourceDocumentUpload
+// must derive the stored file_type from the (allow-listed) extension and IGNORE
+// the client-supplied `fileType`. The direct-upload browser PUTs the object with
+// any Content-Type it likes, so trusting the client could persist a `.pdf` as
+// `text/html`. file_type is only used for extraction routing (isExtractableSource)
+// and display — never as an HTTP Content-Type header — but we still refuse to
+// store the client's claim so the value is always benign and accurate.
+describe('confirmSourceDocumentUpload — server-derived file_type (stored-XSS parity)', () => {
+  const ORG_ID = '11111111-1111-1111-1111-111111111111';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // Generic (non-corpus) filenames so masterplanCorpus is a pass-through and the
+  // stored file_type is driven purely by the extension.
+  const confirmUpload = ({ originalName, fileType }) => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'doc-x', file_name: originalName }] }); // INSERT
+    return service.confirmSourceDocumentUpload({
+      storagePath: `organizations/org-1/deals/master-plan/${originalName}`,
+      originalName,
+      fileType,
+      fileSize: 2048,
+      city: 'Bengaluru',
+      planName: 'REDIP regulatory source',
+      planVersion: 'RMP 2031',
+      docType: 'rmp_table',
+      organizationId: ORG_ID,
+    });
+  };
+
+  // file_type is the 6th bound parameter ($6) of the INSERT.
+  const storedFileType = () => {
+    const insertCall = query.mock.calls.find((c) => /INSERT INTO regulatory_data\.master_plan_documents/.test(c[0]));
+    expect(insertCall).toBeTruthy();
+    return insertCall[1][5];
+  };
+
+  test('stores a client-claimed text/html .pdf as application/pdf (kills the stored-XSS setup)', async () => {
+    await confirmUpload({ originalName: 'redip-site-report.pdf', fileType: 'text/html' });
+    // Server-derived from the .pdf extension, NOT the client's text/html. The
+    // value still satisfies isExtractableSource (mime.includes('pdf')), so PDF
+    // extraction routing is preserved.
+    expect(storedFileType()).toBe('application/pdf');
+  });
+
+  test('stores a client-claimed text/html .png as image/png and keeps it extractable', async () => {
+    await confirmUpload({ originalName: 'redip-site-photo.png', fileType: 'text/html' });
+    // image/png satisfies isExtractableSource (mime.startsWith('image/')), so
+    // image extraction routing is preserved despite the client's lie.
+    expect(storedFileType()).toBe('image/png');
+  });
+
+  test('refuses to let a client spoof an extractable type onto a non-extractable .docx', async () => {
+    // Client claims application/pdf for a .docx, trying to flip extraction routing.
+    await confirmUpload({ originalName: 'redip-field-notes.docx', fileType: 'application/pdf' });
+    // Derived from the real .docx extension — neither pdf nor image, so the
+    // document is NOT mis-routed as extractable.
+    expect(storedFileType()).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  });
+});
