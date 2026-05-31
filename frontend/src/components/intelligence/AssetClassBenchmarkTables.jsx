@@ -18,6 +18,24 @@ import { matchesSearch, buildClusterOptions } from '../../utils/intelligenceTabl
  * cluster-filter / sort state stays local.
  */
 
+// ─── Delta formatting ──────────────────────────────────────────────────────
+// YoY / QoQ deltas must read honestly. A bare `+${v}%` renders "+-3%" for a
+// decline and paints every cell emerald — wrong for benchmark tables where
+// rents and serviced-land values can fall. fmtDelta carries the real sign;
+// deltaTone colours up-emerald / down-red / flat-muted.
+const fmtDelta = (v, digits) => {
+  if (v == null || v === '' || Number.isNaN(Number(v))) return null;
+  const n = Number(v);
+  const body = digits == null ? `${n}` : n.toFixed(digits);
+  return `${n > 0 ? '+' : ''}${body}%`;
+};
+
+const deltaTone = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return 'text-content-muted';
+  return n > 0 ? 'text-emerald-600' : 'text-red-500';
+};
+
 export function OfficeBenchmarksTable({ rows }) {
   const [showSubmarkets, setShowSubmarkets] = useState(false);
   const [search, setSearch] = useState('');
@@ -140,8 +158,8 @@ export function OfficeBenchmarksTable({ rows }) {
                     {r.grade_b_rent_low_psf_month != null
                       ? `₹${r.grade_b_rent_low_psf_month}–${r.grade_b_rent_high_psf_month}` : '—'}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-600 font-medium">
-                    {r.yoy_change_pct != null ? `+${r.yoy_change_pct}%` : '—'}
+                  <td className={`py-2 px-3 text-right tabular-nums whitespace-nowrap font-medium ${deltaTone(r.yoy_change_pct)}`}>
+                    {fmtDelta(r.yoy_change_pct) ?? '—'}
                   </td>
                 </tr>
               ))}
@@ -227,11 +245,11 @@ export function RetailBenchmarksTable({ rows }) {
                   <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
                     ₹{r.rent_avg_psf_month}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500">
-                    +{r.qoq_change_pct}%
+                  <td className={`py-2 px-3 text-right tabular-nums whitespace-nowrap ${deltaTone(r.qoq_change_pct)}`}>
+                    {fmtDelta(r.qoq_change_pct) ?? '—'}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500 font-medium">
-                    +{r.yoy_change_pct}%
+                  <td className={`py-2 px-3 text-right tabular-nums whitespace-nowrap font-medium ${deltaTone(r.yoy_change_pct)}`}>
+                    {fmtDelta(r.yoy_change_pct) ?? '—'}
                   </td>
                 </tr>
               ))}
@@ -327,8 +345,8 @@ export function IndustrialBenchmarksTable({ rows }) {
                   <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
                     ₹{r.rent_low_psf_month}–{r.rent_high_psf_month}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500 font-medium">
-                    +{Number(r.yoy_change_pct).toFixed(1)}%
+                  <td className={`py-2 px-3 text-right tabular-nums whitespace-nowrap font-medium ${deltaTone(r.yoy_change_pct)}`}>
+                    {fmtDelta(r.yoy_change_pct, 1) ?? '—'}
                   </td>
                 </tr>
               ))}
@@ -384,8 +402,8 @@ export function IndustrialBenchmarksTable({ rows }) {
                     <td className="py-2 px-3 text-right font-mono tabular-nums whitespace-nowrap text-content-primary">
                       ₹{r.land_value_low_inr_mn_per_acre}–{r.land_value_high_inr_mn_per_acre}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums whitespace-nowrap text-emerald-500 font-medium">
-                      +{Number(r.yoy_change_pct).toFixed(1)}%
+                    <td className={`py-2 px-3 text-right tabular-nums whitespace-nowrap font-medium ${deltaTone(r.yoy_change_pct)}`}>
+                      {fmtDelta(r.yoy_change_pct, 1) ?? '—'}
                     </td>
                   </tr>
                 ))}
