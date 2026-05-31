@@ -3,7 +3,6 @@ import {
   BarChart, Bar, LineChart, Line, ComposedChart, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
 } from 'recharts';
-import { Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
 
 // Renders the extended USALI hospitality output: 10-year P&L, Sources & Uses,
@@ -14,9 +13,6 @@ export default function HospitalityProformaSection({ financials }) {
 
   const pnl = financials.revenue?.usali_pnl;
   const summary = financials.revenue?.usali_summary || null;
-  const sourcesUses = financials.costs?.sources_uses
-    || financials.costsRaw?.sources_uses
-    || financials.sourcesUses;
   const waterfall = financials.capitalStack?.waterfall;
   const permanent = financials.capitalStack?.permanent;
   const construction = financials.capitalStack?.construction;
@@ -34,7 +30,6 @@ export default function HospitalityProformaSection({ financials }) {
         <NOIEvolutionCard pnl={pnl} />
       </div>
       <USALIProfitLossTable pnl={pnl} />
-      {sourcesUses && <SourcesUsesCard sourcesUses={sourcesUses} />}
       {(construction || permanent) && (
         <CapitalStackTimelineCard
           construction={construction}
@@ -308,104 +303,6 @@ function USALIProfitLossTable({ pnl }) {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-// ─── Sources & Uses ─────────────────────────────────────────────────────────
-function SourcesUsesCard({ sourcesUses }) {
-  const { uses, sources, usesTotalCr, sourcesTotalCr, refinance } = sourcesUses;
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#06b6d4', '#64748b'];
-  const stackData = [{ name: 'Uses' }];
-  uses.forEach((u, i) => { stackData[0][u.category] = u.subtotalCr; });
-  const usesCategories = uses.map((u) => u.category);
-
-  return (
-    <div className="bg-bg-elevated border border-hairline rounded-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-hairline flex items-baseline gap-3">
-        <div className="font-serif text-sm font-semibold text-content-primary">Sources &amp; Uses</div>
-        <span className="ml-auto text-[11px] text-content-secondary tabular-nums">Total ₹{usesTotalCr?.toFixed(1)} Cr</span>
-      </div>
-      <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Uses breakdown */}
-        <div className="lg:col-span-2">
-          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-content-secondary mb-2">Uses of funds</div>
-          <div className="space-y-2">
-            {uses.map((u, i) => (
-              <div key={u.category} className="rounded-lg border border-hairline bg-bg-secondary/60 p-2.5">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
-                    <span className="text-xs font-semibold text-content-primary">{u.category}</span>
-                  </div>
-                  <div className="text-xs font-bold text-content-primary">
-                    ₹{u.subtotalCr?.toFixed(2)} Cr
-                    <span className="ml-2 text-[10px] font-medium text-content-muted">
-                      {usesTotalCr > 0 ? ((u.subtotalCr / usesTotalCr) * 100).toFixed(1) : '0'}%
-                    </span>
-                  </div>
-                </div>
-                {u.items?.map((it, j) => (
-                  <div key={j} className="flex items-center justify-between text-[11px] pl-4">
-                    <span className="text-content-secondary">{it.label}</span>
-                    <span className="text-content-secondary tabular-nums">₹{it.valueCr?.toFixed(2)} Cr</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Sources + refi */}
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-content-secondary mb-2">Sources of funds</div>
-          <div className="space-y-2">
-            {sources.map((s, i) => (
-              <div key={i} className={clsx(
-                'rounded-lg border p-3',
-                s.category === 'debt'   ? 'bg-neg-soft border-hairline' : 'bg-pos-soft border-hairline',
-              )}>
-                <div className="text-[11px] text-content-secondary">{s.label}</div>
-                <div className="mt-0.5 flex items-baseline justify-between">
-                  <span className={clsx('text-lg font-bold', s.category === 'debt' ? 'text-data-negative' : 'text-data-positive')}>
-                    ₹{s.valueCr?.toFixed(2)} Cr
-                  </span>
-                  <span className="text-[10px] text-content-secondary">
-                    {sourcesTotalCr > 0 ? ((s.valueCr / sourcesTotalCr) * 100).toFixed(1) : '0'}%
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {refinance && (
-            <div className="mt-3 rounded-lg border border-hairline bg-accent-soft p-3">
-              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-accent mb-1 flex items-center gap-1.5">
-                <Sparkles size={10} /> Permanent refinance (at stabilization)
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <RefiRow label="Year"            value={`Y${refinance.refiYear}`} />
-                <RefiRow label="Stabilized value" value={`₹${refinance.stabilizedValueForRefiCr?.toFixed(1)} Cr`} />
-                <RefiRow label="Going-in cap"    value={`${refinance.refiCapRatePct}%`} />
-                <RefiRow label="LTV"             value={`${refinance.refiLTVPct}%`} />
-                <RefiRow label="Principal"       value={`₹${refinance.refiPrincipalCr?.toFixed(1)} Cr`} />
-                <RefiRow label="Rate"            value={`${refinance.refiInterestRatePct}%`} />
-                <RefiRow label="IO period"       value={`${refinance.refiIOYears} yrs`} />
-                <RefiRow label="Amort"           value={`${refinance.refiAmortYears} yrs`} />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RefiRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-content-secondary">{label}</span>
-      <span className="font-semibold text-content-primary tabular-nums">{value}</span>
     </div>
   );
 }
