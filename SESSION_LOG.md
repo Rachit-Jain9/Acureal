@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-05-30 (Comps review-queue source docs — guarded attachment serve; closes the #663 red-team scope gap) (PR #665)
+
+Completes the **medium scope-gap** the PR #663 red-team flagged and spawned as a follow-up. The **comps review-queue** detail page (`CompsQueueDetailPage` `SourcePreview`) rendered the uploaded source document **inline** — `<iframe src={raw_doc_url}>` for PDFs, `<img src={raw_doc_url}>` for images — pointing the browser straight at the verbatim Vercel Blob URL, served with the stored content-type and **no `Content-Disposition`**. That bypassed the "served as attachment, never inline" guarantee #663 established for deal documents + master-plan.
+
+Severity **MEDIUM, not critical**: the ingest MIME allow-lists (`ingestEmail.service` / `compsReviewQueue.service`) exclude `text/html` and `image/svg+xml`, and the blob host is cross-origin (carries no REDIP session) — a sandboxed inline render on the storage origin, not same-origin XSS. But the **email-ingest attachment path is attacker-controlled** with no magic-byte sniffing, so it is hardened.
+
+### PR opened -> merged (CI green)
+
+| PR | What landed |
+|---|---|
+| [#665](https://github.com/Rachit-Jain9/REDIP/pull/665) | **security(comps-queue): serve review-queue source docs as guarded attachments, not inline.** New `compsReviewQueue.service.streamRawDoc()` mirrors `document.service.streamDownload` — fetches the row's `raw_doc` via `fetchStoredFile` (the storage-host SSRF allow-list reusing `isVercelBlobUrl`/`isPrivateVercelBlobUrl`) and streams it with `X-Content-Type-Options: nosniff` + `Content-Disposition: attachment`. New route `GET /:id/raw-doc/file` (`authenticate` + `requireRole('admin','analyst')` + `isUUID`). `GET /:id` and `GET /` now **redact `raw_doc_url`** and expose a `has_raw_doc` boolean instead — the browser never holds a dereferenceable cross-origin URL. Frontend `SourcePreview` drops the `<iframe>`/`<img>` embed for a Download action that streams through the guarded proxy (matches the deal-documents flow); `compsReviewQueueAPI.downloadRawDoc()` added. +4 service tests (404 missing/body-only; nosniff+attachment headers+pipe; 500 no-leak when `fetchStoredFile` refuses a non-storage URL) + route id-validation. `npx jest compsReviewQueue` 64 green; frontend build clean; all 7 CI checks green. |
+
+### Environment note
+Same OneDrive git-corruption hazard as the sibling sessions — HEAD flipped three times mid-work between this branch and the parallel masterplan branches, and the Read tool once returned a **stale pre-#663 copy** of `document.service.js` (424 vs the real 504 lines). Worked around it: re-verified file content with `git show HEAD:` / `wc -l`, based the branch off `origin/master`, staged only the 6 intended files behind a count-guard, and pushed immediately. The remote stayed correct throughout; the local working tree was repeatedly reverted but never committed.
+
+### Status
+Merged to `master` + deployed to production (Vercel "Deployment has completed"). Closes the last open item from the 2026-05-30 document-pipeline red-team. Superseded PR #662 (document-access log — already shipped via the #663 line) closed in the same pass.
+
+---
+
 ## 2026-05-30 (Master-plan upload file_type parity — extend the #663 hardening to the regulatory source path) (PR #666)
 
 Follow-up to **PR #663**, which hardened the *deal-document* direct-upload confirm step to derive `file_type` server-side from the file extension and ignore the client's claim. The parallel *master-plan source-document* confirm step (`confirmSourceDocumentUpload`) had been left trusting and storing the client-supplied `fileType` straight into `regulatory_data.master_plan_documents.file_type`.
