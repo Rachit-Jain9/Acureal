@@ -75,6 +75,19 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// Verify the request's access token WITHOUT enforcing it (no 401, no DB
+// hydration). Returns the decoded JWT payload, or null if absent/invalid.
+// For routes that are public by default but gate a subset on a valid session.
+const verifyAccessToken = (req) => {
+  const token = extractAccessToken(req);
+  if (!token) return null;
+  try {
+    return jwt.verify(token, getJwtSecret());
+  } catch (err) {
+    return null;
+  }
+};
+
 const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
@@ -98,6 +111,7 @@ const requireAdmin = requireRole('admin');
 
 module.exports = {
   authenticate,
+  verifyAccessToken,
   requireRole,
   requireAdminOrAnalyst,
   requireAdmin,

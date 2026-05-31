@@ -354,7 +354,10 @@ router.post(
   '/bulk/approve',
   authenticate,
   requireRole('admin', 'analyst'),
-  [body('ids').isArray({ min: 1, max: 50 })],
+  [
+    body('ids').isArray({ min: 1, max: 50 }),
+    body('ids.*').isUUID().withMessage('Each id must be a valid UUID'),
+  ],
   handleValidation,
   async (req, res, next) => {
     try {
@@ -373,6 +376,7 @@ router.post(
   requireRole('admin', 'analyst'),
   [
     body('ids').isArray({ min: 1, max: 50 }),
+    body('ids.*').isUUID().withMessage('Each id must be a valid UUID'),
     body('reason').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
   ],
   handleValidation,
@@ -401,6 +405,7 @@ router.post(
   requireRole('admin', 'analyst'),
   [
     body('ids').isArray({ min: 1, max: 50 }),
+    body('ids.*').isUUID().withMessage('Each id must be a valid UUID'),
     // `assignedTo` is the new owner. Accept null/undefined for the
     // "unassign everything" case; otherwise must be a UUID.
     body('assignedTo').optional({ values: 'null' }).isUUID(),

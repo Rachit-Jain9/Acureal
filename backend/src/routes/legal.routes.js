@@ -3,7 +3,7 @@
 const express = require('express');
 const { param, body } = require('express-validator');
 const legalService = require('../services/legal.service');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, verifyAccessToken } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 
 const router = express.Router();
@@ -53,12 +53,13 @@ router.get(
         return res.status(404).json({ success: false, message: 'Legal document not found.' });
       }
       // Only the current version is publicly readable; older versions require auth.
-      if (!doc.is_current) {
-        if (!req.headers.authorization) {
-          return res
-            .status(401)
-            .json({ success: false, message: 'Authentication required for archived versions.' });
-        }
+      // Only the current version is publicly readable; archived versions
+      // require a VALID session — verify the JWT, don't just check that an
+      // Authorization header is present.
+      if (!doc.is_current && !verifyAccessToken(req)) {
+        return res
+          .status(401)
+          .json({ success: false, message: 'Authentication required for archived versions.' });
       }
       res.set('Cache-Control', doc.is_current ? 'public, max-age=300' : 'private, max-age=60');
       res.json({ success: true, data: doc });

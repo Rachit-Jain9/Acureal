@@ -152,7 +152,7 @@ router.delete(
   requireRole('admin', 'analyst'),
   async (req, res, next) => {
     try {
-      const result = await documentService.deleteDocument(req.params.documentId, req.user.id);
+      const result = await documentService.deleteDocument(req.params.documentId, req.user.id, req.params.dealId);
       res.json({ success: true, message: 'Document deleted.', data: result });
     } catch (error) {
       next(error);
