@@ -346,7 +346,7 @@ const getDocuments = async (dealId, category = null) => {
   };
 };
 
-const deleteDocument = async (documentId, userId) => {
+const deleteDocument = async (documentId, userId, dealId = null) => {
   const result = await query(
     `SELECT doc.*, deals.is_archived AS deal_archived, deals.stage AS deal_stage
      FROM documents doc
@@ -361,6 +361,13 @@ const deleteDocument = async (documentId, userId) => {
   }
 
   const doc = result.rows[0];
+
+  // Cross-check the document belongs to the deal named in the URL — otherwise
+  // an org member with access to deal A could delete deal B's document by
+  // passing deal A's id. Mirrors the guard on getSignedUrl / streamDownload.
+  if (dealId && doc.deal_id && doc.deal_id !== dealId) {
+    throw createError('Document not found.', 404);
+  }
 
   if (doc.deal_archived) {
     throw createError('Cannot delete documents from an archived deal. Restore the deal first.', 409);

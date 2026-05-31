@@ -170,3 +170,22 @@ describe('storage.getDownloadUrl — SSRF allow-list', () => {
     expect(supabase.getSignedUrl).toHaveBeenCalledWith(p, 3600, { download: true });
   });
 });
+
+describe('deleteDocument — deal-ownership cross-check (IDOR guard)', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  test('refuses to delete a document via a mismatched dealId, and never runs the DELETE', async () => {
+    // The SELECT returns a document that belongs to deal-1; the caller passes
+    // a different deal id in the URL. Without the cross-check, an org member
+    // with access to one deal could delete another deal's document.
+    query.mockResolvedValueOnce({
+      rows: [{ id: 'doc-1', deal_id: DEAL, file_url: 'x', deal_archived: false, deal_stage: 'sourcing' }],
+    });
+    await expect(
+      documentService.deleteDocument('doc-1', 'user-1', 'deal-OTHER'),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(query).toHaveBeenCalledTimes(1); // only the SELECT; the DELETE never ran
+  });
+});

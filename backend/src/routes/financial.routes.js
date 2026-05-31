@@ -269,7 +269,9 @@ router.post(
       }
       return res.status(500).json({
         success: false,
-        message: `quick-compute failed: ${err.message}`,
+        message: process.env.NODE_ENV === 'production'
+          ? 'quick-compute failed.'
+          : `quick-compute failed: ${err.message}`,
       });
     }
   }

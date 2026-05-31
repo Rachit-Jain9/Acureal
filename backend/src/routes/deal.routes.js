@@ -243,6 +243,7 @@ router.post(
   requireRole('admin', 'analyst'),
   [
     body('ids').isArray({ min: 1, max: 50 }),
+    body('ids.*').isUUID().withMessage('Each id must be a valid UUID'),
     body('reason').optional({ values: 'null' }).isString().isLength({ max: 1000 }),
   ],
   handleValidation,
