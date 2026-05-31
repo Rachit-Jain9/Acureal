@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Badge from '../common/Badge';
 import DataToolbar from '../common/DataToolbar';
