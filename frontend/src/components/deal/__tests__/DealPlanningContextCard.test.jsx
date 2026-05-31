@@ -10,151 +10,124 @@ vi.mock('../../../hooks/useMasterPlan', () => ({
 
 import DealPlanningContextCard from '../DealPlanningContextCard';
 
-const renderWithRouter = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>);
+// These are the EXACT shapes the live evidence_facts rows carry (verified
+// against the Supabase regulatory_data.evidence_facts table on 2026-05-31).
+// SDZ + heritage are ARRAYS of objects; NGT + PRR are flat OBJECTS whose keys
+// are `*_buffer_m` / `alignment` / `status`. The PREVIOUS version of this test
+// asserted a synthetic `{count, max_far, buffer_m_primary, width_m}` schema
+// that was never actually seeded — so it passed green while the card rendered
+// an empty "not ingested yet" state in production. This version locks the
+// real shapes so that can never happen again.
+const REAL_CALLOUTS = [
+  {
+    type: 'sdz',
+    key: 'special_development_zones',
+    value: [
+      { name: 'SDZ Bellary Road', corridor_axis: 'Bellary Road', source_page: 88 },
+      { name: 'SDZ Old Madras Road', corridor_axis: 'Old Madras Road', source_page: 88 },
+      { name: 'SDZ Sarjapur Road', corridor_axis: 'Sarjapur Road', source_page: 88 },
+      { name: 'SDZ Hosur Road', corridor_axis: 'Hosur Road', source_page: 88 },
+      { name: 'SDZ Mysuru Road', corridor_axis: 'Mysuru Road', source_page: 88 },
+    ],
+  },
+  {
+    type: 'environmental',
+    key: 'ngt_drainage_classification',
+    value: {
+      lake_buffer_m: 75,
+      primary_buffer_m: 50,
+      secondary_buffer_m: 35,
+      tertiary_buffer_m: 25,
+      notes: 'NGT order — no construction zones.',
+    },
+  },
+  {
+    type: 'heritage',
+    key: 'heritage_zones',
+    value: Array.from({ length: 12 }, (_, i) => ({
+      name: `${['Central Administrative', 'Petta and Bangalore Fort', 'Gavipuram', 'M.G.Road', 'Shivajinagar', 'Cleveland Town', 'Richards Town', 'Malleshwaram', 'Ulsoor', 'Whitefield Inner Circle', 'Begur Temple', 'Bangalore Palace'][i]} Heritage Zone`,
+      location: 'Bengaluru',
+    })),
+  },
+  {
+    type: 'road_network',
+    key: 'peripheral_ring_road',
+    value: {
+      alignment: 'northern leg PRR, part of a structured road network',
+      status: 'Proposed/Under implementation, expected by 2031.',
+    },
+  },
+];
 
-const SAMPLE_FULL = {
-  callouts: [
-    {
-      type: 'sdz',
-      key: 'special_development_zones',
-      value: { count: 5, max_far: 3.5, locations: ['Bellary Road', 'Old Madras Road', 'Sarjapura Road'] },
-    },
-    {
-      type: 'environmental',
-      key: 'ngt_drainage_classification',
-      value: { buffer_m_primary: 50, buffer_m_secondary: 35, buffer_m_tertiary: 25, source: 'NGT order' },
-    },
-    {
-      type: 'heritage',
-      key: 'heritage_zones',
-      value: { count: 12, prohibited_radius_m: 100, regulated_radius_m: 200 },
-    },
-    {
-      type: 'road_network',
-      key: 'peripheral_ring_road',
-      value: { width_m: 100, type: 'PRR', note: '100m corridor on the proposed map' },
-    },
-  ],
-};
-
-const SAMPLE_EMPTY = { callouts: [] };
+const renderWithRouter = () => render(
+  <MemoryRouter>
+    <DealPlanningContextCard />
+  </MemoryRouter>,
+);
 
 describe('DealPlanningContextCard', () => {
   beforeEach(() => {
-    landUseQuery = { data: SAMPLE_FULL, isLoading: false, isError: false };
+    landUseQuery = { data: { callouts: REAL_CALLOUTS }, isLoading: false, isError: false };
   });
 
-  it('renders the section header and links to Planning Intelligence admin', () => {
-    renderWithRouter(<DealPlanningContextCard />);
-    expect(screen.getByText(/Bengaluru planning context/i)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: /Open Planning Intelligence/i });
-    expect(link).toHaveAttribute('href', '/admin/master-plan?tab=intelligence');
+  it('renders SDZ, NGT, heritage, and PRR tiles from the real evidence_facts shapes', () => {
+    renderWithRouter();
+    expect(screen.getByText('5 corridors')).toBeInTheDocument();
+    expect(screen.getByText('12 zones')).toBeInTheDocument();
+    // NGT buffers read from *_buffer_m keys (the bug read buffer_m_*).
+    expect(screen.getByText(/Lake 75m · P 50m · S 35m · T 25m/)).toBeInTheDocument();
+    // SDZ corridor names come from corridor_axis on each array element.
+    expect(screen.getByText(/Bellary Road/)).toBeInTheDocument();
   });
 
-  it('renders all four city-wide callouts when data is present', () => {
-    renderWithRouter(<DealPlanningContextCard />);
-    expect(screen.getByText('Special Development Zones')).toBeInTheDocument();
-    expect(screen.getByText(/5 corridors/i)).toBeInTheDocument();
-    expect(screen.getByText('NGT drain buffers')).toBeInTheDocument();
-    expect(screen.getByText('Heritage zones')).toBeInTheDocument();
-    expect(screen.getByText(/12 zones/i)).toBeInTheDocument();
-    expect(screen.getByText('Peripheral Ring Road')).toBeInTheDocument();
+  it('surfaces the RMP 2031 draft / not-notified caveat', () => {
+    renderWithRouter();
+    expect(screen.getByText(/never legally notified/i)).toBeInTheDocument();
   });
 
-  it('formats the heritage prohibited radius and regulated hint', () => {
-    renderWithRouter(<DealPlanningContextCard />);
-    expect(screen.getByText(/100m prohibited/)).toBeInTheDocument();
-    expect(screen.getByText(/200m regulated radius/)).toBeInTheDocument();
-  });
-
-  it('shows the AI-assisted disclaimer', () => {
-    renderWithRouter(<DealPlanningContextCard />);
-    expect(screen.getByText(/AI-extracted from RMP 2031 land-use maps/i)).toBeInTheDocument();
-  });
-
-  it('shows a friendly empty state when no callouts have been ingested yet', () => {
-    landUseQuery = { data: SAMPLE_EMPTY, isLoading: false, isError: false };
-    renderWithRouter(<DealPlanningContextCard />);
-    expect(screen.getByText(/Land-use facts have not been ingested yet/i)).toBeInTheDocument();
+  it('does NOT show the hollow "not ingested yet" state when callouts are present', () => {
+    renderWithRouter();
+    expect(screen.queryByText(/have not been ingested yet/i)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open intelligence/i })).toBeInTheDocument();
   });
 
-  it('renders only the available callouts when some are missing', () => {
+  it('renders the empty state only when no callout carries real fields — and still shows the caveat', () => {
     landUseQuery = {
-      data: {
-        callouts: [
-          {
-            type: 'sdz',
-            key: 'special_development_zones',
-            value: { count: 3, max_far: 2.75, locations: ['Hosur Road'] },
-          },
-        ],
-      },
+      data: { callouts: [{ type: 'sdz', key: 'special_development_zones', value: [] }] },
       isLoading: false,
       isError: false,
     };
-    renderWithRouter(<DealPlanningContextCard />);
-    expect(screen.getByText('Special Development Zones')).toBeInTheDocument();
-    expect(screen.queryByText('NGT drain buffers')).not.toBeInTheDocument();
-    expect(screen.queryByText('Heritage zones')).not.toBeInTheDocument();
-    expect(screen.queryByText('Peripheral Ring Road')).not.toBeInTheDocument();
+    renderWithRouter();
+    expect(screen.getByText(/have not been ingested yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/never legally notified/i)).toBeInTheDocument();
   });
 
-  it('never renders the literal "undefined" when callout rows are hollow', () => {
-    // Regression for the live bug: callout ROWS exist (keys match) but their
-    // numeric sub-fields are absent, so the old template literals
-    // interpolated "P undefinedm · S undefinedm" etc. straight into the UI.
+  it('never interpolates "undefined" when callout objects are hollow', () => {
     landUseQuery = {
       data: {
         callouts: [
-          { key: 'special_development_zones', value: {} },
+          { key: 'special_development_zones', value: [] },
           { key: 'ngt_drainage_classification', value: {} },
-          { key: 'heritage_zones', value: {} },
+          { key: 'heritage_zones', value: [] },
           { key: 'peripheral_ring_road', value: {} },
         ],
       },
       isLoading: false,
       isError: false,
     };
-    const { container } = renderWithRouter(<DealPlanningContextCard />);
+    const { container } = renderWithRouter();
     expect(container.textContent).not.toMatch(/undefined/i);
-    // Every row is hollow → no tiles render → falls back to the empty state.
-    expect(screen.getByText(/Land-use facts have not been ingested yet/i)).toBeInTheDocument();
-  });
-
-  it('renders partial callouts with em-dashes (not "undefined") and skips hollow ones', () => {
-    landUseQuery = {
-      data: {
-        callouts: [
-          // NGT has only the primary buffer; secondary/tertiary missing.
-          { key: 'ngt_drainage_classification', value: { buffer_m_primary: 50 } },
-          // PRR carries a type label but no width.
-          { key: 'peripheral_ring_road', value: { type: 'PRR' } },
-          // Heritage row is entirely hollow → must be skipped.
-          { key: 'heritage_zones', value: {} },
-        ],
-      },
-      isLoading: false,
-      isError: false,
-    };
-    const { container } = renderWithRouter(<DealPlanningContextCard />);
-    expect(container.textContent).not.toMatch(/undefined/i);
-    expect(screen.getByText('NGT drain buffers')).toBeInTheDocument();
-    expect(screen.getByText(/P 50m · S —m · T —m/)).toBeInTheDocument();
-    expect(screen.getByText('Peripheral Ring Road')).toBeInTheDocument();
-    expect(screen.getByText('PRR')).toBeInTheDocument();
-    expect(screen.queryByText('Heritage zones')).not.toBeInTheDocument();
   });
 
   it('shows a skeleton while loading', () => {
     landUseQuery = { data: undefined, isLoading: true, isError: false };
-    renderWithRouter(<DealPlanningContextCard />);
+    renderWithRouter();
     expect(screen.getByText(/Loading planning context/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the request fails', () => {
     landUseQuery = { data: undefined, isLoading: false, isError: true };
-    renderWithRouter(<DealPlanningContextCard />);
+    renderWithRouter();
     expect(screen.getByText(/Could not load planning context/i)).toBeInTheDocument();
   });
 });

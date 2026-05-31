@@ -66,7 +66,11 @@ function PanelSkeleton() {
 }
 
 export default function MasterPlanBbmpUavPanel() {
-  const [status, setStatus] = useState('pending');
+  // Default to 'all' so the panel never opens empty: every seeded BBMP UAV
+  // row is already 'approved', so a 'pending' default showed a misleading
+  // "no entries yet" state despite 108 live rows. Reviewers can still narrow
+  // to 'pending' via the filter chips.
+  const [status, setStatus] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
