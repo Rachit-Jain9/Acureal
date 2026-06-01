@@ -288,13 +288,32 @@ const getEvent = async (eventId) => {
  * operators exactly which layer tripped. Never throws on verify failure;
  * callers decide whether a mismatch is fatal.
  */
+// Stored audit JSON can be damaged (interrupted write, DB corruption, a manual
+// edit). Parse defensively so a SyntaxError never escapes the documented
+// "never throws on verify failure" contract as an opaque 500.
+const safeParseStored = (value) => {
+  if (typeof value !== 'string') return value ?? null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
 const verifyEvent = (event) => {
-  const stored = typeof event.inputs_json === 'string'
-    ? JSON.parse(event.inputs_json)
-    : event.inputs_json;
-  const storedOut = typeof event.outputs_json === 'string'
-    ? JSON.parse(event.outputs_json)
-    : event.outputs_json;
+  const stored = safeParseStored(event.inputs_json);
+  const storedOut = safeParseStored(event.outputs_json);
+  if (stored === null || storedOut === null) {
+    // Honor the no-throw contract: report a clean verify failure for an
+    // unparseable stored payload rather than bubbling a SyntaxError.
+    return {
+      ok: false,
+      checks: { inputsHashMatches: false, outputsHashMatches: false, signatureMatches: false },
+      recomputedInputsHash: null,
+      recomputedOutputsHash: null,
+      error: 'stored payload unparseable',
+    };
+  }
 
   const recomputedInputsHash = hashInputs(stored);
   const recomputedOutputsHash = hashOutputs(storedOut);
@@ -353,12 +372,12 @@ const replayEvent = (event) => {
   // eslint-disable-next-line global-require
   const { computeFullFinancials } = require('../engines/kernel.service');
 
-  const storedInputs = typeof event.inputs_json === 'string'
-    ? JSON.parse(event.inputs_json)
-    : event.inputs_json;
-  const storedOutputs = typeof event.outputs_json === 'string'
-    ? JSON.parse(event.outputs_json)
-    : event.outputs_json;
+  const storedInputs = safeParseStored(event.inputs_json);
+  const storedOutputs = safeParseStored(event.outputs_json);
+  if (storedInputs === null) {
+    // Unparseable stored inputs — cannot replay. Fail cleanly (no throw).
+    return { ok: false, reason: 'unparseable_payload', message: 'stored inputs could not be parsed' };
+  }
 
   // skipSensitivity + skipGraph keep the replay cheap; the golden numbers
   // live in the flat KPI / cost / revenue maps that the original save
