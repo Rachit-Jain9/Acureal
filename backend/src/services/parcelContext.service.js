@@ -276,10 +276,49 @@ const matchPlanningDistrict = async (addressTokens, addressText) => {
   return matchPlanningDistrictByNameFuzz(addressTokens || []);
 };
 
+// Per-district Existing Land-Use mix (RMP PD report, 2015 baseline). Joined to
+// a resolved planning district by PD code; present only for the 7 central PDs
+// (PD-01..PD-07) that have a digitised report. Reference / pending review —
+// surfaced with the same "verify before IC" caveat the rest of the card uses.
+const fetchPdExistingLandUse = async (pdCode) => {
+  const digits = String(pdCode || '').replace(/\D/g, '');
+  // Compare by integer, not string — facts store 'PD-01' (→ '01') while a
+  // resolved PD code may be '1'/'PD-1'/'PD-01'. '01' !== '1' as text.
+  const pdInt = digits ? parseInt(digits, 10) : null;
+  if (pdInt == null) return null;
+  try {
+    const r = await query(
+      `SELECT fact_value
+         FROM regulatory_data.evidence_facts
+        WHERE fact_type = 'pd_existing_land_use'
+          AND NULLIF(regexp_replace(fact_value->>'pd_code', '\\D', '', 'g'), '')::int = $1
+        LIMIT 1`,
+      [pdInt],
+    );
+    const fv = r.rows[0]?.fact_value;
+    if (!fv || !Array.isArray(fv.categories)) return null;
+    const categories = fv.categories
+      .filter((c) => Number(c.pct) > 0)
+      .sort((a, b) => Number(b.pct) - Number(a.pct))
+      .map((c) => ({ category: c.category, pct: Number(c.pct), area_ha: Number(c.area_ha) }));
+    if (categories.length === 0) return null;
+    return {
+      baseline_year: fv.baseline_year ?? 2015,
+      total_area_ha: fv.total_area_ha ?? null,
+      categories,
+      source: 'RMP 2031 planning-district report (2015 existing-use baseline)',
+    };
+  } catch (err) {
+    return null;
+  }
+};
+
 // Enrich the matched PD with its demographics from the evidence_facts
 // aggregate (planning_districts fact) shipped in PR A2.
 const enrichPdWithDemographics = async (matched) => {
   if (!matched) return null;
+  // Existing land-use mix joined by PD code (present for PD-01..PD-07 only).
+  const existing_land_use = await fetchPdExistingLandUse(matched.pd_code);
   try {
     // Two 42-element planning_districts arrays exist in evidence_facts (the
     // rich PDR demographics + a code/name routing list). Both share the same
@@ -307,7 +346,7 @@ const enrichPdWithDemographics = async (matched) => {
     const entry = matchedNum != null
       ? arr.find((e) => pdNum(e?.pd_code) === matchedNum)
       : null;
-    if (!entry) return matched;
+    if (!entry) return { ...matched, existing_land_use };
     return {
       ...matched,
       population_2011: entry.population_2011 ?? null,
@@ -316,9 +355,10 @@ const enrichPdWithDemographics = async (matched) => {
       wards_in_pd: entry.wards_in_pd ?? null,
       villages_count: entry.villages_count ?? null,
       notes: entry.notes ?? null,
+      existing_land_use,
     };
   } catch (err) {
-    return matched;
+    return { ...matched, existing_land_use };
   }
 };
 
