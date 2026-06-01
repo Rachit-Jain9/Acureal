@@ -6,6 +6,7 @@ import {
   Archive, UserPlus, ArrowRight, GitCompare,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ErrorState } from '../design-system';
 import {
   useDeals,
   useCreateDeal,
@@ -165,7 +166,7 @@ export default function DealsPage() {
   const canSaveCurrentView =
     !!(search || stageFilter || typeFilter || priorityFilter || assignedToMe);
 
-  const { data, isLoading, isError } = useDeals(params);
+  const { data, isLoading, isError, refetch } = useDeals(params);
   const { data: propertiesData } = useProperties({ limit: 200 });
   const createDeal = useCreateDeal();
 
@@ -434,8 +435,12 @@ export default function DealsPage() {
 
   if (isError) {
     return (
-      <div className="text-center py-24 text-red-600">
-        Failed to load deals. Please try again.
+      <div className="py-12">
+        <ErrorState
+          title="Couldn't load your deals"
+          description="This is usually a transient network hiccup. Retry — your filters are preserved."
+          onRetry={refetch}
+        />
       </div>
     );
   }
