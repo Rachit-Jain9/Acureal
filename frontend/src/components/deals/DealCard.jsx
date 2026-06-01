@@ -39,12 +39,14 @@ import UrgencyStrip from './UrgencyStrip';
  * click-through resolves instantly. The full opacity-0 → group-hover
  * checkbox affordance mirrors the comps queue's multi-select pattern.
  */
-// IC readiness tier → pill tone (matches the Portfolio Readiness widget).
+// IC readiness tier → design-system Badge tone. Theme-aware (CSS-var backed),
+// so it fixes the pale bg-*-50 dark-mode contrast and matches the card's
+// stage/priority badges instead of hand-rolled chip-soup tints.
 const READINESS_TIER_TONE = {
-  ic_ready:  'bg-green-50 text-green-700 border-green-200',
-  pre_ic:    'bg-sky-50 text-sky-700 border-sky-200',
-  diligence: 'bg-amber-50 text-amber-800 border-amber-200',
-  early:     'bg-slate-50 text-slate-700 border-slate-200',
+  ic_ready:  'success',
+  pre_ic:    'info',
+  diligence: 'warn',
+  early:     'neutral',
 };
 
 const READINESS_TIER_LABEL = {
@@ -231,7 +233,7 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
         <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
           <div>
             <p className="text-xs text-content-muted">Land Area</p>
-            <p className="font-medium text-content-primary">
+            <p className="font-medium text-content-primary tabular-nums">
               {deal.land_area_acres
                 ? `${Number(deal.land_area_acres).toFixed(2)} acres`
                 : deal.land_area_sqft
@@ -241,7 +243,7 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
           </div>
           <div>
             <p className="text-xs text-content-muted">Headline Economics</p>
-            <p className="font-medium text-content-primary">
+            <p className="font-medium text-content-primary tabular-nums">
               {Number(deal.land_ask_price_cr) > 0 ? formatCrores(deal.land_ask_price_cr) : formatCrores(deal.total_revenue_cr)}
             </p>
           </div>
@@ -268,15 +270,12 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
             the live cohort (closed / dead / archived). */}
         {readiness && (
           <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-            <span
-              className={clsx(
-                'text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded border',
-                READINESS_TIER_TONE[readiness.tier] || READINESS_TIER_TONE.early,
-              )}
+            <Badge
+              tone={READINESS_TIER_TONE[readiness.tier] || 'neutral'}
               title="IC readiness tier — composed from kernel, DD, approvals, documents, promoter and deal-breaker signals."
             >
               {READINESS_TIER_LABEL[readiness.tier] || readiness.tier}
-            </span>
+            </Badge>
             <span className="text-xs text-content-secondary tabular-nums" title="Readiness score 0-100">
               {readiness.score}/100
             </span>
@@ -300,17 +299,10 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
         {Array.isArray(deal.key_risks) && deal.key_risks.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {deal.key_risks.slice(0, 2).map((risk) => (
-              <span
-                key={risk}
-                className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
-              >
-                {risk}
-              </span>
+              <Badge key={risk} tone="danger" className="normal-case">{risk}</Badge>
             ))}
             {deal.open_high_risk_count > 2 && (
-              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                +{deal.open_high_risk_count - 2} more
-              </span>
+              <Badge tone="danger" className="normal-case">+{deal.open_high_risk_count - 2} more</Badge>
             )}
           </div>
         )}
@@ -321,37 +313,36 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
             (the workspace-load that produced the snapshot also persisted it). */}
         {deal.recommendations_summary && deal.recommendations_summary.total > 0 && (
           <div className="mb-3">
-            <span
-              className={clsx(
-                'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                deal.recommendations_summary.top_severity === 'critical' && 'border-red-200 bg-red-50 text-red-700',
-                deal.recommendations_summary.top_severity === 'high' && 'border-amber-200 bg-amber-50 text-amber-800',
-                deal.recommendations_summary.top_severity === 'medium' && 'border-slate-200 bg-slate-50 text-slate-700',
-                deal.recommendations_summary.top_severity === 'low' && 'border-hairline bg-bg-secondary text-content-secondary',
-              )}
+            <Badge
+              tone={
+                deal.recommendations_summary.top_severity === 'critical' ? 'danger'
+                  : deal.recommendations_summary.top_severity === 'high' ? 'warn'
+                    : 'neutral'
+              }
+              className="gap-1.5 normal-case"
               title={deal.recommendations_summary.top_card?.headline || ''}
             >
               <Sparkles size={11} />
               {deal.recommendations_summary.total} finding
               {deal.recommendations_summary.total === 1 ? '' : 's'}
               {deal.recommendations_summary.by_severity.critical > 0 && (
-                <span className="text-red-700">· {deal.recommendations_summary.by_severity.critical} critical</span>
+                <span>· {deal.recommendations_summary.by_severity.critical} critical</span>
               )}
               {deal.recommendations_summary.by_severity.critical === 0 && deal.recommendations_summary.by_severity.high > 0 && (
-                <span className="text-amber-800">· {deal.recommendations_summary.by_severity.high} high</span>
+                <span>· {deal.recommendations_summary.by_severity.high} high</span>
               )}
-            </span>
+            </Badge>
           </div>
         )}
 
         <div className="flex items-center justify-between text-sm border-t pt-3">
           <div>
             <span className="text-content-muted text-xs">IRR</span>
-            <p className="font-medium">{formatPct(deal.irr_pct)}</p>
+            <p className="font-medium tabular-nums">{formatPct(deal.irr_pct)}</p>
           </div>
           <div className="text-right">
             <span className="text-content-muted text-xs">Revenue</span>
-            <p className="font-medium">{formatCrores(deal.total_revenue_cr)}</p>
+            <p className="font-medium tabular-nums">{formatCrores(deal.total_revenue_cr)}</p>
           </div>
         </div>
 
