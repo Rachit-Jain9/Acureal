@@ -4,6 +4,29 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-01 (Deep audit v2 → remediation: export integrity, credibility, UX-flatten, reliability, dead-code) (PRs #695–#703)
+
+Operator re-issued the deep-quality mandate. Ran a second 6→7-dimension multi-agent audit workflow (integrations / correctness / credibility / performance / UX / architecture / reliability), adversarially verifying every high/critical finding against the real code — 17 findings, 7 confirmed high/critical. Then a deterministic route-table sweep for broken links. Shipped 9 PRs (operator merges; all CI-green, all touch disjoint files so they merge in any order):
+
+### Shipped
+- **#695** — the deal Zoning "Open full lookup" 404: links pointed at `/admin/master-plan` (missing `/dashboard`); also made `MasterPlanAdminPage` read `?tab=` so the deep-link lands on Planning Intelligence. (Operator-reported; merged earlier.)
+- **#696** — 3 more broken `/deals/:id` links (Audit Trail, Compare modal, Dependents popover) that 404'd in new tabs — found via a full route-table sweep of every internal nav target.
+- **#697 — 🔴 export numeric + credibility.** Customer XLSX double-discounted income by occupancy AND (1−vacancy) vs the kernel's vacancy-only model → exported NOI/IRR/exit ~8% below the deal's saved numbers (v2 + legacy builders fixed; hospitality untouched — its kernel is ADR×occupancy). Also reframed KPI tiles that cited Cushman/JLL/CBRE/HVS as the "source" for hardcoded constants → "illustrative default band, not a verified market reading".
+- **#698 — 🔴 comp-benchmark integrity.** Naive `floor(n·p)` median/percentiles (upper-biased on even sets) → one shared interpolated `utils/percentile.js`; tear-sheet "N **verified** comps" now computed from verified comps only (was mixing unverified).
+- **#699 — 🔴 AI verb policy.** IC-memo prompt mandated "Recommend approval"/"Decline" and export-insights mandated "pass" (CLAUDE.md-forbidden absolute verbs), rendered verbatim into customer PDF/DOCX → rewrote both prompts to the closed dictionary + added a tested, section-scoped `utils/icStanceVerbs.js` neutralizer (defense-in-depth).
+- **#700** — DealCard chips → themed `Badge` (fixes pale-on-dark WCAG contrast) + `tabular-nums` on figures.
+- **#701** — audit verify/replay `JSON.parse` guarded (honors the "never throws" contract on corrupt stored payloads) + `persistScenarios` batched (N serial INSERTs → 1 upsert).
+- **#702 — 🔴 Financial Engine flatten.** Removed banned gradient tiles/headers + 4 glow orbs from the always-visible FinancialVisualizationLayer (8 headers + KPI/TV tiles + formula box → flat + semantic accent stripe) + HospitalityProformaSection SummaryCard + the 2 modal headers.
+- **#703** — deleted **1,232 lines of unreachable dead code** in `export.routes.js` (2 inline PPTX builders + a legacy JSON block, all after live `return`s) + the orphaned `pptxgenjs` import. (Task #17 had claimed this but it was never done.) File 2,654 → 1,422 lines; full suite green.
+
+### Verification
+- Backend full suite green throughout — **174 suites / 3003 tests**. Frontend builds green. New unit tests: `percentile`, `icStanceVerbs`, `audit.verifyParse`. RLS/audit DB facts re-verified live.
+
+### Deliberately deferred (well-scoped follow-ups, NOT done)
+- **perf-overfetch** (medium; cached by 5-min staleTime): add a `?fields=summary` light projection to `GET /deals` (no rollup subqueries, skip the recommendation batch) for Map/Reports/Compare; scope PropertyDetail to its property's deals server-side. Files: deal.service.js getDeals, deal.routes.js, api.js, MapPage/ReportsPage/DealComparePage/PropertyDetailPage.
+- **dedupe** (medium/low): promote one canonical `exports/shared/format.js` (5+ copies of formatNumber/formatCrores/…) + a shared ext→MIME base. (Partially done — `utils/percentile.js` already de-duped the percentile copies.)
+- **Financial-Engine modal interiors** (MethodologyExplorer/DefaultsInspector body cards — ~25 data-driven gradients): a larger visual redesign; on-demand/low-visibility.
+
 ## 2026-06-01 (First-principles deep audit → remediation: a CRITICAL cross-tenant data breach + data-loss + credibility + KPI + UX + perf) (PRs #690–#693)
 
 Operator asked for a from-first-principles deep technical review and to fix the highest-impact issues. Ran a 6-dimension multi-agent audit workflow (correctness / UX / performance / security / architecture / data) with adversarial verification of every high/critical finding — 36 raised, 33 actionable. Every finding acted on was re-verified directly against the live code/DB first (one early read was misled by stale pg_stat counts; the headline security finding was reproduced against `pg_policies`).
