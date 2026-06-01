@@ -49,7 +49,10 @@ function ToggleRow({ checked, label, description, onChange }) {
 
 export default function MapPage() {
   const { data: propertiesData, isLoading: propertiesLoading } = useProperties({ limit: 500 });
-  const { data: dealsData, isLoading: dealsLoading } = useDeals({ limit: 500 });
+  // fields:'summary' → lightweight projection (no per-row DD/risk/approval
+  // rollup subqueries or recommendation batch); the map reads only
+  // lat/lng/stage/irr/revenue/propertyId.
+  const { data: dealsData, isLoading: dealsLoading } = useDeals({ limit: 500, fields: 'summary' });
   const { user } = useAuthStore();
   const bulkGeocode = useBulkGeocodeProperties();
   const canGeocode = ['owner', 'admin', 'editor'].includes(user?.role);

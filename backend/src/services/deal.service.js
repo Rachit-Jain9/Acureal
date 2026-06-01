@@ -219,6 +219,35 @@ const dealSelect = `
   ) as key_risks
 `;
 
+// Lightweight projection for read-only consumers (Map / Reports / Compare /
+// Property-detail) that need only scalar deal/property/financial fields, NOT the
+// per-row rollup subqueries (DD/risk/approval counts, key_risks) the Deals list
+// cards render. This drops ~11 correlated subqueries per row AND the
+// getLatestRunsForDeals batch — turning the most expensive query in the system
+// into a flat projection for callers that ignore those columns. Same JOINs, so
+// every scalar field stays available.
+const dealSummarySelect = `
+  d.*,
+  COALESCE(
+    NULLIF(p.name, ''),
+    NULLIF(p.address, ''),
+    CONCAT(
+      COALESCE(NULLIF(p.city, ''), 'Unknown city'),
+      ' ',
+      INITCAP(REPLACE(COALESCE(p.property_type, 'land'), '_', ' ')),
+      ' opportunity'
+    )
+  ) as property_name,
+  p.property_type, p.city, p.state, p.lat, p.lng,
+  p.lat AS property_lat, p.lng AS property_lng,
+  p.land_area_sqft, p.land_area_acres, p.zoning, p.pincode,
+  p.ownership_type, p.encumbrance_status, p.address as property_address,
+  p.geocode_status,
+  u.name as assigned_to_name, creator.name as created_by_name,
+  f.irr_pct, f.gross_margin_pct, f.total_revenue_cr, f.total_cost_cr,
+  f.gross_profit_cr, f.npv_cr, f.equity_multiple, f.saleable_area_sqft
+`;
+
 const purgePropertyIfInactiveOnly = async (client, propertyId, excludingDealId = null) => {
   if (!propertyId) {
     return null;
@@ -353,6 +382,11 @@ const getDeals = async (filters = {}, pagination = {}) => {
   const values = [];
   let paramCount = 1;
 
+  // Lightweight projection mode for read-only consumers (Map/Reports/Compare/
+  // Property-detail). Skips the per-row rollup subqueries + the recommendation
+  // batch — see dealSummarySelect.
+  const useSummary = pagination.fields === 'summary';
+
   if (filters.onlyArchived) {
     conditions.push('d.is_archived = TRUE');
   } else if (!filters.includeArchived) {
@@ -384,6 +418,12 @@ const getDeals = async (filters = {}, pagination = {}) => {
   if (filters.city) {
     conditions.push(`LOWER(p.city) = LOWER($${paramCount})`);
     values.push(filters.city);
+    paramCount++;
+  }
+
+  if (filters.propertyId) {
+    conditions.push(`d.property_id = $${paramCount}`);
+    values.push(filters.propertyId);
     paramCount++;
   }
 
@@ -426,7 +466,7 @@ const getDeals = async (filters = {}, pagination = {}) => {
   // read the count from); we fall back to a COUNT there so totalPages stays
   // correct. The common path (page 1, or any page with rows) is one query.
   const dataResult = await query(
-    `SELECT ${dealSelect},
+    `SELECT ${useSummary ? dealSummarySelect : dealSelect},
             COUNT(*) OVER() AS total_count
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id
@@ -458,24 +498,28 @@ const getDeals = async (filters = {}, pagination = {}) => {
 
   // Strip the window-function helper column so it never leaks into the API
   // payload; it exists only to carry the total in one round-trip.
-  const normalizedRows = dataResult.rows.map(({ total_count, ...row }) => ({
-    ...row,
-    document_count: parseInt(row.document_count, 10) || 0,
-    pending_required_dd_count: parseInt(row.pending_required_dd_count, 10) || 0,
-    pending_deal_breakers: parseInt(row.pending_deal_breakers, 10) || 0,
-    required_approval_count: parseInt(row.required_approval_count, 10) || 0,
-    validated_approval_count: parseInt(row.validated_approval_count, 10) || 0,
-    open_high_risk_count: parseInt(row.open_high_risk_count, 10) || 0,
-    overdue_dd_count: parseInt(row.overdue_dd_count, 10) || 0,
-    new_risk_flag_count: parseInt(row.new_risk_flag_count, 10) || 0,
-    key_risks: Array.isArray(row.key_risks) ? row.key_risks : [],
-  }));
+  const normalizedRows = dataResult.rows.map(({ total_count, ...row }) => {
+    // Summary projection carries no rollup columns to coerce — return scalars as-is.
+    if (useSummary) return row;
+    return {
+      ...row,
+      document_count: parseInt(row.document_count, 10) || 0,
+      pending_required_dd_count: parseInt(row.pending_required_dd_count, 10) || 0,
+      pending_deal_breakers: parseInt(row.pending_deal_breakers, 10) || 0,
+      required_approval_count: parseInt(row.required_approval_count, 10) || 0,
+      validated_approval_count: parseInt(row.validated_approval_count, 10) || 0,
+      open_high_risk_count: parseInt(row.open_high_risk_count, 10) || 0,
+      overdue_dd_count: parseInt(row.overdue_dd_count, 10) || 0,
+      new_risk_flag_count: parseInt(row.new_risk_flag_count, 10) || 0,
+      key_risks: Array.isArray(row.key_risks) ? row.key_risks : [],
+    };
+  });
 
   // Attach the persisted recommendation summary to each row in one batched
   // round-trip. Deals that have never had a workspace load (no run yet) get
   // a `null` summary — the frontend renders no badge for those. Pre-migration
   // deploys return an empty Map and the summaries are all null.
-  if (normalizedRows.length > 0) {
+  if (!useSummary && normalizedRows.length > 0) {
     const dealIds = normalizedRows.map((r) => r.id);
     const runsByDeal = await recommendationPersistence.getLatestRunsForDeals(dealIds);
     for (const row of normalizedRows) {
