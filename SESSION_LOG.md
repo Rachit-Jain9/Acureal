@@ -22,10 +22,12 @@ Operator re-issued the deep-quality mandate. Ran a second 6→7-dimension multi-
 ### Verification
 - Backend full suite green throughout — **174 suites / 3003 tests**. Frontend builds green. New unit tests: `percentile`, `icStanceVerbs`, `audit.verifyParse`. RLS/audit DB facts re-verified live.
 
-### Deliberately deferred (well-scoped follow-ups, NOT done)
-- **perf-overfetch** (medium; cached by 5-min staleTime): add a `?fields=summary` light projection to `GET /deals` (no rollup subqueries, skip the recommendation batch) for Map/Reports/Compare; scope PropertyDetail to its property's deals server-side. Files: deal.service.js getDeals, deal.routes.js, api.js, MapPage/ReportsPage/DealComparePage/PropertyDetailPage.
-- **dedupe** (medium/low): promote one canonical `exports/shared/format.js` (5+ copies of formatNumber/formatCrores/…) + a shared ext→MIME base. (Partially done — `utils/percentile.js` already de-duped the percentile copies.)
-- **Financial-Engine modal interiors** (MethodologyExplorer/DefaultsInspector body cards — ~25 data-driven gradients): a larger visual redesign; on-demand/low-visibility.
+### Follow-ups (status at session end)
+- ✅ **perf-overfetch** — DONE (PR #705): additive `?fields=summary` light projection on `GET /deals` (no rollup subqueries, skips the recommendation batch) wired into Map/Reports/Compare, + a `propertyId` filter so PropertyDetail scopes server-side instead of fetching 500 and client-filtering. The Deals-list heavy path is unchanged (default).
+- ✅ **CI hygiene** — DONE (PR #706): a newly-published advisory for the Vitest **UI** server (critical, but dev-only — never shipped) tripped the frontend `npm audit` gate, failing CI repo-wide. Scoped the frontend audit to prod deps (`--omit=dev`, matching the backend step). Prod frontend audit = 0 vulns; dev-tooling advisories stay visible in the informational moderate snapshot.
+- ⏳ **dedupe** (medium/low, NOT done): promote one canonical `exports/shared/format.js` (5+ copies of formatNumber/formatCrores/…) + a shared ext→MIME base. Partially done — `utils/percentile.js` already de-duped the percentile copies. Deferred deliberately: the 5 formatter copies may differ subtly (empty-sentinel `null` vs `'–'` confirmed; the other 3 unverified), so a blind merge risks export-output drift — needs per-file verification against the full export suite. Maintenance-only, zero user impact.
+- ⏳ **dev-dep upgrade** (NOT done): a `vite`/`vitest` major bump would clear the dev-tooling advisories at source — but it's a breaking change to the build/test toolchain; do it as its own carefully build+test-verified PR.
+- ⏳ **Financial-Engine modal interiors** (MethodologyExplorer/DefaultsInspector body cards — ~25 data-driven gradients): a larger visual redesign; on-demand/low-visibility.
 
 ## 2026-06-01 (First-principles deep audit → remediation: a CRITICAL cross-tenant data breach + data-loss + credibility + KPI + UX + perf) (PRs #690–#693)
 
