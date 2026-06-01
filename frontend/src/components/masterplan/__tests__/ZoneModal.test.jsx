@@ -18,7 +18,7 @@ const existingZone = {
   id: 'zone-1',
   zone_code: 'R1',
   zone_name: 'Residential (Main)',
-  plan_version: 'RMP 2031 Draft',
+  plan_version: 'RMP 2031 Provisional',
   city: 'Bengaluru',
   permissible_fsi_base: 1.75,
   permissible_fsi_max: 2.5,
@@ -73,11 +73,11 @@ describe('ZoneModal — create mode', () => {
     expect(screen.getByRole('heading', { name: /Add Zone/i })).toBeInTheDocument();
   });
 
-  it('starts with the EMPTY_ZONE seed (RMP 2031 Draft, Bengaluru, pending review)', () => {
+  it('starts with the EMPTY_ZONE seed (RMP 2031 Provisional, Bengaluru, pending review)', () => {
     openModal({ zone: null });
     expect(screen.getByLabelText(/Zone Code/i)).toHaveValue('');
     expect(screen.getByLabelText(/Zone Name/i)).toHaveValue('');
-    expect(screen.getByLabelText(/Plan Version/i)).toHaveValue('RMP 2031 Draft');
+    expect(screen.getByLabelText(/Plan Version/i)).toHaveValue('RMP 2031 Provisional');
     expect(screen.getByLabelText(/City/i)).toHaveValue('Bengaluru');
     expect(screen.getByLabelText(/Review Status/i)).toHaveValue('pending');
   });
@@ -140,7 +140,7 @@ describe('ZoneModal — edit mode', () => {
     openModal({ zone: existingZone });
     expect(screen.getByLabelText(/Zone Code/i)).toHaveValue('R1');
     expect(screen.getByLabelText(/Zone Name/i)).toHaveValue('Residential (Main)');
-    expect(screen.getByLabelText(/Plan Version/i)).toHaveValue('RMP 2031 Draft');
+    expect(screen.getByLabelText(/Plan Version/i)).toHaveValue('RMP 2031 Provisional');
     expect(screen.getByLabelText(/Permissible Uses/i)).toHaveValue('Residential, Retail, Parks');
     expect(screen.getByLabelText(/Prohibited Uses/i)).toHaveValue('Industrial');
     expect(screen.getByLabelText(/FSI Base/i)).toHaveValue(1.75);

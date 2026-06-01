@@ -317,7 +317,7 @@ export default function BuildabilityLab() {
         <AlertTriangle size={11} className="mt-0.5 shrink-0" />
         <span>
           AI-assisted preview — uses the deterministic Volume 6 setback and FAR kernel.
-          Verify against the published RMP 2031 before committing to numbers in IC memos.
+          Verify against the RMP 2031 provisional draft before committing to numbers in IC memos.
         </span>
       </div>
     </div>

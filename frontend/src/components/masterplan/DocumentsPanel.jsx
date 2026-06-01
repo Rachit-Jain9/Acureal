@@ -129,7 +129,7 @@ export default function DocumentsPanel({ canEdit }) {
   const [form, setForm] = useState({
     city: 'Bengaluru',
     planName: '',
-    planVersion: 'RMP 2031 Draft',
+    planVersion: 'RMP 2031 Provisional',
     docType: 'rmp_table',
     sourceRole: '',
     legalStatus: '',

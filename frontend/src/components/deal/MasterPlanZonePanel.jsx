@@ -7,6 +7,7 @@ import { useZones, useZone, useAssignZoneToProperty } from '../../hooks/useMaste
 import { useUpdateProperty } from '../../hooks/useProperties';
 import { ErrorState, SectionHeader } from '../../design-system';
 import Badge from '../common/Badge';
+import RmpStatusBanner from '../masterplan/RmpStatusBanner';
 
 const EDITOR_ROLES = ['admin', 'owner', 'editor', 'analyst'];
 
@@ -232,6 +233,7 @@ export default function MasterPlanZonePanel({ property }) {
       )}
 
       <div className="space-y-5 p-5">
+        <RmpStatusBanner />
         {isAssigned ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <ZoneFact label="Zone code" value={zone.zone_code} />
