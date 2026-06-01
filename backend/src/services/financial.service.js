@@ -22,52 +22,70 @@ const SCENARIO_MULTIPLIERS = {
 
 const persistScenarios = async (dealId, scenarios) => {
   if (!scenarios || typeof scenarios !== 'object') return;
+
+  // Collect every scenario row, then write them in ONE multi-row upsert instead
+  // of a serial INSERT per scenario. On a high-latency serverless→Supabase hop,
+  // this turns N round-trips into 1 (latency = one round-trip, not the sum).
+  const rows = [];
   for (const key of Object.keys(SCENARIO_MULTIPLIERS)) {
     const s = scenarios[key];
     if (!s) continue;
     const kpis = s.kpis || {};
     const rev  = s.revenue || {};
     const m    = SCENARIO_MULTIPLIERS[key];
-    await query(
-      `INSERT INTO financial_scenarios (
-         deal_id, organization_id, scenario, label,
-         revenue_multiplier, cost_multiplier, duration_multiplier,
-         irr_pct, npv_cr, equity_multiple, gross_margin_pct,
-         total_revenue_cr, total_cost_cr,
-         kpis, inputs
-       ) VALUES ($1, (SELECT organization_id FROM deals WHERE id = $1), $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-       ON CONFLICT (deal_id, scenario) DO UPDATE SET
-         label = EXCLUDED.label,
-         revenue_multiplier = EXCLUDED.revenue_multiplier,
-         cost_multiplier = EXCLUDED.cost_multiplier,
-         duration_multiplier = EXCLUDED.duration_multiplier,
-         irr_pct = EXCLUDED.irr_pct,
-         npv_cr = EXCLUDED.npv_cr,
-         equity_multiple = EXCLUDED.equity_multiple,
-         gross_margin_pct = EXCLUDED.gross_margin_pct,
-         total_revenue_cr = EXCLUDED.total_revenue_cr,
-         total_cost_cr = EXCLUDED.total_cost_cr,
-         kpis = EXCLUDED.kpis,
-         inputs = EXCLUDED.inputs,
-         updated_at = NOW()`,
-      [
-        dealId,
-        key,
-        s.label || null,
-        m.revenue,
-        m.cost,
-        m.duration,
-        kpis.irr ?? null,
-        kpis.npv ?? null,
-        kpis.equityMultiple ?? null,
-        kpis.grossMarginPct ?? rev.grossMarginPct ?? null,
-        rev.totalRevenueCr ?? null,
-        rev.totalCostCr ?? null,
-        JSON.stringify(kpis),
-        JSON.stringify(s.adjustments || {}),
-      ]
-    );
+    rows.push([
+      key,
+      s.label || null,
+      m.revenue,
+      m.cost,
+      m.duration,
+      kpis.irr ?? null,
+      kpis.npv ?? null,
+      kpis.equityMultiple ?? null,
+      kpis.grossMarginPct ?? rev.grossMarginPct ?? null,
+      rev.totalRevenueCr ?? null,
+      rev.totalCostCr ?? null,
+      JSON.stringify(kpis),
+      JSON.stringify(s.adjustments || {}),
+    ]);
   }
+  if (rows.length === 0) return;
+
+  // $1 is the shared dealId (also drives the org subquery); each scenario then
+  // contributes 13 positional params. Scenarios are keyed distinctly, so no two
+  // rows collide on (deal_id, scenario) within the batch.
+  const params = [dealId];
+  const valueGroups = rows.map((row) => {
+    const start = params.length;
+    params.push(...row);
+    const ph = row.map((_, j) => `$${start + 1 + j}`).join(', ');
+    return `($1, (SELECT organization_id FROM deals WHERE id = $1), ${ph})`;
+  });
+
+  await query(
+    `INSERT INTO financial_scenarios (
+       deal_id, organization_id, scenario, label,
+       revenue_multiplier, cost_multiplier, duration_multiplier,
+       irr_pct, npv_cr, equity_multiple, gross_margin_pct,
+       total_revenue_cr, total_cost_cr,
+       kpis, inputs
+     ) VALUES ${valueGroups.join(', ')}
+     ON CONFLICT (deal_id, scenario) DO UPDATE SET
+       label = EXCLUDED.label,
+       revenue_multiplier = EXCLUDED.revenue_multiplier,
+       cost_multiplier = EXCLUDED.cost_multiplier,
+       duration_multiplier = EXCLUDED.duration_multiplier,
+       irr_pct = EXCLUDED.irr_pct,
+       npv_cr = EXCLUDED.npv_cr,
+       equity_multiple = EXCLUDED.equity_multiple,
+       gross_margin_pct = EXCLUDED.gross_margin_pct,
+       total_revenue_cr = EXCLUDED.total_revenue_cr,
+       total_cost_cr = EXCLUDED.total_cost_cr,
+       kpis = EXCLUDED.kpis,
+       inputs = EXCLUDED.inputs,
+       updated_at = NOW()`,
+    params,
+  );
 };
 
 // ─── CALCULATE AND SAVE ───────────────────────────────────────────────────────
