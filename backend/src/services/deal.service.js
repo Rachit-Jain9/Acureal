@@ -773,15 +773,15 @@ const transitionStage = async (dealId, newStage, userId, notes = '') => {
       [dealId, currentDeal.stage, newStage, userId, notes || null]
     );
 
-    let propertyDeleted = null;
-    if (newStage === 'dead') {
-      const archivedDeal = dealUpdateResult.rows[0];
-      propertyDeleted = await purgePropertyIfInactiveOnly(
-        client,
-        archivedDeal.property_id,
-        dealId
-      );
-    }
+    // The 'dead' stage is REVERSIBLE (canTransitionStage permits dead -> sourced
+    // / screening to revive a deal). We previously hard-deleted the linked
+    // parcel here whenever no other live deal referenced it — permanently
+    // destroying its PID / khata / survey / geocode / zoning / owner
+    // intelligence, which the revival path never restored. Parcel data is
+    // expensive to reconstruct, so we KEEP it: a dead deal retains its property,
+    // and reviving the deal brings the parcel back intact. True orphan cleanup
+    // happens only on hard-delete (deleteDeal), where the deal is gone for good.
+    const propertyDeleted = null;
 
     // Fire after the txn writes succeed but before we return the row. The
     // activity insert runs outside the transaction (separate connection in
@@ -1240,15 +1240,13 @@ const bulkTransitionStage = async (ids, newStage, userId, notes = '') => {
 };
 
 const deleteDeal = async (id, userId = null) => {
-  // Snapshot the deal BEFORE deletion so the audit row can record what
-  // was lost. We do this outside the transaction because the audit row
-  // references the deal_id which won't exist after the txn commits — the
-  // audit table FK is ON DELETE CASCADE so a post-delete insert would
-  // fail. By logging *before* the row goes, the cascade later removes
-  // the orphan log too — which is correct: a deleted deal can't have a
-  // visible AuditTab anymore.
-  // ...unless the audit table is missing. In that case `recordAudit`
-  // soft-fails and the deletion proceeds anyway.
+  // Snapshot the deal BEFORE deletion so the audit row records what was lost.
+  // We log inside the transaction, before the DELETE, while the deal_id FK
+  // still resolves. The FK is ON DELETE SET NULL (migration 20260624), so the
+  // 'deleted' audit row SURVIVES the deletion (deal_id -> NULL) — a durable,
+  // immutable record of who deleted what and when, surfaced by org-wide audit
+  // reads. If the audit table is missing the insert soft-fails and the deletion
+  // proceeds anyway.
   const dealSnapshot = await transaction(async (client) => {
     const dealResult = await client.query(
       'SELECT id, name, stage, is_archived, property_id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
@@ -1282,12 +1280,13 @@ const deleteDeal = async (id, userId = null) => {
       }
     }
 
-    // Audit BEFORE the DELETE so the deal_id FK still resolves. The
-    // audit row will then cascade-delete with the deal, leaving a
-    // clean slate. We accept that the deal-level AuditTab won't show
-    // this row post-delete; an org-wide query would (until cascade).
-    // Fail-open: if the audit insert fails we still want the delete to
-    // proceed — the docs are already gone.
+    // Audit BEFORE the DELETE so the deal_id FK still resolves at insert. The
+    // FK is ON DELETE SET NULL (migration 20260624), so this 'deleted' row
+    // SURVIVES the deletion (deal_id -> NULL) — a durable, immutable record. The
+    // deal-level AuditTab can't show it post-delete (the deal is gone), but
+    // org-wide audit reads still surface it; the original id is preserved in
+    // metadata.deleted_deal_id. Fail-open: if the audit insert fails we still
+    // want the delete to proceed — the docs are already gone.
     try {
       await client.query(
         `INSERT INTO deal_audit_log (
@@ -1305,7 +1304,7 @@ const deleteDeal = async (id, userId = null) => {
           userId,
           JSON.stringify({ name: deal.name, stage: deal.stage, is_archived: deal.is_archived }),
           JSON.stringify({}),
-          JSON.stringify({}),
+          JSON.stringify({ deleted_deal_id: id }),
         ],
       );
     } catch (err) {

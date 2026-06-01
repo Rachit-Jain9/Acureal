@@ -293,8 +293,17 @@ router.post(
       );
       res.status(201).json({ success: true, message: 'Financials calculated and saved.', data: result });
     } catch (error) {
-      // Engine validation errors should surface as 422 with the actual message
-      if (error.message && !error.code && !error.statusCode) {
+      // Only a genuine kernel INPUT error (bad/missing assumptions the operator
+      // can fix) surfaces as a 422 with its message. Identify it precisely by
+      // the kernel's error type / "kernel input error" prefix — NOT merely
+      // "has a message but no code/statusCode", which ALSO matches internal
+      // TypeErrors / Decimal faults and would leak their raw message to the
+      // client. Anything else falls through to the central error handler, which
+      // redacts to a generic 500 in production.
+      const isKernelInputError =
+        error?.name === 'DealInputError'
+        || /kernel input error/i.test(error?.message || '');
+      if (isKernelInputError) {
         return res.status(422).json({ success: false, message: error.message });
       }
       next(error);
