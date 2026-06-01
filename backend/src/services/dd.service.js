@@ -607,7 +607,9 @@ async function seedForDeal(dealId, assetClass = 'residential_apartments', dealSt
 
   if (!assetClass || !dealStructure) {
     const dealResult = await query(
-      'SELECT asset_class, deal_structure FROM deals WHERE id = $1',
+      // Org-scope guard (BYPASSRLS app role): never read a deal outside the
+      // caller's org just to default the checklist asset class / structure.
+      'SELECT asset_class, deal_structure FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
       [dealId],
     );
     const deal = dealResult.rows[0] || {};
