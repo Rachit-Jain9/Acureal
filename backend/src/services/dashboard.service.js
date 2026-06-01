@@ -19,11 +19,15 @@ const getDashboardStats = async (userId) => {
     `SELECT
       COUNT(*) FILTER (WHERE ${buildVisibleDealCondition('d')}) as total_deals,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])) as active_deals_count,
-      COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'closed' AND d.updated_at >= DATE_TRUNC('month', NOW())) as deals_closed_this_month,
+      COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'closed' AND EXISTS (
+        SELECT 1 FROM deal_stage_history dsh
+        WHERE dsh.deal_id = d.id AND dsh.to_stage = 'closed'
+          AND dsh.changed_at >= DATE_TRUNC('month', NOW())
+      )) as deals_closed_this_month,
       COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'dead') as dead_deals,
       COUNT(*) FILTER (WHERE d.is_archived = TRUE) as archived_deals,
       COALESCE(SUM(f.total_revenue_cr) FILTER (WHERE d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])), 0) as total_pipeline_value_cr,
-      AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage <> 'dead') as avg_irr_pct
+      AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])) as avg_irr_pct
      FROM deals d
      LEFT JOIN financials f ON d.id = f.deal_id
      WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))`,
