@@ -50,9 +50,9 @@ const OWNER_KIND_TONE = {
   risk_flag: 'bg-rose-50 text-rose-700 border-rose-200',
   comp: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   financial_scenario: 'bg-amber-50 text-amber-700 border-amber-200',
-  parcel_intelligence: 'bg-slate-50 text-slate-700 border-slate-200',
-  deal_note: 'bg-slate-50 text-slate-700 border-slate-200',
-  guidance_value: 'bg-slate-50 text-slate-700 border-slate-200',
+  parcel_intelligence: 'bg-bg-secondary text-content-secondary border-hairline',
+  deal_note: 'bg-bg-secondary text-content-secondary border-hairline',
+  guidance_value: 'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 const formatConfidence = (n) => {
@@ -72,7 +72,7 @@ function GroupedSummary({ grouped }) {
             key={kind}
             className={clsx(
               'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border',
-              OWNER_KIND_TONE[kind] || 'bg-slate-50 text-slate-700 border-slate-200',
+              OWNER_KIND_TONE[kind] || 'bg-bg-secondary text-content-secondary border-hairline',
             )}
           >
             <span>{count}</span>

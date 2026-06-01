@@ -294,7 +294,7 @@ export default function DealDetailPage() {
               onClick={() => setStageExpanded((v) => !v)}
               aria-expanded={stageExpanded}
               className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors
-                hover:bg-bg-secondary focus-visible:outline-none focus-visible:bg-bg-secondary"
+                hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:bg-bg-secondary active:scale-[0.99]"
             >
               <div className="flex items-center gap-2">
                 <ArrowRight size={15} className="text-content-muted" />
