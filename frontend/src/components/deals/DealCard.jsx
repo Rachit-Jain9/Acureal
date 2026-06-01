@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MoreVertical, Presentation, Share2, Trash2, Loader2, Download,
@@ -54,7 +54,7 @@ const READINESS_TIER_LABEL = {
   early:     'Early',
 };
 
-export default function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) {
+function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const deleteDeal = useDeleteDeal();
@@ -374,3 +374,14 @@ export default function DealCard({ deal, readiness = null, selected = false, onT
     </>
   );
 }
+
+/**
+ * Memoized: the Deals list renders one card per deal, so a parent re-render
+ * (selection toggle, filter keystroke, query refetch) would otherwise re-render
+ * every card. All four props are referentially stable when unchanged — `deal`
+ * and `readiness` come from React Query / a useMemo'd Map, `selected` is a
+ * boolean compared by value, and `onToggleSelect` is useCallback-stable in the
+ * parent — so the default shallow compare skips every card whose own props
+ * didn't change. Toggling one selection now re-renders ~1 card, not the list.
+ */
+export default memo(DealCard);
