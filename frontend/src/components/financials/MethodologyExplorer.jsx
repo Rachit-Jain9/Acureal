@@ -181,9 +181,7 @@ export default function MethodologyExplorer({
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-bg-elevated shadow-2xl">
-            <header className="relative overflow-hidden border-b border-hairline-strong bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 px-6 py-5 text-white">
-              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-400/30 to-indigo-400/10 blur-2xl" />
-              <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl" />
+            <header className="relative overflow-hidden border-b border-hairline-strong bg-slate-900 px-6 py-5 text-white">
               <div className="relative flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-indigo-200">

@@ -447,12 +447,13 @@ function WaterfallCard({ waterfall }) {
 }
 
 function SummaryCard({ label, tone, capital, total, multiple }) {
-  const tones = {
-    indigo: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
-    rose:   'bg-gradient-to-br from-rose-500 to-pink-600 text-white',
+  // Flat, theme-safe tile with a semantic left-accent stripe (no gradient).
+  const stripe = {
+    indigo: 'border-l-accent',
+    rose:   'border-l-rose-500',
   };
   return (
-    <div className={clsx('rounded-xl p-4', tones[tone] || tones.indigo)}>
+    <div className={clsx('rounded-xl p-4 bg-bg-secondary border border-hairline border-l-2 text-content-primary', stripe[tone] || stripe.indigo)}>
       <div className="text-[10px] uppercase tracking-[0.12em] opacity-80">{label}</div>
       <div className="mt-1 text-2xl font-bold">{multiple != null ? `${multiple.toFixed(2)}\u00d7` : '—'}</div>
       <div className="text-[11px] opacity-80">equity multiple</div>

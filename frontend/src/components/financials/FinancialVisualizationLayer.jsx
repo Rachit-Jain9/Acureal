@@ -171,30 +171,30 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-violet-50 via-white to-violet-50 rounded-xl shadow-sm border border-violet-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 flex items-center gap-2">
-        <Target className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Terminal Value</h3>
-        <span className="ml-auto text-[11px] font-semibold uppercase tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full">
+    <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <Target className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Terminal Value</h3>
+        <span className="ml-auto text-[11px] font-semibold uppercase tracking-wider bg-bg-elevated text-content-secondary border border-hairline px-2 py-0.5 rounded-full">
           {METHOD_LABELS[method] || method}
         </span>
       </div>
 
       <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-bg-elevated rounded-lg border border-violet-100 p-4">
-          <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">Terminal Value</div>
+        <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
+          <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">Terminal Value</div>
           <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">At end of hold (Y{Math.round(hold)})</div>
         </div>
 
-        <div className="bg-bg-elevated rounded-lg border border-violet-100 p-4">
-          <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">PV of Terminal Value</div>
+        <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
+          <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">PV of Terminal Value</div>
           <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tvPv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">Discounted at {discountPct.toFixed(1)}% to t=0</div>
         </div>
 
-        <div className="bg-bg-elevated rounded-lg border border-violet-100 p-4">
-          <div className="text-[11px] font-semibold uppercase text-violet-700 tracking-wide">% of NPV from TV</div>
+        <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
+          <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">% of NPV from TV</div>
           <div className="mt-1 text-2xl font-bold text-content-primary">
             {kpis?.npv && tvPv ? `${((tvPv / (Number(kpis.npv) + tvPv)) * 100).toFixed(1)}%` : '-'}
           </div>
@@ -203,8 +203,8 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
       </div>
 
       <div className="px-5 pb-3">
-        <div className="rounded-lg bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 p-3">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-violet-800 mb-1">Formula in use</div>
+        <div className="rounded-lg bg-bg-secondary border border-hairline p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-content-muted mb-1">Formula in use</div>
           <div className="font-mono text-[13px] text-content-primary">{formulaMap[method] || '—'}</div>
         </div>
       </div>
@@ -267,10 +267,10 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
 
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-3 flex items-center gap-2">
-        <Activity className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">NOI Progression</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <Activity className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">NOI Progression</h3>
+        <span className="ml-auto text-[10px] font-semibold text-content-muted">
           {escPct.toFixed(1)}% pa growth
         </span>
       </div>
@@ -347,10 +347,10 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
 
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-3 flex items-center gap-2">
-        <Gauge className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Terminal Value Sensitivity</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <Gauge className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Terminal Value Sensitivity</h3>
+        <span className="ml-auto text-[10px] font-semibold text-content-muted">
           Current: {currentCap.toFixed(2)}%  →  {formatCrores(currentValue)}
         </span>
       </div>
@@ -433,10 +433,10 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
 
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
-      <div className="bg-gradient-to-r from-slate-800 to-gray-900 px-5 py-3 flex items-center gap-2">
-        <Layers className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cash Flow Composition</h3>
-        <div className="ml-auto flex items-center gap-3 text-[10px] font-semibold text-white/90">
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <Layers className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Cash Flow Composition</h3>
+        <div className="ml-auto flex items-center gap-3 text-[10px] font-semibold text-content-muted">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm" style={{ background: PHASE_COLORS.construction }} />Construction
           </span>
@@ -482,10 +482,10 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
 
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
-      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cumulative Return Trajectory</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Cumulative Return Trajectory</h3>
+        <span className="ml-auto text-[10px] font-semibold text-content-muted">
           IRR: {kpis?.irr != null ? formatPct(kpis.irr) : '-'}
         </span>
       </div>
@@ -548,30 +548,32 @@ export function KPIDashboard({ kpis, assetClass, revenue, costs }) {
 
   if (entries.length === 0) return null;
 
+  // Flat, theme-safe tiles with a semantic left-accent stripe (the documented
+  // "neutral chrome + accent" pattern) — no gradients, legible in both themes.
   const toneClass = {
-    good:    'from-emerald-50 to-teal-50 border-emerald-200 text-emerald-900',
-    bad:     'from-rose-50 to-red-50 border-rose-200 text-rose-900',
-    warn:    'from-amber-50 to-orange-50 border-amber-200 text-amber-900',
-    neutral: 'from-slate-50 to-gray-50 border-hairline-strong text-content-primary',
+    good:    'border-l-emerald-500',
+    bad:     'border-l-rose-500',
+    warn:    'border-l-amber-500',
+    neutral: 'border-l-hairline-strong',
   };
 
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
-      <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Investor KPI Dashboard</h3>
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <BarChart3 className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Investor KPI Dashboard</h3>
       </div>
       <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
         {entries.map(({ label, value, tone, icon: Icon }) => (
           <div
             key={label}
-            className={`bg-gradient-to-br rounded-lg border p-3 ${toneClass[tone]}`}
+            className={`bg-bg-secondary rounded-lg border border-hairline border-l-2 p-3 ${toneClass[tone]}`}
           >
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider opacity-80">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-content-muted">
               <Icon className="w-3 h-3" />
               {label}
             </div>
-            <div className="mt-1 text-xl font-bold">{value}</div>
+            <div className="mt-1 text-xl font-bold text-content-primary tabular-nums">{value}</div>
           </div>
         ))}
       </div>
@@ -603,10 +605,10 @@ export function CostCompositionChart({ costs }) {
 
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-3 flex items-center gap-2">
-        <Layers className="w-4 h-4 text-white" />
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cost Composition</h3>
-        <span className="ml-auto text-[10px] font-semibold text-white/90">Total: {formatCrores(total)}</span>
+      <div className="bg-bg-secondary border-b border-hairline px-5 py-3 flex items-center gap-2">
+        <Layers className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Cost Composition</h3>
+        <span className="ml-auto text-[10px] font-semibold text-content-muted">Total: {formatCrores(total)}</span>
       </div>
       <div className="p-4 h-72">
         <ResponsiveContainer width="100%" height="100%">
