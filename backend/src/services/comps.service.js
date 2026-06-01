@@ -3,6 +3,7 @@ const { createError } = require('../middleware/errorHandler');
 const { rankComps, scoreComp } = require('../utils/compSimilarity');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getPlatformOrgId } = require('../utils/platformOrg');
+const { percentile } = require('../utils/percentile');
 
 // Haversine formula to calculate distance between two lat/lng points in km
 const haversineDistance = (lat1, lng1, lat2, lng2) => {
@@ -228,11 +229,12 @@ const computeBenchmarks = (comps, radiusKm) => {
   const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
   const min = rates[0];
   const max = rates[rates.length - 1];
-  const median = rates[Math.floor(rates.length / 2)];
+  const median = percentile(rates, 0.5);
 
-  // Percentiles
-  const p25 = rates[Math.floor(rates.length * 0.25)];
-  const p75 = rates[Math.floor(rates.length * 0.75)];
+  // Percentiles — interpolated (type-7) so small even-sized comp sets aren't
+  // biased toward the more expensive comp (see backend/src/utils/percentile.js).
+  const p25 = percentile(rates, 0.25);
+  const p75 = percentile(rates, 0.75);
 
   return {
     found: true,
@@ -243,8 +245,8 @@ const computeBenchmarks = (comps, radiusKm) => {
       min_rate_per_sqft: min,
       max_rate_per_sqft: max,
       median_rate_per_sqft: Math.round(median),
-      p25_rate_per_sqft: p25,
-      p75_rate_per_sqft: p75,
+      p25_rate_per_sqft: Math.round(p25),
+      p75_rate_per_sqft: Math.round(p75),
     },
     comps: comps.slice(0, 10), // Return top 10 nearest
   };

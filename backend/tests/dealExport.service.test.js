@@ -26,7 +26,10 @@ describe('dealExport.service helpers', () => {
     expect(summary.count).toBe(4);
     expect(summary.min_rate_per_sqft).toBe(8200);
     expect(summary.max_rate_per_sqft).toBe(11000);
-    expect(summary.median_rate_per_sqft).toBe(10000);
+    // Even-length set → median is the AVERAGE of the two central values
+    // (9100, 10000) = 9550, not the naive upper-middle 10000 (which biased the
+    // benchmark toward the more expensive comp). See utils/percentile.js.
+    expect(summary.median_rate_per_sqft).toBe(9550);
   });
 
   test('summarizes quarterly cash flows with cumulative metrics', () => {

@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
+const { percentile } = require('../utils/percentile');
 const { getCompsNearLocation } = require('./comps.service');
 const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrative, generateDocumentInsights } = require('./export.insights.service');
 // PR-NX67 (2026-05-19) — AI market-context augment layer. Generates 5
@@ -164,12 +165,6 @@ const mapAssetClassToCompType = (assetClass, propertyType) => {
   if (normalizedPropertyType === 'industrial' || normalizedAssetClass === 'industrial_warehousing') return 'industrial';
   if (normalizedPropertyType === 'hospitality' || normalizedAssetClass === 'hospitality') return 'hospitality';
   return 'residential';
-};
-
-const percentile = (sortedValues, fraction) => {
-  if (!sortedValues.length) return null;
-  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.floor(sortedValues.length * fraction)));
-  return sortedValues[index];
 };
 
 const deriveBenchmarks = (comps) => {
@@ -761,7 +756,14 @@ const getDealExportContext = async (dealId, options = {}) => {
   }
   const cityComps = await fetchCityComps({ city: deal.city, compType }).catch(() => []);
   const exportComps = (nearbyComps.length ? nearbyComps : cityComps).slice(0, 10);
-  const benchmarks = deriveBenchmarks(exportComps);
+  // Credibility (CLAUDE.md): the tear-sheet labels this benchmark "verified
+  // comps", so it must be computed from VERIFIED comps only — never present an
+  // unverified/mixed set as an authoritative benchmark rate. When no verified
+  // comp exists, deriveBenchmarks returns count 0 / median null and the caption
+  // falls through to its honest "verified comps required" state. The full nearby
+  // set still feeds the comps table (which renders a Verified Yes/No column).
+  const verifiedComps = exportComps.filter((c) => c && c.is_verified);
+  const benchmarks = deriveBenchmarks(verifiedComps);
 
   const durationYears = deal.project_duration_months
     ? round(deal.project_duration_months / 12, 2)
