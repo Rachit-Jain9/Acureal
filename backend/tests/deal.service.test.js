@@ -94,22 +94,22 @@ describe('deal.service inactive deal handling', () => {
     expect(result.property_deleted).toEqual({ id: 'prop-1' });
   });
 
-  test('transitioning a deal to dead removes an orphaned property', async () => {
+  test('transitioning a deal to dead PRESERVES the linked property (revival-safe)', async () => {
     const txQuery = jest.fn();
     query.mockResolvedValueOnce({
       rows: [{ id: 'deal-1', stage: 'underwriting', is_archived: false }],
     });
     transaction.mockImplementation(async (handler) => handler({ query: txQuery }));
     txQuery
-      .mockResolvedValueOnce({ rows: [{ id: 'deal-1', stage: 'dead', property_id: 'prop-1' }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ has_visible_deals: false }] })
-      .mockResolvedValueOnce({ rows: [{ id: 'prop-1' }] });
+      .mockResolvedValueOnce({ rows: [{ id: 'deal-1', stage: 'dead', property_id: 'prop-1' }] }) // UPDATE deals
+      .mockResolvedValueOnce({ rows: [] }); // deal_stage_history insert
 
-    const result = await dealService.transitionStage('deal-1', 'dead', 'user-1', 'spam cleanup');
+    const result = await dealService.transitionStage('deal-1', 'dead', 'user-1', 'mothballed');
 
-    expect(txQuery.mock.calls[3][0]).toContain('DELETE FROM properties');
-    expect(result.property_deleted).toEqual({ id: 'prop-1' });
+    // The dead stage is reversible, so the parcel is kept (no purge) — reviving
+    // the deal must bring its PID / khata / survey / geocode / zoning back intact.
+    expect(txQuery.mock.calls.some((c) => /DELETE FROM properties/.test(c[0]))).toBe(false);
+    expect(result.property_deleted).toBeNull();
   });
 
   test('deleteDeal removes associated storage files before deleting the deal', async () => {
