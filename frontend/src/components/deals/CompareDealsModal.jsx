@@ -337,7 +337,7 @@ export default function CompareDealsModal({ open, dealIds, onClose }) {
                   {signals.map((s, i) => (
                     <th key={ids[i]} scope="col" className="px-4 py-3 text-left align-top">
                       <Link
-                        to={`/deals/${ids[i]}`}
+                        to={`/dashboard/deals/${ids[i]}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 font-display text-sm font-semibold text-content-primary hover:text-accent transition-colors group"

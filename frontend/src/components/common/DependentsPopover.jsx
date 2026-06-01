@@ -113,7 +113,7 @@ function OwnerRow({ owner }) {
           </div>
           {owner.deal_id && owner.deal_name && (
             <Link
-              to={`/deals/${owner.deal_id}`}
+              to={`/dashboard/deals/${owner.deal_id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
