@@ -24,6 +24,35 @@ import useAutoDeriveParcelContext from '../../hooks/useAutoDeriveParcelContext';
  *   - Carries the match source + a "verify on Parcel tab" prompt — this is
  *     an address-fuzz match, not a spatial parcel intersection.
  */
+// Land-use category → swatch colour for the existing-land-use mix bar. A
+// data-viz palette (not UI chrome), so explicit hex like the chart components.
+const LU_COLOR = {
+  'Residential': '#3b82f6',
+  'Commercial': '#f59e0b',
+  'Industrial': '#8b5cf6',
+  'Public Semi Public': '#14b8a6',
+  'Public & Semi Public - Defence': '#0d9488',
+  'Public Utility': '#64748b',
+  'Parks & Open Spaces': '#22c55e',
+  'Transport & Communication': '#94a3b8',
+  'Vacant': '#cbd5e1',
+  'Agriculture': '#84cc16',
+  'Forest': '#15803d',
+  'Streams': '#67e8f9',
+  'Water Bodies': '#06b6d4',
+  'Quarry/Mining Sites': '#a16207',
+};
+const luColor = (cat) => LU_COLOR[cat] || '#9ca3af';
+const LU_SHORT = {
+  'Public Semi Public': 'Public/Semi-Public',
+  'Public & Semi Public - Defence': 'Defence',
+  'Public Utility': 'Utilities',
+  'Parks & Open Spaces': 'Parks',
+  'Transport & Communication': 'Transport',
+  'Water Bodies': 'Water',
+};
+const luShort = (cat) => LU_SHORT[cat] || cat;
+
 export default function DealPlanningSnapshot({ deal }) {
   const address = deal?.property_address || deal?.address || null;
   const lat = deal?.lat ?? null;
@@ -74,6 +103,11 @@ export default function DealPlanningSnapshot({ deal }) {
       : null;
 
   const confidencePct = pd.confidence != null ? Math.round(Number(pd.confidence) * 100) : null;
+
+  const landUse =
+    Array.isArray(pd.existing_land_use?.categories) && pd.existing_land_use.categories.length > 0
+      ? pd.existing_land_use
+      : null;
 
   return (
     <div
@@ -126,6 +160,44 @@ export default function DealPlanningSnapshot({ deal }) {
                 <p className="text-sm font-semibold text-content-primary tabular-nums leading-tight">{value}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Existing land-use mix (RMP planning-district report, 2015 baseline) —
+            present for the 7 central PDs (PD-01..PD-07) with a digitised report. */}
+        {landUse && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-content-muted font-medium mb-1.5">
+              Existing land use · {landUse.baseline_year} baseline
+            </p>
+            <div
+              className="flex h-2.5 w-full rounded-full overflow-hidden bg-bg-secondary"
+              role="img"
+              aria-label="Existing land-use composition"
+            >
+              {landUse.categories.map((c) => (
+                <div
+                  key={c.category}
+                  style={{ width: `${c.pct}%`, backgroundColor: luColor(c.category) }}
+                  title={`${c.category}: ${c.pct}% (${Number(c.area_ha).toLocaleString('en-IN')} ha)`}
+                />
+              ))}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+              {landUse.categories.slice(0, 5).map((c) => (
+                <span
+                  key={c.category}
+                  className="inline-flex items-center gap-1 text-[10px] text-content-secondary"
+                >
+                  <span
+                    className="w-2 h-2 rounded-sm shrink-0"
+                    style={{ backgroundColor: luColor(c.category) }}
+                  />
+                  {luShort(c.category)}{' '}
+                  <span className="tabular-nums font-medium text-content-primary">{c.pct}%</span>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

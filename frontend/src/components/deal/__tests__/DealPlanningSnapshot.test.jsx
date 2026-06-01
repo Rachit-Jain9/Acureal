@@ -93,4 +93,33 @@ describe('DealPlanningSnapshot', () => {
     renderSnapshot({ city: 'Mumbai', address: 'X' });
     expect(mockHookFn.mock.calls.at(-1)[0].enabled).toBe(false);
   });
+
+  it('renders the existing land-use mix (bar + legend) when present', () => {
+    mockHookState.data = {
+      ...pdPayload,
+      planningDistrict: {
+        ...pdPayload.planningDistrict,
+        existing_land_use: {
+          baseline_year: 2015,
+          total_area_ha: 1481.88,
+          categories: [
+            { category: 'Residential', pct: 37.71, area_ha: 558.82 },
+            { category: 'Public Semi Public', pct: 17.34, area_ha: 256.96 },
+            { category: 'Transport & Communication', pct: 13.31, area_ha: 197.24 },
+          ],
+        },
+      },
+    };
+    renderSnapshot({ city: 'Bengaluru', address: '100 Brigade Road' });
+    expect(screen.getByText(/Existing land use/i)).toBeInTheDocument();
+    expect(screen.getByText('37.71%')).toBeInTheDocument();
+    // long category names are shortened in the legend
+    expect(screen.getByText('Public/Semi-Public')).toBeInTheDocument();
+  });
+
+  it('omits the land-use mix when the PD has no report (PD-08+)', () => {
+    mockHookState.data = pdPayload; // no existing_land_use
+    renderSnapshot({ city: 'Bengaluru', address: '100 Brigade Road' });
+    expect(screen.queryByText(/Existing land use/i)).not.toBeInTheDocument();
+  });
 });
