@@ -90,7 +90,11 @@ jobs:
       - name: Backend npm audit (fail on high/critical)
         run: npm audit --audit-level=high --omit=dev --prefix backend
       - name: Frontend npm audit (fail on high/critical)
-        run: npm audit --audit-level=high --prefix frontend
+        # --omit=dev to match the Backend step above: this gate is for vulns in
+        # what SHIPS to users (production deps), not build/test tooling (vite,
+        # esbuild, vitest) which never reaches the browser. Dev-tooling advisories
+        # are still surfaced by the informational moderate snapshot step below.
+        run: npm audit --audit-level=high --omit=dev --prefix frontend
       - name: Kernel npm audit (fail on high/critical)
         run: npm audit --audit-level=high --prefix packages/financial-kernel
       - name: Moderate advisory snapshot (informational)
