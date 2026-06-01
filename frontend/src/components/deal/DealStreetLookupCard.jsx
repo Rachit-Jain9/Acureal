@@ -171,7 +171,7 @@ export default function DealStreetLookupCard({ property, deal }) {
         sub="Pre-seeded from this deal's linked property. Edit the search to confirm the matched street; the top hit's ward + zone is the BBMP-published classification used for property tax and IGR-style guidance value."
         action={(
           <Link
-            to="/admin/master-plan?tab=intelligence"
+            to="/dashboard/admin/master-plan?tab=intelligence"
             className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary transition-colors duration-120"
           >
             Open full lookup
@@ -275,7 +275,7 @@ export default function DealStreetLookupCard({ property, deal }) {
             {rows.length > 6 && (
               <li className="px-3 py-2 text-center">
                 <Link
-                  to="/admin/master-plan?tab=intelligence"
+                  to="/dashboard/admin/master-plan?tab=intelligence"
                   className="text-[11px] text-content-secondary hover:text-content-primary inline-flex items-center gap-1"
                 >
                   +{rows.length - 6} more in full lookup
