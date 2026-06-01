@@ -291,18 +291,22 @@ const defaultsForAssetClass = (assetClass) =>
 //   - For UP-IS-GOOD KPIs (yield, margin, DSCR): low < mid < high
 //   - For DOWN-IS-GOOD KPIs (cap rate, cost): low > mid > high (the rule
 //     reverses inside applyKpiHealthIndicators below)
-//   - `citation` field grounds the band in a verifiable source per
-//     CLAUDE.md "never fabricate market facts" hard rule
+//   - `citation` is an INTERNAL maintainer note ONLY. It is NOT rendered to
+//     customers as an authoritative source: the export cell comment presents
+//     these bands as illustrative orientation defaults (see buildWorkbook.js),
+//     because they are hardcoded constants, not a verified market feed. Per the
+//     CLAUDE.md rule against presenting fabricated market facts as
+//     authoritative, do NOT surface the firm names below to customers without
+//     first wiring to the verified *_market_benchmarks tables (real source +
+//     as_of_date + confidence).
 //
-// Sources (verified 2026-05-15):
-//   - Cushman & Wakefield India MarketBeat Q1 2026
-//   - JLL India Capital Markets Outlook Q1 2026
-//   - Knight Frank India Real Estate Outlook 2026
-//   - RBI Master Direction on Real Estate (Sep 2023)
-//   - Hospitality Valuation Services India (HVS) Bengaluru benchmark
+// Internal reference points used to set these illustrative bands (NOT a live
+// feed; NOT presented as a source in the export):
+//   - Cushman & Wakefield / JLL / Knight Frank / CBRE India market outlooks
+//   - RBI Master Direction on Real Estate (Sep 2023) — DSCR floor
+//   - HVS India — hospitality benchmark
 //
-// Operators can override any threshold by editing the cell directly in
-// Excel — the cell comment surfaces the citation alongside the band.
+// Operators can override any threshold by editing the cell directly in Excel.
 
 const KPI_BENCHMARKS = Object.freeze({
   // Family-level defaults — applied to KPIs that don't have an asset-class
