@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
@@ -6,6 +6,7 @@ import {
   Archive, UserPlus, ArrowRight, GitCompare,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ErrorState } from '../design-system';
 import {
   useDeals,
   useCreateDeal,
@@ -165,7 +166,7 @@ export default function DealsPage() {
   const canSaveCurrentView =
     !!(search || stageFilter || typeFilter || priorityFilter || assignedToMe);
 
-  const { data, isLoading, isError } = useDeals(params);
+  const { data, isLoading, isError, refetch } = useDeals(params);
   const { data: propertiesData } = useProperties({ limit: 200 });
   const createDeal = useCreateDeal();
 
@@ -242,14 +243,18 @@ export default function DealsPage() {
   });
 
   const someSelected = selectedIds.size > 0;
-  const toggleSelect = (id) => {
+  // useCallback with empty deps keeps this referentially stable for the
+  // component's lifetime (it only touches the stable functional setSelectedIds
+  // updater), so the memoized DealCard can skip re-rendering when nothing but a
+  // sibling card's selection changed.
+  const toggleSelect = useCallback((id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
   const clearSelection = () => setSelectedIds(new Set());
   const bulkBusy =
     bulkArchive.isPending
@@ -434,8 +439,12 @@ export default function DealsPage() {
 
   if (isError) {
     return (
-      <div className="text-center py-24 text-red-600">
-        Failed to load deals. Please try again.
+      <div className="py-12">
+        <ErrorState
+          title="Couldn't load your deals"
+          description="This is usually a transient network hiccup. Retry — your filters are preserved."
+          onRetry={refetch}
+        />
       </div>
     );
   }
