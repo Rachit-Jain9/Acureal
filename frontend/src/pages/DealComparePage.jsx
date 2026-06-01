@@ -74,7 +74,9 @@ export default function DealComparePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const { data: dealsData, isLoading } = useDeals({ limit: 200, includeArchived: false });
+  // fields:'summary' → lightweight projection; the picker reads only
+  // name/city/property_name (the full workspace loads on selection separately).
+  const { data: dealsData, isLoading } = useDeals({ limit: 200, includeArchived: false, fields: 'summary' });
   const deals = dealsData?.data || [];
 
   const detailQuery1 = useDeal(selectedIds[0]);

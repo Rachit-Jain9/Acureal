@@ -59,7 +59,9 @@ export default function ReportsPage() {
   // row's button shows the spinner.
   const [exportingDocx, setExportingDocx] = useState(null);
 
-  const { data: dealsData, isLoading } = useDeals({ limit: 500 });
+  // fields:'summary' → lightweight projection; the report charts read only
+  // stage/city/irr/revenue/name, never the per-row rollup columns.
+  const { data: dealsData, isLoading } = useDeals({ limit: 500, fields: 'summary' });
   const { data: dailyBrief } = useDailyBrief();
   const deals = dealsData?.data || [];
 

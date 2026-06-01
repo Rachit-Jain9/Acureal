@@ -62,13 +62,19 @@ router.get(
         assignedTo,
         city: req.query.city,
         propertyType: req.query.propertyType,
+        propertyId: req.query.propertyId,
         search: req.query.search,
         priority: req.query.priority,
         includeArchived: req.query.includeArchived,
         onlyArchived: req.query.onlyArchived,
         liveOnly: req.query.liveOnly,
       };
-      const pagination = { page: req.query.page, limit: req.query.limit };
+      const pagination = {
+        page: req.query.page,
+        limit: req.query.limit,
+        // Whitelist the projection mode so callers can't request arbitrary shapes.
+        fields: req.query.fields === 'summary' ? 'summary' : undefined,
+      };
       const result = await dealService.getDeals(filters, pagination);
       res.json({ success: true, ...result });
     } catch (error) {
