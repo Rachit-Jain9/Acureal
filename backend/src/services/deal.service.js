@@ -1312,17 +1312,12 @@ const deleteDeal = async (id, userId = null) => {
       'SELECT id, file_url FROM documents WHERE deal_id = $1',
       [id]
     );
-
-    for (const document of documentsResult.rows) {
-      if (!document.file_url) {
-        continue;
-      }
-      try {
-        await deleteStorageFile(document.file_url);
-      } catch (error) {
-        throw createError(`Could not permanently delete an associated document: ${error.message}`, 500);
-      }
-    }
+    // Collect the storage keys but DON'T delete inside the transaction. Storage
+    // deletes are not transactional, so deleting here and then hitting a later
+    // in-txn failure would roll back the DB while the objects are already gone
+    // — irreversible loss with the DB still referencing them. Purge AFTER the
+    // commit, best-effort (below).
+    const fileUrls = documentsResult.rows.map((d) => d.file_url).filter(Boolean);
 
     // Audit BEFORE the DELETE so the deal_id FK still resolves at insert. The
     // FK is ON DELETE SET NULL (migration 20260624), so this 'deleted' row
@@ -1365,9 +1360,23 @@ const deleteDeal = async (id, userId = null) => {
       deleted: true,
       id: result.rows[0].id,
       property_deleted: propertyDeleted,
+      fileUrls,
     };
   });
 
+  // DB delete has COMMITTED. Purge the document objects from storage now as a
+  // best-effort cleanup: a failure here only orphans a storage object (GC-able)
+  // and must never reverse or block a committed deletion.
+  for (const fileUrl of dealSnapshot.fileUrls) {
+    try {
+      await deleteStorageFile(fileUrl);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn(`[deleteDeal] post-commit storage purge failed for ${fileUrl}: ${error.message}`);
+    }
+  }
+
+  delete dealSnapshot.fileUrls;
   return dealSnapshot;
 };
 

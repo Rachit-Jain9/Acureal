@@ -1,6 +1,6 @@
 'use strict';
 
-const { query } = require('../config/database');
+const { query, transaction } = require('../config/database');
 const { mergeStructuredFields } = require('../utils/extractionFields');
 const igrPdfAdapter = require('./adapters/igrPdf.adapter');
 
@@ -294,45 +294,51 @@ const buildEvidenceFacts = ({ docType, fields, scores }) => {
 };
 
 const replacePendingFacts = async ({ sourceId, orgId, userId, facts }) => {
-  await query(
-    `DELETE FROM regulatory_data.evidence_facts
-     WHERE source_id = $1
-       AND review_status = 'pending'`,
-    [sourceId]
-  );
-
-  let created = 0;
-  for (const fact of facts) {
-    await query(
-      `INSERT INTO regulatory_data.evidence_facts (
-         source_id,
-         org_id,
-         fact_type,
-         fact_key,
-         fact_value,
-         page_number,
-         source_section,
-         confidence_score,
-         review_status,
-         created_by
-       )
-       VALUES ($1, COALESCE($2::uuid, current_organization_id()), $3, $4, $5::jsonb, $6, $7, $8, 'pending', $9)`,
-      [
-        sourceId,
-        orgId,
-        fact.fact_type,
-        fact.fact_key,
-        JSON.stringify(fact.fact_value),
-        fact.page_number,
-        fact.source_section,
-        fact.confidence_score,
-        userId || null,
-      ]
+  // Atomic swap: DELETE the prior pending facts + re-insert in ONE transaction
+  // so a mid-loop INSERT failure can't leave the source with its pending facts
+  // deleted but never replaced. Only re-pending facts are at risk, but the
+  // replace must still be all-or-nothing.
+  return transaction(async (client) => {
+    await client.query(
+      `DELETE FROM regulatory_data.evidence_facts
+       WHERE source_id = $1
+         AND review_status = 'pending'`,
+      [sourceId]
     );
-    created += 1;
-  }
 
-  return created;
+    let created = 0;
+    for (const fact of facts) {
+      await client.query(
+        `INSERT INTO regulatory_data.evidence_facts (
+           source_id,
+           org_id,
+           fact_type,
+           fact_key,
+           fact_value,
+           page_number,
+           source_section,
+           confidence_score,
+           review_status,
+           created_by
+         )
+         VALUES ($1, COALESCE($2::uuid, current_organization_id()), $3, $4, $5::jsonb, $6, $7, $8, 'pending', $9)`,
+        [
+          sourceId,
+          orgId,
+          fact.fact_type,
+          fact.fact_key,
+          JSON.stringify(fact.fact_value),
+          fact.page_number,
+          fact.source_section,
+          fact.confidence_score,
+          userId || null,
+        ]
+      );
+      created += 1;
+    }
+
+    return created;
+  });
 };
 
 const insertGuidanceValueCandidate = async ({ sourceId, orgId, fields, scores }) => {

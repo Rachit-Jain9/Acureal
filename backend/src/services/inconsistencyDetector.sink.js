@@ -90,18 +90,24 @@ const scheduleRun = ({ dealId, userId }) => {
     timer: null,
   };
   slot.timer = setTimeout(async () => {
-    pending.delete(dealId);
-    const dealRow = await resolveOrg(dealId);
-    if (!dealRow || !dealRow.organization_id) {
-      log.info('inconsistency_sink_skipped_no_org', { deal_id: dealId });
-      return;
+    try {
+      pending.delete(dealId);
+      const dealRow = await resolveOrg(dealId);
+      if (!dealRow || !dealRow.organization_id) {
+        log.info('inconsistency_sink_skipped_no_org', { deal_id: dealId });
+        return;
+      }
+      await runDetectorScoped({
+        dealId,
+        userId: slot.latestUserId,
+        organizationId: dealRow.organization_id,
+        dealName: dealRow.name || null,
+      });
+    } catch (err) {
+      // Detached debounce callback: an unhandled rejection here would be an
+      // uncaught background error. Keep the "never throws" contract explicit.
+      log.warn('inconsistency_sink_debounce_error', { deal_id: dealId, error: err.message });
     }
-    await runDetectorScoped({
-      dealId,
-      userId: slot.latestUserId,
-      organizationId: dealRow.organization_id,
-      dealName: dealRow.name || null,
-    });
   }, DEBOUNCE_MS);
   pending.set(dealId, slot);
 };
