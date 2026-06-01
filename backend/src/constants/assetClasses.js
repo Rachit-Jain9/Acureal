@@ -67,7 +67,6 @@ const ASSET_CLASSES = ASSET_CLASS_CONFIG.map((entry) => entry.value);
 const ASSET_CLASS_LABELS = Object.fromEntries(
   ASSET_CLASS_CONFIG.map((entry) => [entry.value, entry.label])
 );
-const FINANCIAL_ASSET_CLASSES = ASSET_CLASS_CONFIG.map((entry) => entry.value);
 const FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS = Object.fromEntries(
   ASSET_CLASS_CONFIG.map((entry) => [entry.value, entry.financialModelClass])
 );
@@ -82,7 +81,6 @@ module.exports = {
   ASSET_CLASS_CONFIG,
   ASSET_CLASSES,
   ASSET_CLASS_LABELS,
-  FINANCIAL_ASSET_CLASSES,
   FINANCIAL_MODEL_CLASS_BY_ASSET_CLASS,
   FINANCIAL_MODEL_LABEL_BY_ASSET_CLASS,
   resolveFinancialModelClass,

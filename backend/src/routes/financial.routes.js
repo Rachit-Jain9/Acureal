@@ -8,7 +8,7 @@ const { generateSensitivityNarrative } = require('../services/export.insights.se
 const { authenticate, requireRole } = require('../middleware/auth');
 const { aiLimiter } = require('../middleware/aiLimiter');
 const { handleValidation } = require('../middleware/validate');
-const { FINANCIAL_ASSET_CLASSES } = require('../constants/assetClasses');
+const { ASSET_CLASSES } = require('../constants/assetClasses');
 
 // PR-NX48 (2026-05-19) — parse sensitivity_matrix JSONB into the shape
 // generateSensitivityNarrative expects. Mirrors normalizeSensitivityMatrix
@@ -35,7 +35,7 @@ const parseSensitivityMatrix = (raw) => {
 const router = express.Router();
 
 const baseValidation = [
-  body('assetClass').optional().isIn(FINANCIAL_ASSET_CLASSES).withMessage('Invalid asset class'),
+  body('assetClass').optional().isIn(ASSET_CLASSES).withMessage('Invalid asset class'),
 ];
 
 const modelValidation = [

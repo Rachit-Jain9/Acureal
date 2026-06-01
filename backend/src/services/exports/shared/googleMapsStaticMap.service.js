@@ -177,8 +177,7 @@ const fetchMapPng = async (url, key) => {
 
 /**
  * Render a single-marker site map. Returns a structured result so
- * callers can distinguish failure modes — see staticMap.service.js for
- * the same pattern (this is the Google equivalent).
+ * callers can distinguish failure modes (no token / no coords / fetch failed).
  *
  * @returns {Promise<{buffer: Buffer|null, status: 'ok'|'no_token'|'no_coords'|'fetch_failed', error: string|null, httpStatus: number|null}>}
  */

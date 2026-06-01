@@ -62,19 +62,6 @@ export function useUpdateProperty() {
   });
 }
 
-export function useDeleteProperty() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => propertiesAPI.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['properties'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
-      toast.success('Property deleted');
-    },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete property'),
-  });
-}
-
 export function useGeocodeProperty() {
   const qc = useQueryClient();
   return useMutation({
