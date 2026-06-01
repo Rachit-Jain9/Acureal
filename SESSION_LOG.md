@@ -4,6 +4,25 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-01 (First-principles deep audit → remediation: a CRITICAL cross-tenant data breach + data-loss + credibility + KPI + UX + perf) (PRs #690–#693)
+
+Operator asked for a from-first-principles deep technical review and to fix the highest-impact issues. Ran a 6-dimension multi-agent audit workflow (correctness / UX / performance / security / architecture / data) with adversarial verification of every high/critical finding — 36 raised, 33 actionable. Every finding acted on was re-verified directly against the live code/DB first (one early read was misled by stale pg_stat counts; the headline security finding was reproduced against `pg_policies`).
+
+### Shipped (PRs await operator merge; 2 migrations operator-applied)
+- **#690 — 🔴 CRITICAL multi-tenant data breach.** Every private tenant table (deals, properties [landowner PII], documents, financials, comps, risks, DD, approvals, activities, stage history, document extractions, AI briefs, market notes) had a `*_select_all FOR SELECT TO public USING(true)` policy that OR-overrode the org-scoped one — the anon/authenticated Supabase **Data API could read every org's rows**. The Node app uses a BYPASSRLS role + explicit `WHERE org` filters, so it was never the leak path → **zero app impact**. Supabase's RLS linter doesn't flag `USING(true)`, so CI was green over the hole. Migration `20260623` drops the 13 permissive policies; `scripts/audit_rls.py` now replays CREATE/DROP POLICY in textual order and **build-fails** on any private-table permissive read (proven: flags all 13 without the fix).
+- **#691 — audit-trail + data-loss.** `deal_audit_log.deal_id` was `ON DELETE CASCADE` → the 'deleted' audit row self-destructed at commit (no record of the most destructive action). Migration `20260624` → `ON DELETE SET NULL` (row survives with the deal's identity). `transitionStage→dead` hard-deleted the linked parcel even though 'dead' is reversible → removed (parcel preserved on revival). Financials calculate leaked raw internal errors as 422 → now redacted 500 except genuine kernel-input errors.
+- **#692 — credibility + dashboard KPIs + dashboard perf.** AssetClassInsightBanner stated unsourced market stats as fact (one contradicting the verified JLL feed) + used banned gradients/glow/chip-soup → rewritten to qualitative strategy + flat chrome + a verify caveat. Dashboard 'closed this month' (keyed off `updated_at` → drift) → keyed off the real close transition (corr-4); 'avg IRR' (blended realized closed deals) → live-pipeline only (corr-6; verified live: −2.37% vs old 0.54%). **perf-2:** `getDashboardStats` ran its 8 independent read queries in series → now `Promise.all` (each query() re-applies org context on its own pooled connection, so tenant scoping is preserved exactly; SQL byte-identical, verified via whitespace-insensitive diff). Full backend suite green: 174 suites / 3003 tests.
+- **#693 — UX + deals-list perf.** Deals list dead-ended on transient errors → `ErrorState` + retry (fe-3). **perf-3:** DealCard wrapped in `React.memo` + parent's `toggleSelect` `useCallback`-stabilized → toggling one selection re-renders ~1 card instead of the whole list (the other three props were already referentially stable). Frontend build green.
+
+### Verification
+- Backend: full suite green — **174 suites, 3003 tests**; `lint-migrations` + `audit_rls.py` both green. Frontend builds green. All DB facts verified against production.
+
+### What's left (lower-severity; deferred deliberately, see hand-off)
+- **visual (need rendered feel-check before merge):** themed `Badge` pills replacing remaining hardcoded `-50/-700` chip tints on DealCard + Market Intelligence (fe-2); skeletons-not-spinners + `tabular-nums` on deal-card KPIs (fe-5/6).
+- **cleanup (needs careful dead-code proof):** delete ~1,150 lines of dead PPTX in `export.routes.js` + extract the inline ic-report PDF builder (arch-1); dedupe `fmtPct`/`fmtCr`/`humanize` + the extension→MIME map (arch-3/4/5).
+- **data (needs fresh discovery — summary string didn't match source):** hospitality EBITDA-vs-NOI tile label in the export builders (corr-5); `/reports` briefing honesty parity (cred-2).
+- **perf:** trim 500-deal bulk fetches on Property/Map/Reports (perf-1/5).
+
 ## 2026-06-01 (Master-plan corpus audit → per-district land use extracted + RMP reference made global for all users) (PRs #687, #688)
 
 Operator re-asked whether the full 18-document RMP set was extracted, then "make it applicable for all users." Verified against the live DB rather than memory (an early read was misled by stale pg_stat counts).
