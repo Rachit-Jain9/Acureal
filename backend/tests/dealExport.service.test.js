@@ -8,10 +8,17 @@ describe('dealExport.service helpers', () => {
     mapAssetClassToCompType,
   } = __testables;
 
-  test('maps asset classes to export comp types', () => {
-    expect(mapAssetClassToCompType('commercial_office')).toBe('office');
-    expect(mapAssetClassToCompType('industrial_warehousing')).toBe('industrial');
+  test('maps asset classes to VALID comps.project_type enum values', () => {
+    // comps.project_type only accepts residential | commercial | mixed_use.
+    // The old map returned 'office'/'industrial' (not enum members), so the
+    // comp queries threw and were swallowed as "0 comps".
+    expect(mapAssetClassToCompType('commercial_office')).toBe('commercial');
+    expect(mapAssetClassToCompType('industrial_warehousing')).toBe('commercial');
+    expect(mapAssetClassToCompType('retail')).toBe('commercial');
+    expect(mapAssetClassToCompType('hospitality')).toBe('commercial');
     expect(mapAssetClassToCompType('residential_apartments')).toBe('residential');
+    expect(mapAssetClassToCompType('mixed_use')).toBe('mixed_use');
+    expect(mapAssetClassToCompType('raw_land')).toBeNull();
   });
 
   test('derives benchmark statistics from comp rates', () => {

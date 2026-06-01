@@ -142,6 +142,27 @@ const getComps = async (filters = {}, pagination = {}) => {
   };
 };
 
+// comps.project_type is a Postgres enum: residential | commercial | mixed_use.
+// Map a deal's asset_class (and optional property_type) onto a VALID enum
+// label, or null to skip the filter. Returning an out-of-enum string such as
+// 'office' makes Postgres throw `invalid input value for enum project_type`,
+// which the read paths were silently swallowing as "0 comps". Mirrors the
+// ingestion-side normalizeProjectType so stored + queried types line up.
+const COMMERCIAL_COMP_ASSET_CLASSES = new Set([
+  'commercial_office', 'retail', 'industrial_warehousing', 'hospitality',
+]);
+const COMMERCIAL_COMP_PROPERTY_TYPES = new Set([
+  'office', 'retail', 'industrial', 'hospitality', 'commercial',
+]);
+const assetClassToProjectType = (assetClass, propertyType) => {
+  const ac = String(assetClass || '').trim().toLowerCase();
+  const pt = String(propertyType || '').trim().toLowerCase();
+  if (ac === 'mixed_use' || pt === 'mixed_use' || pt === 'mixed-use') return 'mixed_use';
+  if (ac === 'raw_land' || ac === 'land') return null;
+  if (COMMERCIAL_COMP_ASSET_CLASSES.has(ac) || COMMERCIAL_COMP_PROPERTY_TYPES.has(pt)) return 'commercial';
+  return 'residential';
+};
+
 const getCompsNearLocation = async (lat, lng, radiusKm = 5, projectType = null) => {
   if (!lat || !lng) {
     throw createError('Latitude and longitude are required.', 400);
@@ -414,6 +435,7 @@ module.exports = {
   getComps,
   getCompsForExport,
   getCompsNearLocation,
+  assetClassToProjectType,
   getPricingBenchmarks,
   deleteComp,
   getRankedCompsForDeal,
