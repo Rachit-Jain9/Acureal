@@ -9,7 +9,7 @@ Manual actions that still require credentials, authority, or infrastructure outs
 
 ## Pending now (most recent first)
 
-### Apply migration: `20260620_deals_list_perf_indexes.sql` — PENDING (2026-06-01)
+### ~~Apply migration: `20260620_deals_list_perf_indexes.sql`~~ — DONE 2026-06-01 (applied + verified, 3 indexes). Also applied + verified this session: `20260621_pd_existing_land_use.sql` (7 per-district land-use facts) and `20260622_globalize_masterplan_reference.sql` (curated RMP reference globalised → visible to all users; deal docs kept private — verified 0 org-scoped reference rows, 7 `user_upload` sources still private, 7 PDs tagged PD-01..07).
 Path: `database/migrations/20260620_deals_list_perf_indexes.sql`. Three composite indexes for the deals-list per-deal rollups: `dd_items (deal_id, is_required, status)`, `risk_flags (deal_id, status, severity)`, `activities (deal_id, activity_date DESC)`. Speeds up the correlated-subquery rollups `getDeals` runs per row (currently each can only use a single-column `deal_id` index, then filters in memory). **The PR #685 code ships safely without it** — the indexes are a speed boost, not a dependency, so nothing breaks if applied later. Plain `CREATE INDEX IF NOT EXISTS` in `BEGIN/COMMIT` (Supabase-paste-safe, idempotent, no `CONCURRENTLY`). To apply: open https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new, paste the entire file, click the green Run button, expect "Success. No rows returned." Verify with the `SELECT indexname FROM pg_indexes …` probe in the file footer (expect 3 rows).
 
 ### Apply migration: `20260530_document_access_log.sql` — PENDING (2026-05-30)

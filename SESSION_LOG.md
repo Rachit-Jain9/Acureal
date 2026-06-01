@@ -4,6 +4,23 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-01 (Master-plan corpus audit → per-district land use extracted + RMP reference made global for all users) (PRs #687, #688)
+
+Operator re-asked whether the full 18-document RMP set was extracted, then "make it applicable for all users." Verified against the live DB rather than memory (an early read was misled by stale pg_stat counts).
+
+### Findings
+- 11 of 18 docs already extracted (Volumes 1/3/4/6, Master Plan, Provisional, Database, Index Map, Proposed/Existing Land Use, Guidance Value UAV). Volume-6 zoning is rich (51 FAR rules + 43 zones) — the old "deferred" note was stale.
+- Gap: the 7 per-district ELU reports (CBD, Jayanagar, Malleswaram, Rajajinagar, RT Nagar, Indiranagar, Austin Town) were never extracted.
+- The curated RMP reference was org-scoped, so only one org's users saw the planning intelligence.
+
+### Shipped (both merged + deployed; migrations applied + verified)
+- **#687** — per-district existing land use. Deterministic, self-validating extraction (% anchor; hectares = % × district total; all 7 sum to ~100%). 7 sources + 7 `pd_existing_land_use` facts, `review_status=pending`, 2015 baseline, reference-only. CBD total matched Volume-4 PD-01.
+- **#688** — globalisation + surfacing. `org_id=NULL` on official_pdf sources + their facts + far_rules + bbmp_uav_entries (RLS → every org); `user_upload` deal docs stay private. `parcelContext` joins `pd_existing_land_use` by PD code (integer-normalised); `DealPlanningSnapshot` renders a land-use mix bar + legend. Districts tagged PD-01..07 (area-match 6/7; Malleswaram → PD-06 by name). +2 frontend tests (10 green); backend 59 green; build green.
+- Verified post-apply: 0 org-scoped reference rows (sources/facts/far_rules/uav); 7 `user_upload` sources + 54 facts still private; 7 PDs tagged PD-01..07.
+
+### What's left (optional)
+- Re-extract the 2 low-confidence docs (Volume-1 Vision 0.44, RMP Database Used 0.56) via Gemini for a cleaner pass.
+
 ## 2026-06-01 (10-hour quality block — route hardening · honest market display · planning snapshot on every deal · deals-list + financials perf) (PRs #681–#685)
 
 First-principles pass over the open session backlog, grouped into five focused, non-overlapping PRs. Each branched off master, tested/built, pushed, CI-green. #681 merged; #682–#685 await operator merge (production deploy needs operator authorization per the merge-boundary rule).
