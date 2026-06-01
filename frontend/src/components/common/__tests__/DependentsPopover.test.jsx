@@ -97,7 +97,7 @@ describe('DependentsPopover', () => {
     });
     const dealLinks = screen.getAllByRole('link', { name: /Whitefield Heights/i });
     expect(dealLinks.length).toBe(2);
-    expect(dealLinks[0].getAttribute('href')).toBe('/deals/deal-a');
+    expect(dealLinks[0].getAttribute('href')).toBe('/dashboard/deals/deal-a');
     expect(dealLinks[0].getAttribute('target')).toBe('_blank');
   });
 

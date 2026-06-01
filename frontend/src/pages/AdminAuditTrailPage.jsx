@@ -130,7 +130,7 @@ function EventRow({ event }) {
       <td className="py-2 pr-3 align-top min-w-0">
         {event.deal_id && event.deal_name ? (
           <Link
-            to={`/deals/${event.deal_id}`}
+            to={`/dashboard/deals/${event.deal_id}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-content-primary hover:text-accent inline-flex items-center gap-1 group"
