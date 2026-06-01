@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-02 (Master-plan ingestion Q → full deep-audit remediation: money-units, cross-tenant IDOR, comps, AI legal policy, reliability, UI, cleanup) (PRs #708–#716)
+
+Session opened with the operator asking whether the uploaded Bengaluru RMP master-plan PDFs were ingested / extracted / used for all users. Investigation confirmed the RMP corpus IS live and real (not stubbed): 12 source docs in `regulatory_data.master_plan_documents`, seeded zones / FAR rules / 130 planning-district rows / 108 BBMP-UAV rows / 9,555-street index, and ~10 intelligence endpoints. Gaps: 2 of 18 source docs sit `extraction_status='failed'` (scanned narratives — substance already seeded via callout migrations) and 7 locality PDFs are summarised-but-not-uploaded. Operator then re-issued the full deep-quality mandate (with the "workflow" opt-in).
+
+Ran an **8-dimension multi-agent audit** (correctness / data-credibility / performance / frontend-UX / reliability / security / maintainability / master-plan), adversarially verifying every finding against current code — **51 confirmed (2 P0, 4 P1, 19 P2, 26 P3)**. Shipped **9 themed, CI-green PRs** (disjoint files → mergeable in any order; operator merges).
+
+### Shipped (all CI-green, awaiting operator merge)
+- **#708 — 🔴 P0 money units.** `market_transactions.quantum_inr_mn` is INR millions (1 Cr = 10 mn) but 5 sites divided by 100 → every quantum **10× understated** on the Intelligence page, PDF tear-sheet, daily brief, IC memo. Centralised in tested `utils/marketUnits.js`.
+- **#709 — 🔴 P0 cross-tenant IDOR.** App connects BYPASSRLS, so RLS is not a backstop; `getExtractionByDocument` + `applyCorrections` queried `document_extractions` by id with no org filter (cross-org read AND write of extracted PII); `dd.seedForDeal` read another org's deal. Added `organization_id = current_organization_id()` guards + regression test.
+- **#710 — P1 comps.** `comps.project_type` enum is residential|commercial|mixed_use, but 3 read paths mapped `asset_class` to invalid `office`/`retail`/… → **0 nearby comps on every deal** (swallowed enum error) + export silent-0 + a benchmark-bands 500. One canonical `assetClassToProjectType`; `signalExtractors` now filters verified before the "Verified-comp median".
+- **#711 — P1 PATCH integrity.** approvals/risk normalizers materialised every key → any partial PATCH reset status + nulled dates. Emit only the keys actually sent.
+- **#712 — P2 AI legal policy.** deal-analysis fed raw `zoning`, IC-opinion fed `rera_registered`, neither with a legal carve-out → AI could narrate the four legal lanes. Added carve-out; dropped `rera_registered`.
+- **#713 — P2 master-plan.** Gated pending per-district land-use to `review_status='approved'` (unreviewed facts no longer reach deals/DOCX); `RmpStatusBanner` on the deal Zoning tab; unified "RMP 2031 Provisional" + unnotified-draft caveats.
+- **#714 — P2/P3 reliability.** Atomic `replacePendingFacts`; reindex now index-first→verify→delete-old (was DELETE-then-index, returned 200 on failure → silently dark docs); `deleteDeal` purges storage **post-commit** (was inside the txn → irreversible file loss on rollback); sink `try/catch`; structured logging.
+- **#715 — P1/P2/P3 UI.** Restored the Portfolio-Readiness icon + caption (wrong SectionHeader props); slate → semantic tokens (were light boxes on the dark theme); focus-visible rings on DealCard/Methodology/DealDetail; flattened the banned Methodology gradient chip; route loader spinner → reduced-motion-safe skeleton.
+- **#716 — P3 cleanup.** Deleted dead `staticMap.service`+test + `parcelMessages` (−552 lines); deduped `FINANCIAL_ASSET_CLASSES`; removed dead `useDeleteProperty`; IPv6-safe `aiLimiter` key (`ERR_ERL_KEY_GEN_IPV6`).
+
+### Verification
+Backend full suite green at baseline (**174 suites / 3022 tests**) and per-PR via targeted runs + new suites (`marketUnits`, `extraction.security`, `comps.projectType`, `patchIntegrity`, `aiLegalCarveout`). Frontend builds green. Live-DB checks: the cross-tenant RLS hole was already closed (#690 applied); `idx_comps_location` + `idx_documents_deal_id` already exist in prod (so the planned index PR was a no-op); `comps.project_type` enum confirmed = {residential,commercial,mixed_use}.
+
+### Operator actions / deferred
+- **Merge #708–#716** (production deploys — operator-authorized only; auto-merge correctly blocked). Any order; **#708 + #709 first** (10× money bug + cross-tenant fix).
+- **Approve the 7 pending per-district land-use facts** in the Master Plan review queue to re-enable that surface on deals (gated by #713; auto-approving shared reference data was correctly blocked as a content-integrity action).
+- The 2 `failed` RMP docs + 7 locality PDFs are **data, not code** — re-extract / upload when ready (needs working AI keys).
+- **Deferred (tracked, not shipped):** bulk-deal-ops batching + `portfolioRiskRadar` SQL aggregation (scale-readiness — no impact at 1-deal scale, rewrite risk); broad `animate-pulse` `motion-reduce` sweep (~8 modal/panel skeletons); `deal_shares`-aware document access (access-broadening, needs care); `exports/shared/format.js` dedupe.
+
 ## 2026-06-01 (Deep audit v2 → remediation: export integrity, credibility, UX-flatten, reliability, dead-code) (PRs #695–#703)
 
 Operator re-issued the deep-quality mandate. Ran a second 6→7-dimension multi-agent audit workflow (integrations / correctness / credibility / performance / UX / architecture / reliability), adversarially verifying every high/critical finding against the real code — 17 findings, 7 confirmed high/critical. Then a deterministic route-table sweep for broken links. Shipped 9 PRs (operator merges; all CI-green, all touch disjoint files so they merge in any order):
