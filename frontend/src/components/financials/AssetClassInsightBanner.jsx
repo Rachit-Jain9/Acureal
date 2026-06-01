@@ -1,104 +1,95 @@
 import {
-  Home, Landmark, Building2, Store, Warehouse, Hotel,
-  TrendingUp, ArrowUpRight, Sparkles, Target,
+  Home, Landmark, Building2, Store, Warehouse, Hotel, ArrowUpRight,
 } from 'lucide-react';
 
+// Asset-class underwriting framing for the Financial Engine header.
+//
+// Credibility rule (CLAUDE.md): never present unverified market intel as
+// authoritative. So the `thesis` copy here is STRATEGY framing — how to
+// underwrite each asset class — NOT market statistics. Specific market facts
+// (absorption volumes, stock, occupancy, cap-rate moves) were removed: they
+// were unsourced, undated, and some contradicted the verified market_macro_kpis
+// feed. The `bands` are typical underwriting ranges shown as general guidance,
+// explicitly captioned as not deal-specific. Live, sourced numbers belong on
+// the Market Intelligence / Comps surfaces, not in static per-class copy.
 const CLASS_INSIGHTS = {
   residential_apartments: {
     icon: Home,
-    gradient: 'from-indigo-600 via-violet-600 to-fuchsia-600',
-    soft: 'from-indigo-50 via-violet-50 to-fuchsia-50',
-    ring: 'ring-indigo-200',
-    text: 'text-indigo-900',
+    accent: 'text-indigo-500',
     tagline: 'For-sale residential — cash-velocity play',
-    thesis: 'Bengaluru absorbs ~65,000 units/year with end-user dominance (~75% non-investor). The model monetizes loading-factor uplift and recognizes revenue on sellout milestones.',
-    kpis: [
-      { label: 'Target Margin', value: '18–25%',   color: 'text-emerald-600' },
-      { label: 'IRR Band',      value: '20–28%',   color: 'text-indigo-600' },
-      { label: 'Turn Time',     value: '30–42 mo', color: 'text-amber-600' },
-      { label: 'Exit',          value: 'Sellout',  color: 'text-rose-600' },
+    thesis: 'End-user-led for-sale market. Underwrite for velocity over headline margin — the model monetises loading-factor uplift and books revenue on sellout milestones.',
+    bands: [
+      { label: 'Target margin', value: '18–25%' },
+      { label: 'IRR band',      value: '20–28%' },
+      { label: 'Turn time',     value: '30–42 mo' },
+      { label: 'Exit',          value: 'Sellout' },
     ],
-    persuasion: 'Velocity > margin. A 22% margin over 3 years beats 28% over 5 years on IRR.',
+    insight: 'Velocity > margin. A 22% margin over 3 years beats 28% over 5 years on IRR.',
   },
   plotted_development: {
     icon: Landmark,
-    gradient: 'from-amber-600 via-orange-600 to-rose-600',
-    soft: 'from-amber-50 via-orange-50 to-rose-50',
-    ring: 'ring-amber-200',
-    text: 'text-amber-900',
+    accent: 'text-amber-500',
     tagline: 'Plotted layouts — infrastructure alpha',
-    thesis: 'Land-heavy, low-construction model. 15–25% of land value invested in roads & utilities unlocks 1.5–2.5× uplift on saleable plots. Fast turn, sharp IRR.',
-    kpis: [
-      { label: 'Saleable %',  value: '50–60%',    color: 'text-amber-600' },
-      { label: 'IRR Band',    value: '22–30%',    color: 'text-emerald-600' },
-      { label: 'Turn Time',   value: '18–30 mo',  color: 'text-indigo-600' },
-      { label: 'Capex/Land',  value: '₹200–400', color: 'text-rose-600' },
+    thesis: 'Land-heavy, low-construction. A slice of land value spent on roads & utilities unlocks an uplift on saleable plots — fast turn, sharp IRR. Approvals and infrastructure are the moat.',
+    bands: [
+      { label: 'Saleable %',  value: '50–60%' },
+      { label: 'IRR band',    value: '22–30%' },
+      { label: 'Turn time',   value: '18–30 mo' },
+      { label: 'Capex/land',  value: '₹200–400/sf' },
     ],
-    persuasion: 'Infrastructure is the moat — approvals + roads compress cap rates on raw land 40–70%.',
+    insight: 'Infrastructure is the moat — approvals + roads are what compress pricing on raw land.',
   },
   commercial_office: {
     icon: Building2,
-    gradient: 'from-sky-600 via-blue-600 to-indigo-600',
-    soft: 'from-sky-50 via-blue-50 to-indigo-50',
-    ring: 'ring-sky-200',
-    text: 'text-sky-900',
-    tagline: 'Grade A office — GCC-fueled core asset',
-    thesis: 'Bengaluru is India\'s #1 office market (~220M sqft stock, 85%+ occupancy). GCCs and SaaS drive 12M+ sqft annual absorption. REIT-ready, LRD-ready, forward-sale-ready.',
-    kpis: [
-      { label: 'Entry Cap',    value: '6.5–8.0%', color: 'text-sky-600' },
-      { label: 'Rent',         value: '₹70–120', color: 'text-emerald-600' },
-      { label: 'IRR Band',     value: '14–18%',   color: 'text-indigo-600' },
-      { label: 'Yield on Cost',value: '9–11%',    color: 'text-amber-600' },
+    accent: 'text-sky-500',
+    tagline: 'Grade A office — GCC-anchored core asset',
+    thesis: 'GCC- and SaaS-anchored Grade-A core. Underwrite to a stabilised yield-on-cost, then a cap-rate exit (REIT / LRD / forward sale). Cap-rate movement, not rent, drives the value swing.',
+    bands: [
+      { label: 'Entry cap',     value: '6.5–8.0%' },
+      { label: 'Rent',          value: '₹70–120/sf' },
+      { label: 'IRR band',      value: '14–18%' },
+      { label: 'Yield on cost', value: '9–11%' },
     ],
-    persuasion: '100 bps of cap compression on ₹800 Cr asset = ₹85 Cr of value creation. Exit timing matters.',
+    insight: '100 bps of cap compression on a ₹800 Cr asset is ~₹85 Cr of value. Exit timing matters.',
   },
   retail: {
     icon: Store,
-    gradient: 'from-rose-600 via-pink-600 to-fuchsia-600',
-    soft: 'from-rose-50 via-pink-50 to-fuchsia-50',
-    ring: 'ring-rose-200',
-    text: 'text-rose-900',
+    accent: 'text-rose-500',
     tagline: 'Retail — footfall × conversion × basket',
-    thesis: 'Anchor-inline blend underwriting. Long lease cycles (7–10 yrs), higher opex (~22%), wider exit caps. Post-COVID, experiential and F&B-heavy malls outperform traditional formats.',
-    kpis: [
-      { label: 'Inline Rent',  value: '₹100–180', color: 'text-rose-600' },
-      { label: 'Anchor Share', value: '30–50%',   color: 'text-fuchsia-600' },
-      { label: 'Exit Cap',     value: '7.5–9.0%', color: 'text-amber-600' },
-      { label: 'IRR Band',     value: '13–17%',   color: 'text-indigo-600' },
+    thesis: 'Anchor-plus-inline underwriting on long lease cycles and higher opex. Model realistic vacancy and anchor churn — experiential and F&B-led formats carry the rent.',
+    bands: [
+      { label: 'Inline rent',  value: '₹100–180/sf' },
+      { label: 'Anchor share', value: '30–50%' },
+      { label: 'Exit cap',     value: '7.5–9.0%' },
+      { label: 'IRR band',     value: '13–17%' },
     ],
-    persuasion: 'Anchor churn is the silent killer — model a realistic 12% vacancy, not 8%.',
+    insight: 'Anchor churn is the silent killer — model a realistic 12% vacancy, not 8%.',
   },
   industrial_warehousing: {
     icon: Warehouse,
-    gradient: 'from-emerald-600 via-teal-600 to-cyan-600',
-    soft: 'from-emerald-50 via-teal-50 to-cyan-50',
-    ring: 'ring-emerald-200',
-    text: 'text-emerald-900',
-    tagline: 'Industrial / logistics — India\'s tightest cap',
-    thesis: 'E-commerce (3× in 5 years) + 3PL consolidation has compressed logistics cap rates 75–125 bps since 2020. Lowest capex (~₹1,500/sqft), lowest opex (~15%), longest leases (7–9 yr NNN-style).',
-    kpis: [
-      { label: 'Construction', value: '₹1.2–2.5k',color: 'text-emerald-600' },
-      { label: 'Rent',         value: '₹18–40',  color: 'text-teal-600' },
-      { label: 'Vacancy',      value: '5–10%',    color: 'text-indigo-600' },
-      { label: 'Exit Cap',     value: '7.5–9.5%', color: 'text-amber-600' },
+    accent: 'text-emerald-500',
+    tagline: 'Industrial / logistics — long NNN-style leases',
+    thesis: 'Lowest capex, lowest opex, longest NNN-style leases. E-commerce and 3PL demand underpin tight caps — strong risk-adjusted yield when leasing holds.',
+    bands: [
+      { label: 'Construction', value: '₹1.2–2.5k/sf' },
+      { label: 'Rent',         value: '₹18–40/sf' },
+      { label: 'Vacancy',      value: '5–10%' },
+      { label: 'Exit cap',     value: '7.5–9.5%' },
     ],
-    persuasion: 'Cheapest capex + highest occupancy + longest lease = best risk-adjusted yield in India RE.',
+    insight: 'Cheapest capex + high occupancy + long leases = best risk-adjusted yield in Indian RE.',
   },
   hospitality: {
     icon: Hotel,
-    gradient: 'from-fuchsia-600 via-purple-600 to-violet-600',
-    soft: 'from-fuchsia-50 via-purple-50 to-violet-50',
-    ring: 'ring-fuchsia-200',
-    text: 'text-fuchsia-900',
+    accent: 'text-fuchsia-500',
     tagline: 'Hospitality — operating leverage at ramp',
-    thesis: 'ADR × Occ × Keys × 365 is the top line; F&B and ancillary layer 30–50% more. GOP margins triple from year-1 to year-3 stabilization. Exit on stabilized EBITDA × 9–12×.',
-    kpis: [
-      { label: 'Cost/Key',      value: '₹1–2.5 Cr', color: 'text-fuchsia-600' },
-      { label: 'ADR',           value: '₹6k–15k',   color: 'text-purple-600' },
-      { label: 'Stabilized Occ',value: '68–75%',    color: 'text-violet-600' },
-      { label: 'Exit Multiple', value: '9–12×',     color: 'text-amber-600' },
+    thesis: 'Operating-leverage play. ADR × Occ × Keys is the top line; GOP margins build from year-1 to stabilisation. Underwrite the stabilised EBITDA and a multiple exit — not the trailing.',
+    bands: [
+      { label: 'Cost/key',       value: '₹1–2.5 Cr' },
+      { label: 'ADR',            value: '₹6k–15k' },
+      { label: 'Stabilised occ', value: '68–75%' },
+      { label: 'Exit multiple',  value: '9–12×' },
     ],
-    persuasion: 'Year-1 is a loss-leader. Underwrite the stabilized EBITDA, not the trailing.',
+    insight: 'Year-1 is a loss-leader. Underwrite the stabilised EBITDA, not the trailing.',
   },
 };
 
@@ -107,54 +98,54 @@ export default function AssetClassInsightBanner({ assetClass }) {
   const Icon = insight.icon;
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${insight.soft} ring-1 ${insight.ring} shadow-sm`}>
-      <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-white/40 blur-3xl" />
-      <div className="absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-white/30 blur-2xl" />
-
-      <div className="relative p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${insight.gradient} text-white shadow-md`}>
-              <Icon size={20} strokeWidth={2.2} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`text-[11px] font-semibold uppercase tracking-widest ${insight.text}/80`}>
-                  Investment Thesis
-                </span>
-                <Sparkles size={10} className={insight.text} />
-              </div>
-              <h3 className={`text-base font-bold ${insight.text}`}>{insight.tagline}</h3>
+    <div className="rounded-xl border border-hairline-strong bg-bg-elevated shadow-editorial overflow-hidden">
+      <div className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-hairline bg-bg-secondary">
+              <Icon size={18} strokeWidth={2.1} className={insight.accent} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-muted">
+                Investment thesis
+              </p>
+              <h3 className="text-base font-bold tracking-tight text-content-primary">{insight.tagline}</h3>
             </div>
           </div>
-
-          <div className={`inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/70 px-3 py-1 text-[11px] font-semibold ${insight.text} shadow-sm backdrop-blur`}>
-            <Target size={11} />
-            Bengaluru-first • India-priority
-          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-bg-secondary px-2.5 py-1 text-[11px] font-medium text-content-secondary">
+            Bengaluru-first · India-priority
+          </span>
         </div>
 
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-content-secondary">
           {insight.thesis}
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {insight.kpis.map((k, i) => (
-            <div key={i} className="rounded-xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-content-secondary">{k.label}</div>
-              <div className={`font-mono text-base font-bold ${k.color}`}>{k.value}</div>
-            </div>
-          ))}
+        <div className="mt-4">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-content-muted mb-1.5">
+            Typical underwriting bands
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {insight.bands.map((b) => (
+              <div key={b.label} className="rounded-lg border border-hairline bg-bg-secondary px-3 py-2">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-content-muted">{b.label}</div>
+                <div className="font-mono text-base font-bold tabular-nums text-content-primary">{b.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-2 backdrop-blur">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white">
-            <ArrowUpRight size={12} strokeWidth={2.5} />
-          </div>
-          <p className="text-xs font-medium italic text-content-secondary">
-            <span className="font-semibold not-italic text-content-primary">IC insight:</span> {insight.persuasion}
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-hairline-soft bg-bg-secondary/60 px-3 py-2">
+          <ArrowUpRight size={13} strokeWidth={2.4} className="mt-0.5 shrink-0 text-content-muted" aria-hidden="true" />
+          <p className="text-xs text-content-secondary">
+            <span className="font-semibold text-content-primary">IC insight:</span> {insight.insight}
           </p>
         </div>
+
+        <p className="mt-3 text-[11px] text-content-muted">
+          General asset-class framing and typical bands — not verified market data for this deal. Underwrite against
+          this site's own model and verified comps; see Market Intelligence for sourced, dated benchmarks.
+        </p>
       </div>
     </div>
   );
