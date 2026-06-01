@@ -313,7 +313,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       });
 
       expect(prepared.exportQa.core.baseRentPerSqftMonth).toBe(95);
-      expect(prepared.exportQa.core.occupancyPct).toBeCloseTo(0.9, 6);
+      // Income assets pin occupancy to the 100% lease-up target: the income kernel
+      // (financial-kernel/src/assets/income.ts) applies the vacancy haircut ONLY, so the
+      // modeled P&L must too. This previously defaulted to 1 − vacancy = 0.9 and then
+      // multiplied by (1 − vacancy) again, double-discounting EGR/NOI ~8% below the kernel.
+      expect(prepared.exportQa.core.occupancyPct).toBe(1);
       expect(prepared.exportQa.core.exitCapRate).toBeCloseTo(0.075, 6);
       expect(prepared.exportQa.core.debtLTV).toBeCloseTo(0.6, 6);
 
@@ -4305,7 +4309,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(capIcon.reverse).toBe(true);
       });
 
-      test('PR-NX11: KPI tile carries a hover-tooltip with benchmark citation', async () => {
+      test('PR-NX11: KPI tile carries a hover-tooltip with an illustrative guideline band (no fabricated firm source)', async () => {
         const ctx = minimalContext();
         ctx.deal.asset_class = 'commercial_office';
         ctx.property.property_type = 'commercial_office';
@@ -4316,9 +4320,14 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const yieldCell = dash.getCell('D4');
         const note = yieldCell.note;
         const noteText = note && (typeof note === 'string' ? note : (note.texts || []).map((t) => t.text || '').join(''));
-        expect(noteText).toMatch(/KPI Benchmark/);
-        expect(noteText).toMatch(/Source:/);
-        expect(noteText).toMatch(/Cushman/);
+        expect(noteText).toMatch(/KPI guideline band/);
+        expect(noteText).toMatch(/Range:/);
+        // Credibility (CLAUDE.md): the band is framed as an illustrative default,
+        // NOT a verified market reading, and carries NO named-firm attribution —
+        // these are hardcoded constants, not a live market feed.
+        expect(noteText).toMatch(/Illustrative default band/);
+        expect(noteText).not.toMatch(/Source:/);
+        expect(noteText).not.toMatch(/Cushman|JLL|CBRE|Knight Frank|HVS/);
       });
 
       test('PR-NX11 HOTFIX: KPI tile note is a plain STRING (object form corrupts sheetN.xml in Microsoft Excel)', async () => {
@@ -4346,8 +4355,8 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(commentFiles.length).toBeGreaterThan(0);
         const commentsXmls = await Promise.all(commentFiles.map((f) => f.async('string')));
 
-        // Find a comments XML that mentions KPI Benchmark (the PR-NX11 marker)
-        const kpiCommentsXml = commentsXmls.find((xml) => xml.includes('KPI Benchmark'));
+        // Find a comments XML that mentions the KPI guideline band (the PR-NX11 marker)
+        const kpiCommentsXml = commentsXmls.find((xml) => xml.includes('KPI guideline band'));
         expect(kpiCommentsXml).toBeTruthy();
 
         // Malformed-XML signatures that broke production:

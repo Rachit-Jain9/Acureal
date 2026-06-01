@@ -722,7 +722,6 @@ const buildRevenueSheet = (workbook, context) => {
   } else if (context.dealFamily === 'income') {
     const areaRef = assumptionRef(context, 'saleable_area_sqft', 'activeCell', '0');
     const rentRef = assumptionRef(context, 'base_rent_psf_pm', 'activeCell', '0');
-    const occRef = assumptionRef(context, 'occupancy_pct', 'activeCell', '0');
     const vacRef = assumptionRef(context, 'vacancy_pct', 'activeCell', '0');
     const opexRef = assumptionRef(context, 'opex_pct', 'activeCell', '0');
     const capRef = assumptionRef(context, 'exit_cap_rate', 'activeCell', '0');
@@ -734,10 +733,14 @@ const buildRevenueSheet = (workbook, context) => {
     const gprRow = row;
     row += 1;
 
-    setLabelCell(sheet.getCell(row, 1), 'Vacancy / Occupancy Adjustment');
-    setLabelCell(sheet.getCell(row, 2), 'Occupancy');
-    setFormulaCell(sheet.getCell(row, 3), `IF(OR(C${gprRow}=\"\",${occRef}=0),"",C${gprRow}*${occRef}*(1-${vacRef}))`);
-    setLabelCell(sheet.getCell(row, 4), 'Stabilized occupied rent after vacancy friction');
+    setLabelCell(sheet.getCell(row, 1), 'Vacancy Adjustment');
+    setLabelCell(sheet.getCell(row, 2), 'x (1 - Vacancy)');
+    // The income kernel (financial-kernel/src/assets/income.ts) applies the vacancy haircut ONLY —
+    // effectiveGrossRev = grossPotentialRent x (1 - vacancy). Multiplying by occupancy here as well
+    // (occupancy defaulting to 1 - vacancy) double-discounted NOI/exit ~8% below the deal's saved
+    // kernel figures. Occupancy is the 100% lease-up target for income; vacancy is the sole haircut.
+    setFormulaCell(sheet.getCell(row, 3), `IF(C${gprRow}=\"\","",C${gprRow}*(1-${vacRef}))`);
+    setLabelCell(sheet.getCell(row, 4), 'Stabilized rent after vacancy / credit-loss friction');
     const effRentRow = row;
     row += 1;
 

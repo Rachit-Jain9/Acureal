@@ -722,9 +722,18 @@ const vacancyPctFor = (ctx) =>
 
 const occupancyPctFor = (ctx) => {
   if (ctx.assetClass === 'hospitality') return hospitalityOccupancyPct(ctx);
-  const explicit = toPctDecimal(firstNumber(ctx.inputs.occupancyPct, ctx.deal.occupancy_pct));
-  if (explicit !== null) return explicit;
-  return Math.max(0, Math.min(1, 1 - vacancyPctFor(ctx)));
+  // Income-asset kernel (packages/financial-kernel/src/assets/income.ts:114-117) applies the
+  // vacancy haircut ONLY — effectiveGrossRev = grossPotentialRent × (1 − vacancyPct) — and never
+  // reads occupancy. The modeled operating P&L here must reconcile to those authoritative deal
+  // numbers, so for income assets occupancy is the 100% lease-up target and VacancyPct is the
+  // single stabilized haircut. Returning the deal's occupancy input (or 1 − vacancy) here used to
+  // double-discount EGR by occupancy AND (1 − vacancy) — e.g. 0.92 × 0.92 — pulling exported
+  // NOI / exit value / IRR / DSCR ~8% below the deal's saved kernel figures (the MODELED column
+  // silently disagreeing with the KERNEL column on the same sheet). Occupancy stays editable as a
+  // deliberate downside lever in the scenario/sensitivity tabs (which shock it below 100%); only
+  // the base case is pinned to the kernel. Hospitality is unaffected — its kernel
+  // (hospitality.ts:294) drives revenue off ADR × occupancy, so occupancy is the real driver there.
+  return 1;
 };
 
 const exitCapRateFor = (ctx) =>
@@ -5818,9 +5827,14 @@ const buildDashboardSheet = (workbook, ctx) => {
       });
     }
 
-    // Attach the benchmark citation as a cell COMMENT — operator hovers
-    // the tile and sees the institutional source. Per CLAUDE.md
-    // "verified data only, source + freshness on every cell" rule.
+    // Attach an illustrative guideline band as a cell COMMENT so the operator
+    // can sanity-check the tile against a typical range. These bands are
+    // hardcoded orientation defaults, NOT a verified market feed — so the note
+    // is framed as an illustrative default (no named-firm attribution, no
+    // implied freshness) per the CLAUDE.md rule against presenting fabricated
+    // market facts as authoritative. Wire this to the verified
+    // *_market_benchmarks tables (real source + as_of_date + confidence) when
+    // that feed is surfaced into the export.
     //
     // 2026-05-15 HOTFIX: cell.note MUST be a plain string here, not an
     // object with `texts`/`margins`. The object form is technically
@@ -5836,11 +5850,12 @@ const buildDashboardSheet = (workbook, ctx) => {
     // preserve — direct string assignment is safe.
     const cell = sheet.getCell(ref);
     const benchmarkLines = [
-      `── KPI Benchmark (${label}) ──`,
+      `── KPI guideline band (${label}) ──`,
       bm.direction === 'up'
         ? `Range: ${bm.low} → ${bm.mid} → ${bm.high}`
         : `Range: ${bm.high} → ${bm.mid} → ${bm.low} (lower is better)`,
-      `Source: ${bm.citation}`,
+      'Illustrative default band for orientation only — override per deal.',
+      'Not a verified market reading; no live market feed is attached to this cell.',
     ];
     cell.note = benchmarkLines.join('\n');
   });
