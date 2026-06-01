@@ -100,7 +100,7 @@ export default function DealPlanningContextCard() {
         sub="City-level RMP 2031 facts that materially affect any Bengaluru site. Cross-reference against this parcel's exact location before underwriting."
         action={(
           <Link
-            to="/admin/master-plan?tab=intelligence"
+            to="/dashboard/admin/master-plan?tab=intelligence"
             className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out"
           >
             Open intelligence

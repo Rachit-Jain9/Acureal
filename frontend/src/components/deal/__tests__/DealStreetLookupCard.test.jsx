@@ -189,7 +189,7 @@ describe('DealStreetLookupCard', () => {
   it('includes a link to the full lookup on the admin Planning Intelligence tab', () => {
     renderWithRouter(<DealStreetLookupCard property={BENGALURU_PROPERTY} />);
     const link = screen.getByRole('link', { name: /Open full lookup/i });
-    expect(link).toHaveAttribute('href', '/admin/master-plan?tab=intelligence');
+    expect(link).toHaveAttribute('href', '/dashboard/admin/master-plan?tab=intelligence');
   });
 
   it('includes a Verify-on-Kaveri CTA pointing at the IGR portal in a new tab', () => {

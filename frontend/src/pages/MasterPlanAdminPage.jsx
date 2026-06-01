@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import useAuthStore from '../store/authStore';
 import PageHeader from '../components/common/PageHeader';
@@ -18,6 +18,19 @@ import PlanningIntelligencePanel from '../components/masterplan/PlanningIntellig
 const EDITOR_ROLES = ['admin', 'owner', 'editor', 'analyst'];
 
 /**
+ * Tab definitions — single source of truth for both the tab bar and the
+ * URL-param validation below. The deal Zoning tab's "Open full lookup"
+ * deep-links target `?tab=intelligence`.
+ */
+const TABS = [
+  { key: 'intelligence', label: 'Planning Intelligence' },
+  { key: 'zones', label: 'Zone Library' },
+  { key: 'documents', label: 'Source Documents' },
+  { key: 'corpus', label: 'Source Corpus' },
+  { key: 'bbmp-uav', label: 'BBMP UAV' },
+];
+
+/**
  * Master Plan admin page.
  *
  * Thin tab router that owns nothing more than the active-tab state and
@@ -33,7 +46,17 @@ export default function MasterPlanAdminPage() {
   const { user } = useAuthStore();
   const role = String(user?.role || '').toLowerCase();
   const canEdit = EDITOR_ROLES.includes(role);
-  const [tab, setTab] = useState('zones');
+  // Tab is URL-driven so deep-links (e.g. ?tab=intelligence from the deal
+  // Zoning tab's "Open full lookup") land on the right panel. An unknown or
+  // missing tab falls back to the Zone Library.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab = TABS.some((t) => t.key === tabParam) ? tabParam : 'zones';
+  const setTab = (key) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', key);
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div>
@@ -50,13 +73,7 @@ export default function MasterPlanAdminPage() {
       )}
 
       <div className="flex gap-1 border-b border-hairline-strong mb-4">
-        {[
-          { key: 'intelligence', label: 'Planning Intelligence' },
-          { key: 'zones', label: 'Zone Library' },
-          { key: 'documents', label: 'Source Documents' },
-          { key: 'corpus', label: 'Source Corpus' },
-          { key: 'bbmp-uav', label: 'BBMP UAV' },
-        ].map((t) => (
+        {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
