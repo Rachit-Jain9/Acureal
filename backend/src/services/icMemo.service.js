@@ -46,6 +46,7 @@ const promoterProfileService = require('./promoterProfile.service');
 const compRelianceService = require('./compReliance.service');
 const { getRequestContext } = require('../lib/requestContext');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
+const { neutralizeMemoRecommendation } = require('../utils/icStanceVerbs');
 const log = require('../lib/logger').child({ module: 'icMemo' });
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ Short bullet list of outstanding diligence items. Pull from the supplied dd_item
 Pull from the supplied approval_items. State which are pending vs received. If pending count > 0, this is a yellow light at minimum.
 
 ## 8. Recommendation
-Single paragraph. ONE OF: "Recommend approval", "Recommend approval subject to conditions", "Hold pending [specific items]", "Decline". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt." Weigh the supplied \`verification\` block: if the financial model is assumption-led, or any Risk Radar category is flagged or unverified, a clean "Recommend approval" is not available — name those specific items as explicit conditions or holds.
+Single paragraph. Lead with EXACTLY ONE stance from REDIP's closed recommendation vocabulary — and NEVER use the words approve, approval, decline, reject, buy, sell, pass, or clear: "Recommend proceeding", "Recommend proceeding subject to [conditions]", "Hold pending [specific items]", or "Re-examine [specific items]". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt." Weigh the supplied \`verification\` block: if the financial model is assumption-led, or any Risk Radar category is flagged or unverified, a clean "Recommend proceeding" is not available — name those specific items as explicit conditions, holds, or re-examines.
 
 RULES:
 - Every number in your memo must come from the supplied data — do not invent.
@@ -367,6 +368,14 @@ const persistMemoArtifact = async ({
   callId,
   input,
 }) => {
+  // Defense-in-depth on the closed verb dictionary (CLAUDE.md): the prompt
+  // instructs the model to avoid absolute decision verbs, but neutralize any
+  // that slip through before this customer-facing memo is persisted/exported.
+  const safeContentMd = neutralizeMemoRecommendation(contentMd);
+  if (safeContentMd !== contentMd) {
+    log.warn('ic_memo_stance_verb_neutralized', { dealId });
+  }
+
   // Run the numerical verifier so IC-cited numbers are audited before
   // signoff. Drifts are written alongside the memo.
   let drifts = null;
@@ -374,7 +383,7 @@ const persistMemoArtifact = async ({
   try {
     const snapshot = numericalVerifier.snapshotFromDealAnalysisInput(input);
     const verification = numericalVerifier.verifyDealAnalysis({
-      contentMd,
+      contentMd: safeContentMd,
       snapshot,
     });
     drifts = verification.drifts;
@@ -387,7 +396,7 @@ const persistMemoArtifact = async ({
     organizationId,
     dealId,
     artifactType: 'ic_memo',
-    contentMd,
+    contentMd: safeContentMd,
     snapshotHash,
     generatedByCallId: callId,
     status: 'draft',

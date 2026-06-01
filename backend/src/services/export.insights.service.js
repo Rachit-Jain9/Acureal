@@ -6,6 +6,7 @@
 // of Claude that previously bypassed the router.
 const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runAI } = require('./ai/aiRouter');
+const { neutralizeStanceText } = require('../utils/icStanceVerbs');
 
 // Hard timeout so export routes never hang on a stalled model call.
 const MODEL_TIMEOUT_MS = 15000;
@@ -163,7 +164,7 @@ STRICT RULES:
 
 SCHEMA:
 {
-  "ic_opinion": "3-5 sentence investor-grade opinion. Lead with a clear stance (proceed / proceed with conditions / pass). Cite 2-3 specific KPIs from the payload. Name one material weakness.",
+  "ic_opinion": "3-5 sentence investor-grade opinion. Lead with EXACTLY ONE stance from REDIP's closed vocabulary — Recommend proceeding / Recommend proceeding subject to conditions / Hold pending [items] / Re-examine [items] — and NEVER the words approve, approval, decline, reject, buy, sell, pass, or clear. Cite 2-3 specific KPIs from the payload. Name one material weakness.",
   "top_risks": [
     { "title": "Short risk title (max 8 words)", "detail": "1-2 sentence explanation anchored in the data" }
   ],
@@ -180,7 +181,11 @@ Provide 3 top_risks and 3 next_steps. Confidence reflects data completeness: "lo
 // can share the same shape mapping (parse logic was duplicated otherwise).
 const coerceInsightsEnvelope = (parsed, extras = {}) => ({
   available: true,
-  ic_opinion: typeof parsed.ic_opinion === 'string' ? parsed.ic_opinion.trim() : null,
+  // Defense-in-depth on the closed verb dictionary (CLAUDE.md): neutralize any
+  // banned absolute stance verb the model leads with before it reaches the
+  // customer DOCX Executive Summary. The whole field is a stance opinion, so a
+  // leading-verb rewrite is safe here.
+  ic_opinion: typeof parsed.ic_opinion === 'string' ? neutralizeStanceText(parsed.ic_opinion.trim()) : null,
   top_risks: Array.isArray(parsed.top_risks)
     ? parsed.top_risks
         .filter((r) => r && (r.title || r.detail))
