@@ -87,7 +87,10 @@ const buildPayload = ({
     land_area_sqft: num(deal.land_area_sqft),
     land_ask_price_cr: num(deal.land_ask_price_cr),
     negotiated_price_cr: num(deal.negotiated_price_cr),
-    rera_registered: !!deal.rera_number,
+    // Deliberately NOT passing rera_registered: handing the model a RERA
+    // registration boolean invites it to narrate RERA legal status, which is
+    // one of the four legal lanes AI must never assert (CLAUDE.md). RERA
+    // posture reaches the IC via the deterministic K-RERA panel + risk flags.
   },
   financial_model: financials
     ? {
@@ -157,7 +160,7 @@ const SYSTEM_PROMPT = `You are an investment-review analyst at an India-focused 
 
 STRICT RULES:
 - Respond ONLY with valid JSON matching the schema below. No markdown fences, no prose before/after.
-- Reference only the numbers and flags provided. Never invent market rates, comps, zoning facts, legal status, or approvals.
+- Reference only the numbers and flags provided. Never invent — and never assert or narrate as settled fact — market rates, comps, or the four legal lanes (title, encumbrance, RERA registration, statutory approvals). If a legal topic is material, frame it strictly as a diligence item, never as a finding.
 - If a KPI is missing, say so explicitly rather than guessing.
 - Be blunt about weaknesses. Investor-grade notes that only praise are useless.
 - India market conventions: values in INR Crore, IRR in percent, areas in sqft.

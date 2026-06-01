@@ -407,6 +407,7 @@ Rules:
 - Use specific numbers from the data provided — no vague statements
 - Cross-reference deal pricing/IRR against market benchmarks and comps
 - Flag real risks: pricing vs RLV, stage vs activity gap, comp premium/discount
+- LEGAL CARVE-OUT (non-negotiable): treat the zoning field as an opaque label. Never interpret it or assert any statutory, approval, RERA, title, or encumbrance conclusion ("zoning permits…", "RERA-compliant", "title is clear", "approval will be granted"). If a legal topic is material to a risk, name it only as an item requiring human verification.
 - Tone: direct, institutional — like a senior analyst briefing the investment review team
 - No markdown. No bullets. Plain text paragraphs only.`;
 
