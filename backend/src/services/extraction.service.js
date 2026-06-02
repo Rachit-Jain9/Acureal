@@ -708,9 +708,14 @@ async function extractDocument(
 }
 
 async function getExtractionByDocument(documentId) {
+  // Org-scope guard: the app connects as a BYPASSRLS role, so the table's
+  // RLS policy does NOT protect this path — the explicit org filter is the
+  // only cross-tenant guard. current_organization_id() is set per request
+  // (config/database.js#applyRequestContext).
   const result = await query(
     `SELECT * FROM document_extractions
      WHERE document_id = $1
+       AND organization_id = current_organization_id()
      ORDER BY created_at DESC
      LIMIT 1`,
     [documentId],
@@ -909,8 +914,10 @@ function buildFieldMap(extractions) {
 
 async function applyCorrections(extractionId, corrections, userId) {
   // Append to correction history
+  // Org-scope guard (BYPASSRLS app role — see getExtractionByDocument).
   const existing = await query(
-    `SELECT human_corrections, correction_history FROM document_extractions WHERE id = $1`,
+    `SELECT human_corrections, correction_history FROM document_extractions
+      WHERE id = $1 AND organization_id = current_organization_id()`,
     [extractionId],
   );
 
@@ -931,7 +938,7 @@ async function applyCorrections(extractionId, corrections, userId) {
          reviewed_by          = $3,
          reviewed_at          = NOW(),
          updated_at           = NOW()
-     WHERE id = $4
+     WHERE id = $4 AND organization_id = current_organization_id()
      RETURNING *`,
     [
       JSON.stringify(corrections),
