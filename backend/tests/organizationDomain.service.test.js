@@ -30,19 +30,21 @@ describe('addDomainClaim', () => {
   });
 
   test('inserts a normalized, unverified claim and returns DNS instructions', async () => {
-    query.mockResolvedValueOnce({
-      rows: [{
-        id: 'dom-1',
-        domain: 'acme.in',
-        verified: false,
-        default_role: 'editor',
-        require_admin_approval: false,
-        verification_method: 'dns_txt',
-        verification_token: 'tok-abc',
-        verified_at: null,
-        created_at: 'now',
-      }],
-    });
+    query
+      .mockResolvedValueOnce({ rows: [] }) // pre-check: not verified elsewhere
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'dom-1',
+          domain: 'acme.in',
+          verified: false,
+          default_role: 'editor',
+          require_admin_approval: false,
+          verification_method: 'dns_txt',
+          verification_token: 'tok-abc',
+          verified_at: null,
+          created_at: 'now',
+        }],
+      });
 
     const result = await domainService.addDomainClaim({
       organizationId: ORG,
@@ -50,7 +52,9 @@ describe('addDomainClaim', () => {
       actor: ACTOR,
     });
 
-    expect(query.mock.calls[0][1]).toEqual([ORG, 'acme.in', 'user-1']);
+    // calls[0] = verified-elsewhere pre-check; calls[1] = the INSERT.
+    expect(query.mock.calls[0][1]).toEqual(['acme.in', ORG]);
+    expect(query.mock.calls[1][1]).toEqual([ORG, 'acme.in', 'user-1']);
     expect(result.verified).toBe(false);
     expect(result.verification).toEqual({
       host: '_redip-verify.acme.in',
@@ -59,8 +63,20 @@ describe('addDomainClaim', () => {
     });
   });
 
-  test('maps a duplicate-domain unique violation to 409', async () => {
-    query.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' }));
+  test('rejects claiming a domain already VERIFIED by another workspace (409)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ ok: 1 }] }); // pre-check: verified elsewhere
+    await expect(
+      domainService.addDomainClaim({ organizationId: ORG, domain: 'acme.in', actor: ACTOR }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    // The pre-check ran; the INSERT never did (unverified squatting is blocked,
+    // but only by a PROVEN claim — see the migration).
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('maps a same-workspace duplicate unique violation to 409', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] }) // pre-check: not verified elsewhere
+      .mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' }));
     await expect(
       domainService.addDomainClaim({ organizationId: ORG, domain: 'acme.in', actor: ACTOR }),
     ).rejects.toMatchObject({ statusCode: 409 });
@@ -131,6 +147,16 @@ describe('verifyDomain', () => {
     });
     expect(result.verified).toBe(true);
     expect(dns.promises.resolveTxt).not.toHaveBeenCalled();
+  });
+
+  test('maps a concurrent verified-domain race (UPDATE 23505) to 409', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [claimRow] }) // SELECT claim
+      .mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' })); // UPDATE race
+    dns.promises.resolveTxt.mockResolvedValueOnce([['redip-verify=tok-abc']]);
+    await expect(
+      domainService.verifyDomain({ organizationId: ORG, domainId: 'dom-1', actor: ACTOR }),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 });
 

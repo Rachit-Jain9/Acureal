@@ -66,6 +66,21 @@ const addDomainClaim = async ({ organizationId, domain, actor }) => {
     );
   }
 
+  // Block claiming a domain another workspace has already PROVEN control of
+  // (verified = TRUE). An unverified claim by someone else is harmless — only
+  // one org can ever pass the DNS-TXT proof — so it must NOT block the real
+  // owner. (Runs the same under the old global unique or the new
+  // verified-only unique, so it is safe to deploy before the migration.)
+  const verifiedElsewhere = await query(
+    `SELECT 1 FROM organization_domains
+      WHERE lower(domain) = lower($1) AND verified = TRUE AND organization_id <> $2
+      LIMIT 1`,
+    [normalized, organizationId],
+  );
+  if (verifiedElsewhere.rows.length > 0) {
+    throw createError('That domain is already verified by another workspace.', 409);
+  }
+
   let result;
   try {
     result = await query(
@@ -151,13 +166,24 @@ const verifyDomain = async ({ organizationId, domainId, actor }) => {
     );
   }
 
-  const updated = await query(
-    `UPDATE organization_domains
-        SET verified = TRUE, verified_at = NOW(), updated_at = NOW()
-      WHERE organization_id = $1 AND id = $2
-      ${RETURNING}`,
-    [organizationId, domainId],
-  );
+  let updated;
+  try {
+    updated = await query(
+      `UPDATE organization_domains
+          SET verified = TRUE, verified_at = NOW(), updated_at = NOW()
+        WHERE organization_id = $1 AND id = $2
+        ${RETURNING}`,
+      [organizationId, domainId],
+    );
+  } catch (error) {
+    // The verified-only unique index (lower(domain) WHERE verified = TRUE)
+    // race-guards a simultaneous verify of the same domain by another
+    // workspace — whoever proves control first wins; the loser gets a clear 409.
+    if (error && error.code === '23505') {
+      throw createError('Another workspace has already verified this domain.', 409);
+    }
+    throw error;
+  }
   await organizationAuditLog.recordAudit({
     organizationId,
     actorId: actor.id,
