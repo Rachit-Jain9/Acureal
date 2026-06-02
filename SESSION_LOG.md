@@ -4,6 +4,37 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-02 (cont. — multi-tenancy / RBAC: domain onboarding + Team management) (PRs #722, #723)
+
+Operator green-lit building the multi-tenancy / RBAC plan from earlier this session (domain self-serve onboarding; default joiner role = editor). Built as two PRs on the existing org / membership / RLS foundation, after a 4-agent review workflow mapped the exact auth / DB / route / frontend conventions. A pre-merge audit also caught a signup-breaking deploy-ordering bug (below).
+
+### Shipped (awaiting operator merge)
+- **#722 — backend onboarding engine.**
+  - Migration `20260625_organization_domains_and_audit.sql`: `organization_domains` (`UNIQUE(lower(domain))`, inert until `verified`, per-domain join policy `default_role=editor` + `require_admin_approval`; FORCE RLS org-scope) + `organization_audit_log` (append-only, org-scoped — `deal_audit_log` can't hold member/domain events, it requires a `deal_id`).
+  - `joinByVerifiedDomain` signup tree in `auth.service.register` + Google cold-signup: invitation → verified auto-join domain → personal workspace. Active join (no approval) → editor membership + company default org; approval-required → pending member (`is_active=false`) + a personal workspace to land in.
+  - Real DNS-TXT domain verification (`organizationDomain.service.js`, `_redip-verify.<domain>`, no fakery — honors the CLAUDE.md connectivity rule).
+  - New `/api/organization` endpoints: members list, invite, role change (`FOR UPDATE` + role-ceiling + last-active-owner guards), activate/deactivate, domains CRUD + verify + policy, join-request approve/reject, org audit feed.
+  - New files: `services/organizationDomain.service.js`, `services/organizationAuditLog.service.js`, `utils/emailDomain.js`; `constants/roles.js` now exports `ROLE_PRIORITY`.
+  - **Deploy-before-migrate safe**: the domain lookup runs on a SEPARATE connection so a missing `organization_domains` (migration not yet applied) degrades to a personal workspace instead of poisoning the signup transaction (which would have broken every registration). Fixed before merge after the audit caught it.
+  - +63 backend tests; full backend suite **3070 green**.
+- **#723 — frontend Team page + workspace switcher.**
+  - `pages/TeamPage.jsx` (Settings → owner/admin only): roster with status badges + role-aware controls (role dropdown, remove / approve / decline), invite-by-email modal, Company-domains card (claim → DNS record → Verify → join policy).
+  - `components/layout/WorkspaceSwitcher.jsx` in the sidebar header for multi-org users (set active org → `refreshUser` → invalidate queries; hidden for single-org accounts).
+  - `hooks/useOrganization.js`, `authStore.setActiveOrganization`, extended `organizationAPI`, `/dashboard/settings/team` route, Settings entry-point card.
+  - Frontend build green; **1074 frontend tests pass**.
+
+### Why it matters (plain English)
+Today every signup makes its own solo workspace, so the team is scattered across 4 workspaces. Now: invite teammates from a Team page, change their roles, and — for real companies — verify a company email domain so colleagues auto-join one shared workspace. Free-email domains (Gmail, Outlook, …) can never be claimed.
+
+### Operator actions required
+1. **Apply `database/migrations/20260625_organization_domains_and_audit.sql`** in the Supabase SQL editor (additive — two new tables, no existing data touched). Raw: https://raw.githubusercontent.com/Rachit-Jain9/REDIP/feat/org-domain-onboarding/database/migrations/20260625_organization_domains_and_audit.sql
+2. Merge **#722** then **#723** (production deploys — operator-authorized). #722 is deploy-safe before the migration, but domains / auto-join only function once it's applied.
+
+### What's left (from `docs/MULTI_TENANCY_RBAC_PLAN.md`)
+- Phase 0 — security / ledger hygiene (migration-ledger reconciliation; review read-all `market_transactions` / `micro_market_benchmarks`; clear the `spatial_ref_sys` advisor).
+- Phase 3 — per-role in-deal UI states (viewer read-only across deal tabs).
+- Phase 1.5 — one-time, dry-run-first migration to consolidate the 4 fragmented workspaces.
+
 ## 2026-06-02 (cont. — a11y + journey/mobile UX + extraction-reliability flagship) (PRs #718–#720)
 
 Continuation of the deep-quality block. Took the remaining audit findings (accessibility, user-journey, mobile/responsive, extraction reliability, performance) through to shipped PRs, applying value-vs-risk judgment rather than mechanically clearing the list.
