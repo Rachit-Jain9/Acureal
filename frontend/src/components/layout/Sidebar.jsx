@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
 import { isPlatformAdmin } from '../../utils/permissions';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 
 // `tourId` is consumed by the product-tour coachmarks (data-tour attribute
 // on the NavLink). Steps for nav items the user can't see (e.g. admin
@@ -133,6 +134,13 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
         </div>
+
+        {/* Workspace switcher — appears only for multi-workspace accounts. */}
+        {(user?.organizations || []).filter((o) => o.is_active !== false).length > 1 && (
+          <div className="px-2 pt-3 pb-2 border-b border-hairline">
+            <WorkspaceSwitcher collapsed={collapsed} />
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 py-4 space-y-0.5 px-2">
