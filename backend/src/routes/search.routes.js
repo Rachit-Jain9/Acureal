@@ -51,12 +51,15 @@ router.post('/reindex/:documentId', authenticate, requireRole('admin', 'analyst'
         message: 'No extracted text found for this document. Run extraction first.',
       });
     }
-    // Wipe prior embeddings for this document so we don't accumulate stale
-    // chunks from older extraction runs.
-    await query(
-      `DELETE FROM public.document_embeddings WHERE document_id = $1`,
-      [documentId],
-    );
+    // Index FIRST, then retire the OLD chunks — never the other way round.
+    // The previous order DELETEd then re-indexed, so a failed embedding call
+    // left the document with ZERO embeddings (silently dark in search) AND
+    // still returned 200. Capture the prior chunk ids, index the new ones, and
+    // only drop the old chunks once indexing actually produced rows.
+    const priorIds = (
+      await query(`SELECT id FROM public.document_embeddings WHERE document_id = $1`, [documentId])
+    ).rows.map((r) => r.id);
+
     const result = await embeddings.indexDocumentText({
       organizationId: req.user.organization_id,
       documentId,
@@ -64,6 +67,21 @@ router.post('/reindex/:documentId', authenticate, requireRole('admin', 'analyst'
       sourceKind: 'document_chunk',
       metadata: { reindexed_at: new Date().toISOString(), reindexed_by: req.user.id },
     });
+
+    if (result?.error || !(result?.rows_inserted > 0)) {
+      // Re-index produced nothing — keep the prior embeddings intact and report
+      // the failure rather than silently dark-ing the document behind a 200.
+      return res.status(502).json({
+        success: false,
+        message: 'Re-index produced no chunks; previous embeddings left intact.',
+        data: result,
+      });
+    }
+
+    // New chunks are in — now retire the stale ones captured before indexing.
+    if (priorIds.length > 0) {
+      await query(`DELETE FROM public.document_embeddings WHERE id = ANY($1::uuid[])`, [priorIds]);
+    }
     return res.json({ success: true, data: result });
   } catch (error) {
     return next(error);

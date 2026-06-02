@@ -1,6 +1,12 @@
-jest.mock('../src/config/database', () => ({
-  query: jest.fn(),
-}));
+jest.mock('../src/config/database', () => {
+  const query = jest.fn();
+  return {
+    query,
+    // replacePendingFacts wraps its DELETE + INSERT in a transaction; run the
+    // callback with the same mocked query so existing assertions still apply.
+    transaction: jest.fn(async (cb) => cb({ query })),
+  };
+});
 
 const { query } = require('../src/config/database');
 const service = require('../src/services/evidenceIngestion.service');

@@ -380,7 +380,7 @@ const deleteDocument = async (documentId, userId, dealId = null) => {
   try {
     await deleteStorageFile(doc.file_url);
   } catch (error) {
-    console.warn('Could not delete file from storage:', error.message);
+    log.warn('document_storage_delete_failed', { documentId, fileUrl: doc.file_url, error: error.message });
     // Continue with DB deletion even if storage deletion fails
   }
 

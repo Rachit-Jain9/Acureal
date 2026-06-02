@@ -151,16 +151,19 @@ describe('dealWorkspace.service', () => {
     // can't throw), so exercise the degrade-on-500 + warn contract via a slice
     // that still calls a service: documents.
     documentService.getDocuments.mockRejectedValue(boom);
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    // Slice failures now route through the structured logger (logger.warn →
+    // console.log), not a bare console.warn.
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
     const ws = await dealWorkspaceService.getDealWorkspace(DEAL_ID);
 
     expect(ws.documents).toEqual({ documents: [], grouped: {} });
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[dealWorkspace] documents read failed:'),
-      'boom',
-    );
-    warnSpy.mockRestore();
+    expect(
+      logSpy.mock.calls.some(
+        (c) => String(c[0]).includes('workspace_slice_failed') && String(c[0]).includes('boom'),
+      ),
+    ).toBe(true);
+    logSpy.mockRestore();
   });
 
   test('waterfallByKind handles unexpected non-array payloads', async () => {

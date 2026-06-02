@@ -41,6 +41,7 @@ const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
+const log = require('../lib/logger').child({ module: 'dealWorkspace.service' });
 
 const ACTIVITY_LIMIT = 50;
 const AUDIT_EVENT_LIMIT = 25;
@@ -57,7 +58,7 @@ async function optional(thunk, sliceName) {
     if (err && (err.statusCode === 404 || err.status === 404)) return null;
     // Anything else is logged but still does not fail the composite request —
     // a degraded workspace is more useful than a hard error.
-    console.warn(`[dealWorkspace] ${sliceName} read failed:`, err.message);
+    log.warn('workspace_slice_failed', { slice: sliceName, error: err.message, code: err.code || null });
     return null;
   }
 }
