@@ -119,13 +119,16 @@ router.post(
   handleValidation,
   async (req, res, next) => {
     try {
-      const invitation = await organizationService.inviteOrganizationMember({
+      // Returns { kind: 'added', member } when the email already has an account
+      // (added to the workspace directly), or { kind: 'invited', invitation }
+      // when an email invitation was created for a new signup.
+      const result = await organizationService.inviteOrganizationMember({
         organizationId: req.user.organization_id,
         email: req.body.email,
         role: normalizeRole(req.body.role),
         invitedBy: req.user.id,
       });
-      res.status(201).json({ success: true, data: { invitation } });
+      res.status(201).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

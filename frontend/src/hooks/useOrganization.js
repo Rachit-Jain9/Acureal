@@ -24,9 +24,11 @@ export function useInviteMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ email, role }) => organizationAPI.invite(email, role).then((r) => r.data.data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: MEMBERS_KEY });
-      toast.success('Invitation sent');
+      // Existing REDIP users are added to the workspace immediately; new emails
+      // get an invitation link consumed when they sign up.
+      toast.success(data?.kind === 'added' ? 'Teammate added to the workspace' : 'Invitation sent');
     },
     onError: (err) => toast.error(errMessage(err, 'Could not send the invitation')),
   });

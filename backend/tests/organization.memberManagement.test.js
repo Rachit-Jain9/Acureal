@@ -102,6 +102,46 @@ describe('updateOrganizationMemberRole', () => {
   });
 });
 
+describe('inviteOrganizationMember', () => {
+  test('rejects assigning owner (400)', async () => {
+    await expect(
+      orgService.inviteOrganizationMember({
+        organizationId: ORG, email: 'x@acme.in', role: 'owner', invitedBy: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('adds an EXISTING user directly as an active member', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'u-existing', name: 'Asha', email: 'asha@acme.in' }] })
+      .mockResolvedValueOnce({ rows: [{ organization_id: ORG, user_id: 'u-existing', role: 'editor', is_active: true }] });
+
+    const res = await orgService.inviteOrganizationMember({
+      organizationId: ORG, email: 'Asha@Acme.in', role: 'editor', invitedBy: 'admin-1',
+    });
+
+    expect(res.kind).toBe('added');
+    expect(res.member).toMatchObject({ user_id: 'u-existing', role: 'editor', is_active: true, email: 'asha@acme.in' });
+    expect(query.mock.calls[0][1]).toEqual(['asha@acme.in']); // lookup normalizes the email
+    expect(query.mock.calls[1][0]).toMatch(/INSERT INTO organization_members/i);
+    expect(query.mock.calls[1][1]).toEqual([ORG, 'u-existing', 'editor', 'admin-1']);
+  });
+
+  test('creates an invitation for a NEW (unknown) email', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'inv-1', organization_id: ORG, email: 'new@acme.in', role: 'viewer', token: 't', expires_at: 'soon', created_at: 'now' }] });
+
+    const res = await orgService.inviteOrganizationMember({
+      organizationId: ORG, email: 'new@acme.in', role: 'viewer', invitedBy: 'admin-1',
+    });
+
+    expect(res.kind).toBe('invited');
+    expect(res.invitation).toMatchObject({ id: 'inv-1', email: 'new@acme.in' });
+    expect(query.mock.calls[1][0]).toMatch(/INSERT INTO organization_invitations/i);
+  });
+});
+
 describe('approveJoinRequest / rejectJoinRequest', () => {
   test('approve: self-approval blocked (400)', async () => {
     await expect(
