@@ -317,6 +317,12 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
   return { kind: 'invited', invitation: result.rows[0] };
 };
 
+// The active workspace roster. Pending domain auto-joins (is_active = FALSE)
+// are intentionally excluded — they surface separately via
+// listPendingJoinRequests so the Team page never conflates "awaiting approval"
+// with "active member". Removing a member hard-deletes the row
+// (removeOrganizationMember), so is_active = FALSE now unambiguously means a
+// genuine pending join request.
 const listOrganizationMembers = async (organizationId) => {
   const result = await query(
     `SELECT
@@ -329,7 +335,7 @@ const listOrganizationMembers = async (organizationId) => {
        om.joined_at
      FROM organization_members om
      INNER JOIN users u ON u.id = om.user_id
-     WHERE om.organization_id = $1
+     WHERE om.organization_id = $1 AND om.is_active = TRUE
      ORDER BY
        CASE om.role
          WHEN 'owner' THEN 1
@@ -347,32 +353,68 @@ const listOrganizationMembers = async (organizationId) => {
   }));
 };
 
-const setOrganizationMemberStatus = async ({ organizationId, userId, isActive, requestingUserId }) => {
-  if (userId === requestingUserId) {
-    throw createError('You cannot deactivate your own workspace access.', 400);
+// Remove a member from the workspace (hard delete of the membership row, the
+// same idiom rejectJoinRequest uses). Re-inviting restores access; the audit
+// log preserves the removal. Guards mirror updateOrganizationMemberRole so the
+// server — not just the hidden UI button — enforces them:
+//   • you cannot remove yourself through this control;
+//   • you cannot remove a member who outranks you (rank ceiling); and
+//   • you cannot remove the last active owner (the org must keep an owner).
+// FOR UPDATE makes the last-owner check race-safe against a concurrent removal.
+const removeOrganizationMember = async ({ organizationId, targetUserId, actor }) => {
+  if (targetUserId === actor.id) {
+    throw createError('You cannot remove your own workspace access.', 400);
   }
+  const actorRole = normalizeRole(actor.role);
 
-  const result = await query(
-    `UPDATE organization_members
-     SET is_active = $1, updated_at = NOW()
-     WHERE organization_id = $2 AND user_id = $3
-     RETURNING organization_id, user_id, role, is_active`,
-    [isActive, organizationId, userId]
-  );
+  return transaction(async (client) => {
+    const targetRes = await client.query(
+      `SELECT user_id, role, is_active
+         FROM organization_members
+        WHERE organization_id = $1 AND user_id = $2
+        FOR UPDATE`,
+      [organizationId, targetUserId]
+    );
+    if (targetRes.rows.length === 0) {
+      throw createError('Organization member not found.', 404);
+    }
+    const currentRole = normalizeRole(targetRes.rows[0].role);
 
-  if (result.rows.length === 0) {
-    throw createError('Organization member not found.', 404);
-  }
+    if (ROLE_PRIORITY[currentRole] > ROLE_PRIORITY[actorRole]) {
+      throw createError('You cannot remove a member who outranks you.', 403);
+    }
 
-  await organizationAuditLog.recordAudit({
-    organizationId,
-    actorId: requestingUserId,
-    targetUserId: userId,
-    eventType: isActive ? 'member_reactivated' : 'member_deactivated',
-    after: { is_active: isActive },
+    if (currentRole === 'owner' && targetRes.rows[0].is_active) {
+      const ownerCount = await client.query(
+        `SELECT COUNT(*)::int AS n
+           FROM organization_members
+          WHERE organization_id = $1 AND role = 'owner' AND is_active = TRUE`,
+        [organizationId]
+      );
+      if (ownerCount.rows[0].n <= 1) {
+        throw createError('Cannot remove the last active owner of the organization.', 409);
+      }
+    }
+
+    await client.query(
+      `DELETE FROM organization_members
+        WHERE organization_id = $1 AND user_id = $2`,
+      [organizationId, targetUserId]
+    );
+
+    await organizationAuditLog.recordAudit(
+      {
+        organizationId,
+        actorId: actor.id,
+        targetUserId,
+        eventType: 'member_removed',
+        before: { role: currentRole, is_active: targetRes.rows[0].is_active },
+      },
+      client
+    );
+
+    return { removed: true, user_id: targetUserId };
   });
-
-  return result.rows[0];
 };
 
 // ── Domain-based onboarding ─────────────────────────────────────────────────
@@ -603,7 +645,7 @@ module.exports = {
   listPendingJoinRequests,
   approveJoinRequest,
   rejectJoinRequest,
+  removeOrganizationMember,
   resolveActiveMembership,
-  setOrganizationMemberStatus,
   updateOrganizationMemberRole,
 };

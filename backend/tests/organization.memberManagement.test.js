@@ -102,6 +102,82 @@ describe('updateOrganizationMemberRole', () => {
   });
 });
 
+describe('removeOrganizationMember', () => {
+  test('rejects removing your own access (400)', async () => {
+    await expect(
+      orgService.removeOrganizationMember({
+        organizationId: ORG, targetUserId: 'admin-1', actor: adminActor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  test('404 when the target is not a member', async () => {
+    const client = { query: jest.fn().mockResolvedValueOnce({ rows: [] }) };
+    runTxnWith(client);
+    await expect(
+      orgService.removeOrganizationMember({
+        organizationId: ORG, targetUserId: 'ghost', actor: ownerActor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  test('admin cannot remove an owner who outranks them (403)', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValueOnce({ rows: [{ user_id: 'u2', role: 'owner', is_active: true }] }),
+    };
+    runTxnWith(client);
+    await expect(
+      orgService.removeOrganizationMember({
+        organizationId: ORG, targetUserId: 'u2', actor: adminActor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  test('blocks removing the last active owner (409)', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ user_id: 'u2', role: 'owner', is_active: true }] })
+        .mockResolvedValueOnce({ rows: [{ n: 1 }] }),
+    };
+    runTxnWith(client);
+    await expect(
+      orgService.removeOrganizationMember({
+        organizationId: ORG, targetUserId: 'u2', actor: ownerActor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  test('removes a non-owner member and returns removed:true', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ user_id: 'u2', role: 'editor', is_active: true }] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] }),
+    };
+    runTxnWith(client);
+    const result = await orgService.removeOrganizationMember({
+      organizationId: ORG, targetUserId: 'u2', actor: ownerActor,
+    });
+    expect(result).toEqual({ removed: true, user_id: 'u2' });
+    // A non-owner skips the owner-count query: SELECT FOR UPDATE then DELETE.
+    expect(client.query.mock.calls[1][0]).toMatch(/DELETE FROM organization_members/i);
+  });
+
+  test('removes an owner when another active owner remains', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ user_id: 'u2', role: 'owner', is_active: true }] })
+        .mockResolvedValueOnce({ rows: [{ n: 2 }] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] }),
+    };
+    runTxnWith(client);
+    const result = await orgService.removeOrganizationMember({
+      organizationId: ORG, targetUserId: 'u2', actor: ownerActor,
+    });
+    expect(result).toEqual({ removed: true, user_id: 'u2' });
+  });
+});
+
 describe('inviteOrganizationMember', () => {
   test('rejects assigning owner (400)', async () => {
     await expect(

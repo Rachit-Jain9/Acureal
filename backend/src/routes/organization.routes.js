@@ -162,25 +162,23 @@ router.patch(
   }
 );
 
-// PATCH /api/organization/members/:userId/status — activate/deactivate (admin+).
-router.patch(
-  '/members/:userId/status',
+// DELETE /api/organization/members/:userId — remove a member from the
+// workspace (admin+). Hard delete; re-inviting restores access. The service
+// enforces the rank ceiling + last-active-owner guard server-side.
+router.delete(
+  '/members/:userId',
   authenticate,
   requireRole('admin'),
-  [
-    param('userId').isUUID().withMessage('userId must be a valid id.'),
-    body('isActive').isBoolean().withMessage('isActive must be true or false.'),
-  ],
+  [param('userId').isUUID().withMessage('userId must be a valid id.')],
   handleValidation,
   async (req, res, next) => {
     try {
-      const member = await organizationService.setOrganizationMemberStatus({
+      const result = await organizationService.removeOrganizationMember({
         organizationId: req.user.organization_id,
-        userId: req.params.userId,
-        isActive: req.body.isActive === true,
-        requestingUserId: req.user.id,
+        targetUserId: req.params.userId,
+        actor: req.user,
       });
-      res.json({ success: true, data: { member } });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

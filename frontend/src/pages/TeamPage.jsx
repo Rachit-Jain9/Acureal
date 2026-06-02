@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  UserPlus, ShieldCheck, Globe, Trash2, Check, Copy,
+  UserPlus, ShieldCheck, Globe, Trash2, Check, Copy, UserCheck,
 } from 'lucide-react';
 import {
   Button, Modal, Field, Input, Select, SkeletonList, confirm, Card, SectionHeader, ErrorState,
@@ -11,8 +11,9 @@ import { toast } from '../components/common/Toast';
 import useAuthStore from '../store/authStore';
 import { roleSatisfies, ROLE_LABEL } from '../utils/roles';
 import {
-  useOrganizationMembers, useInviteMember, useUpdateMemberRole, useSetMemberStatus,
-  useRejectJoinRequest, useOrganizationDomains, useAddDomain, useVerifyDomain,
+  useOrganizationMembers, useInviteMember, useUpdateMemberRole, useRemoveMember,
+  useJoinRequests, useApproveJoinRequest, useRejectJoinRequest,
+  useOrganizationDomains, useAddDomain, useVerifyDomain,
   useSetDomainPolicy, useRemoveDomain,
 } from '../hooks/useOrganization';
 
@@ -30,19 +31,20 @@ const fmtDate = (iso) => {
   }
 };
 
-function MemberRow({ member, actorRole, selfId, busy, onChangeRole, onDeactivate, onApprove, onDecline }) {
+// A row in the active roster. Pending join requests render via PendingRow
+// below — they are a distinct list, never mixed in here.
+function MemberRow({ member, actorRole, selfId, busy, onChangeRole, onRemove }) {
   const isSelf = member.id === selfId;
   const actorRank = rankOf(actorRole);
   const memberRank = rankOf(member.role);
   const canManage = roleSatisfies(actorRole, ['admin']);
   // You can act on someone only if they don't outrank you, and never on yourself
-  // through these controls (you can't demote/remove your own access here).
+  // through these controls (you can't remove your own access here).
   const canActOnMember = canManage && !isSelf && memberRank <= actorRank;
   const assignableRoles = ROLE_ORDER.filter((_, i) => i <= actorRank);
-  const inactive = member.is_active === false;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 border-b border-hairline-soft last:border-b-0">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 border-b border-hairline-soft last:border-b-0" role="listitem">
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-content-primary truncate">
           {member.name || member.email}
@@ -55,26 +57,8 @@ function MemberRow({ member, actorRole, selfId, busy, onChangeRole, onDeactivate
         {fmtDate(member.joined_at)}
       </div>
 
-      <div className="w-20 flex justify-center">
-        {inactive
-          ? <Badge tone="warn">Pending</Badge>
-          : <Badge tone="success">Active</Badge>}
-      </div>
-
       <div className="flex items-center gap-2 w-[13.5rem] justify-end">
-        {inactive ? (
-          canManage ? (
-            <>
-              <Button size="sm" variant="secondary" leftIcon={<Check size={14} />}
-                loading={busy} onClick={() => onApprove(member)}>
-                Approve
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => onDecline(member)} aria-label="Decline">
-                <Trash2 size={14} />
-              </Button>
-            </>
-          ) : <Badge tone="neutral">{ROLE_LABEL[member.role] || member.role}</Badge>
-        ) : canActOnMember ? (
+        {canActOnMember ? (
           <>
             <Select
               aria-label={`Role for ${member.name || member.email}`}
@@ -87,7 +71,7 @@ function MemberRow({ member, actorRole, selfId, busy, onChangeRole, onDeactivate
                 <option key={r} value={r}>{ROLE_LABEL[r]}</option>
               ))}
             </Select>
-            <Button size="sm" variant="ghost" onClick={() => onDeactivate(member)}
+            <Button size="sm" variant="ghost" onClick={() => onRemove(member)}
               aria-label={`Remove ${member.name || member.email}`}>
               <Trash2 size={14} />
             </Button>
@@ -97,6 +81,40 @@ function MemberRow({ member, actorRole, selfId, busy, onChangeRole, onDeactivate
             {ROLE_LABEL[member.role] || member.role}
           </Badge>
         )}
+      </div>
+    </div>
+  );
+}
+
+// A pending domain auto-join awaiting an admin's decision. Distinct from the
+// roster: approving moves the person into the workspace at the role they were
+// routed to; declining removes the request entirely.
+function PendingRow({ request, canManage, busy, onApprove, onDecline }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 border-b border-hairline-soft last:border-b-0" role="listitem">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-content-primary truncate">
+          {request.name || request.email}
+        </div>
+        <div className="text-xs text-content-muted truncate">{request.email}</div>
+      </div>
+
+      <div className="hidden sm:block text-xs text-content-muted w-28 text-right">
+        wants {ROLE_LABEL[request.role] || request.role}
+      </div>
+
+      <div className="flex items-center gap-2 w-[13.5rem] justify-end">
+        {canManage ? (
+          <>
+            <Button size="sm" variant="secondary" leftIcon={<Check size={14} />}
+              loading={busy} onClick={() => onApprove(request)}>
+              Approve
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onDecline(request)} aria-label={`Decline ${request.name || request.email}`}>
+              <Trash2 size={14} />
+            </Button>
+          </>
+        ) : <Badge tone="warn">Pending</Badge>}
       </div>
     </div>
   );
@@ -231,10 +249,14 @@ export default function TeamPage() {
 
   const { data: members, isLoading: membersLoading, isError: membersError } = useOrganizationMembers();
   const { data: domains, isLoading: domainsLoading } = useOrganizationDomains();
+  // Pending join requests are admin-gated on the server, so only fetch them for
+  // managers — viewers never see this section.
+  const { data: joinRequests } = useJoinRequests(canManage);
 
   const invite = useInviteMember();
   const changeRole = useUpdateMemberRole();
-  const setStatus = useSetMemberStatus();
+  const removeMember = useRemoveMember();
+  const approve = useApproveJoinRequest();
   const decline = useRejectJoinRequest();
   const addDomain = useAddDomain();
   const verifyDomain = useVerifyDomain();
@@ -244,34 +266,36 @@ export default function TeamPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [newDomain, setNewDomain] = useState('');
 
-  const memberBusy = changeRole.isPending || setStatus.isPending || decline.isPending;
-  const domainBusy = addDomain.isPending || verifyDomain.isPending || setDomainPolicy.isPending || removeDomain.isPending;
+  const memberBusy = changeRole.isPending || removeMember.isPending;
+  const requestBusy = approve.isPending || decline.isPending;
+  const domainBusy = addDomain.isPending || verifyDomain.isPending
+    || setDomainPolicy.isPending || removeDomain.isPending;
 
-  const activeCount = (members || []).filter((m) => m.is_active !== false).length;
-  const pendingCount = (members || []).filter((m) => m.is_active === false).length;
+  const activeCount = (members || []).length;
+  const pending = joinRequests || [];
 
   const handleInvite = ({ email, role }, reset) => {
     invite.mutate({ email, role }, { onSuccess: () => { reset(); setInviteOpen(false); } });
   };
 
-  const handleDeactivate = async (member) => {
+  const handleRemove = async (member) => {
     const ok = await confirm({
       title: `Remove ${member.name || member.email}?`,
-      message: 'They will lose access to this workspace. You can restore them later.',
+      message: 'They will lose access to this workspace. You can re-invite them anytime.',
       tone: 'danger',
       confirmLabel: 'Remove access',
     });
-    if (ok) setStatus.mutate({ userId: member.id, isActive: false });
+    if (ok) removeMember.mutate(member.id);
   };
 
-  const handleDecline = async (member) => {
+  const handleDecline = async (request) => {
     const ok = await confirm({
-      title: `Decline ${member.name || member.email}?`,
+      title: `Decline ${request.name || request.email}?`,
       message: 'Their pending request to join will be removed. They can request again later.',
       tone: 'danger',
       confirmLabel: 'Decline',
     });
-    if (ok) decline.mutate(member.id);
+    if (ok) decline.mutate(request.id);
   };
 
   const handleAddDomain = (e) => {
@@ -306,16 +330,37 @@ export default function TeamPage() {
         )}
       />
 
+      {/* Pending join requests — admin/owner only, shown only when some exist.
+          Kept above the roster so an admin sees decisions that need making
+          before the (longer) list of existing members. */}
+      {canManage && pending.length > 0 && (
+        <Card className="p-5">
+          <SectionHeader
+            icon={UserCheck}
+            title="Pending requests"
+            sub={`${pending.length} ${pending.length === 1 ? 'person is' : 'people are'} waiting to join via your company domain.`}
+          />
+          <div role="list">
+            {pending.map((request) => (
+              <PendingRow
+                key={request.id}
+                request={request}
+                canManage={canManage}
+                busy={requestBusy}
+                onApprove={(r) => approve.mutate(r.id)}
+                onDecline={handleDecline}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Members */}
       <Card className="p-5">
         <SectionHeader
           icon={ShieldCheck}
           title="Members"
-          sub={
-            membersLoading
-              ? 'Loading the roster…'
-              : `${activeCount} active${pendingCount ? ` · ${pendingCount} pending` : ''}`
-          }
+          sub={membersLoading ? 'Loading the roster…' : `${activeCount} active`}
         />
 
         {membersLoading ? (
@@ -338,9 +383,7 @@ export default function TeamPage() {
                 selfId={user?.id}
                 busy={memberBusy}
                 onChangeRole={(m, role) => changeRole.mutate({ userId: m.id, role })}
-                onDeactivate={handleDeactivate}
-                onApprove={(m) => setStatus.mutate({ userId: m.id, isActive: true })}
-                onDecline={handleDecline}
+                onRemove={handleRemove}
               />
             ))}
           </div>
