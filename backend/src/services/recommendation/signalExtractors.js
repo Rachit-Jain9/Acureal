@@ -40,7 +40,15 @@ const num = (v) => {
 
 const getKpis = (ws) => ws?.financial?.summary?.kpis || ws?.financial?.summary || null;
 const getDeal = (ws) => ws?.deal || null;
-const getComps = (ws) => ws?.comps?.entries || ws?.market?.comps || null;
+const getComps = (ws) => {
+  const entries = ws?.comps?.entries || ws?.market?.comps || null;
+  if (!Array.isArray(entries)) return entries;
+  // The price-vs-comp signal labels its median "Verified-comp median", so it
+  // must be computed from verified comps only (CLAUDE.md: never present
+  // unverified market data as authoritative). is_verified defaults TRUE, so
+  // only an explicit false (a comp still in the review queue) is excluded.
+  return entries.filter((c) => c && c.is_verified !== false);
+};
 const getDocuments = (ws) => ws?.documents?.documents || ws?.documents || null;
 const getApprovals = (ws) => ws?.approvals || ws?.deal?.approval_items || [];
 const getDdItems = (ws) => ws?.dd?.items || ws?.deal?.dd_items || [];

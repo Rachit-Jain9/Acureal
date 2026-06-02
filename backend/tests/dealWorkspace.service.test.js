@@ -15,6 +15,9 @@ jest.mock('../src/services/microMarketIntelligence.service', () => ({
 }));
 jest.mock('../src/services/comps.service', () => ({
   getCompsNearLocation: jest.fn(),
+  // Pure mapper — use the real implementation so the asset_class → enum
+  // mapping is exercised end-to-end (the slice now maps before querying).
+  assetClassToProjectType: jest.requireActual('../src/services/comps.service').assetClassToProjectType,
 }));
 
 const dealService = require('../src/services/deal.service');
@@ -251,6 +254,7 @@ describe('dealWorkspace.service', () => {
     expect(ws.financial.summary.irr_pct).toBe(14);
     // comps surfaced in the extractor-expected shape
     expect(ws.comps.entries).toHaveLength(3);
-    expect(compsService.getCompsNearLocation).toHaveBeenCalledWith(12.97, 77.75, 5, 'residential_apartments');
+    // asset_class 'residential_apartments' now maps to the valid comps.project_type enum 'residential'.
+    expect(compsService.getCompsNearLocation).toHaveBeenCalledWith(12.97, 77.75, 5, 'residential');
   });
 });

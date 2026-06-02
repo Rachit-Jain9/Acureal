@@ -153,7 +153,13 @@ async function getDealWorkspace(dealId, options = {}) {
       const lat = Number(deal.property_lat ?? deal.parcel_lat ?? deal.latitude);
       const lng = Number(deal.property_lng ?? deal.parcel_lng ?? deal.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || !compsService.getCompsNearLocation) return [];
-      const nearby = await compsService.getCompsNearLocation(lat, lng, 5, deal.asset_class);
+      // Map asset_class onto a VALID comps.project_type enum value before
+      // filtering. Passing the raw asset_class ('residential_apartments', …)
+      // made Postgres reject the enum comparison, so this slice returned 0
+      // comps on every deal — silently emptying the recommendation engine,
+      // Deal Doctor market cards, and the IC-readiness comp count.
+      const projectType = compsService.assetClassToProjectType(deal.asset_class, deal.property_type);
+      const nearby = await compsService.getCompsNearLocation(lat, lng, 5, projectType);
       return Array.isArray(nearby) ? nearby : [];
     }, 'nearbyComps'),
   ]);

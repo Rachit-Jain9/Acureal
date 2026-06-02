@@ -2,7 +2,7 @@ const { query } = require('../config/database');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { percentile } = require('../utils/percentile');
-const { getCompsNearLocation } = require('./comps.service');
+const { getCompsNearLocation, assetClassToProjectType } = require('./comps.service');
 const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrative, generateDocumentInsights } = require('./export.insights.service');
 // PR-NX67 (2026-05-19) — AI market-context augment layer. Generates 5
 // market-context sections (Why This Area, Demographics, Job Growth,
@@ -156,16 +156,13 @@ const normalizeCityVariants = (city) => {
   return [normalized];
 };
 
-const mapAssetClassToCompType = (assetClass, propertyType) => {
-  const normalizedAssetClass = String(assetClass || '').trim().toLowerCase();
-  const normalizedPropertyType = String(propertyType || '').trim().toLowerCase();
-
-  if (normalizedPropertyType === 'office' || normalizedAssetClass === 'commercial_office') return 'office';
-  if (normalizedPropertyType === 'retail' || normalizedAssetClass === 'retail') return 'retail';
-  if (normalizedPropertyType === 'industrial' || normalizedAssetClass === 'industrial_warehousing') return 'industrial';
-  if (normalizedPropertyType === 'hospitality' || normalizedAssetClass === 'hospitality') return 'hospitality';
-  return 'residential';
-};
+// Delegates to the canonical comps mapper so the result is always a VALID
+// comps.project_type enum member. The previous bespoke map returned
+// 'office'/'retail'/'industrial'/'hospitality' — none of which are enum
+// members — so the nearby + city comp queries threw and were caught as
+// "0 comps" for every commercial-family deal's export.
+const mapAssetClassToCompType = (assetClass, propertyType) =>
+  assetClassToProjectType(assetClass, propertyType);
 
 const deriveBenchmarks = (comps) => {
   const rates = (Array.isArray(comps) ? comps : [])

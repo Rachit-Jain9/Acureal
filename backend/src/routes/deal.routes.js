@@ -383,7 +383,7 @@ router.get('/:id/benchmark-bands', authenticate, async (req, res, next) => {
     }
 
     const { getBenchmarkBands } = require('../services/exports/xlsx/v2/marketBenchmarkValidator');
-    const { getCompsNearLocation } = require('../services/comps.service');
+    const { getCompsNearLocation, assetClassToProjectType } = require('../services/comps.service');
     const { inferAssetClass } = require('../utils/assetClass');
 
     // Coords come from the deal's joined property — exposed by dealSelect as
@@ -408,15 +408,11 @@ router.get('/:id/benchmark-bands', authenticate, async (req, res, next) => {
     }
 
     const assetClass = inferAssetClass(deal);
-    // Map asset_class → comps project_type (residential / office / retail / industrial / hospitality)
-    const projectType = (() => {
-      const ac = String(assetClass || '').toLowerCase();
-      if (ac === 'commercial_office') return 'office';
-      if (ac === 'retail') return 'retail';
-      if (ac === 'industrial_warehousing') return 'industrial';
-      if (ac === 'hospitality') return 'hospitality';
-      return 'residential';
-    })();
+    // Map asset_class → a VALID comps.project_type enum value (residential /
+    // commercial / mixed_use). The previous inline map produced 'office' /
+    // 'retail' / ... which are not enum members, so this endpoint threw an
+    // enum error for every commercial-family deal.
+    const projectType = assetClassToProjectType(assetClass, deal.property_type);
 
     const radiusKm = 5;
     const comps = await getCompsNearLocation(Number(lat), Number(lng), radiusKm, projectType);
