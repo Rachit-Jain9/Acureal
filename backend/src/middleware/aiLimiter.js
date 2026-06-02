@@ -1,6 +1,10 @@
 'use strict';
 
 const rateLimit = require('express-rate-limit');
+// IPv6-safe normalisation for the unauthenticated fallback key — without it,
+// every IPv6 address looks unique and a v6 client could bypass the limit
+// (express-rate-limit ERR_ERL_KEY_GEN_IPV6).
+const { ipKeyGenerator } = require('express-rate-limit');
 
 /**
  * Dedicated limiter for the genuinely expensive, UNCACHED AI endpoints —
@@ -27,7 +31,7 @@ const aiLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip),
   message: {
     success: false,
     message: 'You are sending AI requests too quickly. Please wait a moment and try again.',
