@@ -9,9 +9,9 @@ import {
   MapPin,
   RefreshCw,
   Ruler,
-  X,
 } from 'lucide-react';
 import { useProperty, useGeocodeProperty, useUpdateProperty } from '../hooks/useProperties';
+import { useCanEdit } from '../hooks/useCanEdit';
 import MasterPlanZonePanel from '../components/deal/MasterPlanZonePanel';
 import ParcelIntelligencePanel from '../components/deal/ParcelIntelligencePanel';
 import ReadOnlyPropertyMap from '../components/maps/ReadOnlyPropertyMap';
@@ -20,7 +20,7 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
 import { toast } from '../components/common/Toast';
-import { SectionHeader, Skeleton, SkeletonCard } from '../design-system';
+import { SectionHeader, Skeleton, SkeletonCard, Modal } from '../design-system';
 import {
   formatArea,
   formatDate,
@@ -127,6 +127,7 @@ export default function PropertyDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
 
+  const canEdit = useCanEdit();
   const { data: property, isLoading, isError } = useProperty(id);
   // Scope to THIS property's deals server-side (was fetching up to 500 deals
   // then discarding nearly all client-side). Keeps full deal data for the few
@@ -244,14 +245,16 @@ export default function PropertyDetailPage() {
                 Open in Google Maps
               </a>
             )}
-            <button
-              type="button"
-              onClick={openEditModal}
-              className="btn btn-primary inline-flex items-center gap-2 text-sm"
-            >
-              <Edit2 size={14} />
-              Edit Property
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="btn btn-primary inline-flex items-center gap-2 text-sm"
+              >
+                <Edit2 size={14} />
+                Edit Property
+              </button>
+            )}
           </div>
         }
       />
@@ -323,15 +326,17 @@ export default function PropertyDetailPage() {
                   {property.geocode_message && (
                     <p className="mt-1 text-xs text-content-muted">{property.geocode_message}</p>
                   )}
-                  <button
-                    type="button"
-                    disabled={geocodeMutation.isPending}
-                    onClick={() => geocodeMutation.mutate(id)}
-                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={geocodeMutation.isPending ? 'animate-spin' : ''} />
-                    {geocodeMutation.isPending ? 'Re-geocoding...' : 'Re-geocode from address'}
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      disabled={geocodeMutation.isPending}
+                      onClick={() => geocodeMutation.mutate(id)}
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} className={geocodeMutation.isPending ? 'animate-spin' : ''} />
+                      {geocodeMutation.isPending ? 'Re-geocoding...' : 'Re-geocode from address'}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -415,7 +420,7 @@ export default function PropertyDetailPage() {
                   title="Property reference point"
                   heightClassName="h-72"
                   propertyId={property.id}
-                  canEdit
+                  canEdit={canEdit}
                 />
               </div>
             ) : (
@@ -464,27 +469,25 @@ export default function PropertyDetailPage() {
         )}
       </section>
 
-      {showEditModal && editForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 py-8">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-bg-elevated shadow-2xl">
-            <div className="flex items-center justify-between border-b border-hairline-strong px-6 py-4">
-              <div>
-                <h3 className="text-lg font-semibold text-content-primary">Edit Property</h3>
-                <p className="mt-1 text-sm text-content-secondary">
-                  Update address intelligence, commercial fields, and manual coordinates from one place.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEditModal(false)}
-                className="rounded-lg p-2 text-content-muted transition hover:bg-bg-secondary hover:text-content-secondary dark:hover:bg-bg-primary dark:hover:text-content-muted"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleEditSubmit} className="flex min-h-0 flex-1 flex-col">
-              <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+      <Modal
+        open={showEditModal && !!editForm}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Property"
+        description="Update address intelligence, commercial fields, and manual coordinates from one place."
+        size="xl"
+        footer={(
+          <>
+            <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" form="edit-property-form" disabled={updateProperty.isPending} className="btn btn-primary">
+              {updateProperty.isPending ? 'Saving...' : 'Save Property'}
+            </button>
+          </>
+        )}
+      >
+        {editForm && (
+          <form id="edit-property-form" onSubmit={handleEditSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="md:col-span-2">
                     <label className="mb-1 block text-sm font-medium text-content-secondary">Property Name</label>
@@ -792,28 +795,9 @@ export default function PropertyDetailPage() {
                     placeholder="Capture site nuance, broker context, or diligence notes..."
                   />
                 </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 border-t border-hairline-strong px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updateProperty.isPending}
-                  className="btn btn-primary"
-                >
-                  {updateProperty.isPending ? 'Saving...' : 'Save Property'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }
