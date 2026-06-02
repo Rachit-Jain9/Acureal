@@ -166,7 +166,7 @@ export default function PortfolioReadinessWidget() {
         {isLoading && (
           <div className="space-y-3 animate-pulse motion-reduce:animate-none">
             <div className="h-2 bg-bg-secondary rounded-full" />
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="h-14 bg-bg-secondary rounded" />
               <div className="h-14 bg-bg-secondary rounded" />
               <div className="h-14 bg-bg-secondary rounded" />

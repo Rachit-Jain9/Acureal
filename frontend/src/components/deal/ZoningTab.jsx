@@ -24,7 +24,7 @@ export default function ZoningTab({ setTab }) {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
   const propertyStub = resolveLinkedProperty(deal);
-  const { data: hydratedProperty } = useProperty(propertyStub?.id);
+  const { data: hydratedProperty, isLoading: propertyLoading } = useProperty(propertyStub?.id);
   const property = hydratedProperty ? { ...propertyStub, ...hydratedProperty } : propertyStub;
 
   if (!property?.id) {
@@ -46,6 +46,19 @@ export default function ZoningTab({ setTab }) {
       >
         Parcel Intelligence needs a linked property record so zoning, buildability, guidance value, and K-GIS context can be sourced from one place.
       </ErrorState>
+    );
+  }
+
+  // While the full property record (zone_id, parcel fields) is still hydrating,
+  // hold a skeleton — otherwise MasterPlanZonePanel briefly flashes
+  // "Not assigned / Needs review" against the bare stub before the real zone
+  // resolves on a zone-assigned deal.
+  if (propertyStub?.id && propertyLoading && !hydratedProperty) {
+    return (
+      <div className="space-y-5" role="status" aria-busy="true" aria-label="Loading zoning context">
+        <div className="h-44 rounded-editorial border border-hairline bg-bg-secondary/30 animate-pulse motion-reduce:animate-none" />
+        <div className="h-32 rounded-editorial border border-hairline bg-bg-secondary/30 animate-pulse motion-reduce:animate-none" />
+      </div>
     );
   }
 
