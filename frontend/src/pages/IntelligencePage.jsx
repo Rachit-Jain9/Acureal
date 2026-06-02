@@ -47,7 +47,7 @@ import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
 import { toast } from '../components/common/Toast';
-import { SkeletonKpi, SkeletonCard, Skeleton } from '../design-system';
+import { SkeletonKpi, SkeletonCard, Skeleton, SkeletonList } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
 import {
   buildClusterOptions,
@@ -765,9 +765,7 @@ export default function IntelligencePage() {
           title="5. Residential Micro-Market Benchmarks — Bengaluru Q1 2026"
         >
           {bmLoading ? (
-            <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
-              <RefreshCw size={14} className="animate-spin" /> Loading benchmarks…
-            </div>
+            <SkeletonList rows={5} columns={6} />
           ) : (
             <BenchmarksTable rows={benchmarks} />
           )}
@@ -854,9 +852,7 @@ export default function IntelligencePage() {
           title="6. Market Transaction Flow — Bengaluru (FY2025–FY2027)"
         >
           {txLoading ? (
-            <div className="flex items-center gap-2 text-sm text-content-secondary py-4">
-              <RefreshCw size={14} className="animate-spin" /> Loading transactions…
-            </div>
+            <SkeletonList rows={5} columns={5} />
           ) : (
             <TransactionTable rows={transactions} />
           )}

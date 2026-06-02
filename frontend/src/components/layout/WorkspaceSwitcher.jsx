@@ -44,9 +44,20 @@ export default function WorkspaceSwitcher({ collapsed = false }) {
     setOpen(false);
     if (orgId === activeId) return;
     setSwitching(true);
+    const previousId = activeId;
     try {
       setActiveOrganization(orgId);
       const refreshed = await refreshUser();
+      // refreshUser swallows its own error and returns null on failure. If we
+      // can't re-hydrate the user for the new org, roll the active org back —
+      // otherwise the app is stranded scoped to a workspace it couldn't load
+      // and every subsequent request 403s.
+      if (!refreshed) {
+        setActiveOrganization(previousId);
+        await queryClient.invalidateQueries();
+        toast.error('Could not switch workspace. Please try again.');
+        return;
+      }
       await queryClient.invalidateQueries();
       const name = refreshed?.organization?.name
         || orgs.find((o) => o.id === orgId)?.name
