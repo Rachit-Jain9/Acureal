@@ -210,5 +210,24 @@ describe('PR-NX45 — generateDocumentInsights', () => {
       const out = await generateDocumentInsights(fixture({ extractions: sampleExtractions }));
       expect(out.findings[0].severity).toBe('medium');
     });
+
+    test('[legal-lane] scrubs absolute decision verbs from findings before the DOCX', async () => {
+      getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });
+      runClaudeReasoning.mockResolvedValueOnce(JSON.stringify({
+        summary_paragraph: 'Approve the deal — the EC is clean.',
+        findings: [{
+          title: 'Title review',
+          severity: 'high',
+          description: 'EC shows no encumbrance over the period.',
+          recommendation: 'Clear to proceed to IC.',
+        }],
+        confidence: 'high',
+      }));
+      const out = await generateDocumentInsights(fixture({ extractions: sampleExtractions }));
+      // Defense-in-depth backstop to the prompt: no absolute verb survives.
+      expect(out.summary_paragraph).not.toMatch(/\bApprove\b/);
+      expect(out.summary_paragraph).toMatch(/Proceed the deal/);
+      expect(out.findings[0].recommendation).toBe('Recommend proceeding to IC.');
+    });
   });
 });

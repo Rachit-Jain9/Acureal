@@ -805,6 +805,7 @@ STRICT RULES:
 - Be specific: cite the document type AND the value seen in each document. Never write vague "documents disagree" without naming the values.
 - Indian context: owner names, survey numbers (with sub-divisions like 12/2A), khata numbers, RERA registration numbers, area, consideration value are the canonical fields to cross-check.
 - Severity: "critical" for title/owner mismatches, "high" for survey/khata mismatches, "medium" for area/value mismatches, "low" for trivial.
+- LEGAL LANES (title, ownership, khata, EC / encumbrance, RERA registration, statutory approval): you may flag a factual discrepancy between documents or a missing document, but you must NEVER assert a statutory conclusion as truth (never "title is clear", "RERA-compliant", "khata is valid", "approval will be granted") and NEVER use an absolute decision verb (buy, sell, reject, approve, decline, clear, pass). Every "recommendation" on these topics must be a verification step for a qualified professional (e.g. "Have counsel verify the owner name against the latest RTC"), never a conclusion.
 
 SCHEMA:
 {
@@ -858,18 +859,26 @@ const buildDocInsightsPayload = ({ deal, extractions }) => {
 
 const coerceDocInsightsEnvelope = (parsed, extras = {}) => ({
   available: true,
-  summary_paragraph: typeof parsed.summary_paragraph === 'string' ? parsed.summary_paragraph.trim() : null,
+  // Defense-in-depth: these findings cross the legal-four lanes (title / owner /
+  // khata / EC / RERA), so scrub any absolute decision verb (approve / clear /
+  // pass / buy …) the model emitted before the text reaches the customer DOCX.
+  // The prompt is the primary guard; this is the backstop (CLAUDE.md).
+  summary_paragraph: typeof parsed.summary_paragraph === 'string'
+    ? neutralizeStanceText(parsed.summary_paragraph.trim())
+    : null,
   findings: Array.isArray(parsed.findings)
     ? parsed.findings
         .filter((f) => f && (f.title || f.description))
         .slice(0, 8)
         .map((f) => ({
-          title: String(f.title || '').trim(),
+          title: neutralizeStanceText(String(f.title || '').trim()),
           severity: ['critical', 'high', 'medium', 'low'].includes(f.severity)
             ? f.severity
             : 'medium',
-          description: String(f.description || '').trim(),
-          recommendation: typeof f.recommendation === 'string' ? f.recommendation.trim() : null,
+          description: neutralizeStanceText(String(f.description || '').trim()),
+          recommendation: typeof f.recommendation === 'string'
+            ? neutralizeStanceText(f.recommendation.trim())
+            : null,
         }))
     : [],
   confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'medium',

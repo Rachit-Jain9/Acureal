@@ -20,10 +20,23 @@ describe('icStanceVerbs — closed verb dictionary guard (CLAUDE.md)', () => {
       expect(neutralizeStanceText('Reject this deal.')).toBe('Recommend against proceeding this deal.');
     });
 
+    test('rewrites leading "Buy" / "Sell" and decision-context "Clear"', () => {
+      expect(neutralizeStanceText('Buy. Strong yield-on-cost.'))
+        .toBe('Recommend proceeding. Strong yield-on-cost.');
+      expect(neutralizeStanceText('Sell at stabilization.'))
+        .toBe('Recommend exiting at stabilization.');
+      expect(neutralizeStanceText('Clear to proceed to IC.'))
+        .toBe('Recommend proceeding to IC.');
+    });
+
     test('leaves allowed verbs and compounds untouched', () => {
       expect(neutralizeStanceText('Proceed with conditions.')).toBe('Proceed with conditions.');
       expect(neutralizeStanceText('Pass-through costs are modeled.')).toBe('Pass-through costs are modeled.');
       expect(neutralizeStanceText('Hold pending title verification.')).toBe('Hold pending title verification.');
+      // Buy-side / Sell-side / "clear title" are NOT stance verbs — never rewritten.
+      expect(neutralizeStanceText('Buy-side diligence is complete.')).toBe('Buy-side diligence is complete.');
+      expect(neutralizeStanceText('Sell-side comps were used.')).toBe('Sell-side comps were used.');
+      expect(neutralizeStanceText('Clear title confirmed in the EC.')).toBe('Clear title confirmed in the EC.');
     });
   });
 
@@ -60,12 +73,16 @@ describe('icStanceVerbs — closed verb dictionary guard (CLAUDE.md)', () => {
       expect(containsAbsoluteStanceVerb('Decline this deal')).toBe(true);
       expect(containsAbsoluteStanceVerb('Recommend approval')).toBe(true);
       expect(containsAbsoluteStanceVerb('Approve the budget')).toBe(true);
+      expect(containsAbsoluteStanceVerb('Buy. Strong returns.')).toBe(true);
+      expect(containsAbsoluteStanceVerb('Clear to proceed to IC.')).toBe(true);
     });
 
     test('does not flag clean closed-dictionary prose', () => {
       expect(containsAbsoluteStanceVerb('Recommend proceeding subject to conditions.')).toBe(false);
       expect(containsAbsoluteStanceVerb('Hold pending title verification.')).toBe(false);
       expect(containsAbsoluteStanceVerb('Required Approvals: BBMP sanction pending.')).toBe(false);
+      expect(containsAbsoluteStanceVerb('Buy-side diligence complete.')).toBe(false);
+      expect(containsAbsoluteStanceVerb('Clear title confirmed.')).toBe(false);
     });
   });
 });

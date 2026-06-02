@@ -29,6 +29,8 @@
  * without financials still produces recommendations on the comps side.
  */
 
+const { percentile } = require('../../utils/percentile');
+
 const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -244,9 +246,12 @@ const extractCapRateVsCompBand = (ws) => {
   if (assumed == null) return null;
   const compCaps = comps.map((c) => num(c?.cap_rate_pct ?? c?.implied_cap_rate)).filter((n) => n != null);
   if (compCaps.length < 3) return null;
-  const sorted = compCaps.slice().sort((a, b) => a - b);
-  const lo = sorted[Math.floor(sorted.length * 0.25)];
-  const hi = sorted[Math.floor(sorted.length * 0.75)];
+  // Interpolated p25/p75 (shared type-7 util) — a naive sorted[floor(n*0.25)]
+  // collapses to [min, max] on the small comp sets typical of one Bengaluru
+  // micro-market, so the assumed cap almost always fell "inside" and the flag
+  // never fired.
+  const lo = percentile(compCaps, 0.25);
+  const hi = percentile(compCaps, 0.75);
   if (assumed >= lo && assumed <= hi) return null;
   return {
     kind: 'cap_rate_vs_comp_band',

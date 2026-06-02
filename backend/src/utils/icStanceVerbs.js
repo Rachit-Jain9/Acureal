@@ -27,6 +27,10 @@ const PHRASE_RULES = [
   [/\brecommend(?:ing|s)?\s+approval\b/gi, 'Recommend proceeding'],
   [/\brecommend(?:ing|s)?\s+(?:to\s+)?(?:approve|approving)\b/gi, 'Recommend proceeding'],
   [/\brecommend(?:ing|s)?\s+(?:to\s+)?(?:decline|declining|reject(?:ing)?|rejection|denial|passing)\b/gi, 'Recommend against proceeding'],
+  // "Clear" as a decision verb only ("clear to proceed", "clear for IC",
+  // "clear the deal") — scoped so it never touches the legitimate legal phrase
+  // "clear title" / "clear of encumbrances", which is itself governed elsewhere.
+  [/\bclear(?:ed|s|ing)?\s+(?:to\s+proceed|for\s+(?:the\s+)?(?:ic|investment\s+committee)|(?:the|this)\s+deal)\b/gi, 'Recommend proceeding'],
 ];
 
 // Bare sentence-leading stance verbs — applied ONLY to text that is already a
@@ -37,13 +41,17 @@ const LEADING_RULES = [
   [/(^|[\n.!?]\s*)Reject(?:ing)?\b/g, '$1Recommend against proceeding'],
   [/(^|[\n.!?]\s*)Approve\b/g, '$1Proceed'],
   [/(^|[\n.!?]\s*)Approving\b/g, '$1Proceeding'],
+  // "Buy" / "Sell" as standalone stances — exclude hyphenated/compound forms
+  // ("Buy-side", "Buyer", "Sell-side", "Selling", "Sell-through").
+  [/(^|[\n.!?]\s*)Buy\b(?![-\w])/gi, '$1Recommend proceeding'],
+  [/(^|[\n.!?]\s*)Sell\b(?![-\w])/gi, '$1Recommend exiting'],
   // "Pass" as a standalone stance — exclude "Pass-through" / "Passing" / "Passed".
   [/(^|[\n.!?]\s*)Pass\b(?![-\w])/gi, '$1Recommend against proceeding'],
 ];
 
 // Detector — any absolute stance verb still present (observability only).
 const ABSOLUTE_VERB_RE =
-  /\b(?:recommend(?:ing|s)?\s+(?:approval|to\s+approve|to\s+decline)|approve|approving|declin(?:e|ing)|reject(?:ing)?)\b|(?:^|[\n.!?]\s*)Pass\b(?![-\w])/i;
+  /\b(?:recommend(?:ing|s)?\s+(?:approval|to\s+approve|to\s+decline)|approve|approving|declin(?:e|ing)|reject(?:ing)?)\b|(?:^|[\n.!?]\s*)(?:Pass|Buy|Sell)\b(?![-\w])|\bclear(?:ed|s|ing)?\s+(?:to\s+proceed|for\s+(?:the\s+)?(?:ic|investment\s+committee)|(?:the|this)\s+deal)\b/i;
 
 /** Rewrite banned stance verbs in a string that is ITSELF a stance opinion. */
 function neutralizeStanceText(text) {
