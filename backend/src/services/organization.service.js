@@ -249,6 +249,49 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
     throw createError('Invitations can only assign admin, editor, or viewer access.', 400);
   }
 
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+
+  // If the invitee already has a REDIP account, add them to the workspace
+  // directly. An emailed invitation token is only consumable at registration,
+  // so it would never reach someone who already signed up. This is admin-
+  // initiated (the route gates it to admin/owner) and grants the user access to
+  // THIS workspace only — it exposes none of their own data to the org.
+  const existing = await query(
+    'SELECT id, name, email FROM users WHERE LOWER(email) = $1',
+    [normalizedEmail]
+  );
+  if (existing.rows.length > 0) {
+    const targetUser = existing.rows[0];
+    const upsert = await query(
+      `INSERT INTO organization_members (organization_id, user_id, role, invited_by, is_active)
+       VALUES ($1, $2, $3::organization_role, $4, TRUE)
+       ON CONFLICT (organization_id, user_id) DO UPDATE
+         SET role = EXCLUDED.role,
+             is_active = TRUE,
+             updated_at = NOW()
+       RETURNING organization_id, user_id, role, is_active`,
+      [organizationId, targetUser.id, normalizedRole, invitedBy]
+    );
+
+    await organizationAuditLog.recordAudit({
+      organizationId,
+      actorId: invitedBy,
+      targetUserId: targetUser.id,
+      eventType: 'member_invited',
+      after: { email: normalizedEmail, role: normalizedRole, added_existing_user: true },
+    });
+
+    return {
+      kind: 'added',
+      member: {
+        ...upsert.rows[0],
+        role: normalizeRole(upsert.rows[0].role),
+        name: targetUser.name,
+        email: targetUser.email,
+      },
+    };
+  }
+
   const result = await query(
     `INSERT INTO organization_invitations (organization_id, email, role, invited_by, expires_at)
      VALUES ($1, LOWER($2), $3, $4, NOW() + INTERVAL '7 days')
@@ -271,7 +314,7 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
     after: { email: result.rows[0].email, role: result.rows[0].role },
   });
 
-  return result.rows[0];
+  return { kind: 'invited', invitation: result.rows[0] };
 };
 
 const listOrganizationMembers = async (organizationId) => {
