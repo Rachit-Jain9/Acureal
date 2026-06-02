@@ -2,7 +2,6 @@ const express = require('express');
 const { body } = require('express-validator');
 const financialService = require('../services/financial.service');
 const modelConfidenceService = require('../services/modelConfidence.service');
-const confidenceRangeService = require('../services/confidenceRange.service');
 const dealService = require('../services/deal.service');
 const { generateSensitivityNarrative } = require('../services/export.insights.service');
 const { authenticate, requireRole } = require('../middleware/auth');
@@ -453,23 +452,6 @@ router.get('/:dealId/financial-graph', authenticate, async (req, res, next) => {
 router.get('/:dealId/model-confidence', authenticate, async (req, res, next) => {
   try {
     const summary = await modelConfidenceService.getModelConfidence(req.params.dealId);
-    res.json({ success: true, data: summary });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET /financials/:dealId/confidence-range — Workstream A (Provenance Spine).
-//
-// Deterministic KPI exposure: re-runs the existing kernel with every still-
-// unverified assumption swept across its cited benchmark band, and reports the
-// resulting IRR / NPV / equity-multiple ranges plus the per-input drivers.
-// No kernel change, no AI — every range endpoint is a real, reproducible
-// kernel run. Soft-fails to { available: false } so the panel can hide.
-// Auth: authenticate only (same read scope as GET /:dealId).
-router.get('/:dealId/confidence-range', authenticate, async (req, res, next) => {
-  try {
-    const summary = await confidenceRangeService.getConfidenceRange(req.params.dealId);
     res.json({ success: true, data: summary });
   } catch (error) {
     next(error);

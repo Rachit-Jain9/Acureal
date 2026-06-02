@@ -26,9 +26,6 @@ jest.mock('../src/services/riskRadar.service', () => ({
 jest.mock('../src/services/modelConfidence.service', () => ({
   getModelConfidence: jest.fn().mockResolvedValue({ available: false }),
 }));
-jest.mock('../src/services/confidenceRange.service', () => ({
-  getConfidenceRange: jest.fn().mockResolvedValue({ available: false }),
-}));
 jest.mock('../src/services/promoterProfile.service', () => ({
   getProfileWithAssessment: jest.fn().mockResolvedValue(null),
 }));
@@ -40,7 +37,6 @@ const { query } = require('../src/config/database');
 const { getProviderAvailability } = require('../src/services/ai/providerRegistry');
 const riskRadarService = require('../src/services/riskRadar.service');
 const modelConfidenceService = require('../src/services/modelConfidence.service');
-const confidenceRangeService = require('../src/services/confidenceRange.service');
 const promoterProfileService = require('../src/services/promoterProfile.service');
 const compRelianceService = require('../src/services/compReliance.service');
 const icMemo = require('../src/services/icMemo.service');
@@ -179,12 +175,6 @@ describe('buildVerificationContext', () => {
       dealSetCount: 6,
       total: 10,
     });
-    confidenceRangeService.getConfidenceRange.mockResolvedValueOnce({
-      available: true,
-      primaryKpi: 'irr',
-      unverifiedCount: 4,
-      kpis: [{ key: 'irr', label: 'IRR', base: 18.5, low: 14.2, high: 21.9, swing: 7.7 }],
-    });
     riskRadarService.getRiskRadar.mockResolvedValueOnce({
       overall_posture: 'flagged',
       categories: [
@@ -206,13 +196,6 @@ describe('buildVerificationContext', () => {
       band: 'mixed',
       dealSetCount: 6,
       total: 10,
-    });
-    expect(v.confidenceRange).toEqual({
-      kpi: 'IRR',
-      base: 18.5,
-      low: 14.2,
-      high: 21.9,
-      unverifiedInputs: 4,
     });
     expect(v.riskRadar.overallPosture).toBe('flagged');
     expect(v.riskRadar.flagged).toEqual(['Title & Ownership']);

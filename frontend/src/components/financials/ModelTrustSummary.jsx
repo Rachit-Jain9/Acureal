@@ -1,19 +1,16 @@
 import { ShieldCheck, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useModelConfidence, useConfidenceRange } from '../../hooks/useFinancials';
+import { useModelConfidence } from '../../hooks/useFinancials';
 
 /**
  * Model Trust — Workstream A (Provenance Spine), cross-module integration.
  *
- * A compact, fused readout of the two Provenance-Spine signals built on the
- * DCF Underwriting page:
- *   - Model Confidence — how many key inputs are set for this deal vs. on
- *     REDIP's benchmark defaults.
- *   - Confidence Range — what the still-unverified assumptions do to the
- *     headline KPIs.
+ * A compact readout of the Provenance-Spine Model Confidence signal built on
+ * the DCF Underwriting page — how many key inputs are set for this deal vs. on
+ * REDIP's benchmark defaults.
  *
- * The full panels live on the DCF page (the model builder's surface). This
+ * The full panel lives on the DCF page (the model builder's surface). This
  * strip carries the verdict to where a deal is actually reviewed — the deal
  * Overview and the Financial tab — so "how much do I trust these numbers"
  * travels with the numbers themselves.
@@ -40,22 +37,10 @@ const BAND = {
   },
 };
 
-const fmtKpi = (v, unit) => {
-  if (v === null || v === undefined || Number.isNaN(v)) return '—';
-  if (unit === 'pct') return `${v}%`;
-  if (unit === 'x') return `${v}x`;
-  if (unit === 'inr_cr') {
-    const sign = v < 0 ? '−' : '';
-    return `${sign}₹${Math.abs(v).toLocaleString('en-IN')} Cr`;
-  }
-  return String(v);
-};
-
 export default function ModelTrustSummary({ dealId }) {
   const { data: conf, isLoading: confLoading } = useModelConfidence(dealId);
-  const { data: range, isLoading: rangeLoading } = useConfidenceRange(dealId);
 
-  if (confLoading || rangeLoading) {
+  if (confLoading) {
     return (
       <div className="card-editorial">
         <div className="redip-skeleton h-4 w-36 rounded-md mb-2.5" />
@@ -66,13 +51,9 @@ export default function ModelTrustSummary({ dealId }) {
   }
 
   const hasConf = !!conf && conf.available && typeof conf.confidencePct === 'number';
-  const hasRange =
-    !!range && range.available && Array.isArray(range.kpis) && range.kpis.length > 0;
-  if (!hasConf && !hasRange) return null;
+  if (!hasConf) return null;
 
-  const band = hasConf ? BAND[conf.band] || BAND.mixed : null;
-  const kpis = hasRange ? range.kpis : [];
-  const anySwing = kpis.some((k) => k.swing > 0);
+  const band = BAND[conf.band] || BAND.mixed;
 
   return (
     <div className="card-editorial">
@@ -110,39 +91,6 @@ export default function ModelTrustSummary({ dealId }) {
             />
           </div>
         </>
-      )}
-
-      {hasRange && (
-        <div className={clsx(hasConf && 'mt-3 border-t border-hairline pt-2.5')}>
-          {anySwing ? (
-            <>
-              <p className="text-[11px] uppercase tracking-wider font-medium text-content-muted mb-1.5">
-                Headline numbers — range from unverified assumptions
-              </p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {kpis.map((k) => (
-                  <div key={k.key} className="text-sm tabular-nums">
-                    <span className="text-content-muted">{k.label} </span>
-                    <span className="font-semibold text-content-primary">
-                      {fmtKpi(k.base, k.unit)}
-                    </span>
-                    {k.swing > 0 && (
-                      <span className="text-content-muted">
-                        {' '}
-                        ({fmtKpi(k.low, k.unit)}&ndash;{fmtKpi(k.high, k.unit)})
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-content-secondary">
-              Every key assumption is set for this deal — the headline numbers carry no
-              benchmark-driven range.
-            </p>
-          )}
-        </div>
       )}
 
       <Link

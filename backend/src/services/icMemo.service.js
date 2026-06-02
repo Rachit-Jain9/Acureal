@@ -42,7 +42,6 @@ const { formatQuantumCr } = require('../utils/marketUnits');
 // it is fed the same postures the workspace shows the analyst.
 const riskRadarService = require('./riskRadar.service');
 const modelConfidenceService = require('./modelConfidence.service');
-const confidenceRangeService = require('./confidenceRange.service');
 const promoterProfileService = require('./promoterProfile.service');
 const compRelianceService = require('./compReliance.service');
 const { getRequestContext } = require('../lib/requestContext');
@@ -97,18 +96,17 @@ RULES:
  *
  * The IC memo is a decision document; it must not recommend over risk the
  * platform has already flagged as unverified. This composes the same postures
- * the workspace shows the analyst — model confidence, the confidence range,
- * the Risk Radar, promoter execution, analyst-relied comps — into one compact
- * block the memo author treats as ground truth.
+ * the workspace shows the analyst — model confidence, the Risk Radar, promoter
+ * execution, analyst-relied comps — into one compact block the memo author
+ * treats as ground truth.
  *
  * Every signal is wrapped: a trust-service hiccup degrades that one field to
  * null, never breaks IC-memo generation. Pure deterministic data — the LLM
  * only narrates it, never computes it.
  */
 const buildVerificationContext = async (dealId) => {
-  const [mc, cr, radar, promoter, reliedIds] = await Promise.all([
+  const [mc, radar, promoter, reliedIds] = await Promise.all([
     modelConfidenceService.getModelConfidence(dealId).catch(() => null),
-    confidenceRangeService.getConfidenceRange(dealId).catch(() => null),
     riskRadarService.getRiskRadar(dealId).catch(() => null),
     promoterProfileService.getProfileWithAssessment(dealId).catch(() => null),
     compRelianceService.listReliedCompIds(dealId).catch(() => []),
@@ -123,20 +121,6 @@ const buildVerificationContext = async (dealId) => {
           total: mc.total,
         }
       : null;
-
-  let confidenceRange = null;
-  if (cr && cr.available && Array.isArray(cr.kpis) && cr.kpis.length > 0) {
-    const primary = cr.kpis.find((k) => k.key === cr.primaryKpi) || cr.kpis[0];
-    if (primary) {
-      confidenceRange = {
-        kpi: primary.label,
-        base: primary.base,
-        low: primary.low,
-        high: primary.high,
-        unverifiedInputs: cr.unverifiedCount,
-      };
-    }
-  }
 
   const riskRadar =
     radar && Array.isArray(radar.categories)
@@ -159,7 +143,6 @@ const buildVerificationContext = async (dealId) => {
 
   return {
     modelConfidence,
-    confidenceRange,
     riskRadar,
     promoter: promoterPosture,
     reliedCompCount: Array.isArray(reliedIds) ? reliedIds.length : 0,

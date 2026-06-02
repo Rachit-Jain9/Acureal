@@ -360,10 +360,6 @@ export const financialsAPI = {
   // defaults. Returns { available, dealSetCount, defaultCount, total,
   // confidencePct, band, inputs[] }. Never errors for a missing model.
   modelConfidence: (dealId) => api.get(`/financials/${dealId}/model-confidence`),
-  // Workstream A (Provenance Spine) — deterministic KPI ranges: the kernel
-  // re-run with every unverified assumption swept across its benchmark band.
-  // Returns { available, kpis[], drivers[], unverifiedCount, primaryKpi }.
-  confidenceRange: (dealId) => api.get(`/financials/${dealId}/confidence-range`),
   // Immutable, HMAC-signed audit trail. `events` lists the most recent
   // calc/scenario/sensitivity runs; `verifyEvent` re-hashes stored JSON and
   // re-signs with the current key; `replayEvent` additionally re-runs the
