@@ -12,7 +12,7 @@ import { joinList, parseList, toNum } from '../../utils/masterPlanHelpers';
 const EMPTY_ZONE = {
   zone_code: '',
   zone_name: '',
-  plan_version: 'RMP 2031 Draft',
+  plan_version: 'RMP 2031 Provisional',
   city: 'Bengaluru',
   permissible_fsi_base: '',
   permissible_fsi_max: '',

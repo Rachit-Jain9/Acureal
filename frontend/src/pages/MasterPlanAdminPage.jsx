@@ -62,7 +62,7 @@ export default function MasterPlanAdminPage() {
     <div>
       <PageHeader
         title="Master Plan — Regulatory Data"
-        description="Curated zoning regulations (FSI, ground coverage, setbacks, use rules) used across deals. Source: RMP 2031 Draft (OpenCity.in)."
+        description="Curated zoning regulations (FSI, ground coverage, setbacks, use rules) used across deals. Source: RMP 2031 Provisional (OpenCity.in)."
       />
 
       {!canEdit && (

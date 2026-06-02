@@ -148,7 +148,7 @@ export default function LandUseInsightPanel() {
       <SectionHeader
         eyebrow="BMA macro view"
         title="Land Use Intelligence — 2015 baseline → 2031 proposed"
-        sub="Where Bengaluru's Metropolitan Area is shifting per RMP 2031. Numbers extracted directly from the Existing Land Use 2015 map and the Proposed Land Use 2031 map; deltas in percentage points of total developable area."
+        sub="Where Bengaluru's Metropolitan Area is shifting per the provisional, unnotified RMP 2031. Numbers extracted directly from the Existing Land Use 2015 map and the Proposed Land Use 2031 map; deltas in percentage points of total developable area. Planning context — not operative regulation."
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

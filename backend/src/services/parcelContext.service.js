@@ -291,6 +291,7 @@ const fetchPdExistingLandUse = async (pdCode) => {
       `SELECT fact_value
          FROM regulatory_data.evidence_facts
         WHERE fact_type = 'pd_existing_land_use'
+          AND review_status = 'approved'
           AND NULLIF(regexp_replace(fact_value->>'pd_code', '\\D', '', 'g'), '')::int = $1
         LIMIT 1`,
       [pdInt],
