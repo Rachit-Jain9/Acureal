@@ -194,6 +194,29 @@ export const organizationAPI = {
   getBenchmarkSetting: () => api.get('/organization/benchmark-setting'),
   setBenchmarkSetting: (optedOut) =>
     api.put('/organization/benchmark-setting', { optedOut }),
+
+  // Team & members
+  listMembers: () => api.get('/organization/members'),
+  invite: (email, role) => api.post('/organization/invitations', { email, role }),
+  updateMemberRole: (userId, role) =>
+    api.patch(`/organization/members/${userId}/role`, { role }),
+  setMemberStatus: (userId, isActive) =>
+    api.patch(`/organization/members/${userId}/status`, { isActive }),
+
+  // Pending join requests (domain auto-joins awaiting approval)
+  listJoinRequests: () => api.get('/organization/join-requests'),
+  approveJoinRequest: (userId) =>
+    api.post(`/organization/join-requests/${userId}/approve`),
+  rejectJoinRequest: (userId) =>
+    api.post(`/organization/join-requests/${userId}/reject`),
+
+  // Corporate-domain claims
+  listDomains: () => api.get('/organization/domains'),
+  addDomain: (domain) => api.post('/organization/domains', { domain }),
+  verifyDomain: (domainId) => api.post(`/organization/domains/${domainId}/verify`),
+  setDomainPolicy: (domainId, policy) =>
+    api.patch(`/organization/domains/${domainId}`, policy),
+  removeDomain: (domainId) => api.delete(`/organization/domains/${domainId}`),
 };
 
 // PR-C (2026-05-25) — Recommendation Engine verdicts.

@@ -199,6 +199,21 @@ const useAuthStore = create((set) => ({
     }
   },
 
+  // Switch the active workspace. Mutates the cached active org so the api.js
+  // request interceptor sends the new X-Organization-Id on every subsequent
+  // call; the caller then refreshUser() + invalidates queries to re-scope the
+  // UI (role/name differ per workspace). Persists to the same storage tier the
+  // session already uses, so a reload keeps the chosen workspace.
+  setActiveOrganization: (orgId) => {
+    set((state) => {
+      if (!state.user) return state;
+      const next = { ...state.user, organization_id: orgId };
+      if (localStorage.getItem(USER_KEY)) localStorage.setItem(USER_KEY, JSON.stringify(next));
+      else sessionStorage.setItem(USER_KEY, JSON.stringify(next));
+      return { user: next };
+    });
+  },
+
   clearError: () => set({ error: null }),
 }));
 
