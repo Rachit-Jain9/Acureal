@@ -16,22 +16,39 @@ const normalizeApprovalStatus = (value) => {
   return map[status] || status;
 };
 
-const normalizeApprovalPayload = (data = {}) => ({
-  approval_type: data.approval_type ?? data.approvalType,
-  name: data.name,
-  is_required: data.is_required ?? data.isRequired,
-  is_available: data.is_available ?? data.isAvailable,
-  is_uploaded: data.is_uploaded ?? data.isUploaded,
-  is_validated: data.is_validated ?? data.isValidated,
-  issued_date: data.issued_date ?? data.issuedDate,
-  expiry_date: data.expiry_date ?? data.expiryDate,
-  reference_number: data.reference_number ?? data.referenceNumber,
-  issuing_authority: data.issuing_authority ?? data.issuingAuthority,
-  document_id: data.document_id ?? data.documentId,
-  status: normalizeApprovalStatus(data.status),
-  notes: data.notes,
-  next_action: data.next_action ?? data.nextAction,
-});
+// snake_case column → camelCase request alias (null = no alias).
+const APPROVAL_FIELD_ALIASES = {
+  approval_type: 'approvalType',
+  name: null,
+  is_required: 'isRequired',
+  is_available: 'isAvailable',
+  is_uploaded: 'isUploaded',
+  is_validated: 'isValidated',
+  issued_date: 'issuedDate',
+  expiry_date: 'expiryDate',
+  reference_number: 'referenceNumber',
+  issuing_authority: 'issuingAuthority',
+  document_id: 'documentId',
+  status: null,
+  notes: null,
+  next_action: 'nextAction',
+};
+
+// Emit ONLY the keys the caller actually sent (snake or camel), so a partial
+// PATCH touches only those columns. The previous version always materialised
+// all 14 keys, so update() wrote every column on any PATCH — omitting `status`
+// silently reset it to 'pending' and omitting a date NULLed it. create() fills
+// any gaps from its own destructure defaults, so its behaviour is unchanged.
+const normalizeApprovalPayload = (data = {}) => {
+  const has = (k) => Object.prototype.hasOwnProperty.call(data, k);
+  const out = {};
+  for (const [snake, camel] of Object.entries(APPROVAL_FIELD_ALIASES)) {
+    const key = has(snake) ? snake : (camel && has(camel) ? camel : null);
+    if (!key) continue;
+    out[snake] = snake === 'status' ? normalizeApprovalStatus(data[key]) : data[key];
+  }
+  return out;
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Default approval templates per asset class

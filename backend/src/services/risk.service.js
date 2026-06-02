@@ -12,11 +12,19 @@ const normalizeRiskStatus = (value) => {
   return map[status] || status;
 };
 
-const normalizeRiskPayload = (data = {}) => ({
-  ...data,
-  category: data.category ? String(data.category).trim().toLowerCase() : data.category,
-  status: normalizeRiskStatus(data.status),
-});
+// Only normalize/emit keys the caller actually sent, so a partial PATCH (e.g.
+// editing only `mitigation`) no longer silently resets `status` to 'open' or
+// nulls `category`. create() supplies its own defaults via destructure.
+const normalizeRiskPayload = (data = {}) => {
+  const out = { ...data };
+  if (Object.prototype.hasOwnProperty.call(data, 'category')) {
+    out.category = data.category ? String(data.category).trim().toLowerCase() : data.category;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'status')) {
+    out.status = normalizeRiskStatus(data.status);
+  }
+  return out;
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Scoring weights per severity (open flags only contribute to score)
