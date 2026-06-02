@@ -64,20 +64,6 @@ export function useModelConfidence(dealId) {
   });
 }
 
-// Workstream A (Provenance Spine) — deterministic KPI ranges for a saved
-// model: IRR / NPV / equity-multiple swept across the benchmark bands of the
-// inputs not yet verified for this deal. Read-only display; no toast on error.
-// The payload is deterministic for a given model, so the cache can stay warm.
-export function useConfidenceRange(dealId) {
-  return useQuery({
-    queryKey: ['confidence-range', dealId],
-    queryFn: () => financialsAPI.confidenceRange(dealId).then((r) => r.data.data),
-    enabled: !!dealId,
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
-}
-
 // Provenance-carrying defaults registry for the current asset class. The
 // effective map merges globals with per-class overrides. Values are static
 // at kernel-build time, so stale-time is long.

@@ -18,7 +18,6 @@ jest.mock('../src/middleware/aiLimiter', () => ({ aiLimiter: (_req, _res, next) 
 // hoists jest.mock above any local variable, so they can't reference one.)
 jest.mock('../src/services/financial.service', () => ({}));
 jest.mock('../src/services/modelConfidence.service', () => ({}));
-jest.mock('../src/services/confidenceRange.service', () => ({}));
 jest.mock('../src/services/deal.service', () => ({}));
 jest.mock('../src/services/export.insights.service', () => ({
   generateSensitivityNarrative: jest.fn(),
