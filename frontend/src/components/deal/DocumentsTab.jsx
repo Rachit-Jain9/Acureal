@@ -129,6 +129,16 @@ export default function DocumentsTab() {
     return new Map(rows.map((item) => [item.document_id, item]));
   }, [extractionData?.extractions]);
 
+  // Documents whose latest extraction failed or is still processing. The
+  // backend lists here only those with NO usable extraction, so this never
+  // collides with extractionByDocument — a failed document gets an explicit
+  // "Extraction failed — retry" state instead of looking like it was never
+  // extracted.
+  const failureByDocument = useMemo(() => {
+    const rows = extractionData?.failures || [];
+    return new Map(rows.map((item) => [item.document_id, item]));
+  }, [extractionData?.failures]);
+
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     setFileError('');
@@ -379,6 +389,7 @@ export default function DocumentsTab() {
                 <ul className="divide-y divide-hairline">
                   {items.map((doc) => {
                     const extraction = extractionByDocument.get(doc.id);
+                    const failure = failureByDocument.get(doc.id);
                     const canExtract = isPdfDocument(doc);
                     const isExtracting = extractingDocId === doc.id;
 
@@ -396,10 +407,34 @@ export default function DocumentsTab() {
                           {formatBytes(doc.file_size)} ·{' '}
                           {formatDate(doc.uploaded_at || doc.created_at)}
                           {doc.description && ` · ${doc.description}`}
-                          {extraction && (
+                          {extraction && extraction.has_data && (
                             <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
                               <CheckCircle2 size={10} />
                               {formatDocType(extraction.doc_type)}
+                            </span>
+                          )}
+                          {extraction && !extraction.has_data && (
+                            <span
+                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-content-muted"
+                              title="The document was processed but no extractable fields were found in it."
+                            >
+                              <AlertCircle size={10} />
+                              No fields found
+                            </span>
+                          )}
+                          {!extraction && failure?.status === 'failed' && (
+                            <span
+                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700"
+                              title={failure.error_message || 'Extraction failed. Use the extract button to retry.'}
+                            >
+                              <AlertCircle size={10} />
+                              Extraction failed
+                            </span>
+                          )}
+                          {!extraction && failure?.status === 'processing' && (
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                              <Loader2 size={10} className="animate-spin motion-reduce:animate-none" />
+                              Extracting…
                             </span>
                           )}
                         </p>
@@ -410,7 +445,7 @@ export default function DocumentsTab() {
                             onClick={() => handleExtract(doc)}
                             disabled={isExtracting || extractingDocId !== null}
                             className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50"
-                            title={extraction ? 'Re-run extraction' : 'Extract evidence'}
+                            title={extraction ? 'Re-run extraction' : failure ? 'Retry extraction' : 'Extract evidence'}
                           >
                             {isExtracting ? (
                               <Loader2 size={15} className="animate-spin" />
