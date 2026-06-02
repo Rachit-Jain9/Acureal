@@ -11,6 +11,7 @@ import {
   Loader2,
   Map as MapIcon,
   Table as TableIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
 import { useCanEdit } from '../hooks/useCanEdit';
@@ -347,7 +348,7 @@ export default function CompsPage() {
     return params;
   }, [filters.city, filters.maxRate, filters.minRate, filters.projectType, search]);
 
-  const { data, isLoading } = useComps(queryParams);
+  const { data, isLoading, isError, refetch } = useComps(queryParams);
   const createMutation = useCreateComp();
   const deleteMutation = useDeleteComp();
 
@@ -734,6 +735,17 @@ export default function CompsPage() {
         <div className="bg-bg-elevated border border-hairline rounded-editorial p-2">
           <SkeletonList rows={6} columns={6} />
         </div>
+      ) : isError ? (
+        <EmptyState
+          title="Couldn't load comparables"
+          description="Something went wrong fetching your comparable transactions — this does not mean your library is empty. Please retry."
+          icon={AlertTriangle}
+          action={(
+            <button onClick={() => refetch()} className="btn btn-primary">
+              Retry
+            </button>
+          )}
+        />
       ) : visible.length === 0 ? (
         <EmptyState
           title="No comparables found"
