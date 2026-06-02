@@ -351,13 +351,28 @@ const joinByVerifiedDomain = async (client, { userId, email, hostedDomain = null
     return null;
   }
 
-  const match = await client.query(
-    `SELECT organization_id, default_role, require_admin_approval
-       FROM organization_domains
-      WHERE lower(domain) = lower($1) AND verified = TRUE
-      LIMIT 1`,
-    [domain]
-  );
+  // Resolve the verified domain on a SEPARATE connection (module `query`), not
+  // the signup transaction's `client`. If organization_domains doesn't exist yet
+  // (this migration not applied before deploy), a 42P01 on the client would
+  // poison the whole signup transaction and break registration. On a separate
+  // connection we can swallow it and fall back to a personal workspace.
+  // organization_domains and organization_audit_log ship in the same migration,
+  // so reaching the writes below guarantees both tables exist.
+  let match;
+  try {
+    match = await query(
+      `SELECT organization_id, default_role, require_admin_approval
+         FROM organization_domains
+        WHERE lower(domain) = lower($1) AND verified = TRUE
+        LIMIT 1`,
+      [domain]
+    );
+  } catch (error) {
+    if (error && error.code === '42P01') {
+      return null;
+    }
+    throw error;
+  }
   if (match.rows.length === 0) {
     return null;
   }

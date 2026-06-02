@@ -139,59 +139,70 @@ describe('approveJoinRequest / rejectJoinRequest', () => {
 });
 
 describe('joinByVerifiedDomain', () => {
+  // The domain lookup runs on the module `query` (a separate connection so a
+  // missing table can't poison the signup transaction); the membership writes
+  // run on the transaction `client`.
   const fakeClient = () => ({ query: jest.fn() });
 
-  test('returns null for a public email provider (no auto-join, no DB hit)', async () => {
+  test('returns null for a public email provider (no DB hit)', async () => {
     const client = fakeClient();
     const result = await orgService.joinByVerifiedDomain(client, { userId: 'u1', email: 'a@gmail.com' });
     expect(result).toBeNull();
+    expect(query).not.toHaveBeenCalled();
     expect(client.query).not.toHaveBeenCalled();
   });
 
   test('returns null when no verified domain matches', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
     const client = fakeClient();
-    client.query.mockResolvedValueOnce({ rows: [] });
     const result = await orgService.joinByVerifiedDomain(client, { userId: 'u1', email: 'a@acme.in' });
     expect(result).toBeNull();
+    expect(client.query).not.toHaveBeenCalled();
+  });
+
+  test('deploy-before-migrate: a missing organization_domains table → null, no writes', async () => {
+    query.mockRejectedValueOnce(Object.assign(new Error('no table'), { code: '42P01' }));
+    const client = fakeClient();
+    const result = await orgService.joinByVerifiedDomain(client, { userId: 'u1', email: 'a@acme.in' });
+    expect(result).toBeNull();
+    expect(client.query).not.toHaveBeenCalled();
   });
 
   test('active auto-join: inserts an active member, sets default org, returns org id', async () => {
+    query.mockResolvedValueOnce({ rows: [{ organization_id: 'org-acme', default_role: 'editor', require_admin_approval: false }] });
     const client = fakeClient();
     client.query
-      .mockResolvedValueOnce({ rows: [{ organization_id: 'org-acme', default_role: 'editor', require_admin_approval: false }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const result = await orgService.joinByVerifiedDomain(client, { userId: 'u1', email: 'a@acme.in' });
 
     expect(result).toBe('org-acme');
-    expect(client.query.mock.calls[1][0]).toMatch(/INSERT INTO organization_members/i);
-    expect(client.query.mock.calls[1][1]).toEqual(['org-acme', 'u1', 'editor', true]);
-    expect(client.query.mock.calls[2][0]).toMatch(/UPDATE users SET default_organization_id/i);
+    expect(client.query.mock.calls[0][0]).toMatch(/INSERT INTO organization_members/i);
+    expect(client.query.mock.calls[0][1]).toEqual(['org-acme', 'u1', 'editor', true]);
+    expect(client.query.mock.calls[1][0]).toMatch(/UPDATE users SET default_organization_id/i);
   });
 
-  test('approval-required: inserts a PENDING member and returns null (caller makes personal workspace)', async () => {
+  test('approval-required: inserts a PENDING member and returns null', async () => {
+    query.mockResolvedValueOnce({ rows: [{ organization_id: 'org-acme', default_role: 'editor', require_admin_approval: true }] });
     const client = fakeClient();
-    client.query
-      .mockResolvedValueOnce({ rows: [{ organization_id: 'org-acme', default_role: 'editor', require_admin_approval: true }] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+    client.query.mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const result = await orgService.joinByVerifiedDomain(client, { userId: 'u1', email: 'a@acme.in' });
 
     expect(result).toBeNull();
-    expect(client.query.mock.calls[1][1]).toEqual(['org-acme', 'u1', 'editor', false]);
-    // No default-org update for a pending member.
-    expect(client.query).toHaveBeenCalledTimes(2);
+    expect(client.query.mock.calls[0][1]).toEqual(['org-acme', 'u1', 'editor', false]);
+    expect(client.query).toHaveBeenCalledTimes(1);
   });
 
   test('prefers the Google hosted-domain claim over the email domain', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
     const client = fakeClient();
-    client.query.mockResolvedValueOnce({ rows: [] });
     await orgService.joinByVerifiedDomain(client, {
       userId: 'u1',
       email: 'a@personal-alias.com',
       hostedDomain: 'acme.in',
     });
-    expect(client.query.mock.calls[0][1]).toEqual(['acme.in']);
+    expect(query.mock.calls[0][1]).toEqual(['acme.in']);
   });
 });
