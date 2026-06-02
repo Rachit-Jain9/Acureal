@@ -106,7 +106,7 @@ function TransactionTable({ rows }) {
 
   return (
     <div>
-      <div className="overflow-x-auto -mx-5">
+      <div className="overflow-x-auto overscroll-x-contain -mx-5">
         <table className="w-full text-xs border-collapse min-w-[800px]">
           <thead>
             <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
@@ -259,7 +259,7 @@ function BenchmarksTable({ rows }) {
           allLabel="All sources"
         />
       </div>
-      <div className="overflow-x-auto -mx-5">
+      <div className="overflow-x-auto overscroll-x-contain -mx-5">
         <table className="w-full text-xs border-collapse min-w-[760px]">
           <thead>
             <tr className="border-b-2 border-hairline-strong bg-bg-secondary">
@@ -867,7 +867,7 @@ export default function IntelligencePage() {
           focused. Hide in non-residential filters (office/retail/etc). */}
       {showSection('residential') && brief?.bengaluruDemandHeatmap?.length > 0 && (
         <SectionCard icon={BarChart2} title="7. Demand Heatmap — Bengaluru Micro-Markets">
-          <div className="overflow-x-auto -mx-5">
+          <div className="overflow-x-auto overscroll-x-contain -mx-5">
             <table className="w-full text-xs border-collapse min-w-[700px]">
               <thead>
                 <tr className="border-b-2 border-hairline-strong bg-bg-secondary">

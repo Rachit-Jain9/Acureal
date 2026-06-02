@@ -22,7 +22,7 @@ import ontologyV1 from '@redip/real-estate-ontology';
  * Per AI_ROADMAP §10 (UX/UI conventions for AI surfaces):
  *   - Mandatory "AI-assisted — requires human review" banner.
  *   - Confidence rendered as bands (high/medium/low), not raw %.
- *   - Source-document chips are clickable (open the doc).
+ *   - Source-document chips name the originating document (full name on hover).
  *   - Skeleton-then-list on initial extraction load.
  *
  * The ontology field_map is the single source of truth for field labels +
