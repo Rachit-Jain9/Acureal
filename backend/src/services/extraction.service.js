@@ -59,6 +59,11 @@ const CLAUDE_NORMALIZATION_SKIP_DOC_TYPES = new Set([
   'guidance_value_report',
 ]);
 let documentsDocTypeColumnAvailable = null;
+// Same feature-detect cache for document_extractions.extraction_started_at —
+// lets the pipeline run whether or not the reaper migration has been applied
+// yet, so a code deploy that lands before the DB update never breaks
+// extraction inserts.
+let extractionStartedAtColumnAvailable = null;
 
 const KNOWN_DOC_TYPES = new Set(Object.keys(GEMINI_EXTRACTION_PROMPTS));
 
@@ -274,6 +279,19 @@ function computeConfidenceScores(structuredFields) {
   return scores;
 }
 
+// True when an extraction holds at least one non-empty extracted field.
+// A 'completed' extraction that fails this is "no data" — processed cleanly
+// but with nothing extractable — which the UI must distinguish from a failed
+// extraction. Underscore-prefixed bookkeeping keys never count as data.
+function hasExtractedValue(fields) {
+  if (!fields || typeof fields !== 'object') return false;
+  return Object.entries(fields).some(([key, value]) => {
+    if (key.startsWith('_')) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== null && value !== undefined && value !== '';
+  });
+}
+
 function pickBestStructuredFields(primaryFields, secondaryFields) {
   if (!secondaryFields) return primaryFields;
   if (!primaryFields) return secondaryFields;
@@ -417,6 +435,31 @@ async function canStoreDocumentDocType() {
 
   documentsDocTypeColumnAvailable = Boolean(result.rows[0]?.exists);
   return documentsDocTypeColumnAvailable;
+}
+
+// Feature-detect document_extractions.extraction_started_at (added by the
+// reaper migration). Cached for the warm-instance lifetime; a cold start
+// after the migration applies picks up the new column. Fail-closed to false
+// so a detection error just means we omit the column on insert.
+async function canStoreExtractionStartedAt() {
+  if (extractionStartedAtColumnAvailable !== null) {
+    return extractionStartedAtColumnAvailable;
+  }
+  try {
+    const result = await query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'document_extractions'
+           AND column_name = 'extraction_started_at'
+       ) AS exists`
+    );
+    extractionStartedAtColumnAvailable = Boolean(result.rows[0]?.exists);
+  } catch {
+    extractionStartedAtColumnAvailable = false;
+  }
+  return extractionStartedAtColumnAvailable;
 }
 
 async function updateDocumentDocType(documentId, docType) {
@@ -600,12 +643,22 @@ async function extractDocument(
   options = {}
 ) {
   const providerLabel = getProviderAvailability().claude ? 'gemini_claude' : 'gemini';
-  // Create extraction record in 'processing' state
+  // Create extraction record in 'processing' state. extraction_started_at is
+  // stamped here so the stuck-extraction reaper can reliably tell which
+  // 'processing' rows have outlived the Vercel function timeout (see
+  // reapStuckExtractions below). Feature-detected so the code is safe to
+  // deploy before the reaper migration lands.
+  const hasStartedAt = await canStoreExtractionStartedAt();
   const insertResult = await query(
-    `INSERT INTO document_extractions
-       (document_id, deal_id, extraction_status, provider)
-     VALUES ($1, $2, 'processing', $3)
-     RETURNING *`,
+    hasStartedAt
+      ? `INSERT INTO document_extractions
+           (document_id, deal_id, extraction_status, provider, extraction_started_at)
+         VALUES ($1, $2, 'processing', $3, NOW())
+         RETURNING *`
+      : `INSERT INTO document_extractions
+           (document_id, deal_id, extraction_status, provider)
+         VALUES ($1, $2, 'processing', $3)
+         RETURNING *`,
     [documentId, dealId || null, providerLabel],
   );
   const extraction = insertResult.rows[0];
@@ -723,11 +776,117 @@ async function getExtractionByDocument(documentId) {
   return result.rows[0] || null;
 }
 
-// Deal-scoped roll-up for UI provenance badges. Returns only the latest
-// extraction per document (so corrections win over stale AI passes), and only
-// extractions currently in a completed state. Callers that need raw history
-// should read document_extractions directly.
+// ──────────────────────────────────────────────────────────────────────────────
+// Stuck-extraction reaper
+// ──────────────────────────────────────────────────────────────────────────────
+//
+// Deal-document extraction runs synchronously inside the
+// POST /documents/:id/extract request, which Vercel caps at maxDuration
+// (300s in production). If the function is killed mid-run (timeout, OOM,
+// redeploy) the catch block in extractDocument never executes, so the row is
+// orphaned in 'processing' forever — invisible to getDealExtractions and
+// un-retryable from the UI.
+//
+// This reaper flips stale 'processing' rows to 'failed' with a clear,
+// retry-oriented message so the operator can see the failure and re-run
+// extraction. The threshold sits comfortably above maxDuration so a
+// legitimately in-flight extraction is never reaped. It runs at the start of
+// getDealExtractions — a cheap, idempotent, org-scoped UPDATE (almost always
+// zero rows, backed by idx_document_extractions_processing). No separate cron
+// is needed, matching the master_plan_documents reaper pattern.
+const EXTRACTION_STUCK_THRESHOLD_MS = 6 * 60 * 1000; // 6 min > 300s Vercel maxDuration
+
+async function reapStuckExtractions(dealId = null) {
+  try {
+    const params = [EXTRACTION_STUCK_THRESHOLD_MS];
+    let dealClause = '';
+    if (dealId) {
+      params.push(dealId);
+      dealClause = `AND deal_id = $${params.length}`;
+    }
+    // Two-clause WHERE handles both modern and legacy stuck rows:
+    //  - rows created after this migration have extraction_started_at and are
+    //    reaped once they exceed the threshold.
+    //  - rows that were already stuck before the migration have
+    //    extraction_started_at = NULL; they're reaped via created_at with a
+    //    longer 15-minute floor so a row that is legitimately on its first
+    //    (long) run is never eaten.
+    const result = await query(
+      `UPDATE document_extractions
+          SET extraction_status = 'failed',
+              error_message = 'Extraction timed out before completion (the processing function was interrupted). Re-run extraction to retry.',
+              updated_at = NOW()
+        WHERE extraction_status = 'processing'
+          AND organization_id = current_organization_id()
+          ${dealClause}
+          AND (
+            (extraction_started_at IS NOT NULL
+              AND extraction_started_at < NOW() - ($1::bigint || ' milliseconds')::interval)
+            OR
+            (extraction_started_at IS NULL
+              AND created_at < NOW() - INTERVAL '15 minutes')
+          )`,
+      params,
+    );
+    if (result.rowCount > 0) {
+      log.warn('extraction_reaped_stuck', { deal_id: dealId || null, count: result.rowCount });
+    }
+    return result.rowCount || 0;
+  } catch (err) {
+    // Reaper failures are intentionally swallowed — the read path must not
+    // break if the cleanup write fails. The next read retries.
+    log.warn('extraction_reaper_failed', { error: err.message });
+    return 0;
+  }
+}
+
+// Latest failed / stuck-'processing' extraction per document for a deal.
+// Powers the "N documents failed extraction — retry" surface. Org-scoped:
+// the app connects as a BYPASSRLS role, so the explicit organization_id
+// filter is the only cross-tenant guard (current_organization_id() is set
+// per request in config/database.js#applyRequestContext).
+async function getDealExtractionFailures(dealId) {
+  const result = await query(
+    `SELECT DISTINCT ON (de.document_id)
+            de.id,
+            de.document_id,
+            de.doc_type,
+            de.extraction_status,
+            de.error_message,
+            de.extracted_at,
+            de.updated_at,
+            d.name AS document_name
+       FROM document_extractions de
+       JOIN documents d ON d.id = de.document_id
+      WHERE de.deal_id = $1
+        AND de.organization_id = current_organization_id()
+        AND de.extraction_status IN ('failed','processing')
+      ORDER BY de.document_id, de.created_at DESC`,
+    [dealId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    document_id: row.document_id,
+    document_name: row.document_name,
+    doc_type: row.doc_type,
+    status: row.extraction_status, // 'failed' | 'processing'
+    error_message: row.error_message || null,
+    extracted_at: row.extracted_at || null,
+    updated_at: row.updated_at || null,
+  }));
+}
+
+// Deal-scoped roll-up for UI provenance badges. Returns the latest extraction
+// per document (so corrections win over stale AI passes). The `extractions`
+// array carries documents in a usable state (completed/partial/reviewed);
+// `failures` carries documents whose latest attempt failed or is stuck so the
+// UI can prompt a retry; `coverage` is the at-a-glance status breakdown.
+// Callers that need raw history should read document_extractions directly.
 async function getDealExtractions(dealId) {
+  // Sweep this deal's orphaned 'processing' rows to 'failed' before reading so
+  // they surface in `failures` instead of silently vanishing. Best-effort.
+  await reapStuckExtractions(dealId);
+
   const result = await query(
     `SELECT DISTINCT ON (de.document_id)
             de.id,
@@ -784,6 +943,10 @@ async function getDealExtractions(dealId) {
       confidence: row.confidence_scores || {},
       has_corrections: Object.keys(corrections).length > 0,
       applied_canonical_fields: Array.from(appliedCanonicalFields),
+      // "no data" vs "has data": a completed extraction with no non-empty
+      // field was processed fine but had nothing extractable — the UI shows
+      // "no fields found" instead of implying something is still pending.
+      has_data: hasExtractedValue(fields),
     };
   });
 
@@ -794,10 +957,30 @@ async function getDealExtractions(dealId) {
   // extraction's `applied_canonical_fields` list.
   const fieldMap = buildFieldMap(extractions);
 
+  // Documents whose latest attempt failed or is genuinely still processing —
+  // but only those with NO usable extraction, so a document that failed once
+  // and then succeeded on retry doesn't keep nagging the operator.
+  const usableDocIds = new Set(extractions.map((e) => e.document_id));
+  const failures = (await getDealExtractionFailures(dealId)).filter(
+    (f) => !usableDocIds.has(f.document_id),
+  );
+
+  // At-a-glance coverage so the UI can say "6 extracted · 1 no data · 1 failed"
+  // without re-deriving it client-side.
+  const withData = extractions.filter((e) => e.has_data).length;
+  const coverage = {
+    with_data: withData,
+    no_data: extractions.length - withData,
+    failed: failures.filter((f) => f.status === 'failed').length,
+    processing: failures.filter((f) => f.status === 'processing').length,
+  };
+
   return {
     count: extractions.length,
     extractions,
     field_map: fieldMap,
+    failures,
+    coverage,
   };
 }
 
@@ -976,6 +1159,8 @@ module.exports = {
   callExtractionWithFallback,
   getExtractionByDocument,
   getDealExtractions,
+  getDealExtractionFailures,
+  reapStuckExtractions,
   applyCorrections,
   GEMINI_EXTRACTION_PROMPTS,
 };
