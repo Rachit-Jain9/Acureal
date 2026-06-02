@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Loader2, Info } from 'lucide-react';
-import { financialsAPI } from '../../services/api';
+import { runQuickCompute } from '../../utils/quickCompute';
 import { useDefaultsMeta } from '../../hooks/useFinancials';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
 import { preflightDealInput } from '../../utils/dealInputPreflight';
@@ -189,15 +189,15 @@ export default function SensitivityTornado({ assetClass, baseInputs, baseKpis, o
 
           tasks.push(
             Promise.all([
-              financialsAPI.quickCompute(buildPayload({ [v.key]: lo })),
-              financialsAPI.quickCompute(buildPayload({ [v.key]: hi })),
+              runQuickCompute(buildPayload({ [v.key]: lo })),
+              runQuickCompute(buildPayload({ [v.key]: hi })),
             ]).then(([downRes, upRes]) => ({
               v,
               current: usedCurrent,
               low: lo,
               high: hi,
-              downKpis: downRes.data?.data?.kpis || null,
-              upKpis:   upRes.data?.data?.kpis   || null,
+              downKpis: downRes?.kpis || null,
+              upKpis:   upRes?.kpis   || null,
             })),
           );
         }

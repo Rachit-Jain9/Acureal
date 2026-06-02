@@ -4,7 +4,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { financialsAPI } from '../../services/api';
+import { runQuickCompute } from '../../utils/quickCompute';
 import { resolveFinancialModelClass } from '../../utils/assetClasses';
 import { preflightDealInput } from '../../utils/dealInputPreflight';
 import MissingInputsCard from './MissingInputsCard';
@@ -352,13 +352,13 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, o
     setUpKpis(null);
 
     Promise.all([
-      financialsAPI.quickCompute({ assetClass, ...downInputs }),
-      financialsAPI.quickCompute({ assetClass, ...upInputs }),
+      runQuickCompute({ assetClass, ...downInputs }),
+      runQuickCompute({ assetClass, ...upInputs }),
     ])
       .then(([dRes, uRes]) => {
         if (cancelled) return;
-        setDownKpis(dRes.data?.data?.kpis || null);
-        setUpKpis(uRes.data?.data?.kpis || null);
+        setDownKpis(dRes?.kpis || null);
+        setUpKpis(uRes?.kpis || null);
       })
       .catch((e) => {
         if (cancelled) return;

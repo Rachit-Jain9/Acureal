@@ -12,6 +12,7 @@ import AuditTrailChip from '../financials/AuditTrailChip';
 import ModelTrustSummary from '../financials/ModelTrustSummary';
 import { SectionHeader } from '../../design-system';
 import { useDealRecord } from '../../hooks/useDealContext';
+import { useCanEdit } from '../../hooks/useCanEdit';
 
 function MetricCard({ label, value, sub, highlight }) {
   return (
@@ -69,6 +70,7 @@ export default function FinancialTab() {
   const deal = useDealRecord();
   const financials = deal?.financials;
   const dealId = deal?.id;
+  const canEdit = useCanEdit();
   useScrollOnMount();
 
   if (!financials) {
@@ -78,15 +80,17 @@ export default function FinancialTab() {
           size="md"
           icon={BarChart3}
           title="No financial model yet"
-          description="Build a full financial model to track IRR, NPV, equity multiple, costs, and revenue projections for this deal."
-          action={(
+          description={canEdit
+            ? 'Build a full financial model to track IRR, NPV, equity multiple, costs, and revenue projections for this deal.'
+            : 'An editor or admin needs to build the financial model for this deal. Once it is saved, IRR, NPV, equity multiple, costs, and revenue projections will appear here.'}
+          action={canEdit ? (
             <Link
               to={`/dashboard/financials/${dealId}`}
               className="btn btn-primary inline-flex items-center gap-2"
             >
               Build Financial Model <ArrowRight size={15} />
             </Link>
-          )}
+          ) : null}
         />
       </div>
     );
