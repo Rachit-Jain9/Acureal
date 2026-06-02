@@ -30,6 +30,41 @@ const getDocumentErrorMessage = (err, fallback) => {
   return fallback;
 };
 
+// The extract endpoint returns HTTP 201 for completed, partial, AND failed
+// runs — a failed extraction is caught server-side and returned, not thrown —
+// so a blanket "Document extracted" success toast lies to the operator when
+// nothing was captured. Decide an honest toast from the returned row. Pure +
+// exported for unit testing. `structured_fields` may arrive as an object
+// (JSONB) or a JSON string depending on the column type, so handle both.
+export function resolveExtractionToast(extraction) {
+  const status = extraction?.extraction_status;
+  let fields = extraction?.structured_fields;
+  if (typeof fields === 'string') {
+    try { fields = JSON.parse(fields); } catch { fields = null; }
+  }
+  const fieldCount = fields && typeof fields === 'object' ? Object.keys(fields).length : 0;
+
+  if (status === 'failed') {
+    return {
+      type: 'error',
+      message: extraction?.error_message
+        ? `Extraction failed: ${extraction.error_message}`
+        : 'Extraction failed — please retry.',
+    };
+  }
+  if (fieldCount === 0) {
+    return { type: 'warning', message: 'Extraction finished, but no fields were found in this document.' };
+  }
+  if (status === 'partial') {
+    return { type: 'warning', message: 'Document partially extracted — some fields may be missing. Please review.' };
+  }
+  const ingestion = extraction?.evidence_ingestion;
+  if (ingestion && ingestion.skipped === false) {
+    return { type: 'success', message: 'Evidence queued for review' };
+  }
+  return { type: 'success', message: 'Document extracted' };
+}
+
 export function useDocumentDealOptions() {
   return useQuery({
     queryKey: ['documents', 'deal-options'],
@@ -104,12 +139,8 @@ export function useExtractDocument() {
       qc.invalidateQueries({ queryKey: ['parcel-intelligence-admin-status'] });
       qc.invalidateQueries({ queryKey: ['parcel-intelligence-review-queue'] });
 
-      const ingestion = extraction?.evidence_ingestion;
-      if (ingestion && ingestion.skipped === false) {
-        toast.success('Evidence queued for review');
-      } else {
-        toast.success('Document extracted');
-      }
+      const { type, message } = resolveExtractionToast(extraction);
+      toast[type](message);
     },
     onError: (err) => toast.error(getDocumentErrorMessage(err, 'Extraction failed')),
   });
