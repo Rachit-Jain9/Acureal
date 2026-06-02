@@ -198,7 +198,7 @@ router.patch(
 );
 
 // DELETE /activities/entry/:activityId
-router.delete('/entry/:activityId', authenticate, async (req, res, next) => {
+router.delete('/entry/:activityId', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
     const result = await activityService.deleteActivity(req.params.activityId, req.user.id, req.user.role);
     res.json({ success: true, message: 'Activity deleted.', data: result });
