@@ -9,6 +9,7 @@ const { getRequestContext } = require('../lib/requestContext');
 const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getPlatformOrgId } = require('../utils/platformOrg');
+const { formatQuantumCr } = require('../utils/marketUnits');
 
 const HEATMAP_MARKETS = [
   'Whitefield',
@@ -150,7 +151,7 @@ Rules:
       period: `${t.fiscal_year} ${t.quarter}`,
       type: t.deal_type,
       buyer: t.buyer,
-      quantumCr: t.quantum_inr_mn ? (t.quantum_inr_mn / 100).toFixed(0) + ' Cr' : null,
+      quantumCr: formatQuantumCr(t.quantum_inr_mn),
       locality: t.locality,
       landAcres: t.land_size_acres,
     })),
@@ -445,7 +446,7 @@ Rules:
     recentTransactions: txResult.rows.map((t) => ({
       period: `${t.fiscal_year} ${t.quarter}`,
       buyer: t.buyer,
-      quantumCr: t.quantum_inr_mn ? (t.quantum_inr_mn / 100).toFixed(0) + ' Cr' : null,
+      quantumCr: formatQuantumCr(t.quantum_inr_mn),
       locality: t.locality,
       landAcres: t.land_size_acres,
     })),

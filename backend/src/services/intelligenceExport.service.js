@@ -84,7 +84,7 @@ const fmtCr   = (v) => (v == null ? '-' : `INR ${fmtNum(v, 0)} Cr`);
 // values in the PDF tie out to what the user sees on screen.
 const fmtQuantum = (mn) => {
   if (mn == null) return '-';
-  const cr = Number(mn) / 100;
+  const cr = Number(mn) / 10; // quantum_inr_mn is INR millions; 1 Cr = 10 mn
   return cr >= 1000 ? `INR ${(cr / 1000).toFixed(2)} TCr` : `INR ${cr.toFixed(0)} Cr`;
 };
 

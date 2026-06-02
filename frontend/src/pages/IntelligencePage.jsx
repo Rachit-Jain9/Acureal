@@ -77,7 +77,7 @@ function SectionCard({ icon: Icon, title, children, action, className = '' }) {
 
 const formatQuantum = (mn) => {
   if (!mn) return '—';
-  const cr = mn / 100;
+  const cr = mn / 10; // quantum_inr_mn is INR millions; 1 Cr = 10 mn
   return cr >= 1000
     ? `₹${(cr / 1000).toFixed(2)} TCr`
     : `₹${cr.toFixed(0)} Cr`;

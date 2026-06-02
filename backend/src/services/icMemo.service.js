@@ -36,6 +36,7 @@ const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runClaudeReasoningStream } = require('./ai/aiRouter');
 const aiArtifacts = require('./aiArtifacts.service');
 const numericalVerifier = require('./numericalVerifier.service');
+const { formatQuantumCr } = require('../utils/marketUnits');
 // Deterministic trust-signal services (Workstreams A, B, C). The IC memo —
 // REDIP's decision artifact — must be honest about what has been verified, so
 // it is fed the same postures the workspace shows the analyst.
@@ -318,7 +319,7 @@ const buildIcMemoInput = async (dealId) => {
     recentTransactions: txResult.rows.map((t) => ({
       period: `${t.fiscal_year} ${t.quarter}`,
       buyer: t.buyer,
-      quantumCr: t.quantum_inr_mn ? (t.quantum_inr_mn / 100).toFixed(0) + ' Cr' : null,
+      quantumCr: formatQuantumCr(t.quantum_inr_mn),
       locality: t.locality,
       landAcres: t.land_size_acres,
     })),
