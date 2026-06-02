@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Loader2, Trash2, UserPlus, Shield, Eye, Edit3 } from 'lucide-react';
 import { dealsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 const PERMISSION_OPTIONS = [
   { value: 'viewer', label: 'View only', icon: Eye, description: 'Can view deal data but cannot edit' },
@@ -15,6 +16,9 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
   const [permission, setPermission] = useState('viewer');
   const [sharing, setSharing] = useState(false);
   const [revokingId, setRevokingId] = useState(null);
+  // A11y: trap Tab focus inside the dialog and restore focus to the opener on
+  // close (WAI-ARIA dialog pattern). This was the only dialog missing it.
+  const trapRef = useFocusTrap(true, { onEscape: onClose });
 
   const loadShares = useCallback(async () => {
     setLoading(true);
@@ -75,7 +79,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
       aria-modal="true"
       aria-labelledby="share-deal-dialog-title"
     >
-      <div className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
+      <div ref={trapRef} className="bg-bg-elevated rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline">
           <div className="flex items-center gap-2.5">

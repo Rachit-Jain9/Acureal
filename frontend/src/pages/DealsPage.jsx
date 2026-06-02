@@ -484,6 +484,7 @@ export default function DealsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={16} />
           <input
             type="text"
+            aria-label="Search deals"
             placeholder="Search deals, properties, cities..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -494,6 +495,7 @@ export default function DealsPage() {
         <select
           value={stageFilter}
           onChange={(e) => { setStageFilter(e.target.value); setPage(1); }}
+          aria-label="Filter by stage"
           className="input w-auto"
         >
           <option value="">All Stages</option>
@@ -505,6 +507,7 @@ export default function DealsPage() {
         <select
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+          aria-label="Filter by deal type"
           className="input w-auto"
         >
           <option value="">All Types</option>
@@ -516,6 +519,7 @@ export default function DealsPage() {
         <select
           value={priorityFilter}
           onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}
+          aria-label="Filter by priority"
           className="input w-auto"
         >
           <option value="">All Priorities</option>
@@ -605,6 +609,7 @@ export default function DealsPage() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={pagination.page <= 1}
+                  aria-label="Previous page"
                   className="btn btn-secondary p-2 disabled:opacity-40"
                 >
                   <ChevronLeft size={16} />
@@ -615,6 +620,7 @@ export default function DealsPage() {
                 <button
                   onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={pagination.page >= pagination.totalPages}
+                  aria-label="Next page"
                   className="btn btn-secondary p-2 disabled:opacity-40"
                 >
                   <ChevronRight size={16} />
@@ -988,6 +994,7 @@ export default function DealsPage() {
                   <>
                     <select
                       name="propertyId"
+                      aria-label="Property"
                       value={form.propertyId}
                       onChange={handleFormChange}
                       className="input w-full"
@@ -1026,6 +1033,7 @@ export default function DealsPage() {
                 <input
                   type="text"
                   name="name"
+                  aria-label="Deal name"
                   value={form.name}
                   onChange={handleFormChange}
                   required
@@ -1037,7 +1045,7 @@ export default function DealsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Type</label>
-                  <select name="dealType" value={form.dealType} onChange={handleFormChange} className="input w-full">
+                  <select name="dealType" aria-label="Deal type" value={form.dealType} onChange={handleFormChange} className="input w-full">
                     {Object.entries(DEAL_TYPE_LABELS).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
                     ))}
@@ -1045,7 +1053,7 @@ export default function DealsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Stage</label>
-                  <select name="stage" value={form.stage} onChange={handleFormChange} className="input w-full">
+                  <select name="stage" aria-label="Stage" value={form.stage} onChange={handleFormChange} className="input w-full">
                     {Object.entries(STAGE_CONFIG).map(([key, cfg]) => (
                       <option key={key} value={key}>{cfg.label}</option>
                     ))}
@@ -1053,7 +1061,7 @@ export default function DealsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Priority</label>
-                  <select name="priority" value={form.priority} onChange={handleFormChange} className="input w-full">
+                  <select name="priority" aria-label="Priority" value={form.priority} onChange={handleFormChange} className="input w-full">
                     {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => (
                       <option key={key} value={key}>{cfg.label}</option>
                     ))}
@@ -1061,7 +1069,7 @@ export default function DealsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Asset Class</label>
-                  <select name="assetClass" value={form.assetClass} onChange={handleFormChange} className="input w-full">
+                  <select name="assetClass" aria-label="Asset class" value={form.assetClass} onChange={handleFormChange} className="input w-full">
                     {/* PR-NX59: render directly from the shared
                         ASSET_CLASS_CONFIG so future ontology updates land
                         in one place. */}
@@ -1072,7 +1080,7 @@ export default function DealsPage() {
                 </div>
                 <div className="col-span-2 md:col-span-1">
                   <label className="block text-sm font-medium text-content-secondary mb-1">Deal Structure</label>
-                  <select name="dealStructure" value={form.dealStructure} onChange={handleFormChange} className="input w-full">
+                  <select name="dealStructure" aria-label="Deal structure" value={form.dealStructure} onChange={handleFormChange} className="input w-full">
                     {/* PR-NX59: render directly from the shared
                         DEAL_STRUCTURE_CONFIG so the create form, edit form,
                         and list chips stay in lock-step. */}
@@ -1113,6 +1121,7 @@ export default function DealsPage() {
                     <label className="block text-sm font-medium text-content-secondary mb-1">Pricing Basis</label>
                     <select
                       name="landPricingBasis"
+                      aria-label="Land pricing basis"
                       value={form.landPricingBasis}
                       onChange={handleFormChange}
                       className="input w-full"
@@ -1129,6 +1138,7 @@ export default function DealsPage() {
                       <input
                         type="number"
                         name="landAskPriceCr"
+                        aria-label="Total land price in crore"
                         value={form.landAskPriceCr}
                         onChange={handleFormChange}
                         step="0.01"
@@ -1145,6 +1155,7 @@ export default function DealsPage() {
                       <input
                         type="number"
                         name="landPriceRateInr"
+                        aria-label="Land rate"
                         value={form.landPriceRateInr}
                         onChange={handleFormChange}
                         step="0.01"
@@ -1161,6 +1172,7 @@ export default function DealsPage() {
                       <input
                         type="number"
                         name="landExtentInputValue"
+                        aria-label="Land extent for pricing"
                         value={form.landExtentInputValue}
                         onChange={handleFormChange}
                         step="0.01"
@@ -1170,6 +1182,7 @@ export default function DealsPage() {
                       />
                       <select
                         name="landExtentInputUnit"
+                        aria-label="Land extent unit"
                         value={form.landExtentInputUnit}
                         onChange={handleFormChange}
                         className="input w-full"
@@ -1212,6 +1225,7 @@ export default function DealsPage() {
                 <label className="block text-sm font-medium text-content-secondary mb-1">Notes</label>
                 <textarea
                   name="notes"
+                  aria-label="Notes"
                   value={form.notes}
                   onChange={handleFormChange}
                   rows={3}
