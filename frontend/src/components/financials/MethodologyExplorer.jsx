@@ -160,15 +160,14 @@ export default function MethodologyExplorer({
         <button
           type="button"
           onClick={() => setOpenInternal(true)}
-          className="group relative inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-gradient-to-r from-indigo-50 via-violet-50 to-fuchsia-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:shadow-md hover:border-indigo-300 hover:from-indigo-100 hover:to-fuchsia-100"
+          className="inline-flex items-center gap-2 rounded-full border border-hairline bg-bg-elevated px-3.5 py-1.5 text-xs font-semibold text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           aria-label="How this model works"
         >
-          <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-sm">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white">
             <BookOpen size={12} strokeWidth={2.5} />
-            <span className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition" />
           </span>
           <span className="tracking-wide">Methodology</span>
-          <Sparkles size={12} className="text-fuchsia-500" />
+          <Sparkles size={12} className="text-content-muted" />
         </button>
       )}
 

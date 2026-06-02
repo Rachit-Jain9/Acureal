@@ -181,7 +181,7 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
                 type="button"
                 onClick={(e) => { stopAll(e); setMenuOpen((v) => !v); }}
                 aria-label="Deal actions"
-                className="p-1 rounded hover:bg-bg-secondary text-content-secondary hover:text-content-primary focus:outline-none focus:ring-2 focus:ring-gray-300"
+                className="p-1 rounded hover:bg-bg-secondary text-content-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-95 transition-transform duration-120 ease-out"
               >
                 <MoreVertical size={16} />
               </button>

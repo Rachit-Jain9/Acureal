@@ -33,14 +33,14 @@ const TIER_TONE = {
   ic_ready:  { label: 'IC-ready',  pill: 'bg-green-50 text-green-700 border-green-200', bar: 'bg-green-500', dot: 'bg-green-500' },
   pre_ic:    { label: 'Pre-IC',    pill: 'bg-sky-50 text-sky-700 border-sky-200',       bar: 'bg-sky-500',   dot: 'bg-sky-500' },
   diligence: { label: 'Diligence', pill: 'bg-amber-50 text-amber-800 border-amber-200', bar: 'bg-amber-500', dot: 'bg-amber-500' },
-  early:     { label: 'Early',     pill: 'bg-slate-50 text-slate-700 border-slate-200', bar: 'bg-slate-400', dot: 'bg-slate-400' },
+  early:     { label: 'Early',     pill: 'bg-bg-secondary text-content-secondary border-hairline', bar: 'bg-content-muted', dot: 'bg-content-muted' },
 };
 
 const SEVERITY_TONE = {
   critical: 'bg-red-50 text-red-700 border-red-200',
   high:     'bg-orange-50 text-orange-700 border-orange-200',
   medium:   'bg-amber-50 text-amber-700 border-amber-200',
-  low:      'bg-slate-50 text-slate-700 border-slate-200',
+  low:      'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 // Pick the portfolio's headline posture from tier mix.
@@ -56,7 +56,7 @@ const POSTURE_COPY = {
   all_ic_ready: { label: 'Every live deal IC-ready', pill: 'bg-green-50 text-green-700 border-green-200', accent: 'text-green-700' },
   mixed:        { label: 'Mixed — some IC-ready',     pill: 'bg-sky-50 text-sky-700 border-sky-200',       accent: 'text-sky-700' },
   in_progress:  { label: 'IC prep in progress',       pill: 'bg-amber-50 text-amber-700 border-amber-200', accent: 'text-amber-700' },
-  mostly_early: { label: 'Mostly early-stage',        pill: 'bg-slate-50 text-slate-700 border-slate-200', accent: 'text-slate-700' },
+  mostly_early: { label: 'Mostly early-stage',        pill: 'bg-bg-secondary text-content-secondary border-hairline', accent: 'text-content-secondary' },
 };
 
 function TierProportionBar({ totals }) {
@@ -77,7 +77,7 @@ function TierProportionBar({ totals }) {
         <span className="bg-amber-500" style={{ width: `${pct(totals.diligence)}%` }} title={`${totals.diligence} Diligence-stage`} />
       )}
       {totals.early > 0 && (
-        <span className="bg-slate-400" style={{ width: `${pct(totals.early)}%` }} title={`${totals.early} Early`} />
+        <span className="bg-content-muted" style={{ width: `${pct(totals.early)}%` }} title={`${totals.early} Early`} />
       )}
     </div>
   );
@@ -159,12 +159,12 @@ export default function PortfolioReadinessWidget() {
     <Card className="overflow-hidden">
       <SectionHeader
         title="Portfolio Readiness"
-        Icon={Target}
-        subtitle="IC + RERA readiness rolled up across every live deal."
+        icon={Target}
+        sub="IC + RERA readiness rolled up across every live deal."
       />
       <div className="px-4 sm:px-5 pb-4 space-y-4">
         {isLoading && (
-          <div className="space-y-3 animate-pulse">
+          <div className="space-y-3 animate-pulse motion-reduce:animate-none">
             <div className="h-2 bg-bg-secondary rounded-full" />
             <div className="grid grid-cols-4 gap-2">
               <div className="h-14 bg-bg-secondary rounded" />

@@ -6,7 +6,6 @@ import useAuthStore from './store/authStore';
 import Layout from './components/layout/Layout';
 import ToastContainer from './components/common/Toast';
 import { ConfirmDialogContainer } from './design-system';
-import LoadingSpinner from './components/common/LoadingSpinner';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import CookieBanner from './components/common/CookieBanner';
 import LegalReAcceptanceModal from './components/common/LegalReAcceptanceModal';
@@ -88,9 +87,18 @@ function ProtectedRoute({ children }) {
 }
 
 function PageLoader() {
+  // Route-level Suspense fallback: a viewport-filling content skeleton (header +
+  // KPI row + body) rather than a centered spinner, per the skeletons-not-spinners
+  // bar. Respects prefers-reduced-motion.
   return (
-    <div className="flex items-center justify-center h-96">
-      <LoadingSpinner size="lg" />
+    <div className="p-6 space-y-4 animate-pulse motion-reduce:animate-none" aria-busy="true">
+      <div className="h-8 w-64 rounded bg-bg-secondary" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="h-28 rounded-editorial bg-bg-secondary" />
+        <div className="h-28 rounded-editorial bg-bg-secondary" />
+        <div className="h-28 rounded-editorial bg-bg-secondary" />
+      </div>
+      <div className="h-64 rounded-editorial bg-bg-secondary" />
     </div>
   );
 }
