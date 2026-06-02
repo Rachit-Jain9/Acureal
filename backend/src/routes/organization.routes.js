@@ -14,9 +14,13 @@
  */
 
 const express = require('express');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const organizationConsent = require('../services/organizationConsent.service');
 const benchmarkEligibility = require('../services/benchmarkEligibility.service');
+const organizationService = require('../services/organization.service');
+const organizationDomain = require('../services/organizationDomain.service');
+const organizationAuditLog = require('../services/organizationAuditLog.service');
+const { normalizeRole, ORGANIZATION_ROLES } = require('../constants/roles');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 
@@ -84,5 +88,268 @@ router.put(
     }
   }
 );
+
+// ============================================================================
+// Team & members — who is in the workspace and at what role. Reads are open to
+// any member (roster transparency); writes are admin/owner. Org scoping is
+// enforced at the data layer (RLS + req.user.organization_id).
+// ============================================================================
+
+// GET /api/organization/members — the workspace roster.
+router.get('/members', authenticate, async (req, res, next) => {
+  try {
+    const members = await organizationService.listOrganizationMembers(req.user.organization_id);
+    res.json({ success: true, data: { members } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/organization/invitations — invite a teammate by email (admin+).
+router.post(
+  '/invitations',
+  authenticate,
+  requireRole('admin'),
+  [
+    body('email').isEmail().withMessage('A valid email is required.').normalizeEmail(),
+    body('role')
+      .custom((value) => ['admin', 'editor', 'viewer'].includes(normalizeRole(value)))
+      .withMessage('role must be admin, editor, or viewer.'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const invitation = await organizationService.inviteOrganizationMember({
+        organizationId: req.user.organization_id,
+        email: req.body.email,
+        role: normalizeRole(req.body.role),
+        invitedBy: req.user.id,
+      });
+      res.status(201).json({ success: true, data: { invitation } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PATCH /api/organization/members/:userId/role — change a member's role (admin+).
+router.patch(
+  '/members/:userId/role',
+  authenticate,
+  requireRole('admin'),
+  [
+    param('userId').isUUID().withMessage('userId must be a valid id.'),
+    body('role')
+      .custom((value) => ORGANIZATION_ROLES.includes(normalizeRole(value)))
+      .withMessage('role must be owner, admin, editor, or viewer.'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const member = await organizationService.updateOrganizationMemberRole({
+        organizationId: req.user.organization_id,
+        targetUserId: req.params.userId,
+        nextRole: req.body.role,
+        actor: req.user,
+      });
+      res.json({ success: true, data: { member } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PATCH /api/organization/members/:userId/status — activate/deactivate (admin+).
+router.patch(
+  '/members/:userId/status',
+  authenticate,
+  requireRole('admin'),
+  [
+    param('userId').isUUID().withMessage('userId must be a valid id.'),
+    body('isActive').isBoolean().withMessage('isActive must be true or false.'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const member = await organizationService.setOrganizationMemberStatus({
+        organizationId: req.user.organization_id,
+        userId: req.params.userId,
+        isActive: req.body.isActive === true,
+        requestingUserId: req.user.id,
+      });
+      res.json({ success: true, data: { member } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ── Join requests — pending domain auto-joins awaiting admin approval ────────
+
+router.get('/join-requests', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const requests = await organizationService.listPendingJoinRequests(req.user.organization_id);
+    res.json({ success: true, data: { requests } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post(
+  '/join-requests/:userId/approve',
+  authenticate,
+  requireRole('admin'),
+  [param('userId').isUUID().withMessage('userId must be a valid id.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const member = await organizationService.approveJoinRequest({
+        organizationId: req.user.organization_id,
+        targetUserId: req.params.userId,
+        actor: req.user,
+      });
+      res.json({ success: true, data: { member } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/join-requests/:userId/reject',
+  authenticate,
+  requireRole('admin'),
+  [param('userId').isUUID().withMessage('userId must be a valid id.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await organizationService.rejectJoinRequest({
+        organizationId: req.user.organization_id,
+        targetUserId: req.params.userId,
+        actor: req.user,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============================================================================
+// Domains — claim a corporate email domain so teammates auto-join the workspace.
+// A claim is inert until verified via a DNS TXT record (deterministic, no AI).
+// ============================================================================
+
+// GET /api/organization/domains — list the org's domain claims (any member).
+router.get('/domains', authenticate, async (req, res, next) => {
+  try {
+    const domains = await organizationDomain.listDomains(req.user.organization_id);
+    res.json({ success: true, data: { domains } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/organization/domains — claim a corporate domain (admin+).
+router.post(
+  '/domains',
+  authenticate,
+  requireRole('admin'),
+  [body('domain').isString().trim().notEmpty().withMessage('domain is required.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const domain = await organizationDomain.addDomainClaim({
+        organizationId: req.user.organization_id,
+        domain: req.body.domain,
+        actor: req.user,
+      });
+      res.status(201).json({ success: true, data: { domain } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/organization/domains/:domainId/verify — prove control via DNS TXT.
+router.post(
+  '/domains/:domainId/verify',
+  authenticate,
+  requireRole('admin'),
+  [param('domainId').isUUID().withMessage('domainId must be a valid id.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const domain = await organizationDomain.verifyDomain({
+        organizationId: req.user.organization_id,
+        domainId: req.params.domainId,
+        actor: req.user,
+      });
+      res.json({ success: true, data: { domain } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PATCH /api/organization/domains/:domainId — tune the join policy (admin+).
+router.patch(
+  '/domains/:domainId',
+  authenticate,
+  requireRole('admin'),
+  [
+    param('domainId').isUUID().withMessage('domainId must be a valid id.'),
+    body('defaultRole').optional().isString(),
+    body('requireAdminApproval').optional().isBoolean(),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const domain = await organizationDomain.setDomainPolicy({
+        organizationId: req.user.organization_id,
+        domainId: req.params.domainId,
+        defaultRole: req.body.defaultRole,
+        requireAdminApproval: req.body.requireAdminApproval,
+        actor: req.user,
+      });
+      res.json({ success: true, data: { domain } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// DELETE /api/organization/domains/:domainId — drop a domain claim (admin+).
+router.delete(
+  '/domains/:domainId',
+  authenticate,
+  requireRole('admin'),
+  [param('domainId').isUUID().withMessage('domainId must be a valid id.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await organizationDomain.removeDomainClaim({
+        organizationId: req.user.organization_id,
+        domainId: req.params.domainId,
+        actor: req.user,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/organization/audit — org membership/domain audit trail (admin+).
+router.get('/audit', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const events = await organizationAuditLog.listOrganizationAudit(req.user.organization_id, {
+      limit: req.query.limit,
+    });
+    res.json({ success: true, data: { events } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;
