@@ -50,7 +50,7 @@ export function Tabs({ items, value, onChange, ariaLabel, className }) {
             type="button"
             role="tab"
             aria-selected={active}
-            aria-controls={tab.panelId}
+            aria-controls={tab.panelId ?? `panel-${tab.id}`}
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(tab.id)}
             className={clsx(

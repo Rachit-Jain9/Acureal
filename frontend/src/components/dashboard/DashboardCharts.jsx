@@ -33,6 +33,7 @@ export function PipelineChartWidget({ stage_distribution = [], chartPalette, too
   return (
     <SectionCard title="Pipeline Distribution" eyebrow="Stage mix">
       {data.length > 0 ? (
+        <div role="img" aria-label={`Pipeline distribution by stage — ${data.map((d) => `${d.stage}: ${d.count}`).join(', ')}`}>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data} margin={{ top: 4, right: 10, bottom: 4, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" strokeOpacity={0.5} />
@@ -45,6 +46,7 @@ export function PipelineChartWidget({ stage_distribution = [], chartPalette, too
             <Bar dataKey="count" fill={accentBarFill} radius={[3, 3, 0, 0]} name="Deals" animationDuration={700} animationEasing="ease-out" />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       ) : (
         <EmptyState
           size="md"
@@ -72,6 +74,7 @@ export function CitiesChartWidget({ cities_distribution = [], chartPalette, tool
     <SectionCard title="City Distribution" eyebrow="Geography">
       {data.length > 0 ? (
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-center">
+          <div role="img" aria-label={`City distribution — ${total} deals: ${data.map((d) => `${d.name} ${d.value}`).join(', ')}`}>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               {/* PR-NX60 (2026-05-19): re-enable first-render draw-in
@@ -98,6 +101,7 @@ export function CitiesChartWidget({ cities_distribution = [], chartPalette, tool
               <Tooltip formatter={(value, _n, entry) => [`${value} deal${value === 1 ? '' : 's'}`, entry.payload.name]} contentStyle={tooltipStyle} />
             </PieChart>
           </ResponsiveContainer>
+          </div>
           <div className="space-y-2">
             {data.map((item, idx) => {
               const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
