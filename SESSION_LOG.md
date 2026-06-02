@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-02 (cont. — a11y + journey/mobile UX + extraction-reliability flagship) (PRs #718–#720)
+
+Continuation of the deep-quality block. Took the remaining audit findings (accessibility, user-journey, mobile/responsive, extraction reliability, performance) through to shipped PRs, applying value-vs-risk judgment rather than mechanically clearing the list.
+
+### Shipped (all CI-green, awaiting operator merge)
+- **#718 — a11y (WCAG AA).** ShareDealPanel was the one dialog with no focus-trap/return-focus → `useFocusTrap` (Esc-to-close, focus restore). DealCard actions menu got `aria-haspopup`/`aria-expanded` + `role=menu`/`menuitem`. Deals search/filter/pagination + the 13-field New Deal modal got accessible names. design-system `Tabs` now self-heals `aria-controls` (was `undefined` for every consumer). Dashboard Pipeline + City charts got `role=img` text alternatives.
+- **#719 — journey + mobile polish.** ZoningTab holds a skeleton while the property hydrates (was flashing "Not assigned" on zone-assigned deals). PortfolioReadinessWidget skeleton grid `grid-cols-4` → `grid-cols-2 sm:grid-cols-4` to match the real content grid (killed a mobile layout shift on load). IntelligencePage's 3 wide-table wrappers got `overscroll-x-contain` (no more scroll-chaining / browser back-swipe when panning tables on touch). Corrected an AutoFill modal JSDoc that claimed source chips are clickable.
+- **#720 — 🚩 extraction-reliability flagship (no-data vs failed vs stuck).** The deal-document pipeline inserted a `processing` row and ran the AI extraction *synchronously* inside POST /documents/:id/extract (Vercel maxDuration=300s). A function killed mid-run orphaned the row in `processing` forever — invisible to `getDealExtractions` (only completed/partial/reviewed surface) and un-retryable. The master-plan pipeline already had a reaper; this brings the deal-document pipeline to parity:
+  - Migration `20260602_document_extractions_reaper.sql`: add `extraction_started_at` + partial index `idx_document_extractions_processing`.
+  - `extractDocument` stamps `extraction_started_at` on the processing insert, **feature-detected** (`canStoreExtractionStartedAt`, mirrors `canStoreDocumentDocType`) so the code is safe to deploy before/after the migration.
+  - `reapStuckExtractions(dealId)`: org-scoped best-effort UPDATE flipping `processing` rows older than 6 min (> the 300s maxDuration, so a live job is never reaped) to `failed` with a retry message. Runs at the top of `getDealExtractions` — cheap, idempotent, no cron.
+  - `getDealExtractions` payload extended (additive): `failures` (latest failed/processing per doc, excluding docs that have a usable extraction so a failed-then-succeeded doc doesn't nag), `coverage` (with_data/no_data/failed/processing), per-extraction `has_data`.
+  - DocumentsTab now shows all four states per document (extracted / "No fields found" / "Extraction failed" w/ error tooltip / "Extracting…") with the existing per-row button doubling as a retry.
+  - Tests: `extraction.reliability.test.js` (7) — reaper scoping/threshold/error-swallowing, failures/coverage/has_data, failed-then-succeeded exclusion.
+
+### Verification
+Backend full suite green (**3035 pass**; the only 2 "failures" were `execFileSync`/VirtualAlloc OOM from running all 182 suites at once — both pass in isolation). Frontend builds green throughout.
+
+### Investigated → consciously deferred (NOT shipped, to avoid low-value churn)
+- **PR-E performance micro-opts** — a focused perf sweep surfaced only non-actionable items: the recommended `deal_events(deal_id, created_at)` index **already exists** (`deal_events_deal_created_idx`, migration 20260422) and already serves the `listEvents` query; the bulk-deal-ops audit-batching is the same item deferred earlier on 2026-06-02 (audit-trail correctness risk, zero impact at single-deal scale); the IntelligencePage "memoization" candidates are micro-noise over a few dozen benchmark rows. No worthwhile low-risk win → deferred rather than padding the diff.
+- **PR-C "Apply to underwriting" prefill (P1 in the audit)** — over-called. `mapProgrammeToInputs`/`stashPrefill` have **no caller** and **no component produces the `programme` shape** (unit_mix/keys/leasable_sqft) they consume; `BuildabilitySummary` also lacks `deal.asset_class`. It's an unfinished feature (no broken button exists), so wiring it needs a buildability→programme computation — a real feature build, not a one-line wire. Deferred with a note in the #719 PR body.
+
+### Operator actions
+- **Apply the DB update before merging #720** — `database/migrations/20260602_document_extractions_reaper.sql` (additive, nullable column + index; safe anytime). The code feature-detects the column so nothing breaks either way, but the reaper only activates once it's applied.
+- **Merge #718, #719, #720** (production deploys — operator-authorized only). Disjoint files; any order. Apply the migration first for #720.
+
 ## 2026-06-02 (Master-plan ingestion Q → full deep-audit remediation: money-units, cross-tenant IDOR, comps, AI legal policy, reliability, UI, cleanup) (PRs #708–#716)
 
 Session opened with the operator asking whether the uploaded Bengaluru RMP master-plan PDFs were ingested / extracted / used for all users. Investigation confirmed the RMP corpus IS live and real (not stubbed): 12 source docs in `regulatory_data.master_plan_documents`, seeded zones / FAR rules / 130 planning-district rows / 108 BBMP-UAV rows / 9,555-street index, and ~10 intelligence endpoints. Gaps: 2 of 18 source docs sit `extraction_status='failed'` (scanned narratives — substance already seeded via callout migrations) and 7 locality PDFs are summarised-but-not-uploaded. Operator then re-issued the full deep-quality mandate (with the "workflow" opt-in).
