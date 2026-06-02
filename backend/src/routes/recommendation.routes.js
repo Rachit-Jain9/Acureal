@@ -21,7 +21,7 @@ const { param, body } = require('express-validator');
 const verdictsService = require('../services/recommendation/verdicts.service');
 const learningSignals = require('../services/learningSignals.service');
 const dealService = require('../services/deal.service');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
 
 const router = express.Router();
@@ -31,6 +31,7 @@ const ALLOWED_VERDICTS = ['acted', 'dismissed', 'snoozed'];
 router.post(
   '/deals/:dealId/recommendations/:ruleId/verdict',
   authenticate,
+  requireRole('admin', 'analyst'),
   [
     param('dealId').isUUID().withMessage('dealId must be a UUID'),
     param('ruleId').isString().isLength({ min: 1, max: 120 }),

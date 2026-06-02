@@ -402,7 +402,7 @@ router.get('/:dealId/sensitivity-narrative', authenticate, aiLimiter, async (req
 });
 
 // POST /financials/:dealId/sensitivity
-router.post('/:dealId/sensitivity', authenticate, async (req, res, next) => {
+router.post('/:dealId/sensitivity', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
     const matrix = await financialService.runSensitivity(
       req.params.dealId,
