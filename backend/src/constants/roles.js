@@ -48,6 +48,7 @@ const mapOrganizationRoleToLegacyUserRole = (role) => {
 
 module.exports = {
   ORGANIZATION_ROLES,
+  ROLE_PRIORITY,
   normalizeRole,
   roleSatisfies,
   mapLegacyUserRoleToOrganizationRole,

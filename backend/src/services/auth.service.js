@@ -7,6 +7,7 @@ const {
   consumeInvitation,
   createWorkspaceForUser,
   hydrateUserAuthContext,
+  joinByVerifiedDomain,
 } = require('./organization.service');
 const legalService = require('./legal.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
@@ -181,12 +182,21 @@ const register = async (name, email, password, phone = null, options = {}) => {
         invitationToken: options.invitationToken,
       });
     } else {
-      await createWorkspaceForUser(client, {
+      // Domain-based onboarding: if the email's domain is a verified, auto-join
+      // org domain, place the user there. Only falls back to a fresh personal
+      // workspace when no verified domain claims this address.
+      const joinedOrgId = await joinByVerifiedDomain(client, {
         userId: user.id,
-        name,
         email: normalizedEmail,
-        organizationName: options.organizationName,
       });
+      if (!joinedOrgId) {
+        await createWorkspaceForUser(client, {
+          userId: user.id,
+          name,
+          email: normalizedEmail,
+          organizationName: options.organizationName,
+        });
+      }
     }
 
     // Record legal acceptance inside the same transaction. If the user row
@@ -569,12 +579,22 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
         invitationToken: options.invitationToken,
       });
     } else {
-      await createWorkspaceForUser(client, {
+      // Domain-based onboarding. Google's hosted-domain (hd) claim, when present,
+      // is a stronger signal than the email domain (it proves a Workspace tenant),
+      // so prefer it; joinByVerifiedDomain falls back to the email domain.
+      const joinedOrgId = await joinByVerifiedDomain(client, {
         userId: user.id,
-        name: displayName,
         email: normalizedEmail,
-        organizationName: options.organizationName,
+        hostedDomain: claims.hostedDomain || null,
       });
+      if (!joinedOrgId) {
+        await createWorkspaceForUser(client, {
+          userId: user.id,
+          name: displayName,
+          email: normalizedEmail,
+          organizationName: options.organizationName,
+        });
+      }
     }
 
     await legalService.recordAcceptance(

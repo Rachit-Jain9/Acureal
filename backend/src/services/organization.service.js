@@ -1,12 +1,15 @@
 'use strict';
 
-const { query } = require('../config/database');
+const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const {
   ORGANIZATION_ROLES,
+  ROLE_PRIORITY,
   normalizeRole,
   mapLegacyUserRoleToOrganizationRole,
 } = require('../constants/roles');
+const { normalizeEmailDomain, isPublicEmailDomain } = require('../utils/emailDomain');
+const organizationAuditLog = require('./organizationAuditLog.service');
 
 const slugifyOrganizationName = (value) =>
   String(value || '')
@@ -261,6 +264,13 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
     [organizationId, email, normalizedRole, invitedBy]
   );
 
+  await organizationAuditLog.recordAudit({
+    organizationId,
+    actorId: invitedBy,
+    eventType: 'member_invited',
+    after: { email: result.rows[0].email, role: result.rows[0].role },
+  });
+
   return result.rows[0];
 };
 
@@ -311,7 +321,231 @@ const setOrganizationMemberStatus = async ({ organizationId, userId, isActive, r
     throw createError('Organization member not found.', 404);
   }
 
+  await organizationAuditLog.recordAudit({
+    organizationId,
+    actorId: requestingUserId,
+    targetUserId: userId,
+    eventType: isActive ? 'member_reactivated' : 'member_deactivated',
+    after: { is_active: isActive },
+  });
+
   return result.rows[0];
+};
+
+// ── Domain-based onboarding ─────────────────────────────────────────────────
+// Called during signup (register / Google cold-signup) AFTER the invitation
+// check. If the signup email's domain matches a VERIFIED, auto-join organization
+// domain the user is placed into that org:
+//   • require_admin_approval = false → ACTIVE membership; we set the user's
+//     default org and RETURN the org id so the caller SKIPS creating a personal
+//     workspace (the user lands straight in the company workspace).
+//   • require_admin_approval = true  → a PENDING membership (is_active = FALSE)
+//     and we RETURN null, so the caller still creates a personal workspace for
+//     the user to sign into while an admin approves the pending membership.
+// Returns null (caller creates a personal workspace) when there is no corporate
+// domain, the domain is a public provider, or no verified claim exists. Runs on
+// the backend's bypass role, so the cross-org domain lookup is intentional.
+const joinByVerifiedDomain = async (client, { userId, email, hostedDomain = null }) => {
+  const domain = normalizeEmailDomain(hostedDomain) || normalizeEmailDomain(email);
+  if (!domain || isPublicEmailDomain(domain)) {
+    return null;
+  }
+
+  // Resolve the verified domain on a SEPARATE connection (module `query`), not
+  // the signup transaction's `client`. If organization_domains doesn't exist yet
+  // (this migration not applied before deploy), a 42P01 on the client would
+  // poison the whole signup transaction and break registration. On a separate
+  // connection we can swallow it and fall back to a personal workspace.
+  // organization_domains and organization_audit_log ship in the same migration,
+  // so reaching the writes below guarantees both tables exist.
+  let match;
+  try {
+    match = await query(
+      `SELECT organization_id, default_role, require_admin_approval
+         FROM organization_domains
+        WHERE lower(domain) = lower($1) AND verified = TRUE
+        LIMIT 1`,
+      [domain]
+    );
+  } catch (error) {
+    if (error && error.code === '42P01') {
+      return null;
+    }
+    throw error;
+  }
+  if (match.rows.length === 0) {
+    return null;
+  }
+
+  const { organization_id: organizationId } = match.rows[0];
+  const role = normalizeRole(match.rows[0].default_role) || 'editor';
+  const isActive = match.rows[0].require_admin_approval !== true;
+
+  await client.query(
+    `INSERT INTO organization_members (organization_id, user_id, role, invited_by, is_active)
+     VALUES ($1, $2, $3::organization_role, NULL, $4)
+     ON CONFLICT (organization_id, user_id) DO UPDATE
+       SET role = EXCLUDED.role,
+           is_active = organization_members.is_active OR EXCLUDED.is_active,
+           updated_at = NOW()`,
+    [organizationId, userId, role, isActive]
+  );
+
+  await organizationAuditLog.recordAudit(
+    {
+      organizationId,
+      actorId: userId,
+      targetUserId: userId,
+      eventType: 'member_domain_joined',
+      after: { role, is_active: isActive, via: 'domain' },
+    },
+    client
+  );
+
+  if (isActive) {
+    await client.query(
+      'UPDATE users SET default_organization_id = $1, updated_at = NOW() WHERE id = $2',
+      [organizationId, userId]
+    );
+    return organizationId;
+  }
+
+  return null;
+};
+
+// ── Member management (Team page) ───────────────────────────────────────────
+
+const updateOrganizationMemberRole = async ({ organizationId, targetUserId, nextRole, actor }) => {
+  const normalizedNext = normalizeRole(nextRole);
+  if (!normalizedNext || !ORGANIZATION_ROLES.includes(normalizedNext)) {
+    throw createError('Invalid role.', 400);
+  }
+  const actorRole = normalizeRole(actor.role);
+  if (ROLE_PRIORITY[normalizedNext] > ROLE_PRIORITY[actorRole]) {
+    throw createError('You cannot assign a role higher than your own.', 403);
+  }
+
+  // FOR UPDATE + atomic last-owner check so two concurrent demotions can't both
+  // pass the count and leave the org ownerless.
+  return transaction(async (client) => {
+    const targetRes = await client.query(
+      `SELECT user_id, role, is_active
+         FROM organization_members
+        WHERE organization_id = $1 AND user_id = $2
+        FOR UPDATE`,
+      [organizationId, targetUserId]
+    );
+    if (targetRes.rows.length === 0) {
+      throw createError('Organization member not found.', 404);
+    }
+    const currentRole = normalizeRole(targetRes.rows[0].role);
+
+    if (ROLE_PRIORITY[currentRole] > ROLE_PRIORITY[actorRole]) {
+      throw createError('You cannot change the role of a member who outranks you.', 403);
+    }
+
+    if (currentRole === 'owner' && normalizedNext !== 'owner') {
+      const ownerCount = await client.query(
+        `SELECT COUNT(*)::int AS n
+           FROM organization_members
+          WHERE organization_id = $1 AND role = 'owner' AND is_active = TRUE`,
+        [organizationId]
+      );
+      if (ownerCount.rows[0].n <= 1) {
+        throw createError('Cannot demote the last active owner of the organization.', 409);
+      }
+    }
+
+    const updated = await client.query(
+      `UPDATE organization_members
+          SET role = $3::organization_role, updated_at = NOW()
+        WHERE organization_id = $1 AND user_id = $2
+        RETURNING organization_id, user_id, role, is_active, joined_at`,
+      [organizationId, targetUserId, normalizedNext]
+    );
+
+    await organizationAuditLog.recordAudit(
+      {
+        organizationId,
+        actorId: actor.id,
+        targetUserId,
+        eventType: 'member_role_changed',
+        before: { role: currentRole },
+        after: { role: normalizedNext },
+      },
+      client
+    );
+
+    return { ...updated.rows[0], role: normalizeRole(updated.rows[0].role) };
+  });
+};
+
+// Pending members are domain auto-joins awaiting approval: is_active = FALSE
+// rows. (A deactivated former member is also is_active = FALSE; the Team UI
+// distinguishes them by recency + the audit trail.)
+const listPendingJoinRequests = async (organizationId) => {
+  const result = await query(
+    `SELECT u.id, u.email, u.name, u.phone,
+            om.role, om.is_active, om.joined_at, om.invited_by
+       FROM organization_members om
+       INNER JOIN users u ON u.id = om.user_id
+      WHERE om.organization_id = $1 AND om.is_active = FALSE
+      ORDER BY om.joined_at ASC`,
+    [organizationId]
+  );
+  return result.rows.map((row) => ({
+    ...row,
+    role: normalizeRole(row.role) || mapLegacyUserRoleToOrganizationRole(row.role),
+  }));
+};
+
+const approveJoinRequest = async ({ organizationId, targetUserId, actor }) => {
+  if (targetUserId === actor.id) {
+    throw createError('You cannot approve your own join request.', 400);
+  }
+  const result = await query(
+    `UPDATE organization_members
+        SET is_active = TRUE, updated_at = NOW()
+      WHERE organization_id = $1 AND user_id = $2 AND is_active = FALSE
+      RETURNING organization_id, user_id, role, is_active`,
+    [organizationId, targetUserId]
+  );
+  if (result.rows.length === 0) {
+    throw createError('Pending join request not found.', 404);
+  }
+  await organizationAuditLog.recordAudit({
+    organizationId,
+    actorId: actor.id,
+    targetUserId,
+    eventType: 'join_request_approved',
+    after: { is_active: true, role: normalizeRole(result.rows[0].role) },
+  });
+  return { ...result.rows[0], role: normalizeRole(result.rows[0].role) };
+};
+
+const rejectJoinRequest = async ({ organizationId, targetUserId, actor }) => {
+  if (targetUserId === actor.id) {
+    throw createError('You cannot reject your own join request.', 400);
+  }
+  // Reject = remove the inactive row, letting the user re-request later. (The
+  // row is already is_active = FALSE, so a tri-state isn't needed.)
+  const result = await query(
+    `DELETE FROM organization_members
+      WHERE organization_id = $1 AND user_id = $2 AND is_active = FALSE
+      RETURNING organization_id, user_id, role`,
+    [organizationId, targetUserId]
+  );
+  if (result.rows.length === 0) {
+    throw createError('Pending join request not found.', 404);
+  }
+  await organizationAuditLog.recordAudit({
+    organizationId,
+    actorId: actor.id,
+    targetUserId,
+    eventType: 'join_request_rejected',
+    before: { role: normalizeRole(result.rows[0].role), is_active: false },
+  });
+  return { rejected: true };
 };
 
 module.exports = {
@@ -320,8 +554,13 @@ module.exports = {
   createWorkspaceForUser,
   hydrateUserAuthContext,
   inviteOrganizationMember,
+  joinByVerifiedDomain,
   listMembershipsForUser,
   listOrganizationMembers,
+  listPendingJoinRequests,
+  approveJoinRequest,
+  rejectJoinRequest,
   resolveActiveMembership,
   setOrganizationMemberStatus,
+  updateOrganizationMemberRole,
 };

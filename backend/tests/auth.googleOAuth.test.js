@@ -16,6 +16,7 @@ jest.mock('../src/services/organization.service', () => ({
   consumeInvitation: jest.fn(),
   createWorkspaceForUser: jest.fn(),
   hydrateUserAuthContext: jest.fn(),
+  joinByVerifiedDomain: jest.fn(),
 }));
 
 jest.mock('../src/services/legal.service', () => ({
