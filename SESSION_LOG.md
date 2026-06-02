@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-02 (cont. — RBAC hardening, viewer read-only, add-existing-member, security hygiene) (PRs #725–#728, all merged + deployed)
+
+Operator said "do all" on the 3 remaining follow-ups from the multi-tenancy plan. A 3-agent review workflow mapped backend mutation-route role gaps, frontend edit surfaces, and Phase-0 security items; implemented, verified, merged, and deployed all four PRs (standing auto-merge authorization).
+
+### Shipped + merged + deployed (production READY at 0e4d562)
+- **#725 — backend RBAC enforcement (security).** A role audit of every deal-data mutation route found exactly 3 guarded by `authenticate`-only: `POST /financials/:dealId/sensitivity`, `POST /deals/:dealId/recommendations/:ruleId/verdict`, `DELETE /activities/entry/:activityId` — a viewer could call them via API (overwrite underwriting sensitivity, dismiss IC recommendation cards fleet-wide, erase own audit rows). All 3 now `requireRole('admin','analyst')`. New `rbac.routeGuards.test.js` runs the REAL requireRole through the express router stack asserting viewer→403. Q&A-create (read-assist) + deal-shares (ownership-gated) deliberately left viewer-OK.
+- **#726 — viewer read-only UI.** New `useCanEdit()` hook (`roleSatisfies(role,['editor'])`) consolidates 4 divergent inline checks + fixes the analyst→editor alias bug (deletes 3 bespoke `EDITOR_ROLES` consts). Gated create/edit/delete/upload across Documents, Activity, DD/Approvals, Risk tabs + Deals & Comps pages — HIDE for buttons, DISABLE+tooltip for the dual-purpose DD/approval status selects + checkboxes. Reads/exports stay open. (3 of the gated files done by parallel subagents; all diffs reviewed.)
+- **#727 — add existing teammates.** `inviteOrganizationMember` now detects an existing REDIP account by email and adds them to the workspace directly (`{kind:'added'}`) instead of only minting a registration-only invitation token (`{kind:'invited'}`). Unblocks consolidating the team via the Team page. Admin-gated; upsert-safe; 3 tests; Team-page toast adapts.
+- **#728 — Phase-0 security hygiene migrations (FILES merged; OPERATOR MUST APPLY the SQL).** `20260626` globalizes the 7 curated market tables (`organization_id→NULL`) + rewrites their read-all SELECT to `(org_id IS NULL OR org=current)` — closes the latent cross-tenant Data-API leak (no active leak; all single-org curated). `20260627` clears remaining advisors (`spatial_ref_sys` RLS guarded-for-non-owner + pin `search_path` on 3 functions). Authored via the review workflow, cross-verified vs live `pg_policies`.
+
+### Verification
+Full backend suite **3084 green**; frontend build green + **1074 frontend tests green**; production deploy **READY (0e4d562)**; all diffs reviewed (agent gating + migrations). The `20260625` onboarding migration was applied + DB-verified earlier this session (2 new tables, RLS, 3 policies, zero new advisors).
+
+### Operator actions
+1. **Apply #728's two migrations** in the Supabase SQL editor (`20260626` then `20260627`; additive policy/data, safe) → re-run get_advisors to confirm the delta.
+2. **Consolidate the team (Phase 1.5)** — now trivial: from Settings → Team, invite the rahul / adit / stray-Rachit account emails; they're added to the shared Default Workspace instantly (#727). Solo workspaces (Adit's empty; Rahul's + the stray each hold 1 deal) can be left/archived; the 2 stray deals can be moved later if wanted (ownership change — operator's call).
+
+### Pending (optional, future)
+Migration-ledger reconciliation (cosmetic — operator applies SQL manually anyway); financial-model page (`/dashboard/financials/:id`) edit-gating (flagged as a separate surface by the frontend map); extensions-in-public advisor (risky to relocate an in-use extension).
+
 ## 2026-06-02 (cont. — multi-tenancy / RBAC: domain onboarding + Team management) (PRs #722, #723)
 
 Operator green-lit building the multi-tenancy / RBAC plan from earlier this session (domain self-serve onboarding; default joiner role = editor). Built as two PRs on the existing org / membership / RLS foundation, after a 4-agent review workflow mapped the exact auth / DB / route / frontend conventions. A pre-merge audit also caught a signup-breaking deploy-ordering bug (below).
