@@ -47,16 +47,15 @@ export function useUpdateMemberRole() {
   });
 }
 
-export function useSetMemberStatus() {
+export function useRemoveMember() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, isActive }) =>
-      organizationAPI.setMemberStatus(userId, isActive).then((r) => r.data.data.member),
-    onSuccess: (_data, vars) => {
+    mutationFn: (userId) => organizationAPI.removeMember(userId).then((r) => r.data.data),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: MEMBERS_KEY });
-      toast.success(vars.isActive ? 'Access restored' : 'Access removed');
+      toast.success('Member removed');
     },
-    onError: (err) => toast.error(errMessage(err, 'Could not update access')),
+    onError: (err) => toast.error(errMessage(err, 'Could not remove the member')),
   });
 }
 

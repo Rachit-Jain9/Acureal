@@ -200,8 +200,8 @@ export const organizationAPI = {
   invite: (email, role) => api.post('/organization/invitations', { email, role }),
   updateMemberRole: (userId, role) =>
     api.patch(`/organization/members/${userId}/role`, { role }),
-  setMemberStatus: (userId, isActive) =>
-    api.patch(`/organization/members/${userId}/status`, { isActive }),
+  removeMember: (userId) =>
+    api.delete(`/organization/members/${userId}`),
 
   // Pending join requests (domain auto-joins awaiting approval)
   listJoinRequests: () => api.get('/organization/join-requests'),
