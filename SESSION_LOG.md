@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-02 (cont. — targeted multi-agent audit → 7 themed remediation PRs) (PRs #731–#737, all merged + deployed)
+
+Operator re-issued the deep-quality mandate ("do your best work… finish everything pending… only QUALITY work", workflow opt-in). Ran a **targeted 6-dimension audit workflow** (review → adversarial-verify pipeline) sharpened at where value most likely remained: the freshly-shipped org/RBAC code, measured performance, viewer-read-only completeness, the core deal reliability path, UX/a11y polish, and data/AI-policy correctness. **17 findings survived adversarial verification** (the verifier correctly downgraded one "critical/permanent-lockout" claim to "high/recoverable" — the org was always recoverable via re-invite/approve). Shipped **7 themed, CI-green PRs**, each merged + deployed under standing auto-merge authorization.
+
+### Shipped + merged + deployed (production)
+- **#731 — financials viewer-capable + faster.** New `utils/quickCompute.js` routes what-if/sensitivity/scenario compute through the in-browser kernel (same code → identical numbers) instead of the admin-gated server endpoint; `SensitivityTornado` + `ScenarioComparison` migrated → they work for read-only viewers AND drop ~10 server round-trips/load for everyone. `FinancialsPage` gates the Calculate/Recalculate write path behind `useCanEdit()`; viewers get a clean read-only page. (audit [10])
+- **#732 — org member-management correctness + security.** Replaced the unguarded soft-`deactivate` (no rank/last-owner guard — any admin could deactivate an owner via direct API) with a transactional, guarded hard-`remove` (FOR UPDATE + rank ceiling + last-active-owner 409). `listOrganizationMembers` returns active-only, so `is_active=false` unambiguously means a pending join request; TeamPage surfaces a real "Pending requests" queue via the previously-dead `useJoinRequests` hooks (the removed-member-mislabeled-"Pending"-with-Approve bug is gone). +6 tests. (audit [1],[2])
+- **#733 — honest failure states.** `useExtractDocument` now tells the truth (the extract endpoint returns 201 for completed/partial/**failed**) via a tested `resolveExtractionToast` — error on failed, warning on no-fields/partial, success only when fields were captured. Comps page grew a real error state (`isError`) so a failed fetch no longer masquerades as "No comparables found". +8 tests. (audit [3],[6])
+- **#734 — export AI-policy + correctness.** Verb neutralizer gained Buy/Sell/Clear (3 of 7 forbidden verbs it claimed to block but didn't; "Clear" scoped to decision-context so "clear title" is untouched). AI doc-insights findings (legal-four lanes) now run through the neutralizer at the single coerce choke point feeding both live + DOCX, and the prompt gained a hard legal-lane rule. Cap-rate comp band: naive nearest-rank → interpolated percentile util (the flag never fired on small comp sets). +tests. (audit [7],[14],[15])
+- **#735 — accessible Edit Property dialog + property viewer-gating.** Hand-rolled `fixed inset-0` overlay → the design-system `Modal` primitive (role=dialog, focus-trap, Escape, return-focus, scroll-lock). Edit / Re-geocode / map move-pin gated behind `useCanEdit()`. (audit [5],[11])
+- **#736 — safe workspace switch + intel skeletons.** `WorkspaceSwitcher` rolls the active org back when `refreshUser()` returns null (was toasting "Switched" and stranding the app scoped to an org it couldn't load → 403 loop). Market-Intelligence benchmark/transaction tables: spinner → `SkeletonList`. (audit [9],[13])
+- **#737 — domain anti-squatting (⚠ needs migration).** Only a VERIFIED claim is exclusive now: migration `20260603` drops the global `UNIQUE(lower(domain))` (which let a squatter block the real owner with an unverified claim, no recourse) for a partial unique on `verified=TRUE` + a per-org unique; `addDomainClaim` pre-checks verified-elsewhere, `verifyDomain` race-guards the partial unique. Deploy-before-migrate safe. +tests. (audit [8])
+
+### Verification
+Per-PR CI green throughout (full backend suite + frontend build + frontend tests); ~40 new unit tests across the block. Local frontend dev-server smoke-test: landing page renders fully, zero console errors (app shell/boot healthy). Authed data-page flows (financials/property/team) are CI + unit-verified; a 5-minute operator hands-on check is recommended (below) since they can't be auth-tested locally.
+
+### Operator actions
+1. **Apply `database/migrations/20260603_domain_claim_verified_uniqueness.sql`** (Supabase SQL editor; additive index swap, no rows touched).
+2. **5-minute hands-on check** of the authed flows: a deal's Financials (sensitivity/scenarios render instantly + work even for a viewer), a Property → Edit (dialog traps focus + closes on Escape), Settings → Team (roster = active members; Pending-requests box appears only when someone's waiting).
+
+### Consciously deferred (evaluated, not rushed — quality over padding)
+- **[4] Comps Review Queue modal a11y** — 3 hand-rolled modals → Modal primitive; admin-only + can't be auth-verified locally → own PR + hands-on check.
+- **[12] evidence-ingestion N+1** — real but medium-risk rewrite; no impact at current scale.
+- **[16] GET /comps two round-trips** — a single `COUNT(*) OVER()` introduces a deep-empty-page total inaccuracy for a LOW-severity gain; not worth the edge.
+- **[17] non-streaming IC/deal-analysis 200-on-AI-failure** — LOW + nuanced (changing the contract risks the graceful-degradation display); needs frontend-consumer analysis.
+
 ## 2026-06-02 (cont. — RBAC hardening, viewer read-only, add-existing-member, security hygiene) (PRs #725–#728, all merged + deployed)
 
 Operator said "do all" on the 3 remaining follow-ups from the multi-tenancy plan. A 3-agent review workflow mapped backend mutation-route role gaps, frontend edit surfaces, and Phase-0 security items; implemented, verified, merged, and deployed all four PRs (standing auto-merge authorization).
