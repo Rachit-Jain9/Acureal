@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financialsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
-import { clientQuickCompute, useClientKernel } from '../utils/clientKernel';
+import { runQuickCompute } from '../utils/quickCompute';
 
 export function useFinancials(dealId) {
   return useQuery({
@@ -104,19 +104,10 @@ export function useDefaultsMeta(assetClass) {
 // `/financials/quick-compute` endpoint is preserved as a failsafe).
 export function useQuickCompute() {
   return useMutation({
-    mutationFn: async (data) => {
-      if (useClientKernel()) {
-        const resp = clientQuickCompute(data);
-        if (resp.success) return resp.data;
-        // Shape the error like an axios rejection so downstream error
-        // handling stays uniform.
-        const err = new Error(resp.message);
-        err.response = { status: resp.status, data: { message: resp.message } };
-        throw err;
-      }
-      const r = await financialsAPI.quickCompute(data);
-      return r.data.data;
-    },
+    // Routing (client kernel vs server) + envelope-unwrap live in the
+    // shared runQuickCompute helper so every what-if surface (sliders,
+    // tornado, scenarios) stays byte-for-byte consistent.
+    mutationFn: (data) => runQuickCompute(data),
     // Errors surface via the returned `error` — the what-if panel shows
     // them inline. No global toast so rapid-fire slider changes don't
     // spam the user.

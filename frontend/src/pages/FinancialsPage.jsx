@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calculator, Building2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Calculator, Building2, ChevronDown, Lock } from 'lucide-react';
 import ReferenceMenu from '../components/financials/ReferenceMenu';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import QuarterlyProformaPanel from '../components/financials/QuarterlyProformaPanel';
@@ -34,6 +34,7 @@ import {
   getFinancialModelLabel,
 } from '../components/financials/fieldDefs';
 import { useDeal } from '../hooks/useDeals';
+import { useCanEdit } from '../hooks/useCanEdit';
 import { readPrefill, clearPrefill } from '../utils/programmeToInputs';
 import { toast } from '../components/common/Toast';
 import EmptyState from '../components/common/EmptyState';
@@ -61,6 +62,11 @@ export default function FinancialsPage() {
   const { data: financials, isLoading, error } = useFinancials(dealId);
   const { data: deal } = useDeal(dealId);
   const calculateMutation = useCalculateFinancials();
+  // Viewer (read-only) members can see every computed panel — KPIs, what-if,
+  // sensitivity, scenarios, charts all render from the client kernel — but the
+  // Calculate/Recalculate write path is editor+ only (mirrors the backend's
+  // requireRole('admin','analyst') gate on POST /financials/:id/calculate).
+  const canEdit = useCanEdit();
   useScrollOnMount();
 
   const existingClass = financials?.asset_class || 'residential_apartments';
@@ -276,9 +282,41 @@ export default function FinancialsPage() {
           </div>
 
           <div className="border-t pt-6" ref={inputsRef}>
-            <h3 className="text-sm font-semibold text-content-primary mb-3">Recalculate</h3>
+            {canEdit ? (
+              <>
+                <h3 className="text-sm font-semibold text-content-primary mb-3">Recalculate</h3>
+                <InputForm
+                  initialValues={financials}
+                  assetClass={activeClass}
+                  deal={deal}
+                  onSubmit={handleCalculate}
+                  isLoading={calculateMutation.isPending}
+                  prefill={prefill}
+                  onPrefillConsumed={handlePrefillConsumed}
+                />
+              </>
+            ) : (
+              <div className="flex items-start gap-2.5 text-sm text-content-muted">
+                <Lock size={15} className="mt-0.5 shrink-0 text-content-muted" />
+                <p>
+                  You have <span className="font-medium text-content-secondary">view-only</span> access
+                  to this workspace. The figures above are live and exportable — ask an editor or admin
+                  to update the underwriting model.
+                </p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* First-time form — editors build the model; viewers see a read-only
+          empty state (the write path is gated, so showing them a form they
+          cannot submit would only 403 on Calculate). */}
+      {!hasResults && !shouldShowError && (
+        canEdit ? (
+          <>
             <InputForm
-              initialValues={financials}
+              initialValues={null}
               assetClass={activeClass}
               deal={deal}
               onSubmit={handleCalculate}
@@ -286,26 +324,17 @@ export default function FinancialsPage() {
               prefill={prefill}
               onPrefillConsumed={handlePrefillConsumed}
             />
-          </div>
-        </>
-      )}
-
-      {/* First-time form */}
-      {!hasResults && !shouldShowError && (
-        <>
-          <InputForm
-            initialValues={null}
-            assetClass={activeClass}
-            deal={deal}
-            onSubmit={handleCalculate}
-            isLoading={calculateMutation.isPending}
-            prefill={prefill}
-            onPrefillConsumed={handlePrefillConsumed}
+            {/* Waterfall panels available even before DCF is run */}
+            <JDAWaterfallPanel financials={null} deal={deal} />
+            <JVWaterfallPanel financials={null} deal={deal} />
+          </>
+        ) : (
+          <EmptyState
+            title="No financial model yet"
+            description="An editor or admin needs to build the underwriting model for this deal. Once it's saved, the full DCF, sensitivity, and scenario analysis will appear here."
+            icon={Calculator}
           />
-          {/* Waterfall panels available even before DCF is run */}
-          <JDAWaterfallPanel financials={null} deal={deal} />
-          <JVWaterfallPanel financials={null} deal={deal} />
-        </>
+        )
       )}
 
       {shouldShowError && !hasResults && (
