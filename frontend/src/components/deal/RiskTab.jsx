@@ -17,6 +17,7 @@ import AiMarkdown from '../common/AiMarkdown';
 import { downloadMarkdown, copyMarkdownToClipboard, buildArtifactFilename } from '../../utils/downloadMarkdown';
 import { SectionHeader, SkeletonList, Card, confirm } from '../../design-system';
 import { useDealContext, useDealRecord, useDealRedFlags, useDealRiskScore, useDealDoctor } from '../../hooks/useDealContext';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 // PR-NX47 (2026-05-19) — surface Claude's risk synthesis (the one that
 // ships in the DOCX Risk Register section) inline at the top of the tab.
@@ -100,7 +101,7 @@ function RiskScoreCard({ score, flagCount }) {
   );
 }
 
-function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
+function RiskFlagCard({ flag, dealId, onDelete, updateFlag, canEdit }) {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState(null);
 
@@ -248,6 +249,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
                 </span>
               )}
             </div>
+            {canEdit && (
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 type="button"
@@ -268,6 +270,7 @@ function RiskFlagCard({ flag, dealId, onDelete, updateFlag }) {
                 <Trash2 size={13} />
               </button>
             </div>
+            )}
           </div>
           {flag.description && (
             <p className="text-sm text-content-secondary mb-2">{flag.description}</p>
@@ -297,6 +300,7 @@ export default function RiskTab() {
   const createFlag = useCreateRiskFlag();
   const updateFlag = useUpdateRiskFlag();
   const deleteFlag = useDeleteRiskFlag();
+  const canEdit = useCanEdit();
   // Tier-1 #4 — cross-document inconsistency detector hooks.
   const runInconsistencyCheck = useRunInconsistencyCheck();
   const { data: brief } = useRiskBrief(dealId);
@@ -393,7 +397,7 @@ export default function RiskTab() {
       <SectionHeader
         size="sm"
         title="Risk Flags"
-        action={
+        action={canEdit ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -423,7 +427,7 @@ export default function RiskTab() {
               Add Risk Flag
             </button>
           </div>
-        }
+        ) : null}
       />
 
       {/* AI risk brief — most recent narrative synthesised by Claude
@@ -613,6 +617,7 @@ export default function RiskTab() {
                     dealId={dealId}
                     onDelete={handleDelete}
                     updateFlag={updateFlag}
+                    canEdit={canEdit}
                   />
                 ))}
               </div>

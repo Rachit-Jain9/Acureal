@@ -13,6 +13,7 @@ import {
   Table as TableIcon,
 } from 'lucide-react';
 import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
+import { useCanEdit } from '../hooks/useCanEdit';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
@@ -284,6 +285,7 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
 }
 
 export default function CompsPage() {
+  const canEdit = useCanEdit();
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({
@@ -630,10 +632,12 @@ export default function CompsPage() {
               )}
               {exporting ? 'Exporting…' : 'Export CSV'}
             </button>
-            <button onClick={() => setShowModal(true)} className="btn btn-primary">
-              <Plus size={16} />
-              Add Comp
-            </button>
+            {canEdit && (
+              <button onClick={() => setShowModal(true)} className="btn btn-primary">
+                <Plus size={16} />
+                Add Comp
+              </button>
+            )}
           </div>
         }
       />
@@ -740,7 +744,7 @@ export default function CompsPage() {
           }
           icon={Building2}
           action={
-            !hasActiveFilters && (
+            !hasActiveFilters && canEdit && (
               <button onClick={() => setShowModal(true)} className="btn btn-primary">
                 <Plus size={16} />
                 Add Comparable
@@ -877,14 +881,16 @@ export default function CompsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(comp.id); }}
-                          disabled={deleteMutation.isPending}
-                          className="p-1.5 rounded-lg text-content-muted transition-colors duration-150 ease-out hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 active:scale-[0.95] disabled:opacity-50"
-                          title="Delete comparable"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(comp.id); }}
+                            disabled={deleteMutation.isPending}
+                            className="p-1.5 rounded-lg text-content-muted transition-colors duration-150 ease-out hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 active:scale-[0.95] disabled:opacity-50"
+                            title="Delete comparable"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

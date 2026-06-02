@@ -37,6 +37,7 @@ import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 import DealCard from '../components/deals/DealCard';
 import CompareDealsModal from '../components/deals/CompareDealsModal';
 import useAuthStore from '../store/authStore';
+import { useCanEdit } from '../hooks/useCanEdit';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import PageHeader from '../components/common/PageHeader';
@@ -89,6 +90,7 @@ export default function DealsPage() {
   const [assignedToMe, setAssignedToMe] = useState(false);
   const [page, setPage] = useState(1);
   const currentUser = useAuthStore((s) => s.user);
+  const canEdit = useCanEdit();
 
   // Saved-views store (per-device localStorage). Captures the current
   // filter combination under a name so an analyst can recall "My active
@@ -470,10 +472,12 @@ export default function DealsPage() {
               {exportingCsv ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
               {exportingCsv ? 'Exporting…' : 'Export CSV'}
             </button>
-            <button onClick={handleOpenModal} className="btn btn-primary flex items-center gap-2">
-              <Plus size={16} />
-              New Deal
-            </button>
+            {canEdit && (
+              <button onClick={handleOpenModal} className="btn btn-primary flex items-center gap-2">
+                <Plus size={16} />
+                New Deal
+              </button>
+            )}
           </div>
         }
       />
@@ -576,7 +580,7 @@ export default function DealsPage() {
           description={hasFilters ? 'Try adjusting your filters.' : 'Create your first deal to get started.'}
           icon={Briefcase}
           action={
-            !hasFilters && (
+            !hasFilters && canEdit && (
               <button onClick={handleOpenModal} className="btn btn-primary">
                 <Plus size={16} className="mr-1 inline" /> New Deal
               </button>
@@ -660,33 +664,37 @@ export default function DealsPage() {
               Compare
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setReassignModalOpen(true)}
-            disabled={bulkBusy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <UserPlus size={13} />
-            Reassign
-          </button>
-          <button
-            type="button"
-            onClick={() => setStageModalOpen(true)}
-            disabled={bulkBusy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <ArrowRight size={13} />
-            Move stage
-          </button>
-          <button
-            type="button"
-            onClick={() => setArchiveModalOpen(true)}
-            disabled={bulkBusy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <Archive size={13} />
-            Archive
-          </button>
+          {canEdit && (
+            <>
+              <button
+                type="button"
+                onClick={() => setReassignModalOpen(true)}
+                disabled={bulkBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                <UserPlus size={13} />
+                Reassign
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageModalOpen(true)}
+                disabled={bulkBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                <ArrowRight size={13} />
+                Move stage
+              </button>
+              <button
+                type="button"
+                onClick={() => setArchiveModalOpen(true)}
+                disabled={bulkBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary hover:bg-bg-secondary transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                <Archive size={13} />
+                Archive
+              </button>
+            </>
+          )}
           {/* Bulk delete — admin-only. Visible only to owner/admin so
               analyst seats can't fat-finger a destructive batch op.
               The single-deal Delete on each card is also admin-gated

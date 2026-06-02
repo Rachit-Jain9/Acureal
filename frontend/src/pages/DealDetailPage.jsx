@@ -8,7 +8,9 @@ import {
   useUpdateDeal,
 } from '../hooks/useDeals';
 import { DealContextProvider } from '../hooks/useDealContext';
+import { useCanEdit } from '../hooks/useCanEdit';
 import useAuthStore from '../store/authStore';
+import { roleSatisfies } from '../utils/roles';
 import Badge from '../components/common/Badge';
 import {
   Skeleton, SkeletonKpi, SkeletonCard,
@@ -127,8 +129,8 @@ export default function DealDetailPage() {
   const [editForm, setEditForm] = useState(null);
   const [showSharePanel, setShowSharePanel] = useState(false);
 
-  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
-  const canEdit = ['owner', 'admin', 'editor'].includes(user?.role);
+  const isAdmin = roleSatisfies(user?.role, ['admin']);
+  const canEdit = useCanEdit();
 
   const setTab = (tabId) => setSearchParams({ tab: tabId });
   const updateField = (key, value) => setEditForm((f) => ({ ...f, [key]: value }));

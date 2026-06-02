@@ -19,6 +19,7 @@ import {
 // per-domain hooks but already invalidate `['deal-workspace', dealId]` so
 // the cache refreshes automatically.
 import { useDealContext, useDealActivities } from '../../hooks/useDealContext';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import { clsx } from 'clsx';
 import {
   // PR-NX72: useActivities dropped — activities now read from shared workspace cache.
@@ -71,6 +72,7 @@ export default function ActivityTab() {
   const createActivity = useCreateActivity();
   const updateStatus = useUpdateActivityStatus();
   const deleteActivity = useDeleteActivity();
+  const canEdit = useCanEdit();
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(buildForm());
@@ -145,13 +147,15 @@ export default function ActivityTab() {
             Manual log of calls, visits, meetings &amp; notes — kernel audit trail below.
           </p>
         </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="btn btn-primary flex items-center gap-1.5 text-sm"
-        >
-          <Plus size={14} />
-          Add Activity
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="btn btn-primary flex items-center gap-1.5 text-sm"
+          >
+            <Plus size={14} />
+            Add Activity
+          </button>
+        )}
       </div>
 
       {/* Add Activity Form */}
@@ -321,26 +325,28 @@ export default function ActivityTab() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-2">
-                        {!isCompleted && (
+                      {canEdit && (
+                        <div className="flex items-center gap-3 mt-2">
+                          {!isCompleted && (
+                            <button
+                              onClick={() => handleMarkComplete(activity.id)}
+                              disabled={updateStatus.isPending}
+                              className="text-xs text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                            >
+                              <CheckCircle2 size={12} />
+                              Mark complete
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleMarkComplete(activity.id)}
-                            disabled={updateStatus.isPending}
-                            className="text-xs text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                            onClick={() => handleDelete(activity.id)}
+                            disabled={deleteActivity.isPending}
+                            className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
                           >
-                            <CheckCircle2 size={12} />
-                            Mark complete
+                            <Trash2 size={12} />
+                            Delete
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDelete(activity.id)}
-                          disabled={deleteActivity.isPending}
-                          className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
-                        >
-                          <Trash2 size={12} />
-                          Delete
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </li>
