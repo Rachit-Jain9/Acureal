@@ -15,6 +15,7 @@ import IcReadinessPanel from './IcReadinessPanel';
 // so the cache refreshes automatically.
 import { useDealContext, useDealDDItems, useDealDDScore } from '../../hooks/useDealContext';
 import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ClipboardList,
   Plus,
@@ -121,7 +122,7 @@ const buildApprovalForm = () => ({
 
 // ----------------------- DD Section -----------------------
 
-function DDSection({ dealId }) {
+function DDSection({ dealId, canEdit }) {
   // PR-NX72 (2026-05-19) — Phase A1.1: DDTab now reads items + score + loading
   // state from the shared workspace cache instead of running per-domain
   // useDDItems + useDDScore queries. Mutations still invalidate
@@ -203,7 +204,7 @@ function DDSection({ dealId }) {
         icon={ClipboardList}
         title="Due Diligence Checklist"
         sub={total > 0 ? `${completed}/${total} completed` : undefined}
-        action={
+        action={canEdit ? (
           <div className="flex items-center gap-2">
             {items.length === 0 && (
               <button
@@ -223,7 +224,7 @@ function DDSection({ dealId }) {
               Add Item
             </button>
           </div>
-        }
+        ) : undefined}
       />
 
       {/* DD Score */}
@@ -387,6 +388,8 @@ function DDSection({ dealId }) {
                                   value={item.status}
                                   onChange={(e) => handleStatusChange(item, e.target.value)}
                                   aria-label={`Status for ${item.item_name}`}
+                                  disabled={!canEdit}
+                                  title={!canEdit ? 'View-only — ask an editor to change status' : undefined}
                                   className="text-xs rounded-full px-2 py-0.5 border border-hairline bg-bg-elevated text-content-secondary font-medium cursor-pointer focus:ring-1 focus:ring-accent"
                                 >
                                   {Object.entries(DD_STATUS_CONFIG).map(([v, cfg]) => (
@@ -398,6 +401,7 @@ function DDSection({ dealId }) {
                                 )}
                               </div>
                             </div>
+                            {canEdit && (
                             <button
                               onClick={() => handleDelete(item.id)}
                               className="p-1.5 text-content-muted hover:text-red-500 transition-colors flex-shrink-0"
@@ -405,6 +409,7 @@ function DDSection({ dealId }) {
                             >
                               <Trash2 size={14} />
                             </button>
+                            )}
                           </div>
                         </li>
                       );
@@ -422,7 +427,7 @@ function DDSection({ dealId }) {
 
 // ----------------------- Approvals Section -----------------------
 
-function ApprovalsSection({ dealId }) {
+function ApprovalsSection({ dealId, canEdit }) {
   const { data: approvalsData, isLoading, isError, refetch } = useApprovals(dealId);
   const createApproval = useCreateApproval();
   const updateApproval = useUpdateApproval();
@@ -501,7 +506,7 @@ function ApprovalsSection({ dealId }) {
         size="sm"
         icon={Stamp}
         title="Approvals Tracker"
-        action={
+        action={canEdit ? (
           <div className="flex items-center gap-2">
             {approvals.length === 0 && (
               <button
@@ -521,7 +526,7 @@ function ApprovalsSection({ dealId }) {
               Add Item
             </button>
           </div>
-        }
+        ) : undefined}
       />
 
       {/* Add Form */}
@@ -720,6 +725,8 @@ function ApprovalsSection({ dealId }) {
                       <select
                         value={item.status}
                         onChange={(e) => handleFieldUpdate(item, 'status', e.target.value)}
+                        disabled={!canEdit}
+                        title={!canEdit ? 'View-only — ask an editor to change status' : undefined}
                         className="text-xs bg-transparent border-0 focus:ring-0 cursor-pointer text-content-secondary p-0"
                       >
                         {APPROVAL_STATUS_OPTIONS.map((s) => (
@@ -739,6 +746,7 @@ function ApprovalsSection({ dealId }) {
                         type="checkbox"
                         checked={!!item.is_available}
                         onChange={(e) => handleFieldUpdate(item, 'is_available', e.target.checked)}
+                        disabled={!canEdit}
                         className="rounded text-primary-600 cursor-pointer"
                       />
                     </td>
@@ -747,6 +755,7 @@ function ApprovalsSection({ dealId }) {
                         type="checkbox"
                         checked={!!item.is_uploaded}
                         onChange={(e) => handleFieldUpdate(item, 'is_uploaded', e.target.checked)}
+                        disabled={!canEdit}
                         className="rounded text-primary-600 cursor-pointer"
                       />
                     </td>
@@ -755,6 +764,7 @@ function ApprovalsSection({ dealId }) {
                         type="checkbox"
                         checked={!!item.is_validated}
                         onChange={(e) => handleFieldUpdate(item, 'is_validated', e.target.checked)}
+                        disabled={!canEdit}
                         className="rounded text-primary-600 cursor-pointer"
                       />
                     </td>
@@ -765,12 +775,14 @@ function ApprovalsSection({ dealId }) {
                       {formatDate(item.expiry_date)}
                     </td>
                     <td className="px-3 py-3">
+                      {canEdit && (
                       <button
                         onClick={() => handleDelete(item.id)}
                         className="p-1 text-content-muted hover:text-red-500 transition-colors"
                       >
                         <Trash2 size={13} />
                       </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -787,6 +799,7 @@ function ApprovalsSection({ dealId }) {
 
 export default function DDTab() {
   const { dealId } = useDealContext();
+  const canEdit = useCanEdit();
   useScrollOnMount();
   return (
     <div className="space-y-10">
@@ -807,10 +820,10 @@ export default function DDTab() {
         <KarnatakaReraReadinessPanel />
       </div>
       <div className="border-t border-hairline-strong pt-8">
-        <DDSection dealId={dealId} />
+        <DDSection dealId={dealId} canEdit={canEdit} />
       </div>
       <div className="border-t border-hairline-strong pt-8">
-        <ApprovalsSection dealId={dealId} />
+        <ApprovalsSection dealId={dealId} canEdit={canEdit} />
       </div>
     </div>
   );

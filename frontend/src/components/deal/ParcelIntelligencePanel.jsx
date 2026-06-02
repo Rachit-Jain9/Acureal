@@ -25,13 +25,11 @@ import {
   useVerifyParcelItem,
 } from '../../hooks/useProperties';
 import { useParcelVerdict } from '../../hooks/useParcelVerdict';
-import useAuthStore from '../../store/authStore';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 import VerifyItemDialog from './VerifyItemDialog';
 import SourceExplorerDrawer from './SourceExplorerDrawer';
 import LocalityIntelligenceCard from './LocalityIntelligenceCard';
-
-const EDITOR_ROLES = new Set(['admin', 'owner', 'editor', 'analyst']);
 
 const TABS = [
   { key: 'verified', label: 'Verified' },
@@ -740,8 +738,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
   const verificationsQuery = useParcelVerifications(propertyId);
   const verifyMutation = useVerifyParcelItem();
   const unverifyMutation = useUnverifyParcelItem();
-  const user = useAuthStore((state) => state.user);
-  const canEdit = EDITOR_ROLES.has(String(user?.role || '').toLowerCase());
+  const canEdit = useCanEdit();
   const linkedDealId = dealId || deal?.id || null;
 
   const verificationsByKey = useMemo(() => {

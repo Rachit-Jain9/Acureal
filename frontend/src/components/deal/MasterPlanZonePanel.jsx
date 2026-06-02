@@ -2,18 +2,15 @@ import { useState } from 'react';
 import { CheckCircle2, Edit3, ExternalLink, Info, Search, Shield, Unlink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import useAuthStore from '../../store/authStore';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import { useZones, useZone, useAssignZoneToProperty } from '../../hooks/useMasterPlan';
 import { useUpdateProperty } from '../../hooks/useProperties';
 import { ErrorState, SectionHeader } from '../../design-system';
 import Badge from '../common/Badge';
 import RmpStatusBanner from '../masterplan/RmpStatusBanner';
 
-const EDITOR_ROLES = ['admin', 'owner', 'editor', 'analyst'];
-
 export default function MasterPlanZonePanel({ property }) {
-  const { user } = useAuthStore();
-  const canEdit = EDITOR_ROLES.includes(String(user?.role || '').toLowerCase());
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState('');
   const [showPicker, setShowPicker] = useState(false);
   const [zoneNotesDraft, setZoneNotesDraft] = useState(property?.zone_notes || '');

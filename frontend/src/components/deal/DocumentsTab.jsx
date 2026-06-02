@@ -26,6 +26,7 @@ import DependentsPopover from '../common/DependentsPopover';
 import { useUploadDocument, useDeleteDocument, useExtractDocument } from '../../hooks/useDocuments';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useDealContext, useDealRecord, useDealDocuments } from '../../hooks/useDealContext';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import { SectionHeader, SkeletonList, confirm } from '../../design-system';
@@ -91,6 +92,7 @@ export default function DocumentsTab() {
   const uploadDoc = useUploadDocument();
   const deleteDoc = useDeleteDocument();
   const extractDoc = useExtractDocument();
+  const canEdit = useCanEdit();
 
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [category, setCategory] = useState('other');
@@ -252,6 +254,7 @@ export default function DocumentsTab() {
         <p className="text-sm text-content-secondary">
           {docs.length} document{docs.length !== 1 ? 's' : ''} uploaded
         </p>
+        {canEdit && (
         <div className="flex items-center gap-2">
           {mappedFieldCount > 0 && (
             <button
@@ -272,6 +275,7 @@ export default function DocumentsTab() {
             Upload Document
           </button>
         </div>
+        )}
       </div>
 
       {/* Auto-fill modal (PR-NX26) — operator reviews mapped extractions
@@ -440,7 +444,7 @@ export default function DocumentsTab() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        {canExtract && (
+                        {canEdit && canExtract && (
                           <button
                             onClick={() => handleExtract(doc)}
                             disabled={isExtracting || extractingDocId !== null}
@@ -492,14 +496,16 @@ export default function DocumentsTab() {
                             </button>
                           )}
                         />
-                        <button
-                          onClick={() => handleDelete(doc.id)}
-                          disabled={deleteDoc.isPending}
-                          className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            disabled={deleteDoc.isPending}
+                            className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </li>
                     );
