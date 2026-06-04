@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import useTourStore from '../../store/tourStore';
 import WelcomeModal from './WelcomeModal';
 import Coachmark from './Coachmark';
+import SpotlightBackdrop from './SpotlightBackdrop';
 import { TOUR_STEPS } from './tourSteps';
 
 const isStepVisible = (step) => {
@@ -62,18 +63,21 @@ export default function ProductTour() {
   const isLast = stepIndex === availableSteps.length - 1;
 
   return (
-    <Coachmark
-      key={step.id}
-      target={step.target}
-      title={step.title}
-      body={step.body}
-      step={stepIndex + 1}
-      total={availableSteps.length}
-      isFirst={isFirst}
-      isLast={isLast}
-      onNext={() => (isLast ? dismiss() : setStepIndex((i) => i + 1))}
-      onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
-      onSkip={dismiss}
-    />
+    <>
+      <SpotlightBackdrop target={step.target} />
+      <Coachmark
+        key={step.id}
+        target={step.target}
+        title={step.title}
+        body={step.body}
+        step={stepIndex + 1}
+        total={availableSteps.length}
+        isFirst={isFirst}
+        isLast={isLast}
+        onNext={() => (isLast ? dismiss() : setStepIndex((i) => i + 1))}
+        onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
+        onSkip={dismiss}
+      />
+    </>
   );
 }
