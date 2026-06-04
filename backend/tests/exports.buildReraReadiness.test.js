@@ -95,16 +95,19 @@ describe('buildReraReadinessDocx', () => {
   });
 
   test('not-applicable asset class returns a short document with the reason', async () => {
+    // raw_land is exempt by nature (held / sold as-is, not a unit-sale project).
+    // (commercial_office is intentionally NOT used here any more — under the
+    // corrected statutory logic a commercial unit-sale can be in scope.)
     const readiness = composeReadiness({
-      assetClass: 'commercial_office',
-      dealName: 'Office Park',
+      assetClass: 'raw_land',
+      dealName: 'North Bengaluru Land Parcel',
     });
     const buffer = await buildReraReadinessDocx(readiness);
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(1000);
     const xml = await extractDocumentXml(buffer);
     expect(xml).toContain('Not applicable');
-    expect(xml).toContain('Commercial office');
+    expect(xml).toContain('Raw land');
     // Smaller document — no bucket sections
     expect(xml).not.toContain('Application &amp; Declaration');
   });
