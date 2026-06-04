@@ -226,6 +226,30 @@ describe('KarnatakaReraReadinessPanel', () => {
     expect(screen.getByText('Post-registration')).toBeInTheDocument();
   });
 
+  it('renders the Title & Parcel Consistency section with findings', () => {
+    useDealReraReadinessMock.mockReturnValue({
+      applicable: true, reason_if_not: null, applicability: null,
+      overall: { completeness_pct: 20, readiness_tier: 'early', by_status: {}, total_items: 10, blockers: [] },
+      buckets: [], gaps: [], fee_estimate: null, milestone: null, disclaimer: 'organisation aid',
+      consistency: {
+        available: true,
+        extractions_count: 2,
+        summary: { total: 1, critical: 0, high: 1, medium: 0, low: 0 },
+        findings: [{
+          pair_key: 'area:1:2', category: 'legal', severity: 'high',
+          title: 'Area mismatch: sale_deed vs layout_approval',
+          description: 'Drift is 6.0%.',
+          mitigation: 'Order a fresh survey.',
+          evidence: [{ doc_type: 'sale_deed', field: 'area_sqft', value: 10000 }],
+        }],
+      },
+    });
+    render(<KarnatakaReraReadinessPanel />);
+    expect(screen.getByText('Title & Parcel Consistency')).toBeInTheDocument();
+    expect(screen.getByText(/Area mismatch: sale_deed/)).toBeInTheDocument();
+    expect(screen.getByText(/Order a fresh survey/)).toBeInTheDocument();
+  });
+
   it('saves project facts via dealsAPI.update', async () => {
     useDealReraReadinessMock.mockReturnValue({
       applicable: true, reason_if_not: null, applicability: null,

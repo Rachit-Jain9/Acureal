@@ -38,6 +38,7 @@ const dealStructureRecommender = require('./dealStructureRecommender.service');
 const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
 const { buildReraContext } = require('./rera/complianceContext');
+const reraConsistency = require('./rera/consistency');
 const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
@@ -493,7 +494,12 @@ async function getDealWorkspace(dealId, options = {}) {
       documents: documentsFlat,
       extractedFields: {}, // future hook: structured extracted fields per document
     });
-    return karnatakaReraReadiness.composeReadiness(reraCtx);
+    const slice = karnatakaReraReadiness.composeReadiness(reraCtx);
+    // Co-locate the deterministic cross-document consistency findings (reuses
+    // inconsistencyDetector — pure comparators, no persistence here) so the
+    // cockpit surfaces title/parcel/RERA mismatches next to the checklist.
+    slice.consistency = await reraConsistency.composeReraConsistency(dealId);
+    return slice;
   }, 'karnatakaReraReadiness');
 
   // IC Readiness — Phase 3 / Pillar 5. Pure composer over ALL of the
@@ -532,7 +538,7 @@ async function getDealWorkspace(dealId, options = {}) {
     best_use: bestUseSlice,
     deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
     capital_stack_optimizer: capitalStackSlice,
-    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, applicability: null, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [], fee_estimate: null, milestone: null, conditional_notes: [] },
+    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, applicability: null, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [], fee_estimate: null, milestone: null, conditional_notes: [], consistency: null },
     ic_readiness: icReadinessSlice || { applicable: true, overall: null, buckets: [], gaps: [] },
     generatedAt: new Date().toISOString(),
   };

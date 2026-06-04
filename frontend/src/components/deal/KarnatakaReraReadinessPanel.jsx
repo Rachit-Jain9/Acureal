@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   FileCheck, ChevronRight, ChevronDown, CheckCircle2, Circle,
   AlertCircle, AlertTriangle, Info, Sparkles, Download, Loader2,
-  ExternalLink, HelpCircle, SlidersHorizontal, MinusCircle, ShieldAlert,
+  ExternalLink, HelpCircle, SlidersHorizontal, MinusCircle, ShieldAlert, ScanSearch,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext, useDealReraReadiness } from '../../hooks/useDealContext';
@@ -463,6 +463,91 @@ function GapStrip({ gap }) {
   );
 }
 
+// ── Title & Parcel Consistency — deterministic cross-document mismatch findings
+function FindingRow({ finding }) {
+  const tone = SEVERITY_TONE[finding.severity] || SEVERITY_TONE.low;
+  return (
+    <li className="py-2 px-3 border-b border-hairline last:border-0">
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <span className="text-sm font-medium text-content-primary">{finding.title}</span>
+        <span className={clsx('text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded border shrink-0', tone)}>
+          {finding.severity}
+        </span>
+      </div>
+      {finding.description && (
+        <p className="text-[11px] text-content-secondary mt-1 leading-snug">{finding.description}</p>
+      )}
+      {finding.evidence && finding.evidence.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {finding.evidence.map((e, i) => (
+            <p key={i} className="text-[10px] text-content-muted leading-snug">
+              <span className="uppercase tracking-wide">{String(e.doc_type || 'doc').replace(/_/g, ' ')}</span>
+              {e.field ? ` · ${e.field}` : ''}: <span className="text-content-secondary">{String(e.value ?? '—')}</span>
+            </p>
+          ))}
+        </div>
+      )}
+      {finding.mitigation && (
+        <p className="text-[11px] text-content-secondary mt-1 leading-snug">
+          <span className="font-medium">Next step:</span> {finding.mitigation}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function ConsistencySection({ consistency }) {
+  const [open, setOpen] = useState(true);
+  if (!consistency || !consistency.available) return null;
+  const findings = consistency.findings || [];
+  const extractions = consistency.extractions_count || 0;
+  // Nothing extracted yet → no signal to show; keep the panel uncluttered.
+  if (findings.length === 0 && extractions === 0) return null;
+  const summary = consistency.summary || { total: findings.length, critical: 0 };
+  return (
+    <div className="mb-3 border border-hairline rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 transition-colors duration-150 ease-out"
+      >
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <ScanSearch size={12} className="text-content-muted" />
+          <span className="text-xs uppercase tracking-wider font-medium text-content-secondary">Title &amp; Parcel Consistency</span>
+          {findings.length > 0 ? (
+            <span className="text-[10px] text-content-muted">
+              {summary.total} finding{summary.total === 1 ? '' : 's'}{summary.critical ? ` · ${summary.critical} critical` : ''}
+            </span>
+          ) : (
+            <span className="text-[10px] text-green-600">no conflicts</span>
+          )}
+        </div>
+      </button>
+      {open && (
+        <div className="bg-bg-elevated">
+          {findings.length === 0 ? (
+            <p className="text-[11px] text-content-secondary px-3 py-2 flex items-center gap-1.5">
+              <CheckCircle2 size={12} className="text-green-600 shrink-0" />
+              No cross-document conflicts detected across the uploaded documents.
+            </p>
+          ) : (
+            <>
+              <ul>
+                {findings.map((f, i) => <FindingRow key={f.pair_key || i} finding={f} />)}
+              </ul>
+              <p className="text-[10px] text-content-muted italic px-3 py-1.5 border-t border-hairline">
+                Deterministic cross-document checks — flagged items need human / legal verification, not an automated verdict.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function KarnatakaReraReadinessPanel() {
   const slice = useDealReraReadiness();
   const { dealId, refetch, workspace } = useDealContext();
@@ -515,7 +600,7 @@ export default function KarnatakaReraReadinessPanel() {
     return null;
   }
 
-  const { overall, buckets, gaps, disclaimer, fee_estimate, milestone, applicability } = slice;
+  const { overall, buckets, gaps, disclaimer, fee_estimate, milestone, applicability, consistency } = slice;
   const tier = overall?.readiness_tier || 'early';
   const tierLabel = READINESS_TIER_LABEL[tier] || tier;
   const tierTone = READINESS_TIER_TONE[tier] || READINESS_TIER_TONE.early;
@@ -568,6 +653,9 @@ export default function KarnatakaReraReadinessPanel() {
 
       {/* Fatal blockers */}
       <BlockersCallout blockers={blockers} />
+
+      {/* Cross-document title & parcel consistency */}
+      <ConsistencySection consistency={consistency} />
 
       {/* Fee estimate */}
       <FeeLine fee={fee_estimate} />
