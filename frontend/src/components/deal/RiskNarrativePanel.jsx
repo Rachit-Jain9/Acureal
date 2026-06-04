@@ -1,7 +1,7 @@
 import { Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useRiskNarrative } from '../../hooks/useRiskNarrative';
-import { Skeleton } from '../../design-system';
+import { Skeleton, GuideHelp } from '../../design-system';
 import { formatFallbackReason } from '../../utils/formatFallbackReason';
 
 /**
@@ -96,6 +96,7 @@ export default function RiskNarrativePanel({ dealId }) {
           <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium flex-shrink-0">
             AI-assisted
           </span>
+          <GuideHelp topic="deal.risk-narrative" label="Risk Profile Synthesis" />
         </div>
         <button
           type="button"

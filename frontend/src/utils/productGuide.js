@@ -535,6 +535,62 @@ export const GUIDE_ENTRIES = [
       'Decide whether to stress-test or accept it',
     ],
   },
+  {
+    id: 'deal.ic-readiness',
+    category: 'deal-features',
+    label: 'IC Readiness',
+    icon: 'ClipboardCheck',
+    eyebrow: 'Decision-ready?',
+    what: 'A scorecard of how ready this deal is to take to the Investment Committee — a 0–100 score across seven buckets (financials, documents, approvals and more) with what is verified, uploaded, or still missing.',
+    why: "It turns \"are we ready to decide?\" into a concrete, evidence-backed checklist, so nothing reaches IC with a quiet gap. The score is computed from the deal's own data — not an opinion.",
+    doThis: [
+      'Work the missing and unverified items down',
+      'Use it to judge IC-ready vs pre-IC',
+      'Export the readiness pack for the committee',
+    ],
+  },
+  {
+    id: 'deal.promoter',
+    category: 'deal-features',
+    label: 'Promoter & Execution',
+    icon: 'Building2',
+    eyebrow: 'Execution risk',
+    what: "Where you record the promoter / builder's verified track record — past delivery, delays and RERA project links. The posture (cleared / not-verified / flagged) is computed and feeds the Risk Radar.",
+    why: "Promoter execution is one of the catastrophic ways Indian deals fail. This keeps the track record on the record — and REDIP never lets AI judge a promoter's competence or intent; that call stays yours.",
+    doThis: [
+      "Record and verify the promoter's delivery history",
+      'Link any RERA projects',
+      'Resolve the posture from not-verified to cleared or flagged',
+    ],
+  },
+  {
+    id: 'deal.risk-narrative',
+    category: 'deal-features',
+    label: 'Risk Profile Synthesis',
+    icon: 'Sparkles',
+    eyebrow: 'AI-assisted',
+    what: "An AI-written synthesis of this deal's risk picture — the same prose that ships in your exported risk report, shown live on the Risk tab.",
+    why: "It reads the whole risk register and tells the story in a paragraph so you grasp the shape fast. It's a starting point with evidence links — never a verdict, and it won't assert legal facts like clear title or RERA status; verify those yourself.",
+    doThis: [
+      'Read it as a summary, then confirm against the risk flags',
+      'Trace each claim to its evidence',
+      'Refresh it after the risk register changes',
+    ],
+  },
+  {
+    id: 'deal.ic-memo',
+    category: 'deal-features',
+    label: 'Full IC Memo',
+    icon: 'FileText',
+    eyebrow: 'AI-assisted',
+    what: 'The long-form, multi-section IC memo drafted from this deal — the sign-off version of the Quick Analysis, AI-composed and ready to refine.',
+    why: "It gets you most of the way to an investor-grade memo in seconds, grounded in the deal's real numbers and documents. AI drafts; you review and own the final word — and the legal four stay human-verified.",
+    doThis: [
+      'Generate, then read and edit before relying on it',
+      'Check the numbers against the Financial tab',
+      'Export it for the committee pack',
+    ],
+  },
 
   // ─── How REDIP thinks (concepts — no route, no tour stop) ─────────────────
   {

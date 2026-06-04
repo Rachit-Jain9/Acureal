@@ -7,6 +7,7 @@ import {
   useLinkReraPromoter,
   useUnlinkReraPromoter,
 } from '../../hooks/usePromoterProfile';
+import { GuideHelp } from '../../design-system';
 
 /**
  * Promoter & Execution card — Workstream B (B4).
@@ -299,6 +300,7 @@ export default function PromoterProfileCard({ dealId }) {
         <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
           <Building2 size={16} className="text-content-muted" />
           Promoter &amp; Execution
+          <GuideHelp topic="deal.promoter" label="Promoter & Execution" />
           <span
             className={clsx(
               'text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded border',

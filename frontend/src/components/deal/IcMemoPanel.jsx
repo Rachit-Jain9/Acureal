@@ -124,6 +124,7 @@ export default function IcMemoPanel({ dealId, dealName }) {
     <div>
       <SectionHeader
         size="sm"
+        helpTopic="deal.ic-memo"
         icon={Brain}
         title={
           <>
