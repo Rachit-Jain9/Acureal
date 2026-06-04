@@ -170,6 +170,7 @@ CREATE TABLE deals (
     jv_split_landowner_pct DECIMAL(5, 2),
     rera_number VARCHAR(100),
     rera_expiry_date DATE,
+    rera_inputs JSONB, -- K-RERA applicability inputs: { unit_or_plot_count, sale_intent, completion_date, fee_overrides }
     notes TEXT,
     priority VARCHAR(20) DEFAULT 'medium',
     is_archived BOOLEAN NOT NULL DEFAULT FALSE,

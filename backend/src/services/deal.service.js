@@ -310,10 +310,52 @@ const buildDealPricing = (data, propertyAreaSqft = null) =>
     propertyAreaSqft,
   });
 
+// Sanitise the operator-supplied K-RERA applicability inputs into a bounded,
+// stable JSONB shape. Accepts camelCase or snake_case keys; drops anything
+// unrecognised. Returns null when nothing valid is present.
+const sanitizeReraInputs = (raw) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  const count = Number(raw.unit_or_plot_count ?? raw.unitOrPlotCount);
+  if (Number.isFinite(count) && count >= 0 && count <= 1000000) out.unit_or_plot_count = Math.round(count);
+  const sale = raw.sale_intent ?? raw.saleIntent;
+  if (typeof sale === 'boolean') out.sale_intent = sale;
+  const completion = raw.completion_date ?? raw.completionDate;
+  if (typeof completion === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(completion)) out.completion_date = completion;
+  const fo = raw.fee_overrides ?? raw.feeOverrides;
+  if (fo && typeof fo === 'object' && !Array.isArray(fo)) {
+    const f = {};
+    if (typeof fo.category === 'string' && fo.category.trim()) f.category = fo.category.trim().slice(0, 40);
+    const amt = Number(fo.amount_inr ?? fo.amountInr);
+    if (Number.isFinite(amt) && amt >= 0 && amt <= 100000000) f.amount_inr = Math.round(amt);
+    if (typeof fo.note === 'string' && fo.note.trim()) f.note = fo.note.trim().slice(0, 280);
+    if (Object.keys(f).length) out.fee_overrides = f;
+  }
+  return Object.keys(out).length ? out : null;
+};
+
+// Migration-tolerance for deals.rera_inputs (migration 20260630). Detected once
+// per process via information_schema, then cached. When the column is absent the
+// persistence steps below no-op, so this code is safe to deploy BEFORE the
+// migration is applied (no broken create/update window).
+let _reraInputsColumnPromise = null;
+const reraInputsColumnExists = () => {
+  if (!_reraInputsColumnPromise) {
+    _reraInputsColumnPromise = query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'deals' AND column_name = 'rera_inputs' LIMIT 1`,
+    )
+      .then((res) => res.rows.length > 0)
+      .catch(() => false);
+  }
+  return _reraInputsColumnPromise;
+};
+
 const createDeal = async (data, userId) =>
   transaction(async (client) => {
     const property = await getPropertyContext(client, data.propertyId);
     const pricing = buildDealPricing(data, property?.land_area_sqft || null);
+    const reraInputs = sanitizeReraInputs(data.reraInputs ?? data.rera_inputs);
 
     const result = await client.query(
       `INSERT INTO deals (
@@ -359,6 +401,16 @@ const createDeal = async (data, userId) =>
     );
 
     const deal = result.rows[0];
+
+    // Persist K-RERA inputs only when provided AND the column exists. A second
+    // tiny UPDATE keeps the core INSERT untouched and migration-tolerant.
+    if (reraInputs && (await reraInputsColumnExists())) {
+      await client.query('UPDATE deals SET rera_inputs = $1 WHERE id = $2', [
+        JSON.stringify(reraInputs),
+        deal.id,
+      ]);
+      deal.rera_inputs = reraInputs;
+    }
 
     await client.query(
       `INSERT INTO deal_stage_history (deal_id, from_stage, to_stage, changed_by, notes)
@@ -690,6 +742,11 @@ const updateDeal = async (id, data, userId = null) => {
     };
 
     const pricing = buildDealPricing(merged, property?.land_area_sqft || null);
+    // Provided (even as null / {}) => set or clear; absent => leave untouched.
+    const reraInputsProvided =
+      Object.prototype.hasOwnProperty.call(data, 'reraInputs') ||
+      Object.prototype.hasOwnProperty.call(data, 'rera_inputs');
+    const reraInputs = reraInputsProvided ? sanitizeReraInputs(data.reraInputs ?? data.rera_inputs) : null;
 
     const updateResult = await client.query(
       `UPDATE deals SET
@@ -741,7 +798,18 @@ const updateDeal = async (id, data, userId = null) => {
       ]
     );
 
-    return { result: updateResult.rows[0], beforeDeal: existingDeal };
+    // Persist K-RERA inputs only when the caller provided them AND the column
+    // exists. Provided-null clears; absent leaves the existing value untouched.
+    const updatedDeal = updateResult.rows[0];
+    if (reraInputsProvided && (await reraInputsColumnExists())) {
+      await client.query('UPDATE deals SET rera_inputs = $1 WHERE id = $2', [
+        reraInputs ? JSON.stringify(reraInputs) : null,
+        id,
+      ]);
+      updatedDeal.rera_inputs = reraInputs;
+    }
+
+    return { result: updatedDeal, beforeDeal: existingDeal };
   });
 
   // Reassignment is captured as its own event_type so the timeline
@@ -1385,6 +1453,8 @@ module.exports = {
   getDeals,
   getDealById,
   updateDeal,
+  // exported for unit tests
+  sanitizeReraInputs,
   transitionStage,
   getDealsByStage,
   getPipelineSummary,

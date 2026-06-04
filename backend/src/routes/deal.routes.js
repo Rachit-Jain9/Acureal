@@ -135,6 +135,10 @@ router.post(
     body('expectedCloseDate').optional().isISO8601(),
     body('assetClass').optional().isIn(ASSET_CLASSES),
     body('dealStructure').optional().isIn(DEAL_STRUCTURES),
+    body('reraInputs').optional({ nullable: true }).isObject().withMessage('reraInputs must be an object'),
+    body('reraInputs.unit_or_plot_count').optional({ nullable: true }).isInt({ min: 0, max: 1000000 }).withMessage('unit/plot count must be a whole number'),
+    body('reraInputs.sale_intent').optional({ nullable: true }).isBoolean().withMessage('sale_intent must be true/false'),
+    body('reraInputs.completion_date').optional({ nullable: true }).isISO8601().withMessage('completion_date must be a date (YYYY-MM-DD)'),
   ],
   handleValidation,
   async (req, res, next) => {
@@ -176,6 +180,10 @@ router.put(
     body('negotiatedPriceCr').optional().isFloat({ min: 0 }),
     body('assetClass').optional().isIn(ASSET_CLASSES),
     body('dealStructure').optional().isIn(DEAL_STRUCTURES),
+    body('reraInputs').optional({ nullable: true }).isObject().withMessage('reraInputs must be an object'),
+    body('reraInputs.unit_or_plot_count').optional({ nullable: true }).isInt({ min: 0, max: 1000000 }).withMessage('unit/plot count must be a whole number'),
+    body('reraInputs.sale_intent').optional({ nullable: true }).isBoolean().withMessage('sale_intent must be true/false'),
+    body('reraInputs.completion_date').optional({ nullable: true }).isISO8601().withMessage('completion_date must be a date (YYYY-MM-DD)'),
   ],
   handleValidation,
   async (req, res, next) => {
