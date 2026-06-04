@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
+import useScrollLock from '../hooks/useScrollLock';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, XCircle, Save, RefreshCw, FileText, Mail,
@@ -317,6 +319,15 @@ function CompsTable({ comps, setComps }) {
 
 function RejectModal({ open, onClose, onConfirm, isSubmitting }) {
   const [reason, setReason] = useState('');
+
+  // Trap focus + lock body scroll while open; onClose stabilised so a re-render
+  // doesn't re-arm the trap. Hooks run before the early return below.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(open, { onEscape: handleClose });
+  useScrollLock(open);
+
   if (!open) return null;
   return (
     <div
@@ -327,6 +338,7 @@ function RejectModal({ open, onClose, onConfirm, isSubmitting }) {
       aria-labelledby="reject-batch-dialog-title"
     >
       <div
+        ref={trapRef}
         className="bg-bg-elevated border border-hairline rounded-editorial shadow-editorial p-5 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >

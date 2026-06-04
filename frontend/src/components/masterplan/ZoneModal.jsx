@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
 import { joinList, parseList, toNum } from '../../utils/masterPlanHelpers';
+import useFocusTrap from '../../hooks/useFocusTrap';
+import useScrollLock from '../../hooks/useScrollLock';
 
 /**
  * Initial-form state used when the modal opens in "Add Zone" mode (or as a
@@ -47,6 +49,15 @@ const EMPTY_ZONE = {
  */
 export default function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting }) {
   const [form, setForm] = useState(EMPTY_ZONE);
+
+  // Trap focus + lock body scroll while open (Tab cycles within, Escape closes,
+  // focus restores on close). onClose is stabilised so a re-render doesn't
+  // re-arm the trap.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(isOpen, { onEscape: handleClose });
+  useScrollLock(isOpen);
 
   useMemo(() => {
     if (!isOpen) return;
@@ -126,6 +137,7 @@ export default function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting 
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div
+        ref={trapRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="zone-modal-title"

@@ -1,7 +1,10 @@
+import { useRef, useCallback, useEffect } from 'react';
 import { FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import Badge from '../common/Badge';
 import { ErrorState } from '../../design-system';
 import { formatPercent, pageStatusTone } from '../../utils/masterPlanHelpers';
+import useFocusTrap from '../../hooks/useFocusTrap';
+import useScrollLock from '../../hooks/useScrollLock';
 
 /**
  * Page-level source ledger modal — shows the page-by-page OCR / review
@@ -35,6 +38,14 @@ export default function SourcePagesModal({
   onPrepare,
   preparing,
 }) {
+  // Trap focus + lock body scroll while open; onClose stabilised so a re-render
+  // doesn't re-arm the trap. Hooks run before the early return below.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(isOpen, { onEscape: handleClose });
+  useScrollLock(isOpen);
+
   if (!isOpen || !doc) return null;
 
   const pages = data?.pages || [];
@@ -45,6 +56,7 @@ export default function SourcePagesModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40 transition-opacity duration-150 ease-out" onClick={onClose} />
       <div
+        ref={trapRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-pages-title"
