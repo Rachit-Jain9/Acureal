@@ -8832,3 +8832,26 @@ A 6-PR arc replacing REDIP's thin onboarding (3 static welcome slides + bare flo
 ### What's left (optional follow-ups)
 - PageIntro currently covers the 4 main content pages; could extend to Map/Settings/admin surfaces if wanted.
 - Onboarding state is localStorage (per-device); a server-side preferences table would make tours/banners cross-device, but the checklist already derives cross-device-correct from real data.
+
+## 2026-06-04 (hardening block) — modal a11y completion + deal-panel contextual help (PRs #747–#749)
+
+A focused hardening pass after the onboarding arc, driven by a deep review (3 parallel audit agents — backend / frontend / docs-backlog — plus Supabase advisor checks and live-code verification). Headline finding: the codebase is already well-polished; most audit findings were stale or already-handled (graceful degradation already present via the `dealWorkspace.service` `optional()` helper; the deals/comps export buttons already `disabled` during submit; the comps page already badges verified vs unverified with a source filter + column; `get_advisors(security)` shows **zero REDIP-controlled lints** — the "urgent cross-tenant RLS migration" the backlog flagged was a false alarm, the live policies are in place). So the block focused on the one genuinely-real, verified theme — modal accessibility — plus an on-request onboarding-depth extension.
+
+### What shipped
+- **#747 — deal-flow modal a11y.** Compare Deals, Auto-fill from Documents, and the Parcel property picker were keyboard traps (focus escaped to the page behind, never restored; two had no Escape-to-close or scroll-lock). Migrated to `useFocusTrap` + a new `hooks/useScrollLock`, with `onClose` stabilised against re-render thrash. Updated the one CompareDealsModal test that asserted the old document-level Escape to the container-scoped focus-trap mechanism (matching the Modal primitive's own tests).
+- **#748 — operator modal a11y.** Same fix for the remaining 5 hand-rolled dialogs: the comps-queue reject confirm, and the master-plan Zone / Source-review / Source-pages / Source-history modals. **All 8 hand-rolled modals now follow the WAI-ARIA dialog pattern** (the remaining `role="dialog"` matches are the design-system Modal, Cmd-K, the Guide drawer, and a non-modal popover — all already correct).
+- **#749 — deal-panel contextual help.** Answers the operator's question ("is onboarding done for each feature + sections within each deal?"). `SectionHeader` gains an opt-in `helpTopic` prop — a subtle "?" that opens the Guide to that topic via the existing `redip:guide-open` window event (decoupled, no import cycle). Wired to the 5 marquee deal sub-tools (AI analysis, deal Q&A, financial summary, Bengaluru street lookup, planning context), with 5 matching catalog topics under a new "Signals, AI & lookups" category.
+
+### Validation
+- Frontend: full suite green at each step (1100 → 1102 tests); clean Vite build on every PR. New tests: `useScrollLock` usage, `SectionHelp`; CompareDealsModal Escape test updated.
+- Backend / DB verified read-only: `get_advisors(security)` → zero REDIP-controlled lints (remaining are PostGIS/pgvector-shipped + deny-by-default service tables). `dealWorkspace.service.js` confirmed to wrap every non-core slice in `optional()` (graceful degradation already present). AI provider layer has `AbortController` (disconnect-abort) + ETIMEDOUT handling.
+
+### Recommended follow-up (scoped, deliberately not rushed)
+- **AI wall-clock timeout** — the one genuine reliability gap: provider calls have disconnect-abort but no hard time limit (only the 300s serverless `maxDuration` + the per-day cost cap backstop a hung provider). Worth a dedicated PR adding `setTimeout(() => controller.abort())` at each `AbortController` site in `providerRegistry.js`, with timer-clear across the streaming `done()`/error paths + retry integration, behind an env-overridable timeout. Higher-risk core-infra change → deserves its own tested PR, not a hurried add.
+
+### Operator / manual items (non-blocking; surfaced per the operator's request)
+- Supabase automatic backups (enable Pro plan) — ops hygiene.
+- `security@` mailbox alias — compliance.
+- DPA + AUP legal drafts (DPDP Act 2023) — long lead.
+- Confirm the previously-leaked Google Maps key was rotated/locked in Google Cloud Console.
+(None block code work; the security posture itself is clean.)
