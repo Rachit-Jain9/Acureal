@@ -1,14 +1,17 @@
 // Coachmark — a small anchored pop-up that points at a target element
-// elsewhere on the page (typically a sidebar nav item). Positions itself
-// to the right of the target by default, flipping below if there isn't
-// enough horizontal room. Re-computes position on resize + scroll, fades
-// in via requestAnimationFrame, and respects prefers-reduced-motion.
+// elsewhere on the page (typically a sidebar nav item or a deal tab). Positions
+// itself to the right of the target by default, flipping below if there isn't
+// enough horizontal room. The target measurement comes from the shared
+// useTargetRect hook, so the coachmark and the SpotlightBackdrop stay glued to
+// the exact same anchor. Fades in via requestAnimationFrame and respects
+// prefers-reduced-motion.
 
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '../../design-system';
 import useReducedMotion from '../../hooks/useReducedMotion';
+import useTargetRect from '../../hooks/useTargetRect';
 
 const PANEL_WIDTH = 320;
 const PANEL_HEIGHT_ESTIMATE = 200;
@@ -50,53 +53,19 @@ export default function Coachmark({
   onSkip,
 }) {
   const reduced = useReducedMotion();
-  const [pos, setPos] = useState(null);
+  // The coachmark owns scrolling the target into view (once per step); the
+  // SpotlightBackdrop reads the same selector without re-scrolling.
+  const rect = useTargetRect(target, { scrollIntoView: true });
+  const pos = computePosition(rect);
   const [visible, setVisible] = useState(false);
 
-  // Position computation — re-runs when the target changes AND on
-  // window resize / scroll so the panel stays glued to the anchor.
-  useLayoutEffect(() => {
-    const update = () => {
-      const el = document.querySelector(target);
-      if (!el) {
-        setPos(null);
-        return;
-      }
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        setPos(null);
-        return;
-      }
-      setPos(computePosition(rect));
-    };
-
-    update();
-
-    // Make sure the target is on-screen before we commit to its position.
-    const el = document.querySelector(target);
-    if (el && typeof el.scrollIntoView === 'function') {
-      try {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-      } catch (_) {
-        // older browsers without smooth-scroll options — ignore.
-      }
-    }
-
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [target]);
-
-  // Fade in once we have a position; reset on target change.
+  // Fade in on mount / when the step's target changes. Not keyed on position,
+  // so a reposition (resize / scroll within a step) doesn't re-trigger a flash.
   useEffect(() => {
     setVisible(false);
-    if (!pos) return undefined;
     const id = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(id);
-  }, [pos]);
+  }, [target]);
 
   if (!pos) return null;
 
