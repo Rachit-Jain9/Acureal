@@ -94,12 +94,12 @@ export default function EmailVerificationBanner() {
       </p>
 
       {resendState === 'sent' ? (
-        <span className="inline-flex items-center gap-1.5 text-emerald-700">
+        <span className="inline-flex items-center gap-1.5 text-data-positive">
           <CheckCircle2 size={14} aria-hidden="true" />
           Verification email sent — check your inbox.
         </span>
       ) : resendState === 'error' ? (
-        <span className="text-rose-700 text-xs">{resendError}</span>
+        <span className="text-data-negative text-xs">{resendError}</span>
       ) : (
         <button
           type="button"
@@ -118,7 +118,7 @@ export default function EmailVerificationBanner() {
         type="button"
         onClick={handleDismiss}
         aria-label="Dismiss"
-        className="p-1 rounded text-stone-500 hover:text-stone-900 hover:bg-stone-200/50 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40"
+        className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40"
       >
         <X size={14} aria-hidden="true" />
       </button>

@@ -222,12 +222,16 @@ export function StatTile({ label, value, footnote, negative = false, className }
 //  - danger → rose: compute errors, irrecoverable
 //  - info  → sky: neutral informational message
 export function ErrorState({ tone = 'warn', title, children, action, className }) {
+  // Theme-aware tones: opacity-based tints read correctly on both light and
+  // dark surfaces (the old solid bg-*-50 / text-*-900 rendered as a bright box
+  // in dark mode), with the colour carried by the icon + border accent and the
+  // body text on the primary token.
   const palette =
     tone === 'danger'
-      ? { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-900',   icon: 'text-rose-600' }
+      ? { bg: 'bg-rose-500/10',  border: 'border-rose-500/30',  text: 'text-content-primary', icon: 'text-rose-500' }
       : tone === 'info'
-      ? { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-900',    icon: 'text-sky-600' }
-      : { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-900',  icon: 'text-amber-600' };
+      ? { bg: 'bg-sky-500/10',   border: 'border-sky-500/30',   text: 'text-content-primary', icon: 'text-sky-500' }
+      : { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-content-primary', icon: 'text-amber-500' };
   const Icon = tone === 'info' ? Info : AlertTriangle;
   return (
     <div
