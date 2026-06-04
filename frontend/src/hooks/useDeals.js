@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
@@ -21,6 +21,41 @@ export function useDeal(id) {
     queryFn: () => dealsAPI.get(id).then((r) => r.data.data),
     enabled: !!id,
   });
+}
+
+/**
+ * Cache-only "peek" at a deal's identity — name, stage, city, type, priority.
+ *
+ * Reads whatever the deals list (or a prior single-deal fetch) already placed
+ * in the React Query cache and returns the matching row. NEVER fires a request.
+ * The deal page uses this to paint its real header the instant it mounts —
+ * while the heavy (server-composed) workspace payload is still in flight — so a
+ * user clicking through from the deals list sees the deal's name and stage
+ * immediately instead of a skeleton. On a cold cache (e.g. a hard refresh or a
+ * deep link) it returns null and the page falls back to its skeleton header.
+ */
+export function useDealPeek(id) {
+  const qc = useQueryClient();
+  return useMemo(() => {
+    if (!id) return null;
+    // 1. Richest source: an exact single-deal cache entry.
+    const single = qc.getQueryData(['deal', id]);
+    if (single && single.id === id) return single;
+    // 2. Otherwise scan any cached deals-list page for a matching row.
+    //    List payload shape is { data: [...deals], pagination }.
+    const lists = qc.getQueriesData({ queryKey: ['deals'] });
+    for (const [, value] of lists) {
+      const rows = value?.data;
+      if (Array.isArray(rows)) {
+        const hit = rows.find((d) => d && d.id === id);
+        if (hit) return hit;
+      }
+    }
+    return null;
+    // qc is stable; recompute only when the deal id changes. The peek is read
+    // at mount, which is exactly when the list cache is warm from the click-through.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 }
 
 /**

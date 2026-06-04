@@ -5,6 +5,7 @@ import {
   useTransitionStage,
   useDeleteDeal,
   useUpdateDeal,
+  useDealPeek,
 } from '../hooks/useDeals';
 import { DealContextProvider, useDealWorkspaceWithLite } from '../hooks/useDealContext';
 import { useCanEdit } from '../hooks/useCanEdit';
@@ -97,6 +98,43 @@ const buildEditPayload = (form) => ({
   notes:              form.notes.trim() || undefined,
 });
 
+// ── Header identity, factored out so the same markup paints in the loading
+// skeleton (from a cached "peek") and in the fully-loaded header — no drift,
+// no layout jump when the workspace lands. Presentational only; no hooks.
+function DealHeaderIdentity({ deal }) {
+  return (
+    <div className="min-w-0">
+      <h1 className="text-2xl font-bold text-content-primary truncate">{deal.name}</h1>
+      <p className="text-sm text-content-secondary mt-0.5">
+        {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || ''}
+        {deal.asset_class && (
+          <> · {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}</>
+        )}
+        {deal.deal_structure && (
+          <> · {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}</>
+        )}
+        {(deal.city || deal.state) && (
+          <> · {[deal.city, deal.state].filter(Boolean).join(', ')}</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function DealStageBadges({ deal }) {
+  const stageCfg    = STAGE_CONFIG[deal.stage]       || STAGE_CONFIG.screening;
+  const priorityCfg = PRIORITY_CONFIG[deal.priority] || PRIORITY_CONFIG.medium;
+  return (
+    <div className="flex items-center gap-2 flex-wrap mb-4">
+      <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
+      <Badge tone={priorityCfg.tone}>{priorityCfg.label} Priority</Badge>
+      {deal.assigned_to_name && (
+        <span className="text-sm text-content-muted">Assigned to {deal.assigned_to_name}</span>
+      )}
+    </div>
+  );
+}
+
 export default function DealDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -108,6 +146,10 @@ export default function DealDetailPage() {
   // deal-doctor card prose in place. Shared key with the DealContextProvider
   // below (which the tabs read), so there is no double fetch.
   const { workspace, isLoading, isError } = useDealWorkspaceWithLite(id);
+  // Cache-only identity for an instant header paint while the workspace loads.
+  // Warm when the user clicked through from the deals list; null on a cold
+  // deep-link (page then shows its full skeleton). Never fires a request.
+  const peek = useDealPeek(id);
   const deal = workspace?.deal;
 
   // Drop the freshly-visited deal into the Cmd-K palette's "Recent deals"
@@ -179,16 +221,41 @@ export default function DealDetailPage() {
   if (isLoading) {
     return (
       <div aria-busy="true">
-        <Skeleton className="h-4 w-28 mb-4" />
-        <div className="bg-bg-elevated border border-hairline rounded-editorial p-5 mb-4">
-          <Skeleton className="h-3 w-24 mb-2" />
-          <Skeleton className="h-7 w-2/3 mb-3" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-20 rounded-full" />
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-5 w-24 rounded-full" />
+        {/* Back button is real even while loading — it needs no deal data. */}
+        <button
+          onClick={() => navigate('/dashboard/deals')}
+          className="inline-flex items-center gap-1 text-sm text-content-secondary mb-4 rounded
+            transition-colors duration-150 ease-out hover:text-content-primary
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <ArrowLeft size={15} /> Back to Deals
+        </button>
+
+        {peek ? (
+          // Real identity from cache — the user sees the deal's name and stage
+          // the instant they land, while KPIs / tabs / body fill in below.
+          <>
+            <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
+              <DealHeaderIdentity deal={peek} />
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Skeleton className="h-9 w-24 rounded-md" />
+                <Skeleton className="h-9 w-20 rounded-md" />
+              </div>
+            </div>
+            <DealStageBadges deal={peek} />
+          </>
+        ) : (
+          <div className="bg-bg-elevated border border-hairline rounded-editorial p-5 mb-4">
+            <Skeleton className="h-3 w-24 mb-2" />
+            <Skeleton className="h-7 w-2/3 mb-3" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
           </div>
-        </div>
+        )}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <SkeletonKpi />
           <SkeletonKpi />
@@ -217,7 +284,6 @@ export default function DealDetailPage() {
   }
 
   const stageCfg    = STAGE_CONFIG[deal.stage]       || STAGE_CONFIG.screening;
-  const priorityCfg = PRIORITY_CONFIG[deal.priority] || PRIORITY_CONFIG.medium;
   const nextStages  = STAGE_TRANSITIONS[deal.stage]  || [];
 
   // DealContextProvider lets descendant tabs read deal data via useDealContext()
@@ -237,21 +303,7 @@ export default function DealDetailPage() {
 
         {/* Deal header */}
         <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-content-primary truncate">{deal.name}</h1>
-            <p className="text-sm text-content-secondary mt-0.5">
-              {DEAL_TYPE_LABELS[deal.deal_type] || deal.deal_type || ''}
-              {deal.asset_class && (
-                <> · {ASSET_CLASS_LABELS[deal.asset_class] || deal.asset_class}</>
-              )}
-              {deal.deal_structure && (
-                <> · {DEAL_STRUCTURE_LABELS[deal.deal_structure] || deal.deal_structure}</>
-              )}
-              {(deal.city || deal.state) && (
-                <> · {[deal.city, deal.state].filter(Boolean).join(', ')}</>
-              )}
-            </p>
-          </div>
+          <DealHeaderIdentity deal={deal} />
 
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {canEdit && <ExportMenu dealId={id} dealName={deal.name} />}
@@ -280,13 +332,7 @@ export default function DealDetailPage() {
         </div>
 
         {/* Badge row */}
-        <div className="flex items-center gap-2 flex-wrap mb-4">
-          <Badge tone={stageCfg.tone}>{stageCfg.label}</Badge>
-          <Badge tone={priorityCfg.tone}>{priorityCfg.label} Priority</Badge>
-          {deal.assigned_to_name && (
-            <span className="text-sm text-content-muted">Assigned to {deal.assigned_to_name}</span>
-          )}
-        </div>
+        <DealStageBadges deal={deal} />
 
         {/* Stage transition panel (collapsible, above the tabs) */}
         {nextStages.length > 0 && canEdit && (
