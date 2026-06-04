@@ -84,12 +84,19 @@ vi.mock('../../hooks/useDashboard', () => ({
   }),
 }));
 
-// AI cost summary + audit-trail-tail widgets self-fetch via adminAPI;
-// stub the network so the dashboard renders without real HTTP traffic.
+// AI cost summary + audit-trail-tail widgets self-fetch via adminAPI; the setup
+// checklist self-fetches the deals list (and, for admins, members). Stub the
+// network so the dashboard renders without real HTTP traffic.
 vi.mock('../../services/api', () => ({
   adminAPI: {
     getAiUsage: vi.fn(() => Promise.resolve({ data: { data: null } })),
     getRecentEvents: vi.fn(() => Promise.resolve({ data: { data: [] } })),
+  },
+  dealsAPI: {
+    list: vi.fn(() => Promise.resolve({ data: { data: [] } })),
+  },
+  organizationAPI: {
+    listMembers: vi.fn(() => Promise.resolve({ data: { data: { members: [] } } })),
   },
 }));
 

@@ -4,10 +4,14 @@ import { dealsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 import { invalidatePortfolioRollups } from './dealPostureQueries';
 
-export function useDeals(params = {}) {
+export function useDeals(params = {}, options = {}) {
+  // `options` forwards react-query knobs (enabled, staleTime) so passive
+  // consumers — e.g. the dashboard setup checklist — can gate or cache the
+  // list without firing it on every render.
   return useQuery({
     queryKey: ['deals', params],
     queryFn: () => dealsAPI.list(params).then((r) => r.data),
+    ...options,
   });
 }
 
