@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import { useDealContext, useDealIcReadiness } from '../../hooks/useDealContext';
 import { exportsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
+import { GuideHelp } from '../../design-system';
 
 /**
  * IcReadinessPanel — Phase 3 / Pillar 5.
@@ -231,6 +232,7 @@ export default function IcReadinessPanel() {
           <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
             <Target size={16} className="text-content-muted" />
             IC Readiness Pack
+            <GuideHelp topic="deal.ic-readiness" label="IC Readiness" />
           </h3>
           <p className="text-xs text-content-secondary mt-1 leading-snug max-w-2xl">
             Seven-bucket inventory of what an Investment Committee reviewer expects to see. Reads
