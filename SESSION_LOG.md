@@ -4,6 +4,24 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-04 (cont. — K-RERA V2: cross-document consistency + discoverability) (PRs #766–#768, all merged + deployed)
+
+Continued the K-RERA arc after the operator applied the `20260630_deal_rera_inputs` migration (confirmed live: cockpit reads "In scope", fee ₹3,64,217, 4 blockers on the Jigani deal). Deep-reviewed the existing extraction + inconsistency infrastructure FIRST (3 Explore agents) — and found REDIP already has a deterministic cross-document detector (`inconsistencyDetector.service.js`: 5 pure comparators — seller/EC owner mismatch, consideration drift, FSI conflict, area drift, RERA gap — finding shape, `nameSimilarity`, dedup, persistence to `risk_flags(source='ai_detector')`, event sink, tests, legal carve-out). The vision's "Mismatch Dashboard" largely existed but was trapped on the Risk tab. So the work was **reuse + surface**, not rebuild.
+
+### Shipped + merged + deployed (production)
+- **#766 — Title & Parcel Consistency in the cockpit.** New `backend/src/services/rera/consistency.js` wraps `inconsistencyDetector.detect()` (pure, no persistence) and shapes findings (severity-sorted + summary); degrades to an honest unavailable state, never throwing into the workspace build. Wired into the dealWorkspace K-RERA slice (one extractions read; rides the version-keyed cache that already invalidates on `document_extractions`). Cockpit renders a collapsible "Title & Parcel Consistency" section (severity pills, evidence pairs, next-step) beside the fatal blockers — deterministic findings only, "needs human/legal verification" note (no AI risk-brief surfaced). +27 backend (5 consistency + 22 workspace) + 10 frontend tests.
+- **#767 — same findings in the DOCX pack.** Screen↔paper parity: the export route attaches the consistency slice; `buildReraReadiness` renders a "Title & Parcel Consistency" table after the fatal blockers. The handover pack the CA/lawyer receives now carries the mismatches (the #1 thing they verify). +DOCX test.
+- **#768 — Guide discoverability.** Added a `deal.rera-readiness` entry to `productGuide.js` (the single-source-of-truth catalog) so the cockpit is findable in the in-app Guide. Guide-drawer entry (no tourTarget).
+
+### Deliberately NOT done (quality over padding)
+- **Naive survey-number / khata cross-document comparators** — a real deal legitimately spans multiple parcels, so blindly flagging "survey numbers differ" is false-positive-prone. Doing it right needs ground-truth anchoring (compare extracted vs the deal's recorded `properties.survey_number`/`khata_no`), which needs an interface change to the detector. Deferred rather than shipped noisy.
+
+### Verification
+Per-PR CI green (Backend + Frontend + kernel + audit). Live DOM check on `redip.vercel.app` confirmed the cockpit renders correctly on a real residential deal. ~40 new test assertions across the V2 block.
+
+### Still deferred (operator's vision V3–V5 — larger, directional pillars)
+Professional sign-off board (Form-1/2/3 + advocate/CA/architect/engineer/banker workflow; needs a sign-off data model); post-registration compliance calendar (QPR 15-days-after-quarter + annual-audit + escrow-withdrawal tracking; needs scheduled jobs + tables + a calendar UI); multi-audience report packs (promoter / lender / investor / buyer); ground-truth-anchored mismatch comparators.
+
 ## 2026-06-04 (K-RERA Readiness → deterministic compliance-intelligence substrate) (PRs #761–#764, all merged + deployed)
 
 Operator asked what documents/data K-RERA project registration requires and to make every deal "K-RERA ready", tailored per deal/asset/structure — with a deep-quality, multi-phase, "finish everything pending" mandate. Exploration found REDIP **already shipped** a K-RERA readiness checklist (`karnatakaReraReadiness.service.js` → cached workspace payload → `KarnatakaReraReadinessPanel.jsx` → `buildReraReadiness.js` DOCX), but it was the shallow version the operator's own 16-section vision doc (§12) warns against: applicability gated only on asset class; one flat 30-item list for every asset class; no fatal blockers; no fee; no JDA/deal-structure awareness; missing whole statutory buckets. A round of Grok critique pushed the design from "better checklist" to "compliance substrate" — adopted the genuinely-good ideas (declarative catalog, rule evaluator, ComplianceContext seam, versioned fees, rule-trace), declined the over-reach (unused state-table skeleton, multi-state abstraction, catalog-in-a-table, event bus, json-rules-engine dep) with reasons. Shipped as **4 small, CI-green PRs**.
