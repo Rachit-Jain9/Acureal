@@ -106,6 +106,7 @@ export default function FinancialTab() {
   return (
     <div className="space-y-6">
       <SectionHeader
+        helpTopic="deal.financial-model"
         size="sm"
         icon={TrendingUp}
         title="Financial Model Summary"

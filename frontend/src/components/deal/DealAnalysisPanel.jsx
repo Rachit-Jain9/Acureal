@@ -99,6 +99,7 @@ export default function DealAnalysisPanel({ dealId }) {
   return (
     <div>
       <SectionHeader
+        helpTopic="deal.ai-analysis"
         size="sm"
         icon={Brain}
         title={

@@ -94,6 +94,7 @@ export default function DealPlanningContextCard() {
   return (
     <Card elevated className="p-5">
       <SectionHeader
+        helpTopic="deal.planning-context"
         size="sm"
         icon={Layers}
         title="Bengaluru planning context"

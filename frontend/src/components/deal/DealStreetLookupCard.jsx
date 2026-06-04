@@ -165,6 +165,7 @@ export default function DealStreetLookupCard({ property, deal }) {
   return (
     <Card elevated className="p-5">
       <SectionHeader
+        helpTopic="deal.street-lookup"
         size="sm"
         icon={MapPin}
         title="Bengaluru street lookup — BBMP zone + guidance value"

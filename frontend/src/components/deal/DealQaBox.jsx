@@ -259,6 +259,7 @@ export default function DealQaBox({ dealId }) {
   return (
     <Card className="p-5">
       <SectionHeader
+        helpTopic="deal.ai-qa"
         size="sm"
         icon={Sparkles}
         eyebrow="AI · Tier-2"

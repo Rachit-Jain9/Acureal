@@ -38,7 +38,7 @@ export { Tooltip } from './Tooltip';
 export { confirm, ConfirmDialogContainer } from './ConfirmDialog';
 
 import clsx from 'clsx';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, HelpCircle } from 'lucide-react';
 import useCountUp from '../hooks/useCountUp';
 
 // ── Card ───────────────────────────────────────────────────────────────────
@@ -58,11 +58,29 @@ export function Card({ as: As = 'div', elevated = false, className, children, ..
   );
 }
 
+// A subtle "?" affordance that opens the in-app Guide to a specific topic.
+// Decoupled via a window event (no import of the guide module) so any primitive
+// can offer contextual help without a dependency cycle.
+function SectionHelpButton({ topic, label }) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent('redip:guide-open', { detail: { topicId: topic } }))}
+      aria-label={`What is ${label}? Open the guide`}
+      title="What is this? — open the Guide"
+      className="shrink-0 rounded p-0.5 text-content-muted transition-colors duration-150 ease-out hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
+      <HelpCircle size={14} aria-hidden="true" />
+    </button>
+  );
+}
+
 // ── SectionHeader ──────────────────────────────────────────────────────────
 // Editorial section title: small uppercase eyebrow + display headline + optional sub.
 // `icon` is an optional Lucide component rendered left of the title (muted).
 // `size` controls the headline scale: 'md' (default, h2) | 'sm' (h3, for sub-sections within a Card).
-export function SectionHeader({ icon: Icon, eyebrow, title, sub, action, size = 'md', className }) {
+// `helpTopic` (optional) renders a subtle "?" that opens the Guide to that topic.
+export function SectionHeader({ icon: Icon, eyebrow, title, sub, action, size = 'md', className, helpTopic }) {
   const H = size === 'sm' ? 'h3' : 'h2';
   const headlineClass =
     size === 'sm'
@@ -85,6 +103,9 @@ export function SectionHeader({ icon: Icon, eyebrow, title, sub, action, size = 
         <H className={headlineClass}>
           {Icon && <Icon size={16} className="text-content-muted shrink-0" aria-hidden="true" />}
           <span className="truncate">{title}</span>
+          {helpTopic && (
+            <SectionHelpButton topic={helpTopic} label={typeof title === 'string' ? title : 'this section'} />
+          )}
         </H>
         {sub && <p className="text-sm text-content-secondary mt-1.5 max-w-2xl">{sub}</p>}
       </div>
