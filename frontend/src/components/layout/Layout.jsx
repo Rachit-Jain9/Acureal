@@ -5,6 +5,7 @@ import Header from './Header';
 import CommandPalette from '../common/CommandPalette';
 import EmailVerificationBanner from '../common/EmailVerificationBanner';
 import ProductTour from '../onboarding/ProductTour';
+import GuideCenter from '../guide/GuideCenter';
 
 export default function Layout() {
   // The multi-currency display layer was retired 2026-05-24 — every
@@ -38,6 +39,10 @@ export default function Layout() {
       </div>
       {/* Cmd+K palette is mounted once and overlays everything when toggled. */}
       <CommandPalette />
+      {/* The Guide — an always-available, searchable explainer for every page,
+          tab and concept. Opened from the Header "?", Cmd-K, Settings, or a
+          per-page "?". Renders nothing until opened. */}
+      <GuideCenter />
       {/* Product tour — auto-opens for users who haven't completed it yet,
           replayable from Settings. Renders nothing once dismissed. */}
       <ProductTour />

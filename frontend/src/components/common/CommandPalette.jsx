@@ -43,6 +43,7 @@ const QUICK_ACTIONS = [
   { id: 'intelligence', label: 'Daily intelligence brief',  hint: 'Today’s market take', to: '/dashboard/intelligence', keywords: 'brief market signals' },
   { id: 'reports',      label: 'Reports',                   hint: 'Exports & IC packs',    to: '/dashboard/reports',          keywords: 'export ic pdf' },
   { id: 'settings',     label: 'Settings',                  hint: 'Org & preferences',     to: '/dashboard/settings',         keywords: 'preferences profile' },
+  { id: 'guide',        label: 'Open the Guide',            hint: 'What every page & tab does', event: 'redip:guide-open',     keywords: 'help guide learn explain how onboarding tour what does' },
   { id: 'masterplan',   label: 'Master plan admin',         hint: 'Zone curation',         to: '/dashboard/settings/master-plan', keywords: 'rmp zone' },
   { id: 'parcel-admin', label: 'Parcel intelligence admin', hint: 'Evidence review',       to: '/dashboard/settings/parcel-intelligence', keywords: 'evidence review' },
 ];
@@ -74,6 +75,10 @@ export const recordRecentDeal = (deal) => {
   ];
   persistRecent(next);
 };
+
+// The Guide deep-links deal-tab topics ("Open in a deal") to the most-recently
+// opened deal, so it lands on a real workspace without firing a network query.
+export const getMostRecentDealId = () => loadRecent()[0]?.id || null;
 
 const matchesQuery = (text, query) => {
   if (!query) return true;
@@ -196,7 +201,13 @@ export default function CommandPalette() {
 
   const navigateTo = (item) => {
     if (item.kind === 'action') {
-      navigate(item.payload.to);
+      // Most actions navigate; a few (e.g. the Guide) instead dispatch a
+      // window event so an overlay opens in place rather than routing away.
+      if (item.payload.event) {
+        window.dispatchEvent(new CustomEvent(item.payload.event));
+      } else {
+        navigate(item.payload.to);
+      }
     } else if (item.kind === 'recent' || item.kind === 'deal') {
       const deal = item.payload;
       if (item.kind === 'deal') recordRecentDeal(deal);
