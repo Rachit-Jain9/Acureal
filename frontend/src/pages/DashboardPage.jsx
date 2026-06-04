@@ -1,12 +1,18 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, AlertTriangle, Settings2 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
+import { useDeals } from '../hooks/useDeals';
+import { useOrganizationMembers } from '../hooks/useOrganization';
 import useAuthStore from '../store/authStore';
 import useTourStore from '../store/tourStore';
 import { isPlatformAdmin } from '../utils/permissions';
+import { roleSatisfies } from '../utils/roles';
+import {
+  buildSetupChecklist, isChecklistComplete, hasExploredIntel,
+} from '../utils/setupChecklist';
 import PageHeader from '../components/common/PageHeader';
 import { SkeletonKpi, SkeletonCard } from '../design-system';
 import useThemeStore from '../store/themeStore';
@@ -118,6 +124,26 @@ export default function DashboardPage() {
   const onboardingForceShown = useTourStore((s) => s.gettingStartedForceShown);
   const dismissOnboarding = useTourStore((s) => s.dismissGettingStarted);
 
+  // Setup checklist — completion is derived live from real data (never persisted
+  // booleans). Only fetch the supporting deals/members when the panel could
+  // actually show (not dismissed, or force-shown from Settings); listing members
+  // is admin-scoped, so it's gated by role too.
+  const checklistActive = onboardingForceShown || !onboardingDismissed;
+  const isOrgAdmin = roleSatisfies(userRole, ['admin']);
+  const { data: dealsData } = useDeals({ limit: 100 }, { enabled: checklistActive, staleTime: 60_000 });
+  const { data: orgMembers } = useOrganizationMembers(checklistActive && isOrgAdmin);
+  const checklistItems = useMemo(
+    () => buildSetupChecklist({
+      role: userRole,
+      totalDeals: data?.stats?.total_deals ?? 0,
+      deals: dealsData?.data ?? [],
+      memberCount: orgMembers?.length ?? 1,
+      exploredIntel: hasExploredIntel(),
+    }),
+    [userRole, data, dealsData, orgMembers],
+  );
+  const checklistComplete = isChecklistComplete(checklistItems);
+
   // Skeleton mirrors the real dashboard shape — KPI row + two chart cards —
   // so the layout doesn't reflow when data lands. Per FRONTEND_GUIDELINES §2:
   // skeletons not spinners for any load > 100ms.
@@ -176,7 +202,7 @@ export default function DashboardPage() {
           title="Dashboard"
           description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         />
-        <GettingStarted userName={userName} role={userRole} onDismiss={dismissOnboarding} />
+        <GettingStarted userName={userName} items={checklistItems} onDismiss={dismissOnboarding} />
       </div>
     );
   }
@@ -260,6 +286,13 @@ export default function DashboardPage() {
           </div>
         }
       />
+
+      {/* Setup-progress nudge above the live dashboard — shown until every first
+          move is done (or the user dismisses it), so momentum stays visible
+          across sessions without hiding the real dashboard. */}
+      {!onboardingDismissed && !checklistComplete && (
+        <GettingStarted compact userName={userName} items={checklistItems} onDismiss={dismissOnboarding} />
+      )}
 
       {blocks}
     </div>

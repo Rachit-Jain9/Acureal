@@ -3,15 +3,24 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import GettingStarted from '../GettingStarted';
 
+// GettingStarted is presentational now — it renders the live checklist it's
+// handed (built in utils/setupChecklist.js, unit-tested separately) with ticks,
+// CTAs on undone steps, a progress ring, compact + celebratory variants.
+
+const ITEMS = [
+  { id: 'create-deal', label: 'Create your first deal', hint: 'Start with anything.', done: false, to: '/dashboard/deals?new=1', cta: 'New deal' },
+  { id: 'explore-intel', label: 'Scan Market Intelligence', hint: 'City benchmarks.', done: true, to: '/dashboard/intelligence', cta: 'Open' },
+];
+
 function renderPanel(props = {}) {
   return render(
     <MemoryRouter>
-      <GettingStarted userName="Test User" role="owner" onDismiss={() => {}} {...props} />
+      <GettingStarted userName="Test User" items={ITEMS} onDismiss={() => {}} {...props} />
     </MemoryRouter>,
   );
 }
 
-describe('GettingStarted', () => {
+describe('GettingStarted checklist', () => {
   it('greets the user by first name only', () => {
     renderPanel({ userName: 'Rachit Jain' });
     expect(screen.getByText('Welcome to REDIP, Rachit.')).toBeInTheDocument();
@@ -22,33 +31,32 @@ describe('GettingStarted', () => {
     expect(screen.getByText('Welcome to REDIP.')).toBeInTheDocument();
   });
 
-  it('offers a create-deal step to editors and above with a deep-link to the create modal', () => {
-    renderPanel({ role: 'editor' });
+  it('renders an undone step with its deep-linked CTA', () => {
+    renderPanel();
     expect(screen.getByText('Create your first deal')).toBeInTheDocument();
-    // The CTA deep-links into the create-deal modal directly (via ?new=1
-    // — same trigger Cmd-K uses) so the first click lands on the form,
-    // not the empty deals list.
     expect(screen.getByRole('link', { name: /new deal/i })).toHaveAttribute(
       'href',
       '/dashboard/deals?new=1',
     );
   });
 
-  it('gives viewers a read-only first step instead', () => {
-    renderPanel({ role: 'viewer' });
-    expect(screen.queryByText('Create your first deal')).not.toBeInTheDocument();
-    expect(screen.getByText('Explore the deal pipeline')).toBeInTheDocument();
+  it('shows a done step without a CTA (no action needed)', () => {
+    renderPanel();
+    expect(screen.getByText('Scan Market Intelligence')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^open$/i })).toBeNull();
   });
 
-  it('shows the workspace-setup step only for admins and owners', () => {
-    const { rerender } = renderPanel({ role: 'editor' });
-    expect(screen.queryByText('Set up your workspace')).not.toBeInTheDocument();
-    rerender(
-      <MemoryRouter>
-        <GettingStarted userName="Test User" role="admin" onDismiss={() => {}} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('Set up your workspace')).toBeInTheDocument();
+  it('compact mode hides done steps and shows only what is left', () => {
+    renderPanel({ compact: true });
+    expect(screen.getByText('Create your first deal')).toBeInTheDocument();
+    expect(screen.queryByText('Scan Market Intelligence')).toBeNull();
+  });
+
+  it('shows a celebratory done-state when every step is complete', () => {
+    const allDone = ITEMS.map((i) => ({ ...i, done: true }));
+    renderPanel({ items: allDone });
+    expect(screen.getByRole('heading', { name: /all set/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open the guide/i })).toBeInTheDocument();
   });
 
   it('calls onDismiss when the skip control is clicked', () => {

@@ -13,10 +13,14 @@ const DOMAINS_KEY = ['organization-domains'];
 const errMessage = (err, fallback) => err?.response?.data?.message || fallback;
 
 // ── Members ──────────────────────────────────────────────────────────────────
-export function useOrganizationMembers() {
+// `enabled` lets non-admin surfaces skip the call entirely — listing members is
+// an admin-scoped endpoint, and the setup checklist only needs the count for
+// roles that can actually invite.
+export function useOrganizationMembers(enabled = true) {
   return useQuery({
     queryKey: MEMBERS_KEY,
     queryFn: () => organizationAPI.listMembers().then((r) => r.data.data.members),
+    enabled,
   });
 }
 

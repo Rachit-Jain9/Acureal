@@ -49,6 +49,7 @@ import SortableHeader, { applySort, cycleSort } from '../components/common/Sorta
 import { toast } from '../components/common/Toast';
 import { SkeletonKpi, SkeletonCard, Skeleton, SkeletonList } from '../design-system';
 import { formatPct, formatCrores, formatDate, STAGE_CONFIG } from '../utils/format';
+import { markIntelExplored } from '../utils/setupChecklist';
 import {
   buildClusterOptions,
   matchesSearch,
@@ -445,6 +446,9 @@ function AssetClassSelector({ value, onChange, options }) {
 
 export default function IntelligencePage() {
   const today = new Date().toISOString().slice(0, 10);
+  // Marks the setup-checklist "explore Market Intelligence" step done — the one
+  // item with no server signal. Set on mount; harmless to re-set.
+  useEffect(() => { markIntelExplored(); }, []);
   // Bengaluru-locked: REDIP is Bengaluru-priority and Bengaluru is the only
   // city with seeded data. Multi-city navigation was removed — see asset-
   // class filter below for the replacement.
