@@ -8898,3 +8898,25 @@ Operator picked "speed up the deal page" from the offered directions. The deal p
 
 ### Remaining lever (product / infra decision — surfaced, not actioned)
 Getting the deal *data* itself under ~2s consistently needs one of: (a) **keep the backend warm** to kill the ~4–5s cold-start tax (Vercel cron on a Pro plan, or a free external uptime pinger on the health endpoint — plan/third-party decision), or (b) **cache the deterministic workspace server-side** (correctness-sensitive: stale data on an IC surface is worse than slow; needs careful invalidation across every deal/DD/approval/risk/financial/document/stage mutation + audit — deliberately not rushed). Both deferred to the operator.
+
+## 2026-06-04 (continued) — Server-side deterministic workspace cache (PR #759 + migration)
+
+Operator chose lever (b) — "build the deeper fix" — via AskUserQuestion. Built and shipped a correctness-first server-side cache for the deterministic (lite) workspace payload, applied the migration to prod, and verified it end-to-end on the live DB.
+
+### What shipped (#759)
+- **`deal_workspace_cache` table** (migration `20260629`, applied to prod `niamgjbxxgmmffggumvj`), keyed by `(deal_id, organization_id)`, **FORCE RLS** with `organization_id = current_organization_id()`. Verified live: columns, `relforcerowsecurity = true`, policy, PK all correct.
+- **`dealWorkspaceCache.service`** — `computeVersionKey` / `read` / `write`. Version key = `count(*) + max(updated_at)` across all 10 per-deal input tables (financials, financial_scenarios, waterfall_distributions, dd_items, risk_flags, approval_items, documents, document_extractions, deal_promoter_profiles, deal_recommendation_verdicts) + `deals.updated_at`, sha1-hashed. The table list was confirmed against `information_schema` (every one carries an `updated_at` trigger). Any per-deal edit changes the key → miss → recompute, so an operator's own edit is reflected immediately. Short TTL (default 120s, `DEAL_WORKSPACE_CACHE_TTL_MS`) bounds the two non-per-deal inputs (verified comps + per-org team feedback). Kill switch `DEAL_WORKSPACE_CACHE_ENABLED=false`.
+- Wired into `getDealWorkspace` **after** `getDealById` authorises the caller (a hit can never bypass visibility); lite path only. Every cache call is try/catch → cache miss → recompute, so the code is fully migration-tolerant (safe to deploy before the table exists; `DROP TABLE` is a complete rollback).
+
+### Live verification (prod DB + browser)
+- Table + FORCE RLS + policy confirmed via `pg_class` / `pg_policies`.
+- Opening a deal wrote a correct cache row: 60 KB payload, org-scoped, `shape_ok` (recommendations + ic_readiness + deal all present), 5 recommendation cards, full IC-readiness object.
+- **Version-key correctness:** recomputed the key server-side via SQL — byte-identical to the stored key (`matches = true`), proving the service's fingerprint logic is exact and stable across requests (so hits actually occur and bust precisely on change).
+- **Cache hit confirmed:** a second open did NOT rewrite `computed_at` (a miss would have) → it served from cache.
+- Timing (noisy — serverless cold-starts + the 120s TTL vs a slow manual cadence): lite **miss 9.0s → hit 6.0s** (the ~3s deterministic assembly is removed; the residual is the cold-start of the *second* concurrently-spun lambda). Warm opens painted ~2.7s (full won with its already-cached narration).
+
+### Honest finding / next lever
+The cache does exactly its job — the deterministic payload is served without recompute and can never go stale — but **serverless cold-starts now dominate** the residual latency, and the deal page fires lite + full concurrently so one of the two always lands on a freshly-spun (cold) instance. The page paints on whichever wins, so the cache's fast-lite benefit is fully realised only when an instance is warm. Closing the gap to a consistent ~1–2s needs the **complementary** lever (a): keep the api function warm (free external pinger on a health endpoint, or a Vercel cron on Pro). Surfaced to the operator as the completing step.
+
+### Tests
+Backend suite green: 3100 existing + **13 new** cache tests (version-key composition over every input table, hit/miss, TTL expiry, fault-tolerance when the table is absent, disabled/missing-arg no-ops). `dealWorkspace.service.test` mocks the cache to a no-op so the payload-shape suite still exercises the full assembly. CI green; squash-merged.
