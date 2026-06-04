@@ -408,6 +408,51 @@ const buildBlockersSection = (readiness) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Title & Parcel Consistency — deterministic cross-document mismatch findings
+// ─────────────────────────────────────────────────────────────────────────────
+
+const buildConsistencySection = (readiness) => {
+  const consistency = readiness.consistency;
+  if (!consistency || !consistency.available) return [];
+  const findings = consistency.findings || [];
+  if (findings.length === 0) return [];
+
+  const rows = [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        cell(para('Severity', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle, width: 14 }),
+        cell(para('Finding', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle, width: 52 }),
+        cell(para('Evidence', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle, width: 34 }),
+      ],
+    }),
+  ];
+
+  for (const f of findings) {
+    const sd = SEVERITY_DISPLAY[f.severity] || SEVERITY_DISPLAY.low;
+    const findingBlocks = [para(f.title || '', { size: 20, bold: true })];
+    if (f.description) findingBlocks.push(para(f.description, { size: 18, color: COLORS.ink_muted }));
+    if (f.mitigation) findingBlocks.push(para(`Next step: ${f.mitigation}`, { size: 18, color: COLORS.ink_muted }));
+    const evidenceLines = (f.evidence || []).map((e) =>
+      para(`${String(e.doc_type || 'doc').replace(/_/g, ' ')}${e.field ? ` · ${e.field}` : ''}: ${e.value ?? '—'}`, { size: 16, color: COLORS.ink_muted }),
+    );
+    rows.push(new TableRow({
+      children: [
+        cellText(sd.label, { size: 20, bold: true, color: sd.color }),
+        cell(findingBlocks),
+        cell(evidenceLines.length ? evidenceLines : [para('—', { size: 16, color: COLORS.ink_muted })]),
+      ],
+    }));
+  }
+
+  return [
+    heading('Title & Parcel Consistency'),
+    para('Deterministic cross-document checks across the uploaded title, EC, plan, approval and JDA documents. Flagged items need human / legal verification — this is not an automated title verdict.', { size: 20, color: COLORS.ink_muted }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: tableBorders, rows }),
+  ];
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Per-bucket sections — item table per bucket
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -595,6 +640,7 @@ const buildReraReadinessDocx = async (readiness, { brandName = 'REDIP', userName
     ...buildExecutiveSummary(readiness),
     ...buildApplicabilityFeeMilestone(readiness),
     ...buildBlockersSection(readiness),
+    ...buildConsistencySection(readiness),
   ];
   for (const bucket of readiness.buckets || []) {
     children.push(...buildBucketSection(bucket));

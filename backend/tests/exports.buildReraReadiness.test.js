@@ -183,4 +183,30 @@ describe('buildReraReadinessDocx', () => {
     expect(xml).toContain('Estimate only');
     expect(xml).toContain('Blocked'); // cover tier
   });
+
+  test('renders the Title & Parcel Consistency section when findings present', async () => {
+    const readiness = composeReadiness({
+      assetClass: 'residential_apartments', landAreaSqm: 1200, saleIntent: true, dealName: 'Consistency Deal',
+    });
+    readiness.consistency = {
+      available: true,
+      extractions_count: 2,
+      summary: { total: 1, critical: 0, high: 1, medium: 0, low: 0 },
+      findings: [{
+        pair_key: 'area:1:2', category: 'legal', severity: 'high',
+        title: 'Area mismatch: sale_deed vs layout_approval',
+        description: 'Drift is 6.0%.',
+        mitigation: 'Order a fresh survey.',
+        evidence: [
+          { doc_type: 'sale_deed', field: 'area_sqft', value: 10000 },
+          { doc_type: 'layout_approval', field: 'total_area_acres', value: 9400 },
+        ],
+      }],
+    };
+    const buffer = await buildReraReadinessDocx(readiness);
+    const xml = await extractDocumentXml(buffer);
+    expect(xml).toContain('Title &amp; Parcel Consistency');
+    expect(xml).toContain('Area mismatch: sale_deed vs layout_approval');
+    expect(xml).toContain('Order a fresh survey');
+  });
 });
