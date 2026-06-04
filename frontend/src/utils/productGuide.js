@@ -507,6 +507,34 @@ export const GUIDE_ENTRIES = [
       'Flag any mismatch with the intended use',
     ],
   },
+  {
+    id: 'deal.risk-radar',
+    category: 'deal-features',
+    label: 'Risk Radar',
+    icon: 'ShieldAlert',
+    eyebrow: 'Risk',
+    what: 'A standing pre-mortem at the top of the Risk tab — for each failure mode that sinks Indian real-estate deals, a posture: cleared, not-verified, or flagged.',
+    why: "It keeps the blind spots that actually kill deals — title, encumbrance, approvals, promoter execution — in front of you, scored from the deal's own evidence rather than gut feel.",
+    doThis: [
+      'Scan the postures; treat anything flagged or unverified as open',
+      'Open the evidence behind each posture to confirm it',
+      'Work the flagged modes down before IC',
+    ],
+  },
+  {
+    id: 'deal.deal-doctor',
+    category: 'deal-features',
+    label: 'Deal Doctor',
+    icon: 'Activity',
+    eyebrow: 'Diagnostic',
+    what: 'A diagnostic read of the deal that flags where the numbers, market or structure diverge from benchmarks — below or above bench, inconsistent, or missing support.',
+    why: "It surfaces the soft problems a single number hides — a thin margin, an off-market cap rate, a capital stack that doesn't pencil — using a closed, non-judgmental verb set, never a verdict.",
+    doThis: [
+      'Read each call-out as a prompt to re-examine, not a conclusion',
+      'Trace the diverging figure to its source',
+      'Decide whether to stress-test or accept it',
+    ],
+  },
 
   // ─── How REDIP thinks (concepts — no route, no tour stop) ─────────────────
   {
