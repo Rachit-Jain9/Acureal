@@ -8855,3 +8855,26 @@ A focused hardening pass after the onboarding arc, driven by a deep review (3 pa
 - DPA + AUP legal drafts (DPDP Act 2023) — long lead.
 - Confirm the previously-leaked Google Maps key was rotated/locked in Google Cloud Console.
 (None block code work; the security posture itself is clean.)
+
+## 2026-06-04 (continued) — Post-onboarding hardening: a11y, contextual help, theme-correctness, cinematic polish (PRs #747–#754)
+
+Continuation of the 2026-06-04 onboarding session. After the Onboarding 2.0 arc (#740–#745), broad "highest-impact hardening" mandates produced eight more PRs across accessibility, in-context help, theme-correctness, and one cinematic touch — all verified-then-fixed (several audit findings proved already-handled and were correctly skipped).
+
+### What shipped
+- **#747 / #748 — Modal accessibility.** All 8 hand-rolled blocking dialogs not on the design-system Modal lacked focus-trap / Escape / scroll-lock (keyboard users tabbed out of the dialog into the page behind; some couldn't Escape-close). Added `useFocusTrap` + a new `hooks/useScrollLock.js` to each — deal-flow modals (CompareDeals, AutoFillFromDocuments, ParcelTab picker) in #747, operator modals (masterplan Source*/Zone, comps-queue) in #748. `onClose` stabilised via a ref so a re-render doesn't re-arm the trap and steal focus.
+- **#749 / #751 / #752 — Per-panel contextual help.** A subtle "?" on every marquee deal panel opening the Guide to that topic: `SectionHeader` gained an opt-in `helpTopic` prop; custom-header panels use a new exported `GuideHelp` primitive. Covers AI analysis, deal Q&A, financial model, street/planning lookups, Risk Radar, Deal Doctor, IC Readiness, Promoter & Execution, Risk Narrative, IC Memo — topics under the catalog's `deal-features` category, with honest framing (computed-fact panels say so; AI panels carry "starting point, not a verdict, legal-four stay human-verified").
+- **#753 — Theme-correct ErrorState (+ email banner).** The shared `ErrorState` primitive (every warn/error/empty card app-wide) hardcoded solid light tints (`bg-amber-50` / `text-amber-900`), rendering as a bright box in dark mode. Switched to opacity tints (`bg-*-500/10`) + token text + coloured icon — theme-correct, near-identical in light. Also token-ized the email-verification banner's dark-mode-broken dismiss hover + status colours. (Badge already CSS-var-backed; legal pages intentionally light.)
+- **#754 — Cinematic KPI tilt.** Opt-in `interactive` prop on `MetricTile` → subtle ≤2.5° cursor-follow parallax tilt + shadow/border lift on the four dashboard hero KPIs (FRONTEND_GUIDELINES §6 blesses this for hero tiles). 60fps via direct ref mutation; reduced-motion no-op; dense in-panel MetricTiles stay flat.
+
+### Verified-then-skipped (audit findings already handled — documented so they're not re-chased)
+- Deal-workspace read already degrades gracefully (every non-core slice wrapped in an `optional()` try/catch) — the "learning-signals can 500 the deal page" claim was false.
+- AI provider streaming calls already wire `AbortController`; cost caps + the extraction reaper + Vercel maxDuration bound any hang — the "AI cost-DoS" is a bounded P2, not P0.
+- Security advisor clean (0 REDIP-controlled lints; the "urgent unapplied cross-tenant RLS migration" was stale — verified against the live DB).
+- Most "hardcoded colour" hits were intentional public/legal light pages; `Badge` already themed.
+
+### Validation
+- Frontend: full suite green throughout (1100→1102 tests as topics/tests were added); clean Vite build on every PR.
+- Live (prod): verified the Guide, the personalised welcome, the in-deal spotlight tour, and the Header "?" on the real logged-in site. The Claude-in-Chrome CDP screenshot froze repeatedly on the chart-heavy dashboard, so several checks used `javascript_tool` DOM / computed-style reads instead (reliable when screenshots weren't).
+
+### State at session end
+The high-impact, verified, autonomous hardening backlog is effectively exhausted — the product is well-hardened (secure, green, accessible, self-explaining, theme-consistent). Further substantial work (deal-page first-load perf, deeper cinematic passes, new capabilities) is a product-direction call.
