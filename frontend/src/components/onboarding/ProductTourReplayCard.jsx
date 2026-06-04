@@ -20,12 +20,14 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '../../design-system';
 import { useDeals } from '../../hooks/useDeals';
 import useTourStore from '../../store/tourStore';
+import useGuideStore from '../../store/guideStore';
 import { toast } from '../common/Toast';
 
 export default function ProductTourReplayCard() {
   const replaySidebar = useTourStore((s) => s.replay);
   const replayDealTour = useTourStore((s) => s.replayDealTour);
   const replayGettingStarted = useTourStore((s) => s.replayGettingStarted);
+  const openGuide = useGuideStore((s) => s.openGuide);
   const navigate = useNavigate();
 
   // The deal-workspace tour only renders on a deal-detail page. Grab
@@ -67,12 +69,16 @@ export default function ProductTourReplayCard() {
         Onboarding
       </h3>
       <p className="mt-1 text-sm text-content-secondary">
-        Replay any of REDIP&apos;s first-run surfaces — the dashboard
-        Getting Started panel, the welcome tour that introduces REDIP
-        and walks through each section in the sidebar, or the per-tab
-        walkthrough that opens the first time you visit a deal.
+        Open the Guide any time for a searchable explainer of every page, tab and
+        concept — or replay any of REDIP&apos;s first-run surfaces: the dashboard
+        Getting Started panel, the welcome tour that walks through each section in
+        the sidebar, or the per-tab walkthrough that opens the first time you visit
+        a deal.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="primary" size="sm" onClick={() => openGuide()}>
+          Open the Guide
+        </Button>
         <Button variant="secondary" size="sm" onClick={handleReplayGettingStarted}>
           Show Getting Started again
         </Button>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Search, Moon, Sun, Menu } from 'lucide-react';
+import { Search, Moon, Sun, Menu, HelpCircle } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useThemeStore from '../../store/themeStore';
+import useGuideStore from '../../store/guideStore';
 
 // Detect the platform once at module load so the kbd hint reads "⌘K" on
 // macOS and "Ctrl K" everywhere else.
@@ -18,6 +19,7 @@ export default function Header({ onMobileMenuOpen }) {
   const { user } = useAuthStore();
   const mode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggle);
+  const openGuide = useGuideStore((s) => s.openGuide);
 
   // The "search bar" is now a *button styled like* an input. Clicking
   // opens the Cmd-K palette where live search, deal jumps and recent-
@@ -60,6 +62,15 @@ export default function Header({ onMobileMenuOpen }) {
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => openGuide()}
+          aria-label="Open the guide"
+          title="Guide — what everything does"
+          className="p-2 rounded-md hover:bg-surface text-content-secondary"
+        >
+          <HelpCircle size={17} />
+        </button>
         <button
           onClick={toggleTheme}
           aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
