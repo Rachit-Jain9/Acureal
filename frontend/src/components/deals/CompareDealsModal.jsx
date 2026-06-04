@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { X, ArrowUpRight, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { dealsAPI } from '../../services/api';
+import useFocusTrap from '../../hooks/useFocusTrap';
+import useScrollLock from '../../hooks/useScrollLock';
 
 /**
  * Compare deals — side-by-side workspace view.
@@ -227,26 +229,15 @@ function pluckSignals(workspace) {
 // ───────── Main component ──────────────────────────────────────────────────
 
 export default function CompareDealsModal({ open, dealIds, onClose }) {
-  const containerRef = useRef(null);
-
-  // Close on Escape; trap focus inside via tabindex (the close button is the
-  // only interactive element on first paint, so it captures focus naturally
-  // when we autofocus it). We don't trap focus aggressively — the table cells
-  // are tab-stops by design (each deal name is a link).
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  // Body scroll lock — modal owns the scroll when open.
-  useEffect(() => {
-    if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
+  // Trap focus inside the dialog (Tab cycles within it, Escape closes, focus
+  // restores to the trigger on close) and lock body scroll while open. onClose
+  // is stabilised so a parent re-render (e.g. a background refetch) doesn't
+  // re-arm the trap and yank focus.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(open, { onEscape: handleClose });
+  useScrollLock(open);
 
   const ids = useMemo(() => Array.isArray(dealIds) ? dealIds.slice(0, 4) : [], [dealIds]);
 
@@ -276,7 +267,7 @@ export default function CompareDealsModal({ open, dealIds, onClose }) {
       onClick={onClose}
     >
       <div
-        ref={containerRef}
+        ref={trapRef}
         className="bg-bg-elevated border border-hairline rounded-editorial shadow-elevated w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -293,7 +284,6 @@ export default function CompareDealsModal({ open, dealIds, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            autoFocus
             className="p-1.5 rounded text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             aria-label="Close comparison"
           >
