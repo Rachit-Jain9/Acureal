@@ -41,6 +41,7 @@ const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
+const dealWorkspaceCache = require('./dealWorkspaceCache.service');
 const log = require('../lib/logger').child({ module: 'dealWorkspace.service' });
 
 const ACTIVITY_LIMIT = 50;
@@ -106,6 +107,22 @@ async function getDealWorkspace(dealId, options = {}) {
   const lite = options.lite === true;
   // Core — must succeed. Any failure (not found, not visible) short-circuits.
   const deal = await dealService.getDealById(dealId);
+
+  // ── Server-side deterministic cache (lite only) ──────────────────────────
+  // Checked AFTER getDealById has authorised the caller, so a cache hit can
+  // never bypass visibility. Version-keyed (busts on ANY per-deal edit) + TTL
+  // (bounds the two non-per-deal inputs). Fully fault-tolerant: a missing table
+  // or any error just falls through to a normal recompute. Only the lite path
+  // is cached — it is what the deal page paints first; the full (AI-narrated)
+  // path keeps its own response-cached narration.
+  let liteVersionKey = null;
+  if (lite) {
+    liteVersionKey = await dealWorkspaceCache.computeVersionKey(dealId);
+    if (liteVersionKey) {
+      const cached = await dealWorkspaceCache.read(dealId, liteVersionKey);
+      if (cached) return cached;
+    }
+  }
 
   // Parallel fetch of optional slices. Each already enforces RLS via its own
   // query; we do NOT re-check visibility here — the deal fetch above already
@@ -508,7 +525,7 @@ async function getDealWorkspace(dealId, options = {}) {
     });
   }, 'icReadiness');
 
-  return {
+  const payload = {
     ...composed,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
@@ -520,6 +537,16 @@ async function getDealWorkspace(dealId, options = {}) {
     ic_readiness: icReadinessSlice || { applicable: true, overall: null, buckets: [], gaps: [] },
     generatedAt: new Date().toISOString(),
   };
+
+  // Populate the deterministic cache for the next reader (lite path only).
+  // Fire-and-forget — a cache write never blocks or fails the response. The
+  // version key was already computed for the read attempt above, so this adds
+  // no extra version query.
+  if (lite && liteVersionKey) {
+    dealWorkspaceCache.write(dealId, liteVersionKey, payload).catch(() => {});
+  }
+
+  return payload;
 }
 
 module.exports = {
