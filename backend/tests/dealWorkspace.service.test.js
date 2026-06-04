@@ -9,6 +9,15 @@ jest.mock('../src/services/activity.service');
 jest.mock('../src/services/dd.service');
 jest.mock('../src/services/risk.service');
 jest.mock('../src/services/waterfall.service');
+// The deterministic cache is a pure pass-through here: computeVersionKey → null
+// makes the composer always recompute (no cache read/write), so these payload-
+// shape tests exercise the full assembly exactly as before the cache existed.
+jest.mock('../src/services/dealWorkspaceCache.service', () => ({
+  computeVersionKey: jest.fn().mockResolvedValue(null),
+  read: jest.fn().mockResolvedValue(null),
+  write: jest.fn().mockResolvedValue(undefined),
+  VERSIONED_DEAL_TABLES: [],
+}));
 jest.mock('../src/services/microMarketIntelligence.service', () => ({
   classifyParcel: jest.fn(),
   getBriefing: jest.fn(),
