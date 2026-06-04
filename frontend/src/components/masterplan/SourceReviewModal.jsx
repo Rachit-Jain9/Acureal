@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import {
   SOURCE_DOC_TYPES,
@@ -8,6 +8,8 @@ import {
   ratioToPct,
   pctToRatio,
 } from '../../utils/masterPlanHelpers';
+import useFocusTrap from '../../hooks/useFocusTrap';
+import useScrollLock from '../../hooks/useScrollLock';
 
 /**
  * Operator-facing modal for editing a master-plan source document's metadata.
@@ -39,6 +41,14 @@ export default function SourceReviewModal({ doc, isOpen, onClose, onSubmit, subm
     sourceConfidencePct: '',
     registryNotes: '',
   });
+
+  // Trap focus + lock body scroll while open; onClose stabilised so a re-render
+  // doesn't re-arm the trap mid-typing.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(isOpen, { onEscape: handleClose });
+  useScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen || !doc) return;
@@ -86,6 +96,7 @@ export default function SourceReviewModal({ doc, isOpen, onClose, onSubmit, subm
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div
+        ref={trapRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-review-title"
