@@ -2,12 +2,11 @@ import { useState, useEffect, Suspense, lazy } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Edit2, Trash2, ArrowRight, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import {
-  useDealWorkspace,
   useTransitionStage,
   useDeleteDeal,
   useUpdateDeal,
 } from '../hooks/useDeals';
-import { DealContextProvider } from '../hooks/useDealContext';
+import { DealContextProvider, useDealWorkspaceWithLite } from '../hooks/useDealContext';
 import { useCanEdit } from '../hooks/useCanEdit';
 import useAuthStore from '../store/authStore';
 import { roleSatisfies } from '../utils/roles';
@@ -104,10 +103,11 @@ export default function DealDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
 
-  // One unified workspace read feeds the whole deal page; tabs that want
-  // pre-fetched slices call the workspace hook directly and the shared
-  // query key de-dupes.
-  const { data: workspace, isLoading, isError } = useDealWorkspace(id);
+  // Two-phase workspace read: the deterministic deal paints in ~1-2s while the
+  // ~10s AI narration loads in the background and upgrades the recommendation +
+  // deal-doctor card prose in place. Shared key with the DealContextProvider
+  // below (which the tabs read), so there is no double fetch.
+  const { workspace, isLoading, isError } = useDealWorkspaceWithLite(id);
   const deal = workspace?.deal;
 
   // Drop the freshly-visited deal into the Cmd-K palette's "Recent deals"

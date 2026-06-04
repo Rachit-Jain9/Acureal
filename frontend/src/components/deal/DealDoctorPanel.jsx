@@ -147,7 +147,7 @@ function DiagnosticGroup({ group }) {
 }
 
 export default function DealDoctorPanel({ dealDoctor }) {
-  const { refetch, isLoading } = useDealContext();
+  const { refetch, isLoading, isAiPending } = useDealContext();
   const groups = Array.isArray(dealDoctor?.groups) ? dealDoctor.groups : [];
   const totalFindings = dealDoctor?.finding_count || 0;
   const generatedAt = dealDoctor?.generated_at || null;
@@ -193,6 +193,7 @@ export default function DealDoctorPanel({ dealDoctor }) {
       {generatedAt && totalFindings > 0 && (
         <div className="mt-4 pt-2 border-t border-hairline text-[10px] text-content-muted">
           computed {formatRelativeTime(generatedAt)}
+          {isAiPending && <span className="text-accent"> · refining wording with AI…</span>}
         </div>
       )}
     </div>
