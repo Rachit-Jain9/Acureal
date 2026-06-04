@@ -59,9 +59,11 @@ export function Card({ as: As = 'div', elevated = false, className, children, ..
 }
 
 // A subtle "?" affordance that opens the in-app Guide to a specific topic.
-// Decoupled via a window event (no import of the guide module) so any primitive
-// can offer contextual help without a dependency cycle.
-function SectionHelpButton({ topic, label }) {
+// Decoupled via a window event (no import of the guide module) so any panel or
+// primitive can offer contextual help without a dependency cycle. Exported for
+// panels with custom (non-SectionHeader) headers; SectionHeader uses it via the
+// `helpTopic` prop.
+export function GuideHelp({ topic, label }) {
   return (
     <button
       type="button"
@@ -104,7 +106,7 @@ export function SectionHeader({ icon: Icon, eyebrow, title, sub, action, size = 
           {Icon && <Icon size={16} className="text-content-muted shrink-0" aria-hidden="true" />}
           <span className="truncate">{title}</span>
           {helpTopic && (
-            <SectionHelpButton topic={helpTopic} label={typeof title === 'string' ? title : 'this section'} />
+            <GuideHelp topic={helpTopic} label={typeof title === 'string' ? title : 'this section'} />
           )}
         </H>
         {sub && <p className="text-sm text-content-secondary mt-1.5 max-w-2xl">{sub}</p>}

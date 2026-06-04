@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext } from '../../hooks/useDealContext';
+import { GuideHelp } from '../../design-system';
 import { useEvidenceNavigate } from '../../hooks/useEvidenceNavigate';
 import { isNavigableRef } from '../../utils/evidenceRef';
 import { formatRelativeTime } from '../../utils/format';
@@ -157,6 +158,7 @@ export default function DealDoctorPanel({ dealDoctor }) {
         <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
           <Stethoscope size={16} className="text-content-muted" />
           Deal Doctor
+          <GuideHelp topic="deal.deal-doctor" label="Deal Doctor" />
           {totalFindings > 0 && (
             <span className="text-xs text-content-muted ml-1">
               ({totalFindings} finding{totalFindings === 1 ? '' : 's'})

@@ -1,6 +1,7 @@
 import { ShieldAlert, CheckCircle, HelpCircle, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useRiskRadar } from '../../hooks/useRiskFlags';
+import { GuideHelp } from '../../design-system';
 
 /**
  * Risk Radar — Workstream B ("the Risk Sentinel").
@@ -125,6 +126,7 @@ export default function RiskRadarPanel({ dealId }) {
         <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
           <ShieldAlert size={16} className={overall.color} />
           Risk Radar
+          <GuideHelp topic="deal.risk-radar" label="Risk Radar" />
         </h3>
         <span
           className={clsx(
