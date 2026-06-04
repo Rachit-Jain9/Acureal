@@ -65,6 +65,20 @@ const READINESS_TIER_DISPLAY = Object.freeze({
   mostly_ready: 'Mostly ready',
   partial:      'Partial',
   early:        'Early',
+  blocked:      'Blocked',
+});
+
+const APPLICABILITY_DISPLAY = Object.freeze({
+  in_scope:      'In scope',
+  uncertain:     'Uncertain',
+  likely_exempt: 'Likely exempt',
+  na:            'Not applicable',
+});
+
+const MILESTONE_DISPLAY = Object.freeze({
+  pre_registration:  'Pre-registration',
+  registration:      'Registration',
+  post_registration: 'Post-registration',
 });
 
 const ASSET_CLASS_LABEL = Object.freeze({
@@ -73,6 +87,11 @@ const ASSET_CLASS_LABEL = Object.freeze({
   villas:                 'Villas',
   mixed_use:              'Mixed-Use',
   redevelopment:          'Redevelopment',
+  commercial_office:      'Commercial Office',
+  retail:                 'Retail',
+  industrial_warehousing: 'Industrial / Warehousing',
+  hospitality:            'Hospitality',
+  raw_land:               'Raw Land',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -309,6 +328,86 @@ const buildExecutiveSummary = (readiness) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Applicability + Fee + Milestone (Phase 4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const buildApplicabilityFeeMilestone = (readiness) => {
+  const blocks = [];
+  const ap = readiness.applicability;
+  const fee = readiness.fee_estimate;
+  const ms = readiness.milestone;
+  if (!ap && !fee && !ms) return blocks;
+
+  blocks.push(heading('Applicability, Fee & Milestone'));
+
+  if (ap && ap.status) {
+    blocks.push(para('Applicability', { bold: true, size: 22, color: COLORS.navy }));
+    blocks.push(para(
+      `${APPLICABILITY_DISPLAY[ap.status] || ap.status}${ap.reason ? ` — ${ap.reason}` : ''}`,
+      { size: 20 },
+    ));
+    if (Array.isArray(ap.rule_trace) && ap.rule_trace.length) {
+      for (const t of ap.rule_trace) {
+        const mark = t.result === true ? '✓' : t.result === false ? '–' : '?';
+        blocks.push(para(`${mark}  ${t.text}`, { size: 18, color: COLORS.ink_muted }));
+      }
+    }
+  }
+
+  if (fee) {
+    blocks.push(para('Estimated registration fee', { bold: true, size: 22, color: COLORS.navy, spacing: { before: 160, after: 40 } }));
+    if (fee.fee_inr != null) {
+      const amount = `₹${Number(fee.fee_inr).toLocaleString('en-IN')}`;
+      blocks.push(para(
+        `${amount}${fee.is_overridden ? ' (override)' : ''}${fee.category_label ? ` · ${fee.category_label}` : ''}`,
+        { size: 20, bold: true },
+      ));
+    } else {
+      blocks.push(para(fee.reason || 'Unavailable', { size: 20, color: COLORS.ink_muted }));
+    }
+    blocks.push(para(
+      `Estimate only — verify on rera.karnataka.gov.in${fee.last_verified ? ` · rates checked ${fee.last_verified}` : ''}.`,
+      { size: 16, italics: true, color: COLORS.ink_muted },
+    ));
+  }
+
+  if (ms && ms.phase) {
+    blocks.push(para('Milestone', { bold: true, size: 22, color: COLORS.navy, spacing: { before: 160, after: 40 } }));
+    blocks.push(para(
+      `${MILESTONE_DISPLAY[ms.phase] || ms.phase}${ms.derived_from ? ` — ${ms.derived_from}` : ''}`,
+      { size: 20 },
+    ));
+  }
+
+  return blocks;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Fatal blockers section
+// ─────────────────────────────────────────────────────────────────────────────
+
+const buildBlockersSection = (readiness) => {
+  const blockers = (readiness.overall && readiness.overall.blockers) || [];
+  if (!blockers.length) return [];
+
+  const rows = [
+    new TableRow({
+      tableHeader: true,
+      children: [cell(para('Fatal blocker — resolve before filing', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle })],
+    }),
+    ...blockers.map((b) => new TableRow({
+      children: [cellText(b.item_label || b.item_id || '', { size: 20, bold: true, color: COLORS.red })],
+    })),
+  ];
+
+  return [
+    heading('Fatal Blockers'),
+    para('These items must be resolved before filing — until then the readiness score is capped and the project is shown as "Blocked".', { size: 20, color: COLORS.ink_muted }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: tableBorders, rows }),
+  ];
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Per-bucket sections — item table per bucket
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -337,12 +436,20 @@ const buildBucketSection = (bucket) => {
       : '—';
     const nextStep = item.recommended_action || '—';
 
+    const itemCellBlocks = [
+      para(item.label, { size: 20, bold: true }),
+      para(item.description, { size: 18, color: COLORS.ink_muted }),
+    ];
+    if (item.is_blocker) {
+      itemCellBlocks.push(para('Fatal blocker', { size: 16, bold: true, color: COLORS.red }));
+    }
+    if (item.official_source && (item.official_source.label || item.official_source.url)) {
+      itemCellBlocks.push(para(`Source: ${item.official_source.label || item.official_source.url}`, { size: 16, italics: true, color: COLORS.ink_muted }));
+    }
+
     rows.push(new TableRow({
       children: [
-        cell([
-          para(item.label, { size: 20, bold: true }),
-          para(item.description, { size: 18, color: COLORS.ink_muted }),
-        ]),
+        cell(itemCellBlocks),
         cellText(sd.label, { size: 20, bold: true, color: sd.color }),
         cellText(evidenceText, { size: 18, color: COLORS.ink_muted }),
         cellText(nextStep, { size: 18, color: COLORS.ink_muted }),
@@ -486,6 +593,8 @@ const buildReraReadinessDocx = async (readiness, { brandName = 'REDIP', userName
   const children = [
     ...buildCoverPage({ readiness, deal: { name: readiness.deal_name }, generatedAt, brandName, userName }),
     ...buildExecutiveSummary(readiness),
+    ...buildApplicabilityFeeMilestone(readiness),
+    ...buildBlockersSection(readiness),
   ];
   for (const bucket of readiness.buckets || []) {
     children.push(...buildBucketSection(bucket));
