@@ -141,4 +141,46 @@ describe('buildReraReadinessDocx', () => {
     expect(xml).toContain('Verified'); // Fire NOC verified
     expect(xml).toContain('Available'); // Sanctioned plan available
   });
+
+  test('surfaces applicability, fatal blockers, fee estimate and milestone (cockpit fields)', async () => {
+    const readiness = {
+      applicable: true,
+      asset_class: 'residential_apartments',
+      deal_name: 'Cockpit Deal',
+      applicability: {
+        status: 'in_scope',
+        reason: 'land area exceeds 500 sqm',
+        rule_trace: [{ text: 'land area 1200 sqm > 500 sqm', result: true }],
+      },
+      overall: {
+        completeness_pct: 40, readiness_tier: 'blocked', is_blocked: true,
+        by_status: { verified: 0, uploaded: 0, available: 0, pending: 0, missing: 1 },
+        total_items: 1,
+        blockers: [{ item_id: 'commencement_certificate', item_label: 'Building Commencement Certificate (BCC)' }],
+      },
+      buckets: [{
+        id: 'plan_approvals', label: 'Plan & Approvals', description: 'Plan + CC.',
+        completeness_pct: 0, bucket_status: 'missing', total_items: 1,
+        items: [{
+          id: 'commencement_certificate', label: 'Building Commencement Certificate (BCC)',
+          description: 'Issued after the sanctioned plan.', weight: 5, is_blocker: true,
+          evidence: { status: 'missing', source: null }, status_label: 'Missing',
+          recommended_action: 'Apply for the BCC at the planning authority.',
+          official_source: { label: 'Karnataka RERA portal', url: 'https://rera.karnataka.gov.in/' },
+        }],
+      }],
+      gaps: [{ item_id: 'commencement_certificate', item_label: 'Building Commencement Certificate (BCC)', bucket_label: 'Plan & Approvals', weight: 5, severity: 'critical', recommended_action: 'Apply for the BCC.' }],
+      fee_estimate: { fee_inr: 12000, category_label: 'Group housing', last_verified: '2026-06-04', source_url: 'https://rera.karnataka.gov.in/', is_overridden: false },
+      milestone: { phase: 'registration', derived_from: 'Core plan approval is on file.' },
+      disclaimer: 'This is an organisation aid... not a RERA compliance verdict.',
+    };
+    const buffer = await buildReraReadinessDocx(readiness);
+    const xml = await extractDocumentXml(buffer);
+    expect(xml).toContain('Applicability, Fee &amp; Milestone');
+    expect(xml).toContain('In scope');
+    expect(xml).toContain('Fatal Blockers');
+    expect(xml).toContain('Building Commencement Certificate (BCC)');
+    expect(xml).toContain('Estimate only');
+    expect(xml).toContain('Blocked'); // cover tier
+  });
 });
