@@ -550,6 +550,20 @@ export const GUIDE_ENTRIES = [
     ],
   },
   {
+    id: 'deal.rera-readiness',
+    category: 'deal-features',
+    label: 'K-RERA Readiness',
+    icon: 'FileCheck',
+    eyebrow: 'Filing-ready?',
+    what: 'A deterministic Karnataka-RERA cockpit on the DD & Approvals tab: whether registration is even required (with the plain reason why), a 0–100 readiness score with fatal blockers, an estimated registration fee, the pre-registration → registration → post-registration milestone, the document checklist tailored to the asset type and deal structure, and a Title & Parcel Consistency scan that flags cross-document conflicts.',
+    why: 'It turns "is this deal RERA-ready?" into an evidence-backed answer specific to each deal — and it never asserts compliance. Every figure is computed by fixed rules; the statutory verdict stays with your CA / architect / lawyer.',
+    doThis: [
+      'Set the project facts (units / plots, sale-intent, completion date) to sharpen the verdict',
+      'Clear the fatal blockers and review the Title & Parcel Consistency findings',
+      'Download the DOCX pack for your CA / architect / lawyer',
+    ],
+  },
+  {
     id: 'deal.promoter',
     category: 'deal-features',
     label: 'Promoter & Execution',
