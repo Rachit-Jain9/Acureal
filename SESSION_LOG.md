@@ -8878,3 +8878,23 @@ Continuation of the 2026-06-04 onboarding session. After the Onboarding 2.0 arc 
 
 ### State at session end
 The high-impact, verified, autonomous hardening backlog is effectively exhausted — the product is well-hardened (secure, green, accessible, self-explaining, theme-consistent). Further substantial work (deal-page first-load perf, deeper cinematic passes, new capabilities) is a product-direction call.
+
+## 2026-06-04 (continued) — Deal-page first-load performance (PRs #756, #757)
+
+Operator picked "speed up the deal page" from the offered directions. The deal page blocked its entire first paint on `getDealWorkspace`, which runs the constrained AI narrator over the recommendation + Deal Doctor cards before returning. Shipped two safe, strictly-non-regressing optimisations, then verified the real latency profile live on prod.
+
+### What shipped
+- **#756 — Two-phase workspace load.** Exposed the service's already-implemented `lite` mode on the route (`GET /deals/:id/workspace?lite=true`, validated + `.toBoolean()`-coerced). `lite` skips narration / persistence / audit but keeps every deterministic card. Frontend `useDealWorkspaceWithLite()` fires both reads; `workspace = full.data ?? lite.data` so the page paints on **whichever resolves first** (min(lite, full) ≤ old always-wait-for-full — never slower). Full upgrades the card prose in place when it lands; Recommendations + Deal Doctor show a quiet "· refining wording with AI…" hint while `isAiPending`. Extracted `useDealWorkspaceWithLite` as the shared hook so `DealDetailPage` and the `DealContextProvider` (tabs) read one two-phase result — no double fetch.
+- **#757 — Instant deal header from cache.** New cache-only `useDealPeek(id)` (never fires a request): reads the deal identity from `['deal', id]` or by scanning cached `['deals', *]` list pages; null on a cold cache → existing skeleton header. `DealDetailPage` now paints the real name / type / location / stage / priority + a working Back button the instant it mounts, KPIs/tabs/body skeletoned below. Header markup factored into shared `DealHeaderIdentity` + `DealStageBadges` used by both loading and loaded states → zero layout drift.
+
+### Live verification (prod, Claude-in-Chrome)
+- Two-phase confirmed deployed + firing: deal page issues both `?lite=true` and full reads; in the cold post-deploy run the page painted on **lite at 9.1s** while full upgraded prose at **12.8s** (lite-first saved ~3.7s). Warm run: full won at ~2.6–4s and lite was redundant (page still paints at min).
+- Instant-header confirmed live via client-side click-through (warm cache): header **"Jigani- Apartments" painted 1.2s after click** while the full workspace took **10.8s** — `headerPaintedBeforeWorkspace: true`, **zero console errors** (no regression from the header refactor).
+- **Honest finding:** the deal page's absolute latency (~4–9s warm, 10–13s cold) is dominated by **deterministic workspace assembly + Vercel serverless cold-starts**, NOT AI narration. The fully-warm deterministic+cached floor is ~2.6s. The two PRs make the page paint sooner and feel instant (header in ~1.2s); they do not, and cannot, reduce the backend assembly time. The workspace service is already well-optimised (core deal fetched once preloading financials/dd/risk/approvals; all optional slices `Promise.all`-parallelised; redundant re-fetches deduped).
+
+### Validation
+- Frontend: full suite green throughout (1105 → **1111 tests**, +6 for `useDealPeek`: single-cache hit, list-scan hit, single-preferred-over-list, cold-cache null, malformed-entry safety); clean Vite build on both PRs. Backend route syntax-checked; CI backend suite green.
+- OneDrive `.git/index` lock struck on the #757 merge sync (known hazard) — remote merge succeeded (master `961a3d7`); recovered local master via `reset --hard origin/master` (all work safely in remote), clean tree confirmed.
+
+### Remaining lever (product / infra decision — surfaced, not actioned)
+Getting the deal *data* itself under ~2s consistently needs one of: (a) **keep the backend warm** to kill the ~4–5s cold-start tax (Vercel cron on a Pro plan, or a free external uptime pinger on the health endpoint — plan/third-party decision), or (b) **cache the deterministic workspace server-side** (correctness-sensitive: stale data on an IC surface is worse than slow; needs careful invalidation across every deal/DD/approval/risk/financial/document/stage mutation + audit — deliberately not rushed). Both deferred to the operator.
