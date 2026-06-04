@@ -673,11 +673,21 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next)
 router.get(
   '/:id/workspace',
   authenticate,
-  [param('id').isUUID().withMessage('Deal id must be a UUID.')],
+  [
+    param('id').isUUID().withMessage('Deal id must be a UUID.'),
+    // `lite=true` returns the deterministic payload WITHOUT the (slow) AI
+    // narration on the recommendation + deal-doctor cards. The deal page
+    // fetches lite first for an instant paint, then the full payload upgrades
+    // the card prose in place. The service already supports this mode.
+    qv('lite').optional().isBoolean().toBoolean(),
+  ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const workspace = await dealWorkspaceService.getDealWorkspace(req.params.id);
+      const workspace = await dealWorkspaceService.getDealWorkspace(
+        req.params.id,
+        { lite: req.query.lite === true },
+      );
       res.json({ success: true, data: workspace });
     } catch (error) {
       next(error);

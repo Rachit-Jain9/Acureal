@@ -54,6 +54,23 @@ export function useDealWorkspace(id) {
 }
 
 /**
+ * Fast "lite" twin of useDealWorkspace — the deterministic payload WITHOUT the
+ * slow AI narration on the recommendation + deal-doctor cards. The deal page
+ * fetches this first so it can paint in ~1-2s, then the full payload (above)
+ * upgrades the card prose in place. Distinct query key so it never collides
+ * with the full payload — exports, the compare modal, and the hover-prefetch
+ * all key on `['deal-workspace', id]`.
+ */
+export function useDealWorkspaceLite(id) {
+  return useQuery({
+    queryKey: ['deal-workspace-lite', id],
+    queryFn: () => dealsAPI.getWorkspace(id, { lite: true }).then((r) => r.data.data),
+    enabled: !!id,
+    staleTime: 60_000,
+  });
+}
+
+/**
  * Imperative prefetch for a deal's workspace payload.
  *
  * Returns a function `(dealId) => Promise<void>` that the caller can hook

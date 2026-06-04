@@ -22,19 +22,26 @@ import {
 // without an actual API. The mock simply reflects whatever state we want.
 vi.mock('../useDeals', () => ({
   useDealWorkspace: vi.fn(),
+  useDealWorkspaceLite: vi.fn(),
 }));
 
 // eslint-disable-next-line import/first
-import { useDealWorkspace } from '../useDeals';
+import { useDealWorkspace, useDealWorkspaceLite } from '../useDeals';
 
 const buildWrapper = (workspace, opts = {}) => {
-  useDealWorkspace.mockReturnValue({
+  // The provider now fetches a fast `lite` payload + the full payload. Mirror
+  // both onto the same state for these tests — full.data dominates, and "error"
+  // now means BOTH failed (a full-only failure degrades to the lite
+  // deterministic deal in production, so it is not a hard page error).
+  const state = {
     data: workspace,
     isLoading: opts.isLoading ?? false,
     isError: opts.isError ?? false,
     error: opts.error ?? null,
     refetch: opts.refetch ?? vi.fn(),
-  });
+  };
+  useDealWorkspace.mockReturnValue(state);
+  useDealWorkspaceLite.mockReturnValue(state);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // eslint-disable-next-line react/prop-types
   return ({ children }) => (
@@ -78,6 +85,58 @@ describe('useDealContext', () => {
     });
     expect(result.current.isError).toBe(true);
     expect(result.current.error).toBe(error);
+  });
+});
+
+describe('useDealContext — two-phase load (lite first, full upgrades)', () => {
+  const wrapWith = (fullState, liteState) => {
+    useDealWorkspace.mockReturnValue({ isError: false, error: null, refetch: vi.fn(), ...fullState });
+    useDealWorkspaceLite.mockReturnValue({ isError: false, error: null, refetch: vi.fn(), ...liteState });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // eslint-disable-next-line react/prop-types
+    return ({ children }) => (
+      <QueryClientProvider client={client}>
+        <DealContextProvider dealId="d1">{children}</DealContextProvider>
+      </QueryClientProvider>
+    );
+  };
+
+  it('paints from lite while full is still loading, and flags AI pending', () => {
+    const liteData = { deal: { id: 'd1' }, recommendations: { recommendations: [{ id: 'c1' }] } };
+    const { result } = renderHook(() => useDealContext(), {
+      wrapper: wrapWith(
+        { data: undefined, isLoading: true },
+        { data: liteData, isLoading: false },
+      ),
+    });
+    expect(result.current.workspace).toEqual(liteData); // painted from lite
+    expect(result.current.isLoading).toBe(false); // not blocking
+    expect(result.current.isAiPending).toBe(true); // AI prose still generating
+  });
+
+  it('prefers the full payload once it lands and clears AI pending', () => {
+    const liteData = { deal: { id: 'd1' }, recommendations: { recommendations: [{ headline: 'template' }] } };
+    const fullData = { deal: { id: 'd1' }, recommendations: { recommendations: [{ headline: 'AI-refined' }] } };
+    const { result } = renderHook(() => useDealContext(), {
+      wrapper: wrapWith(
+        { data: fullData, isLoading: false },
+        { data: liteData, isLoading: false },
+      ),
+    });
+    expect(result.current.workspace).toEqual(fullData); // full dominates
+    expect(result.current.isAiPending).toBe(false);
+  });
+
+  it('stays usable (no hard error) if the full payload fails but lite succeeded', () => {
+    const liteData = { deal: { id: 'd1' } };
+    const { result } = renderHook(() => useDealContext(), {
+      wrapper: wrapWith(
+        { data: undefined, isLoading: false, isError: true, error: new Error('full failed') },
+        { data: liteData, isLoading: false },
+      ),
+    });
+    expect(result.current.workspace).toEqual(liteData);
+    expect(result.current.isError).toBe(false); // degrades gracefully
   });
 });
 

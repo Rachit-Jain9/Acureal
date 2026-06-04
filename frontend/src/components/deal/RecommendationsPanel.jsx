@@ -294,7 +294,7 @@ function RecommendationCard({ card, dealId, snapshotHash, hidden = false }) {
 }
 
 export default function RecommendationsPanel({ recommendations }) {
-  const { dealId, refetch, isLoading } = useDealContext();
+  const { dealId, refetch, isLoading, isAiPending } = useDealContext();
   const [showHidden, setShowHidden] = useState(false);
   const cards = Array.isArray(recommendations?.recommendations)
     ? recommendations.recommendations
@@ -362,6 +362,9 @@ export default function RecommendationsPanel({ recommendations }) {
             {recommendations.signal_count} signal{recommendations.signal_count === 1 ? '' : 's'}
             {generatedAt && (
               <> · computed {formatRelativeTime(generatedAt)}</>
+            )}
+            {isAiPending && (
+              <span className="text-accent"> · refining wording with AI…</span>
             )}
           </span>
           <button

@@ -246,7 +246,10 @@ export const dealsAPI = {
   // Unified workspace read-model. Composes deal + financials + scenarios +
   // graph + DD/risk scores + audit events + documents + activities +
   // waterfall so the deal page loads from a single round-trip.
-  getWorkspace: (id) => api.get(`/deals/${id}/workspace`),
+  // `options.lite` fetches the deterministic payload without the slow AI
+  // narration — the deal page uses it for an instant first paint.
+  getWorkspace: (id, options = {}) =>
+    api.get(`/deals/${id}/workspace`, options.lite ? { params: { lite: true } } : undefined),
   // PR-NX50 (2026-05-19) — field-provenance map for inline ProvenanceChip
   // components. Returns `{ field_provenance: { <field>: {...} } }` listing
   // every deal/property field that was auto-applied via document_extraction

@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from 'react';
-import { useDealWorkspace } from './useDeals';
+import { useDealWorkspace, useDealWorkspaceLite } from './useDeals';
 
 /**
  * Reactive deal-workspace context (TODO_ARCHITECTURE Phase A).
@@ -29,21 +29,49 @@ import { useDealWorkspace } from './useDeals';
 
 const DealContext = createContext(null);
 
-export function DealContextProvider({ dealId, children }) {
-  const query = useDealWorkspace(dealId);
-
-  const value = useMemo(
-    () => ({
-      dealId,
-      workspace: query.data || null,
-      isLoading: query.isLoading,
-      isError: query.isError,
-      error: query.error || null,
-      refetch: query.refetch,
-    }),
-    [dealId, query.data, query.isLoading, query.isError, query.error, query.refetch],
+/**
+ * Two-phase deal-workspace read, shared by the DealContextProvider AND
+ * DealDetailPage's page-level loading gate so they agree on when to paint.
+ * Both subscribe to the same React-Query keys, so there is no double fetch.
+ *
+ * The fast `lite` payload paints the deterministic deal (financials, tabs,
+ * risk, DD, comps, recommendation + deal-doctor cards) in ~1-2s; the `full`
+ * payload then upgrades the recommendation + deal-doctor card prose in place.
+ * On a revisit within the cache window the full payload is already warm, so the
+ * page paints complete instantly and `isAiPending` is never set.
+ *
+ * Returns { workspace, isLoading, isError, error, isAiPending, refetch }:
+ *   - isLoading   — true only until EITHER payload lands.
+ *   - isError     — true only if NEITHER payload could load (a full-only failure
+ *                   degrades to the lite deterministic deal, not a page error).
+ *   - isAiPending — deterministic content is shown but the AI prose is still
+ *                   generating; panels show a quiet "refining…" hint.
+ */
+export function useDealWorkspaceWithLite(dealId) {
+  const full = useDealWorkspace(dealId);
+  const lite = useDealWorkspaceLite(dealId);
+  return useMemo(
+    () => {
+      const workspace = full.data ?? lite.data ?? null;
+      return {
+        workspace,
+        isLoading: !workspace && (full.isLoading || lite.isLoading),
+        isError: !workspace && full.isError && lite.isError,
+        error: full.error || lite.error || null,
+        isAiPending: !!workspace && full.isLoading,
+        refetch: full.refetch,
+      };
+    },
+    [
+      full.data, lite.data, full.isLoading, lite.isLoading,
+      full.isError, lite.isError, full.error, lite.error, full.refetch,
+    ],
   );
+}
 
+export function DealContextProvider({ dealId, children }) {
+  const merged = useDealWorkspaceWithLite(dealId);
+  const value = useMemo(() => ({ dealId, ...merged }), [dealId, merged]);
   return <DealContext.Provider value={value}>{children}</DealContext.Provider>;
 }
 
