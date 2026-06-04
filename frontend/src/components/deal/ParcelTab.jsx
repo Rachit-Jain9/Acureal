@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { ExternalLink, MapPin, Search, X, Plus, Link2, CheckCircle2 } from 'lucide-react';
@@ -11,6 +11,8 @@ import {
   useParcelIntelligence,
 } from '../../hooks/useProperties';
 import { useUpdateDeal } from '../../hooks/useDeals';
+import useFocusTrap from '../../hooks/useFocusTrap';
+import useScrollLock from '../../hooks/useScrollLock';
 import { toast } from '../common/Toast';
 import SiteWeatherCard from './SiteWeatherCard';
 import { SectionHeader, ErrorState } from '../../design-system';
@@ -48,6 +50,16 @@ function PropertyPickerModal({ dealId, onClose }) {
   const [mode, setMode] = useState('search'); // 'search' | 'create'
   const searchRef = useRef(null);
   const updateDeal = useUpdateDeal();
+
+  // Trap focus + lock body scroll while the picker is open (it previously had
+  // neither, nor Escape-to-close). autoFocus:false because the search input
+  // self-focuses below; onClose is stabilised so a re-render (debounced search,
+  // fetch) doesn't re-arm the trap and steal focus.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(true, { onEscape: handleClose, autoFocus: false });
+  useScrollLock(true);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -96,7 +108,7 @@ function PropertyPickerModal({ dealId, onClose }) {
       aria-modal="true"
       aria-labelledby="link-property-dialog-title"
     >
-      <div className={`bg-bg-elevated rounded-xl shadow-xl w-full mx-4 my-auto ${mode === 'create' ? 'max-w-2xl' : 'max-w-lg'}`}>
+      <div ref={trapRef} className={`bg-bg-elevated rounded-xl shadow-xl w-full mx-4 my-auto ${mode === 'create' ? 'max-w-2xl' : 'max-w-lg'}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
           <h3 id="link-property-dialog-title" className="text-base font-bold text-content-primary flex items-center gap-2">

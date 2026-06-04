@@ -189,10 +189,13 @@ describe('CompareDealsModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('fires onClose when Escape is pressed', async () => {
+  it('fires onClose when Escape is pressed inside the dialog', async () => {
     const onClose = vi.fn();
     renderModal({ onClose });
-    fireEvent.keyDown(document, { key: 'Escape' });
+    // Focus is trapped inside the dialog (useFocusTrap), so Escape is handled
+    // at the dialog container — fire it from a focusable within, which is where
+    // focus lands when the modal opens.
+    fireEvent.keyDown(screen.getByLabelText(/Close comparison/i), { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
   });
 

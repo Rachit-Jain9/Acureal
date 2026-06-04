@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { X, Sparkles, FileText, CheckCircle2, AlertTriangle, Info, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useApplyExtractions } from '../../hooks/useApplyExtractions';
+import useFocusTrap from '../../hooks/useFocusTrap';
+import useScrollLock from '../../hooks/useScrollLock';
 import ontologyV1 from '@redip/real-estate-ontology';
 
 /**
@@ -61,6 +63,16 @@ const BAND_PILL = {
 export default function AutoFillFromDocumentsModal({ dealId, open, onClose, dealCurrentValues = {}, propertyCurrentValues = {} }) {
   const { data: extractionData, isLoading, isError, refetch } = useDealExtractions(dealId);
   const applyMutation = useApplyExtractions(dealId);
+
+  // Trap focus + lock body scroll while open (this dialog previously had
+  // neither, plus no Escape-to-close). Escape is a deliberate action so it
+  // isn't gated on the in-flight apply the way the backdrop click is. onClose
+  // is stabilised so a re-render doesn't re-arm the trap mid-typing.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+  const trapRef = useFocusTrap(open, { onEscape: handleClose });
+  useScrollLock(open);
 
   // Build the candidate row list from the field_map keys + ontology specs.
   // field_map (built server-side by extraction.service.buildFieldMap) is
@@ -204,7 +216,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         if (e.target === e.currentTarget && !isSubmitting) onClose?.();
       }}
     >
-      <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl bg-paper shadow-2xl border border-hairline-strong overflow-hidden">
+      <div ref={trapRef} className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl bg-paper shadow-2xl border border-hairline-strong overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-hairline">
           <div className="flex items-start gap-3 min-w-0">
