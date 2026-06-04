@@ -8806,3 +8806,29 @@ All merged to master, each re-verified green on CI:
   date (LOW — needs data-plumbing verification).
 - Operator-side TODOs unchanged (backups, DPA/AUP lawyer, runbook names,
   security@ mailbox).
+
+## 2026-06-04 — Onboarding 2.0: cinematic, "explains everything" first-run system (PRs #740–#745)
+
+A 6-PR arc replacing REDIP's thin onboarding (3 static welcome slides + bare floating coachmarks + a static getting-started card) with a comprehensive, cinematic, always-available onboarding system. One source of truth, six themed PRs, each verified green on CI and auto-merged.
+
+### What shipped
+
+- **#740 — Product-guide catalog (`frontend/src/utils/productGuide.js`).** Single source of truth describing every surface (6 nav pages, 10 deal tabs, 7 operator surfaces, 4 trust concepts) with what / why-it-matters / do-this copy. `tourSteps.js` refactored into a thin derivation layer (TOUR_STEPS / DEAL_TOUR_STEPS derive from the catalog); exact tour ids/selectors/order preserved and locked by a new test.
+- **#741 — Guide Center (`components/guide/GuideCenter.jsx`).** Always-available, searchable right-drawer explaining every page/tab/concept, role-aware (admin topics hidden from non-operators), with "Take me there" deep-links. Launchers: Header "?" button, Cmd-K action, Settings card, `redip:guide-open` window event. New `store/guideStore.js`.
+- **#742 — Live setup checklist (`utils/setupChecklist.js` + GettingStarted rewrite).** Completion derived live from real data (useDashboard `total_deals`; useDeals row signals `property_id`/`document_count`/`irr_pct`; useOrganizationMembers count; a localStorage intel flag) — never persisted booleans. Full first-run panel + a compact dashboard progress card with a count-up ring + celebratory done-state. Supporting queries gated by dismissed/role; `useDeals`/`useOrganizationMembers` gained optional `options`/`enabled` params.
+- **#743 — Cinematic welcome (WelcomeModal rewrite).** Four-scene personalized first-run (vision → trust pillars → role/goal personalization → tailored launch). Same props the orchestrator passes (open/onStartTour/onSkip), so ProductTour is untouched. Dead `WELCOME_PANES` removed.
+- **#744 — Spotlight tour (`SpotlightBackdrop.jsx` + `hooks/useTargetRect.js`).** SVG mask cutout + accent highlight ring at z-110, dimming the page around the current coachmark target and tweening between steps. Coachmark refactored onto the shared `useTargetRect`. `prefers-reduced-motion` → instant snap.
+- **#745 — Per-page intros (`components/guide/PageIntro.jsx`).** Dismissible first-visit "what/why" banner on Deals/Comps/Market Intelligence/Reports, content from the catalog, with a "More in the Guide" deep-link; dismissal persists per-topic.
+
+### Validation
+- Frontend: full suite green (1100 tests / 136 files) after the arc; clean Vite build on every PR. New tests: tour-derivation lock, GuideCenter, setupChecklist detection (editor/admin/viewer + each signal), WelcomeModal scenes + personalization, SpotlightBackdrop geometry, PageIntro.
+- Live (prod, logged in): verified the Guide drawer (categories, search, "Take me there"), the Header "?" launcher, and the personalized welcome scene 0 (panel computed style confirmed `rgb(255,255,255)` / opacity 1 / settled — a CDP screenshot translucency was an artifact, not a bug). No app console errors. The Claude-in-Chrome extension's renderer repeatedly timed out on CDP screenshots of the chart-heavy dashboard after a few ops (a tooling issue, not product) — checklist/spotlight/page-intros were verified via build + tests + DOM reads rather than additional screenshots.
+
+### Architecture notes (for future sessions)
+- `utils/productGuide.js` is the single source of truth — edit surface copy THERE, never in the tour/guide/intro components. `tourSteps.js` derives TOUR_STEPS/DEAL_TOUR_STEPS from it; `__tests__/tourSteps.test.js` locks the exact tour ids/selectors/order, so reordering the catalog can break the tours (the test will catch it).
+- localStorage keys: `redip.productTour.completed`, `redip.dealWorkspaceTour.completed`, `redip.gettingStarted.dismissed`, `redip.welcome.focus`, `redip.checklist.exploredIntel`, `redip.pageIntro.<topic>.seen`.
+- Overlay z-index ladder: spotlight 110 < coachmark 120 < guide drawer 200 < Cmd-K palette 1000.
+
+### What's left (optional follow-ups)
+- PageIntro currently covers the 4 main content pages; could extend to Map/Settings/admin surfaces if wanted.
+- Onboarding state is localStorage (per-device); a server-side preferences table would make tours/banners cross-device, but the checklist already derives cross-device-correct from real data.
