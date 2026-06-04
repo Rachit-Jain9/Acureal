@@ -31,14 +31,32 @@ describe('composeReadiness — applicability', () => {
     expect(r.composeReadiness({ assetClass: 'redevelopment' }).applicable).toBe(true);
   });
 
-  test('commercial / retail / industrial / hospitality / raw_land are NOT applicable', () => {
-    const not = ['commercial_office', 'retail', 'industrial_warehousing', 'hospitality', 'raw_land'];
-    for (const ac of not) {
+  test('hospitality / raw_land are NOT applicable by nature (operated / held, not unit-sold)', () => {
+    for (const ac of ['hospitality', 'raw_land']) {
       const out = r.composeReadiness({ assetClass: ac });
       expect(out.applicable).toBe(false);
+      expect(out.applicability.status).toBe('likely_exempt');
       expect(out.reason_if_not).toBeTruthy();
       expect(out.buckets).toEqual([]);
     }
+  });
+
+  test('commercial / retail / industrial are NOT auto-exempt — uncertain until sale-intent is known', () => {
+    // The old behaviour wrongly treated these as always out-of-scope. A
+    // commercial unit-sale that crosses thresholds IS in scope, so with no
+    // inputs we stay conservatively applicable and show the checklist as a guide.
+    for (const ac of ['commercial_office', 'retail', 'industrial_warehousing']) {
+      const out = r.composeReadiness({ assetClass: ac });
+      expect(out.applicable).toBe(true);
+      expect(out.applicability.status).toBe('uncertain');
+      expect(out.buckets.length).toBeGreaterThan(0);
+    }
+  });
+
+  test('HARD RULE: commercial + sale-intent + area > 500 sqm is IN SCOPE, never exempt', () => {
+    const out = r.composeReadiness({ assetClass: 'commercial_office', landAreaSqm: 1200, saleIntent: true });
+    expect(out.applicable).toBe(true);
+    expect(out.applicability.status).toBe('in_scope');
   });
 
   test('unknown asset class is NOT applicable with an honest message', () => {
@@ -404,8 +422,15 @@ describe('composeReadiness — end-to-end with Jigani-like inputs', () => {
       documents: heavyDocs,
       extractedFields: extracted,
     });
-    expect(out.overall.completeness_pct).toBeGreaterThan(60);
-    expect(['mostly_ready', 'filing_ready']).toContain(out.overall.readiness_tier);
+    // With the expanded statutory catalog the absolute % is lower than the old
+    // 28-item list, so assert behaviour, not a brittle number: a near-complete
+    // deck scores far above empty, satisfies every fatal blocker, and is never
+    // shown as "blocked".
+    const empty = r.composeReadiness({ assetClass: 'residential_apartments' });
+    expect(out.overall.completeness_pct).toBeGreaterThan(empty.overall.completeness_pct);
+    expect(out.overall.is_blocked).toBe(false);
+    expect(out.overall.readiness_tier).not.toBe('blocked');
+    expect(out.overall.readiness_tier).not.toBe('early');
   });
 });
 

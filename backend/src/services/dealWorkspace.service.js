@@ -37,6 +37,7 @@ const bestUseSimulator = require('./bestUseSimulator.service');
 const dealStructureRecommender = require('./dealStructureRecommender.service');
 const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
+const { buildReraContext } = require('./rera/complianceContext');
 const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
@@ -483,18 +484,16 @@ async function getDealWorkspace(dealId, options = {}) {
   // deal's asset class + the already-loaded approvals + documents (no extra
   // DB round-trips beyond a single optional approvals fetch).
   const reraReadinessSlice = await optional(async () => {
-    if (!deal.asset_class) {
-      return karnatakaReraReadiness.composeReadiness({ assetClass: null, dealName: deal.name });
-    }
     // `approvals` + `documentsFlat` are the batch-fetched, single-source
-    // views computed once above — no per-slice refetch / reflatten.
-    return karnatakaReraReadiness.composeReadiness({
-      assetClass: deal.asset_class,
+    // views computed once above — no per-slice refetch / reflatten. The
+    // context derives land area (sqm), joint-development flag, RERA number and
+    // the operator's rera_inputs from the already-loaded deal — no extra DB.
+    const reraCtx = buildReraContext(deal, {
       approvals,
       documents: documentsFlat,
       extractedFields: {}, // future hook: structured extracted fields per document
-      dealName: deal.name,
     });
+    return karnatakaReraReadiness.composeReadiness(reraCtx);
   }, 'karnatakaReraReadiness');
 
   // IC Readiness — Phase 3 / Pillar 5. Pure composer over ALL of the
@@ -533,7 +532,7 @@ async function getDealWorkspace(dealId, options = {}) {
     best_use: bestUseSlice,
     deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
     capital_stack_optimizer: capitalStackSlice,
-    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [] },
+    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, applicability: null, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [], fee_estimate: null, milestone: null, conditional_notes: [] },
     ic_readiness: icReadinessSlice || { applicable: true, overall: null, buckets: [], gaps: [] },
     generatedAt: new Date().toISOString(),
   };

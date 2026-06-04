@@ -21,6 +21,7 @@ const { buildDealWorkbookV2 } = require('../services/exports/xlsx/v2/buildWorkbo
 const { buildDealReportDocx } = require('../services/exports/docx/buildReport');
 const { buildReraReadinessDocx } = require('../services/exports/docx/buildReraReadiness');
 const { composeReadiness } = require('../services/karnatakaReraReadiness.service');
+const { buildReraContext } = require('../services/rera/complianceContext');
 const { buildIcReadinessDocx } = require('../services/exports/docx/buildIcReadiness');
 const { getDealWorkspace } = require('../services/dealWorkspace.service');
 const approvalsService = require('../services/approvals.service');
@@ -1228,12 +1229,9 @@ router.get(
         }
       } catch { /* document fetch failure → empty list, pack still works */ }
 
-      const readiness = composeReadiness({
-        assetClass: dealRow.asset_class,
-        approvals,
-        documents: documentsFlat,
-        dealName: dealRow.name,
-      });
+      const readiness = composeReadiness(
+        buildReraContext(dealRow, { approvals, documents: documentsFlat }),
+      );
 
       const docxBuffer = await buildReraReadinessDocx(readiness, {
         brandName: 'REDIP',
