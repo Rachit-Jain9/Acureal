@@ -387,6 +387,7 @@ export function useDealReraReadiness() {
         fee_estimate: null,
         milestone: null,
         conditional_notes: [],
+        consistency: null,
       },
     [workspace?.karnataka_rera_readiness],
   );
