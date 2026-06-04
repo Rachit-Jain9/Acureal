@@ -7,14 +7,14 @@ import {
   LayoutDashboard, Briefcase, Brain, BarChart3, FileBarChart2, Map, Settings,
   Database, Inbox, Activity, Beaker, Sparkles, ShieldCheck, Gauge, LandPlot,
   Ruler, FileText, Clock, Calculator, ClipboardCheck, ShieldAlert, Building2,
-  History, FileCheck, BadgeCheck, Cpu, Compass,
+  History, FileCheck, BadgeCheck, Cpu, MapPin, Layers, Compass,
 } from 'lucide-react';
 
 const ICONS = {
   LayoutDashboard, Briefcase, Brain, BarChart3, FileBarChart2, Map, Settings,
   Database, Inbox, Activity, Beaker, Sparkles, ShieldCheck, Gauge, LandPlot,
   Ruler, FileText, Clock, Calculator, ClipboardCheck, ShieldAlert, Building2,
-  History, FileCheck, BadgeCheck, Cpu,
+  History, FileCheck, BadgeCheck, Cpu, MapPin, Layers,
 };
 
 // Compass is the fallback for an unknown key — a guide is a compass.

@@ -29,6 +29,11 @@ export const GUIDE_CATEGORIES = [
     blurb: 'Every tab in a deal, from the site facts to the signed audit trail.',
   },
   {
+    id: 'deal-features',
+    label: 'Signals, AI & lookups',
+    blurb: 'The analysis panels, AI reads and data lookups you meet inside a deal.',
+  },
+  {
     id: 'admin',
     label: 'For operators',
     blurb: 'Shared data-curation surfaces, visible only to platform operators.',
@@ -427,6 +432,79 @@ export const GUIDE_ENTRIES = [
       'Inspect KPI deltas between calculations',
       "Verify an event's integrity",
       'Replay a historical scenario',
+    ],
+  },
+
+  // ─── Signals, AI & lookups inside a deal (no tab / tour stop — surfaced via
+  //     the "?" on each panel header, and browsable here) ─────────────────────
+  {
+    id: 'deal.ai-analysis',
+    category: 'deal-features',
+    label: 'AI deal analysis',
+    icon: 'Brain',
+    eyebrow: 'AI read',
+    what: 'An AI-written read of the deal — strengths, risks and next steps — composed from the deterministic signals and your uploaded documents.',
+    why: 'A fast starting point, never a verdict. Every claim links to its evidence, and the legal four (title, encumbrance, RERA, approvals) stay human-verified — the AI never asserts them as fact.',
+    doThis: [
+      'Read it as interpretation, then check the evidence links',
+      'Verify any title / RERA / approval claim against the source yourself',
+      'Use it to decide which tab to dig into next',
+    ],
+  },
+  {
+    id: 'deal.ai-qa',
+    category: 'deal-features',
+    label: 'Ask about this deal',
+    icon: 'Sparkles',
+    eyebrow: 'AI read',
+    what: "Ask plain-English questions about the deal; answers are grounded in this deal's own data and documents.",
+    why: 'Faster than hunting across tabs — and every answer cites where it came from, so you can trust and trace it.',
+    doThis: [
+      'Ask about the numbers, risks, approvals or documents',
+      'Open the cited source to confirm',
+      'Treat it as a research aid, not a decision',
+    ],
+  },
+  {
+    id: 'deal.financial-model',
+    category: 'deal-features',
+    label: 'Financial model',
+    icon: 'Calculator',
+    eyebrow: 'Deterministic',
+    what: 'The underwriting summary — IRR, NPV, margin, equity multiple — for this deal.',
+    why: "Every figure is computed by deterministic code, reproducible from the inputs — never an AI guess. That's what makes your IC numbers defensible.",
+    doThis: [
+      'Open the full model to enter assumptions',
+      'Run sensitivities and what-if sliders',
+      'Check the model-confidence read before you rely on it',
+    ],
+  },
+  {
+    id: 'deal.street-lookup',
+    category: 'deal-features',
+    label: 'Street guidance lookup',
+    icon: 'MapPin',
+    eyebrow: 'Bengaluru data',
+    what: 'The BBMP ward, zone and government guidance value for a Bengaluru street.',
+    why: 'Guidance value anchors stamp duty and sets a defensible floor for negotiation — knowing it early sharpens the ask.',
+    doThis: [
+      'Confirm the ward and zone for the parcel',
+      'Compare the guidance value to the asking price',
+      'Carry the figure into the financial model',
+    ],
+  },
+  {
+    id: 'deal.planning-context',
+    category: 'deal-features',
+    label: 'Planning context',
+    icon: 'Layers',
+    eyebrow: 'Bengaluru data',
+    what: 'The Bengaluru planning district and master-plan context around this parcel.',
+    why: "Planning context drives what's buildable and permitted — the rules behind the revenue ceiling.",
+    doThis: [
+      'Check the planning district and existing land use',
+      'Read it alongside the Zoning tab',
+      'Flag any mismatch with the intended use',
     ],
   },
 
