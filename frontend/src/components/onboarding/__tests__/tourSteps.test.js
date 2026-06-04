@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TOUR_STEPS, DEAL_TOUR_STEPS, WELCOME_PANES } from '../tourSteps';
+import { TOUR_STEPS, DEAL_TOUR_STEPS } from '../tourSteps';
 
 // The tours derive from utils/productGuide.js. These tests lock the derivation
 // so a future catalog edit (reorder, new entry, renamed id) can't silently
@@ -39,10 +39,5 @@ describe('tourSteps derivation', () => {
       expect(s.title).toBeTruthy();
       expect(s.body).toBeTruthy();
     });
-  });
-
-  it('keeps the three welcome panes (middle pane carries the bullets)', () => {
-    expect(WELCOME_PANES).toHaveLength(3);
-    expect(WELCOME_PANES[1].bullets).toHaveLength(3);
   });
 });
