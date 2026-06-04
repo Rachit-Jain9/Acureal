@@ -37,9 +37,11 @@ export { Tooltip } from './Tooltip';
 // `await confirm({ title, tone, message })` from anywhere.
 export { confirm, ConfirmDialogContainer } from './ConfirmDialog';
 
+import { useRef } from 'react';
 import clsx from 'clsx';
 import { AlertTriangle, Info, HelpCircle } from 'lucide-react';
 import useCountUp from '../hooks/useCountUp';
+import useReducedMotion from '../hooks/useReducedMotion';
 
 // ── Card ───────────────────────────────────────────────────────────────────
 // Neutral elevated surface. `elevated` adds a subtle drop shadow.
@@ -143,7 +145,29 @@ export function MetricTile({
    * existing cross-fade-on-key-change behaviour.
    */
   format,
+  // Opt-in: a subtle ≤2.5° parallax tilt on hover, reserved for page-level
+  // hero KPI tiles (FRONTEND_GUIDELINES §6 explicitly blesses this). Off by
+  // default so dense in-panel MetricTiles stay flat. Collapses to no-op under
+  // prefers-reduced-motion.
+  interactive = false,
 }) {
+  const reduced = useReducedMotion();
+  const tiltRef = useRef(null);
+  const tiltOn = interactive && !reduced;
+  // Cursor-follow tilt via direct ref mutation (no per-frame React state) so
+  // it stays at 60fps; a short transition smooths the follow + the reset.
+  const handleTilt = (e) => {
+    const el = tiltRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const rx = -(((e.clientY - r.top) / r.height) - 0.5) * 5; // ±2.5°
+    const ry = (((e.clientX - r.left) / r.width) - 0.5) * 5;
+    el.style.transform = `perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale(1.01)`;
+  };
+  const resetTilt = () => {
+    const el = tiltRef.current;
+    if (el) el.style.transform = '';
+  };
   const toneClass = {
     up: 'text-data-positive',
     down: 'text-data-negative',
@@ -156,9 +180,13 @@ export function MetricTile({
   const displayValue = animateNumber ? format(animated) : value;
   return (
     <div
+      ref={tiltOn ? tiltRef : undefined}
+      onMouseMove={tiltOn ? handleTilt : undefined}
+      onMouseLeave={tiltOn ? resetTilt : undefined}
       className={clsx(
         'relative bg-bg-elevated border border-hairline rounded-editorial p-4',
         'shadow-editorial',
+        tiltOn && 'transition-[transform,box-shadow,border-color] duration-200 ease-out will-change-transform hover:shadow-editorial-lg hover:border-hairline-strong',
         className,
       )}
     >

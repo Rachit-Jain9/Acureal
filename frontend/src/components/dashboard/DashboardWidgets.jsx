@@ -60,12 +60,14 @@ export function KpiStripWidget({ stats = {} }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <MetricTile
+        interactive
         label="Pipeline Value"
         value={pipelineValue}
         format={formatCroresWithDash}
         footnote="Cumulative ask · active deals"
       />
       <MetricTile
+        interactive
         label="Active Deals"
         value={activeDeals}
         format={formatIntWithDash}
@@ -74,6 +76,7 @@ export function KpiStripWidget({ stats = {} }) {
         tone={dealsWithRisk > 0 ? 'down' : 'neutral'}
       />
       <MetricTile
+        interactive
         label="Avg IRR"
         value={avgIrrFinite ? avgIrr : '—'}
         format={formatPctWithDash}
@@ -82,6 +85,7 @@ export function KpiStripWidget({ stats = {} }) {
         tone={avgIrrFinite ? (avgIrr >= 20 ? 'up' : avgIrr >= 12 ? 'neutral' : 'down') : 'neutral'}
       />
       <MetricTile
+        interactive
         label="Investor-Grade"
         value={icReadyDeals}
         format={formatIntWithDash}
