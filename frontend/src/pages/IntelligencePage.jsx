@@ -43,6 +43,7 @@ import {
   NicheAssetClassBenchmarksTable,
 } from '../components/intelligence/SegmentedBenchmarkTables';
 import PageHeader from '../components/common/PageHeader';
+import PageIntro from '../components/guide/PageIntro';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
@@ -580,6 +581,8 @@ export default function IntelligencePage() {
           </div>
         }
       />
+
+      <PageIntro topicId="intelligence" />
 
       {/* "Internal pipeline data — external inventory feeds not yet configured"
           banner intentionally removed (per 2026-05-08 cleanup). The page now

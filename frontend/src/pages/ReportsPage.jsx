@@ -5,6 +5,7 @@ import { downloadCsv } from '../utils/csvDownload';
 import { useDeals } from '../hooks/useDeals';
 import { useDailyBrief } from '../hooks/useIntelligence';
 import PageHeader from '../components/common/PageHeader';
+import PageIntro from '../components/guide/PageIntro';
 import Badge from '../components/common/Badge';
 import { Skeleton, SkeletonList } from '../design-system';
 import { formatCrores, formatPct, STAGE_CONFIG } from '../utils/format';
@@ -334,6 +335,8 @@ export default function ReportsPage() {
         title="Reports"
         description="Pipeline analytics, exports, and verified-data intelligence readiness"
       />
+
+      <PageIntro topicId="reports" />
 
       <div className="flex flex-wrap items-center gap-3">
         <button
