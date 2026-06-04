@@ -22,6 +22,7 @@ const { buildDealReportDocx } = require('../services/exports/docx/buildReport');
 const { buildReraReadinessDocx } = require('../services/exports/docx/buildReraReadiness');
 const { composeReadiness } = require('../services/karnatakaReraReadiness.service');
 const { buildReraContext } = require('../services/rera/complianceContext');
+const { composeReraConsistency } = require('../services/rera/consistency');
 const { buildIcReadinessDocx } = require('../services/exports/docx/buildIcReadiness');
 const { getDealWorkspace } = require('../services/dealWorkspace.service');
 const approvalsService = require('../services/approvals.service');
@@ -1232,6 +1233,9 @@ router.get(
       const readiness = composeReadiness(
         buildReraContext(dealRow, { approvals, documents: documentsFlat }),
       );
+      // Co-locate the deterministic cross-document consistency findings so the
+      // handover pack shows the same mismatches as the in-app cockpit.
+      readiness.consistency = await composeReraConsistency(dealId);
 
       const docxBuffer = await buildReraReadinessDocx(readiness, {
         brandName: 'REDIP',
