@@ -17,6 +17,7 @@ import { useComps, useCreateComp, useDeleteComp } from '../hooks/useComps';
 import { useCanEdit } from '../hooks/useCanEdit';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
+import PageIntro from '../components/guide/PageIntro';
 import Badge from '../components/common/Badge';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
@@ -643,6 +644,8 @@ export default function CompsPage() {
         }
       />
       </div>
+
+      <PageIntro topicId="comps" />
 
       <DataToolbar>
         <div className="flex flex-wrap items-center gap-3">

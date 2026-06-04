@@ -41,6 +41,7 @@ import { useCanEdit } from '../hooks/useCanEdit';
 import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import PageHeader from '../components/common/PageHeader';
+import PageIntro from '../components/guide/PageIntro';
 import { SkeletonList, SkeletonKpi, Modal, Button } from '../design-system';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
@@ -481,6 +482,8 @@ export default function DealsPage() {
           </div>
         }
       />
+
+      <PageIntro topicId="deals" />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
