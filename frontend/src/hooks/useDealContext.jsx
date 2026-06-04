@@ -379,10 +379,14 @@ export function useDealReraReadiness() {
     () =>
       workspace?.karnataka_rera_readiness || {
         applicable: false,
+        applicability: null,
         reason_if_not: 'unavailable',
         overall: null,
         buckets: [],
         gaps: [],
+        fee_estimate: null,
+        milestone: null,
+        conditional_notes: [],
       },
     [workspace?.karnataka_rera_readiness],
   );
