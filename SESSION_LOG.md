@@ -4,6 +4,11 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-04 (cont. — K-RERA ground-truth checks + email-reminder blocker recorded) (PRs #773–#774, all merged + deployed)
+
+- **#773 (docs)** — recorded the K-RERA compliance-reminder email blocker. Operator confirmed they'll get a sending domain soon; the reminder cron is deferred until then (shares the existing `RESEND_API_KEY` blocker). Engineering detail in `TODO_MANUAL.md` (build `/api/cron/compliance-reminders/daily` via `cronAuth` + `mailer.js`); plain-English operator step **#6 in `TODO_OPERATOR.md`** (domain → Resend → Vercel env). The calendar view + DOCX work without email.
+- **#774 — ground-truth parcel-identity checks (V2.3).** New `backend/src/services/rera/groundTruthChecks.js`: pure `compareGroundTruth(deal, fieldMap)` comparing the deal's RECORDED khata / owner vs the values EXTRACTED from documents (khata-number mismatch + owner-name divergence via `nameSimilarity`). **Survey number intentionally NOT reconciled** — a deal legitimately spans multiple survey numbers, so a bare comparison is false-positive-prone. `rera/consistency` now reads the deal's extractions ONCE and merges the existing cross-document findings (`inconsistencyDetector.runAllComparators`) + the ground-truth findings (deduped). **Does NOT touch the shared `inconsistencyDetector`** → Risk tab unaffected (its suite stays green). Flows into the cockpit + DOCX with no UI change. +67 backend tests.
+
 ## 2026-06-04 (cont. — K-RERA V4: post-registration compliance calendar) (PRs #770–#771, all merged + deployed)
 
 Operator chose the post-registration compliance calendar (the vision's "stickiest" module — it repeats every quarter). Deep-reviewed first (2 Explore agents): the scraped `regulatory_data.karnataka_rera_*` tables exist but are EMPTY (scraper inert per "no fake connectivity"), so actual filing status is unavailable — the calendar must be a pure computed due-schedule. Confirmed the reusable infra (the `optional()` slice pattern, `formatDate`, Vercel-cron + `mailer.js` for a future reminder slice).
