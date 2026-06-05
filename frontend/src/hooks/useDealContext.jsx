@@ -388,6 +388,7 @@ export function useDealReraReadiness() {
         milestone: null,
         conditional_notes: [],
         consistency: null,
+        compliance_calendar: null,
       },
     [workspace?.karnataka_rera_readiness],
   );
