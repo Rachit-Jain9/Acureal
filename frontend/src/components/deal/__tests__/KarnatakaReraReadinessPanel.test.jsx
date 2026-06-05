@@ -250,6 +250,27 @@ describe('KarnatakaReraReadinessPanel', () => {
     expect(screen.getByText(/Order a fresh survey/)).toBeInTheDocument();
   });
 
+  it('renders the Post-Registration Compliance Calendar for a registered deal', () => {
+    useDealReraReadinessMock.mockReturnValue({
+      applicable: true, reason_if_not: null, applicability: null,
+      overall: { completeness_pct: 60, readiness_tier: 'mostly_ready', by_status: {}, total_items: 10, blockers: [] },
+      buckets: [], gaps: [], fee_estimate: null, milestone: null, disclaimer: 'organisation aid',
+      compliance_calendar: {
+        applicable: true, registered: true, status: 'active',
+        summary: { total: 2, overdue: 1, due_soon: 0, upcoming: 1 },
+        note: 'Indicative deadlines — verify on the K-RERA portal.',
+        items: [
+          { id: 'completion', kind: 'extension', label: 'Declared completion / extension', due_date: '2025-01-01', days_until: -500, status: 'overdue', description: 'Apply for an extension before this date.' },
+          { id: 'qpr:2026-07-15', kind: 'quarterly', label: 'Quarterly update — quarter ending 2026-06-30', due_date: '2026-07-15', days_until: 41, status: 'upcoming', description: 'File the quarterly update.' },
+        ],
+      },
+    });
+    render(<KarnatakaReraReadinessPanel />);
+    expect(screen.getByText('Post-Registration Compliance')).toBeInTheDocument();
+    expect(screen.getByText(/Quarterly update/)).toBeInTheDocument();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+  });
+
   it('saves project facts via dealsAPI.update', async () => {
     useDealReraReadinessMock.mockReturnValue({
       applicable: true, reason_if_not: null, applicability: null,

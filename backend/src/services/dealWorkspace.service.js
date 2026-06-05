@@ -39,6 +39,7 @@ const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
 const { buildReraContext } = require('./rera/complianceContext');
 const reraConsistency = require('./rera/consistency');
+const complianceCalendar = require('./rera/complianceCalendar');
 const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
@@ -499,6 +500,11 @@ async function getDealWorkspace(dealId, options = {}) {
     // inconsistencyDetector — pure comparators, no persistence here) so the
     // cockpit surfaces title/parcel/RERA mismatches next to the checklist.
     slice.consistency = await reraConsistency.composeReraConsistency(dealId);
+    // Deterministic post-registration compliance calendar — pure compute over
+    // the deal's own dates + today (no DB, no writes).
+    slice.compliance_calendar = complianceCalendar.composeComplianceCalendar(reraCtx, {
+      applicabilityStatus: slice.applicability && slice.applicability.status,
+    });
     return slice;
   }, 'karnatakaReraReadiness');
 
@@ -538,7 +544,7 @@ async function getDealWorkspace(dealId, options = {}) {
     best_use: bestUseSlice,
     deal_structure_recommender: dealStructureSlice || { scores: [], reason: 'unavailable' },
     capital_stack_optimizer: capitalStackSlice,
-    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, applicability: null, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [], fee_estimate: null, milestone: null, conditional_notes: [], consistency: null },
+    karnataka_rera_readiness: reraReadinessSlice || { applicable: false, applicability: null, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [], fee_estimate: null, milestone: null, conditional_notes: [], consistency: null, compliance_calendar: null },
     ic_readiness: icReadinessSlice || { applicable: true, overall: null, buckets: [], gaps: [] },
     generatedAt: new Date().toISOString(),
   };

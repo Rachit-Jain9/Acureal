@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   FileCheck, ChevronRight, ChevronDown, CheckCircle2, Circle,
   AlertCircle, AlertTriangle, Info, Sparkles, Download, Loader2,
-  ExternalLink, HelpCircle, SlidersHorizontal, MinusCircle, ShieldAlert, ScanSearch,
+  ExternalLink, HelpCircle, SlidersHorizontal, MinusCircle, ShieldAlert, ScanSearch, CalendarClock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealContext, useDealReraReadiness } from '../../hooks/useDealContext';
 import { dealsAPI, exportsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import { useCountUp } from '../../hooks/useCountUp';
+import { formatDate } from '../../utils/format';
 
 /**
  * KarnatakaReraReadinessPanel — the "Compliance Cockpit" (Phase 4).
@@ -548,6 +549,81 @@ function ConsistencySection({ consistency }) {
   );
 }
 
+// ── Post-Registration Compliance Calendar — deterministic due schedule ──────
+const CAL_STATUS = {
+  overdue:  { cls: 'bg-red-50 text-red-700 border-red-200', label: 'Overdue' },
+  due_soon: { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Due soon' },
+  upcoming: { cls: 'bg-slate-50 text-slate-600 border-slate-200', label: 'Upcoming' },
+};
+
+function CalendarItemRow({ item }) {
+  const t = CAL_STATUS[item.status] || CAL_STATUS.upcoming;
+  const when = item.days_until < 0
+    ? `${Math.abs(item.days_until)}d ago`
+    : item.days_until === 0 ? 'today' : `in ${item.days_until}d`;
+  return (
+    <li className="py-2 px-3 border-b border-hairline last:border-0">
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <span className="text-sm font-medium text-content-primary">{item.label}</span>
+        <span className={clsx('text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded border shrink-0', t.cls)}>
+          {t.label}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 mt-0.5">
+        <span className="text-[11px] text-content-secondary tabular-nums">{formatDate(item.due_date)}</span>
+        <span className="text-[10px] text-content-muted">· {when}</span>
+      </div>
+      {item.description && <p className="text-[11px] text-content-secondary mt-1 leading-snug">{item.description}</p>}
+    </li>
+  );
+}
+
+function ComplianceCalendarSection({ calendar }) {
+  const [open, setOpen] = useState(true);
+  if (!calendar || !calendar.applicable) return null;
+
+  if (calendar.status === 'preview') {
+    return (
+      <div className="mb-3 flex items-start gap-1.5 rounded-md border border-hairline bg-bg-secondary/40 px-2.5 py-1.5">
+        <CalendarClock size={12} className="text-content-muted mt-0.5 shrink-0" />
+        <p className="text-[11px] text-content-secondary leading-snug">{calendar.note}</p>
+      </div>
+    );
+  }
+
+  const items = calendar.items || [];
+  if (items.length === 0) return null;
+  const summary = calendar.summary || { total: items.length, overdue: 0, due_soon: 0 };
+  return (
+    <div className="mb-3 border border-hairline rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 transition-colors duration-150 ease-out"
+      >
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <CalendarClock size={12} className="text-content-muted" />
+          <span className="text-xs uppercase tracking-wider font-medium text-content-secondary">Post-Registration Compliance</span>
+          <span className="text-[10px] text-content-muted">
+            {summary.total} deadline{summary.total === 1 ? '' : 's'}
+            {summary.overdue ? ` · ${summary.overdue} overdue` : summary.due_soon ? ` · ${summary.due_soon} due soon` : ''}
+          </span>
+        </div>
+      </button>
+      {open && (
+        <div className="bg-bg-elevated">
+          <ul>{items.map((it) => <CalendarItemRow key={it.id} item={it} />)}</ul>
+          {calendar.note && (
+            <p className="text-[10px] text-content-muted italic px-3 py-1.5 border-t border-hairline">{calendar.note}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function KarnatakaReraReadinessPanel() {
   const slice = useDealReraReadiness();
   const { dealId, refetch, workspace } = useDealContext();
@@ -600,7 +676,7 @@ export default function KarnatakaReraReadinessPanel() {
     return null;
   }
 
-  const { overall, buckets, gaps, disclaimer, fee_estimate, milestone, applicability, consistency } = slice;
+  const { overall, buckets, gaps, disclaimer, fee_estimate, milestone, applicability, consistency, compliance_calendar } = slice;
   const tier = overall?.readiness_tier || 'early';
   const tierLabel = READINESS_TIER_LABEL[tier] || tier;
   const tierTone = READINESS_TIER_TONE[tier] || READINESS_TIER_TONE.early;
@@ -647,6 +723,9 @@ export default function KarnatakaReraReadinessPanel() {
 
       {/* Milestone band */}
       <MilestoneBand milestone={milestone} />
+
+      {/* Post-registration compliance calendar */}
+      <ComplianceCalendarSection calendar={compliance_calendar} />
 
       {/* Project facts inputs */}
       <ProjectFactsForm dealId={dealId} currentInputs={currentInputs} onSaved={refetch} />

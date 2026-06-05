@@ -66,6 +66,7 @@ const buildReraContext = (deal, { approvals = [], documents = [], extractedField
     saleIntent: typeof reraInputs.sale_intent === 'boolean' ? reraInputs.sale_intent : null,
     completionDate: reraInputs.completion_date || null,
     reraNumber,
+    reraExpiryDate: (deal && deal.rera_expiry_date) || null,
     feeOverrides: reraInputs.fee_overrides || null,
     dealName: (deal && deal.name) || null,
     approvals: Array.isArray(approvals) ? approvals : [],
