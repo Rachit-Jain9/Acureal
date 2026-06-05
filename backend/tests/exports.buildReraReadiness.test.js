@@ -209,4 +209,24 @@ describe('buildReraReadinessDocx', () => {
     expect(xml).toContain('Area mismatch: sale_deed vs layout_approval');
     expect(xml).toContain('Order a fresh survey');
   });
+
+  test('renders the Post-Registration Compliance Calendar when active', async () => {
+    const readiness = composeReadiness({
+      assetClass: 'residential_apartments', landAreaSqm: 1200, saleIntent: true, dealName: 'Registered Deal',
+    });
+    readiness.compliance_calendar = {
+      applicable: true, registered: true, status: 'active',
+      summary: { total: 2, overdue: 0, due_soon: 1, upcoming: 1 },
+      note: 'Indicative deadlines — verify on the K-RERA portal.',
+      items: [
+        { id: 'qpr:2026-07-15', kind: 'quarterly', label: 'Quarterly update — quarter ending 2026-06-30', due_date: '2026-07-15', days_until: 14, status: 'due_soon', description: 'File the quarterly update.' },
+        { id: 'annual_audit', kind: 'annual', label: 'Annual audited statement of accounts', due_date: '2026-09-30', days_until: 100, status: 'upcoming', description: 'CA-certified annual accounts.' },
+      ],
+    };
+    const buffer = await buildReraReadinessDocx(readiness);
+    const xml = await extractDocumentXml(buffer);
+    expect(xml).toContain('Post-Registration Compliance Calendar');
+    expect(xml).toContain('Quarterly update');
+    expect(xml).toContain('Due soon');
+  });
 });

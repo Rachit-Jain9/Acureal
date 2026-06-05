@@ -453,6 +453,54 @@ const buildConsistencySection = (readiness) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Post-Registration Compliance Calendar — deterministic due schedule
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CAL_STATUS_DISPLAY = Object.freeze({
+  overdue:  { label: 'Overdue',  color: COLORS.red },
+  due_soon: { label: 'Due soon', color: COLORS.amber },
+  upcoming: { label: 'Upcoming', color: COLORS.ink_muted },
+});
+
+const buildComplianceCalendarSection = (readiness) => {
+  const cal = readiness.compliance_calendar;
+  if (!cal || !cal.applicable || cal.status !== 'active') return [];
+  const items = cal.items || [];
+  if (items.length === 0) return [];
+
+  const rows = [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        cell(para('Status', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle, width: 16 }),
+        cell(para('Obligation', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle, width: 54 }),
+        cell(para('Due', { bold: true, color: COLORS.ink_muted, size: 18 }), { shading: COLORS.bg_subtle, width: 30 }),
+      ],
+    }),
+  ];
+
+  for (const it of items) {
+    const sd = CAL_STATUS_DISPLAY[it.status] || CAL_STATUS_DISPLAY.upcoming;
+    const when = it.days_until < 0 ? `${Math.abs(it.days_until)} days ago` : it.days_until === 0 ? 'today' : `in ${it.days_until} days`;
+    const obBlocks = [para(it.label || '', { size: 20, bold: true })];
+    if (it.description) obBlocks.push(para(it.description, { size: 18, color: COLORS.ink_muted }));
+    rows.push(new TableRow({
+      children: [
+        cellText(sd.label, { size: 20, bold: true, color: sd.color }),
+        cell(obBlocks),
+        cell([para(it.due_date || '', { size: 20 }), para(when, { size: 16, color: COLORS.ink_muted })]),
+      ],
+    }));
+  }
+
+  return [
+    heading('Post-Registration Compliance Calendar'),
+    para(cal.note || 'Indicative deadlines — verify exact dates on the K-RERA portal.', { size: 20, color: COLORS.ink_muted }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: tableBorders, rows }),
+  ];
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Per-bucket sections — item table per bucket
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -641,6 +689,7 @@ const buildReraReadinessDocx = async (readiness, { brandName = 'REDIP', userName
     ...buildApplicabilityFeeMilestone(readiness),
     ...buildBlockersSection(readiness),
     ...buildConsistencySection(readiness),
+    ...buildComplianceCalendarSection(readiness),
   ];
   for (const bucket of readiness.buckets || []) {
     children.push(...buildBucketSection(bucket));
