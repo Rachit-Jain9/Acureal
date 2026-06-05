@@ -175,6 +175,21 @@ const APPROVAL_TYPES = [
 const RISK_CATEGORIES = ['title', 'zoning', 'regulatory', 'financial', 'physical', 'market', 'legal'];
 const RISK_SEVERITIES = ['critical', 'high', 'medium', 'low'];
 
+// Professional sign-off board (deal_signoffs).
+const SIGNOFF_ROLES = ['advocate', 'ca', 'architect', 'engineer', 'structural_engineer', 'banker', 'other'];
+const SIGNOFF_STATUSES = ['not_started', 'requested', 'signed', 'rejected', 'expired'];
+
+// The standard professional sign-offs an Indian RERA deal collects — used to
+// seed a deal's board on demand. Each: { professional_role, scope, form_ref }.
+const SIGNOFF_TEMPLATES = [
+  { professional_role: 'advocate', scope: 'Title, encumbrance & litigation opinion', form_ref: null },
+  { professional_role: 'ca', scope: 'Project cost + 70% escrow certificate', form_ref: 'Form-1' },
+  { professional_role: 'architect', scope: 'Sanctioned plan & progress certificate', form_ref: 'Form-2' },
+  { professional_role: 'engineer', scope: 'Cost & progress certificate', form_ref: 'Form-3' },
+  { professional_role: 'structural_engineer', scope: 'Structural safety certificate', form_ref: null },
+  { professional_role: 'banker', scope: 'RERA bank account confirmation / affidavit', form_ref: null },
+];
+
 module.exports = {
   PROPERTY_TYPES,
   ZONING_TYPES,
@@ -200,4 +215,7 @@ module.exports = {
   APPROVAL_TYPES,
   RISK_CATEGORIES,
   RISK_SEVERITIES,
+  SIGNOFF_ROLES,
+  SIGNOFF_STATUSES,
+  SIGNOFF_TEMPLATES,
 };
