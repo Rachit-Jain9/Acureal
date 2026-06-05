@@ -113,6 +113,35 @@ faster to set up from scratch. It is **not urgent** and nothing is broken.
 
 ---
 
+## 6. Get a domain + turn on email sending — unlocks sign-up emails and K-RERA deadline reminders
+
+**Why it matters:** A few useful features need REDIP to be able to *send* email — the
+sign-up verification + password-reset links, and (new) automatic **K-RERA deadline
+reminders** ("your quarterly update is due in 7 days"). Right now REDIP can't send any
+email because there's no verified sending domain. You mentioned you'll get a domain
+soon — this is the step that switches all of that on.
+
+**What to do (once you have a domain, e.g. `redip.in`):**
+
+1. 🌐 Go to **https://resend.com**, sign up (free to start), and log in.
+2. Click **Domains → Add Domain**, type your domain (e.g. `redip.in`), click Add.
+3. Resend shows a few **DNS records**. Go to wherever you bought the domain (GoDaddy,
+   Namecheap, Cloudflare, etc.), open its DNS settings, and add those exact records
+   (copy-paste each — don't retype).
+4. Back on Resend, wait until the domain shows a green **Verified**.
+5. Click **API Keys → Create API Key** and copy the key (it starts with `re_…`).
+6. 🌐 Open **https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables**
+   and add two settings:
+   - `RESEND_API_KEY` = the `re_…` key you copied.
+   - `MAIL_FROM` = `REDIP <noreply@redip.in>` (use your real domain).
+7. **Reply to me with:** `email sending on`. I'll then switch on the automatic
+   K-RERA compliance-deadline reminders — that part is already built and waiting.
+
+**Until then nothing is broken:** the K-RERA deadline calendar is fully visible on
+screen and in the Word download; this only adds the *automatic email nudges* on top.
+
+---
+
 ## How to use this file
 
 - The items are in **priority order** — work top to bottom.
