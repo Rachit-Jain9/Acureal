@@ -4,6 +4,22 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-05 (K-RERA V3 — Professional Sign-off Board, end-to-end) (PRs #776–#778, all merged + deployed)
+
+Built the operator's vision §G/§13 pillar: track who must sign off on a deal (advocate / CA / architect / engineer / structural engineer / banker × certificate-scope × lifecycle status), and feed signed certificates into the K-RERA cockpit as verified evidence. Shipped as three small, safe, tested PRs.
+
+- **#776 — data model + backend (V3.1).** New `deal_signoffs` table (`database/migrations/20260701_deal_signoffs.sql`) following the deal-sub-entity pattern (UUID PK, `organization_id DEFAULT current_organization_id()`, FORCE RLS + FOR ALL org-scope policy, `document_id`/`signed_by` FKs). `signoff.service.js` (CRUD + idempotent `seedForDeal` over 6 standard templates + migration-tolerant reads → `[]` before the table exists + `bumpDeal` for cache invalidation), `signoff.routes.js` (REST under `/deals/:dealId/signoffs`, authenticate + requireAdminOrAnalyst, role/status validation), registered in `server.js`. Domain constants `SIGNOFF_ROLES`/`SIGNOFF_STATUSES`/`SIGNOFF_TEMPLATES`; `SIGNOFF_STATUS_CHANGED` event. +37 backend tests.
+- **#777 — sign-off → cockpit linkage (V3.2).** A SIGNED sign-off of the relevant role now marks its matching certificate item **verified** in the K-RERA cockpit — ranked below a validated statutory approval but above an AI-extracted field or a raw document (it's a human professional attestation). New `findSignoffEvidence` + a `signoff` branch in `computeItemEvidence`; `buildReraContext` threads `signoffs`; `signoffRoles` added to 7 catalog items (advocate title opinion, CA Form-1 + CA appointment, architect Form-2, engineer Form-3, structural-safety, bank affidavit). Workspace + DOCX both fetch sign-offs (migration-tolerant) so screen ↔ paper agree. **Cache-correct:** every sign-off write bumps `deals.updated_at` (already fingerprinted) — `deal_signoffs` deliberately NOT added to `VERSIONED_DEAL_TABLES` (would disable the cache before the migration is applied). Additive; legal-lane guardrail preserved (a signed sign-off is a human-confirmed status, never an AI-asserted statutory conclusion). Engine + workspace suites green.
+- **#778 — Professional Sign-off Board UI (V3.3).** New `SignoffsSection` in the DD tab (a section, **not** a new tab), below Approvals. `signoffsAPI` + `useSignoffs` hook family mirror the Approvals pattern; `'signoffs'` added to the canonical `POSTURE_KEYS_FOR_DEAL` set so the board and the cockpit refresh in lock-step (pinned contract test updated). Seedable standard board, inline add form, per-row status select, signed/expiry dates, delete-with-confirm, empty/loading/error states; a SIGNED row shows a green verified check to make the cockpit linkage visible. `useCanEdit` gates every control; view-only renders status as a tone badge. +7 frontend tests. Frontend build green; deal + hooks suites green (49 files / 436 tests).
+
+### Pending operator step (one database update)
+Apply `database/migrations/20260701_deal_signoffs.sql` in the Supabase SQL editor. Until then the board reads as empty and the cockpit is unaffected (all reads are migration-tolerant) — nothing breaks; the board just has no data to show. Plain-English copy-paste step handed to the operator in chat.
+
+### Still deferred (operator's vision V5 / setup-blocked)
+Email-reminder cron (needs Resend sender domain — TODO_MANUAL.md / TODO_OPERATOR.md #6); actual-filing overlay (K-RERA portal scraper inert); multi-audience report packs; promoter credibility vault; survey-number ground-truth reconciliation (multi-parcel false-positive risk).
+
+---
+
 ## 2026-06-04 (cont. — K-RERA ground-truth checks + email-reminder blocker recorded) (PRs #773–#774, all merged + deployed)
 
 - **#773 (docs)** — recorded the K-RERA compliance-reminder email blocker. Operator confirmed they'll get a sending domain soon; the reminder cron is deferred until then (shares the existing `RESEND_API_KEY` blocker). Engineering detail in `TODO_MANUAL.md` (build `/api/cron/compliance-reminders/daily` via `cronAuth` + `mailer.js`); plain-English operator step **#6 in `TODO_OPERATOR.md`** (domain → Resend → Vercel env). The calendar view + DOCX work without email.
