@@ -50,10 +50,13 @@ const deriveIsJoint = (deal) => {
 };
 
 /**
- * buildReraContext(deal, { approvals, documents, extractedFields }) → context.
+ * buildReraContext(deal, { approvals, documents, extractedFields, signoffs }) → context.
  * Tolerates a missing/partial deal — every field degrades to null/empty.
+ * `signoffs` are the deal's professional sign-off rows; a SIGNED sign-off of a
+ * role mapped to a requirement (catalog `detect.signoffRoles`) marks that
+ * professional-certificate item verified in the cockpit.
  */
-const buildReraContext = (deal, { approvals = [], documents = [], extractedFields = {} } = {}) => {
+const buildReraContext = (deal, { approvals = [], documents = [], extractedFields = {}, signoffs = [] } = {}) => {
   const reraInputs = (deal && deal.rera_inputs && typeof deal.rera_inputs === 'object') ? deal.rera_inputs : {};
   const reraNumber = (deal && (deal.rera_number || deal.rera_registration_number)) || null;
   return {
@@ -72,6 +75,7 @@ const buildReraContext = (deal, { approvals = [], documents = [], extractedField
     approvals: Array.isArray(approvals) ? approvals : [],
     documents: Array.isArray(documents) ? documents : [],
     extractedFields: extractedFields && typeof extractedFields === 'object' ? extractedFields : {},
+    signoffs: Array.isArray(signoffs) ? signoffs : [],
   };
 };
 

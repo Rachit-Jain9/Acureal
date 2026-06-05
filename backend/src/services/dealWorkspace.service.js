@@ -40,6 +40,7 @@ const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
 const { buildReraContext } = require('./rera/complianceContext');
 const reraConsistency = require('./rera/consistency');
 const complianceCalendar = require('./rera/complianceCalendar');
+const signoffService = require('./signoff.service');
 const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
 const promoterProfileService = require('./promoterProfile.service');
@@ -490,10 +491,16 @@ async function getDealWorkspace(dealId, options = {}) {
     // views computed once above — no per-slice refetch / reflatten. The
     // context derives land area (sqm), joint-development flag, RERA number and
     // the operator's rera_inputs from the already-loaded deal — no extra DB.
+    // One cheap signoffs fetch (migration-tolerant → [] before the table
+    // exists): a SIGNED professional sign-off marks its matching certificate
+    // item verified in the cockpit. The cache invalidates correctly because
+    // every sign-off write bumps deals.updated_at (already fingerprinted).
+    const signoffs = await signoffService.listByDeal(dealId);
     const reraCtx = buildReraContext(deal, {
       approvals,
       documents: documentsFlat,
       extractedFields: {}, // future hook: structured extracted fields per document
+      signoffs,
     });
     const slice = karnatakaReraReadiness.composeReadiness(reraCtx);
     // Co-locate the deterministic cross-document consistency findings (reuses

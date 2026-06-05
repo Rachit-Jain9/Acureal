@@ -51,6 +51,18 @@ const STATUS_LABEL = Object.freeze({
   missing: 'Missing',
 });
 
+// Human labels for a signed professional sign-off used as evidence (see
+// findSignoffEvidence). Kept local to the engine; the board UI has its own copy.
+const SIGNOFF_ROLE_LABEL = Object.freeze({
+  advocate: 'Advocate',
+  ca: 'Chartered Accountant',
+  architect: 'Architect',
+  engineer: 'Engineer',
+  structural_engineer: 'Structural engineer',
+  banker: 'Banker',
+  other: 'Professional',
+});
+
 // Score below which a blocked project's score is capped, so a high document
 // count can never mask a fatal gap (operator: "95 should be impossible if a
 // commencement certificate is missing").
@@ -110,8 +122,26 @@ const findExtractedFieldEvidence = (item, extractedFields) => {
   return null;
 };
 
-const computeItemEvidence = (item, { approvals, documents, extractedFields }) => {
+// A SIGNED professional sign-off (advocate / CA / architect / engineer /
+// structural engineer / banker) is a human-confirmed status — the deal team's
+// professional has attested the matching certificate. It is therefore stronger
+// evidence than an AI-extracted field or a raw uploaded document, but weaker
+// than a validated statutory approval. Only `status === 'signed'` counts;
+// requested / rejected / expired sign-offs are not evidence. Migration-tolerant:
+// when the table is absent `signoffs` is [], so this simply returns null.
+const findSignoffEvidence = (item, signoffs) => {
+  if (!Array.isArray(signoffs)) return null;
+  const roles = (item.detect && item.detect.signoffRoles) || [];
+  if (roles.length === 0) return null;
+  for (const s of signoffs) {
+    if (s && s.status === 'signed' && roles.includes(s.professional_role)) return s;
+  }
+  return null;
+};
+
+const computeItemEvidence = (item, { approvals, documents, extractedFields, signoffs }) => {
   const approval = findApprovalEvidence(item, approvals);
+  const signoff = findSignoffEvidence(item, signoffs);
   const document = findDocumentEvidence(item, documents);
   const extracted = findExtractedFieldEvidence(item, extractedFields);
 
@@ -130,6 +160,19 @@ const computeItemEvidence = (item, { approvals, documents, extractedFields }) =>
       document_id: approval.document_id || null,
       issued_date: approval.issued_date || null,
       expiry_date: approval.expiry_date || null,
+    };
+  }
+
+  if (signoff) {
+    const roleLabel = SIGNOFF_ROLE_LABEL[signoff.professional_role] || signoff.professional_role;
+    return {
+      status: 'verified',
+      source: 'signoff',
+      evidence_ref: `signoff:${signoff.id}`,
+      evidence_label: `${roleLabel} sign-off${signoff.form_ref ? ` (${signoff.form_ref})` : ''}`,
+      document_id: signoff.document_id || null,
+      signed_date: signoff.signed_at || null,
+      professional_name: signoff.professional_name || null,
     };
   }
 
@@ -253,6 +296,7 @@ const composeReadiness = (ctx = {}) => {
     approvals = [],
     documents = [],
     extractedFields = {},
+    signoffs = [],
     dealName = null,
     feeOverrides = null,
     landAreaSqm = null,
@@ -281,7 +325,7 @@ const composeReadiness = (ctx = {}) => {
   }
 
   // Applicable (in_scope / uncertain) — compose + score the requirement set.
-  const detectCtx = { approvals, documents, extractedFields };
+  const detectCtx = { approvals, documents, extractedFields, signoffs };
   const composed = composeRequirements(ctx);
 
   const flatScored = [];
@@ -407,5 +451,6 @@ module.exports = {
   findApprovalEvidence,
   findDocumentEvidence,
   findExtractedFieldEvidence,
+  findSignoffEvidence,
   tierFromPct,
 };
