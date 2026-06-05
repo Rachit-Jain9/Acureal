@@ -253,6 +253,94 @@ describe('computeItemEvidence — evidence tiers', () => {
   });
 });
 
+// ─── findSignoffEvidence — V3.2 sign-off → cockpit linkage ─────────────────
+
+describe('findSignoffEvidence', () => {
+  const item = { detect: { signoffRoles: ['architect'] } };
+
+  test('SIGNED sign-off of a matching role → returns it', () => {
+    const signoffs = [{ id: 's1', professional_role: 'architect', status: 'signed' }];
+    expect(r.findSignoffEvidence(item, signoffs).id).toBe('s1');
+  });
+
+  test('only SIGNED counts — requested / rejected / expired do not', () => {
+    for (const status of ['requested', 'rejected', 'expired', 'not_started']) {
+      const signoffs = [{ id: 's1', professional_role: 'architect', status }];
+      expect(r.findSignoffEvidence(item, signoffs)).toBeNull();
+    }
+  });
+
+  test('signed but wrong role → null', () => {
+    const signoffs = [{ id: 's1', professional_role: 'banker', status: 'signed' }];
+    expect(r.findSignoffEvidence(item, signoffs)).toBeNull();
+  });
+
+  test('item without signoffRoles → null', () => {
+    expect(r.findSignoffEvidence({ detect: {} }, [{ professional_role: 'architect', status: 'signed' }])).toBeNull();
+    expect(r.findSignoffEvidence({}, [{ professional_role: 'architect', status: 'signed' }])).toBeNull();
+  });
+
+  test('non-array signoffs (incl. undefined — migration-tolerant) → null', () => {
+    expect(r.findSignoffEvidence(item, undefined)).toBeNull();
+    expect(r.findSignoffEvidence(item, null)).toBeNull();
+    expect(r.findSignoffEvidence(item, [])).toBeNull();
+  });
+
+  test('multi-role item matches any of its roles', () => {
+    const multi = { detect: { signoffRoles: ['engineer', 'structural_engineer'] } };
+    const signoffs = [{ id: 's9', professional_role: 'structural_engineer', status: 'signed' }];
+    expect(r.findSignoffEvidence(multi, signoffs).id).toBe('s9');
+  });
+});
+
+// ─── computeItemEvidence — sign-off as a verified evidence source ───────────
+
+describe('computeItemEvidence — sign-off evidence', () => {
+  const item = { detect: { docNamePatterns: [/architect/i], signoffRoles: ['architect'] } };
+
+  test('signed sign-off → verified, source signoff, labelled with role + form', () => {
+    const signoffs = [{
+      id: 's1', professional_role: 'architect', status: 'signed',
+      form_ref: 'Form-2', signed_at: '2026-06-01', document_id: 'doc7',
+      professional_name: 'Rao & Associates',
+    }];
+    const ev = r.computeItemEvidence(item, { approvals: [], documents: [], extractedFields: {}, signoffs });
+    expect(ev.status).toBe('verified');
+    expect(ev.source).toBe('signoff');
+    expect(ev.evidence_label).toBe('Architect sign-off (Form-2)');
+    expect(ev.evidence_ref).toBe('signoff:s1');
+    expect(ev.document_id).toBe('doc7');
+    expect(ev.signed_date).toBe('2026-06-01');
+  });
+
+  test('validated approval still beats a signed sign-off', () => {
+    const approvalItem = { detect: { approvalTypes: ['architect_cert'], signoffRoles: ['architect'] } };
+    const ev = r.computeItemEvidence(approvalItem, {
+      approvals: [{ id: 1, approval_type: 'architect_cert', name: 'Architect cert', is_validated: true }],
+      documents: [], extractedFields: {},
+      signoffs: [{ id: 's1', professional_role: 'architect', status: 'signed' }],
+    });
+    expect(ev.source).toBe('approval');
+  });
+
+  test('signed sign-off beats a raw document + extracted field', () => {
+    const ev = r.computeItemEvidence(item, {
+      approvals: [],
+      documents: [{ id: 'd1', name: 'Architect appointment.pdf' }],
+      extractedFields: {},
+      signoffs: [{ id: 's1', professional_role: 'architect', status: 'signed' }],
+    });
+    expect(ev.source).toBe('signoff');
+  });
+
+  test('backward compatible — ctx with no signoffs key falls through to document', () => {
+    const ev = r.computeItemEvidence(item, {
+      approvals: [], documents: [{ id: 'd1', name: 'Architect appointment.pdf' }], extractedFields: {},
+    });
+    expect(ev.source).toBe('document');
+  });
+});
+
 // ─── Bucket summarisation ──────────────────────────────────────────────────
 
 describe('computeBucketSummary', () => {
@@ -382,6 +470,29 @@ describe('composeReadiness — end-to-end with Jigani-like inputs', () => {
       documents: [],
     });
     expect(out.overall.readiness_tier).toBe('early');
+  });
+
+  test('signed professional sign-offs verify the matching catalog items (real wiring)', () => {
+    const out = r.composeReadiness({
+      assetClass: 'residential_apartments',
+      approvals: APPROVALS,
+      documents: DOCUMENTS,
+      signoffs: [
+        { id: 'so1', professional_role: 'architect', status: 'signed', form_ref: 'Form-2' },
+        { id: 'so2', professional_role: 'ca', status: 'signed', form_ref: 'Form-1' },
+        { id: 'so3', professional_role: 'advocate', status: 'requested' }, // not signed → ignored
+      ],
+    });
+    const certs = out.buckets.find((b) => b.id === 'professional_certificates').items;
+    const architect = certs.find((it) => it.id === 'architect_appointment');
+    expect(architect.evidence.status).toBe('verified');
+    expect(architect.evidence.source).toBe('signoff');
+
+    // The advocate sign-off is only 'requested' → the title report stays unverified-by-signoff.
+    const titleReport = out.buckets
+      .find((b) => b.id === 'title_ownership')
+      .items.find((it) => it.id === 'legal_title_report');
+    expect(titleReport.evidence.source).not.toBe('signoff');
   });
 
   test('overall readiness_tier scales with completeness', () => {

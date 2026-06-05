@@ -24,6 +24,7 @@ const { composeReadiness } = require('../services/karnatakaReraReadiness.service
 const { buildReraContext } = require('../services/rera/complianceContext');
 const { composeReraConsistency } = require('../services/rera/consistency');
 const { composeComplianceCalendar } = require('../services/rera/complianceCalendar');
+const signoffService = require('../services/signoff.service');
 const { buildIcReadinessDocx } = require('../services/exports/docx/buildIcReadiness');
 const { getDealWorkspace } = require('../services/dealWorkspace.service');
 const approvalsService = require('../services/approvals.service');
@@ -1231,7 +1232,13 @@ router.get(
         }
       } catch { /* document fetch failure → empty list, pack still works */ }
 
-      const reraCtx = buildReraContext(dealRow, { approvals, documents: documentsFlat });
+      // Professional sign-offs — a SIGNED sign-off marks its matching
+      // certificate item verified, so the handover pack reflects the same
+      // evidence the in-app cockpit shows. Migration-tolerant → [] pre-table.
+      let signoffs = [];
+      try { signoffs = await signoffService.listByDeal(dealId); } catch { /* migration-tolerant */ }
+
+      const reraCtx = buildReraContext(dealRow, { approvals, documents: documentsFlat, signoffs });
       const readiness = composeReadiness(reraCtx);
       // Co-locate the cross-document consistency findings + the post-registration
       // compliance calendar so the handover pack matches the in-app cockpit.
