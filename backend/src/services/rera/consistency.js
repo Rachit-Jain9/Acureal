@@ -17,6 +17,8 @@
  */
 
 const inconsistencyDetector = require('../inconsistencyDetector.service');
+const extractionService = require('../extraction.service');
+const { compareGroundTruth } = require('./groundTruthChecks');
 const log = require('../../lib/logger').child({ module: 'reraConsistency' });
 
 const SEVERITY_RANK = Object.freeze({ critical: 0, high: 1, medium: 2, low: 3 });
@@ -46,18 +48,36 @@ const shapeConsistency = (findings) => {
 };
 
 /**
- * Fetch + shape the deal's cross-document consistency findings for the cockpit.
- * Reuses `inconsistencyDetector.detect` (pure, no DB writes — one read of the
- * deal's extractions). Degrades to an honest "unavailable" state on any error
- * (e.g. extractions table absent), never throwing into the workspace build.
+ * Fetch + shape the deal's consistency findings for the cockpit:
+ *   • cross-document findings — reuses the existing deterministic
+ *     `inconsistencyDetector.runAllComparators` (no DB writes, no re-implementation);
+ *   • ground-truth findings — the deal's RECORDED khata / owner vs the values
+ *     extracted from documents (`compareGroundTruth`), when `deal` is supplied.
+ *
+ * One read of the deal's extractions feeds both. Degrades to an honest
+ * "unavailable" state on any error (e.g. extractions table absent), never
+ * throwing into the workspace build.
  */
-const composeReraConsistency = async (dealId) => {
+const composeReraConsistency = async (dealId, deal = null) => {
   try {
-    const { findings, extractions_count } = await inconsistencyDetector.detect(dealId);
+    const { extractions, field_map } = await extractionService.getDealExtractions(dealId);
+    const detectorFindings = inconsistencyDetector.runAllComparators(extractions);
+    const groundTruthFindings = deal ? compareGroundTruth(deal, field_map) : [];
+
+    // Merge + dedupe by pair_key (both sources are deterministic).
+    const seen = new Set();
+    const merged = [...detectorFindings, ...groundTruthFindings].filter((f) => {
+      const k = f && f.pair_key ? f.pair_key : null;
+      if (!k) return true;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
     return {
-      ...shapeConsistency(findings),
+      ...shapeConsistency(merged),
       available: true,
-      extractions_count: extractions_count || 0,
+      extractions_count: (extractions && extractions.length) || 0,
     };
   } catch (err) {
     log.warn('rera_consistency_failed', { dealId, error: err.message });

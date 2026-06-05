@@ -1235,7 +1235,7 @@ router.get(
       const readiness = composeReadiness(reraCtx);
       // Co-locate the cross-document consistency findings + the post-registration
       // compliance calendar so the handover pack matches the in-app cockpit.
-      readiness.consistency = await composeReraConsistency(dealId);
+      readiness.consistency = await composeReraConsistency(dealId, dealRow);
       readiness.compliance_calendar = composeComplianceCalendar(reraCtx, {
         applicabilityStatus: readiness.applicability && readiness.applicability.status,
       });
