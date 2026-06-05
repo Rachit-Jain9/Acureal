@@ -7,7 +7,7 @@
 // any export plumbing.
 
 import { useState, useRef, useEffect } from 'react';
-import { Download, ChevronDown, FileDown, Presentation, BookText, Loader2 } from 'lucide-react';
+import { Download, ChevronDown, FileDown, Presentation, BookText, Loader2, Landmark, LineChart, Home } from 'lucide-react';
 import clsx from 'clsx';
 import { Button } from '../../design-system';
 import { exportsAPI } from '../../services/api';
@@ -18,6 +18,14 @@ const FORMATS = [
   { key: 'pdf',  label: 'Investor tear-sheet', hint: '2-page landscape PDF',         icon: FileDown },
   { key: 'pptx', label: 'Investor deck',       hint: 'Full PPTX presentation',        icon: Presentation },
   { key: 'docx', label: 'Underwriting report', hint: '22-section institutional DOCX', icon: BookText },
+];
+
+// Audience-tailored report packs — the same deterministic deal data, reframed
+// for a specific reader. Each is a focused DOCX from the report-pack engine.
+const PACKS = [
+  { key: 'lender',   label: 'Lender pack',   hint: 'Credit lens — leverage & covenants', icon: Landmark },
+  { key: 'investor', label: 'Investor pack', hint: 'Returns lens — IRR & scenarios',      icon: LineChart },
+  { key: 'buyer',    label: 'Buyer pack',    hint: 'Buyer lens — RERA, title & approvals', icon: Home },
 ];
 
 export default function ExportMenu({ dealId, dealName }) {
@@ -67,6 +75,24 @@ export default function ExportMenu({ dealId, dealName }) {
         ok: 'Underwriting report downloaded',
         err: 'Underwriting report download failed',
       },
+      lender: {
+        call: () => exportsAPI.dealPack(dealId, 'lender'),
+        filename: `redip-${safeName}-lender-pack-${today}.docx`,
+        ok: 'Lender pack downloaded',
+        err: 'Lender pack export failed',
+      },
+      investor: {
+        call: () => exportsAPI.dealPack(dealId, 'investor'),
+        filename: `redip-${safeName}-investor-pack-${today}.docx`,
+        ok: 'Investor pack downloaded',
+        err: 'Investor pack export failed',
+      },
+      buyer: {
+        call: () => exportsAPI.dealPack(dealId, 'buyer'),
+        filename: `redip-${safeName}-buyer-pack-${today}.docx`,
+        ok: 'Buyer pack downloaded',
+        err: 'Buyer pack export failed',
+      },
     }[key];
 
     setBusy(key);
@@ -83,6 +109,30 @@ export default function ExportMenu({ dealId, dealName }) {
     } finally {
       setBusy(null);
     }
+  };
+
+  const renderItem = (item) => {
+    const Icon = item.icon;
+    const isBusy = busy === item.key;
+    return (
+      <button
+        key={item.key}
+        type="button"
+        disabled={busy != null}
+        onClick={() => runExport(item.key)}
+        className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors duration-150 ease-out
+          hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed
+          focus-visible:outline-none focus-visible:bg-bg-secondary"
+      >
+        <span className="shrink-0 text-content-muted" aria-hidden="true">
+          {isBusy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm text-content-primary">{item.label}</span>
+          <span className="block text-xs text-content-muted">{item.hint}</span>
+        </span>
+      </button>
+    );
   };
 
   return (
@@ -105,29 +155,13 @@ export default function ExportMenu({ dealId, dealName }) {
       </Button>
       {open && (
         <div className="absolute right-0 mt-1.5 w-72 z-20 rounded-editorial border border-hairline bg-bg-elevated shadow-editorial-lg overflow-hidden py-1">
-          {FORMATS.map((format) => {
-            const Icon = format.icon;
-            const isBusy = busy === format.key;
-            return (
-              <button
-                key={format.key}
-                type="button"
-                disabled={busy != null}
-                onClick={() => runExport(format.key)}
-                className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors duration-150 ease-out
-                  hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed
-                  focus-visible:outline-none focus-visible:bg-bg-secondary"
-              >
-                <span className="shrink-0 text-content-muted" aria-hidden="true">
-                  {isBusy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm text-content-primary">{format.label}</span>
-                  <span className="block text-xs text-content-muted">{format.hint}</span>
-                </span>
-              </button>
-            );
-          })}
+          {FORMATS.map(renderItem)}
+          <div className="mt-1 pt-1 border-t border-hairline">
+            <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-content-muted">
+              Audience packs
+            </div>
+            {PACKS.map(renderItem)}
+          </div>
         </div>
       )}
     </div>
