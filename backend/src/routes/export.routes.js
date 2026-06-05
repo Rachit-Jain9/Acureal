@@ -23,6 +23,7 @@ const { buildReraReadinessDocx } = require('../services/exports/docx/buildReraRe
 const { composeReadiness } = require('../services/karnatakaReraReadiness.service');
 const { buildReraContext } = require('../services/rera/complianceContext');
 const { composeReraConsistency } = require('../services/rera/consistency');
+const { composeComplianceCalendar } = require('../services/rera/complianceCalendar');
 const { buildIcReadinessDocx } = require('../services/exports/docx/buildIcReadiness');
 const { getDealWorkspace } = require('../services/dealWorkspace.service');
 const approvalsService = require('../services/approvals.service');
@@ -1230,12 +1231,14 @@ router.get(
         }
       } catch { /* document fetch failure → empty list, pack still works */ }
 
-      const readiness = composeReadiness(
-        buildReraContext(dealRow, { approvals, documents: documentsFlat }),
-      );
-      // Co-locate the deterministic cross-document consistency findings so the
-      // handover pack shows the same mismatches as the in-app cockpit.
+      const reraCtx = buildReraContext(dealRow, { approvals, documents: documentsFlat });
+      const readiness = composeReadiness(reraCtx);
+      // Co-locate the cross-document consistency findings + the post-registration
+      // compliance calendar so the handover pack matches the in-app cockpit.
       readiness.consistency = await composeReraConsistency(dealId);
+      readiness.compliance_calendar = composeComplianceCalendar(reraCtx, {
+        applicabilityStatus: readiness.applicability && readiness.applicability.status,
+      });
 
       const docxBuffer = await buildReraReadinessDocx(readiness, {
         brandName: 'REDIP',
