@@ -3,9 +3,11 @@
  *
  * REDIP renders a deal's risk posture in many places — the per-deal Risk
  * Radar, the Risk Score, the DD checklist, the Approvals tracker, the
- * unified Deal Workspace payload, the dashboard's KPI strip, and the
- * new Portfolio Risk Radar tile. All of them are derived from the same
- * three source tables: risk_flags, dd_items, approval_items.
+ * professional sign-off board, the unified Deal Workspace payload (whose
+ * K-RERA cockpit reads signed sign-offs as verified evidence), the
+ * dashboard's KPI strip, and the Portfolio Risk Radar tile. All of them are
+ * derived from the same source tables: risk_flags, dd_items, approval_items,
+ * deal_signoffs.
  *
  * Before this helper, each mutation hook listed the canonical set of
  * `queryClient.invalidateQueries(...)` calls inline. The natural drift was:
@@ -37,6 +39,7 @@ const POSTURE_KEYS_FOR_DEAL = [
   'dd-items',
   'dd-score',
   'approvals',
+  'signoffs',
   'deal-workspace',
 ];
 

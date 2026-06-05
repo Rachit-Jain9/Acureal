@@ -651,6 +651,17 @@ export const approvalsAPI = {
   seed:   (dealId)           => api.post(`/deals/${dealId}/approvals/seed`),
 };
 
+// Professional Sign-offs — the advocate / CA / architect / engineer /
+// structural engineer / banker certificate board. A SIGNED sign-off marks its
+// matching K-RERA cockpit item verified (server-side, deterministic).
+export const signoffsAPI = {
+  list:   (dealId)           => api.get(`/deals/${dealId}/signoffs`),
+  create: (dealId, data)     => api.post(`/deals/${dealId}/signoffs`, data),
+  update: (dealId, id, data) => api.put(`/deals/${dealId}/signoffs/${id}`, data),
+  delete: (dealId, id)       => api.delete(`/deals/${dealId}/signoffs/${id}`),
+  seed:   (dealId)           => api.post(`/deals/${dealId}/signoffs/seed`),
+};
+
 // Risk Flags
 export const riskAPI = {
   list:   (dealId)           => api.get(`/deals/${dealId}/risk`),
