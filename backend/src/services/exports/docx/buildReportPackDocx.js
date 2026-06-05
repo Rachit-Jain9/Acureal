@@ -24,6 +24,12 @@
  */
 
 const K = require('./packKit');
+const {
+  renderCapitalStackDonutSvg,
+  renderCashFlowTrendSvg,
+  renderTornadoSvg,
+  FALLBACK_PNG_BUFFER,
+} = require('../shared/chartSvg.service');
 
 const {
   Paragraph, TextRun, Table, TableRow, AlignmentType, WidthType, ShadingType,
@@ -31,6 +37,31 @@ const {
   fullWidthTable, tableBorders, STATUS_DISPLAY, SEVERITY_DISPLAY,
   coverPage, buildDocShell, toBuffer,
 } = K;
+
+const { ImageRun } = K.docx;
+
+// Chart kind → (data) → svg string. The composer emits pure chart SPECs
+// (kind + data); the SVG is produced here, in the presentation layer. Each
+// generator is the shared, kernel-driven renderer already used by the main
+// underwriting report — same numbers, same look-and-feel.
+//
+// Per-kind default dimensions (aspect ratios match what the SVG service
+// produces internally so the document never looks cramped). The block spec
+// may override via `width` / `height`.
+const CHART_RENDERERS = Object.freeze({
+  capital_stack_donut: {
+    fn: (d) => renderCapitalStackDonutSvg({ debtCr: d.debtCr, equityCr: d.equityCr }),
+    width: 440, height: 250,
+  },
+  cashflow_trend: {
+    fn: (d) => renderCashFlowTrendSvg({ rows: d.rows, title: d.title }),
+    width: 620, height: 280,
+  },
+  sensitivity_tornado: {
+    fn: (d) => renderTornadoSvg({ drivers: d.drivers, baseIrr: d.baseIrr, title: d.title }),
+    width: 620, height: 260,
+  },
+});
 
 const toneColor = (tone) => {
   switch (tone) {
@@ -180,6 +211,38 @@ const renderCallouts = (b) => {
   return [fullWidthTable(rows)];
 };
 
+// Chart block — embed a kernel-driven SVG via ImageRun (with the shared 1×1
+// PNG fallback for viewers without SVG support). Returns [] when the chart
+// kind is unknown or the generator yields nothing — never throws into the doc.
+// Per-kind default dimensions live in CHART_RENDERERS; the block may override.
+const renderChart = (b) => {
+  const descriptor = CHART_RENDERERS[b && b.chart];
+  if (!descriptor) return [];
+  let svg;
+  try { svg = descriptor.fn(b.data || {}); } catch { return []; }
+  if (!svg) return [];
+  const width = b.width || descriptor.width;
+  const height = b.height || descriptor.height;
+  const out = [new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 120, after: b.caption ? 20 : 120 },
+    children: [new ImageRun({
+      type: 'svg',
+      data: Buffer.from(svg, 'utf8'),
+      fallback: { type: 'png', data: FALLBACK_PNG_BUFFER },
+      transformation: { width, height },
+    })],
+  })];
+  if (b.caption) {
+    out.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: 120 },
+      children: [text(b.caption, { size: 16, color: C.mutedLow, italics: true })],
+    }));
+  }
+  return out;
+};
+
 const RENDERERS = {
   paragraph: renderParagraph,
   note: renderNote,
@@ -190,6 +253,7 @@ const RENDERERS = {
   statusList: renderStatusList,
   flagList: renderFlagList,
   callouts: renderCallouts,
+  chart: renderChart,
 };
 
 const renderBlock = (block) => {
@@ -260,4 +324,4 @@ const buildReportPackDocx = async (packModel, { brandName = 'REDIP', userName = 
   return toBuffer(doc);
 };
 
-module.exports = { buildReportPackDocx, renderBlock, toneColor };
+module.exports = { buildReportPackDocx, renderBlock, toneColor, CHART_RENDERERS };

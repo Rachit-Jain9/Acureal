@@ -43,6 +43,98 @@ const scenarioKpis = (ws, key) => {
   return (sc && sc[key] && sc[key].kpis) || null;
 };
 
+// ─── Chart spec builders (pure — no SVG here; the renderer generates it) ────
+// Each returns a chart block or null when there isn't enough data to draw
+// honestly. The renderer's CHART_RENDERERS dispatches by `chart` kind.
+
+// Debt vs equity from the base capital-stack scenario; equity falls back to
+// total cost − debt when amounts_cr.equity isn't on the scenario row.
+const capitalStackDonutBlock = (ws) => {
+  const base = baseCapitalScenario(ws);
+  if (!base) return null;
+  const debtCr = K.num(base.debt_cr);
+  let equityCr = base.amounts_cr ? K.num(base.amounts_cr.equity) : null;
+  if (equityCr == null) {
+    const total = K.num(base.total_cost_cr);
+    if (total != null && debtCr != null) equityCr = Math.max(0, total - debtCr);
+  }
+  if ((debtCr == null || debtCr <= 0) && (equityCr == null || equityCr <= 0)) return null;
+  return { type: 'chart', chart: 'capital_stack_donut', data: { debtCr, equityCr }, caption: 'Debt vs equity in the base capital stack (INR Cr).' };
+};
+
+// Quarterly cashflow trend — period net columns + cumulative line. The kernel
+// emits cash_flows.quarterly[].net but NOT cumulative; we add it as a running
+// sum (same approach as dealExport.normalizeCashFlowRows). Falls back to
+// yearly when quarterly is absent. Returns null when < 2 periods (renderer
+// would draw an empty-state SVG; better to omit the block entirely).
+const cashflowTrendBlock = (ws) => {
+  const s = finSummary(ws);
+  const cf = s && s.cash_flows;
+  let raw = (cf && Array.isArray(cf.quarterly) && cf.quarterly.length >= 2) ? cf.quarterly
+    : (cf && Array.isArray(cf.yearly) && cf.yearly.length >= 2) ? cf.yearly
+    : null;
+  if (!raw) return null;
+  let cumulative = 0;
+  const rows = raw.map((r, i) => {
+    const net = K.num(r && (r.net != null ? r.net : r)) || 0;
+    cumulative += net;
+    return {
+      label: r && r.label ? String(r.label) : `P${i + 1}`,
+      net,
+      cumulative: K.num(r && r.cumulative) != null ? K.num(r.cumulative) : cumulative,
+    };
+  });
+  if (rows.length < 2) return null;
+  return {
+    type: 'chart', chart: 'cashflow_trend',
+    data: { rows, title: 'Period Net Cash Flow & Cumulative (INR Cr)' },
+    caption: 'Period net cash flow (columns) and the cumulative position (line). Kernel-driven; no model-generated figures.',
+  };
+};
+
+// Sensitivity tornado — drivers extracted from the kernel's IRR grid by
+// taking the centre row/column for the base IRR and the edges for the
+// selling-rate / construction-cost ranges. Mirrors the canonical adapter in
+// buildReport.js so the chart numbers match the underwriting report's. Asset-
+// class neutral labels (the grid axes themselves are class-specific; the
+// driver labels we render stay generic).
+const sensitivityTornadoBlock = (ws) => {
+  const s = finSummary(ws);
+  const m = s && s.sensitivity_matrix;
+  if (!m || !Array.isArray(m.irrGrid) || m.irrGrid.length < 3) return null;
+  if (!Array.isArray(m.sellingRates) || m.sellingRates.length < 3) return null;
+  if (!Array.isArray(m.constructionCosts) || m.constructionCosts.length < 3) return null;
+  const midRow = Math.floor(m.constructionCosts.length / 2);
+  const midCol = Math.floor(m.sellingRates.length / 2);
+  const baseIrr = K.num(m.irrGrid[midRow] && m.irrGrid[midRow][midCol]);
+  const sellRow = m.irrGrid[midRow] || [];
+  const sellLow = K.num(sellRow[0]);
+  const sellHigh = K.num(sellRow[sellRow.length - 1]);
+  const costLow = K.num(m.irrGrid[m.irrGrid.length - 1] && m.irrGrid[m.irrGrid.length - 1][midCol]);
+  const costHigh = K.num(m.irrGrid[0] && m.irrGrid[0][midCol]);
+  const drivers = [];
+  if (baseIrr != null && sellLow != null && sellHigh != null) {
+    drivers.push({
+      label: 'Selling Rate',
+      subLabel: `${K.formatNumber(m.sellingRates[0])} → ${K.formatNumber(m.sellingRates[m.sellingRates.length - 1])} /sqft`,
+      low: sellLow, high: sellHigh,
+    });
+  }
+  if (baseIrr != null && costLow != null && costHigh != null) {
+    drivers.push({
+      label: 'Construction Cost',
+      subLabel: `${K.formatNumber(m.constructionCosts[m.constructionCosts.length - 1])} → ${K.formatNumber(m.constructionCosts[0])} /sqft`,
+      low: costLow, high: costHigh,
+    });
+  }
+  if (drivers.length === 0 || baseIrr == null) return null;
+  return {
+    type: 'chart', chart: 'sensitivity_tornado',
+    data: { drivers, baseIrr, title: 'Sensitivity — IRR Range by Driver' },
+    caption: 'Which inputs move IRR the most. Driver ranges read straight off the kernel\'s sensitivity grid.',
+  };
+};
+
 const reraSlice = (ws) => (ws && ws.karnataka_rera_readiness) || null;
 
 const approvalStatus = (a) => {
@@ -119,6 +211,8 @@ const sectionCovenantPosture = (ws) => {
   if (base.debt_cr != null) ctx.push({ label: 'Total debt (base)', value: K.formatCr(base.debt_cr) });
   if (ctx.length) blocks.push({ type: 'kpiGrid', items: ctx });
   blocks.push({ type: 'note', text: 'Covenants reflect the base capital-stack scenario against conventional asset-class thresholds; each institution sets its own floors.' });
+  const donut = capitalStackDonutBlock(ws);
+  if (donut) blocks.unshift(donut);
   return blocks;
 };
 
@@ -245,7 +339,12 @@ const sectionReturnsSummary = (ws) => {
     { label: 'Project cost', value: K.formatCr(s && s.total_cost_cr) },
     { label: 'Duration', value: s && s.project_duration_months != null ? `${K.formatNumber(s.project_duration_months)} months` : EMDASH },
   ];
-  return [{ type: 'kpiGrid', items }];
+  const blocks = [{ type: 'kpiGrid', items }];
+  // Cinematic SVG: the cashflow trend behind those headline numbers. Pure
+  // kernel output; null when the kernel hasn't produced period rows yet.
+  const cashflow = cashflowTrendBlock(ws);
+  if (cashflow) blocks.push(cashflow);
+  return blocks;
 };
 
 const sectionScenarios = (ws) => {
@@ -260,10 +359,15 @@ const sectionScenarios = (ws) => {
     ['Gross margin', c(bear, 'grossMarginPct', K.formatPct, 'warning'), c(base, 'grossMarginPct', K.formatPct), c(bull, 'grossMarginPct', K.formatPct, 'positive')],
     ['NPV', c(bear, 'npv', K.formatCr, 'warning'), c(base, 'npv', K.formatCr), c(bull, 'npv', K.formatCr, 'positive')],
   ];
-  return [
+  const blocks = [
     { type: 'table', columns: [{ header: 'Metric', width: 28 }, { header: 'Bear', width: 24 }, { header: 'Base', width: 24 }, { header: 'Bull', width: 24 }], rows },
     { type: 'note', text: 'Bull / bear apply the kernel\'s standard sensitivities to revenue, cost and timeline. Modelled estimates, not guarantees.' },
   ];
+  // Cinematic SVG: which inputs move IRR the most — from the kernel's own
+  // sensitivity grid. Null when the grid isn't dense enough for an honest read.
+  const tornado = sensitivityTornadoBlock(ws);
+  if (tornado) blocks.push(tornado);
+  return blocks;
 };
 
 const sectionCapitalStack = (ws) => {
@@ -276,10 +380,14 @@ const sectionCapitalStack = (ws) => {
     s.blended_cost_of_capital_pct != null ? K.formatPct(s.blended_cost_of_capital_pct) : EMDASH,
     { text: s.verdict || (s.band ? `${s.band} fit` : EMDASH), tone: s.band === 'high' ? 'positive' : s.band === 'low' ? 'warning' : null },
   ]);
-  return [
+  const blocks = [
     { type: 'table', columns: [{ header: 'Scenario', width: 22 }, { header: 'Equity', width: 16 }, { header: 'Debt', width: 22 }, { header: 'Blended cost', width: 20 }, { header: 'Fit', width: 20 }], rows },
     { type: 'note', text: 'Deterministic financing scenarios scored against asset-class covenant norms. The base case anchors the returns above.' },
   ];
+  // Cinematic SVG: debt vs equity in the base capital stack.
+  const donut = capitalStackDonutBlock(ws);
+  if (donut) blocks.unshift(donut);
+  return blocks;
 };
 
 const humanizeMetric = (k) => String(k || '')
@@ -508,4 +616,8 @@ module.exports = {
   baseCapitalScenario,
   scenarioKpis,
   approvalStatus,
+  // chart spec builders (pure) — exported so tests can pin their behaviour
+  capitalStackDonutBlock,
+  cashflowTrendBlock,
+  sensitivityTornadoBlock,
 };
