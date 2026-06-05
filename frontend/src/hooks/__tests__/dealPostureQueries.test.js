@@ -82,6 +82,7 @@ describe('canonical key set', () => {
       'dd-items',
       'dd-score',
       'approvals',
+      'signoffs',
       'deal-workspace',
     ]);
   });

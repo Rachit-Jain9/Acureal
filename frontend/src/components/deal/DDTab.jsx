@@ -9,6 +9,10 @@ import KarnatakaReraReadinessPanel from './KarnatakaReraReadinessPanel';
 // composes signals from every workspace surface (financial, DD, risk,
 // market, promoter, documents) into a single IC-handoff inventory.
 import IcReadinessPanel from './IcReadinessPanel';
+// V3 — Professional Sign-off Board section (advocate / CA / architect /
+// engineer / structural engineer / banker). A signed sign-off marks its
+// matching K-RERA cockpit item verified.
+import SignoffsSection from './SignoffsSection';
 // PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
 // workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
@@ -824,6 +828,13 @@ export default function DDTab() {
       </div>
       <div className="border-t border-hairline-strong pt-8">
         <ApprovalsSection dealId={dealId} canEdit={canEdit} />
+      </div>
+      {/* V3 — Professional Sign-off Board. Tracks the advocate / CA / architect
+          / engineer / structural engineer / banker certificates. A SIGNED
+          sign-off marks its matching K-RERA cockpit item verified (server-side,
+          deterministic). */}
+      <div className="border-t border-hairline-strong pt-8">
+        <SignoffsSection dealId={dealId} canEdit={canEdit} />
       </div>
     </div>
   );
