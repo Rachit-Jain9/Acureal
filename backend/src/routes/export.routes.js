@@ -27,6 +27,9 @@ const { composeComplianceCalendar } = require('../services/rera/complianceCalend
 const signoffService = require('../services/signoff.service');
 const { buildIcReadinessDocx } = require('../services/exports/docx/buildIcReadiness');
 const { getDealWorkspace } = require('../services/dealWorkspace.service');
+const { composePack } = require('../services/exports/reportPack/composePack');
+const { buildReportPackDocx } = require('../services/exports/docx/buildReportPackDocx');
+const { isAudience } = require('../constants/reportPackCatalog');
 const approvalsService = require('../services/approvals.service');
 const documentService = require('../services/document.service');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
@@ -1302,6 +1305,53 @@ router.get(
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="redip-${safeName}-ic-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
+      );
+      return res.send(docxBuffer);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── Audience-tailored report packs (lender / investor / buyer) ─────────────
+// GET /exports/deals/:dealId/pack/:audience/docx — one parameterized route
+// serves every audience. The audience differences live in the declarative
+// catalog + the pure composer; this route just loads the workspace once,
+// composes the normalized pack model, and renders it. Same auth + response
+// posture as the other DOCX exports.
+//
+// Honesty (CLAUDE.md): the composer keeps the legal-four lanes as documentary
+// status / flags only and labels every market figure with source + freshness;
+// the renderer carries the single quiet cover disclaimer. No env gate — these
+// are deal-team workflow aids.
+router.get(
+  '/deals/:dealId/pack/:audience/docx',
+  authenticate,
+  requireRole('admin', 'analyst'),
+  async (req, res, next) => {
+    try {
+      const { dealId, audience } = req.params;
+      if (!isAudience(audience)) {
+        return res.status(400).json({ success: false, message: 'Unknown report-pack audience.' });
+      }
+      const workspace = await getDealWorkspace(dealId).catch(() => null);
+      if (!workspace) {
+        return res.status(404).json({ success: false, message: 'Deal not found.' });
+      }
+
+      const packModel = composePack(workspace, audience);
+      const docxBuffer = await buildReportPackDocx(packModel, {
+        brandName: 'REDIP',
+        userName: req.user?.name || null,
+        generatedAt: new Date().toISOString(),
+      });
+
+      const safeName = ((workspace.deal && workspace.deal.name) || 'deal')
+        .replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="redip-${safeName}-${audience}-pack-${new Date().toISOString().slice(0, 10)}.docx"`,
       );
       return res.send(docxBuffer);
     } catch (error) {
