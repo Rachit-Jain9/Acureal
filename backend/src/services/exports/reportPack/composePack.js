@@ -231,7 +231,211 @@ const sectionRepaymentExit = (ws) => {
 
 const sectionClosing = (ws, audience) => [{ type: 'paragraph', text: audience.disclaimer, tone: 'muted' }];
 
+// ── Investor sections ───────────────────────────────────────────────────────
+
+const sectionReturnsSummary = (ws) => {
+  const s = finSummary(ws);
+  const base = scenarioKpis(ws, 'base');
+  if (!s && !base) return [{ type: 'note', text: 'Returns appear once the financial model has run.' }];
+  const items = [
+    { label: 'Project IRR', value: K.formatPct((s && s.irr_pct) ?? (base && base.irr)) },
+    { label: 'Equity multiple', value: K.formatX((s && s.equity_multiple) ?? (base && base.equityMultiple)) },
+    { label: 'NPV', value: K.formatCr((s && s.npv_cr) ?? (base && base.npv)) },
+    { label: 'Gross margin', value: K.formatPct((s && s.gross_margin_pct) ?? (base && base.grossMarginPct)) },
+    { label: 'Project cost', value: K.formatCr(s && s.total_cost_cr) },
+    { label: 'Duration', value: s && s.project_duration_months != null ? `${K.formatNumber(s.project_duration_months)} months` : EMDASH },
+  ];
+  return [{ type: 'kpiGrid', items }];
+};
+
+const sectionScenarios = (ws) => {
+  const base = scenarioKpis(ws, 'base');
+  const bull = scenarioKpis(ws, 'bull');
+  const bear = scenarioKpis(ws, 'bear');
+  if (!base && !bull && !bear) return [{ type: 'note', text: 'Scenario analysis appears once the financial model has run.' }];
+  const c = (k, key, fmt, tone) => (k && k[key] != null ? { text: fmt(k[key]), tone } : { text: EMDASH });
+  const rows = [
+    ['IRR', c(bear, 'irr', K.formatPct, 'warning'), c(base, 'irr', K.formatPct), c(bull, 'irr', K.formatPct, 'positive')],
+    ['Equity multiple', c(bear, 'equityMultiple', K.formatX, 'warning'), c(base, 'equityMultiple', K.formatX), c(bull, 'equityMultiple', K.formatX, 'positive')],
+    ['Gross margin', c(bear, 'grossMarginPct', K.formatPct, 'warning'), c(base, 'grossMarginPct', K.formatPct), c(bull, 'grossMarginPct', K.formatPct, 'positive')],
+    ['NPV', c(bear, 'npv', K.formatCr, 'warning'), c(base, 'npv', K.formatCr), c(bull, 'npv', K.formatCr, 'positive')],
+  ];
+  return [
+    { type: 'table', columns: [{ header: 'Metric', width: 28 }, { header: 'Bear', width: 24 }, { header: 'Base', width: 24 }, { header: 'Bull', width: 24 }], rows },
+    { type: 'note', text: 'Bull / bear apply the kernel\'s standard sensitivities to revenue, cost and timeline. Modelled estimates, not guarantees.' },
+  ];
+};
+
+const sectionCapitalStack = (ws) => {
+  const scn = (ws && ws.capital_stack_optimizer && ws.capital_stack_optimizer.scenarios) || [];
+  if (!scn.length) return [{ type: 'note', text: 'Capital-stack scenarios appear once the financial model has run.' }];
+  const rows = scn.map((s) => [
+    s.label || String(s.scenario || '').replace(/_/g, ' '),
+    s.mix && s.mix.equity_pct != null ? K.formatPct(s.mix.equity_pct) : EMDASH,
+    s.debt_cr != null ? K.formatCr(s.debt_cr) : EMDASH,
+    s.blended_cost_of_capital_pct != null ? K.formatPct(s.blended_cost_of_capital_pct) : EMDASH,
+    { text: s.verdict || (s.band ? `${s.band} fit` : EMDASH), tone: s.band === 'high' ? 'positive' : s.band === 'low' ? 'warning' : null },
+  ]);
+  return [
+    { type: 'table', columns: [{ header: 'Scenario', width: 22 }, { header: 'Equity', width: 16 }, { header: 'Debt', width: 22 }, { header: 'Blended cost', width: 20 }, { header: 'Fit', width: 20 }], rows },
+    { type: 'note', text: 'Deterministic financing scenarios scored against asset-class covenant norms. The base case anchors the returns above.' },
+  ];
+};
+
+const humanizeMetric = (k) => String(k || '')
+  .replace(/_/g, ' ')
+  .replace(/\bper sqft inr\b/i, '(INR/sqft)')
+  .replace(/\binr\b/i, '(INR)')
+  .replace(/\bpct\b/i, '%')
+  .trim();
+
+const sectionMarketContext = (ws) => {
+  const mm = (ws && ws.micro_market) || {};
+  const benchmarks = mm.benchmarks || [];
+  const blocks = [];
+  if (benchmarks.length) {
+    const rows = benchmarks.slice(0, 6).map((b) => [
+      humanizeMetric(b.metric_kind),
+      b.p25 != null ? K.formatNumber(b.p25) : EMDASH,
+      b.p50 != null ? K.formatNumber(b.p50) : EMDASH,
+      b.p75 != null ? K.formatNumber(b.p75) : EMDASH,
+      b.source_ref ? `${b.source_ref}${b.n_observations ? ` (n=${b.n_observations})` : ''}` : EMDASH,
+    ]);
+    blocks.push({ type: 'table', columns: [{ header: 'Metric', width: 30 }, { header: 'P25', width: 14 }, { header: 'Median', width: 16 }, { header: 'P75', width: 14 }, { header: 'Source', width: 26 }], rows });
+    const freshest = benchmarks.map((b) => b.last_verified_at).filter(Boolean).sort().slice(-1)[0];
+    const confidences = [...new Set(benchmarks.map((b) => b.confidence).filter(Boolean))].join(' / ');
+    blocks.push({ type: 'sourceNote', source: 'Verified market benchmarks', freshness: freshest ? K.formatDate(freshest) : null, confidence: confidences || null });
+  } else {
+    blocks.push({ type: 'sourceNote' }); // → "No verified feed available"
+  }
+  const comps = ((ws && ws.comps && ws.comps.entries) || []).filter((c) => c.is_verified !== false);
+  blocks.push({
+    type: 'note',
+    text: comps.length
+      ? `${comps.length} verified comparable transaction${comps.length === 1 ? '' : 's'} within 5 km on file.`
+      : 'No verified comparables on file within 5 km yet.',
+  });
+  const bestUse = ((ws && ws.best_use && ws.best_use.scores) || [])[0];
+  if (bestUse) {
+    blocks.push({ type: 'note', text: `Best-use suitability: ${K.assetClassLabel(bestUse.asset_class)} — score ${bestUse.score}/100${bestUse.label ? ` (${bestUse.label})` : ''}.` });
+  }
+  return blocks;
+};
+
+const POSTURE_LABEL = { cleared: 'Cleared', unverified: 'Unverified', flagged: 'Flagged' };
+
+const sectionPromoter = (ws) => {
+  const p = ws && ws.promoter;
+  if (!p) return [{ type: 'note', text: 'Promoter track record not yet recorded on the deal.' }];
+  const a = p.assessment || {};
+  const postureLabel = POSTURE_LABEL[a.posture] || 'Unverified';
+  const postureTone = a.posture === 'cleared' ? 'positive' : a.posture === 'flagged' ? 'negative' : 'warning';
+  const rows = [
+    ['Promoter', p.promoter_name || EMDASH],
+    ['Projects delivered', (p.delivered_on_time != null || p.delivered_delayed != null)
+      ? `${p.delivered_on_time || 0} on time, ${p.delivered_delayed || 0} delayed` : EMDASH],
+    ['Years active', p.years_active != null ? String(p.years_active) : EMDASH],
+    ['RERA registered', p.rera_registered === true ? 'Yes' : p.rera_registered === false ? 'No' : EMDASH],
+  ];
+  const blocks = [
+    { type: 'keyValue', rows },
+    { type: 'paragraph', text: `Execution posture: ${postureLabel}.`, tone: postureTone },
+  ];
+  for (const sig of (a.signals || [])) {
+    const color = sig.tone === 'negative' ? C.negative : sig.tone === 'warn' ? C.warning : C.positive;
+    blocks.push({ type: 'note', text: `•  ${sig.text}`, color });
+  }
+  return blocks;
+};
+
+const sectionIcReadiness = (ws) => {
+  const ic = ws && ws.ic_readiness;
+  if (!ic || !ic.overall) return [{ type: 'note', text: 'IC readiness appears once the deal\'s workspace has enough signals.' }];
+  const o = ic.overall;
+  const blocks = [{
+    type: 'kpiGrid',
+    items: [
+      { label: 'IC readiness', value: o.completeness_pct != null ? `${o.completeness_pct}/100` : EMDASH },
+      { label: 'Tier', value: String(o.readiness_tier || '').replace(/_/g, ' ') || EMDASH },
+      { label: 'Items verified', value: o.by_status ? `${o.by_status.verified || 0} of ${o.total_items || 0}` : EMDASH },
+    ],
+  }];
+  const buckets = ic.buckets || [];
+  if (buckets.length) {
+    const rows = buckets.map((b) => [
+      b.label,
+      `${b.completeness_pct}%`,
+      { text: b.bucket_status === 'complete' ? 'Complete' : b.bucket_status === 'partial' ? 'Partial' : 'Missing', tone: b.bucket_status === 'complete' ? 'positive' : b.bucket_status === 'partial' ? 'warning' : 'negative' },
+    ]);
+    blocks.push({ type: 'table', columns: [{ header: 'Bucket', width: 50 }, { header: 'Complete', width: 25 }, { header: 'Status', width: 25 }], rows });
+  }
+  blocks.push({ type: 'note', text: 'IC readiness is an organisation aid for the deal team\'s pre-IC preparation — not an IC approval.' });
+  return blocks;
+};
+
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+
+const sectionRecommendations = (ws) => {
+  // Non-legal deterministic call-outs only. ai_narratable === false marks the
+  // legal-four lanes, which must never be AI-narrated — those stay as status.
+  const recs = ((ws && ws.recommendations && ws.recommendations.recommendations) || [])
+    .filter((r) => r && r.ai_narratable !== false);
+  if (!recs.length) return [{ type: 'note', text: 'No deterministic call-outs surfaced for this deal yet.' }];
+  const top = recs
+    .slice()
+    .sort((x, y) => (SEV_RANK[x.severity_base] ?? 9) - (SEV_RANK[y.severity_base] ?? 9))
+    .slice(0, 6);
+  const items = top.map((r) => ({ verb: r.verb, headline: r.headline || r.topic_label, detail: r.detail || '' }));
+  return [
+    { type: 'callouts', items },
+    { type: 'note', text: 'Call-outs are composed deterministically from kernel signals; verbs follow REDIP\'s fixed dictionary. Statutory matters are excluded here and shown as documentary status only.' },
+  ];
+};
+
+// ── Buyer sections ──────────────────────────────────────────────────────────
+
+const sectionProjectOverview = (ws) => {
+  const deal = (ws && ws.deal) || {};
+  const p = ws && ws.promoter;
+  const rows = [
+    ['Project', deal.name || EMDASH],
+    ['Type', K.assetClassLabel(deal.asset_class)],
+    ['Location', [deal.city, deal.state].filter(Boolean).join(', ') || deal.parcel_address || deal.property_address || EMDASH],
+    ['Developer / promoter', (p && p.promoter_name) || EMDASH],
+    ['RERA registration', deal.rera_number || 'Not on file'],
+  ];
+  const completion = deal.rera_inputs && deal.rera_inputs.completion_date;
+  if (completion) rows.push(['Declared completion', K.formatDate(completion)]);
+  if (deal.land_area_sqft) rows.push(['Land extent', K.formatArea(deal.land_area_sqft)]);
+  return [{ type: 'keyValue', rows }];
+};
+
+const sectionProfessionalSignoffs = (ws) => {
+  // Derived from the K-RERA cockpit: items whose evidence source is a signed
+  // professional sign-off. Avoids any workspace plumbing — reuses existing data.
+  const buckets = (reraSlice(ws) && reraSlice(ws).buckets) || [];
+  const signed = [];
+  for (const b of buckets) {
+    for (const it of (b.items || [])) {
+      if (it.evidence && it.evidence.source === 'signoff') {
+        signed.push({ label: it.label, status: 'signed', detail: it.evidence.evidence_label || '' });
+      }
+    }
+  }
+  if (!signed.length) {
+    return [{
+      type: 'note',
+      text: 'No professional sign-offs are recorded against this project\'s certificates yet. Ask the developer which certificates — advocate, CA, architect, engineer, structural engineer, banker — have been signed off.',
+    }];
+  }
+  return [
+    { type: 'statusList', items: signed },
+    { type: 'note', text: 'A signed certificate means a qualified professional has attested it. Confirm the originals with the developer before any payment.' },
+  ];
+};
+
 const SECTION_COMPOSERS = Object.freeze({
+  // lender
   credit_summary: sectionCreditSummary,
   covenant_posture: sectionCovenantPosture,
   downside_stress: sectionDownsideStress,
@@ -241,6 +445,17 @@ const SECTION_COMPOSERS = Object.freeze({
   risk_register: sectionRiskRegister,
   repayment_exit: sectionRepaymentExit,
   closing: sectionClosing,
+  // investor
+  returns_summary: sectionReturnsSummary,
+  scenarios: sectionScenarios,
+  capital_stack: sectionCapitalStack,
+  market_context: sectionMarketContext,
+  promoter: sectionPromoter,
+  ic_readiness: sectionIcReadiness,
+  recommendations: sectionRecommendations,
+  // buyer
+  project_overview: sectionProjectOverview,
+  professional_signoffs: sectionProfessionalSignoffs,
 });
 
 // ─── Public: compose the normalized pack model ──────────────────────────────

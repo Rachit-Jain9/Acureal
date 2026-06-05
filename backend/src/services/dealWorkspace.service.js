@@ -545,6 +545,10 @@ async function getDealWorkspace(dealId, options = {}) {
 
   const payload = {
     ...composed,
+    // Promoter track record + deterministic posture (already batch-fetched for
+    // the IC composer). Surfaced on the payload so report packs + future
+    // consumers can read it directly. Additive — null when the table is absent.
+    promoter: promoterData || null,
     recommendations: recommendationsSlice || { recommendations: [], hidden_by_verdict: [], snapshot_hash: null, signal_count: 0, generated_at: null },
     deal_doctor: dealDoctorSlice || { findings: [], groups: [], finding_count: 0, signal_count: 0, generated_at: null },
     micro_market: microMarketSlice || { classification: { locality_code: null, confidence: null }, locality: null, benchmarks: [], demand_signals: [], reason: 'unavailable' },
