@@ -4,6 +4,20 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-04 (cont. — K-RERA V4: post-registration compliance calendar) (PRs #770–#771, all merged + deployed)
+
+Operator chose the post-registration compliance calendar (the vision's "stickiest" module — it repeats every quarter). Deep-reviewed first (2 Explore agents): the scraped `regulatory_data.karnataka_rera_*` tables exist but are EMPTY (scraper inert per "no fake connectivity"), so actual filing status is unavailable — the calendar must be a pure computed due-schedule. Confirmed the reusable infra (the `optional()` slice pattern, `formatDate`, Vercel-cron + `mailer.js` for a future reminder slice).
+
+### Shipped + merged + deployed (production)
+- **#770 — deterministic compliance calendar (cockpit view).** New `backend/src/services/rera/complianceCalendar.js`: pure compute over the deal's own dates + today (no DB, AI, writes or cron). For a REGISTERED deal: the next two quarterly-update deadlines (15 days after each quarter-end), the next annual-audit deadline (within 6 months of the Indian FY-end), and the declared-completion/extension + certificate-validity anchors. In-scope-but-unregistered → one-line cadence preview; exempt → nothing. **Honesty:** with no actual filing data, quarterly/annual items are FORWARD-LOOKING only and never marked "overdue" (we can't know if filed); "overdue" is used only for the deal's OWN declared completion / certificate dates. `complianceContext` now exposes `rera_expiry_date`; workspace composes `slice.compliance_calendar` (sync, pure) beside `consistency`; rides the 120s-TTL cache. Cockpit renders a "Post-Registration Compliance" section after the milestone band. +63 backend (calendar 9 + workspace + engine) + 11 frontend tests.
+- **#771 — same calendar in the DOCX pack.** Screen↔paper parity: export route attaches the calendar; `buildReraReadiness` renders a "Post-Registration Compliance Calendar" table after the consistency section.
+
+### Deferred next slice (needs operator setup)
+The **email reminder before each deadline** is the natural next step — the Vercel-cron (`CRON_SECRET` set) + `mailer.js` (Resend) infra exists to reuse, but it needs the operator's Resend sender domain verified (manual step, TODO_MANUAL.md). Flagged, not built.
+
+### Still deferred (operator's vision V3/V5)
+Professional sign-off board (V3 — needs a sign-off data model); ground-truth-anchored mismatch comparators (compare extracted survey/khata/owner vs the deal's recorded `properties.*`); multi-audience report packs; actual-filing overlay (blocked on the K-RERA portal scraper — needs operator-provided sample HTML or a Puppeteer pull).
+
 ## 2026-06-04 (cont. — K-RERA V2: cross-document consistency + discoverability) (PRs #766–#768, all merged + deployed)
 
 Continued the K-RERA arc after the operator applied the `20260630_deal_rera_inputs` migration (confirmed live: cockpit reads "In scope", fee ₹3,64,217, 4 blockers on the Jigani deal). Deep-reviewed the existing extraction + inconsistency infrastructure FIRST (3 Explore agents) — and found REDIP already has a deterministic cross-document detector (`inconsistencyDetector.service.js`: 5 pure comparators — seller/EC owner mismatch, consideration drift, FSI conflict, area drift, RERA gap — finding shape, `nameSimilarity`, dedup, persistence to `risk_flags(source='ai_detector')`, event sink, tests, legal carve-out). The vision's "Mismatch Dashboard" largely existed but was trapped on the Risk tab. So the work was **reuse + surface**, not rebuild.
