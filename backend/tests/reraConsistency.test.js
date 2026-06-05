@@ -5,15 +5,23 @@
  * deterministic inconsistencyDetector. Pure shaping + graceful degradation.
  */
 
-jest.mock('../src/services/inconsistencyDetector.service', () => ({
-  detect: jest.fn(),
+jest.mock('../src/services/extraction.service', () => ({
+  getDealExtractions: jest.fn(),
 }));
+// Partial mock — keep the real nameSimilarity (used by groundTruthChecks), mock
+// only the cross-document comparator entry point.
+jest.mock('../src/services/inconsistencyDetector.service', () => {
+  const actual = jest.requireActual('../src/services/inconsistencyDetector.service');
+  return { ...actual, runAllComparators: jest.fn() };
+});
 
+const extractionService = require('../src/services/extraction.service');
 const inconsistencyDetector = require('../src/services/inconsistencyDetector.service');
 const reraConsistency = require('../src/services/rera/consistency');
 
 beforeEach(() => {
-  inconsistencyDetector.detect.mockReset();
+  extractionService.getDealExtractions.mockReset();
+  inconsistencyDetector.runAllComparators.mockReset();
 });
 
 describe('shapeConsistency', () => {
@@ -42,21 +50,33 @@ describe('shapeConsistency', () => {
 });
 
 describe('composeReraConsistency', () => {
-  test('shapes detector findings + marks available', async () => {
-    inconsistencyDetector.detect.mockResolvedValue({
-      findings: [{ pair_key: 'area:1:2', severity: 'high', title: 'Area mismatch', evidence: [] }],
-      extractions_count: 3,
+  test('merges detector + ground-truth findings, marks available', async () => {
+    extractionService.getDealExtractions.mockResolvedValue({
+      extractions: [{}, {}, {}],
+      field_map: { khata_number: { value: 'KH-999' } },
     });
-    const out = await reraConsistency.composeReraConsistency('deal-1');
+    inconsistencyDetector.runAllComparators.mockReturnValue([
+      { pair_key: 'area:1:2', severity: 'high', title: 'Area mismatch', evidence: [] },
+    ]);
+    const deal = { khata_no: 'KH-111', owner_name: null };
+    const out = await reraConsistency.composeReraConsistency('deal-1', deal);
     expect(out.available).toBe(true);
     expect(out.extractions_count).toBe(3);
-    expect(out.findings).toHaveLength(1);
-    expect(out.findings[0].title).toBe('Area mismatch');
+    const titles = out.findings.map((f) => f.title);
+    expect(titles).toContain('Area mismatch');
+    expect(titles).toContain('Khata number on file differs from the document');
   });
 
-  test('degrades to unavailable on detector error (never throws)', async () => {
-    inconsistencyDetector.detect.mockRejectedValue(new Error('extractions table absent'));
-    const out = await reraConsistency.composeReraConsistency('deal-1');
+  test('no deal → detector findings only (no ground-truth)', async () => {
+    extractionService.getDealExtractions.mockResolvedValue({ extractions: [], field_map: { khata_number: { value: 'KH-999' } } });
+    inconsistencyDetector.runAllComparators.mockReturnValue([]);
+    const out = await reraConsistency.composeReraConsistency('deal-1', null);
+    expect(out.findings).toEqual([]);
+  });
+
+  test('degrades to unavailable on error (never throws)', async () => {
+    extractionService.getDealExtractions.mockRejectedValue(new Error('extractions table absent'));
+    const out = await reraConsistency.composeReraConsistency('deal-1', {});
     expect(out.available).toBe(false);
     expect(out.findings).toEqual([]);
     expect(out.summary.total).toBe(0);

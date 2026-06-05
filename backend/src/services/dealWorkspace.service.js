@@ -499,7 +499,7 @@ async function getDealWorkspace(dealId, options = {}) {
     // Co-locate the deterministic cross-document consistency findings (reuses
     // inconsistencyDetector — pure comparators, no persistence here) so the
     // cockpit surfaces title/parcel/RERA mismatches next to the checklist.
-    slice.consistency = await reraConsistency.composeReraConsistency(dealId);
+    slice.consistency = await reraConsistency.composeReraConsistency(dealId, deal);
     // Deterministic post-registration compliance calendar — pure compute over
     // the deal's own dates + today (no DB, no writes).
     slice.compliance_calendar = complianceCalendar.composeComplianceCalendar(reraCtx, {
