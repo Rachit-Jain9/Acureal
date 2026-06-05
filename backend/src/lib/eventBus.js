@@ -107,6 +107,7 @@ const EVENTS = Object.freeze({
   DOCUMENT_ACCESSED:         'document.accessed',
   DD_ITEM_STATUS_CHANGED:    'dd_item.status_changed',
   APPROVAL_STATUS_CHANGED:   'approval.status_changed',
+  SIGNOFF_STATUS_CHANGED:    'signoff.status_changed',
   RISK_FLAG_STATUS_CHANGED:  'risk_flag.status_changed',
   PARCEL_INTELLIGENCE_REFRESHED: 'parcel_intelligence.refreshed',
   EVIDENCE_LINKED:           'evidence.linked',

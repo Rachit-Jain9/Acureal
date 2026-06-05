@@ -29,6 +29,7 @@ const healthRoutes = require('./routes/health.routes');
 const intelligenceRoutes = require('./routes/intelligence.routes');
 const ddRoutes = require('./routes/dd.routes');
 const approvalsRoutes = require('./routes/approvals.routes');
+const signoffRoutes = require('./routes/signoff.routes');
 const riskRoutes = require('./routes/risk.routes');
 const extractionRoutes = require('./routes/extraction.routes');
 // fx.routes retired 2026-05-24 — multi-currency display feature removed
@@ -190,6 +191,7 @@ app.use('/api/exports', exportRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api', ddRoutes);
 app.use('/api', approvalsRoutes);
+app.use('/api', signoffRoutes);
 app.use('/api', riskRoutes);
 app.use('/api', promoterRoutes);
 app.use('/api', extractionRoutes);
