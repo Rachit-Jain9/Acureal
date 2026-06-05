@@ -4,6 +4,33 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-05 (cont. — Audience-tailored report packs, end-to-end + cinematic charts) (PRs #780–#783, all merged + deployed)
+
+Built the operator's V5 vision pillar: the same deterministic deal data, reframed as three audience-specific Word documents (lender / investor / buyer). Architecture mirrors the K-RERA substrate — declarative catalog → pure composer → one renderer — so adding a fourth audience is a catalog entry. Shipped as four small, safe, tested PRs.
+
+- **#780 — Engine + lender pack (RP1).** New shared `packKit.js` (DOCX primitives: doc shell, cover, quiet 7pt cover disclaimer, section heading, kpiGrid, table, statusList, flagList, sourceNote, callouts) + null-safe formatters reusing the canonical `exports/shared/palette.js`. Declarative `reportPackCatalog.js` (single source of truth for each audience's cover framing + ordered section list). Pure `composePack.js` reads ONLY kernel-computed numbers; honest empty-state notes when data is missing; omits not-applicable sections. Single renderer `buildReportPackDocx.js` drives all audiences. Lender pack sections: Credit Summary, Leverage & Covenant Posture (LTV/LTC/DSCR vs covenants with pass/fail), Downside & Stress (base vs bear), Security & Title, Statutory Approvals, RERA Registration, Risk Register, Repayment & Exit, Disclaimer. One parameterized route `GET /exports/deals/:dealId/pack/:audience/docx`. +44 backend tests.
+- **#781 — Investor + buyer audiences (RP2).** Both audiences as catalog entries + section composers on the RP1 engine — no route change. Investor (returns lens): Return Profile / Scenarios / Capital Stack / Market Context (with source + freshness + confidence, or truthful "no verified feed") / Promoter / IC Readiness / Diagnostic Call-outs (deterministic, NON-legal only) / Risk Register. Buyer (consumer-transparency lens): Project Overview / RERA / Approvals / Title / Professional Sign-offs (derived from the cockpit's signed-certificate evidence — no new plumbing) / consumer-protection disclaimer (verify on rera.karnataka.gov.in, engage your own advocate). `dealWorkspace`: surface `promoter` on the payload (additive, null-safe). +20 audience tests.
+- **#782 — Audience packs in the ExportMenu (RP3).** One frontend `dealPack(dealId, audience)` API call mirrors the server's single route. New "Audience packs" group in the deal Export dropdown with distinct icons (Landmark / LineChart / Home), lens hints, and the established busy-spinner + toast behaviour. ExportMenu test pattern uses `vi.hoisted` for the API mock spy. +3 menu tests.
+- **#783 — Cinematic SVG charts (RP4).** Wires the shared kernel-driven SVG renderer (already used by the main underwriting report) into the packs. Three chart kinds, embedded via docx `ImageRun` with the 1×1 PNG fallback: capital-stack donut, cashflow trend (quarterly with computed cumulative; falls back yearly), and sensitivity tornado (drivers extracted by taking the centre row/col of the kernel sensitivity grid — mirrors `buildReport.js` so chart numbers match). Pure chart SPECs in the composer; renderer dispatches by kind. Each spec returns `null` when data is too thin for an honest chart — block silently omitted. Investor pack: cashflow under returns_summary, tornado under scenarios, donut leading capital_stack. Renderer hardened: unknown kinds + generator throws both swallowed. +17 chart tests.
+
+### Honesty (CLAUDE.md), by construction
+- Every number from the deterministic kernel; nothing model-generated.
+- Legal-four lanes (title / encumbrance / RERA registration / statutory approvals) shown as documentary status / flags only — never an AI conclusion. Investor diagnostic call-outs explicitly drop `ai_narratable:false` (legal) cards; buyer pack carries no AI call-outs at all.
+- Market figures carry source + freshness + confidence, or a truthful "no verified feed".
+- Single quiet 7pt cover disclaimer states the kernel guarantee; no per-section AI banners, no provider names.
+
+### Verification
+- 84 new backend tests across the four PRs.
+- **Full backend suite: 196 suites / 3244 tests, green throughout.**
+- Frontend build green; ExportMenu / deal-component suites green.
+- Per-PR CI green (Backend + Frontend + kernel + audit + Vercel preview).
+- No new keys, migrations, or third-party accounts.
+
+### Still deferred (operator's vision V5 / setup-blocked)
+Email-reminder cron (needs Resend sender domain — TODO_OPERATOR.md #6); actual-filing overlay (K-RERA portal scraper inert); promoter credibility vault (`deal_promoter_profiles` + `karnataka_rera_promoter_index` indexing); survey-number ground-truth reconciliation; cross-audience report-pack reconciliation comparators.
+
+---
+
 ## 2026-06-05 (K-RERA V3 — Professional Sign-off Board, end-to-end) (PRs #776–#778, all merged + deployed)
 
 Built the operator's vision §G/§13 pillar: track who must sign off on a deal (advocate / CA / architect / engineer / structural engineer / banker × certificate-scope × lifecycle status), and feed signed certificates into the K-RERA cockpit as verified evidence. Shipped as three small, safe, tested PRs.
