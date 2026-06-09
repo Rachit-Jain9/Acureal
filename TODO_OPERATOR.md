@@ -1,152 +1,164 @@
-# Your Pending Tasks — Operator Actions
+# Your Pending Tasks — Operator Actions (Rachit)
 
-A plain-English list of things only **you (Rachit)** can do. Each one needs an
-account login, a decision, a person's name, or money — so they can't be done
-from the code. Everything is written step-by-step, no jargon.
+This is the **single, complete list of things only you can do** — the ones that
+need an account login, a payment, a decision, a person's name, or a file only you
+have. Everything else (the code, the database, the product) is built and verified.
 
-_Last updated: 2026-05-22. Listed most important first._
+**Goal: clear the 🔴 / 🟠 / 🟡 items below within ~1 month.** Work top to bottom.
+After each one, reply with the little "done" phrase shown — that's how I keep this
+list up to date. Everything is written step-by-step, no jargon.
 
----
-
-## 1. Turn on database backups — most important, protects against data loss
-
-**Why it matters:** Right now REDIP's database may have **no automatic backups**.
-If something ever goes wrong, deal data could be lost permanently. This is the
-single most important item on this list.
-
-**What to do:**
-
-1. 🌐 In your web browser, open this exact link:
-   `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/database/backups`
-2. Look at the page. It will either show a **list of daily backups**, or a message
-   saying backups are **not available on your current plan**.
-3. **If backups are not available (you're on the Free plan):** click the
-   **"Upgrade"** button on that page and choose the **Pro** plan (about US$25 a
-   month). Pro includes automatic daily backups. Confirm the upgrade.
-4. After upgrading, return to the same Backups page. Within a day you should see
-   daily backups starting to appear in the list.
-5. **Reply to me with:** `backups on` — or paste a screenshot of the Backups page
-   if anything looks different from the above.
-
-**One small follow-up, once backups exist:**
-
-6. On that same Backups page, each backup has a **"Restore"** option next to it.
-   You do **not** need to actually restore anything — just confirm the option is
-   there and reply `restore option visible`. (A proper practice restore can be
-   done later, carefully, together.)
+_Last updated: 2026-06-09._
 
 ---
 
-## 2. Hire a lawyer for two legal documents — start early, lawyers take time
+## ✅ Already handled — nothing for you to do here
 
-**Why it matters:** Large customers (funds, banks, REITs) will check that REDIP
-has proper legal paperwork before they sign up. Two documents are missing, and by
-law I must **not** write them myself — they have to come from a real Indian
-lawyer.
-
-**The two documents needed:**
-
-- A **Data Processing Agreement (DPA)** — explains how REDIP handles customer data.
-- An **Acceptable Use Policy (AUP)** — the rules for what customers may and may not
-  do with REDIP.
-
-**What to do:**
-
-1. Find an Indian lawyer or law firm familiar with technology/software products
-   and the **DPDP Act 2023** (India's data-protection law). A startup-focused
-   lawyer is perfectly fine.
-2. Ask them to draft a **DPA** and an **AUP** for an India-based real-estate
-   software product.
-3. When they send the drafts back, forward them to me — there is already a place
-   in the website built and waiting to host legal documents, so I can wire them
-   in quickly.
-4. **Reply to me with:** `lawyer engaged` once you've hired someone, so I know
-   it's in motion.
+- **Database is fully up to date and secure.** Verified live on 2026-06-09: every
+  database update (including the important security fix) is already applied, and
+  Supabase's own security scanner found nothing that needs action. You do **not**
+  need to apply any database updates.
+- **The website features** (large-number helpers, charts, exports, deal workspace,
+  K-RERA tracking, etc.) are built and live.
+- **AI + file uploads** are working in production, so those keys are set. (If
+  anything AI- or upload-related ever misbehaves, tell me and I'll check the keys.)
 
 ---
 
-## 3. Give me two names for the emergency plan — quick, about 2 minutes
+# 🔴 DO FIRST — protects your data and money (this week)
 
-**Why it matters:** REDIP has a written plan for what to do if there is ever a
-security problem. It has two blank spots that need real people's names.
+## 1. Turn on database backups — most important
+**Why:** Right now your database may have **no automatic backups**. If something
+ever goes wrong, deal data could be lost permanently.
 
-**What to do — just reply to me in chat with these two names:**
+1. 🌐 Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/database/backups`
+2. If it says backups are **not available on your plan**, click **Upgrade** and pick
+   the **Pro** plan (about US$25/month — includes automatic daily backups). Confirm.
+3. Within a day, daily backups start appearing in the list.
+4. **Reply:** `backups on` (or paste a screenshot if it looks different).
+5. One small follow-up: each backup has a **Restore** option next to it — you don't
+   need to restore anything, just confirm it's there and reply `restore option visible`.
 
-1. **Incident Lead** — the person in charge if something goes wrong (this is
-   probably you).
-2. **Legal Liaison** — the person who would contact the lawyer (probably also you,
-   for now).
+## 2. Delete the old Google Maps key — closes a leaked-key hole
+**Why:** An old Google Maps key was once exposed. The new key is already in the site,
+but **the old leaked key still works until you delete it** in Google Cloud.
 
-That's it — send me the two names and I will fill them into the plan document.
+1. 🌐 Open: `https://console.cloud.google.com/google/maps-apis/credentials`
+2. You'll see a list of API keys. Find the **old one you're no longer using**
+   (if unsure which is old, reply here and I'll help you tell them apart).
+3. Click the old key → **Delete** (or **Regenerate** if you'd rather keep the slot).
+4. While you're there: on your **current** key, make sure there's a **billing budget
+   cap** set so a runaway can never cost a fortune.
+5. **Reply:** `maps key deleted`.
 
----
+## 3. Set the AI spending cap — ~2 minutes
+**Why:** This puts a hard daily dollar limit on the AI features so they can never
+overspend, no matter what.
 
-## 4. Set up a security email address — quick, about 5 minutes
-
-**Why it matters:** Security researchers and customers expect a `security@` email
-address to report problems to. REDIP's documents already point people to
-`security@redip.in`, but that mailbox doesn't exist yet, so any such email would
-bounce.
-
-**What to do:**
-
-1. 🌐 Go to wherever you manage email for the **redip.in** domain (for example
-   Google Workspace, Zoho Mail, or your domain provider's email settings).
-2. Create a new mailbox or alias: **security@redip.in**.
-3. Point it to your own inbox so you actually see anything sent there.
-4. **Reply to me with:** `security mailbox done`.
-
----
-
-## 5. Database tidy-up — no rush, I prepare it and you click one button later
-
-**Why it matters:** Over time REDIP has built up dozens of small database update
-files. Combining them into one clean starting point makes the project tidier and
-faster to set up from scratch. It is **not urgent** and nothing is broken.
-
-**What to do:** Nothing yet. When you want this done, just tell me
-`do the database tidy-up` and I will:
-
-1. Prepare the single combined file.
-2. Give you exact click-by-click steps to apply it in Supabase — the same kind of
-   steps you've followed for past database updates.
+1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
+2. Click **Add New** (or **Add Another**).
+3. Name (Key): `AI_DAILY_COST_CAP_USD`  ·  Value: `25` (or whatever daily US-dollar
+   ceiling you're comfortable with).
+4. Click **Save**.
+5. **Reply:** `cost cap set` — I'll confirm the cap is active on the next publish.
 
 ---
 
-## 6. Get a domain + turn on email sending — unlocks sign-up emails and K-RERA deadline reminders
+# 🟠 QUICK WINS — a few minutes each
 
-**Why it matters:** A few useful features need REDIP to be able to *send* email — the
-sign-up verification + password-reset links, and (new) automatic **K-RERA deadline
-reminders** ("your quarterly update is due in 7 days"). Right now REDIP can't send any
-email because there's no verified sending domain. You mentioned you'll get a domain
-soon — this is the step that switches all of that on.
+## 4. Two names for the emergency plan
+**Why:** The written "what to do if there's a security problem" plan has two blank
+spots that need real people.
 
-**What to do (once you have a domain, e.g. `redip.in`):**
+Just **reply** with these two names:
+- **Incident Lead** — the person in charge if something goes wrong (probably you).
+- **Legal Liaison** — the person who'd contact the lawyer (probably you, for now).
 
-1. 🌐 Go to **https://resend.com**, sign up (free to start), and log in.
-2. Click **Domains → Add Domain**, type your domain (e.g. `redip.in`), click Add.
-3. Resend shows a few **DNS records**. Go to wherever you bought the domain (GoDaddy,
+## 5. Create a security@ email address
+**Why:** Your documents tell security researchers to email `security@redip.in`, but
+that mailbox doesn't exist yet — so any such email would bounce.
+
+1. 🌐 Go to wherever you manage email for **redip.in** (Google Workspace, Zoho, or
+   your domain provider's email settings).
+2. Create a mailbox or alias **security@redip.in**, pointed to your own inbox.
+3. **Reply:** `security mailbox done`.
+
+---
+
+# 🟡 NEEDS LEAD TIME — start soon
+
+## 6. Get a domain + turn on email sending
+**Why:** A few features need REDIP to *send* email — sign-up verification + password
+reset links, and automatic **K-RERA deadline reminders**. Right now it can't send any
+email because there's no verified sending domain. (Nothing is broken without it — the
+K-RERA calendar is fully visible on screen and in the Word download; this just adds
+the email nudges.)
+
+Once you have a domain (e.g. `redip.in`):
+1. 🌐 Go to `https://resend.com`, sign up (free to start), log in.
+2. **Domains → Add Domain**, type your domain, click Add.
+3. Resend shows a few **DNS records**. Go to where you bought the domain (GoDaddy,
    Namecheap, Cloudflare, etc.), open its DNS settings, and add those exact records
    (copy-paste each — don't retype).
-4. Back on Resend, wait until the domain shows a green **Verified**.
-5. Click **API Keys → Create API Key** and copy the key (it starts with `re_…`).
-6. 🌐 Open **https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables**
+4. Back on Resend, wait for the domain to show a green **Verified**.
+5. **API Keys → Create API Key**, copy the key (starts with `re_…`).
+6. 🌐 Open `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
    and add two settings:
-   - `RESEND_API_KEY` = the `re_…` key you copied.
-   - `MAIL_FROM` = `REDIP <noreply@redip.in>` (use your real domain).
-7. **Reply to me with:** `email sending on`. I'll then switch on the automatic
-   K-RERA compliance-deadline reminders — that part is already built and waiting.
+   - `RESEND_API_KEY` = the `re_…` key.
+   - `MAIL_FROM` = `REDIP <noreply@redip.in>` (your real domain).
+7. **Reply:** `email sending on` — I'll switch on the automatic K-RERA reminders
+   (already built and waiting).
 
-**Until then nothing is broken:** the K-RERA deadline calendar is fully visible on
-screen and in the Word download; this only adds the *automatic email nudges* on top.
+## 7. Hire a lawyer for two legal documents
+**Why:** Big customers (funds, banks, REITs) check for proper legal paperwork before
+signing up. Two documents are missing, and by law they must come from a real Indian
+lawyer — I can't write them.
+
+The two documents: a **Data Processing Agreement (DPA)** and an **Acceptable Use
+Policy (AUP)**.
+
+1. Find an Indian lawyer/firm familiar with tech products and the **DPDP Act 2023**
+   (a startup-focused lawyer is fine).
+2. Ask them to draft a **DPA** and an **AUP** for an India-based real-estate software product.
+3. Forward the drafts to me — there's already a place built and waiting in the site to
+   host legal documents, so I can wire them in quickly.
+4. **Reply:** `lawyer engaged` once you've hired someone, so I know it's in motion.
+
+---
+
+# 🟢 WHEN YOU'RE READY — no rush, just tell me
+
+These need nothing from you right now. When you want them, send the phrase and I'll do it.
+
+- **8. Database tidy-up.** Combine dozens of small database files into one clean
+  starting point — tidier, nothing broken. Say `do the database tidy-up` and I'll
+  prepare it + give you one click-by-click step.
+- **9. Guidance-value PDF (unlocks 11 placeholder rows).** Bengaluru guidance/circle-
+  rate values are placeholders until you give me **one** official PDF. Go to
+  `https://igr.karnataka.gov.in/english` → **Revised Guidelines Value** → pick Bengaluru
+  Urban/Rural → pick any SRO → download the PDF → **drag it into our chat**. The first
+  one teaches the pattern; the rest are automatic (~$0.05 each).
+- **10. Resume a paused data stream.** Co-working, student-housing, senior-living, and
+  data-centre benchmarks are scaffolded and paused at your request. Say
+  `resume co-working` (or student housing / senior living / data center) and I'll build
+  the extraction for it.
+
+---
+
+# 🔒 BIG / BLOCKED — not this month unless a customer needs it
+
+- **Investor-package cryptographic signing.** Tamper-proof digital signatures on
+  exported investor packages need a dedicated signing-key service (HSM/KMS) + a
+  compliance decision on the scheme. It's a bigger project — flag it if a specific
+  customer requires signed packages and I'll scope it with you. (We deliberately don't
+  fake a signature — a fake is worse than none.)
 
 ---
 
 ## How to use this file
-
 - The items are in **priority order** — work top to bottom.
-- Items **3** and **4** are quick wins (a few minutes each).
-- Item **1** is the most important — please don't leave it for long.
-- Item **2** has the longest lead time, so start looking for a lawyer soon even
-  though everything else can wait.
-- When you finish one, tell me and I'll keep this file up to date.
+- Reply with the small `done` phrase after each so I keep this current.
+- **Target: clear 🔴 / 🟠 / 🟡 within ~1 month.** The 🟢 items have no deadline.
+- This file is the **single source of truth** for operator actions. Engineering
+  detail (for me) lives in `TODO_MANUAL.md`; data-source limitations in `TODO_DATA.md`;
+  legal constraints in `TODO_LEGAL.md`.

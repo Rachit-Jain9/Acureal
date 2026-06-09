@@ -12,7 +12,18 @@ Architectural initiatives that cross modules and cannot land in a single PR. The
 
 ## 1. "One Brain" — Unified Deal Context
 
-**Status: DEFERRED**
+**Status: PHASE A LANDED + PHASE B substantially LANDED — verified 2026-06-09. Phases C–E DEFERRED.**
+
+> **2026-06-09 reality check:** Phase A (read consolidation) is **built and live** —
+> `useDealWorkspace(id)` returns one server-composed payload for the whole deal page,
+> with a fast `useDealWorkspaceLite` twin for instant first paint, `usePrefetchDealWorkspace`
+> on hover, a 5-min `WORKSPACE_STALE_TIME` matching the backend cache, and a server-side
+> `deal_workspace_cache` table (migration `20260629`). Phase B (shared cache invalidation)
+> is **substantially done** — every workspace-mutating hook invalidates `['deal-workspace', id]`,
+> and `dealPostureQueries.js` drives the posture refresh. What REMAINS (Phases C–E): the
+> `useDealContext()` provider refactor (components still call `useDealWorkspace` directly,
+> not a context), reactive drag-a-slider what-if, and the Activity-tab event-log UI. The
+> historical write-up below predates this and is kept for context only.
 
 Today the four deal-scoped surfaces — Zoning, Financials, DD, Comps — operate as independent modules. Each mounts its own React-Query hooks, each recalculates on its own cadence, and none reacts to a change elsewhere. A user who bumps FSI on the Zoning panel sees stale IRR on the Financials tab until they manually re-run the model. A new comp does not push a new benchmark band into the Financials "Market" card. A DD title-defect flag does not surface on the IC summary as "underwriting paused."
 
