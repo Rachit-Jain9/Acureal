@@ -46,6 +46,142 @@ export const formatCroresOrDash = (value) => {
   return `₹${num.toFixed(2)} Cr`;
 };
 
+// ─── Large-number entry readout (AmountReadout) ──────────────────────────────
+// Unit-aware "what did I just type" echo shown beneath numeric inputs so a
+// fat-fingered zero on a crore-scale number is obvious at a glance. The input
+// box is never reformatted (no caret hazard) — these pure helpers only build
+// the muted line below it. House style mirrors formatCrores / FinancialTab's
+// formatINRPerUnit: en-IN grouping, ₹, Cr (≥1e7) / L (≥1e5), 2-dp crore.
+
+/**
+ * Classify a field label into a readout "kind" from the unit it already encodes.
+ * Labels are the single source of truth ("Land Cost (₹ Cr)", "Selling Rate
+ * (₹/sqft)", "Plot Area (sqft)", "Debt LTV (0–1)"), so no per-field annotation.
+ *
+ * @param {string} label
+ * @returns {'rupeeCrore'|'rupeePlain'|'count'|'none'}
+ */
+export const inferAmountKind = (label) => {
+  if (typeof label !== 'string') return 'none';
+  const l = label.toLowerCase();
+  // Money branches FIRST. No "none" field (%, ratios, durations) carries a ₹,
+  // so this is safe — and it stops "Base Rent (₹/sqft/month)" from being eaten
+  // by the "month" duration token below.
+  // 1) Crore: literal "₹ cr" (note the space — every real label uses "(₹ Cr)").
+  if (l.includes('₹ cr')) return 'rupeeCrore';
+  // 2) Plain rupee RATE: any "₹/…" token. BEFORE the area branch because
+  //    "(₹/sqft)", "(₹/sqft GFA)" etc. also contain "sqft".
+  if (l.includes('₹/')) return 'rupeePlain';
+  // 3) Hard NONE: ratios, rates, durations, small counts.
+  //    "Debt LTV (0–1)" / "(years)" / "(%)" / "FSI / FAR" → no readout.
+  if (
+    l.includes('%') ||
+    l.includes('(0–1)') || l.includes('(0-1)') ||
+    /\bltv\b/.test(l) || /\bltc\b/.test(l) ||
+    l.includes('cap rate') || l.includes('caprate') ||
+    l.includes('year') || l.includes('month') ||
+    l.includes('multiple') || l.includes('ratio') ||
+    l.includes('bps') || l.includes('dscr') ||
+    l.includes('fsi') || l.includes('far') ||
+    l.includes('(rooms)') || l.includes('number of keys')
+  ) {
+    return 'none';
+  }
+  // 4) Bare area count (plotArea, totalLand, leasable, avgUnitSize…).
+  if (l.includes('sqft') || l.includes('sq ft')) return 'count';
+  return 'none';
+};
+
+/** Indian digit grouping (53567890 → "5,35,67,890"). '' for non-finite. */
+export const groupIndian = (value, maxFractionDigits = 0) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '';
+  return num.toLocaleString('en-IN', { maximumFractionDigits: maxFractionDigits });
+};
+
+/**
+ * Format a numeric magnitude into a compact scale label for a FIXED scale unit
+ * (unit chosen once from the final value so the count-up animation never flips
+ * its suffix mid-roll). `value` units depend on `scaleUnit`:
+ *   'cr'        → value already in crore     → "₹25.50 Cr"
+ *   'crINR'     → value in rupees            → "₹5.36 Cr"
+ *   'lakhINR'   → value in rupees            → "₹80.00 L"
+ *   'plainINR'  → value in rupees            → "₹8,000"
+ *   'crCount'   → value as a plain count     → "2.00 Cr"
+ *   'lakhCount' → value as a plain count     → "2.00 Lakh"
+ */
+export const formatAmountScale = (value, scaleUnit) => {
+  const v = Number(value);
+  if (!Number.isFinite(v) || !scaleUnit) return '';
+  // Grouped 2-dp — so a fat-finger like ₹2,550.00 Cr keeps its commas.
+  const f2 = (n) => Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  switch (scaleUnit) {
+    case 'cr':        return `₹${f2(v)} Cr`;
+    case 'crINR':     return `₹${f2(v / 1e7)} Cr`;
+    case 'lakhINR':   return `₹${f2(v / 1e5)} L`;
+    case 'plainINR':  return `₹${groupIndian(Math.round(v))}`;
+    case 'crCount':   return `${f2(v / 1e7)} Cr`;
+    case 'lakhCount': return `${f2(v / 1e5)} Lakh`;
+    default:          return '';
+  }
+};
+
+/**
+ * Build the readout for a typed value under a unit kind, or null when nothing
+ * should show (kind 'none', empty, NaN, ≤ 0, or below the magnitude threshold).
+ *
+ * @returns {{ grouped: string|null, compact: string|null, scaleValue: number|null, scaleUnit: string|null } | null}
+ *   - `grouped` is the static Indian-grouped echo (null when it would duplicate
+ *     the compact, e.g. a sub-₹1L rupee value).
+ *   - `compact` is the final compact label.
+ *   - `scaleValue` / `scaleUnit` drive the count-up (the component animates the
+ *     compact figure toward `scaleValue`); both null ⇒ no animation (areas stay
+ *     static so "2 Lakh sqft" never becomes "2.00 Lakh sqft" mid-roll).
+ */
+export const describeAmount = (value, kind) => {
+  if (kind === 'none' || value === '' || value == null) return null;
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+
+  if (kind === 'rupeeCrore') {
+    // Already in crore; a fat-finger 2550 → "₹2,550.00 Cr" stands out loudly.
+    return {
+      grouped: null,
+      compact: formatAmountScale(raw, 'cr'),
+      scaleValue: raw,
+      scaleUnit: 'cr',
+    };
+  }
+
+  if (kind === 'rupeePlain') {
+    if (raw < 1000) return null;
+    const rupees = Math.round(raw);
+    if (rupees >= 1e7) {
+      return { grouped: groupIndian(rupees), compact: formatAmountScale(rupees, 'crINR'), scaleValue: rupees, scaleUnit: 'crINR' };
+    }
+    if (rupees >= 1e5) {
+      return { grouped: groupIndian(rupees), compact: formatAmountScale(rupees, 'lakhINR'), scaleValue: rupees, scaleUnit: 'lakhINR' };
+    }
+    // Below ₹1 lakh the grouped number IS the compact — show one, not "8,000 · ₹8,000".
+    return { grouped: null, compact: formatAmountScale(rupees, 'plainINR'), scaleValue: rupees, scaleUnit: 'plainINR' };
+  }
+
+  if (kind === 'count') {
+    if (raw < 1000) return null;
+    const whole = Math.round(raw);
+    // Areas stay static (no count-up): trim trailing zeros so 200000 → "2 Lakh".
+    if (whole >= 1e7) {
+      return { grouped: groupIndian(whole), compact: `${+(whole / 1e7).toFixed(2)} Cr`, scaleValue: null, scaleUnit: null };
+    }
+    if (whole >= 1e5) {
+      return { grouped: groupIndian(whole), compact: `${+(whole / 1e5).toFixed(2)} Lakh`, scaleValue: null, scaleUnit: null };
+    }
+    return { grouped: groupIndian(whole), compact: null, scaleValue: null, scaleUnit: null };
+  }
+
+  return null;
+};
+
 /**
  * Format percentage
  */

@@ -26,6 +26,10 @@ import {
 // mistakes as they type instead of 5 hours later at export.
 import { useBenchmarkBands, computeSellRateWarning } from '../../hooks/useBenchmarkBands';
 import BenchmarkWarning from './BenchmarkWarning';
+// Unit-aware "what did I just type" echo under each numeric input — catches a
+// fat-fingered zero on crore-scale numbers before it reaches the kernel.
+import AmountReadout from '../common/AmountReadout';
+import { inferAmountKind } from '../../utils/format';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -300,6 +304,13 @@ export default function InputForm({
                 when input is within band / no bands available. */}
             {field.name === 'sellingRatePerSqft' && (
               <BenchmarkWarning warning={sellRateWarning} />
+            )}
+            {field.type !== 'select' && (
+              <AmountReadout
+                value={inputs[field.name]}
+                kind={inferAmountKind(field.label)}
+                unitSuffix={inferAmountKind(field.label) === 'count' ? 'sqft' : undefined}
+              />
             )}
           </div>
         ))}

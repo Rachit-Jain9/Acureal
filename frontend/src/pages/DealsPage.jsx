@@ -28,6 +28,7 @@ import { useProperties } from '../hooks/useProperties';
 // link a property. Paste a Maps link / Plus Code / address / coords /
 // survey number / broker narrative and REDIP creates the parcel inline.
 import PropertyCaptureField from '../components/deal/PropertyCaptureField';
+import AmountReadout from '../components/common/AmountReadout';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 // DealCard was extracted from this file (2026-05-25) when DealsPage
@@ -1157,6 +1158,7 @@ export default function DealsPage() {
                         placeholder="e.g. 25.50"
                         className="input w-full"
                       />
+                      <AmountReadout value={form.landAskPriceCr} kind="rupeeCrore" />
                     </div>
                   ) : (
                     <div>
@@ -1173,6 +1175,11 @@ export default function DealsPage() {
                         min="0"
                         placeholder={form.landPricingBasis === 'per_acre' ? 'e.g. 250000000' : 'e.g. 12000'}
                         className="input w-full"
+                      />
+                      <AmountReadout
+                        value={form.landPriceRateInr}
+                        kind="rupeePlain"
+                        unitSuffix={form.landPricingBasis === 'per_acre' ? '/acre' : '/sqft'}
                       />
                     </div>
                   )}
@@ -1202,6 +1209,11 @@ export default function DealsPage() {
                         <option value="acre">acre</option>
                       </select>
                     </div>
+                    <AmountReadout
+                      value={form.landExtentInputValue}
+                      kind="count"
+                      unitSuffix={form.landExtentInputUnit === 'acre' ? 'acre' : 'sqft'}
+                    />
                     <p className="mt-2 text-xs text-content-secondary">
                       {selectedProperty?.land_area_sqft
                         ? `Linked property fallback area: ${Number(selectedProperty.land_area_sqft).toLocaleString('en-IN')} sqft`
