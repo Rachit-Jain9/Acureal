@@ -18,6 +18,7 @@ import ReadOnlyPropertyMap from '../components/maps/ReadOnlyPropertyMap';
 import { useDeals } from '../hooks/useDeals';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import AmountReadout from '../components/common/AmountReadout';
 import EmptyState from '../components/common/EmptyState';
 import { toast } from '../components/common/Toast';
 import { SectionHeader, Skeleton, SkeletonCard, Modal } from '../design-system';
@@ -591,6 +592,11 @@ export default function PropertyDetailPage() {
                         <option value="acre">acre</option>
                       </select>
                     </div>
+                    <AmountReadout
+                      value={editForm.landAreaValue}
+                      kind="count"
+                      unitSuffix={editForm.landAreaUnit === 'acre' ? 'acre' : 'sqft'}
+                    />
                     <p className="mt-2 text-xs text-content-secondary">
                       {editAreaSqft
                         ? `Normalized area: ${formatArea(editAreaSqft)}`
@@ -608,6 +614,7 @@ export default function PropertyDetailPage() {
                       onChange={(event) => setEditForm((current) => ({ ...current, circleRatePerSqft: event.target.value }))}
                       className="input"
                     />
+                    <AmountReadout value={editForm.circleRatePerSqft} kind="rupeePlain" unitSuffix="/sqft" />
                   </div>
 
                   <div>

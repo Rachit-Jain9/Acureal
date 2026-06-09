@@ -12,6 +12,7 @@ import { useCanEdit } from '../hooks/useCanEdit';
 import useAuthStore from '../store/authStore';
 import { roleSatisfies } from '../utils/roles';
 import Badge from '../components/common/Badge';
+import AmountReadout from '../components/common/AmountReadout';
 import {
   Skeleton, SkeletonKpi, SkeletonCard,
   Button, Modal, Tabs, Field, Input, Select, Textarea,
@@ -517,26 +518,32 @@ export default function DealDetailPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Land ask price (₹ Cr)">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editForm.landAskPriceCr}
-                    onChange={(e) => updateField('landAskPriceCr', e.target.value)}
-                    placeholder="Optional"
-                  />
-                </Field>
-                <Field label="Negotiated price (₹ Cr)">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editForm.negotiatedPriceCr}
-                    onChange={(e) => updateField('negotiatedPriceCr', e.target.value)}
-                    placeholder="Optional"
-                  />
-                </Field>
+                <div>
+                  <Field label="Land ask price (₹ Cr)">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editForm.landAskPriceCr}
+                      onChange={(e) => updateField('landAskPriceCr', e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </Field>
+                  <AmountReadout value={editForm.landAskPriceCr} kind="rupeeCrore" />
+                </div>
+                <div>
+                  <Field label="Negotiated price (₹ Cr)">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editForm.negotiatedPriceCr}
+                      onChange={(e) => updateField('negotiatedPriceCr', e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </Field>
+                  <AmountReadout value={editForm.negotiatedPriceCr} kind="rupeeCrore" />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
