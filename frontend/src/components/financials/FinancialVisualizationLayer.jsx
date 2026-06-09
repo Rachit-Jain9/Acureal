@@ -221,7 +221,7 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
               </div>
             )}
           </div>
-          <div className="h-48">
+          <div className="h-48" role="img" aria-label="Terminal value comparison by valuation method, horizontal bar chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={comparison} layout="vertical" margin={{ left: 20, right: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
@@ -277,7 +277,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
           {escPct.toFixed(1)}% pa growth
         </span>
       </div>
-      <div className="p-4 h-64">
+      <div className="p-4 h-64" role="img" aria-label={`NOI progression line chart over ${hold} years at ${escPct.toFixed(1)} percent annual growth`}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data}>
             <defs>
@@ -360,7 +360,7 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
           Current: {currentCap.toFixed(2)}%  →  {formatCrores(currentValue)}
         </span>
       </div>
-      <div className="p-4 h-64">
+      <div className="p-4 h-64" role="img" aria-label={`Terminal value sensitivity to exit cap rate, line chart; current cap ${currentCap.toFixed(2)} percent`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 10, right: 20 }}>
             <defs>
@@ -456,7 +456,7 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
           </span>
         </div>
       </div>
-      <div className="p-4 h-72">
+      <div className="p-4 h-72" role="img" aria-label={`Cash flow composition by phase — construction, operating, terminal — stacked bar chart across ${data.length} quarters`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} stackOffset="sign">
             <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
@@ -498,7 +498,7 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
           IRR: {kpis?.irr != null ? formatPct(kpis.irr) : '-'}
         </span>
       </div>
-      <div className="p-4 h-64">
+      <div className="p-4 h-64" role="img" aria-label={`Cumulative return trajectory, area chart across ${data.length} quarters${kpis?.irr != null ? `, IRR ${formatPct(kpis.irr)}` : ''}`}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data}>
             <defs>
@@ -621,7 +621,7 @@ export function CostCompositionChart({ costs }) {
         <h3 className="text-sm font-bold text-content-primary uppercase tracking-wide">Cost Composition</h3>
         <span className="ml-auto text-[10px] font-semibold text-content-muted">Total: {formatCrores(total)}</span>
       </div>
-      <div className="p-4 h-72">
+      <div className="p-4 h-72" role="img" aria-label={`Project cost composition, horizontal bar chart across ${items.length} categories, total ${formatCrores(total)}`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={items} layout="vertical" margin={{ left: 30, right: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
