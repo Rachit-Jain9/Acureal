@@ -3,11 +3,16 @@ import { useEffect, useState, useCallback } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
+// Monotonic id source. `Date.now()` collides when two toasts fire in the same
+// millisecond (e.g. several validation errors at once) — duplicate React keys
+// and `removeToast` then drops BOTH. A counter guarantees unique ids.
+let toastSeq = 0;
+
 export const useToastStore = create((set) => ({
   toasts: [],
   addToast: (toast) =>
     set((state) => ({
-      toasts: [...state.toasts, { id: Date.now(), ...toast }],
+      toasts: [...state.toasts, { id: ++toastSeq, ...toast }],
     })),
   removeToast: (id) =>
     set((state) => ({

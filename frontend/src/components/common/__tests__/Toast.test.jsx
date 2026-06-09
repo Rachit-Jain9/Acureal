@@ -50,4 +50,14 @@ describe('Toast a11y', () => {
     });
     expect(screen.getByRole('status').className).toContain('redip-toast-in');
   });
+
+  test('two toasts fired in the same tick get unique ids (no key collision)', () => {
+    act(() => {
+      toast.success('A');
+      toast.error('B');
+    });
+    const ids = useToastStore.getState().toasts.map((t) => t.id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
 });
