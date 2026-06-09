@@ -9,6 +9,7 @@ import {
   GitBranch, Gauge, LineChart as LineIcon, BarChart3,
 } from 'lucide-react';
 import { formatCrores, formatPct, formatINR } from '../../utils/format';
+import { useChartAnim } from '../../hooks/useChartAnim';
 
 // ─── DESIGN TOKENS (Precision Analysis) ───────────────────────────────────
 // Mirrors --chart-* CSS vars + data-signal palette. Kept as hex so Recharts
@@ -98,6 +99,7 @@ function Tip({ active, payload, label, valueFormatter = (v) => `₹${Number(v).t
 // ─── TERMINAL VALUE PANEL ─────────────────────────────────────────────────
 
 export function TerminalValuePanel({ kpis, revenue, inputs }) {
+  const chartAnim = useChartAnim();
   // NOTE: the `if (!method) return null` guard sits AFTER the useMemo below,
   // not here. `method` flips falsy→truthy across renders for income-like
   // deals (it loads async — null in normalizeFinancials until the kernel
@@ -226,7 +228,7 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
                 <XAxis type="number" tickFormatter={(v) => `${Number(v).toFixed(0)}`} tick={AXIS_TICK} />
                 <YAxis dataKey="label" type="category" tick={AXIS_TICK} width={140} />
                 <Tooltip content={<Tip />} />
-                <Bar dataKey="value" name="Terminal Value (₹ Cr)" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="value" name="Terminal Value (₹ Cr)" radius={[0, 4, 4, 0]} {...chartAnim}>
                   {comparison.map((entry) => (
                     <Cell
                       key={entry.method}
@@ -248,6 +250,7 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
 // ─── NOI PROGRESSION CHART ─────────────────────────────────────────────────
 
 export function NOIProgressionChart({ kpis, inputs, revenue }) {
+  const chartAnim = useChartAnim();
   const stabilizedNOI = safeNumber(kpis?.noi ?? revenue?.stabilizedNOI, 0);
   const hold = Math.max(1, Math.round(safeNumber(inputs?.holdPeriodYears, 5)));
   const escPct = safeNumber(inputs?.rentEscalationPct ?? inputs?.adrGrowthPct, 5);
@@ -299,6 +302,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
             <Tooltip content={<Tip />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area
+              {...chartAnim}
               yAxisId="left"
               type="monotone"
               dataKey="noi"
@@ -308,6 +312,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
               fill="url(#noiGradient)"
             />
             <Line
+              {...chartAnim}
               yAxisId="right"
               type="monotone"
               dataKey="impliedValue"
@@ -327,6 +332,7 @@ export function NOIProgressionChart({ kpis, inputs, revenue }) {
 // ─── VALUE vs CAP RATE CURVE ───────────────────────────────────────────────
 
 export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
+  const chartAnim = useChartAnim();
   const noiAtExit = safeNumber(kpis?.noiAtExit ?? revenue?.noiAtExit, 0);
   const currentCap = safeNumber(kpis?.exitCapRate ?? inputs?.exitCapRate, 0);
   if (noiAtExit <= 0 || currentCap <= 0) return null;
@@ -376,6 +382,7 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
             />
             <Tooltip content={<Tip />} />
             <Line
+              {...chartAnim}
               type="monotone"
               dataKey="value"
               name="Terminal Value (₹ Cr)"
@@ -407,6 +414,7 @@ export function ValueVsCapRateCurve({ kpis, inputs, revenue }) {
 // ─── CASH FLOW WATERFALL ───────────────────────────────────────────────────
 
 export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
+  const chartAnim = useChartAnim();
   if (!Array.isArray(cashFlows) || cashFlows.length === 0) return null;
   const terminalValue = safeNumber(kpis?.terminalValue ?? revenue?.terminalValue, 0);
   const hold = Math.max(1, Math.round(safeNumber(inputs?.holdPeriodYears, 5)));
@@ -456,9 +464,9 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
             <YAxis tick={AXIS_TICK} tickFormatter={(v) => `₹${Number(v).toFixed(0)}`} />
             <Tooltip content={<Tip />} />
             <ReferenceLine y={0} stroke={REFERENCE_LINE_STROKE} strokeWidth={1} />
-            <Bar dataKey="construction" name="Construction" stackId="a" fill={PHASE_COLORS.construction} />
-            <Bar dataKey="operating"    name="Operating"    stackId="a" fill={PHASE_COLORS.operating} />
-            <Bar dataKey="terminal"     name="Terminal"     stackId="a" fill={PHASE_COLORS.terminal} />
+            <Bar dataKey="construction" name="Construction" stackId="a" fill={PHASE_COLORS.construction} {...chartAnim} />
+            <Bar dataKey="operating"    name="Operating"    stackId="a" fill={PHASE_COLORS.operating} {...chartAnim} />
+            <Bar dataKey="terminal"     name="Terminal"     stackId="a" fill={PHASE_COLORS.terminal} {...chartAnim} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -469,6 +477,7 @@ export function CashFlowWaterfall({ cashFlows, kpis, revenue, inputs }) {
 // ─── IRR / RETURN PROGRESSION ──────────────────────────────────────────────
 
 export function ReturnProgressionChart({ cashFlows, kpis }) {
+  const chartAnim = useChartAnim();
   if (!Array.isArray(cashFlows) || cashFlows.length < 2) return null;
   let running = 0;
   const data = cashFlows.map((cf, i) => {
@@ -516,6 +525,7 @@ export function ReturnProgressionChart({ cashFlows, kpis }) {
               />
             )}
             <Area
+              {...chartAnim}
               type="monotone"
               dataKey="cumulative"
               name="Cumulative Cash (₹ Cr)"
@@ -584,6 +594,7 @@ export function KPIDashboard({ kpis, assetClass, revenue, costs }) {
 // ─── COST COMPOSITION DONUT (bar style) ────────────────────────────────────
 
 export function CostCompositionChart({ costs }) {
+  const chartAnim = useChartAnim();
   if (!costs) return null;
   const items = [
     { name: 'Land',           value: safeNumber(costs.land),           color: '#1e40af' },
@@ -621,7 +632,7 @@ export function CostCompositionChart({ costs }) {
             />
             <YAxis dataKey="name" type="category" tick={AXIS_TICK} width={110} />
             <Tooltip content={<Tip />} />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+            <Bar dataKey="value" radius={[0, 4, 4, 0]} {...chartAnim}>
               {items.map((e) => (
                 <Cell key={e.name} fill={e.color} />
               ))}

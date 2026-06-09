@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
 } from 'recharts';
 import { clsx } from 'clsx';
+import { useChartAnim } from '../../hooks/useChartAnim';
 
 // Renders the extended USALI hospitality output: 10-year P&L, Sources & Uses,
 // LP/GP waterfall, revenue mix, sensitivity — only shown when the engine
@@ -140,6 +141,7 @@ function HospitalityHeader({ inputs, kpis }) {
 
 // ─── Revenue mix pie (stabilized) ───────────────────────────────────────────
 function RevenueMixCard({ pnl }) {
+  const chartAnim = useChartAnim();
   const stab = pnl.find((y) => y.year === 4) || pnl[pnl.length - 1];
   const data = [
     { name: 'Rooms',            value: stab.roomsRevenueCr || 0, color: '#6366f1' },
@@ -160,7 +162,7 @@ function RevenueMixCard({ pnl }) {
       <div className="flex items-center gap-4">
         <ResponsiveContainer width="55%" height={220}>
           <PieChart>
-            <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
+            <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2} {...chartAnim}>
               {data.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Pie>
             <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
@@ -183,6 +185,7 @@ function RevenueMixCard({ pnl }) {
 
 // ─── NOI / EBITDA evolution line chart ──────────────────────────────────────
 function NOIEvolutionCard({ pnl }) {
+  const chartAnim = useChartAnim();
   const data = pnl.map((y) => ({
     year: `Y${y.year}`,
     Revenue: y.totalRevenueCr,
@@ -204,10 +207,10 @@ function NOIEvolutionCard({ pnl }) {
           <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickFormatter={(v) => `₹${v}`} />
           <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Area type="monotone" dataKey="Revenue" fill="#c7d2fe" stroke="#6366f1" fillOpacity={0.25} />
-          <Line type="monotone" dataKey="GOP"    stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} />
-          <Line type="monotone" dataKey="EBITDA" stroke="#10b981" strokeWidth={2} dot={{ r: 2 }} />
-          <Line type="monotone" dataKey="NOI"    stroke="#f43f5e" strokeWidth={2.5} dot={{ r: 3 }} />
+          <Area type="monotone" dataKey="Revenue" fill="#c7d2fe" stroke="#6366f1" fillOpacity={0.25} {...chartAnim} />
+          <Line type="monotone" dataKey="GOP"    stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} {...chartAnim} />
+          <Line type="monotone" dataKey="EBITDA" stroke="#10b981" strokeWidth={2} dot={{ r: 2 }} {...chartAnim} />
+          <Line type="monotone" dataKey="NOI"    stroke="#f43f5e" strokeWidth={2.5} dot={{ r: 3 }} {...chartAnim} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -374,6 +377,7 @@ function StackColumn({ title, subtitle, tone, rows }) {
 
 // ─── Waterfall ──────────────────────────────────────────────────────────────
 function WaterfallCard({ waterfall }) {
+  const chartAnim = useChartAnim();
   const { tiers, totalLPCr, totalGPCr, lpEquityMultiple, gpEquityMultiple, totalEquityCr, lpCapitalCr, gpCapitalCr, totalDistributionsCr } = waterfall;
   const chartData = tiers.map((t) => ({ name: t.name.split('—')[0].trim(), LP: t.lpCr, GP: t.gpCr }));
 
@@ -394,8 +398,8 @@ function WaterfallCard({ waterfall }) {
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} width={90} />
               <Tooltip formatter={(v) => `₹${Number(v).toFixed(2)} Cr`} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="LP" fill="#6366f1" stackId="a" />
-              <Bar dataKey="GP" fill="#f43f5e" stackId="a" />
+              <Bar dataKey="LP" fill="#6366f1" stackId="a" {...chartAnim} />
+              <Bar dataKey="GP" fill="#f43f5e" stackId="a" {...chartAnim} />
             </BarChart>
           </ResponsiveContainer>
 

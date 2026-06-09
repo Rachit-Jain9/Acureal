@@ -18,12 +18,12 @@ import { Briefcase, ArrowRight, MapPin } from 'lucide-react';
 import EmptyState from '../common/EmptyState';
 import { Button } from '../../design-system';
 import { STAGE_CONFIG } from '../../utils/format';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useChartAnim } from '../../hooks/useChartAnim';
 import { SectionCard } from './DashboardWidgets';
 
 // ── Pipeline distribution chart ────────────────────────────────────────────
 export function PipelineChartWidget({ stage_distribution = [], chartPalette, tooltipStyle }) {
-  const reduced = useReducedMotion();
+  const chartAnim = useChartAnim();
   const accentBarFill = chartPalette[0];
   const data = stage_distribution
     .map((item) => ({
@@ -45,7 +45,7 @@ export function PipelineChartWidget({ stage_distribution = [], chartPalette, too
             {/* PR-NX60: 700ms draw-in matches FRONTEND_GUIDELINES §7
                 (recharts default is 1500ms which feels sluggish on a
                 small KPI-adjacent chart). */}
-            <Bar dataKey="count" fill={accentBarFill} radius={[3, 3, 0, 0]} name="Deals" isAnimationActive={!reduced} animationDuration={700} animationEasing="ease-out" />
+            <Bar dataKey="count" fill={accentBarFill} radius={[3, 3, 0, 0]} name="Deals" {...chartAnim} animationDuration={700} animationEasing="ease-out" />
           </BarChart>
         </ResponsiveContainer>
         </div>
@@ -68,7 +68,7 @@ export function PipelineChartWidget({ stage_distribution = [], chartPalette, too
 
 // ── Cities distribution chart ──────────────────────────────────────────────
 export function CitiesChartWidget({ cities_distribution = [], chartPalette, tooltipStyle }) {
-  const reduced = useReducedMotion();
+  const chartAnim = useChartAnim();
   const data = cities_distribution
     .map((item) => ({ name: item.city || item.name || 'Unknown', value: Number(item.deal_count ?? item.count ?? 0) }))
     .filter((item) => item.value > 0);
@@ -87,7 +87,7 @@ export function CitiesChartWidget({ cities_distribution = [], chartPalette, tool
                   was hardcoded false — the pie just popped. Update animations
                   during data refresh stay smooth via recharts' default
                   inter-render tween. */}
-              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} innerRadius={58} paddingAngle={3} stroke="transparent" isAnimationActive={!reduced} animationDuration={700} animationEasing="ease-out">
+              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} innerRadius={58} paddingAngle={3} stroke="transparent" {...chartAnim} animationDuration={700} animationEasing="ease-out">
                 {data.map((item, idx) => (
                   <Cell key={item.name} fill={chartPalette[idx % chartPalette.length]} />
                 ))}
