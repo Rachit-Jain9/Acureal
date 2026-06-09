@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export const useToastStore = create((set) => ({
   toasts: [],
@@ -35,14 +36,25 @@ const colors = {
   warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
 };
 
+const TOAST_EXIT_MS = 200; // keep in sync with .redip-toast-out in index.css
+
 function ToastItem({ toast: t, onRemove }) {
   const Icon = icons[t.type] || Info;
   const isError = t.type === 'error';
+  const reduced = useReducedMotion();
+  const [leaving, setLeaving] = useState(false);
+
+  // Play the exit animation, then unmount. Under reduced motion, remove at once.
+  const dismiss = useCallback(() => {
+    if (reduced) { onRemove(t.id); return; }
+    setLeaving(true);
+    setTimeout(() => onRemove(t.id), TOAST_EXIT_MS);
+  }, [reduced, onRemove, t.id]);
 
   useEffect(() => {
-    const timer = setTimeout(() => onRemove(t.id), 4000);
+    const timer = setTimeout(dismiss, 4000);
     return () => clearTimeout(timer);
-  }, [t.id, onRemove]);
+  }, [dismiss]);
 
   // Errors get role="alert" + aria-live="assertive" so screen readers
   // interrupt; everything else is "status"/"polite" per WAI-ARIA APG.
@@ -50,13 +62,13 @@ function ToastItem({ toast: t, onRemove }) {
     <div
       role={isError ? 'alert' : 'status'}
       aria-live={isError ? 'assertive' : 'polite'}
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${colors[t.type]}`}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${colors[t.type]} ${leaving ? 'redip-toast-out' : 'redip-toast-in'}`}
     >
       <Icon size={18} aria-hidden="true" />
       <span className="text-sm flex-1">{t.message}</span>
       <button
         type="button"
-        onClick={() => onRemove(t.id)}
+        onClick={dismiss}
         aria-label="Dismiss notification"
         className="opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-black/30 rounded"
       >
