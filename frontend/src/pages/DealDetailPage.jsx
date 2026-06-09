@@ -13,6 +13,7 @@ import useAuthStore from '../store/authStore';
 import { roleSatisfies } from '../utils/roles';
 import Badge from '../components/common/Badge';
 import AmountReadout from '../components/common/AmountReadout';
+import { handleNumericPaste } from '../components/common/numericPaste';
 import {
   Skeleton, SkeletonKpi, SkeletonCard,
   Button, Modal, Tabs, Field, Input, Select, Textarea,
@@ -526,6 +527,7 @@ export default function DealDetailPage() {
                       min="0"
                       value={editForm.landAskPriceCr}
                       onChange={(e) => updateField('landAskPriceCr', e.target.value)}
+                      onPaste={(e) => handleNumericPaste(e, 'rupeeCrore', (v) => updateField('landAskPriceCr', v))}
                       placeholder="Optional"
                     />
                   </Field>
@@ -539,6 +541,7 @@ export default function DealDetailPage() {
                       min="0"
                       value={editForm.negotiatedPriceCr}
                       onChange={(e) => updateField('negotiatedPriceCr', e.target.value)}
+                      onPaste={(e) => handleNumericPaste(e, 'rupeeCrore', (v) => updateField('negotiatedPriceCr', v))}
                       placeholder="Optional"
                     />
                   </Field>
