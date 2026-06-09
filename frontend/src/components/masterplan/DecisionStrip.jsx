@@ -144,7 +144,7 @@ export default function DecisionStrip() {
       <SectionHeader
         eyebrow="Build envelope"
         title="Decision Strip — what you can build, given a zone"
-        sub="Pick a zone and try road-width / plot-area / building-height combinations. The envelope is computed from RMP 2031 Volume 6 Tables 1, 2 and the per-zone FAR road-width tiers — all deterministic, no AI in the math."
+        sub="Pick a zone and try road-width / plot-area / building-height combinations. The envelope is computed from the operative RMP 2015 Vol III — setback Tables 8 & 9 and the per-zone FAR road-width tables — all deterministic, no AI in the math."
       />
 
       <Card elevated className="p-5">
@@ -233,29 +233,27 @@ export default function DecisionStrip() {
                 </div>
                 <ValueRow
                   icon={MoveHorizontal}
-                  label="Front (effective)"
+                  label="Front"
                   value={`${fmt(envelope.setbacks.front_m, 2)} m`}
-                  hint={
-                    envelope.setbacks.front_road_tier && envelope.setbacks.height_tier
-                      ? `max(road tier ${fmt(envelope.setbacks.front_road_tier.front_m, 1)}m, height tier ${fmt(envelope.setbacks.height_tier.front_m, 1)}m)`
-                      : envelope.setbacks.front_road_tier
-                        ? `road tier ≥ ${fmt(envelope.setbacks.front_road_tier.source_tier_m, 1)}m`
-                        : null
-                  }
+                  hint={envelope.setbacks.basis}
                   tone="neutral"
                 />
                 <ValueRow
                   icon={ArrowsUpFromLine}
                   label="Rear"
                   value={envelope.setbacks.rear_m !== null ? `${fmt(envelope.setbacks.rear_m, 2)} m` : '—'}
-                  hint={envelope.setbacks.height_tier ? `tier: ${envelope.setbacks.height_tier.max_floors_label}` : null}
+                  hint={envelope.setbacks.model === 'low_rise' ? 'rear referenced to site depth' : 'uniform all-around'}
                   tone="neutral"
                 />
                 <ValueRow
                   icon={ArrowsUpFromLine}
-                  label="Side"
+                  label="Side (max of left / right)"
                   value={envelope.setbacks.side_m !== null ? `${fmt(envelope.setbacks.side_m, 2)} m` : '—'}
-                  hint={envelope.setbacks.height_tier ? `tier: ${envelope.setbacks.height_tier.max_floors_label}` : null}
+                  hint={
+                    envelope.setbacks.left_m !== null || envelope.setbacks.right_m !== null
+                      ? `left ${fmt(envelope.setbacks.left_m, 2)} m / right ${fmt(envelope.setbacks.right_m, 2)} m`
+                      : null
+                  }
                   tone="neutral"
                 />
               </div>
@@ -291,9 +289,10 @@ export default function DecisionStrip() {
           {envelope.height.allowed_max_m !== null && buildingHeightM > envelope.height.allowed_max_m && (
             <ErrorState tone="warn" title="Target height exceeds permitted ceiling">
               Your target {fmt(buildingHeightM, 1)} m is above the permitted {fmt(envelope.height.allowed_max_m, 1)} m
-              ({envelope.height.road_cap_m !== null && envelope.height.road_cap_m < envelope.height.zone_max_m
-                ? `road cap = 1.5 × ${fmt(envelope.inputs.road_width_m, 1)}m road + front setback`
-                : 'zone-level cap'})
+              ({envelope.height.road_cap_m !== null
+                && (envelope.height.zone_max_m === null || envelope.height.road_cap_m <= envelope.height.zone_max_m)
+                ? `screening cap ≈ 1.5 × ${fmt(envelope.inputs.road_width_m, 1)}m road + front setback`
+                : 'zone-level ceiling'})
               . Either drop the height, widen the abutting road, or pick a different zone.
             </ErrorState>
           )}
@@ -306,9 +305,9 @@ export default function DecisionStrip() {
               </div>
               <ul className="space-y-0.5">
                 <li>FAR road-width tiers — {envelope.sources.far_table}</li>
-                <li>Front setback by road width — {envelope.sources.front_setback_table}</li>
-                <li>Setback by building height — {envelope.sources.height_setback_table}</li>
-                <li>Height cap rule — {envelope.sources.max_height_rule}</li>
+                <li>Setbacks, height ≤ 11.5 m — {envelope.sources.low_rise_setback_table}</li>
+                <li>Setbacks, height &gt; 11.5 m — {envelope.sources.high_rise_setback_table}</li>
+                <li>Height ceiling — {envelope.sources.max_height_rule}</li>
               </ul>
               <div className="mt-2 flex items-center gap-1.5 text-content-muted">
                 <AlertTriangle size={11} />

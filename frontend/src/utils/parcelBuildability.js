@@ -42,13 +42,17 @@ const inLowerInclusiveUpperExclusiveBand = (value, min, max) => {
 export const citeFarRule = (rule = {}) => ({
   id: rule.id ? `far-rule-${rule.id}` : 'far-rule',
   kind: 'rmp_far_rule',
-  label: rule.source_section || 'RMP 2031 FAR rule',
-  source_title: rule.source_title || 'RMP 2031 Volume 6 Zoning Regulations',
+  // Operative source = RMP 2015 Vol III (BDA; G.O. UDD 540 BEM AA SE 2004 dated
+  // 22-06-2007). Keep in lockstep with backend/src/utils/parcelBuildability.js.
+  label: rule.source_section || 'RMP 2015 Vol III FAR rule',
+  source_title:
+    rule.source_title
+    || 'Revised Master Plan 2015 — Volume III: Zoning of Land Use and Regulations (BDA)',
   source_url: rule.source_url || null,
-  authority: rule.authority_name || 'BDA / RMP 2031 reference',
+  authority: rule.authority_name || 'Bangalore Development Authority (RMP 2015, operative)',
   page: rule.source_page || null,
   section: rule.source_section || null,
-  status: rule.plan_status || 'draft_reference',
+  status: rule.plan_status || 'operative',
 });
 
 export const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs, landUseFamily } = {}) => {
@@ -262,7 +266,7 @@ export const computeBuildabilityFromRule = ({ property = {}, zone = null, rule =
     rule: {
       id: rule.id,
       plan_version: rule.plan_version,
-      plan_status: rule.plan_status || 'draft_reference',
+      plan_status: rule.plan_status || 'operative',
       source_section: rule.source_section,
       source_page: rule.source_page,
       review_status: rule.review_status,

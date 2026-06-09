@@ -28,118 +28,138 @@ m._compile(cjsSource, 'frontend/src/utils/buildEnvelope.js');
 const frontend = m.exports;
 
 const sampleZone = {
-  id: 'zone-r-pz-a',
-  zone_code: 'R-PZ-A',
-  zone_name: 'Residential (Planning Zone A — inside ORR)',
-  plan_version: 'RMP 2031 Provisional',
-  permissible_fsi_base: 1.5,
-  permissible_fsi_max: 2.7,
-  ground_coverage_pct: 65,
+  id: 'zone-r-main',
+  zone_code: 'R',
+  zone_name: 'Residential (Main)',
+  plan_version: 'RMP 2015',
+  permissible_fsi_base: 1.75,
+  permissible_fsi_max: 3.25,
+  ground_coverage_pct: 75,
   building_height_max_m: 60,
-  source_page: 45,
-  source_section: '5.3 Table 6',
+  source_page: 27,
+  source_section: 'RMP 2015 Vol III, §4.1 Table 10',
   fsi_road_width_rules: [
-    { road_width_m:  6.0, fsi: 1.50, max_ground_coverage_pct: 75 },
-    { road_width_m:  9.5, fsi: 1.50, max_ground_coverage_pct: 75 },
-    { road_width_m: 12.5, fsi: 1.50, max_ground_coverage_pct: 70 },
-    { road_width_m: 15.5, fsi: 1.50, max_ground_coverage_pct: 70 },
-    { road_width_m: 18.5, fsi: 2.25, max_ground_coverage_pct: 65, tdr_addition: 0.45 },
-    { road_width_m: 24.5, fsi: 2.40, max_ground_coverage_pct: 60, tdr_addition: 0.60 },
-    { road_width_m: 30.5, fsi: 2.50, max_ground_coverage_pct: 50, tdr_addition: 0.70 },
+    { road_width_m: 0, fsi: 1.75, max_ground_coverage_pct: 75 },
+    { road_width_m: 12, fsi: 2.25, max_ground_coverage_pct: 65 },
+    { road_width_m: 18, fsi: 2.5, max_ground_coverage_pct: 60 },
+    { road_width_m: 24, fsi: 3.0, max_ground_coverage_pct: 55 },
+    { road_width_m: 30, fsi: 3.25, max_ground_coverage_pct: 50 },
   ],
 };
 
 const fixtures = [
-  { label: 'small plot, narrow road, low building', zone: sampleZone, inputs: { roadWidthM: 9.0, plotAreaSqm: 100, buildingHeightM: 9.5 } },
-  { label: 'mid plot, mid road, mid building', zone: sampleZone, inputs: { roadWidthM: 18.0, plotAreaSqm: 500, buildingHeightM: 15.0 } },
-  { label: 'large plot, wide road, tall building', zone: sampleZone, inputs: { roadWidthM: 30.5, plotAreaSqm: 4000, buildingHeightM: 60.0 } },
-  { label: 'no inputs', zone: sampleZone, inputs: {} },
-  { label: 'only road width', zone: sampleZone, inputs: { roadWidthM: 18.0 } },
-  { label: 'only height', zone: sampleZone, inputs: { buildingHeightM: 30.0 } },
-  { label: 'plot area pushes G+1 tier into G+2 tier', zone: sampleZone, inputs: { roadWidthM: 12.0, plotAreaSqm: 200, buildingHeightM: 9.0 } },
-  { label: 'TDR-eligible tier', zone: sampleZone, inputs: { roadWidthM: 24.5, plotAreaSqm: 2000, buildingHeightM: 24.0 } },
+  { label: 'low-rise small plot', inputs: { roadWidthM: 9, plotAreaSqm: 100, buildingHeightM: 9.5 } },
+  { label: 'low-rise mid plot', inputs: { roadWidthM: 18, plotAreaSqm: 500, buildingHeightM: 11 } },
+  { label: 'high-rise', inputs: { roadWidthM: 18, plotAreaSqm: 1000, buildingHeightM: 15 } },
+  { label: 'tall high-rise, large plot', inputs: { roadWidthM: 30.5, plotAreaSqm: 4000, buildingHeightM: 60 } },
+  { label: 'large plot low-rise (>4000 sqm)', inputs: { roadWidthM: 24, plotAreaSqm: 5000, buildingHeightM: 10 } },
+  { label: 'no inputs', inputs: {} },
+  { label: 'only road width', inputs: { roadWidthM: 18 } },
+  { label: 'only height (high-rise)', inputs: { buildingHeightM: 30 } },
+  { label: 'explicit site dims', inputs: { roadWidthM: 12, plotAreaSqm: 240, buildingHeightM: 9, siteWidthM: 12, siteDepthM: 20 } },
 ];
 
 describe('buildEnvelope parity (backend vs frontend)', () => {
-  test('FRONT_SETBACK_BY_ROAD_WIDTH constants match', () => {
-    expect(frontend.FRONT_SETBACK_BY_ROAD_WIDTH).toEqual(backend.FRONT_SETBACK_BY_ROAD_WIDTH);
-  });
-  test('SETBACK_BY_HEIGHT constants match', () => {
-    expect(frontend.SETBACK_BY_HEIGHT).toEqual(backend.SETBACK_BY_HEIGHT);
+  test('HIGH_RISE_SETBACK_BY_HEIGHT constants match', () => {
+    expect(frontend.HIGH_RISE_SETBACK_BY_HEIGHT).toEqual(backend.HIGH_RISE_SETBACK_BY_HEIGHT);
   });
 
-  test.each(fixtures)('frontSetbackByRoadWidth parity: $label', ({ inputs }) => {
-    expect(frontend.frontSetbackByRoadWidth(inputs.roadWidthM)).toEqual(
-      backend.frontSetbackByRoadWidth(inputs.roadWidthM),
+  test.each(fixtures)('lowRiseSetback parity: $label', ({ inputs }) => {
+    const args = { siteWidthM: inputs.siteWidthM, siteDepthM: inputs.siteDepthM, plotAreaSqm: inputs.plotAreaSqm };
+    expect(frontend.lowRiseSetback(args)).toEqual(backend.lowRiseSetback(args));
+  });
+
+  test.each(fixtures)('highRiseSetback parity: $label', ({ inputs }) => {
+    expect(frontend.highRiseSetback(inputs.buildingHeightM)).toEqual(backend.highRiseSetback(inputs.buildingHeightM));
+  });
+
+  test.each(fixtures)('setbacksForBuilding parity: $label', ({ inputs }) => {
+    const args = {
+      buildingHeightM: inputs.buildingHeightM,
+      siteWidthM: inputs.siteWidthM,
+      siteDepthM: inputs.siteDepthM,
+      plotAreaSqm: inputs.plotAreaSqm,
+    };
+    expect(frontend.setbacksForBuilding(args)).toEqual(backend.setbacksForBuilding(args));
+  });
+
+  test.each(fixtures)('deriveSiteDimensions parity: $label', ({ inputs }) => {
+    const args = { plotAreaSqm: inputs.plotAreaSqm, siteWidthM: inputs.siteWidthM, siteDepthM: inputs.siteDepthM };
+    expect(frontend.deriveSiteDimensions(args)).toEqual(backend.deriveSiteDimensions(args));
+  });
+
+  test.each(fixtures)('effectiveFARFromZone parity: $label', ({ inputs }) => {
+    expect(frontend.effectiveFARFromZone(sampleZone, inputs.roadWidthM)).toEqual(
+      backend.effectiveFARFromZone(sampleZone, inputs.roadWidthM),
     );
   });
 
-  test.each(fixtures)('setbackByHeight parity: $label', ({ inputs }) => {
-    expect(frontend.setbackByHeight(inputs.buildingHeightM, inputs.plotAreaSqm)).toEqual(
-      backend.setbackByHeight(inputs.buildingHeightM, inputs.plotAreaSqm),
-    );
-  });
-
-  test.each(fixtures)('effectiveFARFromZone parity: $label', ({ zone, inputs }) => {
-    expect(frontend.effectiveFARFromZone(zone, inputs.roadWidthM)).toEqual(
-      backend.effectiveFARFromZone(zone, inputs.roadWidthM),
-    );
-  });
-
-  test.each(fixtures)('calculateBuildEnvelope parity: $label', ({ zone, inputs }) => {
-    expect(frontend.calculateBuildEnvelope(zone, inputs)).toEqual(
-      backend.calculateBuildEnvelope(zone, inputs),
+  test.each(fixtures)('calculateBuildEnvelope parity: $label', ({ inputs }) => {
+    expect(frontend.calculateBuildEnvelope(sampleZone, inputs)).toEqual(
+      backend.calculateBuildEnvelope(sampleZone, inputs),
     );
   });
 });
 
-describe('buildEnvelope numeric correctness', () => {
-  test('front setback for 6m road = 1.0m', () => {
-    expect(backend.frontSetbackByRoadWidth(6.0)).toMatchObject({ front_m: 1.0 });
+describe('buildEnvelope numeric correctness — RMP 2015 Vol III', () => {
+  // Table 9 (high-rise, > 11.5 m): uniform all-around by height.
+  test('Table 9: height 12 m -> 5.0 m all sides', () => {
+    expect(backend.highRiseSetback(12)).toMatchObject({ front_m: 5.0, rear_m: 5.0, left_m: 5.0, right_m: 5.0, model: 'high_rise' });
   });
 
-  test('front setback for 18m road = 3.5m', () => {
-    expect(backend.frontSetbackByRoadWidth(18.0)).toMatchObject({ front_m: 3.5 });
+  test('Table 9: height 17 m -> 6.0 m', () => {
+    expect(backend.highRiseSetback(17)).toMatchObject({ front_m: 6.0, rear_m: 6.0 });
   });
 
-  test('front setback for 60m road = 6.0m (top tier)', () => {
-    expect(backend.frontSetbackByRoadWidth(60.0)).toMatchObject({ front_m: 6.0 });
+  test('Table 9: height 60 m -> 16.0 m (top band)', () => {
+    expect(backend.highRiseSetback(60)).toMatchObject({ front_m: 16.0, left_m: 16.0 });
   });
 
-  test('setback for G+1 (≤9.5m) on 60sqm plot = 1.0/0.5/0.5', () => {
-    expect(backend.setbackByHeight(9.0, 60)).toMatchObject({ front_m: 1.0, rear_m: 0.5, side_m: 0.5 });
+  // Table 8 (low-rise, <= 11.5 m): % of site width (left/right) and depth (front/rear).
+  test('Table 8: site width/depth <= 6 m -> right 1.0/left 0, front 1.0/rear 0', () => {
+    expect(backend.lowRiseSetback({ siteWidthM: 5, siteDepthM: 5 })).toMatchObject({
+      right_m: 1.0, left_m: 0.0, front_m: 1.0, rear_m: 0.0, model: 'low_rise',
+    });
   });
 
-  test('setback for G+5 (15-18m) = 6.0/6.0/6.0 regardless of plot area', () => {
-    expect(backend.setbackByHeight(17.0, 5000)).toMatchObject({ front_m: 6.0, rear_m: 6.0, side_m: 6.0 });
+  test('Table 8: site 6-9 m -> 1.0 m on all sides', () => {
+    expect(backend.lowRiseSetback({ siteWidthM: 8, siteDepthM: 8 })).toMatchObject({
+      right_m: 1.0, left_m: 1.0, front_m: 1.0, rear_m: 1.0,
+    });
   });
 
-  test('setback for G+19 (54-60m) = 15.0/15.0/15.0', () => {
-    expect(backend.setbackByHeight(60.0, 5000)).toMatchObject({ front_m: 15.0, rear_m: 15.0, side_m: 15.0 });
+  test('Table 8: site > 9 m -> 8% width (right/left), 12%/8% depth (front/rear)', () => {
+    // width 12 -> 0.96 ; depth 12 -> front 1.44, rear 0.96
+    expect(backend.lowRiseSetback({ siteWidthM: 12, siteDepthM: 12 })).toMatchObject({
+      right_m: 0.96, left_m: 0.96, front_m: 1.44, rear_m: 0.96,
+    });
   });
 
-  test('effective FAR for R-PZ-A on 18.5m road = base 2.25 + TDR 0.45 = max 2.70', () => {
-    const result = backend.effectiveFARFromZone(sampleZone, 18.5);
-    expect(result).toMatchObject({ base_fsi: 2.25, tdr_addition: 0.45 });
-    expect(result.max_fsi).toBeCloseTo(2.70, 2);
+  test('Table 8 note: plot > 4000 sqm -> 5.0 m all sides', () => {
+    expect(backend.lowRiseSetback({ siteWidthM: 50, siteDepthM: 120, plotAreaSqm: 5000 })).toMatchObject({
+      front_m: 5.0, rear_m: 5.0, left_m: 5.0, right_m: 5.0,
+    });
   });
 
-  test('effective FAR for narrow road falls back to lowest tier', () => {
-    const result = backend.effectiveFARFromZone(sampleZone, 5.0);
-    expect(result).toMatchObject({ base_fsi: 1.50 });
+  test('setbacksForBuilding routes >11.5 m to Table 9 and <=11.5 m to Table 8', () => {
+    expect(backend.setbacksForBuilding({ buildingHeightM: 20, siteWidthM: 30, siteDepthM: 33, plotAreaSqm: 1000 })).toMatchObject({ model: 'high_rise', front_m: 7.0 });
+    expect(backend.setbacksForBuilding({ buildingHeightM: 9, siteWidthM: 12, siteDepthM: 12 })).toMatchObject({ model: 'low_rise', front_m: 1.44 });
   });
 
-  test('full envelope: 1000 sqm plot, 18m road, 15m building → buildable, footprint, height cap', () => {
-    const env = backend.calculateBuildEnvelope(sampleZone, { roadWidthM: 18.0, plotAreaSqm: 1000, buildingHeightM: 15.0 });
+  test('deriveSiteDimensions: square estimate from area when dims absent', () => {
+    expect(backend.deriveSiteDimensions({ plotAreaSqm: 100 })).toEqual({ width_m: 10, depth_m: 10, method: 'square_estimate' });
+  });
+
+  test('full envelope: R zone, 18 m road, 1000 sqm, 15 m building', () => {
+    const env = backend.calculateBuildEnvelope(sampleZone, { roadWidthM: 18, plotAreaSqm: 1000, buildingHeightM: 15 });
     expect(env.ok).toBe(true);
-    expect(env.far.base_fsi).toBe(1.50); // tier 12.5 (15.5 not yet reached at exactly 18.0)
-    expect(env.setbacks.front_m).toBeCloseTo(4.0, 2); // max(road=3.5, height=4.0)
-    expect(env.setbacks.rear_m).toBe(4.0);
-    expect(env.setbacks.side_m).toBe(4.0);
-    expect(env.height.road_cap_m).toBeCloseTo(30.5, 2); // 1.5*18 + 3.5
-    expect(env.height.allowed_max_m).toBeCloseTo(30.5, 2); // road cap < zone max (60)
-    expect(env.capacity.buildable_base_sqm).toBe(1500); // 1000 * 1.5
-    expect(env.capacity.footprint_cap_sqm).toBe(700); // 1000 * 70%
+    expect(env.far.base_fsi).toBe(2.5); // tier >= 18 m road
+    expect(env.ground_coverage_pct).toBe(60);
+    expect(env.setbacks).toMatchObject({ front_m: 5.0, rear_m: 5.0, side_m: 5.0, model: 'high_rise' }); // Table 9 @ 15 m
+    expect(env.height.road_cap_m).toBeCloseTo(32.0, 2); // 1.5*18 + 5
+    expect(env.height.allowed_max_m).toBeCloseTo(32.0, 2); // min(zone 60, 32)
+    expect(env.capacity.buildable_base_sqm).toBe(2500); // 1000 * 2.5
+    expect(env.capacity.footprint_cap_sqm).toBe(600); // 1000 * 60%
   });
 
   test('envelope without zone returns ok=false', () => {

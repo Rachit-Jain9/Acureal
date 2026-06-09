@@ -3,8 +3,8 @@
 const corpus = require('../src/services/masterplanCorpus');
 
 describe('masterplanCorpus manifest', () => {
-  test('exposes 12 canonical entries with required classification fields', () => {
-    expect(corpus.MANIFEST).toHaveLength(12);
+  test('exposes 14 canonical entries with required classification fields', () => {
+    expect(corpus.MANIFEST).toHaveLength(14);
     for (const entry of corpus.MANIFEST) {
       expect(entry.canonical_name).toMatch(/\.(pdf|docx)$/);
       expect(entry.plan_name).toEqual(expect.any(String));
@@ -23,11 +23,17 @@ describe('masterplanCorpus manifest', () => {
     }
   });
 
-  test('Volume 6 zoning regulations is provisional, not gazetted', () => {
+  test('Volume 6 (RMP 2031 draft) is withdrawn; operative RMP 2015 Vol III is present', () => {
     const entry = corpus.findCorpusEntry('Volume-6 Zoning Regulations.pdf');
     expect(entry).not.toBeNull();
-    expect(entry.legal_status).toBe('provisional');
+    expect(entry.legal_status).toBe('draft');
     expect(entry.source_role).toBe('provisional_plan');
+
+    const operative = corpus.findCorpusEntry('Zoning_Regulations_RMP2015f.pdf');
+    expect(operative).not.toBeNull();
+    expect(operative.legal_status).toBe('gazetted');
+    expect(operative.source_role).toBe('operative_regulation');
+    expect(operative.plan_version).toBe('RMP 2015');
   });
 
   test('RMP-Provisional.pdf is OCR-required and provisional', () => {
@@ -97,7 +103,7 @@ describe('applyCorpusDefaults', () => {
     expect(result.canonical_name).toBe('volume-6-zoning-regulations.pdf');
     expect(result.payload.docType).toBe('rmp_table');
     expect(result.payload.sourceRole).toBe('provisional_plan');
-    expect(result.payload.legalStatus).toBe('provisional');
+    expect(result.payload.legalStatus).toBe('draft');
     expect(result.payload.processingMode).toBe('text_extraction');
     expect(result.payload.ocrRequired).toBe(false);
   });
@@ -184,7 +190,7 @@ describe('assertCorpusClassification', () => {
 describe('buildCorpusStatus', () => {
   test('marks every manifest entry as not uploaded when documents list is empty', () => {
     const status = corpus.buildCorpusStatus([]);
-    expect(status).toHaveLength(12);
+    expect(status).toHaveLength(14);
     for (const item of status) {
       expect(item.uploaded).toBe(false);
       expect(item.document).toBeNull();

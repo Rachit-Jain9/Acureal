@@ -1,6 +1,13 @@
 'use strict';
 
-// Bengaluru RMP 2031 source corpus manifest.
+// Bengaluru master-plan source corpus manifest.
+//
+// OPERATIVE plan = Revised Master Plan 2015 (RMP 2015), Volume III Zoning
+// Regulations (BDA; approved vide G.O. UDD 540 BEM AA SE 2004 dated
+// 22-06-2007). The RMP 2031 entries below are a WITHDRAWN draft — provisional
+// approval was withdrawn by the Karnataka govt in July 2020 and the plan was
+// never notified. They are retained only so legacy uploads still classify;
+// their legal_status is 'withdrawn' and no number from them is operative.
 //
 // The 12 entries below are the authoritative classification for the official
 // regulatory inputs that feed REDIP's parcel-intelligence and rule extraction.
@@ -21,8 +28,47 @@
 const path = require('path');
 
 const RMP_2031_PLAN_VERSION = 'RMP 2031 Provisional';
+const RMP_2015_PLAN_VERSION = 'RMP 2015';
 
 const MANIFEST = Object.freeze([
+  {
+    canonical_name: 'rmp-2015-volume-3-zoning-regulations.pdf',
+    aliases: [
+      'zoning_regulations_rmp2015f.pdf',
+      'rmp 2015 volume 3.pdf',
+      'rmp-2015-volume-iii.pdf',
+      'revised master plan 2015 volume iii.pdf',
+      'rmp2015 zoning regulations.pdf',
+    ],
+    plan_name: 'RMP 2015 Volume III — Zoning of Land Use and Regulations (OPERATIVE)',
+    plan_version: RMP_2015_PLAN_VERSION,
+    doc_type: 'rmp_table',
+    source_role: 'operative_regulation',
+    legal_status: 'gazetted',
+    authority_name: 'Bangalore Development Authority',
+    processing_mode: 'text_extraction',
+    ocr_required: false,
+    source_confidence: 1.0,
+    registry_notes: 'OPERATIVE statutory zoning rulebook. Approved vide G.O. UDD 540 BEM AA SE 2004 dated 22-06-2007. Primary source for FAR / ground coverage / setbacks / buffers / TDR. Seeded by migration 20260701_rmp2015_zonal_regulations_seed.',
+  },
+  {
+    canonical_name: 'rmp-2015-zoning-amendment-2015.pdf',
+    aliases: [
+      'udd 105 mnj 2008.pdf',
+      'rmp 2015 amendment 2015.pdf',
+      'zoning regulations amendment 2015.pdf',
+    ],
+    plan_name: 'RMP 2015 Zoning Regulations — Amendment (Karnataka Gazette 23-03-2015)',
+    plan_version: RMP_2015_PLAN_VERSION,
+    doc_type: 'rmp_table',
+    source_role: 'operative_regulation',
+    legal_status: 'gazetted',
+    authority_name: 'Urban Development Department, Govt. of Karnataka',
+    processing_mode: 'text_extraction',
+    ocr_required: false,
+    source_confidence: 1.0,
+    registry_notes: 'Amendment to RMP 2015 zonal regulations. Notification No. UDD 105 MNJ 2008 dated 20-03-2015. Amends commercial / ancillary-use rules in residential zones by ring & road width.',
+  },
   {
     canonical_name: 'volume-6-zoning-regulations.pdf',
     aliases: ['volume-6 zoning regulations.pdf', 'volume_6_zoning_regulations.pdf', 'volume6-zoning.pdf'],
@@ -30,12 +76,12 @@ const MANIFEST = Object.freeze([
     plan_version: RMP_2031_PLAN_VERSION,
     doc_type: 'rmp_table',
     source_role: 'provisional_plan',
-    legal_status: 'provisional',
+    legal_status: 'draft',
     authority_name: 'Bangalore Development Authority',
     processing_mode: 'text_extraction',
     ocr_required: false,
-    source_confidence: 0.85,
-    registry_notes: 'Primary zoning rule source. FAR, setbacks, parking, TOD, buffers, approvals. Treat as provisional planning reference until gazetted.',
+    source_confidence: 0.0,
+    registry_notes: 'WITHDRAWN DRAFT — RMP 2031 was never notified (provisional approval withdrawn Jul 2020). Superseded by the operative RMP 2015 Vol III. Retained for legacy-upload classification only; do NOT promote any FAR/setback/buffer number from this file.',
   },
   {
     canonical_name: 'master-plan.docx',
