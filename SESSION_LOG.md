@@ -4,7 +4,7 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
-## 2026-06-09 (Large-number entry UX + toast cinematic/reliability) (PRs #785–#788, all merged + deployed)
+## 2026-06-09 (Large-number entry UX + toast/chart polish + comps paste) (PRs #785–#791, all merged + deployed)
 
 Operator pain that opened the session: typing and pasting large rupee + area numbers into deal/financial inputs is error-prone — a native `<input type="number">` shows no thousands separators, and silently CLEARS a pasted grouped figure like `₹5,35,67,890` (commas make it invalid). Shipped a unit-aware large-number entry layer + two toast improvements, all small / tested / additive. A deep multi-agent audit was run first; its synthesis backlog proved **unreliable** (hallucinated line numbers, claimed `framer-motion` is installed — it is not, and confused already-shipped work with pending work). The adversarial-critic phase + my own ground-truth verification caught this, so work proceeded from verified reading + domain judgment — e.g. the audit's "require a property on deal creation" was rejected as a violation of the CLAUDE.md sourcing-without-parcel rule.
 
@@ -12,6 +12,8 @@ Operator pain that opened the session: typing and pasting large rupee + area num
 - **#786 — smart paste (P3).** `normalizeNumericPaste(text, kind)` + `handleNumericPaste` (`components/common/numericPaste.js`): pasting `₹5,35,67,890` / an Excel cell / `…/acre` now fills the box instead of clearing it; a full-rupee paste into a `₹ Cr` field is read as crore with a transparent toast; unreadable text raises a clear toast and leaves the input unchanged. `onPaste` wired into the same 4 surfaces. 10 tests.
 - **#787 — toast enter/exit animation.** Toasts now slide 16px + fade in (220ms ease-out) and out (200ms) via pure-CSS keyframes added to the existing `index.css` motion system; honors `prefers-reduced-motion`. No new deps (framer-motion confirmed absent).
 - **#788 — toast id-collision fix.** `addToast` used `id: Date.now()` → two toasts in the same millisecond shared an id (duplicate React keys + `removeToast` dropped both). Switched to a monotonic counter.
+- **#790 — smart paste in the Comps review queue.** Wired the shared `handleNumericPaste` into the `CompField` numeric cells (rate fields → `rupeePlain`, area fields → `count`; units/years/coords keep native paste) so a reviewer can paste a rate from the source email / spreadsheet without the cell clearing. Paste only, no readout (grid cells too dense).
+- **#791 — dashboard charts respect `prefers-reduced-motion`.** The pipeline bar + city pie drew in over 700ms regardless of the reduced-motion setting; gated `isAnimationActive` on `useReducedMotion` per FRONTEND_GUIDELINES §9 (they still animate for everyone else). The financials recharts views (which rely on recharts' default tween, multi-component) are a noted follow-up — deliberately deferred to avoid regressions.
 
 ### Verification
 Per-PR: full frontend build green; new + touched suites green. Full frontend suite 1159/1160 — the single failure is an unrelated pre-existing `AdminAbEvalPage` flake (a `findByText` race under full-suite parallel load) that passes in isolation. Per-PR CI green on master (Frontend + Backend + Financial kernel + Audit + Vercel). No new dependencies, migrations, or keys.
