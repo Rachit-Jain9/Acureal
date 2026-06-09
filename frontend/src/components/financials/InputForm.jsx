@@ -29,6 +29,7 @@ import BenchmarkWarning from './BenchmarkWarning';
 // Unit-aware "what did I just type" echo under each numeric input — catches a
 // fat-fingered zero on crore-scale numbers before it reaches the kernel.
 import AmountReadout from '../common/AmountReadout';
+import { handleNumericPaste } from '../common/numericPaste';
 import { inferAmountKind } from '../../utils/format';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -294,6 +295,11 @@ export default function InputForm({
                 value={inputs[field.name] ?? ''}
                 onChange={handleChange}
                 onWheel={(e) => e.target.blur()}
+                onPaste={(e) =>
+                  handleNumericPaste(e, inferAmountKind(field.label), (v) =>
+                    handleChange({ target: { name: field.name, value: v } })
+                  )
+                }
                 className="input w-full"
               />
             )}

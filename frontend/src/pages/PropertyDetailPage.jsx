@@ -19,6 +19,7 @@ import { useDeals } from '../hooks/useDeals';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import AmountReadout from '../components/common/AmountReadout';
+import { handleNumericPaste } from '../components/common/numericPaste';
 import EmptyState from '../components/common/EmptyState';
 import { toast } from '../components/common/Toast';
 import { SectionHeader, Skeleton, SkeletonCard, Modal } from '../design-system';
@@ -580,6 +581,7 @@ export default function PropertyDetailPage() {
                         step="0.01"
                         value={editForm.landAreaValue}
                         onChange={(event) => setEditForm((current) => ({ ...current, landAreaValue: event.target.value }))}
+                        onPaste={(e) => handleNumericPaste(e, 'count', (v) => setEditForm((current) => ({ ...current, landAreaValue: v })))}
                         className="input"
                         placeholder="Enter area"
                       />
@@ -612,6 +614,7 @@ export default function PropertyDetailPage() {
                       step="0.01"
                       value={editForm.circleRatePerSqft}
                       onChange={(event) => setEditForm((current) => ({ ...current, circleRatePerSqft: event.target.value }))}
+                      onPaste={(e) => handleNumericPaste(e, 'rupeePlain', (v) => setEditForm((current) => ({ ...current, circleRatePerSqft: v })))}
                       className="input"
                     />
                     <AmountReadout value={editForm.circleRatePerSqft} kind="rupeePlain" unitSuffix="/sqft" />

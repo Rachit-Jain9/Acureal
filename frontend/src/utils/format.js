@@ -183,6 +183,44 @@ export const describeAmount = (value, kind) => {
 };
 
 /**
+ * Normalize a pasted clipboard string into a clean numeric value for a money/
+ * area input. Solves a real bug: a native <input type="number"> silently CLEARS
+ * itself when you paste a grouped figure like "₹5,35,67,890" (the commas make it
+ * an invalid number), so copy-pasting a price from a broker's message or an
+ * Excel cell fails. This is deterministic — no shorthand magic (that's a later
+ * layer); it only strips currency symbols, Indian grouping, and a trailing unit.
+ *
+ * @param {string} text  raw clipboard text
+ * @param {'rupeeCrore'|'rupeePlain'|'count'|'none'} kind  the field's unit kind
+ * @returns {{ ok: boolean, value?: number, reason?: string, asCrore?: boolean, interpretedFrom?: number }}
+ *   On a ₹ Cr field, a pasted FULL-RUPEE figure (≥ ₹1 lakh) is interpreted as
+ *   crore (value = rupees / 1e7) with asCrore/interpretedFrom set so the caller
+ *   can tell the user transparently.
+ */
+export const normalizeNumericPaste = (text, kind) => {
+  if (typeof text !== 'string') return { ok: false, reason: 'empty' };
+  // Excel multi-cell paste → take the first line, first tab-cell only.
+  let s = text.split('\n')[0].split('\t')[0].trim();
+  if (!s) return { ok: false, reason: 'empty' };
+  const original = s;
+  // Strip currency markers and Indian digit grouping.
+  s = s.replace(/₹|rs\.?|inr/gi, '').replace(/,/g, '').trim();
+  // Drop a trailing unit tail: "/acre", "per sqft", "sqft", "acre", "/month", "/key", "/night".
+  s = s.replace(/\s*\/?\s*(per\s*)?(sq\s*\.?\s*ft|sqft|sqyd|acres?|months?|keys?|nights?)\b.*$/i, '').trim();
+  if (!/^\d*\.?\d+$/.test(s)) {
+    const shown = original.length > 40 ? `${original.slice(0, 40)}…` : original;
+    return { ok: false, reason: `couldn't read "${shown}"` };
+  }
+  const value = Number(s);
+  if (!Number.isFinite(value) || value < 0) return { ok: false, reason: 'not a positive number' };
+  // A ₹ Cr field receiving a full-rupee amount (≥ ₹1 lakh): interpret as crore.
+  if (kind === 'rupeeCrore' && value >= 1e5) {
+    return { ok: true, value: value / 1e7, asCrore: true, interpretedFrom: value };
+  }
+  return { ok: true, value };
+};
+
+/**
  * Format percentage
  */
 export const formatPct = (value, decimals = 1) => {

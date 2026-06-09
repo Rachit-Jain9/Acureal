@@ -29,6 +29,7 @@ import { useProperties } from '../hooks/useProperties';
 // survey number / broker narrative and REDIP creates the parcel inline.
 import PropertyCaptureField from '../components/deal/PropertyCaptureField';
 import AmountReadout from '../components/common/AmountReadout';
+import { handleNumericPaste } from '../components/common/numericPaste';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 // DealCard was extracted from this file (2026-05-25) when DealsPage
@@ -1153,6 +1154,7 @@ export default function DealsPage() {
                         aria-label="Total land price in crore"
                         value={form.landAskPriceCr}
                         onChange={handleFormChange}
+                        onPaste={(e) => handleNumericPaste(e, 'rupeeCrore', (v) => handleFormChange({ target: { name: 'landAskPriceCr', value: v } }))}
                         step="0.01"
                         min="0"
                         placeholder="e.g. 25.50"
@@ -1171,6 +1173,7 @@ export default function DealsPage() {
                         aria-label="Land rate"
                         value={form.landPriceRateInr}
                         onChange={handleFormChange}
+                        onPaste={(e) => handleNumericPaste(e, 'rupeePlain', (v) => handleFormChange({ target: { name: 'landPriceRateInr', value: v } }))}
                         step="0.01"
                         min="0"
                         placeholder={form.landPricingBasis === 'per_acre' ? 'e.g. 250000000' : 'e.g. 12000'}
@@ -1193,6 +1196,7 @@ export default function DealsPage() {
                         aria-label="Land extent for pricing"
                         value={form.landExtentInputValue}
                         onChange={handleFormChange}
+                        onPaste={(e) => handleNumericPaste(e, 'count', (v) => handleFormChange({ target: { name: 'landExtentInputValue', value: v } }))}
                         step="0.01"
                         min="0"
                         placeholder={selectedProperty?.land_area_sqft ? 'Optional override. Blank uses linked property area.' : 'Enter the deal land extent'}

@@ -4,6 +4,7 @@ import {
   groupIndian,
   formatAmountScale,
   describeAmount,
+  normalizeNumericPaste,
 } from '../format';
 
 describe('inferAmountKind', () => {
@@ -132,5 +133,41 @@ describe('describeAmount', () => {
     expect(describeAmount('-5', 'rupeeCrore')).toBeNull();
     expect(describeAmount('abc', 'count')).toBeNull();
     expect(describeAmount('53567890', 'none')).toBeNull();
+  });
+});
+
+describe('normalizeNumericPaste', () => {
+  it('strips ₹, commas, and whitespace from a grouped figure', () => {
+    expect(normalizeNumericPaste('₹5,35,67,890', 'rupeePlain')).toEqual({ ok: true, value: 53567890 });
+    expect(normalizeNumericPaste('5,35,67,890', 'rupeePlain')).toEqual({ ok: true, value: 53567890 });
+    expect(normalizeNumericPaste('  8,000 ', 'rupeePlain')).toEqual({ ok: true, value: 8000 });
+    expect(normalizeNumericPaste('Rs. 12000', 'rupeePlain')).toEqual({ ok: true, value: 12000 });
+  });
+
+  it('drops a trailing unit tail (/acre, per sqft, sqft)', () => {
+    expect(normalizeNumericPaste('2,50,00,000 /acre', 'rupeePlain')).toEqual({ ok: true, value: 25000000 });
+    expect(normalizeNumericPaste('₹8,000 per sqft', 'rupeePlain')).toEqual({ ok: true, value: 8000 });
+    expect(normalizeNumericPaste('2,00,000 sqft', 'count')).toEqual({ ok: true, value: 200000 });
+  });
+
+  it('uses only the first cell of an Excel multi-cell paste', () => {
+    expect(normalizeNumericPaste('5,35,67,890\t4,50,00,000', 'rupeePlain')).toEqual({ ok: true, value: 53567890 });
+    expect(normalizeNumericPaste('25.5\n40', 'rupeeCrore')).toEqual({ ok: true, value: 25.5 });
+  });
+
+  it('interprets a full-rupee paste into a ₹ Cr field as crore (transparently)', () => {
+    expect(normalizeNumericPaste('₹5,35,67,890', 'rupeeCrore')).toEqual({
+      ok: true, value: 5.356789, asCrore: true, interpretedFrom: 53567890,
+    });
+    // a small crore value pasted as-is is NOT reinterpreted
+    expect(normalizeNumericPaste('25.5', 'rupeeCrore')).toEqual({ ok: true, value: 25.5 });
+  });
+
+  it('rejects letters / garbage / negative / empty with a reason', () => {
+    expect(normalizeNumericPaste('₹ twelve thousand', 'rupeePlain').ok).toBe(false);
+    expect(normalizeNumericPaste('5.5.5', 'rupeePlain').ok).toBe(false);
+    expect(normalizeNumericPaste('-100', 'rupeePlain').ok).toBe(false);
+    expect(normalizeNumericPaste('', 'rupeePlain').ok).toBe(false);
+    expect(normalizeNumericPaste(null, 'rupeePlain').ok).toBe(false);
   });
 });
