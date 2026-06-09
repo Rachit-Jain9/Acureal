@@ -4,6 +4,27 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-09 (Large-number entry UX + toast cinematic/reliability) (PRs #785–#788, all merged + deployed)
+
+Operator pain that opened the session: typing and pasting large rupee + area numbers into deal/financial inputs is error-prone — a native `<input type="number">` shows no thousands separators, and silently CLEARS a pasted grouped figure like `₹5,35,67,890` (commas make it invalid). Shipped a unit-aware large-number entry layer + two toast improvements, all small / tested / additive. A deep multi-agent audit was run first; its synthesis backlog proved **unreliable** (hallucinated line numbers, claimed `framer-motion` is installed — it is not, and confused already-shipped work with pending work). The adversarial-critic phase + my own ground-truth verification caught this, so work proceeded from verified reading + domain judgment — e.g. the audit's "require a property on deal creation" was rejected as a violation of the CLAUDE.md sourcing-without-parcel rule.
+
+- **#785 — live Indian-number readout (P1).** New pure utils in `utils/format.js`: `inferAmountKind(label)` (derives a field's unit from its existing label — zero `fieldDefs` churn), `groupIndian`, `formatAmountScale`, `describeAmount`. New `<AmountReadout>` (`components/common`): a muted, CLS-safe line under the input echoing the value as grouped Indian digits + a count-up ₹ Cr/Lakh scale (reuses `useCountUp`, snaps under reduced motion). The input is never reformatted → no controlled-input caret hazard, submit/parse untouched. Wired into financials `InputForm` (all 118 fields, unit inferred per label), the new-deal modal, deal edit, property edit. 23 tests.
+- **#786 — smart paste (P3).** `normalizeNumericPaste(text, kind)` + `handleNumericPaste` (`components/common/numericPaste.js`): pasting `₹5,35,67,890` / an Excel cell / `…/acre` now fills the box instead of clearing it; a full-rupee paste into a `₹ Cr` field is read as crore with a transparent toast; unreadable text raises a clear toast and leaves the input unchanged. `onPaste` wired into the same 4 surfaces. 10 tests.
+- **#787 — toast enter/exit animation.** Toasts now slide 16px + fade in (220ms ease-out) and out (200ms) via pure-CSS keyframes added to the existing `index.css` motion system; honors `prefers-reduced-motion`. No new deps (framer-motion confirmed absent).
+- **#788 — toast id-collision fix.** `addToast` used `id: Date.now()` → two toasts in the same millisecond shared an id (duplicate React keys + `removeToast` dropped both). Switched to a monotonic counter.
+
+### Verification
+Per-PR: full frontend build green; new + touched suites green. Full frontend suite 1159/1160 — the single failure is an unrelated pre-existing `AdminAbEvalPage` flake (a `findByText` race under full-suite parallel load) that passes in isolation. Per-PR CI green on master (Frontend + Backend + Financial kernel + Audit + Vercel). No new dependencies, migrations, or keys.
+
+### Pending / manual asks surfaced to operator (still blocking — operator-only)
+- 🔴 **Apply `20260623_fix_rls_cross_tenant_select.sql`** — URGENT multi-tenant security fix (drops 13 permissive `*_select_all USING(true)` policies that let the anon Supabase Data API read every org's private data; idempotent, zero app impact). Also pending: `20260624_deal_audit_log_durable_on_delete.sql`, `20260530_document_access_log.sql`, `20260701_deal_signoffs.sql`.
+- DB backups (Supabase Pro), email sending domain (Resend → unlocks K-RERA reminders), incident-plan names, `security@redip.in` mailbox, DPA/AUP lawyer. (See `TODO_OPERATOR.md` / `TODO_MANUAL.md`.)
+
+### Next
+Operator steer needed on the largest remaining items. The pending migrations are the highest-impact pending work overall but are operator-applied (can be applied via the connected Supabase tool on go-ahead). "One Brain" Phase A (read-consolidation) appears to have its entry criteria met, but `dealWorkspace.service.js` already exists and is consumed by report packs / the K-RERA cockpit — investigate how much of Phase A is already done before scoping.
+
+---
+
 ## 2026-06-05 (cont. — Audience-tailored report packs, end-to-end + cinematic charts) (PRs #780–#783, all merged + deployed)
 
 Built the operator's V5 vision pillar: the same deterministic deal data, reframed as three audience-specific Word documents (lender / investor / buyer). Architecture mirrors the K-RERA substrate — declarative catalog → pure composer → one renderer — so adding a fourth audience is a catalog entry. Shipped as four small, safe, tested PRs.
