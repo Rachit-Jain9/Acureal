@@ -52,12 +52,13 @@ describe('DecisionStrip', () => {
     expect(screen.getByText('Permitted height')).toBeInTheDocument();
   });
 
-  it('shows source citations and the AI-assisted disclaimer', () => {
+  it('shows source citations from the operative RMP 2015 setback tables', () => {
     render(<DecisionStrip />);
     expect(screen.getByText(/Sources used in this calculation/i)).toBeInTheDocument();
-    expect(screen.getByText(/Volume 6 Table 1/i)).toBeInTheDocument();
-    expect(screen.getByText(/Volume 6 Table 2/i)).toBeInTheDocument();
-    expect(screen.getByText(/AI-assisted preview/i)).toBeInTheDocument();
+    // Table 8 / Table 9 appear both in the source list and the setback basis hint.
+    expect(screen.getAllByText(/RMP 2015 Vol III Table 8/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/RMP 2015 Vol III Table 9/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Deterministic screening estimate/i)).toBeInTheDocument();
   });
 
   it('updates envelope when the user changes road-width preset', async () => {

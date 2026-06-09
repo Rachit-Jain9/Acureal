@@ -92,12 +92,12 @@ describe('BuildabilityLab', () => {
   it('flags a height that exceeds the road cap with a warning', async () => {
     const user = userEvent.setup();
     render(<BuildabilityLab />);
-    // Scenario A defaults: road 12m, height 15m → road cap = 1.5*12 + 2.0 = 20m
-    // Bump height to 60 to exceed.
+    // Scenario A defaults: road 12m. At 60m height the RMP 2015 Table 9 setback is
+    // 16m, so the screening ceiling = 1.5*12 + 16 = 34m. Bump height to 60 to exceed.
     const heightA = screen.getByLabelText('Scenario A building height');
     await user.clear(heightA);
     await user.type(heightA, '60');
-    expect(screen.getByText(/Height exceeds road-cap/i)).toBeInTheDocument();
+    expect(screen.getByText(/screening ceiling/i)).toBeInTheDocument();
   });
 
   it('lets the user pick a different zone for one scenario', async () => {
@@ -121,9 +121,9 @@ describe('BuildabilityLab', () => {
     expect(screen.getByText(/No approved zones yet/i)).toBeInTheDocument();
   });
 
-  it('renders the AI-assisted disclaimer', () => {
+  it('renders the deterministic RMP 2015 screening disclaimer', () => {
     render(<BuildabilityLab />);
-    expect(screen.getByText(/AI-assisted preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/Deterministic screening estimate/i)).toBeInTheDocument();
   });
 
   it('resets all three scenarios when Reset is clicked', async () => {

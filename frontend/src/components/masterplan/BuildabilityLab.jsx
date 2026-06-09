@@ -167,7 +167,7 @@ function ScenarioCard({ label, scenario, zones, onChange, envelope, isWinner }) 
           {heightExceeded && (
             <div className="flex items-start gap-1.5 text-[11px] text-data-negative">
               <AlertTriangle size={11} className="mt-0.5 shrink-0" />
-              <span>Height exceeds road-cap of {fmt(envelope.height.allowed_max_m, 1)}m. Reduce building height or use a wider road.</span>
+              <span>Height exceeds the {fmt(envelope.height.allowed_max_m, 1)}m screening ceiling. Reduce building height or use a wider road.</span>
             </div>
           )}
         </div>
@@ -270,7 +270,7 @@ export default function BuildabilityLab() {
       <SectionHeader
         eyebrow="What-if scenarios"
         title="Buildability Lab — compare three envelopes side-by-side"
-        sub="Stack three combinations of zone, road width, plot area, and building height. Each card shows the envelope kernel output for Volume 6 Tables 1 & 2; the highest buildable scenario is flagged."
+        sub="Stack three combinations of zone, road width, plot area, and building height. Each card shows the envelope kernel output from the operative RMP 2015 Vol III (setback Tables 8 & 9 + per-zone FAR tables); the highest buildable scenario is flagged."
         action={(
           <button
             type="button"
@@ -316,8 +316,9 @@ export default function BuildabilityLab() {
       <div className="text-[11px] text-content-muted flex items-start gap-1.5">
         <AlertTriangle size={11} className="mt-0.5 shrink-0" />
         <span>
-          AI-assisted preview — uses the deterministic Volume 6 setback and FAR kernel.
-          Verify against the RMP 2031 provisional draft before committing to numbers in IC memos.
+          Deterministic screening estimate from the operative RMP 2015 Vol III setback
+          (Tables 8 &amp; 9) and FAR kernel. Verify against the rulebook and a site survey
+          before committing to numbers in IC memos.
         </span>
       </div>
     </div>
