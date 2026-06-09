@@ -13,6 +13,7 @@ import { Card, SectionHeader, SkeletonLine, ErrorState } from '../design-system'
 import { compsReviewQueueAPI } from '../services/api';
 import { downloadAxiosResponse } from '../utils/download';
 import { toast } from '../components/common/Toast';
+import { handleNumericPaste } from '../components/common/numericPaste';
 import {
   useCompsReviewQueueRow,
   useProcessQueueRow,
@@ -49,6 +50,17 @@ const NUMERIC_FIELDS = new Set([
   'rate_per_sqft', 'rate_per_sqft_min', 'rate_per_sqft_max',
   'total_units', 'launch_year', 'possession_year', 'lat', 'lng',
 ]);
+
+// Unit kind per numeric field, so smart-paste can clean a value copied from a
+// source email / spreadsheet (e.g. "₹8,500/sqft" → 8500). Fields not listed
+// (units, years, coords) fall back to native paste.
+const COMP_FIELD_KIND = {
+  rate_per_sqft: 'rupeePlain',
+  rate_per_sqft_min: 'rupeePlain',
+  rate_per_sqft_max: 'rupeePlain',
+  carpet_area_sqft: 'count',
+  super_builtup_area_sqft: 'count',
+};
 
 const ASSET_CLASS_OPTIONS = [
   'residential', 'office', 'retail', 'hospitality', 'industrial',
@@ -226,6 +238,14 @@ function CompField({ comp, setComp, field }) {
         const next = isNumeric && v !== '' ? Number(v) : v === '' ? null : v;
         setComp({ ...comp, [field]: next });
       }}
+      onPaste={
+        isNumeric
+          ? (e) =>
+              handleNumericPaste(e, COMP_FIELD_KIND[field] || 'none', (v) =>
+                setComp({ ...comp, [field]: v === '' ? null : Number(v) })
+              )
+          : undefined
+      }
       placeholder={required ? 'required' : '—'}
       className={clsx(
         'w-full px-2 py-1 text-xs border rounded bg-bg-elevated text-content-primary',
