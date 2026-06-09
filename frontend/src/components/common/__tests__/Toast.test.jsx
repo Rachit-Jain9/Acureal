@@ -42,4 +42,12 @@ describe('Toast a11y', () => {
     });
     expect(screen.getByLabelText('Dismiss notification')).toBeInTheDocument();
   });
+
+  test('enters with the slide-in animation class', () => {
+    render(<ToastContainer />);
+    act(() => {
+      toast.success('Saved');
+    });
+    expect(screen.getByRole('status').className).toContain('redip-toast-in');
+  });
 });
