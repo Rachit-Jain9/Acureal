@@ -2,10 +2,13 @@
 
 Manual actions that still require credentials, authority, or infrastructure outside this repo.
 
-> **Operator-facing checklist:** the current plain-English list of tasks for the
-> operator (Rachit) — backups, legal counsel, breach-runbook names, security
-> mailbox, schema squash — lives in [`TODO_OPERATOR.md`](TODO_OPERATOR.md). This
-> file (`TODO_MANUAL.md`) remains the engineering-detail record.
+> **Operator-facing checklist:** the single, complete plain-English list of tasks for
+> the operator (Rachit) — backups, the leaked Google Maps key, the AI spend cap, the
+> email/sending domain, legal counsel, breach-runbook names, security mailbox, schema
+> squash, the guidance-value PDF, paused data streams — lives in
+> [`TODO_OPERATOR.md`](TODO_OPERATOR.md). **That file is the source of truth for
+> anything the operator must do**; this file (`TODO_MANUAL.md`) is the engineering-detail
+> record only. Don't duplicate operator instructions here — cross-reference instead.
 
 ## Pending now (most recent first)
 
@@ -80,26 +83,18 @@ The summary at the end lists every "cross-locality correction" — these are row
 
 ## Critical
 
-### 1. Apply the deal-centric database migrations
+### ~~1. Apply the deal-centric database migrations~~ — ✅ DONE + VERIFIED 2026-06-09
 
-Files:
+Applied long ago and in active production use. Verified live (2026-06-09) that
+`deal_events`, `dd_items`, `approval_items`, and `master_plan_document_pages` all
+exist. The entire migration backlog through `20260701` is applied (see the ✅ banner
+at the top of "Pending now"). Files retained for fresh-environment bootstrap:
+`20260411_deal_centric_expansion.sql`, `20260411_documents_and_security_alignment.sql`,
+`20260422_deal_events.sql`.
 
-- `database/migrations/20260411_deal_centric_expansion.sql`
-- `database/migrations/20260411_documents_and_security_alignment.sql`
-- `database/migrations/20260422_deal_events.sql` (new — immutable audit log)
-
-Run them against the target Postgres/Supabase database before using DD, approvals, risks, extraction history, or the updated document metadata / RLS alignment. The `20260422_deal_events.sql` migration gates the new `/api/financials/:dealId/events` + replay endpoints — without it, every persisted calc logs a warning but the save itself still succeeds.
-
-```powershell
-psql "$DATABASE_URL" -f database/migrations/20260411_deal_centric_expansion.sql
-psql "$DATABASE_URL" -f database/migrations/20260411_documents_and_security_alignment.sql
-psql "$DATABASE_URL" -f database/migrations/20260422_deal_events.sql
-```
-
-Current assumption:
-
-- the backend Postgres role is a superuser or service-role style account that can bypass RLS for writes
-- if you use a restricted DB role, add explicit write policies before enabling production traffic
+Note for a fresh environment only: the backend Postgres role must be able to bypass
+RLS for writes (superuser / service-role); a restricted role needs explicit write
+policies before production traffic.
 
 ### 2. Apply the source page ledger migration — APPLIED 2026-04-30
 
