@@ -50,7 +50,7 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
           </button>
         </div>
       </div>
-      <div className="h-72">
+      <div className="h-72" role="img" aria-label={`Cash flow bar chart, ${view} view, ${data.length} periods`}>
         <ResponsiveContainer width="100%" height="100%">
           {/* PR-NX65 — chart polish matching DashboardWidgets conventions:
               - grid stroke uses CSS var with 50% opacity (was hardcoded #f0f0f0
