@@ -7,9 +7,11 @@ import {
 import { Card } from '../../design-system';
 import { INCOME_CLASSES, getModelAssetClass } from './fieldDefs';
 import { formatCrores } from '../../utils/format';
+import { useChartAnim } from '../../hooks/useChartAnim';
 
 export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }) {
   const [view, setView] = useState('quarterly');
+  const chartAnim = useChartAnim();
   if (!cashFlows || cashFlows.length === 0) return null;
   const isIncome = INCOME_CLASSES.has(getModelAssetClass(assetClass));
 
@@ -79,7 +81,7 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
               cursor={{ fill: 'var(--color-brand-accent-soft)' }}
             />
             <ReferenceLine y={0} stroke="var(--color-border-strong)" strokeOpacity={0.7} />
-            <Bar dataKey="value" radius={[3, 3, 0, 0]} animationDuration={700} animationEasing="ease-out">
+            <Bar dataKey="value" radius={[3, 3, 0, 0]} {...chartAnim} animationDuration={700} animationEasing="ease-out">
               {data.map((entry, i) => (
                 <Cell
                   key={i}
