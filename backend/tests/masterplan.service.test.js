@@ -612,7 +612,7 @@ describe('masterplan.service corpus auto-classification', () => {
       'RMP 2031 Volume 6 — Zoning Regulations',
       'rmp_table',
       'provisional_plan',
-      'provisional',
+      'draft',
       'Bangalore Development Authority',
       'text_extraction',
       false,
@@ -1111,7 +1111,7 @@ describe('masterplan.service corpus auto-classification', () => {
     expect(inProgressUpdate).toContain('extraction_started_at = NOW()');
   });
 
-  test('listMasterplanCorpus returns 12 entries with upload status from listDocuments', async () => {
+  test('listMasterplanCorpus returns 14 entries with upload status from listDocuments', async () => {
     // Reaper UPDATE inside listDocuments runs first
     query.mockResolvedValueOnce({ rows: [] });
     query.mockResolvedValueOnce({
@@ -1132,7 +1132,7 @@ describe('masterplan.service corpus auto-classification', () => {
     });
 
     const result = await service.listMasterplanCorpus({ city: 'Bengaluru' });
-    expect(result).toHaveLength(12);
+    expect(result).toHaveLength(14);
     const vol6 = result.find((row) => row.canonical_name === 'volume-6-zoning-regulations.pdf');
     const guidance = result.find((row) => row.canonical_name === 'guidance-value.pdf');
     expect(vol6.uploaded).toBe(true);

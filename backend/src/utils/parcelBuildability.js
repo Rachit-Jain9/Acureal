@@ -37,13 +37,19 @@ const inLowerInclusiveUpperExclusiveBand = (value, min, max) => {
 const citeFarRule = (rule = {}) => ({
   id: rule.id ? `far-rule-${rule.id}` : 'far-rule',
   kind: 'rmp_far_rule',
-  label: rule.source_section || 'RMP 2031 FAR rule',
-  source_title: rule.source_title || 'RMP 2031 Volume 6 Zoning Regulations',
+  // Operative source is the Revised Master Plan 2015, Volume III (BDA),
+  // approved vide G.O. No. UDD 540 BEM AA SE 2004 dated 22-06-2007. The
+  // earlier "RMP 2031 / Volume 6" framing referenced a draft that was never
+  // notified (provisional approval withdrawn Jul 2020) — do not reintroduce it.
+  label: rule.source_section || 'RMP 2015 Vol III FAR rule',
+  source_title:
+    rule.source_title
+    || 'Revised Master Plan 2015 — Volume III: Zoning of Land Use and Regulations (BDA)',
   source_url: rule.source_url || null,
-  authority: rule.authority_name || 'BDA / RMP 2031 reference',
+  authority: rule.authority_name || 'Bangalore Development Authority (RMP 2015, operative)',
   page: rule.source_page || null,
   section: rule.source_section || null,
-  status: rule.plan_status || 'draft_reference',
+  status: rule.plan_status || 'operative',
 });
 
 const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs, landUseFamily } = {}) => {
@@ -257,7 +263,7 @@ const computeBuildabilityFromRule = ({ property = {}, zone = null, rule = null }
     rule: {
       id: rule.id,
       plan_version: rule.plan_version,
-      plan_status: rule.plan_status || 'draft_reference',
+      plan_status: rule.plan_status || 'operative',
       source_section: rule.source_section,
       source_page: rule.source_page,
       review_status: rule.review_status,

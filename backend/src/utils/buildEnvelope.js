@@ -2,16 +2,26 @@
 
 // Build-envelope math for the Decision Strip.
 //
-// Encodes Volume 6 Tables 1 (front setback by road width) and 2 (setbacks by
+// Encodes INTERIM setback tables (front setback by road width, and setbacks by
 // building height). Pure deterministic JS — no AI involvement. Mirrors
 // frontend/src/utils/buildEnvelope.js verbatim; change one, change both, run
 // the parity test in backend/tests/buildEnvelope.parity.test.js.
 //
-// Source: RMP 2031 Volume 6 Zoning Regulations, pp.38-39 (Tables 1 and 2)
-// and the per-zone fsi_road_width_rules JSONB stored on master_plan_zones
-// (extracted manually from Volume 6 §§5-6).
+// FAR/coverage source: Revised Master Plan 2015, Volume III (BDA; approved
+// vide G.O. UDD 540 BEM AA SE 2004 dated 22-06-2007), via the per-zone
+// fsi_road_width_rules JSONB on master_plan_zones.
+//
+// ** SETBACK MODEL IS INTERIM — PENDING RE-SOURCE TO RMP 2015. **
+// The two setback tables below were carried over from the withdrawn RMP 2031
+// "Volume 6" draft (never notified; provisional approval withdrawn Jul 2020)
+// and do NOT yet match the operative RMP 2015 Vol III, whose Table 8
+// (height <=11.5m) is PERCENTAGE-based (right 8% / left 8% / front 12% /
+// rear 8% above 9m site width) and whose Table 9 (height >11.5m) is a UNIFORM
+// all-around ladder by height (5/6/7/8/9/10/11/12/13/14/16 m). Replace these
+// JS tables with the RMP 2015 model (plus the frontend twin + parity test)
+// before setback output is quoted as authoritative.
 
-// Volume 6 Table 1: minimum front setback by abutting road width (m).
+// INTERIM Table 1 (NOT RMP 2015 Table 8): minimum front setback by road width (m).
 // Used as the floor; the height-based setback in Table 2 takes over for
 // taller buildings.
 const FRONT_SETBACK_BY_ROAD_WIDTH = [
@@ -27,7 +37,7 @@ const FRONT_SETBACK_BY_ROAD_WIDTH = [
   { road_width_m: 60.0, front_m: 6.0, building_line_from_centre_m: 36.00 },
 ];
 
-// Volume 6 Table 2: minimum setbacks (front + rear/side) by building height
+// INTERIM Table 2 (NOT RMP 2015 Table 9): minimum setbacks by building height
 // and plot area. Plot-area buckets only apply for shorter buildings; tall
 // buildings (above 15 m) are governed by height alone.
 const SETBACK_BY_HEIGHT = [
@@ -108,7 +118,7 @@ function setbackByHeight(buildingHeightM, plotAreaSqm) {
 }
 
 // Look up the FAR + ground-coverage tier from the zone's road-width rules
-// for a given road width. Mirrors the JSONB schema we wrote in Volume 6
+// for a given road width. Mirrors the JSONB schema seeded from RMP 2015 Vol III
 // extraction (each tier carries fsi + max_ground_coverage_pct + optional
 // tdr_addition).
 function effectiveFARFromZone(zone, roadWidthM) {
@@ -204,7 +214,7 @@ function calculateBuildEnvelope(zone, inputs = {}) {
     ? plotAreaSqm * (groundCoveragePct / 100)
     : null;
 
-  // 1.5 × road width + front setback rule (Volume 6 §4.5.ii cap)
+  // 1.5 × road width + front setback rule (interim height cap; verify vs RMP 2015)
   const heightCapByRoadM = (roadWidthM !== null && roadFront)
     ? (1.5 * roadWidthM) + roadFront.front_m
     : null;
@@ -259,12 +269,12 @@ function calculateBuildEnvelope(zone, inputs = {}) {
       footprint_cap_sqm: footprintCapSqm,
     },
     sources: {
-      front_setback_table: 'Volume 6 Table 1 (p.38)',
-      height_setback_table: 'Volume 6 Table 2 (p.39)',
-      far_table: zone.source_section || 'Volume 6 §§5-6',
-      max_height_rule: 'Volume 6 §4.5.ii (max height ≤ 1.5 × road width + front setback)',
+      far_table: zone.source_section || 'RMP 2015 Vol III (zone FAR/coverage rules)',
+      front_setback_table: 'INTERIM (pending re-source to RMP 2015 Vol III Table 8)',
+      height_setback_table: 'INTERIM (pending re-source to RMP 2015 Vol III Table 9)',
+      max_height_rule: 'Interim height cap; verify against RMP 2015 Vol III (road-width / setback rules)',
     },
-    disclaimer: 'AI-assisted preview — requires human review against the original Volume 6 tables before quoting in IC memos.',
+    disclaimer: 'Deterministic screening estimate. FAR & ground coverage are from the operative RMP 2015 Vol III zone rules; the setback figures are an interim model pending re-source to RMP 2015 Tables 8 & 9 — verify setbacks against the rulebook before quoting in IC memos.',
   };
 }
 

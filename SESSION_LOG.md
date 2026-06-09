@@ -9054,3 +9054,28 @@ The cache does exactly its job — the deterministic payload is served without r
 
 ### Tests
 Backend suite green: 3100 existing + **13 new** cache tests (version-key composition over every input table, hit/miss, TTL expiry, fault-tolerance when the table is absent, disabled/missing-arg no-ops). `dealWorkspace.service.test` mocks the cache to a no-op so the payload-shape suite still exercises the full assembly. CI green; squash-merged.
+
+## 2026-06-09 — Regulatory correction: RMP 2015 is operative, not RMP 2031 (+ seed the real zonal regulations)
+
+### What was worked on (plain English)
+REDIP's zoning/FAR engine was quietly sourced from the **Revised Master Plan 2031 — a draft that was never made law** (provisional approval withdrawn by the Karnataka govt in July 2020). The operative plan for the whole BDA Local Planning Area is the **Revised Master Plan 2015, Volume III** (approved vide G.O. UDD 540 BEM AA SE 2004 dated 22-06-2007). The operator supplied the primary gazette PDF of RMP 2015 Vol III + the 2015 amendment (UDD 105 MNJ 2008, 23-03-2015). This session corrected the provenance and loaded the real, operative rules.
+
+A prior multi-agent deep-dive (primary-source research + adversarial verification + architecture) established the corrected domain model (RMP 2031 withdrawn; Whitefield/Bellandur are inside BDA LPA on RMP 2015; Jigani/Anekal genuinely separate under Anekal LPA MP 2031 / BMRDA; GBA is the new Planning Authority but did NOT abolish BDA; lake/drain buffers are date/instrument-specific). Full write-up: `docs/REGULATORY_INTELLIGENCE_ARCHITECTURE.md` (design-only, not committed this session).
+
+### Changes
+- **New migration `20260701_rmp2015_zonal_regulations_seed.sql`** — idempotent, guarded on `evidence_sources.source_title`. Seeds: 2 evidence sources (RMP 2015 Vol III G.O. 22-06-2007 + 2015 amendment), 1 master_plan_document, **13 land-use zones** (R, R-Mixed, C-Central, C-Business, MC, I-General, I-HiTech, P&SP, T&T, P, PU, AG, UC) with `fsi_road_width_rules` JSONB, and **~60 `far_rules` rows** transcribed verbatim from Tables 10, 12–22 (FAR / ground coverage / road-width bands / plot bands / industrial setbacks) — every row `review_status='approved'`, `confidence_score=1.000`, `plan_status='operative'`, evidence-linked, source page+section tagged. Plus `evidence_facts` for drain buffers (50/25/15m from centre), lake 30m, Additional FAR (Ring 1/2/3 amalgamation), metro-150m FAR-4, redevelopment cap (60% / FAR 3), TDR multipliers (Table 25), NOC thresholds (fire 24m), high-rise 24m. Re-tags legacy RMP-2031 `far_rules`/zones as `withdrawn` (audit-safe, not deleted). Flips `far_rules` column defaults → `plan_version='RMP 2015'`, `plan_status='operative'`. **Pending operator-apply to prod `niamgjbxxgmmffggumvj`.**
+- **`schema.sql`** — `far_rules` defaults updated to `'RMP 2015'` / `'operative'` for fresh installs.
+- **`parcelBuildability.js` (backend + frontend twin)** — `citeFarRule()` and the buildability `plan_status` fallback re-sourced from "RMP 2031 Volume 6 / draft_reference" to "Revised Master Plan 2015 — Volume III (BDA) / operative".
+- **`buildEnvelope.js` (backend + frontend twin)** — FAR/coverage now correctly described as RMP 2015 (from seeded zone rules). The two **setback tables were found to genuinely diverge** from RMP 2015 (its Table 8 is percentage-based, Table 9 uniform-by-height) — labelled honestly as INTERIM pending re-source (NOT relabelled as RMP 2015), and the customer-facing "AI-assisted preview … Volume 6" disclaimer string replaced with a neutral deterministic-screening disclaimer (2026-05-19 AI-disclosure policy). Follow-up task spawned to re-source Tables 8/9.
+- **`masterplanCorpus.js`** — added 2 operative RMP 2015 entries (`gazetted` / `operative_regulation`); marked the RMP 2031 "Volume 6" entry `draft` + confidence 0.0 with a "WITHDRAWN DRAFT" note; header rewritten ("operative = RMP 2015").
+- **Tests updated** to the corrected reality (manifest 12→14 entries; Volume 6 = withdrawn-draft; operative RMP 2015 present; vol6 upload classification).
+
+### Verification
+- **Full backend suite green: 196 suites / 3,244 tests** (incl. updated corpus + parity tests; frontend twins eval'd by the parity suites).
+- **Adversarial data-accuracy check** (3 independent agents re-read the source PDF vs the migration): **67 rows checked, 0 discrepancies, all "clean"** across Tables 10–22 + all cross-cutting facts.
+
+### What's left to do next
+- Operator (or via Supabase MCP) to **apply migration `20260701` to prod**, then exercise a Bengaluru deal's Zoning tab to confirm FAR resolves from RMP 2015.
+- **Re-source `buildEnvelope.js` setback Tables 8/9 to RMP 2015** (spawned task `task_f3572975`).
+- Verify the runtime `land_use_family` vocabulary the parcel engine queries against matches the seeded values (seed links `zone_id` precisely, so zone-scoped lookups are unaffected; confirm the flat-rules path).
+- Commit `docs/REGULATORY_INTELLIGENCE_ARCHITECTURE.md` if/when the operator wants the design doc in-repo.

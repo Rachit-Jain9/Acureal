@@ -2,9 +2,13 @@
 // one, change both, run the parity test in
 // backend/tests/buildEnvelope.parity.test.js.
 //
-// Pure deterministic JS — encodes Volume 6 Tables 1 and 2 plus per-zone
-// FAR road-width rules. No AI involvement. Used by the Decision Strip UI
-// in MasterPlanAdminPage to compute the build envelope for a chosen zone.
+// Pure deterministic JS. FAR/coverage come from per-zone road-width rules
+// seeded from the OPERATIVE RMP 2015 Vol III (BDA; G.O. UDD 540 BEM AA SE 2004
+// dated 22-06-2007). The setback tables are an INTERIM carry-over from the
+// withdrawn RMP 2031 "Volume 6" draft and do NOT yet match RMP 2015 Table 8
+// (percentage-based) / Table 9 (uniform by height) — re-source before quoting
+// setbacks. No AI involvement. Used by the Decision Strip UI in
+// MasterPlanAdminPage to compute the build envelope for a chosen zone.
 
 export const FRONT_SETBACK_BY_ROAD_WIDTH = [
   { road_width_m:  6.0, front_m: 1.0, building_line_from_centre_m:  4.00 },
@@ -224,11 +228,11 @@ export function calculateBuildEnvelope(zone, inputs = {}) {
       footprint_cap_sqm: footprintCapSqm,
     },
     sources: {
-      front_setback_table: 'Volume 6 Table 1 (p.38)',
-      height_setback_table: 'Volume 6 Table 2 (p.39)',
-      far_table: zone.source_section || 'Volume 6 §§5-6',
-      max_height_rule: 'Volume 6 §4.5.ii (max height ≤ 1.5 × road width + front setback)',
+      far_table: zone.source_section || 'RMP 2015 Vol III (zone FAR/coverage rules)',
+      front_setback_table: 'INTERIM (pending re-source to RMP 2015 Vol III Table 8)',
+      height_setback_table: 'INTERIM (pending re-source to RMP 2015 Vol III Table 9)',
+      max_height_rule: 'Interim height cap; verify against RMP 2015 Vol III (road-width / setback rules)',
     },
-    disclaimer: 'AI-assisted preview — requires human review against the original Volume 6 tables before quoting in IC memos.',
+    disclaimer: 'Deterministic screening estimate. FAR & ground coverage are from the operative RMP 2015 Vol III zone rules; the setback figures are an interim model pending re-source to RMP 2015 Tables 8 & 9 — verify setbacks against the rulebook before quoting in IC memos.',
   };
 }
