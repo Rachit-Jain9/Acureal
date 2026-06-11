@@ -27,7 +27,7 @@ OUT = TMP / "sql"
 ROWS_FILE = TMP / "bbmp-uav-register.json"
 FIXUPS_FILE = TMP / "bbmp-uav-visual-fixups.json"
 SOURCE_DOC = "BBMP Guidance Value Notification No. 384 (09-Mar-2016)"
-CHUNK = 400
+CHUNK = 2500
 
 
 def esc(s: str | None) -> str:
@@ -91,6 +91,23 @@ def main() -> int:
             best[key] = r
     final = list(best.values())
     final.sort(key=lambda r: (r["page_number"], r.get("sl_no") or 0))
+
+    # Emit the final merged rows as one JSON so the Node loader
+    # (scripts/seed-bbmp-uav-register.js) can bulk-upsert via the same pg pool
+    # the API uses — no need to shuttle large SQL strings through tool calls.
+    (TMP / "bbmp-uav-register-final.json").write_text(
+        json.dumps([{
+            "street_name_en": r["street_name_en"],
+            "ward_no": r["ward_no"],
+            "page_number": r["page_number"],
+            "aro_section": r.get("aro_section"),
+            "register": r.get("register"),
+            "zone_code": r.get("zone_code"),
+            "band_min_inr": r.get("band_min_inr"),
+            "band_max_inr": r.get("band_max_inr"),
+            "row_excerpt": (r.get("row_excerpt") or "")[:160],
+            "confidence_score": 0.85 if r.get("visual") else 0.95,
+        } for r in final], ensure_ascii=False), encoding="utf-8")
 
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("bbmp_register_*.sql"):
