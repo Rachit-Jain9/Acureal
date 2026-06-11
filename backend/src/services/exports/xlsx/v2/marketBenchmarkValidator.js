@@ -294,6 +294,63 @@ const validateYocVsExitCapSpread = (ctx, core, addIssue) => {
 };
 
 /**
+ * Validator 7 (2026-06-11): Fundamental-economics floor. EVERY asset class.
+ *
+ * Pre-this-validator the export QA only checked DSCR and YoC-vs-Exit-Cap, both
+ * income-family-only. A development / residential / plotted / hospitality deal
+ * could compute a NEGATIVE IRR or an equity multiple BELOW 1.0× — i.e. the
+ * model destroys investor capital — and the workbook shipped with no flag.
+ * REDIP exists to "reduce catastrophic blind spots"; a silently capital-losing
+ * deal reaching IC is exactly that.
+ *
+ * Reads the kernel's ALREADY-COMPUTED returns (ctx.kernelKpis.irr,
+ * .equityMultiple) — re-derives nothing, so it cannot diverge from the
+ * deterministic kernel (CLAUDE.md hard rule). Both are unambiguous capital-loss
+ * boundaries, not judgment calls:
+ *   - IRR < 0      → negative annualised return; cash flows return less than invested.
+ *   - EquityMultiple < 1.0× → investor equity is not returned in full.
+ *
+ * NPV is intentionally EXCLUDED: the kernel discounts NPV at the deal's
+ * hurdle/discount rate (14-15%), so a negative NPV means "below the required
+ * return", NOT "loses money in absolute terms" — flagging it as a loss would
+ * misstate the economics and mislead IC.
+ *
+ * Severity WARN (never BLOCKER) — matches the permissive DSCR/YoC posture; the
+ * operator can consciously ship a loss-making sensitivity case (export stays
+ * PASS_WITH_WARNINGS). Units: ctx.kernelKpis.irr is an annual PERCENT
+ * (deal.irr_pct, e.g. -4 = -4%); .equityMultiple is a RATIO (e.g. 0.85 = 0.85×).
+ * The < 0 and < 1.0 boundaries are convention-safe. Fail-open: silent when a
+ * KPI is null/NaN (kernel returns null IRR with no cash-flow sign change and
+ * null equity multiple when equity is non-positive).
+ */
+const validateFundamentalEconomics = (ctx, core, addIssue) => {
+  const irrPct = asFiniteNumber(ctx.kernelKpis?.irr); // annual percent
+  const equityMultiple = asFiniteNumber(ctx.kernelKpis?.equityMultiple); // ratio
+
+  if (irrPct !== null && irrPct < 0) {
+    addIssue(
+      'warn',
+      'Fundamental economics — return floor',
+      'IRR',
+      `Computed IRR is ${irrPct.toFixed(2)}% — negative. The kernel's annualised return is below zero: projected cash flows return less than the capital invested.`,
+      'Re-examine the cost, pricing, and timing inputs and stress-test the downside. A negative-IRR model should not go to IC as a base case without an explicit, documented rationale.',
+      'all asset classes',
+    );
+  }
+
+  if (equityMultiple !== null && equityMultiple < 1.00) {
+    addIssue(
+      'warn',
+      'Fundamental economics — equity return',
+      'EquityMultiple',
+      `Computed equity multiple is ${equityMultiple.toFixed(2)}× — below 1.0×. Projected distributions return less than the invested equity: investor capital is not returned in full.`,
+      'Re-examine the deal structure and return profile before IC; an equity multiple below 1.0× is capital destruction unless an offsetting return source is documented.',
+      'all asset classes',
+    );
+  }
+};
+
+/**
  * Validator 6: CompSetStale — latest comp launch_year is more than 24
  * months old. Indian RE pricing moves fast in active micro-markets.
  */
@@ -346,6 +403,8 @@ const runMarketBenchmarkValidators = (ctx, core, addIssue) => {
     // PR-NX33 (2026-05-17): income-deal validators
     validateDscrFloor,
     validateYocVsExitCapSpread,
+    // 2026-06-11: cross-asset-class fundamental-economics floor (IRR<0, EM<1.0×)
+    validateFundamentalEconomics,
   ];
   for (const validator of runners) {
     try {
@@ -437,6 +496,7 @@ module.exports = {
     validateCompFreshness,
     validateDscrFloor,
     validateYocVsExitCapSpread,
+    validateFundamentalEconomics,
     RBI_DSCR_FLOOR,
     RBI_DSCR_FLOOR_BPS,
     YOC_VS_EXIT_CAP_MIN_SPREAD_BPS,

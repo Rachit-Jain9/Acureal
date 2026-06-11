@@ -204,4 +204,46 @@ describe('PR-NX56 — computeKernelWarnings (post-Calculate)', () => {
     expect(computeKernelWarnings({ dscr: null }, {}, thresholds)).toEqual([]);
     expect(computeKernelWarnings({ dscr: 0 }, {}, thresholds)).toEqual([]);
   });
+
+  // ── Fundamental-economics floor (2026-06-11): IRR<0 + equity multiple<1.0× ──
+  // Applies to EVERY asset class — incl. residential/plotted deals with no DSCR/YoC.
+  it('flags negative IRR as critical for a deal with NO DSCR/YoC (residential)', () => {
+    const kpis = { irr: -4.2, equityMultiple: 1.4 }; // residential: no dscr, no yoc
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('irr');
+    expect(w[0].severity).toBe('critical');
+    expect(w[0].label).toMatch(/Negative IRR/);
+    expect(w[0].label).toMatch(/-4\.2%/);
+  });
+
+  it('flags a sub-1.0× equity multiple as critical (capital not returned in full)', () => {
+    const kpis = { irr: 3.1, equityMultiple: 0.85 };
+    const w = computeKernelWarnings(kpis, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('equity_multiple');
+    expect(w[0].severity).toBe('critical');
+    expect(w[0].label).toMatch(/0\.85× — below 1\.0×/);
+  });
+
+  it('returns BOTH fundamental flags when IRR<0 AND equity multiple<1.0×', () => {
+    const w = computeKernelWarnings({ irr: -8, equityMultiple: 0.6 }, {}, thresholds);
+    expect(w).toHaveLength(2);
+    expect(w.find((x) => x.kind === 'irr')).toBeTruthy();
+    expect(w.find((x) => x.kind === 'equity_multiple')).toBeTruthy();
+  });
+
+  it('does NOT flag a healthy residential deal (positive IRR, EM ≥ 1.0×)', () => {
+    expect(computeKernelWarnings({ irr: 18, equityMultiple: 2.1 }, {}, thresholds)).toEqual([]);
+  });
+
+  it('does NOT flag IRR = 0 or equity multiple = 1.0 exactly (boundary)', () => {
+    expect(computeKernelWarnings({ irr: 0, equityMultiple: 1.0 }, {}, thresholds)).toEqual([]);
+  });
+
+  it('is fail-open: silent when IRR / equity multiple are null / NaN / undefined', () => {
+    expect(computeKernelWarnings({ irr: null, equityMultiple: null }, {}, thresholds)).toEqual([]);
+    expect(computeKernelWarnings({ irr: NaN, equityMultiple: undefined }, {}, thresholds)).toEqual([]);
+    expect(computeKernelWarnings({}, {}, thresholds)).toEqual([]);
+  });
 });

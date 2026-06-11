@@ -130,7 +130,10 @@ export function computeDscrWarning({ noiCr, totalCostCr, debtLTV, debtRatePct, l
  * recompute from raw inputs.
  *
  * Returns:
- *   Array<{ kind: 'dscr'|'yoc', severity: 'critical'|'warn', label: string, detail: string }>
+ *   Array<{ kind: 'dscr'|'yoc'|'irr'|'equity_multiple', severity: 'critical'|'warn', label: string, detail: string }>
+ *
+ * dscr/yoc are income-family; irr/equity_multiple are the cross-asset-class
+ * fundamental-economics floor (capital-loss boundaries read from kernel output).
  *
  * Empty array → all kernel KPIs are within band (panel hides).
  */
@@ -185,6 +188,37 @@ export function computeKernelWarnings(kpis, inputs, thresholds) {
         });
       }
     }
+  }
+
+  // Fundamental-economics floor — applies to EVERY asset class (residential,
+  // plotted, hospitality, etc., not just income deals). Reads the kernel's own
+  // IRR + equity multiple; re-derives nothing, so it cannot diverge from the
+  // deterministic kernel. These are unambiguous capital-loss boundaries, not
+  // judgment calls. NPV is intentionally NOT flagged here: the kernel discounts
+  // it at the deal's 14-15% hurdle rate, so a negative NPV means "below the
+  // required return", not "loses money" — flagging it as a loss would misstate
+  // the economics. Guarded with Number.isFinite so partial models never trip.
+  // Null-safe parse: Number(null) and Number('') are 0, which would falsely
+  // trip the "< 0" / "< 1.0×" boundaries below — treat null/''/undefined as
+  // "not present" so a partial model never fires a false capital-loss flag.
+  const irrPct = kpis.irr == null || kpis.irr === '' ? NaN : Number(kpis.irr); // annual percent (e.g. 18 = 18%)
+  if (Number.isFinite(irrPct) && irrPct < 0) {
+    warnings.push({
+      kind: 'irr',
+      severity: 'critical',
+      label: `Negative IRR (${irrPct.toFixed(1)}%) — returns below capital invested`,
+      detail: `The kernel's annualised return is negative (${irrPct.toFixed(2)}%): projected cash flows return less than the capital invested. Re-examine the cost, pricing, and timing inputs and stress-test the downside before taking this to IC.`,
+    });
+  }
+  const equityMultiple = kpis.equityMultiple == null || kpis.equityMultiple === ''
+    ? NaN : Number(kpis.equityMultiple); // ratio (e.g. 2.1 = 2.1×)
+  if (Number.isFinite(equityMultiple) && equityMultiple < 1.0) {
+    warnings.push({
+      kind: 'equity_multiple',
+      severity: 'critical',
+      label: `Equity multiple ${equityMultiple.toFixed(2)}× — below 1.0×`,
+      detail: `Projected distributions return ${equityMultiple.toFixed(2)}× the invested equity — investor capital is not returned in full. Re-examine the structure and return profile before IC; below 1.0× is capital destruction unless an offsetting return source is documented.`,
+    });
   }
 
   return warnings;
