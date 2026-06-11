@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-11 (Regulatory FAR engine: fix silent commercial/industrial failure + default-deny + BBMP corpus-stats fix) (PRs #802, #803, #804 — all merged + deployed; master green)
+
+A focused regulatory-correctness block driven by a deep multi-agent review of the live codebase. The review (and an adversarial critique that corrected it) surfaced one severe silent bug and several smaller ones; all the code-only fixes shipped.
+
+- **#802 — FAR/buildability engine resolved for ALL zones (was silently dead for commercial/industrial).** Root cause: `loadFarRules` filtered FAR rows on a coarse normalized `land_use_family` that only ever emits `residential`/`commercial`/`industrial`, but the operative RMP-2015 seed labels its 51 rules with 11 specific families (`commercial_business`, `industrial_general`, `residential_dev_plan`, …). The equality filter matched none of them for any non-residential, large-residential, mixed-use, or dev-plan zone → zero rules → "No approved FAR matrix rule matched" while the zone itself resolved fine. **Only small/mid plain-residential parcels worked end to end — the engine was blind on REDIP's core commercial/industrial deal segment, and it looked healthy on screen.** Fix: key resolution on `zone_code` (the seed's authoritative join key) and band by plot-area + road-width in `selectFarRule`; per-zone area bands are disjoint so banding selects exactly one rule. Removed the redundant family filter from both `selectFarRule` copies (backend `utils/parcelBuildability.js` + frontend mirror). Also: `far_rules.review_status` default flipped `'approved'`→`'pending'` (the only regulatory table that wasn't default-deny — migration `20260711` + `schema.sql`, behavior-neutral); dropped the stale withdrawn-`'RMP 2031 Draft'` snapshot fallback (→ null + needs_verification); regression tests cover every dual-family zone incl `>threshold` dev-plan cases. Verified live: all 51 approved RMP-2015 rules across 10 zone_codes now reachable. Backend 3273 tests + frontend build green.
+- **#803 — BBMP street-index corpus stats corrected.** `getStreetIndexSummary` grouped by (zone_code, ward_no) then COUNT(*)'d the *buckets*, so the Bengaluru street-lookup panel headline showed **803** when there are really **18,743** index entries (~11,661 unique streets), and the per-zone breakdown undercounted (duplicate zone keys collapsed). Rewrote the query to count entries directly + clean `GROUP BY zone_code` + expose `distinct_streets` and the residential/non-residential split; panel tile relabeled "Index entries" with a unique-streets footnote. Verified vs prod: 18,743 total / 18,479 enriched (98.6%) / by_zone sums correct. Also folded in the completed BBMP UAV register tooling (cross-page zone forward-fill in the builder; self-contained loader deps).
+- **#804 — hotfix.** #803 squash-merged at its pre-fix SHA, so master briefly had the relabeled component but the old test assertion → red Frontend CI. Cherry-picked the matching test update; master green again.
+
+### Verification (this session)
+- Backend full suite 196 suites / 3273 tests green; frontend build clean; affected frontend panel test 15/15.
+- Read-only prod queries (Supabase MCP) confirmed: 51 approved operative RMP-2015 far_rules across all 10 zone_codes are present (so the #802 fix has real data to resolve against), and the corrected street-index query returns 18,743/11,661/98.6% with a correct per-zone breakdown.
+
+### Left for next / operator
+- **🔴 Operator must apply migration `20260711_far_rules_default_pending.sql`** in the Supabase SQL editor (one line; behavior-neutral). The auto-mode classifier blocks the agent from applying prod migrations.
+- **🟡 Optional: load the staged BBMP UAV top-up** (`tmp/bbmp-uav-register-final.json`, 19,830 rows @ 100% zoned, vs the current already-good 18,743 @ 98.6%) via `node scripts/seed-bbmp-uav-register.js`. Enhancement, not a fix; classifier blocks the agent from running it.
+- **🟢 Follow-up chip spawned:** surface the non-residential UAV band as primary for commercial deals (B3 — deferred; data already present, needs use-type routing).
+- Known minor: `createManualFarRule` upper-cases zone_code vs mixed-case seed zones (manual-rule match edge case).
+
+---
+
 ## 2026-06-09 (Large-number entry UX + toast/chart polish + comps paste + chart a11y: reduced-motion + screen-reader labels) (PRs #785–#795, all merged + deployed)
 
 Operator pain that opened the session: typing and pasting large rupee + area numbers into deal/financial inputs is error-prone — a native `<input type="number">` shows no thousands separators, and silently CLEARS a pasted grouped figure like `₹5,35,67,890` (commas make it invalid). Shipped a unit-aware large-number entry layer + two toast improvements, all small / tested / additive. A deep multi-agent audit was run first; its synthesis backlog proved **unreliable** (hallucinated line numbers, claimed `framer-motion` is installed — it is not, and confused already-shipped work with pending work). The adversarial-critic phase + my own ground-truth verification caught this, so work proceeded from verified reading + domain judgment — e.g. the audit's "require a property on deal creation" was rejected as a violation of the CLAUDE.md sourcing-without-parcel rule.
