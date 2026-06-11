@@ -118,6 +118,31 @@ def clean_street(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip(" ,.;:-")
 
 
+# Column-header detection. The two table layouts print a header row that is NOT
+# a single token ("Sl. No Ward No Road / Street Name" / "Sl. WARD No. NO NAME OF
+# THE STREET"), so the single-token HEADER_NOISE regex misses it — the block
+# then bleeds into the first street name. Catch it by its unmistakable marker.
+HEADER_MARKER_RE = re.compile(r"(NAME\s+OF\s+THE\s+STREET|ROAD\s*/\s*STREET\s*NAME)", re.IGNORECASE)
+HEADER_TOKEN_RE = re.compile(r"^(SL\.?|NO\.?|WARD|\d{1,2}R|ROAD|/|STREET|NAME|OF|THE|:|1R)$", re.IGNORECASE)
+
+
+def strip_header_prefix(s: str) -> str:
+    """Cut a leading 'Sl … Name of the Street' header that merged into a street."""
+    m = HEADER_MARKER_RE.search(s)
+    if m and m.start() <= 45:
+        return s[m.end():].strip(" ,.;:-")
+    return s
+
+
+def is_pure_header(s: str) -> bool:
+    if not s.strip():
+        return False
+    toks = re.split(r"\s+", s.strip())
+    if HEADER_MARKER_RE.search(s) and len(toks) <= 8:
+        return True
+    return all(HEADER_TOKEN_RE.match(t) for t in toks)
+
+
 # Glyph-substituted Calibri subsets (a third encoding in this PDF) survive the
 # +0x1D plausibility check because they are printable ASCII/Greek — but they
 # are NOT English. Detect them so they become anomalies instead of polluting
@@ -194,7 +219,7 @@ def page_items(page: fitz.Page) -> list[dict]:
                         items.append({"y": y0, "kind": "aro", "aro": name})
                     break
             continue
-        if HEADER_NOISE.match(text):
+        if HEADER_NOISE.match(text) or HEADER_MARKER_RE.search(text):
             continue
         if looks_garbled(text):
             items.append({"y": y0, "kind": "garbled", "text": text[:120]})
@@ -224,8 +249,8 @@ def rows_from_block(tokens: list[str]) -> tuple[list[dict], list[str]]:
             while i < n and not (NUM.match(tokens[i]) and i + 1 < n and NUM.match(tokens[i + 1])):
                 frags.append(tokens[i])
                 i += 1
-            street = clean_street(" ".join(frags))
-            if street:
+            street = strip_header_prefix(clean_street(" ".join(frags)))
+            if street and not is_pure_header(street):
                 rows.append({"sl": sl, "ward": ward, "street": street})
             else:
                 rejects.append(f"{sl} {ward} <no street>")
@@ -239,7 +264,9 @@ def rows_from_block(tokens: list[str]) -> tuple[list[dict], list[str]]:
                 i += 1
             if frags:
                 lead = clean_street(" ".join(frags))
-                if rows:
+                if is_pure_header(lead):
+                    pass  # drop header fragments outright
+                elif rows:
                     rows[-1]["street"] = clean_street(rows[-1]["street"] + " " + lead)
                 else:
                     rejects.append(lead)
@@ -300,9 +327,12 @@ def parse(pdf_path: str) -> tuple[list[dict], list[dict]]:
                 # a fragment-only block: either the wrapped tail of the LAST
                 # emitted row, or the lead of the NEXT row. Heads are rare;
                 # tails dominate. Attach to the last row on the same page.
+                # Header fragments are dropped so they never pollute a street.
+                if is_pure_header(rej):
+                    continue
                 if out and out[-1]["page_number"] == pno and len(rej) > 3 and not NUM.match(rej):
-                    out[-1]["street_name_en"] = clean_street(
-                        out[-1]["street_name_en"] + " " + rej).upper()
+                    out[-1]["street_name_en"] = strip_header_prefix(clean_street(
+                        out[-1]["street_name_en"] + " " + rej)).upper()
                 elif len(rej) > 3 and not NUM.match(rej):
                     pending_lead = clean_street((pending_lead or "") + " " + rej)
                 else:
@@ -310,8 +340,9 @@ def parse(pdf_path: str) -> tuple[list[dict], list[dict]]:
             for r in rows:
                 street = r["street"]
                 if pending_lead:
-                    street = clean_street(pending_lead + " " + street)
+                    street = strip_header_prefix(clean_street(pending_lead + " " + street))
                     pending_lead = None
+                street = strip_header_prefix(street)
                 letters = sum(1 for c in street if c.isalpha())
                 if letters < 3 or not (1 <= r["ward"] <= 250):
                     anomalies.append({"page": pno, "kind": "bad_row",

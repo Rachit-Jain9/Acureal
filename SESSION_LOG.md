@@ -9085,3 +9085,25 @@ A prior multi-agent deep-dive (primary-source research + adversarial verificatio
 - Updated consumers: `DecisionStrip.jsx` (header, setback hints → basis + left/right, sources list, height-warning copy) and `BuildabilityLab.jsx` (header + footer disclaimer + warning copy) — all "RMP 2031 / Volume 6 / AI-assisted" strings replaced with RMP 2015 / deterministic-screening wording. Rewrote `buildEnvelope.parity.test.js` (66 tests) and updated `DecisionStrip.test.jsx` + `BuildabilityLab.test.jsx`.
 - **Fixed the CI "Frontend" failure** on #799: it was the DecisionStrip test asserting the old "Volume 6 / AI-assisted" copy that the component still hardcoded — now corrected.
 - Verification: backend `buildEnvelope` 66/66; **full frontend suite 142 files / 1162 tests green**. Task `task_f3572975` (setback re-source) is now complete — folded into #799 so no known-wrong interim setbacks ship.
+
+## 2026-06-11 — BBMP UAV street register: complete both registers (residential + non-residential) + load to prod
+
+### What was worked on (plain English)
+The operator flagged that the BBMP "Guidance Value" document looked un-uploaded / OCR-pending on the Master Plan admin. Investigation: the file (686-page text-layer gazette, Notification No. 384 dated 09-Mar-2016) WAS uploaded (byte-identical, sha256 ece261be…) and its UAV rate card WAS extracted (108 approved `bbmp_uav_entries`). The scary chip was two label bugs (misprofiled as a 30-page scan; readiness chip showed "OCR required" even after completed extraction). The REAL gap: the document holds TWO street→UAV-zone registers — residential (pp.17-362) + non-residential (pp.363-686) — and only ~45% had been extracted (residential, partial) because the old pypdf parser couldn't read a +0x1D-shifted subset font and detached ZONE headers from rows.
+
+### Changes (shipped via PR #800, merged → master `a010c9a`)
+- New deterministic parser `scripts/parse-bbmp-uav-register.py` (PyMuPDF block-level; decodes the shifted font + the legacy-Nudi zone marker; reads ZONE/BANDWIDTH/ARO headers in document order; tags register). Plus `scripts/build-bbmp-street-register-sql.py` (merge + visual fixups → SQL chunks + final JSON) and migration `20260702` (add `bbmp_street_index.register` + index + backfill).
+- `searchBbmpStreets` register filter (service+route+hook+API+`STREET_INDEX_RETURN_COLS`); `getSourceDocumentReadiness` now reads "Extracted (manual review)" for an OCR-flagged source that completed; `masterplanCorpus` reprofiled Guidance Value.pdf `text_extraction`; `parcelContext` attaches the non-residential twin zone; UI register filter pills + badges. Tests added (register filter + readiness regression).
+
+### Post-merge fixes (PR pending — `scripts/` only)
+- **Parser header-bleed bug fix:** the column-header row ("Sl. No Ward No Road / Street Name") isn't a single token, so it bled into the first street name on some pages. Added `HEADER_MARKER_RE` skip + `strip_header_prefix` + `is_pure_header`. Caught during a non-residential spot-check BEFORE loading. (PR #800 merged the pre-fix parser; this corrects it.)
+- New `scripts/seed-bbmp-uav-register.js` loader (pg pool via backend/.env DATABASE_URL, idempotent ON CONFLICT upsert).
+
+### Prod load (operator-authorized, applied to niamgjbxxgmmffggumvj 2026-06-11)
+- Migration `20260702` applied (register column + index + backfill).
+- Loaded the completed register: **18,743 streets — residential 10,195, non-residential 8,548, 98.6% zoned**, every row page-cited. Retired 397 legacy non-residential partials + 4,318 legacy residential near-duplicates (both deletes operator-authorized via AskUserQuestion). Verified: same street can carry different residential vs non-residential zones (e.g. 100 Feet Ring Road BSK 3rd Stage = res C / non-res B).
+
+### What's left to do next
+- **Commit the post-merge script fixes** (parser header fix + loader) as a follow-up PR.
+- **Visual top-up (idempotent):** the page-image workflow (`wf_2342b620-76b`) names 314 garbled-header ARO pages (done — 59 ARO names banked), transcribes 32 glyph-substituted pages (still missing, mostly non-res pp.535-651), and fills the ~264 remaining unzoned rows. Re-run the builder with `tmp/bbmp-uav-visual-fixups.json` populated, then `node scripts/seed-bbmp-uav-register.js` (upserts on top, no rework).
+- Minor: a handful of street names carry a leading "=" decode artifact (cosmetic; zones unaffected) — clean in the top-up.
