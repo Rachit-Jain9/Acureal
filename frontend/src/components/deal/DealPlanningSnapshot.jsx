@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Building2, MapPin, Users, Maximize2, Gauge, Layers } from 'lucide-react';
 import Badge from '../common/Badge';
 import useAutoDeriveParcelContext from '../../hooks/useAutoDeriveParcelContext';
+import { selectPrimaryBbmpZone } from '../../utils/bbmpRegister';
 
 /**
  * DealPlanningSnapshot — the positive counterpart to
@@ -70,7 +71,12 @@ export default function DealPlanningSnapshot({ deal }) {
   });
 
   const pd = data?.planningDistrict || null;
-  const zone = data?.bbmpZone || null;
+  // Headline the register that matches the deal's use-type: a commercial /
+  // retail / industrial / hospitality deal anchors on the NON-residential UAV
+  // band (the same street can sit in a different zone per register). Defaults to
+  // residential when the asset class is residential/unknown or the street has no
+  // non-residential twin. See utils/bbmpRegister.js.
+  const zone = selectPrimaryBbmpZone(data?.bbmpZone, deal?.asset_class);
   const overlays = useMemo(
     () => (Array.isArray(data?.applicableWarnings) ? data.applicableWarnings : []),
     [data],
@@ -142,8 +148,16 @@ export default function DealPlanningSnapshot({ deal }) {
             <div className="text-right shrink-0">
               <p className="text-[10px] uppercase tracking-wider text-content-muted font-medium mb-0.5">
                 BBMP tax zone
+                {zone.primary_register === 'non_residential' && (
+                  <span className="ml-1 normal-case tracking-normal text-content-secondary">(non-residential)</span>
+                )}
               </p>
               <p className="text-sm font-semibold text-content-primary tabular-nums">Zone {zone.zone_code}</p>
+              {zone.residential_twin?.zone_code && (
+                <p className="text-[10px] text-content-muted tabular-nums mt-0.5">
+                  Residential: Zone {zone.residential_twin.zone_code}
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -539,6 +539,13 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
   // behaviour), and the non-residential twin — when the same/best street
   // also appears in that register — is attached alongside, because the
   // same street can sit in a different UAV zone for commercial use.
+  // NOTE: residential stays the structural primary HERE on purpose — this runs
+  // pre-property (no use-type yet) and bbmpZone is a display/audit field, not a
+  // FAR/kernel input (FAR joins on properties.zone_id). The use-type-aware
+  // choice of WHICH register to headline lives on the deal surfaces, in
+  // frontend/src/utils/bbmpRegister.js (selectPrimaryBbmpZone / selectPrimary
+  // StreetRow). Do NOT swap the primary here — it would be inert downstream and
+  // would change the auto_derived_zone_code provenance the user reviewed.
   // Use finalStreetIndexResult so taluk-override empties out the rows
   // when K-GIS confirms non-BBMP jurisdiction.
   const streetRows = Array.isArray(finalStreetIndexResult?.rows) ? finalStreetIndexResult.rows : [];

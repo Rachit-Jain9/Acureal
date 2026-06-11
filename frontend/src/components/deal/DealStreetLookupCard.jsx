@@ -5,6 +5,7 @@ import Badge from '../common/Badge';
 import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
 import { analyseGuidanceValueSpread } from '../../utils/guidanceValueAnalysis';
+import { selectPrimaryStreetRow } from '../../utils/bbmpRegister';
 import WardSpreadBenchmarkTile from './WardSpreadBenchmarkTile';
 
 // Inline 200ms debounce — keeps the BBMP street search responsive on the
@@ -126,7 +127,14 @@ export default function DealStreetLookupCard({ property, deal }) {
   // while the query is still loading (data === undefined).
   const rows = data?.rows || [];
   const summary = data?.summary || {};
-  const topMatch = rows[0] || null;
+  // Headline the register that matches the deal's use-type. For a commercial /
+  // retail / industrial / hospitality deal this prefers the non-residential row
+  // for the SAME street, so the zone, guidance band, AND the spread-vs-guidance
+  // signal below all re-base onto the commercial UAV band — comparing a
+  // commercial price against the commercial band, not the residential one.
+  // Residential/unknown deals keep the legacy top-trigram-hit behavior. The full
+  // hit list below still shows every row + register, so nothing is hidden.
+  const topMatch = selectPrimaryStreetRow(rows, deal?.asset_class);
   const enrichedCount = summary.enriched ?? 0;
   const totalCount = summary.total ?? 0;
   const enrichedPct = totalCount > 0 ? Math.round((enrichedCount / totalCount) * 100) : 0;
@@ -191,7 +199,7 @@ export default function DealStreetLookupCard({ property, deal }) {
           label="Top match zone"
           value={topMatch?.zone_code ? `Zone ${topMatch.zone_code}` : '—'}
           footnote={topMatch?.zone_code
-            ? `from ${topMatch.street_name_en.slice(0, 30)}${topMatch.street_name_en.length > 30 ? '…' : ''}`
+            ? `${topMatch.register === 'non_residential' ? 'Non-residential · ' : ''}from ${topMatch.street_name_en.slice(0, 30)}${topMatch.street_name_en.length > 30 ? '…' : ''}`
             : (topMatch ? 'Zone not yet enriched for this row' : 'No matches yet')}
         />
         <StatTile

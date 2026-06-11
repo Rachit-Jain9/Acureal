@@ -270,4 +270,52 @@ describe('DealStreetLookupCard', () => {
       expect(screen.getByText(/Fair/i)).toBeInTheDocument();
     });
   });
+
+  describe('BBMP register selection by deal use-type (B3)', () => {
+    // Same street present in BOTH gazette registers with different zones/bands.
+    const DUAL_REGISTER = {
+      ...SAMPLE,
+      rows: [
+        { id: 'res', street_name_en: 'MG ROAD', ward_no: 117, page_number: 23, register: 'residential', zone_code: 'D', guidance_value_band_min_inr: 4500, guidance_value_band_max_inr: 9800 },
+        { id: 'nonres', street_name_en: 'MG ROAD', ward_no: 117, page_number: 400, register: 'non_residential', zone_code: 'B', guidance_value_band_min_inr: 8000, guidance_value_band_max_inr: 15000 },
+      ],
+    };
+
+    beforeEach(() => {
+      lookupQuery = { data: DUAL_REGISTER, isLoading: false, isError: false, isFetching: false };
+    });
+
+    it('headlines the non-residential band + register tag for a commercial deal', () => {
+      renderWithRouter(
+        <DealStreetLookupCard property={BENGALURU_PROPERTY} deal={{ asset_class: 'commercial_office' }} />
+      );
+      // non-residential band ₹8,000–15,000 shows in BOTH the top-match tile and the hit row
+      expect(screen.getAllByText(/₹8,000.*15,000/).length).toBeGreaterThanOrEqual(2);
+      // the tile footnote marks the headline register (middot distinguishes it from the row badge)
+      expect(screen.getByText(/Non-residential ·/)).toBeInTheDocument();
+    });
+
+    it('headlines the residential band for a residential / unknown deal', () => {
+      renderWithRouter(
+        <DealStreetLookupCard property={BENGALURU_PROPERTY} deal={{ asset_class: 'residential_apartments' }} />
+      );
+      expect(screen.getAllByText(/₹4,500.*9,800/).length).toBeGreaterThanOrEqual(2);
+      expect(screen.queryByText(/Non-residential ·/)).not.toBeInTheDocument();
+    });
+
+    it('re-bases the spread-vs-guidance signal onto the headlined register', () => {
+      // price ₹13,800/sqft → non-res band mid 11,500 ⇒ +20.0%; res band mid 7,150 ⇒ +93.0%.
+      const propertyWithPrice = { ...BENGALURU_PROPERTY, selling_rate_per_sqft: 13800 };
+      renderWithRouter(
+        <DealStreetLookupCard property={propertyWithPrice} deal={{ asset_class: 'commercial_office' }} />
+      );
+      expect(screen.getByText(/\+20\.0%/)).toBeInTheDocument(); // computed against the non-residential band
+
+      // A residential deal on the same street compares against the residential band instead.
+      renderWithRouter(
+        <DealStreetLookupCard property={propertyWithPrice} deal={{ asset_class: 'residential_apartments' }} />
+      );
+      expect(screen.getByText(/\+93\.0%/)).toBeInTheDocument(); // computed against the residential band
+    });
+  });
 });

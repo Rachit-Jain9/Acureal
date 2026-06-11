@@ -29,7 +29,20 @@ const pdPayload = {
     source: 'address-fuzz',
     confidence: 0.82,
   },
-  bbmpZone: { zone_code: 'D', guidance_value_band_min_inr: 4500, guidance_value_band_max_inr: 9800 },
+  bbmpZone: {
+    zone_code: 'D',
+    register: 'residential',
+    guidance_value_band_min_inr: 4500,
+    guidance_value_band_max_inr: 9800,
+    non_residential: {
+      zone_code: 'B',
+      zone_name: 'Zone B',
+      guidance_value_band_min_inr: 8000,
+      guidance_value_band_max_inr: 15000,
+      source_street: 'X',
+      source_page: 400,
+    },
+  },
   applicableWarnings: [
     { kind: 'SDZ', fact_type: 'sdz' },
     { kind: 'PRR / road alignment', fact_type: 'road_network' },
@@ -121,5 +134,32 @@ describe('DealPlanningSnapshot', () => {
     mockHookState.data = pdPayload; // no existing_land_use
     renderSnapshot({ city: 'Bengaluru', address: '100 Brigade Road' });
     expect(screen.queryByText(/Existing land use/i)).not.toBeInTheDocument();
+  });
+
+  // ── BBMP UAV register selection by deal use-type (B3) ──
+  it('headlines the NON-residential band for a commercial deal, keeping residential visible', () => {
+    mockHookState.data = pdPayload;
+    renderSnapshot({ city: 'Bengaluru', address: '100 Brigade Road', asset_class: 'commercial_office' });
+    // Non-residential register (Zone B, ₹8,000–15,000) is the headline
+    expect(screen.getByText('Zone B')).toBeInTheDocument();
+    expect(screen.getByText(/8,000.*15,000\/sqft/)).toBeInTheDocument();
+    expect(screen.getByText('(non-residential)')).toBeInTheDocument();
+    // residential twin still shown (nothing hidden)
+    expect(screen.getByText(/Residential: Zone D/)).toBeInTheDocument();
+  });
+
+  it('headlines the residential band for a residential deal', () => {
+    mockHookState.data = pdPayload;
+    renderSnapshot({ city: 'Bengaluru', address: '100 Brigade Road', asset_class: 'residential_apartments' });
+    expect(screen.getByText('Zone D')).toBeInTheDocument();
+    expect(screen.getByText(/4,500.*9,800\/sqft/)).toBeInTheDocument();
+    expect(screen.queryByText('(non-residential)')).not.toBeInTheDocument();
+  });
+
+  it('defaults to residential when no asset_class is set (backward compatible)', () => {
+    mockHookState.data = pdPayload;
+    renderSnapshot({ city: 'Bengaluru', address: '100 Brigade Road' });
+    expect(screen.getByText('Zone D')).toBeInTheDocument();
+    expect(screen.queryByText('(non-residential)')).not.toBeInTheDocument();
   });
 });
