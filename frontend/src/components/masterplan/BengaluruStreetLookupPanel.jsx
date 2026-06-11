@@ -50,6 +50,11 @@ function HitRow({ row }) {
               {row.street_name_en}
             </span>
             {hasZone && <Badge tone="info">Zone {row.zone_code}</Badge>}
+            {row.register && (
+              <Badge tone={row.register === 'non_residential' ? 'warn' : 'neutral'}>
+                {row.register === 'non_residential' ? 'Non-residential' : 'Residential'}
+              </Badge>
+            )}
           </div>
           <div className="text-[11px] text-content-muted leading-snug mt-0.5 flex items-center gap-1.5 flex-wrap">
             {row.ward_no != null && (
@@ -93,14 +98,22 @@ const ZONE_FILTERS = [
   { key: 'F', label: 'Zone F' },
 ];
 
+const REGISTER_FILTERS = [
+  { key: null, label: 'Both registers' },
+  { key: 'residential', label: 'Residential' },
+  { key: 'non_residential', label: 'Non-residential' },
+];
+
 export default function BengaluruStreetLookupPanel() {
   const [searchInput, setSearchInput] = useState('');
   const [zoneFilter, setZoneFilter] = useState(null);
+  const [registerFilter, setRegisterFilter] = useState(null);
   const rootRef = useRef(null);
   const debouncedSearch = useDebounced(searchInput, 200);
   const { data, isLoading, isError, isFetching } = useStreetLookup({
     search: debouncedSearch,
     zone: zoneFilter,
+    register: registerFilter,
     limit: 50,
   });
 
@@ -147,7 +160,7 @@ export default function BengaluruStreetLookupPanel() {
       <SectionHeader
         eyebrow="Bengaluru street index"
         title="Find a street's BBMP zone + source page"
-        sub="Type any area or street from inside BBMP limits. The index is built from every street listed in the 686-page BBMP Guidance Value gazette (Notification No. 384 dated 09-Mar-2016). Each hit shows the ward + the exact PDF page; rows enriched in Phase 2 also surface the assigned UAV zone and guidance-value bandwidth."
+        sub="Type any area or street from inside BBMP limits. The index covers BOTH registers of the 686-page BBMP Guidance Value gazette (Notification No. 384 dated 09-Mar-2016): residential (pages 17-362) and non-residential (pages 363-686) — the same street can sit in different UAV zones per register. Each hit shows the ward, register, the exact PDF page, and the zone + guidance-value bandwidth read from the gazette's own section headers."
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -207,6 +220,24 @@ export default function BengaluruStreetLookupPanel() {
             >
               {opt.label}
               {count > 0 && <span className="ml-1 text-[11px] opacity-70">({fmt(count)})</span>}
+            </button>
+          );
+        })}
+        <span aria-hidden="true" className="mx-1 text-content-muted">·</span>
+        {REGISTER_FILTERS.map((opt) => {
+          const active = registerFilter === opt.key;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setRegisterFilter(opt.key)}
+              className={`px-2.5 py-1 rounded text-xs transition-colors duration-150 border ${
+                active
+                  ? 'bg-accent-soft text-accent border-accent'
+                  : 'bg-bg-secondary text-content-secondary hover:text-content-primary border-transparent'
+              }`}
+            >
+              {opt.label}
             </button>
           );
         })}

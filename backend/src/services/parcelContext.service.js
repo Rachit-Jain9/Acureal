@@ -496,7 +496,10 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
       : Promise.resolve(null),
     provisionallyInsideBbmp && tokens.length
       ? masterplanService
-          .searchBbmpStreets({ search: tokens[0], limit: 5 })
+          // limit 10 so the same street's residential AND non-residential
+          // register rows both land in the result set (the gazette keeps two
+          // registers; the same street can sit in different UAV zones).
+          .searchBbmpStreets({ search: tokens[0], limit: 10 })
           .catch(() => ({ rows: [], summary: {} }))
       : Promise.resolve({ rows: [], summary: {} }),
     provisionallyInsideBbmp ? matchPlanningDistrict(tokens, coords.formatted_address || trimmedAddress) : Promise.resolve(null),
@@ -530,12 +533,25 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
 
   // ─── Synthesise BBMP street + ward ──────────────────────────────────
   // Pick the best fuzzy hit on the BBMP street index. We rely on the
-  // service's existing trigram + ILIKE ordering — the first row is the
-  // best candidate. Use finalStreetIndexResult so taluk-override
-  // empties out the rows when K-GIS confirms non-BBMP jurisdiction.
+  // service's existing trigram + ILIKE ordering. The index carries BOTH
+  // gazette registers (residential pages 17-362, non-residential 363-686);
+  // the primary zone stays the RESIDENTIAL classification (legacy
+  // behaviour), and the non-residential twin — when the same/best street
+  // also appears in that register — is attached alongside, because the
+  // same street can sit in a different UAV zone for commercial use.
+  // Use finalStreetIndexResult so taluk-override empties out the rows
+  // when K-GIS confirms non-BBMP jurisdiction.
   const streetRows = Array.isArray(finalStreetIndexResult?.rows) ? finalStreetIndexResult.rows : [];
-  const streetMatch = streetRows[0] || null;
-  const streetAlternates = streetRows.slice(1, 4);
+  const residentialRows = streetRows.filter((r) => !r.register || r.register === 'residential');
+  const nonResidentialRows = streetRows.filter((r) => r.register === 'non_residential');
+  const streetMatch = residentialRows[0] || streetRows[0] || null;
+  const nonResMatch =
+    nonResidentialRows.find((r) => r.street_name_en === streetMatch?.street_name_en)
+    || nonResidentialRows[0]
+    || null;
+  const streetAlternates = streetRows
+    .filter((r) => r !== streetMatch && r !== nonResMatch)
+    .slice(0, 3);
 
   const bbmpWard = streetMatch?.ward_no
     ? {
@@ -549,12 +565,23 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
     ? {
         zone_code: streetMatch.zone_code,
         zone_name: `Zone ${streetMatch.zone_code}`,
+        register: streetMatch.register || 'residential',
         guidance_value_band_min_inr: streetMatch.guidance_value_band_min_inr ?? null,
         guidance_value_band_max_inr: streetMatch.guidance_value_band_max_inr ?? null,
         source: 'bbmp_street_index_match',
         source_street: streetMatch.street_name_en,
         source_page: streetMatch.page_number,
         confidence: 0.55,
+        non_residential: nonResMatch?.zone_code
+          ? {
+              zone_code: nonResMatch.zone_code,
+              zone_name: `Zone ${nonResMatch.zone_code}`,
+              guidance_value_band_min_inr: nonResMatch.guidance_value_band_min_inr ?? null,
+              guidance_value_band_max_inr: nonResMatch.guidance_value_band_max_inr ?? null,
+              source_street: nonResMatch.street_name_en,
+              source_page: nonResMatch.page_number,
+            }
+          : null,
       }
     : null;
 

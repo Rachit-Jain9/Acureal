@@ -235,6 +235,23 @@ const getSourceMetadataGaps = (doc = {}) => SOURCE_METADATA_FIELDS
 const getSourceDocumentReadiness = (doc = {}) => {
   const mode = doc?.processing_mode;
   if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
+    // An OCR/image-review source that has ALREADY been extracted (manual or
+    // page-review path) must say so — showing "required before extraction"
+    // next to a completed extraction reads as a contradiction and made the
+    // operator believe the document was never ingested. Automated extraction
+    // stays blocked either way (can_extract: false).
+    if (doc?.extraction_status === 'completed') {
+      return {
+        key: 'ocr_completed',
+        label: 'Extracted (manual review)',
+        tone: 'success',
+        description: 'Extracted via manual/page review — automated OCR pipeline not used',
+        can_extract: false,
+        action_label: 'Re-review pages',
+        block_reason: 'This source is marked as needing OCR or image review; automated extraction stays disabled. Its content was extracted through the manual review path.',
+        missing_fields: [],
+      };
+    }
     return {
       key: 'ocr',
       label: mode === 'image_review' ? 'Image review' : 'OCR review',
@@ -1960,13 +1977,14 @@ function parseDistrictNotes(notes) {
 // multi-zone pages — the response includes a `summary` block with the
 // corpus-wide enrichment counts so the panel can render accurate stats.
 const STREET_INDEX_RETURN_COLS = `
-  id, street_name_en, ward_no, page_number, aro_section,
+  id, street_name_en, ward_no, page_number, aro_section, register,
   zone_code, guidance_value_band_min_inr, guidance_value_band_max_inr,
   row_excerpt
 `;
 const STREET_INDEX_SOURCE_DOC = 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)';
-const STREET_INDEX_DISCLAIMER = 'AI-extracted street index — verify the ward and zone classification against the original PDF page before quoting.';
+const STREET_INDEX_DISCLAIMER = 'Extracted street index — verify the ward and zone classification against the original PDF page before quoting. The same street can carry different UAV zones in the residential vs non-residential register.';
 const VALID_ZONE_CODES = new Set(['A', 'B', 'C', 'D', 'E', 'F']);
+const VALID_REGISTERS = new Set(['residential', 'non_residential']);
 
 // Ward-level rollup of the BBMP street index. Returns one row per ward_no
 // with: street count, dominant zone (the zone code that wins the plurality
@@ -2097,7 +2115,7 @@ async function getStreetIndexSummary() {
   };
 }
 
-async function searchBbmpStreets({ search = '', limit = 25, zone = null } = {}) {
+async function searchBbmpStreets({ search = '', limit = 25, zone = null, register = null } = {}) {
   const cleanSearch = String(search || '').trim();
   // `Number(0) || 25` returns 25 because 0 is falsy, so use explicit
   // null/undefined/NaN gating before clamping.
@@ -2111,9 +2129,14 @@ async function searchBbmpStreets({ search = '', limit = 25, zone = null } = {}) 
     const upper = String(zone).trim().toUpperCase();
     return VALID_ZONE_CODES.has(upper) ? upper : null;
   })();
+  const cleanRegister = (() => {
+    if (!register) return null;
+    const lower = String(register).trim().toLowerCase();
+    return VALID_REGISTERS.has(lower) ? lower : null;
+  })();
 
   // Build WHERE clauses + params dynamically so the same query supports
-  // any combination of {search, zone, neither}.
+  // any combination of {search, zone, register, none}.
   const whereParts = [];
   const params = [];
 
@@ -2124,6 +2147,10 @@ async function searchBbmpStreets({ search = '', limit = 25, zone = null } = {}) 
   if (cleanZone) {
     params.push(cleanZone);
     whereParts.push(`zone_code = $${params.length}`);
+  }
+  if (cleanRegister) {
+    params.push(cleanRegister);
+    whereParts.push(`register = $${params.length}`);
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -2150,6 +2177,7 @@ async function searchBbmpStreets({ search = '', limit = 25, zone = null } = {}) 
   return {
     query: cleanSearch,
     zone_filter: cleanZone,
+    register_filter: cleanRegister,
     rows: rowsResult.rows,
     summary,
     source_document: STREET_INDEX_SOURCE_DOC,

@@ -224,10 +224,14 @@ const MANIFEST = Object.freeze([
     source_role: 'property_tax_uav',
     legal_status: 'advisory',
     authority_name: 'Bruhat Bengaluru Mahanagara Palike',
-    processing_mode: 'ocr_required',
-    ocr_required: true,
-    source_confidence: 0.8,
-    registry_notes: 'BBMP property-tax Unit Area Value. NOT an IGR sale guidance dataset. Route to bbmp_uav_entries; never to guidance_values.',
+    // Corrected 2026-06-10: the file is a 686-page TEXT-LAYER PDF (gazette
+    // notification + UAV rate tables + residential/non-residential street
+    // registers), not a scan. The earlier ocr_required default made the UI
+    // demand OCR forever even after extraction completed.
+    processing_mode: 'text_extraction',
+    ocr_required: false,
+    source_confidence: 0.9,
+    registry_notes: 'BBMP property-tax Unit Area Value gazette (Notification No. 384, 09-Mar-2016; 686 pages, text layer). Pages 1-16: notification + rate Tables I & II (route to bbmp_uav_entries). Pages 17-362: RESIDENTIAL street->zone register; 363-686: NON-RESIDENTIAL register (route to bbmp_street_index with the register tag; parser: scripts/parse-bbmp-uav-register.py). NOT an IGR sale guidance dataset — never route to guidance_values.',
   },
   {
     canonical_name: 'grok-guidance-value-remarks.docx',

@@ -101,12 +101,13 @@ export function useBbmpWardSummary() {
 export function useStreetLookup(params = {}) {
   const search = String(params.search || '').trim();
   const zone = params.zone || null;
+  const register = params.register || null;
   const limit = params.limit ?? 50;
   return useQuery({
-    queryKey: ['master-plan-street-lookup', search, zone, limit],
+    queryKey: ['master-plan-street-lookup', search, zone, register, limit],
     queryFn: () => masterPlanAPI
-      .streetLookup({ search, zone, limit })
-      .then((r) => r.data.data ?? { query: search, zone_filter: zone, rows: [], summary: {}, disclaimer: '' }),
+      .streetLookup({ search, zone, register, limit })
+      .then((r) => r.data.data ?? { query: search, zone_filter: zone, register_filter: register, rows: [], summary: {}, disclaimer: '' }),
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   });

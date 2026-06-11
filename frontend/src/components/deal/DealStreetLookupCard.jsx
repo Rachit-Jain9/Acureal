@@ -52,6 +52,11 @@ function HitRow({ row }) {
               {row.street_name_en}
             </span>
             {hasZone && <Badge tone="info">Zone {row.zone_code}</Badge>}
+            {row.register && (
+              <Badge tone={row.register === 'non_residential' ? 'warn' : 'neutral'}>
+                {row.register === 'non_residential' ? 'Non-residential' : 'Residential'}
+              </Badge>
+            )}
           </div>
           <div className="text-[11px] text-content-muted leading-snug mt-0.5 flex items-center gap-1.5 flex-wrap">
             {row.ward_no != null && <span className="tabular-nums">Ward {row.ward_no}</span>}
