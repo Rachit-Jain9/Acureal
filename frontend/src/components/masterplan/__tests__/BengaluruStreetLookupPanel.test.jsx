@@ -38,6 +38,7 @@ const SAMPLE = {
   ],
   summary: {
     total: 9913,
+    distinct_streets: 7188,
     enriched: 2943,
     wards: 199,
     by_zone: { A: 292, B: 257, C: 465, D: 824, E: 879, F: 226, unknown: 6970 },
@@ -55,7 +56,8 @@ describe('BengaluruStreetLookupPanel', () => {
   it('renders the section header and the three summary tiles', () => {
     render(<BengaluruStreetLookupPanel />);
     expect(screen.getByText(/Find a street's BBMP zone/i)).toBeInTheDocument();
-    expect(screen.getByText('Streets indexed')).toBeInTheDocument();
+    expect(screen.getByText('Index entries')).toBeInTheDocument();
+    expect(screen.getByText(/unique streets \(both registers\)/i)).toBeInTheDocument();
     expect(screen.getByText('BBMP wards covered')).toBeInTheDocument();
     expect(screen.getByText('With zone enrichment')).toBeInTheDocument();
   });
