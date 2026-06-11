@@ -2090,27 +2090,42 @@ async function getBbmpWardSummary() {
 
 async function getStreetIndexSummary() {
   // One round-trip for the corpus-wide stats so the panel doesn't have to
-  // fan out three separate queries on every load.
+  // fan out separate queries on every load.
+  //
+  // The previous version grouped by (zone_code, ward_no) and then COUNT(*)'d
+  // the *buckets* — so `total` reported the number of distinct zone×ward combos
+  // (~800) instead of the ~18.7k index entries, and `by_zone` aggregated over
+  // those buckets with zone_code as a JSON key, silently collapsing duplicate
+  // zones across wards (last-ward-wins) and under-reporting every zone. This
+  // counts entries directly, exposes the distinct-street count alongside the
+  // entry count (the same street can appear in both gazette registers and on
+  // multiple pages), and builds by_zone from a single clean GROUP BY zone_code.
   const result = await query(
     `SELECT
-       COUNT(*)::int                                                       AS total,
-       COUNT(*) FILTER (WHERE zone_code IS NOT NULL)::int                  AS enriched,
-       COUNT(DISTINCT ward_no)::int                                        AS wards,
-       jsonb_object_agg(
-         coalesce(zone_code, 'unknown'),
-         cnt
-       ) AS by_zone
-     FROM (
-       SELECT zone_code, ward_no, COUNT(*) AS cnt
-       FROM regulatory_data.bbmp_street_index
-       GROUP BY zone_code, ward_no
-     ) bucketed`,
+       COUNT(*)::int                                              AS total,
+       COUNT(DISTINCT (lower(street_name_en), ward_no))::int      AS distinct_streets,
+       COUNT(*) FILTER (WHERE zone_code IS NOT NULL)::int         AS enriched,
+       COUNT(DISTINCT ward_no)::int                               AS wards,
+       COUNT(*) FILTER (WHERE register = 'residential')::int      AS residential,
+       COUNT(*) FILTER (WHERE register = 'non_residential')::int  AS non_residential,
+       (
+         SELECT jsonb_object_agg(z, n)
+         FROM (
+           SELECT COALESCE(zone_code, 'unknown') AS z, COUNT(*)::int AS n
+           FROM regulatory_data.bbmp_street_index
+           GROUP BY COALESCE(zone_code, 'unknown')
+         ) zb
+       )                                                          AS by_zone
+     FROM regulatory_data.bbmp_street_index`,
   );
   const row = result.rows[0] || {};
   return {
     total: row.total ?? 0,
+    distinct_streets: row.distinct_streets ?? 0,
     enriched: row.enriched ?? 0,
     wards: row.wards ?? 0,
+    residential: row.residential ?? 0,
+    non_residential: row.non_residential ?? 0,
     by_zone: row.by_zone ?? {},
   };
 }
