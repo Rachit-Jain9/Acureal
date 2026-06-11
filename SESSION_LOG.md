@@ -19,7 +19,7 @@ A focused regulatory-correctness block driven by a deep multi-agent review of th
 ### Left for next / operator
 - **🔴 Operator must apply migration `20260711_far_rules_default_pending.sql`** in the Supabase SQL editor (one line; behavior-neutral). The auto-mode classifier blocks the agent from applying prod migrations.
 - **🟡 Optional: load the staged BBMP UAV top-up** (`tmp/bbmp-uav-register-final.json`, 19,830 rows @ 100% zoned, vs the current already-good 18,743 @ 98.6%) via `node scripts/seed-bbmp-uav-register.js`. Enhancement, not a fix; classifier blocks the agent from running it.
-- **🟢 Follow-up chip spawned:** surface the non-residential UAV band as primary for commercial deals (B3 — deferred; data already present, needs use-type routing).
+- **🟢 B3 SHIPPED later same day — PR #806 (merged).** Commercial/retail/industrial/hospitality deals now headline the non-residential BBMP UAV band (zone + guidance + spread-vs-guidance signal) on the Overview and Zoning cards; residential stays visible. A 6-agent investigation + adversarial critique settled the approach first: the service can't thread use-type (runs pre-property) and the band is display/audit-only (never feeds FAR), so a frontend-only fix via a shared selector (`frontend/src/utils/bbmpRegister.js`, keyed on the exact asset_class set, mixed_use excluded) is correct + backward compatible. 47 frontend tests + 100 backend parcel tests pass.
 - Known minor: `createManualFarRule` upper-cases zone_code vs mixed-case seed zones (manual-rule match edge case).
 
 ---
