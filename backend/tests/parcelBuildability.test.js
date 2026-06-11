@@ -136,3 +136,97 @@ describe('parcel buildability FAR matrix utilities', () => {
     expect(impact.effective_area_sqft).toBeLessThan(1000 * 10.76391041671);
   });
 });
+
+// ── Regression: selectFarRule must resolve EVERY seeded zone by zone_code, not
+// by the coarse normalized land-use family. Previously the engine filtered on
+// land_use_family (only ever 'residential' / 'commercial' / 'industrial'),
+// which matched none of the RMP-2015 seed's 11 specific family labels for any
+// non-residential zone → zero rules → "No approved FAR matrix rule matched" for
+// every commercial, industrial, mixed-use, dev-plan and large-residential
+// parcel. selectFarRule now receives rows already scoped to one zone_code (the
+// SQL keys on zone_code) and bands purely by area/road width. These fixtures
+// mirror the seed's dual-family zones, whose plot-area bands are DISJOINT, so
+// exactly one rule resolves per parcel.
+const sqftOf = (sqm) => sqm * 10.76391041671;
+
+// Zone 'C-Business' carries TWO families: commercial_business (Table 14, plots
+// ≤12000sqm) and non_residential_dev_plan (Table 21, plots >12000sqm).
+const cBusinessZoneRules = [
+  {
+    id: 'cb-12-18', zone_code: 'C-Business', land_use_family: 'commercial_business',
+    plot_area_min_sqm: 0, plot_area_max_sqm: 12000, road_width_min_m: 12, road_width_max_m: 18,
+    base_far: 2.25, max_far: 2.25, review_status: 'approved',
+  },
+  {
+    id: 'nrdp-18-24', zone_code: 'C-Business', land_use_family: 'non_residential_dev_plan',
+    plot_area_min_sqm: 12000, plot_area_max_sqm: null, road_width_min_m: 18, road_width_max_m: 24,
+    base_far: 2.5, max_far: 2.5, review_status: 'approved',
+  },
+];
+
+// Zone 'R' carries residential (Table 10, ≤20000sqm) and residential_dev_plan
+// (Table 20, >20000sqm).
+const rZoneRules = [
+  {
+    id: 'r-1000-2000', zone_code: 'R', land_use_family: 'residential',
+    plot_area_min_sqm: 1000, plot_area_max_sqm: 2000, road_width_min_m: 18, road_width_max_m: 24,
+    base_far: 2.5, max_far: 2.5, review_status: 'approved',
+  },
+  {
+    id: 'rdp-18-24', zone_code: 'R', land_use_family: 'residential_dev_plan',
+    plot_area_min_sqm: 20000, plot_area_max_sqm: null, road_width_min_m: 18, road_width_max_m: 24,
+    base_far: 2.5, max_far: 2.5, review_status: 'approved',
+  },
+];
+
+const iGeneralZoneRules = [
+  {
+    id: 'ig-1000-3000', zone_code: 'I-General', land_use_family: 'industrial_general',
+    plot_area_min_sqm: 1000, plot_area_max_sqm: 3000, road_width_min_m: 0, road_width_max_m: null,
+    base_far: 1.0, max_far: 1.0, review_status: 'approved',
+  },
+];
+
+describe('selectFarRule resolves seeded zones by zone_code, not coarse family', () => {
+  test('small commercial plot resolves the commercial_business band', () => {
+    const { rule, reason } = selectFarRule(cBusinessZoneRules, {
+      landAreaSqft: sqftOf(2000), roadWidthMtrs: 15, landUseFamily: 'commercial',
+    });
+    expect(reason).toBeNull();
+    expect(rule.id).toBe('cb-12-18');
+    expect(rule.base_far).toBe(2.25);
+  });
+
+  test('large commercial plot (>12000sqm) resolves the non_residential_dev_plan band', () => {
+    const { rule } = selectFarRule(cBusinessZoneRules, {
+      landAreaSqft: sqftOf(15000), roadWidthMtrs: 20, landUseFamily: 'commercial',
+    });
+    expect(rule).not.toBeNull();
+    expect(rule.id).toBe('nrdp-18-24');
+    expect(rule.base_far).toBe(2.5);
+  });
+
+  test('large residential plot (>20000sqm) resolves residential_dev_plan, not Table 10', () => {
+    const { rule } = selectFarRule(rZoneRules, {
+      landAreaSqft: sqftOf(25000), roadWidthMtrs: 20, landUseFamily: 'residential',
+    });
+    expect(rule).not.toBeNull();
+    expect(rule.id).toBe('rdp-18-24');
+  });
+
+  test('industrial parcel resolves (was dead — family never normalized to industrial_general)', () => {
+    const { rule } = selectFarRule(iGeneralZoneRules, {
+      landAreaSqft: sqftOf(2000), roadWidthMtrs: 12, landUseFamily: 'industrial',
+    });
+    expect(rule).not.toBeNull();
+    expect(rule.base_far).toBe(1.0);
+  });
+
+  test('coarse family arg no longer filters — wrong family still resolves the right rule', () => {
+    const { rule } = selectFarRule(cBusinessZoneRules, {
+      landAreaSqft: sqftOf(2000), roadWidthMtrs: 15, landUseFamily: 'residential', // deliberately wrong
+    });
+    expect(rule).not.toBeNull();
+    expect(rule.id).toBe('cb-12-18');
+  });
+});

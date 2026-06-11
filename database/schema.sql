@@ -995,7 +995,11 @@ CREATE TABLE regulatory_data.far_rules (
   source_section VARCHAR(255),
   rule_notes TEXT,
   confidence_score NUMERIC(4,3) DEFAULT 1 CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
-  review_status VARCHAR(40) DEFAULT 'approved' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
+  -- Default-deny: a FAR rule must be explicitly approved before loadFarRules()
+  -- will surface it into buildable-area screening (migration 20260711). Both
+  -- live insert paths set this column explicitly, so the default only governs
+  -- future bulk/external inserts.
+  review_status VARCHAR(40) DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
   effective_from DATE,
   effective_to DATE,
   created_at TIMESTAMPTZ DEFAULT NOW(),

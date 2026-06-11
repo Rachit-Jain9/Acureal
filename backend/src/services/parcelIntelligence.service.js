@@ -81,9 +81,20 @@ const loadPropertyWithZone = async (propertyId) => {
   return result.rows[0];
 };
 
-const loadFarRules = async ({ property, zone, landUseFamily }) => {
+const loadFarRules = async ({ property, zone }) => {
   if (!zone?.zone_code) return [];
 
+  // Match candidate rules on zone_code — the authoritative join key in the
+  // RMP-2015 seed. We deliberately do NOT filter on land_use_family here: a
+  // single zone can carry several families with DISJOINT plot-area bands (zone
+  // 'R' = residential ≤20000sqm + residential_dev_plan >20000sqm; 'C-Business'
+  // = commercial_business ≤12000sqm + non_residential_dev_plan >12000sqm), so
+  // selectFarRule's area/road-width banding selects the right one. The previous
+  // equality filter on the coarse normalized family (only ever 'residential' /
+  // 'commercial' / 'industrial') matched none of the seed's 11 specific family
+  // labels for any non-residential zone — silently returning zero rules for
+  // every commercial, industrial, mixed-use, dev-plan and large-residential
+  // parcel while the zone itself resolved fine. Key on the zone, band by area.
   const result = await query(
     `SELECT
        fr.*,
@@ -94,19 +105,17 @@ const loadFarRules = async ({ property, zone, landUseFamily }) => {
      LEFT JOIN regulatory_data.evidence_sources es ON es.id = fr.evidence_source_id
      WHERE fr.review_status = 'approved'
        AND LOWER(COALESCE(fr.city, 'bengaluru')) = LOWER($1)
-       AND LOWER(fr.land_use_family) = LOWER($2)
        AND (
-         fr.zone_code = $3
+         fr.zone_code = $2
          OR (
            fr.planning_zone IS NOT NULL
-           AND fr.planning_zone = COALESCE($4, fr.planning_zone)
-           AND $3 IS NULL
+           AND fr.planning_zone = COALESCE($3, fr.planning_zone)
+           AND $2 IS NULL
          )
        )
      ORDER BY (fr.org_id IS NOT NULL) DESC, fr.plot_area_min_sqm ASC, fr.road_width_min_m ASC`,
     [
       property.city || 'Bengaluru',
-      landUseFamily,
       zone.zone_code || null,
       zone.planning_zone || null,
     ]
@@ -642,12 +651,11 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   const property = await loadPropertyWithZone(propertyId);
   const zone = property.zone || null;
   const landUseFamily = normalizeLandUseFamily(property, zone);
-  const farRules = await loadFarRules({ property, zone, landUseFamily });
+  const farRules = await loadFarRules({ property, zone });
   const previousMeta = await loadLatestSnapshotMeta(propertyId);
   const { rule, reason: farReason } = selectFarRule(farRules, {
     landAreaSqft: property.land_area_sqft,
     roadWidthMtrs: property.road_width_mtrs,
-    landUseFamily,
   });
   const buildability = computeBuildabilityFromRule({ property, zone, rule });
   if (!rule && farReason) {
@@ -809,8 +817,13 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
       zone_name: zone?.zone_name || property.zoning || null,
       planning_zone: zone?.planning_zone || null,
       land_use_family: landUseFamily,
-      plan_version: zone?.plan_version || buildability.rule?.plan_version || 'RMP 2031 Draft',
-      plan_status: zone?.plan_status || buildability.rule?.plan_status || 'draft_reference',
+      // Honest fallback when neither the assigned zone nor a matched FAR rule
+      // carries a plan: do NOT assert the withdrawn RMP 2031 (provisional
+      // approval withdrawn Jul 2020). Leave the version unknown and mark the
+      // status needs_verification — consistent with `status` above, which is
+      // already 'needs_verification' when no zone_code is assigned.
+      plan_version: zone?.plan_version || buildability.rule?.plan_version || null,
+      plan_status: zone?.plan_status || buildability.rule?.plan_status || 'needs_verification',
       notes: property.zone_notes || null,
     },
     buildability,
