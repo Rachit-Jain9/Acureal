@@ -43,7 +43,13 @@ export default function PostCalcBenchmarkPanel({ dealId, kpis, inputs }) {
       Number.isFinite(Number(kpis.yieldOnCost)) && Number(kpis.yieldOnCost) > 0 &&
       Number.isFinite(Number(kpis.exitCapRate ?? inputs?.exitCapRate)) &&
       Number(kpis.exitCapRate ?? inputs?.exitCapRate) > 0;
-    return dscrEvaluable || yocEvaluable;
+    // Fundamental economics (IRR / equity multiple) apply to EVERY asset class —
+    // including residential / plotted / hospitality deals that carry no DSCR or
+    // YoC. Counting these as "evaluable" lets the panel surface a negative-IRR
+    // or sub-1.0× flag (and the "all clear" confirmation) for those deals too.
+    const fundamentalsEvaluable =
+      Number.isFinite(Number(kpis.irr)) || Number.isFinite(Number(kpis.equityMultiple));
+    return dscrEvaluable || yocEvaluable || fundamentalsEvaluable;
   }, [kpis, inputs]);
 
   // Hidden while bands are loading — don't flash a false "all clear".
@@ -61,7 +67,7 @@ export default function PostCalcBenchmarkPanel({ dealId, kpis, inputs }) {
           <CheckCircle2 size={14} className="text-data-positive flex-shrink-0" />
           <span>
             <span className="font-semibold text-content-primary">Underwriting benchmarks · all clear.</span>{' '}
-            DSCR and YoC/Exit-Cap spread are within RBI + IC thresholds.
+            Returns, coverage, and yield-spread benchmarks are within IC + RBI thresholds.
           </span>
         </div>
       </Card>

@@ -41,12 +41,38 @@ describe('PostCalcBenchmarkPanel (PR-NX56)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders NOTHING when no KPIs are evaluable (no DSCR, no income KPIs)', () => {
+  it('renders NOTHING when no KPIs are evaluable (no DSCR, YoC, IRR, or equity multiple)', () => {
     mockBands();
     const { container } = render(
-      <PostCalcBenchmarkPanel dealId="d1" kpis={{ irr: 18, npv: 50 }} inputs={{}} />,
+      <PostCalcBenchmarkPanel dealId="d1" kpis={{}} inputs={{}} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // ── Fundamental-economics floor (2026-06-11) — works for non-income deals ──
+  it('renders the negative-IRR critical chip for a residential deal (no DSCR/YoC)', () => {
+    mockBands();
+    render(
+      <PostCalcBenchmarkPanel dealId="d1" kpis={{ irr: -4.2, equityMultiple: 1.4 }} inputs={{}} />,
+    );
+    expect(screen.getByText(/Underwriting Benchmarks/i)).toBeInTheDocument();
+    expect(screen.getByText(/Negative IRR/i)).toBeInTheDocument();
+  });
+
+  it('renders the capital-destruction chip when equity multiple is below 1.0×', () => {
+    mockBands();
+    render(
+      <PostCalcBenchmarkPanel dealId="d1" kpis={{ irr: 3.1, equityMultiple: 0.85 }} inputs={{}} />,
+    );
+    expect(screen.getByText(/0\.85× — below 1\.0×/i)).toBeInTheDocument();
+  });
+
+  it('renders the ALL-CLEAR pill for a healthy residential deal (positive IRR, EM ≥ 1.0×)', () => {
+    mockBands();
+    render(
+      <PostCalcBenchmarkPanel dealId="d1" kpis={{ irr: 18, equityMultiple: 2.1 }} inputs={{}} />,
+    );
+    expect(screen.getByText(/Underwriting benchmarks · all clear/i)).toBeInTheDocument();
   });
 
   it('renders quiet ALL-CLEAR pill when DSCR + spread are within band', () => {

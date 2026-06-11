@@ -13,6 +13,7 @@ const {
   validateCompFreshness,
   validateDscrFloor,
   validateYocVsExitCapSpread,
+  validateFundamentalEconomics,
   RBI_DSCR_FLOOR,
 } = __internal;
 
@@ -452,6 +453,68 @@ describe('marketBenchmarkValidator', () => {
       validateYocVsExitCapSpread(buildCtx(0.075), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(1);
       expect(issues[0].message).toMatch(/THIN development premium/);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // 2026-06-11 — fundamental-economics floor (all asset classes)
+  // ──────────────────────────────────────────────────────────────────
+
+  describe('validateFundamentalEconomics — IRR<0 + equity multiple<1.0× (all asset classes)', () => {
+    const buildCtx = (kpis, dealFamily = 'development') => ({ dealFamily, kernelKpis: kpis });
+
+    test('negative IRR → WARN on IRR (development/residential deal, no DSCR)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: -4.2, equityMultiple: 1.4 }), {}, addIssue);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warn');
+      expect(issues[0].field).toBe('IRR');
+      expect(issues[0].message).toMatch(/IRR is -4\.20% — negative/);
+    });
+
+    test('equity multiple below 1.0× → WARN on EquityMultiple', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: 3.1, equityMultiple: 0.85 }), {}, addIssue);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warn');
+      expect(issues[0].field).toBe('EquityMultiple');
+      expect(issues[0].message).toMatch(/0\.85× — below 1\.0×/);
+    });
+
+    test('both IRR<0 AND equity multiple<1.0× → two WARNs', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: -8, equityMultiple: 0.6 }), {}, addIssue);
+      expect(issues).toHaveLength(2);
+      expect(issues.map((i) => i.field).sort()).toEqual(['EquityMultiple', 'IRR']);
+      // never a blocker — export must stay PASS_WITH_WARNINGS, not BLOCKED
+      expect(issues.every((i) => i.severity === 'warn')).toBe(true);
+    });
+
+    test('fires for income deals too (not gated by deal family)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: -1, equityMultiple: 0.9 }, 'income'), {}, addIssue);
+      expect(issues).toHaveLength(2);
+    });
+
+    test('healthy deal (positive IRR, EM ≥ 1.0×) → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: 18, equityMultiple: 2.1 }), {}, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('IRR = 0 and equity multiple = 1.0 exactly → silent (boundary, not below)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: 0, equityMultiple: 1.0 }), {}, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('fail-open: silent when IRR / equity multiple are null / NaN / missing', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: null, equityMultiple: null }), {}, addIssue);
+      validateFundamentalEconomics(buildCtx({ irr: NaN, equityMultiple: undefined }), {}, addIssue);
+      validateFundamentalEconomics(buildCtx({}), {}, addIssue);
+      validateFundamentalEconomics({ kernelKpis: undefined }, {}, addIssue);
+      expect(issues).toHaveLength(0);
     });
   });
 
