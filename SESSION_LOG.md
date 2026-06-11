@@ -4,6 +4,17 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-11 (Financial-engine fundamental-economics guardrail) (PR #808 — merged + deployed; master green)
+
+After the regulatory wave shipped, a fresh 7-agent deep review (survey → architect rank → adversarial critic) of the current master picked the next highest-impact, deterministic, non-operator-gated win: a **fundamental-economics guardrail**. Today a deal could compute a NEGATIVE IRR or an equity multiple BELOW 1.0× — i.e. the model destroys investor capital — and nothing flagged it, because the in-app benchmark panel + the XLSX export QA only checked DSCR and YoC-vs-Exit-Cap (both income-family-only). So an economically indefensible deal of any asset class shipped to IC silently — the exact "catastrophic blind spot" REDIP exists to close.
+
+- **#808 — flag negative IRR / sub-1.0× equity multiple on actual kernel output, across ALL asset classes.** Reads the kernel's already-computed `kpis.irr` / `kpis.equityMultiple` (re-derives nothing → cannot diverge from the deterministic kernel). Frontend `computeKernelWarnings` gains the two critical flags; `PostCalcBenchmarkPanel` now renders for non-income deals (residential/plotted/hospitality) that carry no DSCR/YoC; backend `validateFundamentalEconomics` (WARN, never BLOCKER → export stays PASS_WITH_WARNINGS) mirrors the rule into the export QA. NPV deliberately excluded (it's hurdle-discounted; negative NPV = "below required return", not "loses money" — the critic caught the original copy as factually wrong). Implementation also surfaced + fixed a real `Number(null)===0` false-positive bug. Verified: backend 196 suites / 3280 tests (7 new), frontend 40 tests, build clean.
+
+### Process note
+The review's nominal favourite (input-time DSCR prediction while typing) was REJECTED in the critique as a kernel-divergence risk (income deals don't carry NOI/cost on the form). The runner-up (deals-table composite indexes) was deferred as an operator-gated prod migration targeting hypothetical scale. New memory file `project_financial_benchmark_validators.md` records the validator architecture so it isn't re-discovered.
+
+---
+
 ## 2026-06-11 (Regulatory FAR engine: fix silent commercial/industrial failure + default-deny + BBMP corpus-stats fix) (PRs #802, #803, #804 — all merged + deployed; master green)
 
 A focused regulatory-correctness block driven by a deep multi-agent review of the live codebase. The review (and an adversarial critique that corrected it) surfaced one severe silent bug and several smaller ones; all the code-only fixes shipped.
