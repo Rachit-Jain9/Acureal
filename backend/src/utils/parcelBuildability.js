@@ -52,10 +52,9 @@ const citeFarRule = (rule = {}) => ({
   status: rule.plan_status || 'operative',
 });
 
-const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs, landUseFamily } = {}) => {
+const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs } = {}) => {
   const areaSqm = sqftToSqm(landAreaSqft);
   const roadWidthM = toNumber(roadWidthMtrs);
-  const normalizedUse = (landUseFamily || '').toLowerCase();
 
   if (!areaSqm) {
     return { rule: null, reason: 'land_area_missing' };
@@ -65,8 +64,12 @@ const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs, landUseFamily 
     return { rule: null, reason: 'road_width_missing' };
   }
 
+  // No land_use_family filter. The candidate set is already scoped to a single
+  // zone_code upstream, and a zone's families have disjoint plot-area bands, so
+  // the area/road-width banding below resolves to exactly one rule. An equality
+  // filter on the coarse normalized family here silently dropped every
+  // commercial / industrial / mixed-use / dev-plan / large-residential rule.
   const matches = rules
-    .filter((rule) => !normalizedUse || String(rule.land_use_family || '').toLowerCase() === normalizedUse)
     .filter((rule) => inLowerInclusiveUpperExclusiveBand(areaSqm, rule.plot_area_min_sqm, rule.plot_area_max_sqm))
     .filter((rule) => inLowerInclusiveUpperExclusiveBand(roadWidthM, rule.road_width_min_m, rule.road_width_max_m))
     .sort((a, b) => {
