@@ -296,6 +296,33 @@ describe('masterplan.service source intake and zone assignment', () => {
     });
   });
 
+  test('an OCR-required source that completed extraction reads as extracted, not blocked', async () => {
+    // Regression: the UAV gazette was fully extracted via the manual review
+    // path while still flagged ocr_required — the chip kept saying "OCR or
+    // image review required before extraction", which read as "this document
+    // was never ingested". Completed extraction must win the label while
+    // automated extraction stays blocked.
+    const readiness = service.getSourceDocumentReadiness({
+      processing_mode: 'ocr_required',
+      ocr_required: true,
+      extraction_status: 'completed',
+    });
+    expect(readiness).toMatchObject({
+      key: 'ocr_completed',
+      label: 'Extracted (manual review)',
+      tone: 'success',
+      can_extract: false,
+    });
+
+    // Not-yet-extracted OCR sources keep the warning state.
+    const pending = service.getSourceDocumentReadiness({
+      processing_mode: 'ocr_required',
+      ocr_required: true,
+      extraction_status: 'pending',
+    });
+    expect(pending).toMatchObject({ key: 'ocr', label: 'OCR review', can_extract: false });
+  });
+
   test('lists page-level source records for a reviewed document', async () => {
     query
       .mockResolvedValueOnce({
@@ -1602,6 +1629,26 @@ describe('masterplan.service district intelligence helpers', () => {
       const [sqlInvalid, paramsInvalid] = query.mock.calls[callsBefore2];
       expect(sqlInvalid).not.toContain('zone_code = $');
       expect(paramsInvalid).toEqual([25]);
+    });
+
+    test('applies a register filter (residential | non_residential), ignores invalid values', async () => {
+      const callsBefore = query.mock.calls.length;
+      query.mockResolvedValueOnce({ rows: [] });
+      queueSummary();
+      const result = await service.searchBbmpStreets({ register: 'non_residential' });
+      const [sqlValid, paramsValid] = query.mock.calls[callsBefore];
+      expect(sqlValid).toContain('register = $');
+      expect(paramsValid).toEqual(['non_residential', 25]);
+      expect(result.register_filter).toBe('non_residential');
+
+      const callsBefore2 = query.mock.calls.length;
+      query.mockResolvedValueOnce({ rows: [] });
+      queueSummary();
+      const result2 = await service.searchBbmpStreets({ register: 'COMMERCIAL' });
+      const [sqlInvalid, paramsInvalid] = query.mock.calls[callsBefore2];
+      expect(sqlInvalid).not.toContain('register = $');
+      expect(paramsInvalid).toEqual([25]);
+      expect(result2.register_filter).toBeNull();
     });
 
     test('clamps limit into [1,100] and defaults to 25', async () => {

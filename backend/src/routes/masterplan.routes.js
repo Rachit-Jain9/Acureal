@@ -407,17 +407,20 @@ router.get('/intelligence/ward-summary', authenticate, async (req, res, next) =>
   }
 });
 
-// GET /api/master-plan/intelligence/street-lookup?search=...&limit=...&zone=A
-// Fuzzy-search the 9,913-row BBMP street index sourced from the Guidance
-// Value PDF. Each hit carries the ward + source page so the user can verify
+// GET /api/master-plan/intelligence/street-lookup?search=...&limit=...&zone=A&register=residential
+// Fuzzy-search the BBMP street index sourced from the Guidance Value PDF
+// (both gazette registers: residential pages 17-362, non-residential pages
+// 363-686 — the same street can carry different UAV zones per register).
+// Each hit carries the ward + source page + register so the user can verify
 // the zone classification in the original document. Optional zone filter
-// scopes results to a single UAV zone (A through F).
+// (A-F) and register filter (residential | non_residential).
 router.get('/intelligence/street-lookup', authenticate, async (req, res, next) => {
   try {
     const data = await masterplanService.searchBbmpStreets({
       search: req.query.search,
       limit: req.query.limit,
       zone: req.query.zone,
+      register: req.query.register,
     });
     res.json({ success: true, data });
   } catch (err) {
