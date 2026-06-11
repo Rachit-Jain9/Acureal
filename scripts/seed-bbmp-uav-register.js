@@ -21,9 +21,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { Pool } = require('pg');
 
-require('dotenv').config({ path: path.join(__dirname, '..', 'backend', '.env') });
+// Resolve runtime deps from backend/node_modules (this script lives in scripts/,
+// which has no node_modules of its own) so it runs with a plain
+// `node scripts/seed-bbmp-uav-register.js` — no NODE_PATH prefix needed.
+const BACKEND_MODULES = path.join(__dirname, '..', 'backend', 'node_modules');
+const { Pool } = require(path.join(BACKEND_MODULES, 'pg'));
+require(path.join(BACKEND_MODULES, 'dotenv')).config({ path: path.join(__dirname, '..', 'backend', '.env') });
 
 const JSON_PATH = path.join(__dirname, '..', 'tmp', 'bbmp-uav-register-final.json');
 const SOURCE_DOC = 'BBMP Guidance Value Notification No. 384 (09-Mar-2016)';

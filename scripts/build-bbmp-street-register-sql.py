@@ -82,6 +82,36 @@ def main() -> int:
             "visual": True,
         })
 
+    # 2b. Cross-page zone forward-fill. The gazette prints a "ZONE X" banner
+    # once at the start of each zone block; a row's zone is the last banner
+    # at/above it. The visually-extracted continuation pages therefore have
+    # blank zones on every page after the one that carried the banner. Fill
+    # them from the running zone, per register, in reading order — resetting at
+    # each ARO section boundary, which is detectable because the serial number
+    # (sl_no) restarts near 1 at the top of every ARO. We never invent a zone
+    # for rows that precede the first banner of their section (stay blank).
+    by_reg: dict[str, list[dict]] = {}
+    for r in rows:
+        by_reg.setdefault(r.get("register") or "?", []).append(r)
+    filled = 0
+    for reg, reg_rows in by_reg.items():
+        reg_rows.sort(key=lambda r: (r["page_number"], r.get("sl_no") or 0))
+        current_zone = None
+        prev_sl = 0
+        for r in reg_rows:
+            sl = r.get("sl_no") or 0
+            if sl and sl < prev_sl - 2:   # serial reset -> new ARO section
+                current_zone = None
+            if r.get("zone_code"):
+                current_zone = r["zone_code"]
+            elif current_zone:
+                r["zone_code"] = current_zone
+                r["zone_inherited"] = True
+                filled += 1
+            prev_sl = sl or prev_sl
+    if filled:
+        print(f"forward-filled {filled} blank zones from the running section zone")
+
     # 3. dedupe on the unique key, preferring rows WITH a zone
     best: dict[tuple, dict] = {}
     for r in rows:

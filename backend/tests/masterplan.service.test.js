@@ -1569,7 +1569,8 @@ describe('masterplan.service district intelligence helpers', () => {
     // The service issues both in a Promise.all, but pg.query mock returns
     // queued resolutions in call order regardless of parallelism.
     const SUMMARY_FIXTURE = {
-      total: 9913, enriched: 2943, wards: 199,
+      total: 9913, distinct_streets: 7188, enriched: 2943, wards: 199,
+      residential: 5400, non_residential: 4513,
       by_zone: { A: 292, B: 257, C: 465, D: 824, E: 879, F: 226, unknown: 6970 },
     };
     const queueSummary = () => query.mockResolvedValueOnce({ rows: [SUMMARY_FIXTURE] });

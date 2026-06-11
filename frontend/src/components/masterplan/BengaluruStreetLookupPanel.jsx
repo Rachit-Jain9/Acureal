@@ -149,6 +149,7 @@ export default function BengaluruStreetLookupPanel() {
   const rows = data?.rows || [];
   const summary = data?.summary || {};
   const totalIndexed = summary.total ?? 0;
+  const distinctStreets = summary.distinct_streets ?? 0;
   const totalWards = summary.wards ?? 0;
   const enrichedCount = summary.enriched ?? 0;
   const enrichedPct = totalIndexed > 0
@@ -165,9 +166,11 @@ export default function BengaluruStreetLookupPanel() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatTile
-          label="Streets indexed"
+          label="Index entries"
           value={fmt(totalIndexed)}
-          footnote="From BBMP gazette"
+          footnote={distinctStreets > 0
+            ? `${fmt(distinctStreets)} unique streets (both registers)`
+            : 'From BBMP gazette'}
         />
         <StatTile
           label="BBMP wards covered"
