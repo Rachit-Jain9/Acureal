@@ -9182,3 +9182,23 @@ Executed the autonomous half of the "Regulatory coverage" plan (`Claude Remarks.
 - **Operator: apply migration `20260712_statutory_plan_registry.sql` to prod** (walkthrough provided in chat) — this activates the whole spine (the "Governing plan" strip + Anekal routing). After it's applied, verify a Whitefield deal resolves to RMP 2015 and an Anekal-taluk deal resolves to "Anekal LPA MP 2031 — rulebook not loaded."
 - **Operator uploads gate the rest of the plan:** (1) one IGR guidance-value SRO PDF → Workstream 1; (2) RMP 2015 land-use map sheet(s) → Workstream 2; (3) Anekal LPA Master Plan 2031 zoning regulations → Workstream 3.
 - **Deferred (ready-to-build):** the guidance-vs-assumed-rate mismatch flag (Workstream 1 sub-item). Correct home = the deal-level financial validator (compare `deals.land_price_rate_inr` / negotiated price ÷ area against the property's matched `guidance.value_inr_per_sqft`, with ₹/sqft↔₹/acre normalization). Left unbuilt deliberately: it's dormant until IGR data lands, and it should be unit-verified against real guidance values rather than built blind into a financial-critical path.
+
+## 2026-06-12 (continued) — Spine ACTIVATED on prod + Anekal LPA MP 2031 rulebook ingested (Workstream 3; PR #818)
+
+### What was worked on (plain English)
+The operator applied the spine migration and delivered the Anekal rulebook + two RMP-2015 map sheets. Result: the zoning spine is now LIVE on prod and verified end-to-end, and Anekal/Jigani parcels now get real building-density numbers from their own government plan.
+
+### Spine activated + verified live (prod `niamgjbxxgmmffggumvj`)
+Operator ran `20260712_statutory_plan_registry.sql` (Success). Verified read-only: 2 authorities (BDA, Anekal PA), 3 plans (RMP 2015 operative / Anekal LPA MP 2031 operative / RMP 2031 withdrawn), far_rules backfill RMP-2015:51 / RMP-2031:51 (clean, zero unlinked), zones 13/43. **Routing proven on real data:** taluk=anekal → ANEKAL_PA → ANEKAL_LPA_MP_2031; taluk=bangalore south → BDA → RMP_2015; zone 'R' scoped to RMP_2015 → 10 rules reachable, scoped to Anekal → 0 (honest "rulebook not loaded" before the seed below).
+
+### #818 — Anekal LPA MP 2031 zonal regulations (Workstream 3)
+Migration `20260714_anekal_lpa_mp2031_zonal_regulations_seed.sql`: 1 evidence source (links the Anekal plan row), 10 master_plan_zones (9 use-zones + IT/BT sub-zone), **41 far_rules** transcribed VERBATIM from Table 4 (FAR×road×use), Table 6 (group housing ≥1ha), Table 10 (industrial), Table 10A (IT/BT), Agriculture; + evidence_facts (setback Tables 2/3, TOD +0.5 additional FAR, Gramathana, SWM 50m/200m buffer). Source: "Anekal LPA MP 2031 — Zoning Regulations", G.O. UDD 151 BMR 2013 dated 03-09-2014 (BMRDA). Extraction via PyMuPDF text layer (73 pp, clean). **Adversarial verification: 3 independent agents re-derived every value vs the source PDF text — 0 discrepancies across 29/41/78 rows** (same gold standard as the RMP-2015 seed). CI green; squash-merged. **Pending operator-apply of `20260714` to prod** (the spine + Anekal plan row already exist; this fills the FAR tables).
+
+### Workstream 2 (RMP-2015 map sheets) — honest finding
+The two sheets (Petta PD 1.01 = Commercial-Central 64.26%; Gandhi Nagar PD 1.03 = Public&Semi-public 45.78% / Green 37.31%) are RMP-2015 **proposed** land-use maps. Their granular RMP-2015 PD numbering (1.01/1.03, ~300 sub-districts) does NOT map to REDIP's coarse PD-01..PD-07 (PD-01 = "Central Business District", ~2774 ha) — Petta/Gandhi Nagar sit *inside* those. A display auto-join would mis-associate IC-grade data (hard-rule violation), so NOT built. Correct path: upload the two PDFs as viewable, cited reference documents via the admin (operator step). Area statements extracted + verified for the record.
+
+### What's left to do next
+- **Operator: apply migration `20260714` to prod** (walkthrough in chat) — activates real Anekal FAR. After apply, an Anekal deal with an assigned AN-* zone resolves to Anekal FAR (e.g. AN-R residential 1.50→2.50 by road width).
+- Optional: apply `20260713` (guidance fields) when starting the IGR feature.
+- Operator: upload the 2 RMP-2015 map sheets as viewable cited documents (admin), if desired.
+- Still gated: IGR guidance PDF (Workstream 1) + the deferred mismatch flag.
