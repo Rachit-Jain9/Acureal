@@ -4,6 +4,20 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-12 (BBMP UAV street-register top-up loaded to prod + atomic loader) (prod data load + loader PR; master green)
+
+Loaded the staged BBMP UAV street-register top-up to production — but only after a rigorous pre-load verification, because the load is destructive (it deletes the non-residential rows and re-inserts). Treated the staged data as guilty until proven a strict improvement.
+
+- **Pre-load diff (read-only, staged vs live prod):** the top-up is +1,117 new streets, 264 previously-blank zones filled, 16 garbage pypdf mega-rows cleaned, **0 hard regressions** — and it **CORRECTS 179 wrongly-zoned rows**. The surprise: the old prod parser (pre-#801 header-bleed fix) had mis-propagated the *first* zone banner of each ARO block onto its continuation pages. e.g. prod page 238 (Shivaji Nagar) was zone A; the gazette (page 235) shows Zone A = only Sl 1 (M G Road), the block runs A→B→C→**D from Sl 14**, so pages 236–238 are all D. The fixed parser propagates the correct (last) banner.
+- **Verified against the gazette itself** by rasterizing the split page PDFs (`tmp/pdf-pages/page-NNN.pdf`) with the image reader — the legacy-Kannada zone banners + ₹ guidance bands print legibly even though the text layer is shifted-font garbage. Confirmed on two independent AROs (Shivaji Nagar A→D, Maruti Sevanagar full A/B/C/D/E/F → page 198 = E).
+- **Loaded atomically.** First hardened the loader (`scripts/seed-bbmp-uav-register.js`) to wrap the prelude DELETE + every upsert batch in ONE transaction (BEGIN/COMMIT/ROLLBACK on a single client), so a mid-load failure can't leave the table half-loaded; the load stays idempotent + re-runnable. Then ran it.
+- **Prod now: 19,830 rows, 100% zoned** (residential 10,195 + non-residential 9,635; 11,932 distinct streets; 199 wards). Post-load verified: page 238 → all D, page 198 → all E (the corrections landed and match the gazette); the in-app corpus summary now reads 19,830 / 11,932 / 100%.
+
+### Left for next
+- The atomic-loader improvement ships as its own PR; the data is already live (loads don't deploy through CI). Nothing else pending on the BBMP register — it's complete and clean.
+
+---
+
 ## 2026-06-11 (Financial-engine fundamental-economics guardrail) (PR #808 — merged + deployed; master green)
 
 After the regulatory wave shipped, a fresh 7-agent deep review (survey → architect rank → adversarial critic) of the current master picked the next highest-impact, deterministic, non-operator-gated win: a **fundamental-economics guardrail**. Today a deal could compute a NEGATIVE IRR or an equity multiple BELOW 1.0× — i.e. the model destroys investor capital — and nothing flagged it, because the in-app benchmark panel + the XLSX export QA only checked DSCR and YoC-vs-Exit-Cap (both income-family-only). So an economically indefensible deal of any asset class shipped to IC silently — the exact "catastrophic blind spot" REDIP exists to close.

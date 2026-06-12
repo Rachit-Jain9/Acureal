@@ -60,60 +60,78 @@ async function main() {
     const before = await pool.query('SELECT COUNT(*)::int AS n FROM regulatory_data.bbmp_street_index');
     console.log(`Before: ${before.rows[0].n} rows present`);
 
-    if (!SKIP_PRELUDE) {
-      const del = await pool.query('DELETE FROM regulatory_data.bbmp_street_index WHERE page_number >= 363');
-      console.log(`Prelude: retired ${del.rowCount} legacy non-residential rows (page >= 363)`);
-    }
-
+    // Atomic load: the prelude DELETE + every upsert batch run inside ONE
+    // transaction, so the table is never left half-loaded. A mid-load failure
+    // rolls back to the exact pre-load state; readers (Postgres MVCC) keep
+    // seeing the old data until COMMIT, then the complete new register appears
+    // atomically. The load is also idempotent (ON CONFLICT upsert keyed on
+    // lower(street)+ward+page), so a rolled-back run can simply be re-run.
+    const client = await pool.connect();
     let upserted = 0;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const chunk = rows.slice(i, i + BATCH_SIZE);
-      const valuesSql = [];
-      const params = [];
-      for (const r of chunk) {
-        const zone = r.zone_code && VALID_ZONES.has(String(r.zone_code).toUpperCase())
-          ? String(r.zone_code).toUpperCase() : null;
-        const register = VALID_REGISTERS.has(r.register) ? r.register : null;
-        const b = params.length;
-        params.push(
-          String(r.street_name_en).slice(0, 300),
-          r.ward_no ?? null,
-          r.page_number,
-          r.aro_section || null,
-          register,
-          zone,
-          r.band_min_inr ?? null,
-          r.band_max_inr ?? null,
-          (r.row_excerpt || '').slice(0, 160),
-          SOURCE_DOC,
-          r.confidence_score ?? 0.9,
-        );
-        valuesSql.push(
-          `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11})`,
-        );
+    try {
+      await client.query('BEGIN');
+
+      if (!SKIP_PRELUDE) {
+        const del = await client.query('DELETE FROM regulatory_data.bbmp_street_index WHERE page_number >= 363');
+        console.log(`Prelude: retired ${del.rowCount} legacy non-residential rows (page >= 363)`);
       }
-      const sql = `
-        INSERT INTO regulatory_data.bbmp_street_index
-          (street_name_en, ward_no, page_number, aro_section, register, zone_code,
-           guidance_value_band_min_inr, guidance_value_band_max_inr,
-           row_excerpt, source_document, confidence_score)
-        VALUES ${valuesSql.join(',')}
-        ON CONFLICT (lower(street_name_en), ward_no, page_number) DO UPDATE SET
-          register = EXCLUDED.register,
-          aro_section = COALESCE(EXCLUDED.aro_section, regulatory_data.bbmp_street_index.aro_section),
-          zone_code = COALESCE(EXCLUDED.zone_code, regulatory_data.bbmp_street_index.zone_code),
-          guidance_value_band_min_inr = COALESCE(EXCLUDED.guidance_value_band_min_inr, regulatory_data.bbmp_street_index.guidance_value_band_min_inr),
-          guidance_value_band_max_inr = COALESCE(EXCLUDED.guidance_value_band_max_inr, regulatory_data.bbmp_street_index.guidance_value_band_max_inr),
-          row_excerpt = EXCLUDED.row_excerpt,
-          confidence_score = EXCLUDED.confidence_score,
-          updated_at = now()`;
-      const res = await pool.query(sql, params);
-      upserted += res.rowCount;
-      if ((i / BATCH_SIZE) % 5 === 0) {
-        process.stdout.write(`  …upserted ${upserted}\r`);
+
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const chunk = rows.slice(i, i + BATCH_SIZE);
+        const valuesSql = [];
+        const params = [];
+        for (const r of chunk) {
+          const zone = r.zone_code && VALID_ZONES.has(String(r.zone_code).toUpperCase())
+            ? String(r.zone_code).toUpperCase() : null;
+          const register = VALID_REGISTERS.has(r.register) ? r.register : null;
+          const b = params.length;
+          params.push(
+            String(r.street_name_en).slice(0, 300),
+            r.ward_no ?? null,
+            r.page_number,
+            r.aro_section || null,
+            register,
+            zone,
+            r.band_min_inr ?? null,
+            r.band_max_inr ?? null,
+            (r.row_excerpt || '').slice(0, 160),
+            SOURCE_DOC,
+            r.confidence_score ?? 0.9,
+          );
+          valuesSql.push(
+            `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11})`,
+          );
+        }
+        const sql = `
+          INSERT INTO regulatory_data.bbmp_street_index
+            (street_name_en, ward_no, page_number, aro_section, register, zone_code,
+             guidance_value_band_min_inr, guidance_value_band_max_inr,
+             row_excerpt, source_document, confidence_score)
+          VALUES ${valuesSql.join(',')}
+          ON CONFLICT (lower(street_name_en), ward_no, page_number) DO UPDATE SET
+            register = EXCLUDED.register,
+            aro_section = COALESCE(EXCLUDED.aro_section, regulatory_data.bbmp_street_index.aro_section),
+            zone_code = COALESCE(EXCLUDED.zone_code, regulatory_data.bbmp_street_index.zone_code),
+            guidance_value_band_min_inr = COALESCE(EXCLUDED.guidance_value_band_min_inr, regulatory_data.bbmp_street_index.guidance_value_band_min_inr),
+            guidance_value_band_max_inr = COALESCE(EXCLUDED.guidance_value_band_max_inr, regulatory_data.bbmp_street_index.guidance_value_band_max_inr),
+            row_excerpt = EXCLUDED.row_excerpt,
+            confidence_score = EXCLUDED.confidence_score,
+            updated_at = now()`;
+        const res = await client.query(sql, params);
+        upserted += res.rowCount;
+        if ((i / BATCH_SIZE) % 5 === 0) {
+          process.stdout.write(`  …upserted ${upserted}\r`);
+        }
       }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
-    console.log(`\nUpserted ${upserted} rows.`);
+    console.log(`\nUpserted ${upserted} rows (committed atomically).`);
 
     const after = await pool.query(`
       SELECT register, COUNT(*)::int AS n,
