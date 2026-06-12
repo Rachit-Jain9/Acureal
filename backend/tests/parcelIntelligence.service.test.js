@@ -33,6 +33,7 @@ jest.mock('../src/services/regulatory/resolveStatutoryPlan', () => ({
     needs_authority_confirmation: true,
     alternates: [],
   }),
+  resolvePlanById: jest.fn().mockResolvedValue(null),
   logJurisdictionResolution: jest.fn().mockResolvedValue(null),
 }));
 
@@ -214,6 +215,41 @@ describe('parcelIntelligence.service', () => {
     expect(result.statutory_plan.plan_code).toBe('RMP_2015');
     expect(result.statutory_plan.authority_code).toBe('BDA');
     expect(result.statutory_plan.method).toBe('taluk_alias');
+  });
+
+  test('the analyst-assigned zone plan overrides the taluk default (fixes blank Anekal FAR)', async () => {
+    const { resolveStatutoryPlan, resolvePlanById } = require('../src/services/regulatory/resolveStatutoryPlan');
+    // Resolver defaults to BDA (no taluk) — the WRONG plan for an assigned Anekal zone.
+    resolveStatutoryPlan.mockResolvedValueOnce({
+      resolved: true,
+      authority: { id: 'auth-bda', code: 'BDA', name: 'Bangalore Development Authority' },
+      plan: { id: 'plan-rmp2015', code: 'RMP_2015', name: 'RMP 2015', legal_status: 'operative' },
+      method: 'default_bda', confidence: 0.3, basis: 'no taluk', needs_authority_confirmation: true, alternates: [],
+    });
+    // The analyst-assigned zone pins the Anekal plan → authoritative.
+    resolvePlanById.mockResolvedValueOnce({
+      authority: { id: 'auth-anekal', code: 'ANEKAL_PA', name: 'Anekal Planning Authority', kind: 'lpa', status: 'active', status_note: null },
+      plan: { id: 'plan-anekal', code: 'ANEKAL_LPA_MP_2031', name: 'Anekal LPA MP 2031 (BMRDA)', legal_status: 'operative', version_label: 'base-2014', notes: null },
+    });
+    const anekalZone = { ...residentialZone, zone_code: 'AN-R', statutory_plan_id: 'plan-anekal', plan_version: 'Anekal LPA MP 2031', plan_status: 'operative' };
+    const anekalRule = { ...farRule, zone_code: 'AN-R', plan_version: 'Anekal LPA MP 2031', plan_status: 'operative' };
+    query
+      .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: anekalZone }] })  // property (zone pins plan-anekal)
+      .mockResolvedValueOnce({ rows: [anekalRule] })  // far rules — must be scoped to plan-anekal
+      .mockResolvedValueOnce({ rows: [] })            // snapshot meta
+      .mockResolvedValueOnce({ rows: [] })            // kgis cache
+      .mockResolvedValueOnce({ rows: [] });           // osm cache
+
+    const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
+
+    // FAR query scoped to the ZONE's plan (Anekal), not the BDA default.
+    expect(query.mock.calls[1][1]).toContain('plan-anekal');
+    expect(result.statutory_plan.plan_code).toBe('ANEKAL_LPA_MP_2031');
+    expect(result.statutory_plan.authority_code).toBe('ANEKAL_PA');
+    expect(result.statutory_plan.method).toBe('assigned_zone');
+    expect(result.statutory_plan.needs_authority_confirmation).toBe(false);
+    // FAR actually resolved (not blank) — the symptom this fix addresses.
+    expect(result.buildability.values?.max_far).toBe(2.4);
   });
 
   test('refresh calls vendor and K-GIS adapters, caches context, and writes snapshot', async () => {

@@ -226,7 +226,7 @@ export default function MasterPlanZonePanel({ property }) {
       )}
 
       <div className="space-y-5 p-5">
-        <RmpStatusBanner />
+        <RmpStatusBanner planVersion={zone?.plan_version} planName={zone?.zone_name} />
         {isAssigned ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <ZoneFact label="Zone code" value={zone.zone_code} />
