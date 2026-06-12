@@ -7,6 +7,7 @@ import { ArrowLeft, AlertTriangle, Info } from 'lucide-react';
 import { useLegalActive } from '../../hooks/useLegalActive';
 import usePublicLightTheme from '../../hooks/usePublicLightTheme';
 import Markdown from '../../components/common/Markdown';
+import { Skeleton } from '../../design-system';
 
 // Local light-theme error/info card primitive — sized for legal pages and
 // independent of the dashboard's design-system tokens (which assume dark
@@ -93,12 +94,12 @@ export default function LegalDocPage({ kind }) {
 
         <div className="mt-8">
           {loading && (
-            <div role="status" aria-busy="true" className="space-y-3 animate-pulse">
-              <div className="h-4 bg-stone-200 rounded w-3/4" />
-              <div className="h-4 bg-stone-200 rounded w-5/6" />
-              <div className="h-4 bg-stone-200 rounded w-2/3" />
-              <div className="h-4 bg-stone-200 rounded w-3/4" />
-              <div className="h-4 bg-stone-200 rounded w-4/6" />
+            <div role="status" aria-busy="true" className="space-y-3">
+              <Skeleton className="h-4 rounded w-3/4" />
+              <Skeleton className="h-4 rounded w-5/6" />
+              <Skeleton className="h-4 rounded w-2/3" />
+              <Skeleton className="h-4 rounded w-3/4" />
+              <Skeleton className="h-4 rounded w-4/6" />
             </div>
           )}
 

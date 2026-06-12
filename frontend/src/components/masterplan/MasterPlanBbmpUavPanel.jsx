@@ -3,7 +3,7 @@ import {
   Search, RefreshCw, Loader2, Database, AlertTriangle, CheckCircle2, Clock, XCircle,
 } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useBbmpUavEntries } from '../../hooks/useMasterPlan';
 
 const STATUS_FILTERS = [
@@ -46,18 +46,18 @@ function StatusBadge({ status }) {
 function PanelSkeleton() {
   return (
     <Card elevated className="p-6">
-      <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-        <div className="h-3 w-40 rounded bg-bg-secondary" />
-        <div className="h-5 w-2/3 rounded bg-bg-secondary" />
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-40 rounded" />
+        <Skeleton className="h-5 w-2/3 rounded" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
-          <div className="h-16 rounded bg-bg-secondary" />
-          <div className="h-16 rounded bg-bg-secondary" />
-          <div className="h-16 rounded bg-bg-secondary" />
+          <Skeleton className="h-16 w-full rounded" />
+          <Skeleton className="h-16 w-full rounded" />
+          <Skeleton className="h-16 w-full rounded" />
         </div>
         <div className="space-y-2 pt-2">
-          <div className="h-10 rounded bg-bg-secondary" />
-          <div className="h-10 rounded bg-bg-secondary" />
-          <div className="h-10 rounded bg-bg-secondary" />
+          <Skeleton className="h-10 w-full rounded" />
+          <Skeleton className="h-10 w-full rounded" />
+          <Skeleton className="h-10 w-full rounded" />
         </div>
       </div>
       <span className="sr-only">Loading BBMP UAV entries</span>

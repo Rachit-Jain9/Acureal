@@ -3,7 +3,7 @@ import {
   Building2, Ruler, ArrowsUpFromLine, Layers, MoveHorizontal, Info, AlertTriangle,
 } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useZones } from '../../hooks/useMasterPlan';
 import { calculateBuildEnvelope } from '../../utils/buildEnvelope';
 
@@ -116,15 +116,15 @@ export default function DecisionStrip() {
   if (isLoading) {
     return (
       <Card elevated className="p-6">
-        <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-          <div className="h-3 w-40 rounded bg-bg-secondary" />
-          <div className="h-5 w-2/3 rounded bg-bg-secondary" />
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-40 rounded" />
+          <Skeleton className="h-5 w-2/3 rounded" />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
-            <div className="h-20 rounded bg-bg-secondary" />
-            <div className="h-20 rounded bg-bg-secondary" />
-            <div className="h-20 rounded bg-bg-secondary" />
+            <Skeleton className="h-20 rounded" />
+            <Skeleton className="h-20 rounded" />
+            <Skeleton className="h-20 rounded" />
           </div>
-          <div className="h-32 rounded bg-bg-secondary" />
+          <Skeleton className="h-32 rounded" />
         </div>
         <span className="sr-only">Loading decision strip</span>
       </Card>

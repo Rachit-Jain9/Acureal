@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, Edit3, Plus, Search, Shield, XCircle } from 'lucide-react';
 import EmptyState from '../common/EmptyState';
 import Badge from '../common/Badge';
+import { Skeleton } from '../../design-system';
 import {
   useZones,
   useCreateZone,
@@ -39,14 +40,14 @@ function ZoneTableSkeleton() {
     <div role="status" aria-busy="true" className="overflow-hidden rounded-lg border border-hairline bg-bg-elevated">
       <div className="grid grid-cols-[0.7fr,1.4fr,1fr,0.7fr,0.8fr,0.9fr] gap-3 border-b border-hairline-strong px-4 py-3">
         {[0, 1, 2, 3, 4, 5].map((item) => (
-          <div key={item} className="h-3 rounded bg-bg-secondary animate-pulse" />
+          <Skeleton key={item} className="h-3 rounded" />
         ))}
       </div>
       <div className="divide-y divide-hairline">
         {[0, 1, 2, 3].map((row) => (
           <div key={row} className="grid grid-cols-[0.7fr,1.4fr,1fr,0.7fr,0.8fr,0.9fr] gap-3 px-4 py-3">
             {[0, 1, 2, 3, 4, 5].map((item) => (
-              <div key={item} className="h-8 rounded bg-bg-secondary animate-pulse" />
+              <Skeleton key={item} className="h-8 rounded" />
             ))}
           </div>
         ))}

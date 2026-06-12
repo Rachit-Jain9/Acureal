@@ -13,7 +13,7 @@ import {
   Database,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Card, SectionHeader } from '../../design-system';
+import { Card, SectionHeader, Skeleton } from '../../design-system';
 import {
   useDealQaHistory,
   useStreamDealQa,
@@ -364,10 +364,10 @@ export default function DealQaBox({ dealId }) {
             </p>
           ) : (
             // Pre-first-token skeleton — model is thinking, no text yet.
-            <div className="ml-5 space-y-2 animate-pulse" aria-busy="true">
-              <div className="h-3 w-11/12 rounded bg-bg-secondary" />
-              <div className="h-3 w-9/12 rounded bg-bg-secondary" />
-              <div className="h-3 w-10/12 rounded bg-bg-secondary" />
+            <div className="ml-5 space-y-2" aria-busy="true">
+              <Skeleton className="h-3 w-11/12 rounded" />
+              <Skeleton className="h-3 w-9/12 rounded" />
+              <Skeleton className="h-3 w-10/12 rounded" />
             </div>
           )}
           <div className="ml-5 text-[10px] text-content-muted">

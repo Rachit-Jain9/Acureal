@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Building2, CheckCircle2, FileText, Layers, Ruler, Sparkles, Upload, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
+import { Skeleton } from '../../design-system';
 import { useParcelIntelligence } from '../../hooks/useProperties';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import BuildabilityMassing from './BuildabilityMassing';
@@ -101,11 +102,11 @@ export default function BuildabilitySummary({
 
       <div className={clsx('p-4 sm:p-5', compact && 'p-3 sm:p-4')}>
         {isLoading ? (
-          <div className="space-y-3">
-            <div className="h-5 w-40 rounded bg-bg-secondary animate-pulse" />
+          <div className="space-y-3" role="status" aria-busy="true" aria-label="Loading buildable envelope">
+            <Skeleton className="h-5 w-40 rounded" />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[1, 2, 3, 4].map((item) => (
-                <div key={item} className="h-16 rounded-lg bg-bg-secondary animate-pulse" />
+                <Skeleton key={item} className="h-16 rounded-lg" ariaLabel={null} role="presentation" />
               ))}
             </div>
           </div>

@@ -44,7 +44,7 @@ import EmptyState from '../components/common/EmptyState';
 import Badge from '../components/common/Badge';
 import PageHeader from '../components/common/PageHeader';
 import PageIntro from '../components/guide/PageIntro';
-import { SkeletonList, SkeletonKpi, Modal, Button } from '../design-system';
+import { SkeletonList, SkeletonKpi, Skeleton, Modal, Button } from '../design-system';
 import { toast } from '../components/common/Toast';
 import { exportsAPI } from '../services/api';
 import { downloadAxiosResponse } from '../utils/download';
@@ -819,7 +819,7 @@ export default function DealsPage() {
               Assign to
             </label>
             {usersQuery.isLoading ? (
-              <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+              <Skeleton className="h-8 w-full rounded" />
             ) : usersQuery.isError ? (
               <p className="text-sm text-data-negative">Couldn't load users — try closing and re-opening this dialog.</p>
             ) : (

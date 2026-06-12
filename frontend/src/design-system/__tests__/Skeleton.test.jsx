@@ -11,12 +11,22 @@ import {
 } from '../Skeleton';
 
 describe('Skeleton (base)', () => {
-  it('carries the shimmer class + accessibility hooks', () => {
+  it('is decorative by default (presentation + aria-hidden) so a cluster keeps one status landmark', () => {
     render(<Skeleton data-testid="s" />);
     const el = screen.getByTestId('s');
     expect(el.className).toMatch(/redip-skeleton/);
-    expect(el).toHaveAttribute('aria-busy', 'true');
+    expect(el).toHaveAttribute('role', 'presentation');
+    expect(el).toHaveAttribute('aria-hidden', 'true');
+    expect(el).not.toHaveAttribute('aria-busy');
+  });
+
+  it('opts into a status landmark when role="status" (standalone loading indicator)', () => {
+    render(<Skeleton data-testid="s" role="status" ariaLabel="Loading widget" />);
+    const el = screen.getByTestId('s');
     expect(el).toHaveAttribute('role', 'status');
+    expect(el).toHaveAttribute('aria-busy', 'true');
+    expect(el).toHaveAttribute('aria-label', 'Loading widget');
+    expect(el).not.toHaveAttribute('aria-hidden');
   });
 
   it('forwards className overrides', () => {

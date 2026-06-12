@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, MapPin, FileText, AlertTriangle, ArrowUpRight, Sparkles, TrendingUp, ExternalLink, Shield } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
 import { analyseGuidanceValueSpread } from '../../utils/guidanceValueAnalysis';
 import { selectPrimaryStreetRow } from '../../utils/bbmpRegister';
@@ -87,10 +87,10 @@ function HitRow({ row }) {
 function PanelSkeleton() {
   return (
     <Card elevated className="p-5">
-      <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-        <div className="h-3 w-40 rounded bg-bg-secondary" />
-        <div className="h-12 rounded bg-bg-secondary" />
-        <div className="h-32 rounded bg-bg-secondary" />
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-40 rounded" />
+        <Skeleton className="h-12 w-full rounded" />
+        <Skeleton className="h-32 w-full rounded" />
       </div>
       <span className="sr-only">Loading Bengaluru street lookup</span>
     </Card>

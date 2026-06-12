@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import { useZones, useZone, useAssignZoneToProperty } from '../../hooks/useMasterPlan';
 import { useUpdateProperty } from '../../hooks/useProperties';
-import { ErrorState, SectionHeader } from '../../design-system';
+import { ErrorState, SectionHeader, Skeleton } from '../../design-system';
 import Badge from '../common/Badge';
 import RmpStatusBanner from '../masterplan/RmpStatusBanner';
 
@@ -174,11 +174,7 @@ export default function MasterPlanZonePanel({ property }) {
             {searching || zoneLoading ? (
               <div className="space-y-2 p-3">
                 {[1, 2, 3].map((item) => (
-                  <div
-                    key={item}
-                    className="h-12 rounded bg-bg-secondary motion-safe:animate-pulse"
-                    style={{ animationDelay: `${item * 60}ms` }}
-                  />
+                  <Skeleton key={item} className="h-12 w-full rounded" />
                 ))}
               </div>
             ) : searchResults.length === 0 ? (

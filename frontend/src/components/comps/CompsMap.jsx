@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import { Building2, MapPin, Layers, MousePointerClick, AlertTriangle } from 'lucide-react';
 import useTheme from '../../hooks/useTheme';
+import { Skeleton } from '../../design-system';
 
 // Bengaluru fallback center for the comps map. The seed data is residential
 // Bengaluru-only as of audit; this keeps the map oriented even before any
@@ -610,10 +611,10 @@ export default function CompsMap({
 
   if (!isLoaded) {
     return (
-      <div
-        className="relative bg-bg-secondary rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial motion-safe:animate-pulse"
+      <Skeleton
+        className="relative w-full rounded-editorial border border-hairline-strong overflow-hidden shadow-editorial"
         style={{ height }}
-        aria-busy="true"
+        ariaLabel="Loading map"
       />
     );
   }
