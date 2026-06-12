@@ -82,7 +82,7 @@ BEGIN
   VALUES
     (NULL, 'official_pdf', 'Bangalore Metropolitan Region Development Authority (Anekal Planning Authority)',
      'Anekal LPA Master Plan 2031 — Chapter 11/12: Zoning Regulations',
-     'https://www.bmrda.kar.in/', 'Anekal', 'Anekal LPA MP 2031', DATE '2014-09-03',
+     NULL, 'Anekal', 'Anekal LPA MP 2031', DATE '2014-09-03',
      'completed', 'approved', 1.000,
      'Operative zoning rulebook for the Anekal Local Planning Area under BMRDA. Approved by Govt. of Karnataka vide G.O. No. UDD 151 BMR 2013 dated 03-09-2014 as part of the Master Plan 2031. Operator-supplied primary PDF; FAR/coverage transcribed verbatim from Tables 4, 6, 10, 10A and §11.2.8.')
   RETURNING id INTO v_src;
